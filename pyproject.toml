@@ -1,0 +1,16 @@
+[project]
+name = "workspace"
+version = "0.1.0"
+description = "Django workspace project"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "django>=6.0,<7.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []

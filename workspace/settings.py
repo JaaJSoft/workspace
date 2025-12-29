@@ -79,6 +79,11 @@ INSTALLED_APPS = [
     'health_check.contrib.migrations',
     'health_check.contrib.psutil',
     'health_check.contrib.db_heartbeat',
+    # Workspace apps
+    'workspace.common',
+    'workspace.files',
+    'workspace.dashboard',
+    'workspace.users',
 ]
 
 # Add Debug Toolbar only in DEBUG mode (after staticfiles)

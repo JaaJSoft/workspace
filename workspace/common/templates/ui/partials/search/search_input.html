@@ -1,0 +1,36 @@
+{% comment %}
+  Partial pour l'input de recherche
+  Paramètres:
+  - input_class: classes CSS supplémentaires pour l'input (optionnel)
+  - show_kbd: afficher le raccourci clavier (défaut: false)
+  - on_escape: handler personnalisé pour Escape (défaut: "close()")
+{% endcomment %}
+<div class="relative group flex-1">
+  <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+    <i
+      data-lucide="search"
+      class="w-4 h-4 text-base-content/40 group-focus-within:text-primary transition-colors"
+    ></i>
+  </div>
+  <input
+    type="text"
+    x-ref="input"
+    x-model="query"
+    @input.debounce.300ms="search()"
+    @click.stop="open = true"
+    @focus="open = true"
+    @keydown.arrow-down.prevent="navigate(1)"
+    @keydown.arrow-up.prevent="navigate(-1)"
+    @keydown.enter.prevent="select()"
+    @keydown.escape="{{ on_escape|default:'close()' }}"
+    class="input input-bordered w-full pl-10 {% if show_kbd %}pr-20{% else %}pr-10{% endif %} bg-base-200/50 focus:bg-base-100 border-base-300 focus:border-primary/50 transition-all {{ input_class }}"
+    placeholder="Search..."
+    autocomplete="off"
+  />
+  <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+    <span x-show="loading" x-cloak class="loading loading-spinner {% if show_kbd %}loading-xs{% else %}loading-sm{% endif %} text-primary"></span>
+    {% if show_kbd %}
+      <kbd class="kbd kbd-xs bg-base-300 border-base-400 text-base-content/60" x-show="!loading">⌘K</kbd>
+    {% endif %}
+  </div>
+</div>

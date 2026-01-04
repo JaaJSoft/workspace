@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}Login · Workspace{% endblock %}
+
+{% block body_class %}bg-gradient-to-br from-base-200 to-base-300 min-h-screen{% endblock %}
+
+{% block body %}
+<div class="min-h-screen flex items-center justify-center p-4">
+  <div class="card w-full max-w-md bg-base-100 shadow-2xl border border-base-300">
+    <div class="card-body p-8">
+      <!-- Logo/Header -->
+      <div class="flex flex-col items-center mb-8">
+        <div class="mb-3">
+          {% include 'ui/partials/app_logo.html' with size='md' %}
+        </div>
+        <p class="text-base-content/60 text-sm">Sign in to continue</p>
+      </div>
+
+      <!-- Error messages -->
+      {% if form.errors %}
+        <div class="alert alert-error mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Invalid username or password. Please try again.</span>
+        </div>
+      {% endif %}
+
+      {% if next %}
+        {% if user.is_authenticated %}
+          <div class="alert alert-warning mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>Your account doesn't have access to this page.</span>
+          </div>
+        {% endif %}
+      {% endif %}
+
+      <!-- Login Form -->
+      <form method="post" action="{% url 'login' %}" x-data="{ isSubmitting: false }" @submit="isSubmitting = true">
+        {% csrf_token %}
+
+        <!-- Username Field -->
+        <div class="form-control w-full mb-4">
+          <label class="label" for="{{ form.username.id_for_label }}">
+            <span class="label-text font-medium">Username</span>
+          </label>
+          <label class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors">
+            <i data-lucide="user" class="w-4 h-4 text-base-content/40"></i>
+            <input
+              type="text"
+              name="username"
+              id="{{ form.username.id_for_label }}"
+              class="grow"
+              placeholder="Enter your username"
+              required
+              autofocus
+            />
+          </label>
+        </div>
+
+        <!-- Password Field -->
+        <div class="form-control w-full mb-6">
+          <label class="label" for="{{ form.password.id_for_label }}">
+            <span class="label-text font-medium">Password</span>
+          </label>
+          <label class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors">
+            <i data-lucide="lock" class="w-4 h-4 text-base-content/40"></i>
+            <input
+              type="password"
+              name="password"
+              id="{{ form.password.id_for_label }}"
+              class="grow"
+              placeholder="Enter your password"
+              required
+            />
+          </label>
+        </div>
+
+        <!-- Hidden next field -->
+        <input type="hidden" name="next" value="{{ next }}" />
+
+        <!-- Submit Button -->
+        <div class="form-control mt-6">
+          <button type="submit" class="btn btn-primary w-full gap-2 h-12 text-base font-medium shadow-lg hover:shadow-xl transition-all" :disabled="isSubmitting">
+            <span x-show="!isSubmitting">
+              <i data-lucide="log-in" class="w-5 h-5"></i>
+            </span>
+            <span x-show="isSubmitting" class="loading loading-spinner loading-md"></span>
+            <span x-text="isSubmitting ? 'Signing in...' : 'Sign In'"></span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Additional Links -->
+      <div class="divider text-xs text-base-content/40 my-6">OR</div>
+      <div class="text-center">
+        <a href="/admin/" class="link link-primary text-sm font-medium hover:text-secondary transition-colors inline-flex items-center gap-2">
+          <i data-lucide="shield" class="w-4 h-4"></i>
+          Admin Login
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

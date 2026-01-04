@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<!-- Navbar -->
+{% include 'ui/partials/navbar.html' %}
+
+<!-- Main content -->
+<main class="{% block main_class %}container mx-auto p-4{% endblock %}">
+  {% block content %}{% endblock %}
+</main>
+{% endblock %}

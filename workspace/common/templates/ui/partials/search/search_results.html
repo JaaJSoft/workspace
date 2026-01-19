@@ -13,8 +13,8 @@
       <a
         :href="`/person/${result.uuid}`"
         {% if on_click %}@click="{{ on_click }}"{% endif %}
-        @mouseenter="setActiveFromElement($el)"
-        :class="isActive($el) ? 'bg-base-300' : 'bg-transparent'"
+        @mouseenter="activeIndex = index"
+        :class="isResultActive(index) ? 'bg-base-300' : 'bg-transparent'"
         class="flex items-center gap-3 px-3 py-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
       >
         <div class="avatar placeholder flex-shrink-0">

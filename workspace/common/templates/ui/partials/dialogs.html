@@ -1,0 +1,33 @@
+<!-- Generic Dialogs Partial: include once (e.g., in base.html) -->
+<!-- Confirm dialog -->
+<dialog id="app-dialog-confirm" class="modal">
+  <div class="modal-box">
+    <h3 id="app-dialog-confirm-title" class="font-bold text-lg">Confirm</h3>
+    <p id="app-dialog-confirm-message" class="py-2">Are you sure?</p>
+    <div class="modal-action">
+      <form method="dialog">
+        <button id="app-dialog-confirm-cancel" class="btn btn-ghost btn-sm">Cancel</button>
+      </form>
+      <button id="app-dialog-confirm-ok" class="btn btn-primary btn-sm">OK</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+  </dialog>
+
+<!-- Message/Error dialog -->
+<dialog id="app-dialog-message" class="modal">
+  <div class="modal-box">
+    <h3 id="app-dialog-message-title" class="font-bold text-lg">Message</h3>
+    <p id="app-dialog-message-message" class="py-2">Done.</p>
+    <div class="modal-action">
+      <form method="dialog">
+        <button id="app-dialog-message-ok" class="btn btn-sm">OK</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

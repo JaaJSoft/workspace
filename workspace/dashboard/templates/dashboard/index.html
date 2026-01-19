@@ -1,0 +1,120 @@
+{% extends 'base_with_navbar.html' %}
+
+{% block title %}Dashboard · Workspace{% endblock %}
+
+{% block content %}
+<div class="py-8">
+  <!-- Welcome Section -->
+  <div class="mb-8">
+    <h1 class="text-4xl font-bold text-base-content mb-2">
+      Welcome back, {{ user.username }}!
+    </h1>
+    <p class="text-base-content/60">
+      Here's what's happening in your workspace today.
+    </p>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Stat Card 1 -->
+    <div class="stats shadow border border-base-300">
+      <div class="stat">
+        <div class="stat-figure text-primary">
+          <i data-lucide="file" class="w-8 h-8"></i>
+        </div>
+        <div class="stat-title">Total Files</div>
+        <div class="stat-value text-primary">0</div>
+        <div class="stat-desc">No files yet</div>
+      </div>
+    </div>
+
+    <!-- Stat Card 2 -->
+    <div class="stats shadow border border-base-300">
+      <div class="stat">
+        <div class="stat-figure text-secondary">
+          <i data-lucide="users" class="w-8 h-8"></i>
+        </div>
+        <div class="stat-title">Team Members</div>
+        <div class="stat-value text-secondary">1</div>
+        <div class="stat-desc">Just you for now</div>
+      </div>
+    </div>
+
+    <!-- Stat Card 3 -->
+    <div class="stats shadow border border-base-300">
+      <div class="stat">
+        <div class="stat-figure text-success">
+          <i data-lucide="check-circle" class="w-8 h-8"></i>
+        </div>
+        <div class="stat-title">Completed</div>
+        <div class="stat-value text-success">0</div>
+        <div class="stat-desc">Tasks done</div>
+      </div>
+    </div>
+
+    <!-- Stat Card 4 -->
+    <div class="stats shadow border border-base-300">
+      <div class="stat">
+        <div class="stat-figure text-warning">
+          <i data-lucide="clock" class="w-8 h-8"></i>
+        </div>
+        <div class="stat-title">Pending</div>
+        <div class="stat-value text-warning">0</div>
+        <div class="stat-desc">Tasks to do</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Grid -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Recent Activity -->
+    <div class="lg:col-span-2">
+      <div class="card bg-base-100 shadow border border-base-300">
+        <div class="card-body">
+          <h2 class="card-title text-2xl mb-4">
+            <i data-lucide="activity" class="w-6 h-6"></i>
+            Recent Activity
+          </h2>
+          <div class="text-center py-12 text-base-content/60">
+            <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-4 opacity-40"></i>
+            <p>No activity yet. Start by creating something!</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="lg:col-span-1">
+      <div class="card bg-base-100 shadow border border-base-300">
+        <div class="card-body">
+          <h2 class="card-title text-2xl mb-4">
+            <i data-lucide="zap" class="w-6 h-6"></i>
+            Quick Actions
+          </h2>
+          <div class="space-y-2">
+            <a href="#" class="btn btn-primary w-full justify-start gap-3">
+              <i data-lucide="plus" class="w-5 h-5"></i>
+              Create New Item
+            </a>
+            <a href="#" class="btn btn-outline w-full justify-start gap-3">
+              <i data-lucide="folder" class="w-5 h-5"></i>
+              Browse Files
+            </a>
+            <a href="#" class="btn btn-outline w-full justify-start gap-3">
+              <i data-lucide="settings" class="w-5 h-5"></i>
+              Settings
+            </a>
+            {% if user.is_staff %}
+              <div class="divider text-xs">Admin</div>
+              <a href="/admin/" class="btn btn-outline btn-error w-full justify-start gap-3">
+                <i data-lucide="shield" class="w-5 h-5"></i>
+                Admin Panel
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

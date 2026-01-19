@@ -1,0 +1,55 @@
+{% comment %}
+  Composant d'alerte inline réutilisable
+
+  Usage Django template:
+    {% include "ui/partials/inline_alert.html" with type="info" message="Your message here" %}
+    {% include "ui/partials/inline_alert.html" with type="error" title="Error" message="Something went wrong" dismissible=True %}
+
+  Usage Alpine.js (avec x-html):
+    <div x-html="$refs.inlineAlert.innerHTML" x-data="{type: 'info', message: 'Dynamic message', icon_name: 'calendar'}"></div>
+
+  Paramètres:
+    - type: 'info', 'success', 'warning', 'error' (défaut: 'info')
+    - message: Le message à afficher (requis si pas de slot)
+    - title: Titre optionnel
+    - dismissible: Afficher un bouton de fermeture (défaut: False)
+    - icon: Afficher l'icône (défaut: True)
+    - icon_name: Nom de l'icône lucide personnalisée (optionnel)
+    - class: Classes CSS additionnelles
+    - slot: Contenu HTML personnalisé (prioritaire sur message)
+{% endcomment %}
+
+{% if message or slot %}
+  <div class="alert alert-{{ type|default:'info' }} {{ class|default:'' }}"
+       {% if dismissible %}x-data="{ show: true }" x-show="show" x-transition{% endif %}>
+
+    {% if icon|default:True %}
+      {% if icon_name %}
+        <i data-lucide="{{ icon_name }}" class="w-5 h-5 stroke-current shrink-0"></i>
+      {% elif type == 'success' %}
+        <i data-lucide="check-circle" class="w-5 h-5 stroke-current shrink-0"></i>
+      {% elif type == 'error' %}
+        <i data-lucide="x-circle" class="w-5 h-5 stroke-current shrink-0"></i>
+      {% elif type == 'warning' %}
+        <i data-lucide="alert-triangle" class="w-5 h-5 stroke-current shrink-0"></i>
+      {% else %}
+        <i data-lucide="info" class="w-5 h-5 stroke-current shrink-0"></i>
+      {% endif %}
+    {% endif %}
+
+    {% if slot %}
+      {{ slot|safe }}
+    {% elif title %}
+      <div>
+        <h3 class="font-bold">{{ title }}</h3>
+        <div class="text-sm">{{ message }}</div>
+      </div>
+    {% else %}
+      <span>{{ message }}</span>
+    {% endif %}
+
+    {% if dismissible %}
+      <button type="button" @click="show = false" class="btn btn-ghost btn-xs btn-circle ml-auto" aria-label="Dismiss">✕</button>
+    {% endif %}
+  </div>
+{% endif %}

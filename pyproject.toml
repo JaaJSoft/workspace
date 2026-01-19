@@ -32,3 +32,8 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 dev-dependencies = []
+
+[project.scripts]
+makemigrations = "django:call_command('makemigrations')"
+migrate = "django:call_command('migrate')"
+showmigrations = "django:call_command('showmigrations')"

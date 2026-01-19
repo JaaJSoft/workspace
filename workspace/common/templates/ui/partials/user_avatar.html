@@ -1,0 +1,41 @@
+{% comment %}
+User avatar partial - displays user avatar or initials
+Parameters:
+  - user: The user object
+  - size: 'xs', 'sm', 'md', 'lg' (default: 'md')
+  - show_ring: Boolean to show ring around avatar (default: False)
+{% endcomment %}
+
+{% if size == 'xs' %}
+  {% with size_class='w-6 h-6 text-xs' %}
+    <div class="avatar placeholder {% if show_ring %}ring ring-primary ring-offset-base-100 ring-offset-2{% endif %}">
+      <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full">
+        <span>{{ user.username|slice:":1"|upper }}</span>
+      </div>
+    </div>
+  {% endwith %}
+{% elif size == 'sm' %}
+  {% with size_class='w-8 h-8 text-xs' %}
+    <div class="avatar placeholder {% if show_ring %}ring ring-primary ring-offset-base-100 ring-offset-2{% endif %}">
+      <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full">
+        <span>{{ user.username|slice:":1"|upper }}</span>
+      </div>
+    </div>
+  {% endwith %}
+{% elif size == 'lg' %}
+  {% with size_class='w-16 h-16 text-xl' %}
+    <div class="avatar placeholder {% if show_ring %}ring ring-primary ring-offset-base-100 ring-offset-2{% endif %}">
+      <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full">
+        <span>{{ user.username|slice:":1"|upper }}</span>
+      </div>
+    </div>
+  {% endwith %}
+{% else %}
+  {% with size_class='w-10 h-10 text-sm' %}
+    <div class="avatar placeholder {% if show_ring %}ring ring-primary ring-offset-base-100 ring-offset-2{% endif %}">
+      <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full">
+        <span>{{ user.username|slice:":1"|upper }}</span>
+      </div>
+    </div>
+  {% endwith %}
+{% endif %}

@@ -1,21 +1,283 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-theme="light">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{% block title %}Workspace{% endblock %}</title>
+
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- DaisyUI -->
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" type="text/css"/>
+
+  <!-- Alpine.js -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <script>
-    // Initialize Lucide icons
-    lucide.createIcons();
-  </script>
+
+  <!-- Favicon -->
+  <link rel="icon" href="https://fav.farm/👥"/>
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#111827"/>
+
   {% block extra_head %}{% endblock %}
 </head>
-<body>
-{% block body %}{% endblock %}
+<body class="{% block body_class %}bg-base-100{% endblock %}">
+  {% block body %}{% endblock %}
+
+  <!-- Generic Dialogs -->
+  {% include "ui/partials/dialogs.html" %}
+
+  <!-- Initialize Lucide Icons -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+    });
+
+    // Theme handling
+    (function () {
+      const root = document.documentElement;
+      const saved = localStorage.getItem('theme') || 'light';
+      root.setAttribute('data-theme', saved);
+
+      // Theme toggle functionality
+      const themeToggle = document.getElementById('themeToggle');
+      if (themeToggle) {
+        // Set initial state based on saved theme
+        themeToggle.checked = saved === 'dark';
+
+        themeToggle.addEventListener('change', function() {
+          const newTheme = this.checked ? 'dark' : 'light';
+          root.setAttribute('data-theme', newTheme);
+          localStorage.setItem('theme', newTheme);
+        });
+      }
+    })();
+
+    // Command Palette Dropdown Component (Alpine.js)
+    function commandPaletteDropdown() {
+      return {
+        open: false,
+        query: '',
+        results: [],
+        selectedIndex: -1,
+        loading: false,
+        hasMore: false,
+        loadingMore: false,
+        searchQuery: '',
+
+        init() {
+          // Listen for keyboard shortcut (Cmd/Ctrl + K)
+          document.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+              e.preventDefault();
+              this.$refs.input?.focus();
+              this.open = true;
+            }
+          });
+        },
+
+        search() {
+          this.searchQuery = this.query;
+          if (this.query.length < 2) {
+            this.results = [];
+            this.selectedIndex = -1;
+            return;
+          }
+
+          this.loading = true;
+          // Mock search - replace with actual API call
+          setTimeout(() => {
+            this.results = [
+              { id: 1, title: 'Mock Result 1', url: '#', icon: 'file-text' },
+              { id: 2, title: 'Mock Result 2', url: '#', icon: 'folder' },
+              { id: 3, title: 'Mock Result 3', url: '#', icon: 'tag' }
+            ].filter(item =>
+              item.title.toLowerCase().includes(this.query.toLowerCase())
+            );
+            this.loading = false;
+          }, 300);
+        },
+
+        navigateDown() {
+          if (this.selectedIndex < this.results.length - 1) {
+            this.selectedIndex++;
+          }
+        },
+
+        navigateUp() {
+          if (this.selectedIndex > 0) {
+            this.selectedIndex--;
+          }
+        },
+
+        selectCurrent() {
+          if (this.selectedIndex >= 0 && this.selectedIndex < this.results.length) {
+            window.location.href = this.results[this.selectedIndex].url;
+          }
+        },
+
+        close() {
+          this.open = false;
+          this.query = '';
+          this.results = [];
+          this.selectedIndex = -1;
+        },
+
+        // Helper methods for search results
+        setActiveFromElement(el) {
+          // Mock implementation
+        },
+
+        isActive(el) {
+          return false;
+        },
+
+        highlightMatch(text, query) {
+          if (!query) return text;
+          const regex = new RegExp(`(${query})`, 'gi');
+          return text.replace(regex, '<mark class="bg-primary/20">$1</mark>');
+        },
+
+        loadMore() {
+          this.loadingMore = true;
+          setTimeout(() => {
+            this.loadingMore = false;
+          }, 500);
+        },
+
+        navigate(direction) {
+          // Mock navigation
+        },
+
+        select() {
+          this.selectCurrent();
+        }
+      };
+    }
+
+    // Dialog utilities
+    const AppDialog = {
+      confirm({ title = 'Confirm', message = 'Are you sure?', okLabel = 'OK', cancelLabel = 'Cancel', okClass = 'btn-primary' } = {}) {
+        return new Promise((resolve) => {
+          const dialog = document.getElementById('app-dialog-confirm');
+          const titleEl = document.getElementById('app-dialog-confirm-title');
+          const messageEl = document.getElementById('app-dialog-confirm-message');
+          const okBtn = document.getElementById('app-dialog-confirm-ok');
+          const cancelBtn = document.getElementById('app-dialog-confirm-cancel');
+
+          titleEl.textContent = title;
+          messageEl.textContent = message;
+          okBtn.textContent = okLabel;
+          cancelBtn.textContent = cancelLabel;
+          okBtn.className = `btn btn-sm ${okClass}`;
+
+          const cleanup = () => {
+            okBtn.removeEventListener('click', onOk);
+            dialog.removeEventListener('close', onClose);
+          };
+
+          const onOk = () => {
+            cleanup();
+            dialog.close();
+            resolve(true);
+          };
+
+          const onClose = () => {
+            cleanup();
+            resolve(false);
+          };
+
+          okBtn.addEventListener('click', onOk);
+          dialog.addEventListener('close', onClose);
+          dialog.showModal();
+        });
+      },
+
+      message({ title = 'Message', message = 'Done.', okLabel = 'OK' } = {}) {
+        return new Promise((resolve) => {
+          const dialog = document.getElementById('app-dialog-message');
+          const titleEl = document.getElementById('app-dialog-message-title');
+          const messageEl = document.getElementById('app-dialog-message-message');
+          const okBtn = document.getElementById('app-dialog-message-ok');
+
+          titleEl.textContent = title;
+          messageEl.textContent = message;
+          okBtn.textContent = okLabel;
+
+          const onClose = () => {
+            dialog.removeEventListener('close', onClose);
+            resolve();
+          };
+
+          dialog.addEventListener('close', onClose);
+          dialog.showModal();
+        });
+      },
+
+      error({ title = 'Error', message = 'An error occurred.', okLabel = 'OK' } = {}) {
+        return this.message({ title, message, okLabel });
+      }
+    };
+
+    // Inline Alert utilities
+    const InlineAlert = {
+      create({ type = 'info', message, title, dismissible = false, iconName, className = '' } = {}) {
+        const icons = {
+          success: 'check-circle',
+          error: 'x-circle',
+          warning: 'alert-triangle',
+          info: 'info'
+        };
+        const icon = iconName || icons[type] || icons.info;
+
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} ${className}`;
+
+        let html = `<i data-lucide="${icon}" class="w-5 h-5 stroke-current shrink-0"></i>`;
+
+        if (title) {
+          html += `<div><h3 class="font-bold">${title}</h3><div class="text-sm">${message}</div></div>`;
+        } else {
+          html += `<span>${message}</span>`;
+        }
+
+        if (dismissible) {
+          html += `<button type="button" class="btn btn-ghost btn-xs btn-circle ml-auto" aria-label="Dismiss">✕</button>`;
+        }
+
+        alertDiv.innerHTML = html;
+
+        if (dismissible) {
+          alertDiv.querySelector('button').addEventListener('click', () => {
+            alertDiv.remove();
+          });
+        }
+
+        // Initialize lucide icons for this element
+        if (typeof lucide !== 'undefined') {
+          lucide.createIcons({ nodes: [alertDiv] });
+        }
+
+        return alertDiv;
+      },
+
+      show(container, options) {
+        const alert = this.create(options);
+        if (typeof container === 'string') {
+          container = document.querySelector(container);
+        }
+        container.appendChild(alert);
+        return alert;
+      }
+    };
+  </script>
+
+  {% block extra_scripts %}{% endblock %}
 </body>
 </html>

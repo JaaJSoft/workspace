@@ -157,13 +157,15 @@ APPEND_SLASH = False
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [],
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Expose `request_processing_ms` au template
+                # 'workspace.ui.context_processors.request_timing',
             ],
             # Cache compiled templates for better performance (disabled in DEBUG mode)
             'loaders': [

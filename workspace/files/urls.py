@@ -1,9 +1,9 @@
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter, SimpleRouter
-from .views import FileNodeViewSet
+from rest_framework.routers import SimpleRouter
+from .views import FileViewSet
 
 router = SimpleRouter(trailing_slash=False)
-router.register(r'nodes', FileNodeViewSet, basename='filenode')
+router.register(r'files', FileViewSet, basename='file')
 
 urlpatterns = [
     path('', include(router.urls)),

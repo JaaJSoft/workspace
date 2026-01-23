@@ -25,7 +25,7 @@ def file_upload_path(instance, filename):
     return os.path.join('files', filename)
 
 
-class FileNode(models.Model):
+class File(models.Model):
     """Model representing a file or folder in a tree structure."""
 
     class NodeType(models.TextChoices):
@@ -62,7 +62,10 @@ class FileNode(models.Model):
         constraints = [
             models.CheckConstraint(
                 condition=(
-                    models.Q(node_type='folder', content__isnull=True) |
+                    (
+                        models.Q(node_type='folder') &
+                        (models.Q(content__isnull=True) | models.Q(content=''))
+                    ) |
                     models.Q(node_type='file')
                 ),
                 name='folder_has_no_content'

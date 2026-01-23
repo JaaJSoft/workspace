@@ -36,7 +36,7 @@ urlpatterns = [
     path('health/', include('health_check.urls')),
 
     # Apps
-    path('api/v1/files/', include('workspace.files.urls')),
+    path('api/v1/', include('workspace.files.urls')),
     path('', include('workspace.dashboard.urls')),
     path('', include('workspace.users.urls')),
 ]

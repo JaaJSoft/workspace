@@ -5,8 +5,9 @@ A reusable component for drawer/sidebar menu items.
 
 Parameters:
 -----------
-- href: URL for the link (optional if disabled)
+- href: URL for the link (optional if disabled; if omitted, renders a button)
 - icon: Lucide icon name (e.g., "folder", "clock", "trash-2")
+- icon_binding: Optional Alpine.js expression for dynamic icon names
 - label: Text label for the item
 - active: Boolean, whether this item is currently active (default: False)
 - disabled: Boolean, whether this item is disabled (default: False)
@@ -16,6 +17,9 @@ Parameters:
 - x_target_history: Optional x-target history mode ("push" or "replace")
 - onclick: Optional JavaScript onclick handler
 - tooltip: Optional tooltip text for collapsed state
+- title_binding: Optional Alpine.js expression for the title attribute
+- aria_label: Optional static aria-label text
+- aria_label_binding: Optional Alpine.js expression for aria-label
 
 Usage Examples:
 ---------------
@@ -27,12 +31,25 @@ Usage Examples:
 <li class="list-none">
   {% if disabled %}
     <span
-      class="flex items-center opacity-50 cursor-not-allowed py-3 text-base rounded-lg transition-colors hover:bg-base-300/30"
-      :class="collapsed ? 'justify-center px-2' : 'gap-3 px-3'"
-      :title="collapsed ? '{{ label }}{% if badge %} ({{ badge }}){% endif %}' : ''"
+      class="flex items-center opacity-50 cursor-not-allowed p-2 text-base rounded-lg transition-colors hover:bg-base-300/30"
+      :class="collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3'"
+      {% if title_binding %}
+        :title="{{ title_binding|safe }}"
+      {% else %}
+        :title="collapsed ? '{{ label }}{% if badge %} ({{ badge }}){% endif %}' : ''"
+      {% endif %}
+      {% if aria_label_binding %}
+        :aria-label="{{ aria_label_binding|safe }}"
+      {% elif aria_label %}
+        aria-label="{{ aria_label }}"
+      {% endif %}
       {% if onclick %}@click="{{ onclick }}"{% endif %}
     >
-      <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+      {% if icon_binding %}
+        <i :data-lucide="{{ icon_binding|safe }}" class="w-5 h-5 flex-shrink-0"></i>
+      {% else %}
+        <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+      {% endif %}
       <span x-show="!collapsed" x-transition class="flex items-center gap-2 flex-1">
         {{ label }}
         {% if badge %}
@@ -40,16 +57,29 @@ Usage Examples:
         {% endif %}
       </span>
     </span>
-  {% else %}
+  {% elif href %}
     <a
       href="{{ href }}"
-      class="flex items-center {% if active %}bg-primary/10 text-primary hover:bg-primary/20{% else %}hover:bg-base-300/50{% endif %} py-3 text-base rounded-lg transition-colors"
-      :class="collapsed ? 'justify-center px-2' : 'gap-3 px-3'"
+      class="flex items-center {% if active %}bg-primary/10 text-primary hover:bg-primary/20{% else %}hover:bg-base-300/50{% endif %} p-2 text-base rounded-lg transition-colors"
+      :class="collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3'"
       {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %}
       {% if onclick %}@click="{{ onclick }}"{% endif %}
-      :title="collapsed ? '{{ tooltip|default:label }}' : ''"
+      {% if title_binding %}
+        :title="{{ title_binding|safe }}"
+      {% else %}
+        :title="collapsed ? '{{ tooltip|default:label }}' : ''"
+      {% endif %}
+      {% if aria_label_binding %}
+        :aria-label="{{ aria_label_binding|safe }}"
+      {% elif aria_label %}
+        aria-label="{{ aria_label }}"
+      {% endif %}
     >
-      <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+      {% if icon_binding %}
+        <i :data-lucide="{{ icon_binding|safe }}" class="w-5 h-5 flex-shrink-0"></i>
+      {% else %}
+        <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+      {% endif %}
       <span x-show="!collapsed" x-transition class="flex items-center gap-2 flex-1">
         {{ label }}
         {% if badge %}
@@ -57,5 +87,35 @@ Usage Examples:
         {% endif %}
       </span>
     </a>
+  {% else %}
+    <button
+      type="button"
+      class="flex items-center w-full text-left {% if active %}bg-primary/10 text-primary hover:bg-primary/20{% else %}hover:bg-base-300/50{% endif %} p-2 text-base rounded-lg transition-colors"
+      :class="collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3'"
+      {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %}
+      {% if onclick %}@click="{{ onclick }}"{% endif %}
+      {% if title_binding %}
+        :title="{{ title_binding|safe }}"
+      {% else %}
+        :title="collapsed ? '{{ tooltip|default:label }}' : ''"
+      {% endif %}
+      {% if aria_label_binding %}
+        :aria-label="{{ aria_label_binding|safe }}"
+      {% elif aria_label %}
+        aria-label="{{ aria_label }}"
+      {% endif %}
+    >
+      {% if icon_binding %}
+        <i :data-lucide="{{ icon_binding|safe }}" class="w-5 h-5 flex-shrink-0"></i>
+      {% else %}
+        <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+      {% endif %}
+      <span x-show="!collapsed" x-transition class="flex items-center gap-2 flex-1">
+        {{ label }}
+        {% if badge %}
+          <span class="badge badge-{{ badge_type|default:'sm' }}{% if badge_variant %} badge-{{ badge_variant }}{% endif %}">{{ badge }}</span>
+        {% endif %}
+      </span>
+    </button>
   {% endif %}
 </li>

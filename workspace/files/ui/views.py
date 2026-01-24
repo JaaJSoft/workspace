@@ -1,5 +1,4 @@
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum
 from django.shortcuts import get_object_or_404, render
 
 from ..models import File
@@ -23,30 +22,6 @@ def build_breadcrumbs(folder):
         'icon': 'hard-drive',
     })
     return breadcrumbs
-
-
-def get_storage_stats(user):
-    """Calculate storage statistics for the user."""
-    result = File.objects.filter(
-        owner=user,
-        node_type=File.NodeType.FILE
-    ).aggregate(
-        total_size=Sum('size'),
-    )
-    total_size = result['total_size'] or 0
-    file_count = File.objects.filter(
-        owner=user,
-        node_type=File.NodeType.FILE
-    ).count()
-    folder_count = File.objects.filter(
-        owner=user,
-        node_type=File.NodeType.FOLDER
-    ).count()
-    return {
-        'total_size': total_size,
-        'file_count': file_count,
-        'folder_count': folder_count,
-    }
 
 
 @login_required
@@ -76,9 +51,6 @@ def index(request, folder=None):
             parent__isnull=True
         ).order_by('-node_type', 'name')  # '-' to reverse order: folder before file
 
-    # Get storage stats
-    storage_stats = get_storage_stats(request.user)
-
     # Calculate folder stats
     folder_stats = {
         'file_count': 0,
@@ -96,7 +68,6 @@ def index(request, folder=None):
         'nodes': nodes,
         'current_folder': current_folder,
         'breadcrumbs': breadcrumbs,
-        'storage_stats': storage_stats,
         'folder_stats': folder_stats,
     }
 

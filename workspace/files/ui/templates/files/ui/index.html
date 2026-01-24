@@ -21,11 +21,21 @@
          :class="collapsed ? 'w-16' : 'w-72'">
     <!-- Sidebar header -->
     <div class="border-b border-base-300 py-4 px-3">
-      <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-start'">
+      <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
         <h2 class="text-xl font-semibold flex items-center gap-2" :class="collapsed ? '' : 'pl-2'">
           <i data-lucide="hard-drive" class="w-6 h-6"></i>
           <span x-show="!collapsed" x-transition>My Files</span>
         </h2>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square mr-1"
+          aria-label="Settings"
+          title="Settings"
+          x-show="!collapsed"
+          x-transition
+        >
+          <i data-lucide="settings" class="w-4 h-4"></i>
+        </button>
       </div>
     </div>
 

@@ -180,22 +180,39 @@ window.commandPaletteDropdown = function() {
       }
     },
 
-    navigate(direction) {
-      const allItems = this.getAllItems();
+    // Get the total count of navigable items based on current state
+    getItemCount() {
+      if (this.query.length >= 2) {
+        // Search results mode
+        return this.results.length;
+      } else if (this.query.length === 0) {
+        // Quick actions mode - 3 items (or 4 if admin, but we'll use DOM count as fallback)
+        const quickActionsContainer = this.$root.querySelector('[x-show="query.length === 0"]');
+        if (quickActionsContainer) {
+          return quickActionsContainer.querySelectorAll('a[href]').length;
+        }
+        return 3; // Default fallback
+      }
+      return 0;
+    },
 
-      if (allItems.length === 0) return;
+    navigate(direction) {
+      const itemCount = this.getItemCount();
+
+      if (itemCount === 0) return;
 
       this.activeIndex += direction;
 
       // Wrap around
       if (this.activeIndex < 0) {
-        this.activeIndex = allItems.length - 1;
-      } else if (this.activeIndex >= allItems.length) {
+        this.activeIndex = itemCount - 1;
+      } else if (this.activeIndex >= itemCount) {
         this.activeIndex = 0;
       }
 
       // Scroll into view
       this.$nextTick(() => {
+        const allItems = this.getAllItems();
         const activeEl = allItems[this.activeIndex];
         if (activeEl) {
           activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -204,6 +221,8 @@ window.commandPaletteDropdown = function() {
     },
 
     select() {
+      if (this.activeIndex < 0) return;
+
       const allItems = this.getAllItems();
       const activeEl = allItems[this.activeIndex];
 
@@ -230,6 +249,32 @@ window.commandPaletteDropdown = function() {
       if (index !== -1) {
         this.activeIndex = index;
       }
+    },
+
+    // Check if a result at the given index is active (for search results)
+    isResultActive(index) {
+      if (!this.open) return false;
+      if (this.activeIndex < 0) return false;
+
+      // Calculate the offset: quick actions come first when query is empty
+      // When query has results, only results are shown
+      if (this.query.length >= 2) {
+        // Only search results are visible
+        return this.activeIndex === index;
+      }
+      return false;
+    },
+
+    // Check if a quick action at the given index is active
+    isQuickActionActive(index) {
+      if (!this.open) return false;
+      if (this.activeIndex < 0) return false;
+
+      // Quick actions are only visible when query is empty
+      if (this.query.length === 0) {
+        return this.activeIndex === index;
+      }
+      return false;
     },
 
     isActive(el) {

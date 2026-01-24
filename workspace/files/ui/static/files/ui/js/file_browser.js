@@ -2,10 +2,22 @@ window.sidebarCollapse = function sidebarCollapse() {
   return {
     collapsed: localStorage.getItem('sidebarCollapsed') === 'true',
     activeView: null,
+
+    isMobile() {
+      return window.matchMedia('(max-width: 1023px)').matches;
+    },
     
     init() {
+      if (this.isMobile()) {
+        this.collapsed = true;
+      }
       this.syncActiveView();
       window.addEventListener('popstate', () => this.syncActiveView());
+      window.matchMedia('(max-width: 1023px)').addEventListener('change', (event) => {
+        if (event.matches) {
+          this.collapsed = true;
+        }
+      });
 
       // Initialize Lucide icons on load
       this.$nextTick(() => {
@@ -26,6 +38,9 @@ window.sidebarCollapse = function sidebarCollapse() {
     },
     
     toggleCollapse() {
+      if (this.isMobile()) {
+        return;
+      }
       this.collapsed = !this.collapsed;
       localStorage.setItem('sidebarCollapsed', this.collapsed);
       

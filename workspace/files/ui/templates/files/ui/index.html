@@ -7,7 +7,7 @@
 {% include 'ui/partials/navbar.html' with navbar_full_width=True %}
 {% endblock %}
 
-{% block drawer_class %}lg:drawer-open{% endblock %}
+{% block drawer_class %}drawer-open{% endblock %}
 {% block drawer_id %}files-drawer{% endblock %}
 
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
@@ -54,7 +54,7 @@
 
     <!-- Toggle Button (Always at bottom) -->
     <div class="border-t border-base-300 py-4 px-3">
-      <ul class="menu p-0">
+      <ul class="menu p-0" x-show="!isMobile()">
         {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
       </ul>
     </div>
@@ -71,11 +71,6 @@
     <div class="bg-base-100 border-b border-base-300 p-4 lg:p-6">
       <!-- Header with breadcrumb, title and actions on same line -->
       <div class="flex items-start gap-3">
-        <!-- Mobile drawer toggle -->
-        <label for="files-drawer" class="btn btn-square btn-ghost drawer-button lg:hidden flex-shrink-0 -ml-2">
-          <i data-lucide="panel-left" class="w-5 h-5"></i>
-        </label>
-
         <!-- Left: Breadcrumb and Title -->
         <div class="flex-1 min-w-0">
           <!-- Breadcrumb row with action button aligned -->

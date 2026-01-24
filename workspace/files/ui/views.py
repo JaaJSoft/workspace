@@ -1,7 +1,8 @@
 from django.contrib.auth.decorators import login_required
+from django.db.models import Exists, OuterRef
 from django.shortcuts import get_object_or_404, render
 
-from ..models import File
+from ..models import File, FileFavorite
 
 
 def build_breadcrumbs(folder):
@@ -28,9 +29,15 @@ def build_breadcrumbs(folder):
 def index(request, folder=None):
     """File browser view with optional folder navigation."""
     current_folder = None
+    is_favorites_view = str(request.GET.get('favorites', '')).lower() in {'1', 'true', 'yes'}
     breadcrumbs = [{'label': 'Files', 'url': '/files', 'icon': 'hard-drive'}]
 
-    if folder:
+    if is_favorites_view:
+        breadcrumbs = [
+            {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
+            {'label': 'Favorites', 'icon': 'star'},
+        ]
+    elif folder:
         current_folder = get_object_or_404(
             File,
             uuid=folder,
@@ -40,7 +47,12 @@ def index(request, folder=None):
         breadcrumbs = build_breadcrumbs(current_folder)
 
     # Get files in current folder (folders first, then files)
-    if current_folder:
+    if is_favorites_view:
+        nodes = File.objects.filter(
+            owner=request.user,
+            favorites__owner=request.user
+        ).distinct().order_by('-node_type', 'name')
+    elif current_folder:
         nodes = File.objects.filter(
             owner=request.user,
             parent=current_folder
@@ -50,6 +62,12 @@ def index(request, folder=None):
             owner=request.user,
             parent__isnull=True
         ).order_by('-node_type', 'name')  # '-' to reverse order: folder before file
+
+    favorite_subquery = FileFavorite.objects.filter(
+        owner=request.user,
+        file_id=OuterRef('pk'),
+    )
+    nodes = nodes.annotate(is_favorite=Exists(favorite_subquery))
 
     # Calculate folder stats
     folder_stats = {
@@ -64,11 +82,33 @@ def index(request, folder=None):
         else:
             folder_stats['folder_count'] += 1
 
+    if is_favorites_view:
+        page_title = 'Favorites'
+        current_view_url = '/files?favorites=1'
+        empty_title = 'No favorites yet'
+        empty_message = 'Star files or folders to see them here.'
+    elif current_folder:
+        page_title = current_folder.name
+        current_view_url = f'/files/{current_folder.uuid}'
+        empty_title = None
+        empty_message = None
+    else:
+        page_title = 'All Files'
+        current_view_url = '/files'
+        empty_title = None
+        empty_message = None
+
     context = {
         'nodes': nodes,
         'current_folder': current_folder,
         'breadcrumbs': breadcrumbs,
         'folder_stats': folder_stats,
+        'is_favorites_view': is_favorites_view,
+        'is_root_view': not current_folder and not is_favorites_view,
+        'page_title': page_title,
+        'current_view_url': current_view_url,
+        'empty_title': empty_title,
+        'empty_message': empty_message,
     }
 
     # If Alpine AJAX request, return only the partial

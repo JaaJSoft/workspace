@@ -45,11 +45,8 @@
           :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-4 opacity-100'"
           :aria-hidden="collapsed">Quick Access</h3>
       <ul class="space-y-2">
-        {% if not current_folder %}
-          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" active=True x_target="folder-browser" x_target_history="push" %}
-        {% else %}
-          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" active=False x_target="folder-browser" x_target_history="push" %}
-        {% endif %}
+        {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" %}
+        {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" disabled=True badge="Soon" %}
         {% include "ui/partials/drawer_item.html" with icon="trash-2" label="Trash" disabled=True badge="Soon" %}
       </ul>
@@ -86,11 +83,12 @@
             <div class="flex items-center gap-2 min-w-0">
               {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs x_target="folder-browser" x_target_history="push" %}
               <a
-                href="{% if current_folder %}/files/{{ current_folder.uuid }}{% else %}/files{% endif %}"
+                href="{{ current_view_url }}"
                 class="btn btn-ghost btn-sm btn-square"
                 title="Refresh"
                 aria-label="Refresh"
                 x-target="folder-browser"
+                data-refresh-folder-browser
               >
                 <i data-lucide="rotate-cw" class="w-4 h-4"></i>
               </a>
@@ -108,9 +106,7 @@
           </div>
 
           <!-- Title below breadcrumb -->
-          <h1 class="text-2xl font-bold text-base-content">
-            {% if current_folder %}{{ current_folder.name }}{% else %}All Files{% endif %}
-          </h1>
+          <h1 class="text-2xl font-bold text-base-content">{{ page_title }}</h1>
         </div>
       </div>
     </div>
@@ -120,7 +116,7 @@
 
     <!-- Main Content Area with Table -->
     <div class="flex-1 overflow-hidden flex flex-col bg-base-200/30">
-      {% include 'files/ui/partials/folder_content.html' with nodes=nodes folder_stats=folder_stats %}
+      {% include 'files/ui/partials/folder_content.html' with nodes=nodes folder_stats=folder_stats empty_title=empty_title empty_message=empty_message %}
     </div>
   </div>
   {% endpartialdef %}

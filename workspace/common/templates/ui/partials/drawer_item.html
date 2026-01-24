@@ -10,6 +10,7 @@ Parameters:
 - icon_binding: Optional Alpine.js expression for dynamic icon names
 - label: Text label for the item
 - active: Boolean, whether this item is currently active (default: False)
+- active_binding: Optional Alpine.js expression to control active state
 - disabled: Boolean, whether this item is disabled (default: False)
 - badge: Optional badge text (e.g., "Soon", "3", "New")
 - badge_type: Badge variant (default: "sm") - can be "xs", "sm", "md", "lg"
@@ -60,8 +61,16 @@ Usage Examples:
   {% elif href %}
     <a
       href="{{ href }}"
-      class="flex items-center {% if active %}bg-primary/10 text-primary hover:bg-primary/20{% else %}hover:bg-base-300/50{% endif %} p-2 text-base rounded-lg transition-colors"
-      :class="collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3'"
+      {% if active_binding %}
+        class="flex items-center hover:bg-base-300/50 p-2 text-base rounded-lg transition-colors"
+        :class="[
+          collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3',
+          ({{ active_binding|safe }}) ? 'bg-primary/10 text-primary hover:bg-primary/20' : ''
+        ]"
+      {% else %}
+        class="flex items-center {% if active %}bg-primary/10 text-primary hover:bg-primary/20{% else %}hover:bg-base-300/50{% endif %} p-2 text-base rounded-lg transition-colors"
+        :class="collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3'"
+      {% endif %}
       {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %}
       {% if onclick %}@click="{{ onclick }}"{% endif %}
       {% if title_binding %}
@@ -90,8 +99,16 @@ Usage Examples:
   {% else %}
     <button
       type="button"
-      class="flex items-center w-full text-left {% if active %}bg-primary/10 text-primary hover:bg-primary/20{% else %}hover:bg-base-300/50{% endif %} p-2 text-base rounded-lg transition-colors"
-      :class="collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3'"
+      {% if active_binding %}
+        class="flex items-center w-full text-left hover:bg-base-300/50 p-2 text-base rounded-lg transition-colors"
+        :class="[
+          collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3',
+          ({{ active_binding|safe }}) ? 'bg-primary/10 text-primary hover:bg-primary/20' : ''
+        ]"
+      {% else %}
+        class="flex items-center w-full text-left {% if active %}bg-primary/10 text-primary hover:bg-primary/20{% else %}hover:bg-base-300/50{% endif %} p-2 text-base rounded-lg transition-colors"
+        :class="collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3'"
+      {% endif %}
       {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %}
       {% if onclick %}@click="{{ onclick }}"{% endif %}
       {% if title_binding %}

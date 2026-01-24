@@ -21,6 +21,7 @@
           <tr class="bg-base-200">
             <th class="w-12"></th>
             <th>Name</th>
+            <th class="w-10 text-center">Fav</th>
             <th class="hidden sm:table-cell">Size</th>
             <th class="hidden md:table-cell">Modified</th>
             {% if show_actions != False %}
@@ -71,6 +72,27 @@
                 <span class="font-medium">{{ node.name }}</span>
               {% endif %}
             </td>
+            <td class="text-center text-base-content/60" data-stop-row-click>
+              {% if node.is_favorite %}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs btn-circle"
+                  aria-label="Remove from favorites"
+                  @click="toggleFavorite('{{ node.uuid }}', true)"
+                >
+                  <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
+                </button>
+              {% else %}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs btn-circle"
+                  aria-label="Add to favorites"
+                  @click="toggleFavorite('{{ node.uuid }}', false)"
+                >
+                  <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
+                </button>
+              {% endif %}
+            </td>
             <td class="hidden sm:table-cell text-sm text-base-content/70">
               {% if node.node_type == 'file' %}
                 {{ node.size|filesize }}
@@ -90,23 +112,44 @@
                 >
                   <i data-lucide="more-vertical" class="w-4 h-4"></i>
                 </label>
-                <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow-lg bg-base-100 border border-base-300 rounded-box w-40">
+                <ul tabindex="0" class="dropdown-content z-50 menu menu-sm shadow-xl bg-base-100 border border-base-300 rounded-lg w-56 p-1 mt-2">
                   {% if node.node_type == 'file' and node.content %}
                   <li>
-                    <a href="{{ node.content.url }}" target="_blank" class="gap-2">
+                    <a href="{{ node.content.url }}" target="_blank" class="gap-3 rounded">
                       <i data-lucide="eye" class="w-4 h-4"></i>View
                     </a>
                   </li>
                   <li>
-                    <a href="{{ node.content.url }}" download class="gap-2">
+                    <a href="{{ node.content.url }}" download class="gap-3 rounded">
                       <i data-lucide="download" class="w-4 h-4"></i>Download
                     </a>
+                  </li>
+                  {% endif %}
+                  {% if node.is_favorite %}
+                  <li>
+                    <button
+                      type="button"
+                      class="gap-3 rounded"
+                      @click="toggleFavorite('{{ node.uuid }}', true)"
+                    >
+                      <i data-lucide="star" class="w-4 h-4"></i>Remove from favorites
+                    </button>
+                  </li>
+                  {% else %}
+                  <li>
+                    <button
+                      type="button"
+                      class="gap-3 rounded"
+                      @click="toggleFavorite('{{ node.uuid }}', false)"
+                    >
+                      <i data-lucide="star" class="w-4 h-4"></i>Add to favorites
+                    </button>
                   </li>
                   {% endif %}
                   <li>
                     <button
                       type="button"
-                      class="gap-2"
+                      class="gap-3 rounded"
                       @click="showRenameDialog('{{ node.uuid }}', '{{ node.name|escapejs }}')"
                     >
                       <i data-lucide="pencil" class="w-4 h-4"></i>Rename
@@ -115,7 +158,7 @@
                   <li>
                     <button
                       type="button"
-                      class="gap-2 text-error"
+                      class="gap-3 rounded text-error"
                       @click="confirmDelete('{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.node_type }}')"
                     >
                       <i data-lucide="trash-2" class="w-4 h-4"></i>Delete

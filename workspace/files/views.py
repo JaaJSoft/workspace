@@ -1,9 +1,12 @@
 import mimetypes
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Exists, OuterRef
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from rest_framework import viewsets
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from drf_spectacular.types import OpenApiTypes
@@ -15,7 +18,7 @@ from drf_spectacular.utils import (
     extend_schema_view,
 )
 
-from .models import File
+from .models import File, FileFavorite
 from .serializers import FileSerializer
 
 
@@ -34,6 +37,11 @@ from .serializers import FileSerializer
                 type=OpenApiTypes.STR,
                 enum=[File.NodeType.FILE, File.NodeType.FOLDER],
                 description="Filter by node type.",
+            ),
+            OpenApiParameter(
+                name="favorites",
+                type=OpenApiTypes.BOOL,
+                description="When true, return only favorited items.",
             ),
             OpenApiParameter(
                 name="parent",
@@ -175,9 +183,33 @@ class FileViewSet(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'updated_at', 'size']
     ordering = ['node_type', 'name']
 
+    def _is_favorites_query(self):
+        value = self.request.query_params.get('favorites')
+        if value is None:
+            return False
+        return str(value).lower() in {'1', 'true', 'yes'}
+
     def get_queryset(self):
         """Filter by current user's files."""
         queryset = File.objects.filter(owner=self.request.user)
-        if self.action == 'list' and 'parent' not in self.request.query_params:
-            return queryset.filter(parent__isnull=True)
+        favorite_subquery = FileFavorite.objects.filter(
+            owner=self.request.user,
+            file_id=OuterRef('pk'),
+        )
+        queryset = queryset.annotate(is_favorite=Exists(favorite_subquery))
+        if self.action == 'list':
+            if self._is_favorites_query():
+                return queryset.filter(favorites__owner=self.request.user).distinct()
+            if 'parent' not in self.request.query_params:
+                return queryset.filter(parent__isnull=True)
         return queryset
+
+    @action(detail=True, methods=['post', 'delete'], url_path='favorite')
+    def favorite(self, request, uuid=None):
+        """Add or remove a file/folder from favorites."""
+        file_obj = self.get_object()
+        if request.method == 'POST':
+            FileFavorite.objects.get_or_create(owner=request.user, file=file_obj)
+            return Response({'is_favorite': True}, status=status.HTTP_200_OK)
+        FileFavorite.objects.filter(owner=request.user, file=file_obj).delete()
+        return Response({'is_favorite': False}, status=status.HTTP_200_OK)

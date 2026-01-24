@@ -1,8 +1,12 @@
 window.sidebarCollapse = function sidebarCollapse() {
   return {
     collapsed: localStorage.getItem('sidebarCollapsed') === 'true',
+    activeView: null,
     
     init() {
+      this.syncActiveView();
+      window.addEventListener('popstate', () => this.syncActiveView());
+
       // Initialize Lucide icons on load
       this.$nextTick(() => {
         if (typeof lucide !== 'undefined') {
@@ -31,6 +35,25 @@ window.sidebarCollapse = function sidebarCollapse() {
           lucide.createIcons();
         }
       });
+    },
+
+    syncActiveView() {
+      const path = window.location.pathname.replace(/\/+$/, '');
+      const params = new URLSearchParams(window.location.search);
+      const favorites = (params.get('favorites') || '').toLowerCase();
+      if (['1', 'true', 'yes'].includes(favorites)) {
+        this.activeView = 'favorites';
+        return;
+      }
+      if (path === '/files') {
+        this.activeView = 'root';
+        return;
+      }
+      this.activeView = null;
+    },
+
+    setActiveView(view) {
+      this.activeView = view;
     }
   }
 }
@@ -118,7 +141,7 @@ window.fileBrowser = function fileBrowser() {
         });
         if (response.ok) {
           document.getElementById('create-folder-dialog').close();
-          window.location.reload();
+          this.refreshFolderBrowser();
         } else {
           const data = await response.json();
           this.showAlert('error', data.detail || 'Failed to create folder');
@@ -191,7 +214,7 @@ window.fileBrowser = function fileBrowser() {
         });
         if (response.ok) {
           document.getElementById('create-file-dialog').close();
-          window.location.reload();
+          this.refreshFolderBrowser();
         } else {
           let data = {};
           try {
@@ -235,7 +258,7 @@ window.fileBrowser = function fileBrowser() {
           this.showAlert('error', `Failed to upload ${file.name}`);
         }
       }
-      window.location.reload();
+          this.refreshFolderBrowser();
     },
 
     async renameItem(uuid, newName) {
@@ -250,7 +273,7 @@ window.fileBrowser = function fileBrowser() {
         });
         if (response.ok) {
           document.getElementById('rename-dialog').close();
-          window.location.reload();
+          this.refreshFolderBrowser();
         } else {
           const data = await response.json();
           this.showAlert('error', data.detail || 'Failed to rename');
@@ -269,13 +292,78 @@ window.fileBrowser = function fileBrowser() {
           }
         });
         if (response.ok) {
-          window.location.reload();
+          this.refreshFolderBrowser();
         } else {
           this.showAlert('error', 'Failed to delete');
         }
       } catch (error) {
         this.showAlert('error', 'Failed to delete');
       }
+    },
+
+    async toggleFavorite(uuid, isFavorite) {
+      if (!uuid) return;
+      try {
+        const response = await fetch(`/api/v1/files/${uuid}/favorite`, {
+          method: isFavorite ? 'DELETE' : 'POST',
+          headers: {
+            'X-CSRFToken': this.getCsrfToken()
+          }
+        });
+        if (response.ok) {
+          this.refreshFolderBrowser();
+          return;
+        }
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (error) {
+          data = {};
+        }
+        this.showAlert('error', data.detail || 'Failed to update favorites');
+      } catch (error) {
+        this.showAlert('error', 'Failed to update favorites');
+      }
+    },
+
+    refreshFolderBrowser() {
+      const refreshLink = document.querySelector('[data-refresh-folder-browser]');
+      if (refreshLink) {
+        refreshLink.click();
+        return;
+      }
+      const target = document.getElementById('folder-browser');
+      if (!target) return;
+      fetch(window.location.href, {
+        headers: {
+          'X-Alpine-Request': 'true'
+        }
+      })
+        .then((response) => {
+          if (!response.ok) {
+            this.showAlert('error', 'Failed to refresh items');
+            return null;
+          }
+          return response.text();
+        })
+        .then((html) => {
+          if (!html) return;
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = html;
+          const fresh = wrapper.querySelector('#folder-browser');
+          if (!fresh) {
+            this.showAlert('error', 'Failed to refresh items');
+            return;
+          }
+          target.replaceWith(fresh);
+          if (window.Alpine?.initTree) {
+            window.Alpine.initTree(fresh);
+          }
+          if (window.lucide?.createIcons) {
+            window.lucide.createIcons({ nodes: [fresh] });
+          }
+        })
+        .catch(() => this.showAlert('error', 'Failed to refresh items'));
     },
 
     showAlert(type, message) {

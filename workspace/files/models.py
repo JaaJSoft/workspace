@@ -172,6 +172,36 @@ class File(models.Model):
         super().delete(*args, **kwargs)
 
 
+class FileFavorite(models.Model):
+    """User favorites for files or folders."""
+    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='file_favorites',
+    )
+    file = models.ForeignKey(
+        File,
+        on_delete=models.CASCADE,
+        related_name='favorites',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['owner', 'file'],
+                name='unique_file_favorite',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['owner', 'created_at'], name='file_fav_owner_created'),
+        ]
+
+    def __str__(self):
+        return f"{self.owner} -> {self.file}"
+
+
 # Signal to handle file deletion when using QuerySet.delete() or bulk operations
 @receiver(pre_delete, sender=File)
 def delete_file_on_delete(sender, instance, **kwargs):

@@ -57,7 +57,7 @@
                 <a
                   href="/files/{{ node.uuid }}"
                   class="font-medium hover:text-primary hover:underline"
-                  x-target="folder-browser"
+                  x-target.push="folder-browser"
                 >
                   {{ node.name }}
                 </a>

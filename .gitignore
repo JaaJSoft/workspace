@@ -116,5 +116,4 @@ crashlytics.properties
 crashlytics-build.properties
 fabric.properties
 
-files/
 db.sqlite3*

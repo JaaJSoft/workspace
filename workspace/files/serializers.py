@@ -37,7 +37,11 @@ class FileSerializer(serializers.ModelSerializer):
             'name': {'help_text': 'Display name of the file or folder.'},
             'node_type': {'help_text': "Either 'file' or 'folder'."},
             'parent': {'help_text': 'Parent folder UUID.'},
-            'content': {'help_text': 'File payload. Must be empty for folders.'},
+            'content': {
+                'help_text': 'File payload. Must be empty for folders.',
+                'allow_empty_file': True,
+                'required': False,
+            },
             'size': {'help_text': 'File size in bytes.'},
             'mime_type': {'help_text': 'MIME type for file nodes.'},
             'owner': {'help_text': 'Owner user id.'},

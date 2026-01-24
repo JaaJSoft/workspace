@@ -48,7 +48,7 @@ class File(models.Model):
     )
 
     # File-specific fields
-    content = models.FileField(upload_to=file_upload_path, null=True, blank=True)
+    content = models.FileField(upload_to=file_upload_path, null=True, blank=True, max_length=1024)
     size = models.BigIntegerField(null=True, blank=True, help_text="File size in bytes")
     mime_type = models.CharField(max_length=100, null=True, blank=True)
     path = models.TextField(

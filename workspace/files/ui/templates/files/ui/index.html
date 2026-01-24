@@ -1,5 +1,5 @@
 {% extends 'base_with_navbar.html' %}
-{% load file_filters %}
+{% load file_filters static %}
 
 {% block title %}Files - Workspace{% endblock %}
 
@@ -27,7 +27,7 @@
       <h3 class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-3">Quick Access</h3>
       <ul class="menu menu-sm p-0 gap-1">
         <li>
-          <a href="/files" class="{% if not current_folder %}active{% endif %} gap-3" x-target="folder-browser">
+          <a href="/files" class="{% if not current_folder %}active{% endif %} gap-3" x-target.push="folder-browser">
             <i data-lucide="folder" class="w-4 h-4"></i>
             All Files
           </a>
@@ -85,7 +85,7 @@
         <div class="flex-1 min-w-0">
           <!-- Breadcrumb row with action button aligned -->
           <div class="flex items-center justify-between gap-4 mb-1">
-            {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs x_target="folder-browser" %}
+            {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs x_target="folder-browser" x_target_history="push" %}
 
             <!-- Action button with dropdown -->
             <div class="dropdown dropdown-end flex-shrink-0">
@@ -94,53 +94,7 @@
                 <span class="hidden sm:inline">New</span>
                 <i data-lucide="chevron-down" class="w-3 h-3 hidden sm:inline opacity-70"></i>
               </button>
-              <ul tabindex="0" class="dropdown-content z-50 menu menu-sm shadow-xl bg-base-100 border border-base-300 rounded-lg w-56 p-1 mt-2">
-                <li>
-                  <button
-                    type="button"
-                    class="gap-3 rounded"
-                    @click="showCreateFolderDialog(); document.activeElement.blur()"
-                  >
-                    <i data-lucide="folder-plus" class="w-4 h-4 text-warning"></i>
-                    <div class="flex-1">
-                      <div class="font-medium">New Folder</div>
-                      <div class="text-xs text-base-content/60">Create a new folder</div>
-                    </div>
-                  </button>
-                </li>
-                <li>
-                  <label class="gap-3 rounded cursor-pointer">
-                    <i data-lucide="file-plus" class="w-4 h-4 text-info"></i>
-                    <div class="flex-1">
-                      <div class="font-medium">Upload Files</div>
-                      <div class="text-xs text-base-content/60">Select files from your computer</div>
-                    </div>
-                    <input
-                      type="file"
-                      class="hidden"
-                      multiple
-                      @change="handleUpload($event)"
-                    />
-                  </label>
-                </li>
-                <div class="divider my-1"></div>
-                <li>
-                  <label class="gap-3 rounded cursor-pointer">
-                    <i data-lucide="folder-open" class="w-4 h-4 text-success"></i>
-                    <div class="flex-1">
-                      <div class="font-medium">Upload Folder</div>
-                      <div class="text-xs text-base-content/60">Upload entire folder</div>
-                    </div>
-                    <input
-                      type="file"
-                      class="hidden"
-                      webkitdirectory
-                      directory
-                      @change="handleUpload($event)"
-                    />
-                  </label>
-                </li>
-              </ul>
+              {% include 'files/ui/partials/new_menu.html' %}
             </div>
           </div>
 
@@ -163,211 +117,9 @@
   {% endpartialdef %}
 </div>
 
-<!-- Create Folder Dialog -->
-<dialog id="create-folder-dialog" class="modal">
-  <div class="modal-box" x-data>
-    <h3 class="font-bold text-lg mb-4">Create New Folder</h3>
-    <form @submit.prevent="$dispatch('create-folder', { name: $refs.folderName.value })">
-      <div class="form-control">
-        <label class="label">
-          <span class="label-text">Folder name</span>
-        </label>
-        <input
-          x-ref="folderName"
-          type="text"
-          placeholder="New folder"
-          class="input input-bordered w-full"
-          required
-        />
-      </div>
-      <div class="modal-action">
-        <button type="button" class="btn btn-sm" onclick="document.getElementById('create-folder-dialog').close()">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-sm">Create</button>
-      </div>
-    </form>
-  </div>
-  <form method="dialog" class="modal-backdrop">
-    <button>close</button>
-  </form>
-</dialog>
+{% include 'files/ui/partials/dialogs.html' %}
+{% endblock %}
 
-<!-- Rename Dialog -->
-<dialog id="rename-dialog" class="modal">
-  <div class="modal-box" x-data="{ uuid: '', name: '' }" @open-rename.window="uuid = $event.detail.uuid; name = $event.detail.name">
-    <h3 class="font-bold text-lg mb-4">Rename</h3>
-    <form @submit.prevent="$dispatch('rename-item', { uuid: uuid, name: $refs.newName.value })">
-      <div class="form-control">
-        <label class="label">
-          <span class="label-text">New name</span>
-        </label>
-        <input
-          x-ref="newName"
-          x-model="name"
-          type="text"
-          class="input input-bordered w-full"
-          required
-        />
-      </div>
-      <div class="modal-action">
-        <button type="button" class="btn btn-sm" onclick="document.getElementById('rename-dialog').close()">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-sm">Rename</button>
-      </div>
-    </form>
-  </div>
-  <form method="dialog" class="modal-backdrop">
-    <button>close</button>
-  </form>
-</dialog>
-
-<script>
-function fileBrowser() {
-  return {
-    get currentFolder() {
-      const folderEl = document.getElementById('folder-browser');
-      return folderEl?.dataset.folder || '';
-    },
-
-    showCreateFolderDialog() {
-      const dialog = document.getElementById('create-folder-dialog');
-      const input = dialog.querySelector('input');
-      input.value = '';
-      dialog.showModal();
-      setTimeout(() => input.focus(), 100);
-    },
-
-    showRenameDialog(uuid, name) {
-      const dialog = document.getElementById('rename-dialog');
-      window.dispatchEvent(new CustomEvent('open-rename', { detail: { uuid, name } }));
-      dialog.showModal();
-      setTimeout(() => dialog.querySelector('input').focus(), 100);
-    },
-
-    async confirmDelete(uuid, name, nodeType) {
-      const confirmed = await AppDialog.confirm({
-        title: `Delete ${nodeType}?`,
-        message: `Are you sure you want to delete "${name}"?${nodeType === 'folder' ? ' This will also delete all contents.' : ''}`,
-        okLabel: 'Delete',
-        okClass: 'btn-error'
-      });
-      if (confirmed) {
-        this.deleteItem(uuid);
-      }
-    },
-
-    async createFolder(name) {
-      try {
-        const response = await fetch('/api/v1/files', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.getCsrfToken()
-          },
-          body: JSON.stringify({
-            name: name,
-            node_type: 'folder',
-            parent: this.currentFolder || null
-          })
-        });
-        if (response.ok) {
-          document.getElementById('create-folder-dialog').close();
-          window.location.reload();
-        } else {
-          const data = await response.json();
-          this.showAlert('error', data.detail || 'Failed to create folder');
-        }
-      } catch (error) {
-        this.showAlert('error', 'Failed to create folder');
-      }
-    },
-
-    async handleUpload(event) {
-      const files = event.target.files;
-      if (!files.length) return;
-
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append('name', file.name);
-        formData.append('node_type', 'file');
-        formData.append('content', file);
-        if (this.currentFolder) {
-          formData.append('parent', this.currentFolder);
-        }
-
-        try {
-          const response = await fetch('/api/v1/files', {
-            method: 'POST',
-            headers: {
-              'X-CSRFToken': this.getCsrfToken()
-            },
-            body: formData
-          });
-          if (!response.ok) {
-            const data = await response.json();
-            this.showAlert('error', `Failed to upload ${file.name}: ${data.detail || 'Unknown error'}`);
-          }
-        } catch (error) {
-          this.showAlert('error', `Failed to upload ${file.name}`);
-        }
-      }
-      window.location.reload();
-    },
-
-    async renameItem(uuid, newName) {
-      try {
-        const response = await fetch(`/api/v1/files/${uuid}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.getCsrfToken()
-          },
-          body: JSON.stringify({ name: newName })
-        });
-        if (response.ok) {
-          document.getElementById('rename-dialog').close();
-          window.location.reload();
-        } else {
-          const data = await response.json();
-          this.showAlert('error', data.detail || 'Failed to rename');
-        }
-      } catch (error) {
-        this.showAlert('error', 'Failed to rename');
-      }
-    },
-
-    async deleteItem(uuid) {
-      try {
-        const response = await fetch(`/api/v1/files/${uuid}`, {
-          method: 'DELETE',
-          headers: {
-            'X-CSRFToken': this.getCsrfToken()
-          }
-        });
-        if (response.ok) {
-          window.location.reload();
-        } else {
-          this.showAlert('error', 'Failed to delete');
-        }
-      } catch (error) {
-        this.showAlert('error', 'Failed to delete');
-      }
-    },
-
-    showAlert(type, message) {
-      const alert = InlineAlert.create({ type, message, dismissible: true, className: 'mb-4' });
-      this.$refs.alertsContainer.appendChild(alert);
-    },
-
-    getCsrfToken() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-             document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-    },
-
-    init() {
-      // Listen for form submissions from dialogs
-      window.addEventListener('create-folder', (e) => this.createFolder(e.detail.name));
-      window.addEventListener('rename-item', (e) => this.renameItem(e.detail.uuid, e.detail.name));
-    }
-  };
-}
-</script>
+{% block extra_scripts %}
+<script src="{% static 'files/ui/js/file_browser.js' %}"></script>
 {% endblock %}

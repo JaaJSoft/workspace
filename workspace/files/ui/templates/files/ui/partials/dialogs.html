@@ -1,0 +1,109 @@
+<!-- Create Folder Dialog -->
+<dialog id="create-folder-dialog" class="modal">
+  <div class="modal-box" x-data>
+    <h3 class="font-bold text-lg mb-4">Create New Folder</h3>
+    <form @submit.prevent="$dispatch('create-folder', { name: $refs.folderName.value })">
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">Folder name</span>
+        </label>
+        <input
+          x-ref="folderName"
+          type="text"
+          placeholder="New folder"
+          class="input input-bordered w-full"
+          required
+        />
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('create-folder-dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Create</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
+<!-- Create File Dialog -->
+<dialog id="create-file-dialog" class="modal">
+  <div class="modal-box" x-data="{ fileType: 'txt' }">
+    <h3 class="font-bold text-lg mb-4">Create New File</h3>
+    <form @submit.prevent="$dispatch('create-file', { name: $refs.fileName.value, fileType, customExt: $refs.customExt ? $refs.customExt.value : '' })">
+      <div class="form-control mb-3">
+        <label class="label">
+          <span class="label-text">File name</span>
+        </label>
+        <input
+          x-ref="fileName"
+          type="text"
+          placeholder="notes"
+          class="input input-bordered w-full"
+          required
+        />
+        <label class="label">
+          <span class="label-text-alt">Extension added if missing</span>
+        </label>
+      </div>
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">Type</span>
+        </label>
+        <select x-model="fileType" class="select select-bordered w-full">
+          <option value="txt">Text (.txt)</option>
+          <option value="md">Markdown (.md)</option>
+          <option value="json">JSON (.json)</option>
+          <option value="csv">CSV (.csv)</option>
+          <option value="custom">Custom extension</option>
+        </select>
+      </div>
+      <div class="form-control mt-3" x-show="fileType === 'custom'" x-cloak>
+        <label class="label">
+          <span class="label-text">Extension</span>
+        </label>
+        <input
+          x-ref="customExt"
+          type="text"
+          placeholder="log"
+          class="input input-bordered w-full"
+        />
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('create-file-dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Create</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
+<!-- Rename Dialog -->
+<dialog id="rename-dialog" class="modal">
+  <div class="modal-box" x-data="{ uuid: '', name: '' }" @open-rename.window="uuid = $event.detail.uuid; name = $event.detail.name">
+    <h3 class="font-bold text-lg mb-4">Rename</h3>
+    <form @submit.prevent="$dispatch('rename-item', { uuid: uuid, name: $refs.newName.value })">
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">New name</span>
+        </label>
+        <input
+          x-ref="newName"
+          x-model="name"
+          type="text"
+          class="input input-bordered w-full"
+          required
+        />
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('rename-dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Rename</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

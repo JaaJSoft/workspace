@@ -8,6 +8,7 @@
 
   Optional context:
     - x_target: Alpine AJAX target id for links (enables SPA-like navigation)
+    - x_target_history: "push" or "replace" to update browser history when navigating
 
   Example:
     {% include "ui/partials/breadcrumbs.html" with breadcrumbs=[
@@ -24,7 +25,7 @@
     {% for item in breadcrumbs %}
       <li>
         {% if item.url %}
-          <a href="{{ item.url }}" class="flex items-center gap-1"{% if x_target %} x-target="{{ x_target }}"{% endif %}>
+          <a href="{{ item.url }}" class="flex items-center gap-1"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
             {% if item.icon %}<i data-lucide="{{ item.icon }}" class="w-4 h-4"></i>{% endif %}
             {% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}
           </a>

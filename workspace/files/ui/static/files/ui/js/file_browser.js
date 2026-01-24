@@ -399,3 +399,342 @@ window.fileBrowser = function fileBrowser() {
     }
   };
 };
+
+window.fileTableControls = function fileTableControls() {
+  return {
+    storageKey: 'fileTableControls:v1',
+    searchQuery: '',
+    typeFilter: 'all',
+    sortField: 'default',
+    sortDir: 'asc',
+    columns: [
+      { id: 'icon', label: 'Type', required: true },
+      { id: 'name', label: 'Name', required: true },
+      { id: 'favorite', label: 'Fav', required: false },
+      { id: 'size', label: 'Size', required: false },
+      { id: 'modified', label: 'Modified', required: false },
+      { id: 'actions', label: 'Actions', required: false }
+    ],
+    defaultColumnOrder: ['icon', 'name', 'favorite', 'size', 'modified', 'actions'],
+    defaultColumnVisibility: {
+      icon: true,
+      name: true,
+      favorite: true,
+      size: true,
+      modified: true,
+      actions: true
+    },
+    columnOrder: ['icon', 'name', 'favorite', 'size', 'modified', 'actions'],
+    columnVisibility: {
+      icon: true,
+      name: true,
+      favorite: true,
+      size: true,
+      modified: true,
+      actions: true
+    },
+    table: null,
+    tbody: null,
+    originalRows: [],
+    ready: false,
+
+    get orderedColumns() {
+      return this.columnOrder
+        .map((id) => this.columns.find((col) => col.id === id))
+        .filter(Boolean);
+    },
+
+    init() {
+      this.table = this.$el.querySelector('table');
+      if (!this.table) {
+        return;
+      }
+      this.tbody = this.table.querySelector('tbody');
+      if (!this.tbody) {
+        return;
+      }
+      this.originalRows = Array.from(this.tbody.querySelectorAll('tr'));
+      this.loadState();
+      this.pruneMissingColumns();
+      this.ready = true;
+      this.applyAll();
+
+      this.$nextTick(() => {
+        if (typeof lucide !== 'undefined') {
+          lucide.createIcons({ nodes: [this.$el] });
+        }
+      });
+
+      this.$watch('searchQuery', () => this.applyRows());
+      this.$watch('typeFilter', () => this.applyRows());
+      this.$watch('sortField', () => this.applyRows());
+      this.$watch('sortDir', () => this.applyRows());
+    },
+
+    loadState() {
+      try {
+        const raw = localStorage.getItem(this.storageKey);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (Array.isArray(data.columnOrder)) {
+          this.columnOrder = data.columnOrder.slice();
+        }
+        if (data.columnVisibility && typeof data.columnVisibility === 'object') {
+          this.columnVisibility = { ...this.columnVisibility, ...data.columnVisibility };
+        }
+        if (typeof data.sortField === 'string') {
+          this.sortField = data.sortField;
+        }
+        if (data.sortDir === 'asc' || data.sortDir === 'desc') {
+          this.sortDir = data.sortDir;
+        }
+      } catch (error) {
+        // Ignore malformed state
+      }
+    },
+
+    saveState() {
+      try {
+        const payload = {
+          sortField: this.sortField,
+          sortDir: this.sortDir,
+          columnOrder: this.columnOrder,
+          columnVisibility: this.columnVisibility
+        };
+        localStorage.setItem(this.storageKey, JSON.stringify(payload));
+      } catch (error) {
+        // Ignore storage failures
+      }
+    },
+
+    pruneMissingColumns() {
+      const present = new Set(
+        Array.from(this.table.querySelectorAll('thead th[data-col]')).map((cell) => cell.dataset.col)
+      );
+      this.columns = this.columns.filter((col) => present.has(col.id));
+      this.columnOrder = this.columnOrder.filter((id) => present.has(id));
+
+      const missing = this.columns
+        .map((col) => col.id)
+        .filter((id) => !this.columnOrder.includes(id));
+      this.columnOrder.push(...missing);
+
+      this.columns.forEach((col) => {
+        if (!(col.id in this.columnVisibility)) {
+          this.columnVisibility[col.id] = true;
+        }
+        if (col.required) {
+          this.columnVisibility[col.id] = true;
+        }
+      });
+    },
+
+    applyAll() {
+      if (!this.ready) return;
+      this.applyColumns();
+      this.applyRows();
+    },
+
+    applyColumns() {
+      if (!this.ready) return;
+      this.applyColumnVisibility();
+      this.applyColumnOrder();
+    },
+
+    applyColumnVisibility() {
+      if (!this.table) return;
+      this.columns.forEach((col) => {
+        const show = this.isColumnVisible(col.id);
+        this.table.querySelectorAll(`[data-col="${col.id}"]`).forEach((cell) => {
+          cell.style.display = show ? '' : 'none';
+        });
+      });
+      this.updateEmptyRowColspan();
+    },
+
+    applyColumnOrder() {
+      if (!this.table) return;
+      const headerRow = this.table.querySelector('thead tr');
+      if (headerRow) {
+        this.reorderRowCells(headerRow);
+      }
+      if (!this.tbody) return;
+      const rows = Array.from(this.tbody.querySelectorAll('tr')).filter((row) => !row.dataset.emptyRow);
+      rows.forEach((row) => this.reorderRowCells(row));
+    },
+
+    reorderRowCells(row) {
+      const cells = Array.from(row.children).filter((cell) => cell.dataset && cell.dataset.col);
+      if (!cells.length) return;
+      const cellMap = new Map(cells.map((cell) => [cell.dataset.col, cell]));
+      this.columnOrder.forEach((id) => {
+        const cell = cellMap.get(id);
+        if (cell) {
+          row.appendChild(cell);
+        }
+      });
+    },
+
+    isColumnVisible(id) {
+      const column = this.columns.find((col) => col.id === id);
+      if (column && column.required) return true;
+      return this.columnVisibility[id] !== false;
+    },
+
+    setColumnVisible(id, visible) {
+      const column = this.columns.find((col) => col.id === id);
+      if (column && column.required) {
+        this.columnVisibility[id] = true;
+        return;
+      }
+      this.columnVisibility[id] = Boolean(visible);
+      this.applyColumnVisibility();
+      this.saveState();
+    },
+
+    moveColumn(id, direction) {
+      const index = this.columnOrder.indexOf(id);
+      if (index === -1) return;
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= this.columnOrder.length) return;
+      this.columnOrder.splice(index, 1);
+      this.columnOrder.splice(nextIndex, 0, id);
+      this.applyColumnOrder();
+      this.saveState();
+    },
+
+    resetColumns() {
+      this.columnOrder = this.defaultColumnOrder.filter((id) => this.columns.some((col) => col.id === id));
+      this.columnVisibility = { ...this.defaultColumnVisibility };
+      this.columns.forEach((col) => {
+        if (!(col.id in this.columnVisibility)) {
+          this.columnVisibility[col.id] = true;
+        }
+        if (col.required) {
+          this.columnVisibility[col.id] = true;
+        }
+      });
+      this.applyColumns();
+      this.saveState();
+    },
+
+    resetAll() {
+      this.searchQuery = '';
+      this.typeFilter = 'all';
+      this.sortField = 'default';
+      this.sortDir = 'asc';
+      this.resetColumns();
+      this.applyRows();
+    },
+
+    toggleSortDir() {
+      this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+    },
+
+    applyRows() {
+      if (!this.ready || !this.tbody) return;
+      const query = (this.searchQuery || '').trim().toLowerCase();
+      const filtered = this.originalRows.filter((row) => this.matchesFilter(row, query));
+      let ordered = filtered;
+
+      if (this.sortField !== 'default') {
+        const dir = this.sortDir === 'asc' ? 1 : -1;
+        ordered = filtered.slice().sort((a, b) => this.compareRows(a, b, dir));
+      }
+
+      const fragment = document.createDocumentFragment();
+      ordered.forEach((row) => fragment.appendChild(row));
+      this.tbody.replaceChildren();
+      this.tbody.appendChild(fragment);
+      this.updateEmptyRow(ordered.length);
+      this.saveState();
+    },
+
+    matchesFilter(row, query) {
+      if (row.dataset.emptyRow) return false;
+      if (query) {
+        const name = row.dataset.name || '';
+        if (!name.includes(query)) {
+          return false;
+        }
+      }
+      if (this.typeFilter === 'files' && row.dataset.nodeType !== 'file') {
+        return false;
+      }
+      if (this.typeFilter === 'folders' && row.dataset.nodeType !== 'folder') {
+        return false;
+      }
+      if (this.typeFilter === 'favorites' && row.dataset.favorite !== '1') {
+        return false;
+      }
+      return true;
+    },
+
+    compareRows(a, b, dir) {
+      const aValue = this.getSortValue(a);
+      const bValue = this.getSortValue(b);
+      if (typeof aValue === 'string' || typeof bValue === 'string') {
+        const diff = String(aValue).localeCompare(String(bValue));
+        if (diff !== 0) return diff * dir;
+      } else {
+        if (aValue < bValue) return -1 * dir;
+        if (aValue > bValue) return 1 * dir;
+      }
+      const aName = a.dataset.name || '';
+      const bName = b.dataset.name || '';
+      return aName.localeCompare(bName) * dir;
+    },
+
+    getSortValue(row) {
+      switch (this.sortField) {
+        case 'name':
+          return row.dataset.name || '';
+        case 'size':
+          return parseInt(row.dataset.size || '0', 10);
+        case 'modified':
+          return parseInt(row.dataset.updated || '0', 10);
+        case 'favorite':
+          return parseInt(row.dataset.favorite || '0', 10);
+        case 'type':
+          return row.dataset.nodeType === 'folder' ? 0 : 1;
+        default:
+          return 0;
+      }
+    },
+
+    getColumnCount() {
+      const headerCells = this.table.querySelectorAll('thead th[data-col]');
+      if (headerCells.length) return headerCells.length;
+      return this.columnOrder.length || 1;
+    },
+
+    updateEmptyRowColspan() {
+      if (!this.tbody) return;
+      const emptyRow = this.tbody.querySelector('[data-empty-row]');
+      if (!emptyRow) return;
+      const cell = emptyRow.querySelector('td');
+      if (!cell) return;
+      cell.setAttribute('colspan', String(this.getColumnCount()));
+    },
+
+    updateEmptyRow(visibleCount) {
+      if (!this.tbody) return;
+      let emptyRow = this.tbody.querySelector('[data-empty-row]');
+      if (visibleCount === 0) {
+        if (!emptyRow) {
+          emptyRow = document.createElement('tr');
+          emptyRow.dataset.emptyRow = 'true';
+          const cell = document.createElement('td');
+          cell.className = 'py-6 text-center text-base-content/60';
+          cell.textContent = 'No matching items';
+          cell.setAttribute('colspan', String(this.getColumnCount()));
+          emptyRow.appendChild(cell);
+        }
+        emptyRow.querySelector('td').setAttribute('colspan', String(this.getColumnCount()));
+        this.tbody.appendChild(emptyRow);
+      } else if (emptyRow) {
+        emptyRow.remove();
+      }
+    }
+  };
+};

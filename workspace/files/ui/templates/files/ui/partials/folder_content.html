@@ -11,21 +11,111 @@
     - empty_message: str - custom empty state message
 {% endcomment %}
 
-<div class="bg-base-100 shadow border border-base-300 flex flex-col h-full">
+<div class="border-base-300 flex flex-col h-full" x-data="fileTableControls()" x-init="init()">
   <div class="card-body p-0 flex flex-col flex-1 ">
+    {% if nodes %}
+    <div class="border-b border-base-300 bg-base-100 px-3 py-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="input input-sm input-bordered flex items-center gap-2 flex-1 min-w-[200px]">
+          <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+          <input
+            type="search"
+            class="grow"
+            placeholder="Filter by name"
+            x-model.debounce.200ms="searchQuery"
+          />
+        </label>
+
+        <select class="select select-sm select-bordered" x-model="typeFilter">
+          <option value="all">All</option>
+          <option value="files">Files</option>
+          <option value="folders">Folders</option>
+          <option value="favorites">Favorites</option>
+        </select>
+
+        <div class="join">
+          <select class="select select-sm select-bordered join-item" x-model="sortField">
+            <option value="default">Default</option>
+            <option value="name">Name</option>
+            <option value="size">Size</option>
+            <option value="modified">Modified</option>
+            <option value="favorite">Favorite</option>
+            <option value="type">Type</option>
+          </select>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline join-item"
+            @click="toggleSortDir()"
+            :disabled="sortField === 'default'"
+            aria-label="Toggle sort direction"
+          >
+            <i data-lucide="arrow-up" class="w-4 h-4" x-show="sortDir === 'asc'" x-cloak></i>
+            <i data-lucide="arrow-down" class="w-4 h-4" x-show="sortDir === 'desc'" x-cloak></i>
+          </button>
+        </div>
+
+        <button type="button" class="btn btn-sm btn-ghost" @click="resetAll()" title="Reset filters and sorting">Reset</button>
+
+        <div class="dropdown dropdown-end">
+          <label tabindex="0" class="btn btn-sm btn-outline gap-2">
+            <i data-lucide="columns-2" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Columns</span>
+          </label>
+          <div tabindex="0" class="dropdown-content z-50 w-72 p-2 shadow-xl bg-base-100 border border-base-300 rounded-lg">
+            <div class="text-xs uppercase tracking-wide text-base-content/60 px-2 py-1">Visible</div>
+            <div class="space-y-1">
+              <template x-for="col in columns" :key="col.id">
+                <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-base-200">
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-xs"
+                    :checked="isColumnVisible(col.id)"
+                    :disabled="col.required"
+                    @change="setColumnVisible(col.id, $event.target.checked)"
+                  />
+                  <span class="text-sm" x-text="col.label"></span>
+                  <span class="ml-auto text-xs text-base-content/40" x-show="col.required">Required</span>
+                </label>
+              </template>
+            </div>
+            <div class="divider my-2"></div>
+            <div class="text-xs uppercase tracking-wide text-base-content/60 px-2 py-1">Order</div>
+            <div class="space-y-1">
+              <template x-for="(col, index) in orderedColumns" :key="col.id">
+                <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-base-200">
+                  <span class="text-sm" x-text="col.label"></span>
+                  <div class="ml-auto flex items-center gap-1">
+                    <button type="button" class="btn btn-ghost btn-xs" @click="moveColumn(col.id, -1)" :disabled="index === 0">
+                      <i data-lucide="chevron-up" class="w-3 h-3"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-xs" @click="moveColumn(col.id, 1)" :disabled="index === orderedColumns.length - 1">
+                      <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <div class="mt-2 flex justify-end">
+              <button type="button" class="btn btn-xs btn-ghost" @click="resetColumns()">Reset columns</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
     <!-- Table container with overflow -->
     <div class="overflow-auto flex-1 min-h-0">
       {% if nodes %}
       <table class="table">
         <thead class="sticky top-0 z-10">
           <tr class="bg-base-200">
-            <th class="w-12"></th>
-            <th>Name</th>
-            <th class="w-10 text-center">Fav</th>
-            <th class="hidden sm:table-cell">Size</th>
-            <th class="hidden md:table-cell">Modified</th>
+            <th class="w-12" data-col="icon"><span class="sr-only">Type</span></th>
+            <th data-col="name">Name</th>
+            <th class="w-10 text-center" data-col="favorite">Fav</th>
+            <th class="hidden sm:table-cell" data-col="size">Size</th>
+            <th class="hidden md:table-cell" data-col="modified">Modified</th>
             {% if show_actions != False %}
-            <th class="w-16"></th>
+            <th class="w-16" data-col="actions"><span class="sr-only">Actions</span></th>
             {% endif %}
           </tr>
         </thead>
@@ -33,11 +123,16 @@
           {% for node in nodes %}
           <tr
             class="hover group {% if node.node_type == 'folder' %}cursor-pointer{% endif %}"
+            data-name="{{ node.name|lower }}"
+            data-node-type="{{ node.node_type }}"
+            data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
+            data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
+            data-updated="{{ node.updated_at|date:'U' }}"
             {% if node.node_type == 'folder' %}
             @click="openFolderFromRow($event)"
             {% endif %}
           >
-            <td class="text-base-content/60">
+            <td class="text-base-content/60" data-col="icon">
               {% if node.node_type == 'folder' %}
                 <i data-lucide="folder" class="w-5 h-5 text-warning"></i>
               {% else %}
@@ -58,7 +153,7 @@
                 {% endwith %}
               {% endif %}
             </td>
-            <td>
+            <td data-col="name">
               {% if node.node_type == 'folder' %}
                 <a
                   href="/files/{{ node.uuid }}"
@@ -72,7 +167,7 @@
                 <span class="font-medium">{{ node.name }}</span>
               {% endif %}
             </td>
-            <td class="text-center text-base-content/60" data-stop-row-click>
+            <td class="text-center text-base-content/60" data-stop-row-click data-col="favorite">
               {% if node.is_favorite %}
                 <button
                   type="button"
@@ -93,18 +188,18 @@
                 </button>
               {% endif %}
             </td>
-            <td class="hidden sm:table-cell text-sm text-base-content/70">
+            <td class="hidden sm:table-cell text-sm text-base-content/70" data-col="size">
               {% if node.node_type == 'file' %}
                 {{ node.size|filesize }}
               {% else %}
                 -
               {% endif %}
             </td>
-            <td class="hidden md:table-cell text-sm text-base-content/70">
+            <td class="hidden md:table-cell text-sm text-base-content/70" data-col="modified">
               {{ node.updated_at|date:"M j, Y" }}
             </td>
             {% if show_actions != False %}
-            <td data-stop-row-click>
+            <td data-stop-row-click data-col="actions">
               <div class="dropdown dropdown-end">
                 <label
                   tabindex="0"

@@ -139,17 +139,6 @@
         </div>
       </label>
 
-      <!-- Dashboard link (main action) -->
-      {% if user.is_staff %}
-        <a
-          class="btn btn-sm btn-ghost gap-2 hover:bg-info/10 hover:text-info transition-all"
-          href="/"
-        >
-          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-          <span class="hidden md:inline font-medium">Dashboard</span>
-        </a>
-      {% endif %}
-
       <!-- User menu dropdown -->
       <div class="dropdown dropdown-end">
         <label tabindex="0" class="btn btn-ghost btn-circle btn-sm cursor-pointer">

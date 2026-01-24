@@ -33,7 +33,7 @@ api_urlpatterns = [
 
 ui_urlpatterns = [
     # UI apps
-    path('files/', include('workspace.files.ui.urls')),
+    path('files', include('workspace.files.ui.urls')),
 ]
 
 urlpatterns = [

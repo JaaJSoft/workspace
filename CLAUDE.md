@@ -1,5 +1,9 @@
 # Claude Code Instructions
 
+## API
+
+all api must be prefixed with `/api/` and have no trailing slashes
+
 ## UI Components
 
 Always use the existing UI partials located in `workspace/common/templates/ui/partials/` instead of writing inline HTML for common components.

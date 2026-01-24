@@ -1,11 +1,23 @@
 {% extends 'base.html' %}
 
-{% block body %}
-<!-- Navbar -->
-{% include 'ui/partials/navbar.html' %}
+{% block body_class %}bg-base-100 h-screen overflow-hidden flex flex-col{% endblock %}
 
-<!-- Main content -->
-<main class="{% block main_class %}container mx-auto p-4{% endblock %}">
-  {% block content %}{% endblock %}
-</main>
+{% block body %}
+<!-- Navbar (always full width) -->
+{% block navbar %}
+{% include 'ui/partials/navbar.html' %}
+{% endblock %}
+
+<!-- Drawer below navbar -->
+<div class="drawer {% block drawer_class %}{% endblock %} flex-1 min-h-0">
+  <input id="{% block drawer_id %}main-drawer{% endblock %}" type="checkbox" class="drawer-toggle" />
+
+  <div class="drawer-content flex flex-col h-full overflow-hidden">
+    <main class="{% block main_class %}container mx-auto p-4{% endblock %} flex-1 min-h-0">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  {% block drawer_sidebar %}{% endblock %}
+</div>
 {% endblock %}

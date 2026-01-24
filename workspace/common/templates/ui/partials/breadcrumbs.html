@@ -6,19 +6,25 @@
     - code (optional bool): if true, wraps label in <code>
     - icon (optional): lucide icon name to display before the label
 
+  Optional context:
+    - x_target: Alpine AJAX target id for links (enables SPA-like navigation)
+
   Example:
     {% include "ui/partials/breadcrumbs.html" with breadcrumbs=[
       {"label": "Home", "url": "/", "icon": "home"},
       {"label": "Section", "icon": "folder"},
       {"label": title, "code": true}
     ] %}
+
+    {# With Alpine AJAX #}
+    {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs x_target="content" %}
 {% endcomment %}
 <div class="breadcrumbs text-sm">
   <ul>
     {% for item in breadcrumbs %}
       <li>
         {% if item.url %}
-          <a href="{{ item.url }}" class="flex items-center gap-1">
+          <a href="{{ item.url }}" class="flex items-center gap-1"{% if x_target %} x-target="{{ x_target }}"{% endif %}>
             {% if item.icon %}<i data-lucide="{{ item.icon }}" class="w-4 h-4"></i>{% endif %}
             {% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}
           </a>

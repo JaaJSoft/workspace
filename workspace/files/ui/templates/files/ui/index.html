@@ -1,0 +1,74 @@
+{% extends 'base_with_navbar.html' %}
+
+{% block title %}Files - Workspace{% endblock %}
+
+{% block content %}
+<div class="py-8 space-y-6">
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h1 class="text-3xl font-bold text-base-content">Files</h1>
+      <p class="text-base-content/60">Browse your files and folders.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" class="btn btn-primary btn-sm gap-2">
+        <i data-lucide="folder-plus" class="w-4 h-4"></i>
+        New Folder
+      </button>
+      <button type="button" class="btn btn-outline btn-sm gap-2">
+        <i data-lucide="upload" class="w-4 h-4"></i>
+        Upload
+      </button>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow border border-base-300">
+    <div class="card-body p-0">
+      <div class="overflow-x-auto">
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="w-12"></th>
+              <th>Name</th>
+              <th>Type</th>
+              <th class="text-right">Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for node in root_nodes %}
+              <tr class="hover">
+                <td>
+                  {% if node.node_type == 'folder' %}
+                    <span class="badge badge-outline gap-2">
+                      <i data-lucide="folder" class="w-4 h-4"></i>
+                      Folder
+                    </span>
+                  {% else %}
+                    <span class="badge badge-outline gap-2">
+                      <i data-lucide="file" class="w-4 h-4"></i>
+                      File
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="font-medium">{{ node.name }}</td>
+                <td class="text-sm text-base-content/70">{{ node.get_node_type_display }}</td>
+                <td class="text-right text-sm text-base-content/70">
+                  {{ node.updated_at|date:"Y-m-d H:i" }}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4">
+                  <div class="p-8 text-center text-base-content/60">
+                    <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 opacity-60"></i>
+                    <p>No files yet. Create a folder or upload a file.</p>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

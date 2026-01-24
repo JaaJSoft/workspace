@@ -83,16 +83,12 @@
 
         <!-- Left: Breadcrumb and Title -->
         <div class="flex-1 min-w-0">
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex-1 min-w-0">
-              {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs x_target="folder-browser" %}
-              <h1 class="text-2xl font-bold text-base-content mt-1">
-                {% if current_folder %}{{ current_folder.name }}{% else %}All Files{% endif %}
-              </h1>
-            </div>
+          <!-- Breadcrumb row with action button aligned -->
+          <div class="flex items-center justify-between gap-4 mb-1">
+            {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs x_target="folder-browser" %}
 
-            <!-- Right: Action button with dropdown -->
-            <div class="dropdown dropdown-end">
+            <!-- Action button with dropdown -->
+            <div class="dropdown dropdown-end flex-shrink-0">
               <button tabindex="0" class="btn btn-primary btn-sm gap-2">
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 <span class="hidden sm:inline">New</span>
@@ -103,7 +99,7 @@
                   <button
                     type="button"
                     class="gap-3 rounded"
-                    @click="showCreateFolderDialog()"
+                    @click="showCreateFolderDialog(); document.activeElement.blur()"
                   >
                     <i data-lucide="folder-plus" class="w-4 h-4 text-warning"></i>
                     <div class="flex-1">
@@ -147,6 +143,11 @@
               </ul>
             </div>
           </div>
+
+          <!-- Title below breadcrumb -->
+          <h1 class="text-2xl font-bold text-base-content">
+            {% if current_folder %}{{ current_folder.name }}{% else %}All Files{% endif %}
+          </h1>
         </div>
       </div>
     </div>
@@ -180,8 +181,8 @@
         />
       </div>
       <div class="modal-action">
-        <button type="button" class="btn" onclick="document.getElementById('create-folder-dialog').close()">Cancel</button>
-        <button type="submit" class="btn btn-primary">Create</button>
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('create-folder-dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Create</button>
       </div>
     </form>
   </div>
@@ -208,8 +209,8 @@
         />
       </div>
       <div class="modal-action">
-        <button type="button" class="btn" onclick="document.getElementById('rename-dialog').close()">Cancel</button>
-        <button type="submit" class="btn btn-primary">Rename</button>
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('rename-dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Rename</button>
       </div>
     </form>
   </div>

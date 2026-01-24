@@ -6,5 +6,5 @@ router = SimpleRouter(trailing_slash=False)
 router.register(r'files', FileViewSet, basename='file')
 
 urlpatterns = [
-    path('/api/v1/', include(router.urls)),
+    path('api/v1/', include(router.urls)),
 ]

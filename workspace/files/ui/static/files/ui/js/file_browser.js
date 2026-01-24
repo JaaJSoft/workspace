@@ -1,3 +1,40 @@
+window.sidebarCollapse = function sidebarCollapse() {
+  return {
+    collapsed: localStorage.getItem('sidebarCollapsed') === 'true',
+    
+    init() {
+      // Initialize Lucide icons on load
+      this.$nextTick(() => {
+        if (typeof lucide !== 'undefined') {
+          lucide.createIcons();
+        }
+      });
+      
+      // Re-initialize Lucide icons when state changes
+      this.$watch('collapsed', () => {
+        // Wait for transition to complete before recreating icons
+        setTimeout(() => {
+          if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+          }
+        }, 350); // Slightly longer than transition duration (300ms)
+      });
+    },
+    
+    toggleCollapse() {
+      this.collapsed = !this.collapsed;
+      localStorage.setItem('sidebarCollapsed', this.collapsed);
+      
+      // Immediate icon refresh for visible elements
+      this.$nextTick(() => {
+        if (typeof lucide !== 'undefined') {
+          lucide.createIcons();
+        }
+      });
+    }
+  }
+}
+
 window.fileBrowser = function fileBrowser() {
   return {
     get currentFolder() {

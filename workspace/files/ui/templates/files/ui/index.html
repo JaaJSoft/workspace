@@ -13,59 +13,74 @@
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
 {% block drawer_sidebar %}
-<div class="drawer-side z-40 h-full">
+<div class="drawer-side z-40 h-full" x-data="sidebarCollapse()" x-init="init()"
   <label for="files-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
   <!-- Sidebar -->
-  <aside class="bg-base-200 w-72 h-full border-r border-base-300 flex flex-col">
+  <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
+         :class="collapsed ? 'w-16' : 'w-72'">
     <!-- Sidebar header -->
-    <div class="p-4 border-b border-base-300">
-      <h2 class="text-lg font-semibold flex items-center gap-2">
-        <i data-lucide="hard-drive" class="w-5 h-5"></i>
-        My Files
-      </h2>
+    <div class="border-b border-base-300" :class="collapsed ? 'p-3' : 'p-4'">
+      <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-start'">
+        <!-- Expanded state: Title only -->
+        <h2 class="text-xl font-semibold flex items-center gap-2" x-show="!collapsed" x-transition>
+          <i data-lucide="hard-drive" class="w-6 h-6"></i>
+          My Files
+        </h2>
+        <!-- Collapsed state: Icon only -->
+        <div x-show="collapsed" x-transition class="flex justify-center">
+          <i data-lucide="hard-drive" class="w-6 h-6"></i>
+        </div>
+      </div>
     </div>
 
     <!-- Quick Access -->
-    <div class="flex-1 overflow-y-auto p-4">
-      <h3 class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-3">Quick Access</h3>
-      <ul class="menu menu-sm p-0 gap-1">
-        <li>
-          <a href="/files" class="{% if not current_folder %}active{% endif %} gap-3" x-target.push="folder-browser">
-            <i data-lucide="folder" class="w-4 h-4"></i>
-            All Files
-          </a>
-        </li>
-        <li class="disabled">
-          <span class="gap-3 opacity-50 cursor-not-allowed">
-            <i data-lucide="clock" class="w-4 h-4"></i>
-            Recent
-            <span class="badge badge-xs">Soon</span>
-          </span>
-        </li>
-        <li class="disabled">
-          <span class="gap-3 opacity-50 cursor-not-allowed">
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-            Trash
-            <span class="badge badge-xs">Soon</span>
-          </span>
-        </li>
+    <div class="flex-1 overflow-y-auto" :class="collapsed ? 'p-2' : 'p-4'">
+      <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider mb-4"
+          x-show="!collapsed" x-transition>Quick Access</h3>
+      <ul class="space-y-2">
+        {% if not current_folder %}
+          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" active=True x_target="folder-browser" x_target_history="push" %}
+        {% else %}
+          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" active=False x_target="folder-browser" x_target_history="push" %}
+        {% endif %}
+        {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" disabled=True badge="Soon" %}
+        {% include "ui/partials/drawer_item.html" with icon="trash-2" label="Trash" disabled=True badge="Soon" %}
       </ul>
     </div>
 
     <!-- Storage Stats (Always at bottom) -->
-    <div class="p-4 border-t border-base-300 bg-base-100/50 mt-auto">
-      <h3 class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-3">Storage</h3>
-      <div class="space-y-2">
-        <div class="flex justify-between text-sm">
-          <span class="text-base-content/70">Used</span>
-          <span class="font-medium">{{ storage_stats.total_size|filesize }}</span>
-        </div>
-        <div class="flex gap-4 text-xs text-base-content/60">
-          <span>{{ storage_stats.file_count }} file{{ storage_stats.file_count|pluralize }}</span>
-          <span>{{ storage_stats.folder_count }} folder{{ storage_stats.folder_count|pluralize }}</span>
+    <div class="border-t border-base-300 bg-base-100/50" :class="collapsed ? 'p-3' : 'p-4'">
+      <div x-show="!collapsed" x-transition>
+        <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider mb-3">Storage</h3>
+        <div class="space-y-2">
+          <div class="flex justify-between text-base">
+            <span class="text-base-content/70">Used</span>
+            <span class="font-medium">{{ storage_stats.total_size|filesize }}</span>
+          </div>
+          <div class="flex gap-4 text-sm text-base-content/60">
+            <span>{{ storage_stats.file_count }} file{{ storage_stats.file_count|pluralize }}</span>
+            <span>{{ storage_stats.folder_count }} folder{{ storage_stats.folder_count|pluralize }}</span>
+          </div>
         </div>
       </div>
+      <div x-show="collapsed" x-transition class="flex justify-center py-1">
+        <div class="tooltip tooltip-right" data-tip="{{ storage_stats.total_size|filesize }} used">
+          <i data-lucide="database" class="w-5 h-5"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toggle Button (Always at bottom) -->
+    <div class="border-t border-base-300" :class="collapsed ? 'p-2' : 'p-4'">
+      <button @click="toggleCollapse()"
+              class="flex items-center w-full py-3 text-base hover:bg-base-300/50 rounded-lg transition-colors"
+              :class="collapsed ? 'justify-center px-2' : 'gap-3 px-3'"
+              :aria-label="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+              :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'">
+        <i :data-lucide="collapsed ? 'panel-left-open' : 'panel-left-close'" class="w-5 h-5 flex-shrink-0"></i>
+        <span x-show="!collapsed" x-transition class="flex-1 text-left">Collapse</span>
+      </button>
     </div>
   </aside>
 </div>

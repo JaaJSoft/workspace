@@ -47,6 +47,15 @@
               <kbd class="kbd kbd-xs">⏎</kbd>
               select
             </span>
+            <button
+              type="button"
+              @click="close()"
+              class="btn btn-ghost btn-xs ml-auto"
+              title="Close"
+              aria-label="Close search results"
+            >
+              <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -107,6 +116,15 @@
               <kbd class="kbd kbd-xs">Esc</kbd>
               close
             </span>
+            <button
+              type="button"
+              @click="mobileSearchOpen = false"
+              class="btn btn-ghost btn-xs ml-auto"
+              title="Close"
+              aria-label="Close search results"
+            >
+              <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -251,3 +269,5 @@
   {% csrf_token %}
 </form>
 {% endif %}
+
+{% include 'ui/partials/search/command_palette_dropdown_scripts.html' %}

@@ -1,0 +1,29 @@
+{% comment %}
+Drawer Section Component
+========================
+A reusable component for drawer/sidebar sections with title and items.
+
+Parameters:
+-----------
+- title: Section title (e.g., "Quick Access", "Navigation", "Tools")
+- items: List of items to render (passed to drawer_item.html)
+- collapsed_class: Additional classes for collapsed state (optional)
+- expanded_class: Additional classes for expanded state (optional)
+
+Usage Example:
+--------------
+{% include "ui/partials/drawer_section.html" with title="Quick Access" %}
+  {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" %}
+  {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" disabled=True badge="Soon" %}
+{% endinclude %}
+{% endcomment %}
+
+<div class="flex-1 overflow-y-auto" :class="collapsed ? 'p-2' : 'p-4'">
+  {% if title %}
+    <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider mb-4"
+        x-show="!collapsed" x-transition>{{ title }}</h3>
+  {% endif %}
+  <ul class="menu p-0 gap-2">
+    {{ content }}
+  </ul>
+</div>

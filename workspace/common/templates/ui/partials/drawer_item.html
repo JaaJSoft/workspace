@@ -1,0 +1,61 @@
+{% comment %}
+Drawer Item Component
+=====================
+A reusable component for drawer/sidebar menu items.
+
+Parameters:
+-----------
+- href: URL for the link (optional if disabled)
+- icon: Lucide icon name (e.g., "folder", "clock", "trash-2")
+- label: Text label for the item
+- active: Boolean, whether this item is currently active (default: False)
+- disabled: Boolean, whether this item is disabled (default: False)
+- badge: Optional badge text (e.g., "Soon", "3", "New")
+- badge_type: Badge variant (default: "sm") - can be "xs", "sm", "md", "lg"
+- x_target: Optional Alpine.js x-target attribute
+- x_target_history: Optional x-target history mode ("push" or "replace")
+- onclick: Optional JavaScript onclick handler
+- tooltip: Optional tooltip text for collapsed state
+
+Usage Examples:
+---------------
+{% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" active=True %}
+{% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" disabled=True badge="Soon" %}
+{% include "ui/partials/drawer_item.html" with href="/trash" icon="trash-2" label="Trash" badge="5" badge_type="error" %}
+{% endcomment %}
+
+<li class="list-none">
+  {% if disabled %}
+    <span
+      class="flex items-center opacity-50 cursor-not-allowed py-3 text-base rounded-lg transition-colors hover:bg-base-300/30"
+      :class="collapsed ? 'justify-center px-2' : 'gap-3 px-3'"
+      :title="collapsed ? '{{ label }}{% if badge %} ({{ badge }}){% endif %}' : ''"
+      {% if onclick %}@click="{{ onclick }}"{% endif %}
+    >
+      <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+      <span x-show="!collapsed" x-transition class="flex items-center gap-2 flex-1">
+        {{ label }}
+        {% if badge %}
+          <span class="badge badge-{{ badge_type|default:'sm' }}">{{ badge }}</span>
+        {% endif %}
+      </span>
+    </span>
+  {% else %}
+    <a
+      href="{{ href }}"
+      class="flex items-center {% if active %}bg-primary/10 text-primary hover:bg-primary/20{% else %}hover:bg-base-300/50{% endif %} py-3 text-base rounded-lg transition-colors"
+      :class="collapsed ? 'justify-center px-2' : 'gap-3 px-3'"
+      {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %}
+      {% if onclick %}@click="{{ onclick }}"{% endif %}
+      :title="collapsed ? '{{ tooltip|default:label }}' : ''"
+    >
+      <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
+      <span x-show="!collapsed" x-transition class="flex items-center gap-2 flex-1">
+        {{ label }}
+        {% if badge %}
+          <span class="badge badge-{{ badge_type|default:'sm' }}{% if badge_variant %} badge-{{ badge_variant }}{% endif %}">{{ badge }}</span>
+        {% endif %}
+      </span>
+    </a>
+  {% endif %}
+</li>

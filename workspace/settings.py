@@ -204,12 +204,19 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Workspace API',
-    'DESCRIPTION': "",
+    'DESCRIPTION': (
+        "Workspace productivity suite for organizing and managing daily work."
+    ),
     'VERSION': APP_VERSION,
     # Ensure file uploads are correctly rendered as multipart/form-data in Swagger UI
     'COMPONENT_SPLIT_REQUEST': True,
     'SCHEMA_PATH_PREFIX': r'/v[1-9]',
-    'TAGS': [],
+    'TAGS': [
+        {
+            'name': 'Files',
+            'description': 'Browse and manage files and folders.',
+        },
+    ],
     'SWAGGER_UI_SETTINGS': {
         'persistAuthorization': True,
     },

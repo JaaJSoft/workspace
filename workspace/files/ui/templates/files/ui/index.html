@@ -85,7 +85,18 @@
         <div class="flex-1 min-w-0">
           <!-- Breadcrumb row with action button aligned -->
           <div class="flex items-center justify-between gap-4 mb-1">
-            {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs x_target="folder-browser" x_target_history="push" %}
+            <div class="flex items-center gap-2 min-w-0">
+              {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs x_target="folder-browser" x_target_history="push" %}
+              <a
+                href="{% if current_folder %}/files/{{ current_folder.uuid }}{% else %}/files{% endif %}"
+                class="btn btn-ghost btn-sm btn-square"
+                title="Refresh"
+                aria-label="Refresh"
+                x-target="folder-browser"
+              >
+                <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+              </a>
+            </div>
 
             <!-- Action button with dropdown -->
             <div class="dropdown dropdown-end flex-shrink-0">

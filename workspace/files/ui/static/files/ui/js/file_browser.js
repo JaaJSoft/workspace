@@ -5,6 +5,19 @@ window.fileBrowser = function fileBrowser() {
       return folderEl?.dataset.folder || '';
     },
 
+    openFolderFromRow(event) {
+      if (!event) return;
+      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+      if (target && target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
+        return;
+      }
+      const row = event.currentTarget;
+      const link = row?.querySelector('[data-folder-link]');
+      if (link) {
+        link.click();
+      }
+    },
+
     showCreateFolderDialog() {
       const dialog = document.getElementById('create-folder-dialog');
       const input = dialog.querySelector('input');

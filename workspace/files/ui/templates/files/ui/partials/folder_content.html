@@ -30,7 +30,12 @@
         </thead>
         <tbody>
           {% for node in nodes %}
-          <tr class="hover group">
+          <tr
+            class="hover group {% if node.node_type == 'folder' %}cursor-pointer{% endif %}"
+            {% if node.node_type == 'folder' %}
+            @click="openFolderFromRow($event)"
+            {% endif %}
+          >
             <td class="text-base-content/60">
               {% if node.node_type == 'folder' %}
                 <i data-lucide="folder" class="w-5 h-5 text-warning"></i>
@@ -58,6 +63,7 @@
                   href="/files/{{ node.uuid }}"
                   class="font-medium hover:text-primary hover:underline"
                   x-target.push="folder-browser"
+                  data-folder-link
                 >
                   {{ node.name }}
                 </a>
@@ -76,7 +82,7 @@
               {{ node.updated_at|date:"M j, Y" }}
             </td>
             {% if show_actions != False %}
-            <td>
+            <td data-stop-row-click>
               <div class="dropdown dropdown-end">
                 <label
                   tabindex="0"

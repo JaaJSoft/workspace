@@ -2,6 +2,8 @@ import os
 from django.db import models, transaction
 from django.db.models import Value
 from django.db.models.functions import Concat, Substr
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 
 from workspace.common.uuids import uuid_v7_or_v4
@@ -139,3 +141,54 @@ class File(models.Model):
 
     def is_file(self):
         return self.node_type == self.NodeType.FILE
+
+    def delete(self, *args, **kwargs):
+        """Override delete to ensure physical file deletion."""
+        from django.core.files.storage import default_storage
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # If this is a file with content, delete the physical file
+        if self.node_type == self.NodeType.FILE and self.content:
+            try:
+                # Store the file path before deletion
+                file_path = self.content.name
+
+                # Delete from storage if file exists
+                if file_path and default_storage.exists(file_path):
+                    default_storage.delete(file_path)
+                    logger.info(f"Deleted physical file: {file_path}")
+                else:
+                    logger.warning(f"Physical file not found for deletion: {file_path}")
+            except Exception as e:
+                logger.error(f"Error deleting physical file {self.content.name}: {e}")
+                # Continue with database deletion even if file deletion fails
+
+        # If this is a folder, all children will be deleted by CASCADE
+        # Their delete() methods will be called individually, ensuring file cleanup
+
+        # Call the parent delete method to remove from database
+        super().delete(*args, **kwargs)
+
+
+# Signal to handle file deletion when using QuerySet.delete() or bulk operations
+@receiver(pre_delete, sender=File)
+def delete_file_on_delete(sender, instance, **kwargs):
+    """
+    Delete the physical file when a File instance is deleted.
+    This signal ensures files are deleted even in bulk operations.
+    """
+    from django.core.files.storage import default_storage
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    if instance.node_type == File.NodeType.FILE and instance.content:
+        try:
+            file_path = instance.content.name
+            if file_path and default_storage.exists(file_path):
+                default_storage.delete(file_path)
+                logger.info(f"Signal: Deleted physical file: {file_path}")
+        except Exception as e:
+            logger.error(f"Signal: Error deleting physical file {instance.content.name}: {e}")

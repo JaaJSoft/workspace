@@ -80,3 +80,146 @@ class FileSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['owner'] = self.context['request'].user
         return super().create(validated_data)
+
+
+    def _get_folder_path(self, folder):
+        """Build the full path for a folder based on its hierarchy."""
+        path_parts = []
+        current = folder
+        while current:
+            path_parts.insert(0, current.name)
+            current = current.parent
+
+        # Add base path: files/username/...
+        base_path = f"files/{folder.owner.username}"
+        if path_parts:
+            return f"{base_path}/{'/'.join(path_parts)}"
+        return base_path
+
+    def _rename_folder_files(self, folder, old_folder_name, new_folder_name):
+        """Recursively rename all files in a folder and its subfolders."""
+        import os
+        from django.core.files.storage import default_storage
+        from django.core.files.base import ContentFile
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # Process all children
+        children = File.objects.filter(parent=folder)
+
+        for child in children:
+            if child.node_type == File.NodeType.FILE and child.content and child.content.name:
+                try:
+                    old_path = child.content.name
+
+                    # Replace the old folder name with the new one in the path
+                    # We need to be careful to replace only the correct occurrence
+                    path_segments = old_path.split('/')
+
+                    # Find the index where our folder appears
+                    for i, segment in enumerate(path_segments):
+                        if segment == old_folder_name:
+                            path_segments[i] = new_folder_name
+                            break
+
+                    new_path = '/'.join(path_segments)
+
+                    if old_path != new_path:
+                        logger.info(f"Moving file from '{old_path}' to '{new_path}'")
+
+                        if default_storage.exists(old_path):
+                            # Read the file
+                            with default_storage.open(old_path, 'rb') as f:
+                                content = f.read()
+
+                            # Ensure directory exists and save to new location
+                            new_dir = os.path.dirname(new_path)
+                            saved_path = default_storage.save(new_path, ContentFile(content))
+
+                            # Update the database
+                            child.content.name = saved_path
+                            child.save(update_fields=['content'])
+
+                            # Delete old file
+                            try:
+                                default_storage.delete(old_path)
+                                logger.info(f"Deleted old file: '{old_path}'")
+                            except Exception as e:
+                                logger.warning(f"Could not delete old file '{old_path}': {e}")
+                        else:
+                            logger.warning(f"Old file does not exist: '{old_path}'")
+
+                except Exception as e:
+                    logger.error(f"Error moving file '{child.name}': {e}")
+
+            elif child.node_type == File.NodeType.FOLDER:
+                # Recursively process subfolders
+                self._rename_folder_files(child, old_folder_name, new_folder_name)
+
+    def update(self, instance, validated_data):
+        """Override update to handle file and folder renaming on storage.
+
+        For files: Renames the physical file on storage.
+        For folders: Updates database name AND moves all contained files to new paths.
+        """
+        import os
+        from django.core.files.storage import default_storage
+        from django.core.files.base import ContentFile
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # Check if name is being changed
+        if 'name' in validated_data:
+            old_name = instance.name
+            new_name = validated_data['name']
+
+            if old_name != new_name:
+                # Handle folder renaming - move all files inside
+                if instance.node_type == File.NodeType.FOLDER:
+                    logger.info(f"Renaming folder '{old_name}' to '{new_name}' and moving all contained files")
+
+                    # Rename all files in this folder and subfolders
+                    self._rename_folder_files(instance, old_name, new_name)
+
+                # Handle file renaming
+                elif instance.content and instance.content.name:
+                    try:
+                        # Get the current file path
+                        old_file_path = instance.content.name
+
+                        # Build the new file path (keep same directory, change filename)
+                        dir_path = os.path.dirname(old_file_path)
+                        # Get file extension from old file
+                        _, ext = os.path.splitext(old_file_path)
+                        # Keep extension if new name doesn't have one
+                        if '.' not in new_name and ext:
+                            new_filename = f"{new_name}{ext}"
+                        else:
+                            new_filename = new_name
+                        new_file_path = os.path.join(dir_path, new_filename)
+
+                        # Check if old file exists
+                        if default_storage.exists(old_file_path):
+                            # Open and read the old file
+                            with default_storage.open(old_file_path, 'rb') as old_file:
+                                file_content = old_file.read()
+
+                            # Save with new name
+                            new_file_path = default_storage.save(new_file_path, ContentFile(file_content))
+
+                            # Update the content field to point to new file
+                            instance.content.name = new_file_path
+
+                            # Delete the old file (only if it's different from the new one)
+                            if old_file_path != new_file_path:
+                                try:
+                                    default_storage.delete(old_file_path)
+                                except Exception:
+                                    pass  # Ignore delete errors
+                    except Exception as e:
+                        # Log error but don't fail the rename operation
+                        logger.warning(f"Could not rename physical file from {old_file_path} to {new_name}: {e}")
+
+        return super().update(instance, validated_data)

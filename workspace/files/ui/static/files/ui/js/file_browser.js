@@ -56,8 +56,13 @@ window.sidebarCollapse = function sidebarCollapse() {
       const path = window.location.pathname.replace(/\/+$/, '');
       const params = new URLSearchParams(window.location.search);
       const favorites = (params.get('favorites') || '').toLowerCase();
+      const recent = (params.get('recent') || '').toLowerCase();
       if (['1', 'true', 'yes'].includes(favorites)) {
         this.activeView = 'favorites';
+        return;
+      }
+      if (['1', 'true', 'yes'].includes(recent)) {
+        this.activeView = 'recent';
         return;
       }
       if (path === '/files') {
@@ -382,8 +387,15 @@ window.fileBrowser = function fileBrowser() {
     },
 
     showAlert(type, message) {
-      const alert = InlineAlert.create({ type, message, dismissible: true, className: 'mb-4' });
-      this.$refs.alertsContainer.appendChild(alert);
+      if (window.AppAlert && typeof window.AppAlert.show === 'function') {
+        window.AppAlert.show({
+          type: type || 'info',
+          message: message || '',
+          duration: type === 'error' ? 8000 : 5000,
+        });
+        return;
+      }
+      console.warn('AppAlert is not available:', message);
     },
 
     getCsrfToken() {

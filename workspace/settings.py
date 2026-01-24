@@ -58,6 +58,9 @@ if not DEBUG:
 
 # Application version (from env, defaults to 'dev')
 APP_VERSION = os.getenv('APP_VERSION') or 'dev'
+# Recent files listing limits
+RECENT_FILES_LIMIT = int(os.getenv('RECENT_FILES_LIMIT', '25'))
+RECENT_FILES_MAX_LIMIT = int(os.getenv('RECENT_FILES_MAX_LIMIT', '200'))
 # Application definition
 
 INSTALLED_APPS = [

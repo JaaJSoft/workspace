@@ -47,7 +47,7 @@
       <ul class="space-y-2">
         {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" %}
-        {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" disabled=True badge="Soon" %}
+        {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with icon="trash-2" label="Trash" disabled=True badge="Soon" %}
       </ul>
     </div>
@@ -105,9 +105,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Alerts container -->
-    <div x-ref="alertsContainer" class="px-4 lg:px-6"></div>
 
     <!-- Main Content Area with Table -->
     <div class="flex-1 overflow-hidden flex flex-col bg-base-200/30">

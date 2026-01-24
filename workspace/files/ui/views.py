@@ -1,8 +1,11 @@
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 from django.db.models import Exists, OuterRef
 from django.shortcuts import get_object_or_404, render
 
 from ..models import File, FileFavorite
+
+RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
 
 
 def build_breadcrumbs(folder):
@@ -30,12 +33,21 @@ def index(request, folder=None):
     """File browser view with optional folder navigation."""
     current_folder = None
     is_favorites_view = str(request.GET.get('favorites', '')).lower() in {'1', 'true', 'yes'}
+    is_recent_view = (
+        not is_favorites_view and
+        str(request.GET.get('recent', '')).lower() in {'1', 'true', 'yes'}
+    )
     breadcrumbs = [{'label': 'Files', 'url': '/files', 'icon': 'hard-drive'}]
 
     if is_favorites_view:
         breadcrumbs = [
             {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
             {'label': 'Favorites', 'icon': 'star'},
+        ]
+    elif is_recent_view:
+        breadcrumbs = [
+            {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
+            {'label': 'Recent', 'icon': 'clock'},
         ]
     elif folder:
         current_folder = get_object_or_404(
@@ -52,6 +64,10 @@ def index(request, folder=None):
             owner=request.user,
             favorites__owner=request.user
         ).distinct().order_by('-node_type', 'name')
+    elif is_recent_view:
+        nodes = File.objects.filter(
+            owner=request.user
+        ).order_by('-updated_at', 'name')
     elif current_folder:
         nodes = File.objects.filter(
             owner=request.user,
@@ -68,6 +84,8 @@ def index(request, folder=None):
         file_id=OuterRef('pk'),
     )
     nodes = nodes.annotate(is_favorite=Exists(favorite_subquery))
+    if is_recent_view:
+        nodes = nodes[:RECENT_FILES_LIMIT]
 
     # Calculate folder stats
     folder_stats = {
@@ -87,6 +105,11 @@ def index(request, folder=None):
         current_view_url = '/files?favorites=1'
         empty_title = 'No favorites yet'
         empty_message = 'Star files or folders to see them here.'
+    elif is_recent_view:
+        page_title = 'Recent'
+        current_view_url = '/files?recent=1'
+        empty_title = 'No recent files'
+        empty_message = 'Files you create or edit will show up here.'
     elif current_folder:
         page_title = current_folder.name
         current_view_url = f'/files/{current_folder.uuid}'
@@ -104,7 +127,8 @@ def index(request, folder=None):
         'breadcrumbs': breadcrumbs,
         'folder_stats': folder_stats,
         'is_favorites_view': is_favorites_view,
-        'is_root_view': not current_folder and not is_favorites_view,
+        'is_recent_view': is_recent_view,
+        'is_root_view': not current_folder and not is_favorites_view and not is_recent_view,
         'page_title': page_title,
         'current_view_url': current_view_url,
         'empty_title': empty_title,

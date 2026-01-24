@@ -1,6 +1,7 @@
 import mimetypes
 
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 from django.db.models import Exists, OuterRef
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -20,6 +21,9 @@ from drf_spectacular.utils import (
 
 from .models import File, FileFavorite
 from .serializers import FileSerializer
+
+RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
+RECENT_FILES_MAX_LIMIT = getattr(settings, 'RECENT_FILES_MAX_LIMIT', 200)
 
 
 @extend_schema_view(
@@ -42,6 +46,22 @@ from .serializers import FileSerializer
                 name="favorites",
                 type=OpenApiTypes.BOOL,
                 description="When true, return only favorited items.",
+            ),
+            OpenApiParameter(
+                name="recent",
+                type=OpenApiTypes.BOOL,
+                description=(
+                    "When true, return recently updated items ordered by "
+                    "updated_at desc."
+                ),
+            ),
+            OpenApiParameter(
+                name="recent_limit",
+                type=OpenApiTypes.INT,
+                description=(
+                    "Limit the number of recent items returned. Defaults to "
+                    f"{RECENT_FILES_LIMIT} and capped at {RECENT_FILES_MAX_LIMIT}."
+                ),
             ),
             OpenApiParameter(
                 name="parent",
@@ -189,6 +209,24 @@ class FileViewSet(viewsets.ModelViewSet):
             return False
         return str(value).lower() in {'1', 'true', 'yes'}
 
+    def _is_recent_query(self):
+        value = self.request.query_params.get('recent')
+        if value is None:
+            return False
+        return str(value).lower() in {'1', 'true', 'yes'}
+
+    def _get_recent_limit(self):
+        value = self.request.query_params.get('recent_limit')
+        if value is None:
+            return RECENT_FILES_LIMIT
+        try:
+            limit = int(value)
+        except (TypeError, ValueError):
+            return RECENT_FILES_LIMIT
+        if limit <= 0:
+            return RECENT_FILES_LIMIT
+        return min(limit, RECENT_FILES_MAX_LIMIT)
+
     def get_queryset(self):
         """Filter by current user's files."""
         queryset = File.objects.filter(owner=self.request.user)
@@ -200,9 +238,25 @@ class FileViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             if self._is_favorites_query():
                 return queryset.filter(favorites__owner=self.request.user).distinct()
-            if 'parent' not in self.request.query_params:
+            if not self._is_recent_query() and 'parent' not in self.request.query_params:
                 return queryset.filter(parent__isnull=True)
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        if self._is_recent_query():
+            queryset = queryset.order_by('-updated_at')
+            limit = self._get_recent_limit()
+            if limit:
+                queryset = queryset[:limit]
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post', 'delete'], url_path='favorite')
     def favorite(self, request, uuid=None):

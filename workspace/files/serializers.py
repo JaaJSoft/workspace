@@ -1,3 +1,5 @@
+import mimetypes
+
 from rest_framework import serializers
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
@@ -93,6 +95,29 @@ class FileSerializer(serializers.ModelSerializer):
             if errors:
                 raise serializers.ValidationError(errors)
 
+        node_type = attrs.get('node_type')
+        instance = self.instance
+        if instance is not None and node_type is None:
+            node_type = instance.node_type
+
+        if node_type == File.NodeType.FILE:
+            name = attrs.get('name') or (instance.name if instance else None)
+            parent = attrs.get('parent') if 'parent' in attrs else (instance.parent if instance else None)
+            owner = instance.owner if instance else self.context['request'].user
+            if name:
+                existing = File.objects.filter(
+                    owner=owner,
+                    parent=parent,
+                    node_type=File.NodeType.FILE,
+                    name__iexact=name,
+                )
+                if instance is not None:
+                    existing = existing.exclude(pk=instance.pk)
+                if existing.exists():
+                    raise serializers.ValidationError({
+                        'name': 'A file with the same name already exists in this folder.'
+                    })
+
         return super().validate(attrs)
 
     def create(self, validated_data):
@@ -101,9 +126,27 @@ class FileSerializer(serializers.ModelSerializer):
             uploaded = validated_data.get('content')
             if uploaded is not None:
                 validated_data['size'] = uploaded.size
+                if not validated_data.get('mime_type'):
+                    validated_data['mime_type'] = self._infer_mime_type(
+                        uploaded,
+                        validated_data.get('name'),
+                    )
         else:
             validated_data['size'] = None
         return super().create(validated_data)
+
+    def _infer_mime_type(self, uploaded, name):
+        """Infer mime type from upload metadata or filename."""
+        if uploaded is not None:
+            content_type = getattr(uploaded, 'content_type', None)
+            if content_type and content_type != 'application/octet-stream':
+                return content_type
+        candidate_name = name or getattr(uploaded, 'name', None)
+        if candidate_name:
+            guessed, _ = mimetypes.guess_type(candidate_name)
+            if guessed:
+                return guessed
+        return getattr(uploaded, 'content_type', None) or 'application/octet-stream'
 
 
     def _get_folder_path(self, folder):
@@ -197,6 +240,11 @@ class FileSerializer(serializers.ModelSerializer):
             uploaded = validated_data.get('content')
             if instance.node_type == File.NodeType.FILE and uploaded is not None:
                 validated_data['size'] = uploaded.size
+                if not validated_data.get('mime_type'):
+                    validated_data['mime_type'] = self._infer_mime_type(
+                        uploaded,
+                        validated_data.get('name', instance.name),
+                    )
             else:
                 validated_data['size'] = None
 

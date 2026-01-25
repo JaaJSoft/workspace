@@ -5,6 +5,7 @@ from django.db.models.functions import Concat, Substr
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 from workspace.common.uuids import uuid_v7_or_v4
 
@@ -61,12 +62,14 @@ class File(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='files')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         ordering = ['node_type', 'name']
         indexes = [
             models.Index(fields=['parent', 'node_type']),
             models.Index(fields=['owner', 'created_at']),
+            models.Index(fields=['owner', 'deleted_at'], name='file_owner_del_idx'),
         ]
         constraints = [
             models.CheckConstraint(
@@ -142,34 +145,58 @@ class File(models.Model):
     def is_file(self):
         return self.node_type == self.NodeType.FILE
 
+    def is_deleted(self):
+        return self.deleted_at is not None
+
+    def _descendant_filter(self):
+        if self.node_type != self.NodeType.FOLDER:
+            return models.Q(pk=self.pk)
+        path = self.path or self.get_path()
+        if not path:
+            return models.Q(pk=self.pk)
+        prefix = f"{path}/"
+        return models.Q(pk=self.pk) | models.Q(path__startswith=prefix)
+
+    def soft_delete(self, deleted_at=None):
+        if deleted_at is None:
+            deleted_at = timezone.now()
+        return File.objects.filter(
+            self._descendant_filter(),
+            deleted_at__isnull=True,
+        ).update(deleted_at=deleted_at)
+
+    def _restore_parents(self):
+        parent_id = self.parent_id
+        restored_ids = []
+        while parent_id:
+            parent = File.objects.filter(pk=parent_id).values('pk', 'parent_id', 'deleted_at').first()
+            if not parent or parent['deleted_at'] is None:
+                break
+            restored_ids.append(parent['pk'])
+            parent_id = parent['parent_id']
+        if restored_ids:
+            File.objects.filter(pk__in=restored_ids).update(deleted_at=None)
+        return len(restored_ids)
+
+    def restore(self):
+        if self.node_type == self.NodeType.FOLDER:
+            updated = File.objects.filter(self._descendant_filter()).update(deleted_at=None)
+        else:
+            if self.deleted_at is None:
+                updated = 0
+            else:
+                self.deleted_at = None
+                self.save(update_fields=['deleted_at'])
+                updated = 1
+        self._restore_parents()
+        return updated
+
     def delete(self, *args, **kwargs):
-        """Override delete to ensure physical file deletion."""
-        from django.core.files.storage import default_storage
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        # If this is a file with content, delete the physical file
-        if self.node_type == self.NodeType.FILE and self.content:
-            try:
-                # Store the file path before deletion
-                file_path = self.content.name
-
-                # Delete from storage if file exists
-                if file_path and default_storage.exists(file_path):
-                    default_storage.delete(file_path)
-                    logger.info(f"Deleted physical file: {file_path}")
-                else:
-                    logger.warning(f"Physical file not found for deletion: {file_path}")
-            except Exception as e:
-                logger.error(f"Error deleting physical file {self.content.name}: {e}")
-                # Continue with database deletion even if file deletion fails
-
-        # If this is a folder, all children will be deleted by CASCADE
-        # Their delete() methods will be called individually, ensuring file cleanup
-
-        # Call the parent delete method to remove from database
-        super().delete(*args, **kwargs)
+        """Soft-delete by default; pass hard=True to permanently delete."""
+        hard = kwargs.pop('hard', False)
+        if hard:
+            return super().delete(*args, **kwargs)
+        return self.soft_delete()
 
 
 class FileFavorite(models.Model):

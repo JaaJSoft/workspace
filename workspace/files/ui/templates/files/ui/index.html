@@ -48,7 +48,7 @@
         {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" %}
-        {% include "ui/partials/drawer_item.html" with icon="trash-2" label="Trash" disabled=True badge="Soon" %}
+        {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" %}
       </ul>
     </div>
 
@@ -89,6 +89,14 @@
               </a>
             </div>
 
+            {% if is_trash_view %}
+            <div class="flex-shrink-0">
+              <button type="button" class="btn btn-error btn-sm gap-2" @click="confirmCleanTrash()">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">Empty trash</span>
+              </button>
+            </div>
+            {% else %}
             <!-- Action button with dropdown -->
             <div class="dropdown dropdown-end flex-shrink-0">
               <button tabindex="0" class="btn btn-primary btn-sm gap-2">
@@ -98,6 +106,7 @@
               </button>
               {% include 'files/ui/partials/new_menu.html' %}
             </div>
+            {% endif %}
           </div>
 
           <!-- Title below breadcrumb -->

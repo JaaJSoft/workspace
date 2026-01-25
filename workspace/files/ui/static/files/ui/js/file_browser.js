@@ -65,7 +65,11 @@ window.sidebarCollapse = function sidebarCollapse() {
         this.activeView = 'recent';
         return;
       }
-      if (path === '/files') {
+      if (path === '/files/trash') {
+        this.activeView = 'trash';
+        return;
+      }
+      if (path === '/files' || path.startsWith('/files/')) {
         this.activeView = 'root';
         return;
       }
@@ -136,8 +140,8 @@ window.fileBrowser = function fileBrowser() {
     async confirmDelete(uuid, name, nodeType) {
       const confirmed = await AppDialog.confirm({
         title: `Delete ${nodeType}?`,
-        message: `Are you sure you want to delete "${name}"?${nodeType === 'folder' ? ' This will also delete all contents.' : ''}`,
-        okLabel: 'Delete',
+        message: `Move "${name}" to trash?${nodeType === 'folder' ? ' This will also move all contents.' : ''}`,
+        okLabel: 'Move to trash',
         okClass: 'btn-error'
       });
       if (confirmed) {
@@ -318,6 +322,97 @@ window.fileBrowser = function fileBrowser() {
         }
       } catch (error) {
         this.showAlert('error', 'Failed to delete');
+      }
+    },
+
+    async confirmRestore(uuid, name, nodeType) {
+      const confirmed = await AppDialog.confirm({
+        title: `Restore ${nodeType}?`,
+        message: `Restore "${name}" from trash?`,
+        okLabel: 'Restore',
+        okClass: 'btn-primary'
+      });
+      if (confirmed) {
+        this.restoreItem(uuid);
+      }
+    },
+
+    async restoreItem(uuid) {
+      try {
+        const response = await fetch(`/api/v1/files/${uuid}/restore`, {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': this.getCsrfToken()
+          }
+        });
+        if (response.ok) {
+          this.refreshFolderBrowser();
+        } else {
+          this.showAlert('error', 'Failed to restore');
+        }
+      } catch (error) {
+        this.showAlert('error', 'Failed to restore');
+      }
+    },
+
+    async confirmPurge(uuid, name, nodeType) {
+      const confirmed = await AppDialog.confirm({
+        title: `Delete ${nodeType} permanently?`,
+        message: `This will permanently delete "${name}" and cannot be undone.`,
+        okLabel: 'Delete permanently',
+        okClass: 'btn-error'
+      });
+      if (confirmed) {
+        this.purgeItem(uuid);
+      }
+    },
+
+    async purgeItem(uuid) {
+      try {
+        const response = await fetch(`/api/v1/files/${uuid}/purge`, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRFToken': this.getCsrfToken()
+          }
+        });
+        if (response.ok) {
+          this.refreshFolderBrowser();
+        } else {
+          this.showAlert('error', 'Failed to delete permanently');
+        }
+      } catch (error) {
+        this.showAlert('error', 'Failed to delete permanently');
+      }
+    },
+
+    async confirmCleanTrash() {
+      const confirmed = await AppDialog.confirm({
+        title: 'Empty trash?',
+        message: 'This will permanently delete all items in trash and cannot be undone.',
+        okLabel: 'Empty trash',
+        okClass: 'btn-error'
+      });
+      if (confirmed) {
+        this.cleanTrash(true);
+      }
+    },
+
+    async cleanTrash(force = false) {
+      const url = force ? '/api/v1/files/trash/clean?force=1' : '/api/v1/files/trash/clean';
+      try {
+        const response = await fetch(url, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRFToken': this.getCsrfToken()
+          }
+        });
+        if (response.ok) {
+          this.refreshFolderBrowser();
+        } else {
+          this.showAlert('error', 'Failed to clean trash');
+        }
+      } catch (error) {
+        this.showAlert('error', 'Failed to clean trash');
       }
     },
 

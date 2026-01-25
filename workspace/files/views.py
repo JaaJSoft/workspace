@@ -1,15 +1,12 @@
-import mimetypes
-
-from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.db.models import Exists, OuterRef
-from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from datetime import timedelta
+from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiExample,
@@ -24,6 +21,7 @@ from .serializers import FileSerializer
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
 RECENT_FILES_MAX_LIMIT = getattr(settings, 'RECENT_FILES_MAX_LIMIT', 200)
+TRASH_RETENTION_DAYS = getattr(settings, 'TRASH_RETENTION_DAYS', 30)
 
 
 @extend_schema_view(
@@ -54,6 +52,11 @@ RECENT_FILES_MAX_LIMIT = getattr(settings, 'RECENT_FILES_MAX_LIMIT', 200)
                     "When true, return recently updated items ordered by "
                     "updated_at desc."
                 ),
+            ),
+            OpenApiParameter(
+                name="trashed",
+                type=OpenApiTypes.BOOL,
+                description="When true, return only items in trash.",
             ),
             OpenApiParameter(
                 name="recent_limit",
@@ -215,6 +218,12 @@ class FileViewSet(viewsets.ModelViewSet):
             return False
         return str(value).lower() in {'1', 'true', 'yes'}
 
+    def _is_trash_query(self):
+        value = self.request.query_params.get('trashed')
+        if value is None:
+            return False
+        return str(value).lower() in {'1', 'true', 'yes'}
+
     def _get_recent_limit(self):
         value = self.request.query_params.get('recent_limit')
         if value is None:
@@ -235,9 +244,16 @@ class FileViewSet(viewsets.ModelViewSet):
             file_id=OuterRef('pk'),
         )
         queryset = queryset.annotate(is_favorite=Exists(favorite_subquery))
+        if self.action in {'trash'} or self._is_trash_query():
+            return queryset.filter(deleted_at__isnull=False)
+        if self.action in {'restore', 'purge'}:
+            return queryset
+        queryset = queryset.filter(deleted_at__isnull=True)
         if self.action == 'list':
             if self._is_favorites_query():
                 return queryset.filter(favorites__owner=self.request.user).distinct()
+            if self._is_trash_query():
+                return queryset
             if not self._is_recent_query() and 'parent' not in self.request.query_params:
                 return queryset.filter(parent__isnull=True)
         return queryset
@@ -267,3 +283,116 @@ class FileViewSet(viewsets.ModelViewSet):
             return Response({'is_favorite': True}, status=status.HTTP_200_OK)
         FileFavorite.objects.filter(owner=request.user, file=file_obj).delete()
         return Response({'is_favorite': False}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='restore')
+    def restore(self, request, uuid=None):
+        """Restore a file or folder from trash."""
+        file_obj = self.get_object()
+        if file_obj.deleted_at is None:
+            return Response({'detail': 'Item is not in trash.'}, status=status.HTTP_400_BAD_REQUEST)
+        restored = file_obj.restore()
+        return Response({'restored': restored}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['delete'], url_path='purge')
+    def purge(self, request, uuid=None):
+        """Permanently delete a file or folder."""
+        file_obj = self.get_object()
+        if file_obj.deleted_at is None:
+            return Response({'detail': 'Item is not in trash.'}, status=status.HTTP_400_BAD_REQUEST)
+        file_obj.delete(hard=True)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        summary="List trashed files and folders",
+        description="Return the current user's trashed items.",
+        parameters=[
+            OpenApiParameter(
+                name="node_type",
+                type=OpenApiTypes.STR,
+                enum=[File.NodeType.FILE, File.NodeType.FOLDER],
+                description="Filter by node type.",
+            ),
+            OpenApiParameter(
+                name="parent",
+                type=OpenApiTypes.UUID,
+                description="Filter by parent folder UUID.",
+            ),
+            OpenApiParameter(
+                name="owner",
+                type=OpenApiTypes.INT,
+                description=(
+                    "Filter by owner id. Results are always limited to the "
+                    "current user."
+                ),
+            ),
+            OpenApiParameter(
+                name="search",
+                type=OpenApiTypes.STR,
+                description="Search in name or mime_type.",
+            ),
+            OpenApiParameter(
+                name="ordering",
+                type=OpenApiTypes.STR,
+                description=(
+                    "Comma-separated fields. Use '-' for descending. Allowed: "
+                    "name, created_at, updated_at, size."
+                ),
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(
+                response=FileSerializer(many=True),
+                description="List of trashed files and folders.",
+            ),
+        },
+    )
+    @action(detail=False, methods=['get'], url_path='trash')
+    def trash(self, request):
+        """List trashed files and folders."""
+        queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
+        favorite_subquery = FileFavorite.objects.filter(
+            owner=request.user,
+            file_id=OuterRef('pk'),
+        )
+        queryset = queryset.annotate(is_favorite=Exists(favorite_subquery))
+        queryset = self.filter_queryset(queryset)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Clean trash",
+        description=(
+            "Permanently delete trashed items past retention. "
+            "Use force=true to delete all trashed items."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="force",
+                type=OpenApiTypes.BOOL,
+                description="When true, delete all trashed items.",
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description="Deletion summary.",
+            ),
+        },
+    )
+    @action(detail=False, methods=['delete'], url_path='trash/clean')
+    def clean_trash(self, request):
+        """Permanently delete trashed items past retention (or force all)."""
+        force_value = self.request.query_params.get('force')
+        force = str(force_value).lower() in {'1', 'true', 'yes'} if force_value is not None else False
+        retention_days = TRASH_RETENTION_DAYS
+        cutoff = timezone.now() - timedelta(days=retention_days)
+        queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
+        if not force:
+            queryset = queryset.filter(deleted_at__lt=cutoff)
+        file_count = queryset.count()
+        queryset.delete()
+        return Response({
+            'deleted': file_count,
+            'retention_days': retention_days,
+            'force': force,
+        }, status=status.HTTP_200_OK)

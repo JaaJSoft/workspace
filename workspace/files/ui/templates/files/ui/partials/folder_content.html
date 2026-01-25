@@ -9,6 +9,7 @@
     - show_actions: bool (default: True) - show row action buttons
     - empty_title: str - custom empty state title
     - empty_message: str - custom empty state message
+    - is_trash_view: bool - render trash-specific actions
 {% endcomment %}
 
 <div class="border-base-300 flex flex-col flex-1 min-h-0" x-data="fileTableControls()" x-init="init()">
@@ -30,7 +31,9 @@
           <option value="all">All</option>
           <option value="files">Files</option>
           <option value="folders">Folders</option>
+          {% if not is_trash_view %}
           <option value="favorites">Favorites</option>
+          {% endif %}
         </select>
 
         <div class="join">
@@ -39,7 +42,9 @@
             <option value="name">Name</option>
             <option value="size">Size</option>
             <option value="modified">Modified</option>
+            {% if not is_trash_view %}
             <option value="favorite">Favorite</option>
+            {% endif %}
             <option value="type">Type</option>
           </select>
           <button
@@ -111,9 +116,11 @@
           <tr class="bg-base-200">
             <th class="w-12" data-col="icon"><span class="sr-only">Type</span></th>
             <th data-col="name">Name</th>
+            {% if not is_trash_view %}
             <th class="w-10 text-center" data-col="favorite">Fav</th>
+            {% endif %}
             <th class="hidden sm:table-cell" data-col="size">Size</th>
-            <th class="hidden md:table-cell" data-col="modified">Modified</th>
+            <th class="hidden md:table-cell" data-col="modified">{% if is_trash_view %}Deleted{% else %}Modified{% endif %}</th>
             {% if show_actions != False %}
             <th class="w-16" data-col="actions"><span class="sr-only">Actions</span></th>
             {% endif %}
@@ -127,8 +134,8 @@
             data-node-type="{{ node.node_type }}"
             data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
             data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
-            data-updated="{{ node.updated_at|date:'U' }}"
-            {% if node.node_type == 'folder' %}
+            data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
+            {% if node.node_type == 'folder' and not is_trash_view %}
             @click="openFolderFromRow($event)"
             {% endif %}
           >
@@ -154,7 +161,7 @@
               {% endif %}
             </td>
             <td data-col="name">
-              {% if node.node_type == 'folder' %}
+              {% if node.node_type == 'folder' and not is_trash_view %}
                 <a
                   href="/files/{{ node.uuid }}"
                   class="font-medium hover:text-primary hover:underline"
@@ -167,6 +174,7 @@
                 <span class="font-medium">{{ node.name }}</span>
               {% endif %}
             </td>
+            {% if not is_trash_view %}
             <td class="text-center text-base-content/60" data-stop-row-click data-col="favorite">
               {% if node.is_favorite %}
                 <button
@@ -188,6 +196,7 @@
                 </button>
               {% endif %}
             </td>
+            {% endif %}
             <td class="hidden sm:table-cell text-sm text-base-content/70" data-col="size">
               {% if node.node_type == 'file' %}
                 {{ node.size|filesize }}
@@ -196,7 +205,11 @@
               {% endif %}
             </td>
             <td class="hidden md:table-cell text-sm text-base-content/70" data-col="modified">
-              {{ node.updated_at|date:"M j, Y" }}
+              {% if is_trash_view %}
+                {{ node.deleted_at|date:"M j, Y" }}
+              {% else %}
+                {{ node.updated_at|date:"M j, Y" }}
+              {% endif %}
             </td>
             {% if show_actions != False %}
             <td data-stop-row-click data-col="actions">
@@ -208,6 +221,26 @@
                   <i data-lucide="more-vertical" class="w-4 h-4"></i>
                 </label>
                 <ul tabindex="0" class="dropdown-content z-50 menu menu-sm shadow-xl bg-base-100 border border-base-300 rounded-lg w-56 p-1 mt-2">
+                  {% if is_trash_view %}
+                  <li>
+                    <button
+                      type="button"
+                      class="gap-3 rounded"
+                      @click="confirmRestore('{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.node_type }}')"
+                    >
+                      <i data-lucide="rotate-ccw" class="w-4 h-4"></i>Restore
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      class="gap-3 rounded text-error"
+                      @click="confirmPurge('{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.node_type }}')"
+                    >
+                      <i data-lucide="trash-2" class="w-4 h-4"></i>Delete permanently
+                    </button>
+                  </li>
+                  {% else %}
                   {% if node.node_type == 'file' and node.content %}
                   <li>
                     <a href="{{ node.content.url }}" target="_blank" class="gap-3 rounded">
@@ -259,6 +292,7 @@
                       <i data-lucide="trash-2" class="w-4 h-4"></i>Delete
                     </button>
                   </li>
+                  {% endif %}
                 </ul>
               </div>
             </td>

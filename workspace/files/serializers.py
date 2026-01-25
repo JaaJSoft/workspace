@@ -16,6 +16,15 @@ class FileSerializer(serializers.ModelSerializer):
     is_favorite = serializers.SerializerMethodField(
         help_text="True when the current user has favorited this item."
     )
+    category = serializers.SerializerMethodField(
+        help_text="File category (text, image, pdf, video, audio, unknown)."
+    )
+    is_viewable = serializers.SerializerMethodField(
+        help_text="True if file can be viewed in browser."
+    )
+    content_url = serializers.SerializerMethodField(
+        help_text="URL to fetch file content for viewing."
+    )
 
     class Meta:
         model = File
@@ -35,6 +44,9 @@ class FileSerializer(serializers.ModelSerializer):
             'is_folder',
             'is_file',
             'is_favorite',
+            'category',
+            'is_viewable',
+            'content_url',
         ]
         read_only_fields = ['owner', 'created_at', 'updated_at', 'deleted_at', 'size', 'path', 'is_favorite']
         extra_kwargs = {
@@ -73,6 +85,31 @@ class FileSerializer(serializers.ModelSerializer):
         if not request or not getattr(request, 'user', None) or not request.user.is_authenticated:
             return False
         return FileFavorite.objects.filter(owner=request.user, file=obj).exists()
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_category(self, obj):
+        """Get file category based on MIME type."""
+        from .utils import FileTypeDetector
+
+        if obj.node_type != File.NodeType.FILE:
+            return None
+        return FileTypeDetector.categorize(obj.mime_type or '').value
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_viewable(self, obj):
+        """Check if file can be viewed in browser."""
+        from .utils import FileTypeDetector
+
+        if obj.node_type != File.NodeType.FILE:
+            return False
+        return FileTypeDetector.is_viewable(obj.mime_type or '')
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_content_url(self, obj):
+        """Get URL to fetch file content for viewing."""
+        if obj.node_type == File.NodeType.FILE and obj.content:
+            return f'/api/v1/files/{obj.uuid}/content'
+        return None
 
     def validate(self, attrs):
         if self.instance is not None:

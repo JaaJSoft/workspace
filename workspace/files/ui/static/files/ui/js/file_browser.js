@@ -102,6 +102,17 @@ window.fileBrowser = function fileBrowser() {
       }
     },
 
+    openFileFromRow(event, uuid, name, mimeType) {
+      if (!event) return;
+      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+      if (target && target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('open-file-viewer', {
+        detail: { uuid, name, mime_type: mimeType }
+      }));
+    },
+
     showCreateFolderDialog() {
       const dialog = document.getElementById('create-folder-dialog');
       const input = dialog.querySelector('input');

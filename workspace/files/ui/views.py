@@ -2,8 +2,10 @@ from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404, render
+from django.http import HttpResponse
 
 from ..models import File, FileFavorite
+from .viewers import ViewerRegistry
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
 
@@ -184,3 +186,41 @@ def trash(request):
         return render(request, 'files/ui/index.html#folder-browser', context)
 
     return render(request, 'files/ui/index.html', context)
+
+
+@login_required
+def view_file(request, uuid):
+    """
+    Render file viewer HTML for a specific file.
+
+    Returns the appropriate viewer HTML based on file MIME type.
+    Used by the file viewer modal to load content via Alpine AJAX.
+    """
+    # Get file and check ownership
+    file_obj = get_object_or_404(File, uuid=uuid, owner=request.user, deleted_at__isnull=True)
+
+    # Only files can be viewed
+    if file_obj.node_type != File.NodeType.FILE:
+        return HttpResponse('<div class="p-8 text-center text-error">This is a folder, not a file.</div>', status=400)
+
+    # Check if viewable
+    if not file_obj.is_viewable():
+        return HttpResponse(
+            f'<div class="p-8 text-center text-error">No viewer available for {file_obj.mime_type}</div>',
+            status=400
+        )
+
+    # Get appropriate viewer
+    ViewerClass = ViewerRegistry.get_viewer(file_obj.mime_type)
+
+    if not ViewerClass:
+        return HttpResponse(
+            f'<div class="p-8 text-center text-error">No viewer available for {file_obj.mime_type}</div>',
+            status=400
+        )
+
+    # Render viewer
+    viewer = ViewerClass(file_obj)
+    html = viewer.render(request)
+
+    return HttpResponse(html)

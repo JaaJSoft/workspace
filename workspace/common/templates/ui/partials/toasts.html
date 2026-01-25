@@ -1,5 +1,5 @@
 <!-- AppAlert: Toast-like notification system -->
-<div id="app-alerts-container" class="fixed bottom-4 left-4 z-[100] flex flex-col gap-2 max-w-md"></div>
+<div id="app-alerts-container" class="fixed bottom-4 right-4 flex flex-col gap-2 max-w-md" style="z-index: 99999 !important;"></div>
 
 <!-- Django messages - will be converted to AppAlert toasts via JS -->
 {% if messages %}
@@ -134,7 +134,7 @@
 
     function updateContainerPosition(position) {
       // Reset classes
-      container.className = 'fixed z-[100] flex flex-col gap-2 max-w-md';
+      container.className = 'fixed flex flex-col gap-2 max-w-md';
 
       // Apply position
       const positions = {
@@ -145,7 +145,10 @@
         'top-center': 'top-4 left-1/2 -translate-x-1/2'
       };
 
-      container.className += ' ' + (positions[position] || positions['bottom-left']);
+      container.className += ' ' + (positions[position] || positions['bottom-right']);
+
+      // Keep z-index in style to ensure it's always applied
+      container.style.zIndex = '99999';
     }
 
     function escapeHtml(text) {
@@ -291,7 +294,7 @@
               message: msg.message,
               type: type,
               duration: type === 'error' ? 8000 : 5000,
-              position: 'bottom-left'
+              position: 'top-right'
             });
           }, index * 300);
         });

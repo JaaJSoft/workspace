@@ -124,8 +124,17 @@
 </div>
 
 {% include 'files/ui/partials/dialogs.html' %}
+{% include 'files/ui/partials/file_viewer_modal.html' %}
 {% endblock %}
 
 {% block extra_scripts %}
+<!-- Monaco Editor for text/code viewing and editing -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+
+<!-- File browser -->
 <script src="{% static 'files/ui/js/file_browser.js' %}"></script>
+
+<!-- File viewers -->
+<script src="{% static 'files/ui/js/viewers/text-viewer.js' %}"></script>
+<script src="{% static 'files/ui/js/viewers/image-viewer.js' %}"></script>
 {% endblock %}

@@ -1,0 +1,148 @@
+<!-- File Viewer Modal -->
+<div x-data="fileViewerModal()" x-init="init()">
+  <dialog
+    x-ref="dialog"
+    class="modal"
+    @close="open = false"
+  >
+    <div class="modal-box max-w-[95vw] max-h-[95vh] w-full h-full p-0 flex flex-col">
+      <!-- Header -->
+      <div class="flex items-center justify-between p-4 border-b border-base-300 bg-base-100">
+        <div class="flex-1 min-w-0">
+          <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
+          <p class="text-sm text-base-content/60" x-text="mimeType"></p>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-2">
+          <!-- Download -->
+          <a
+            :href="`/api/v1/files/${fileUuid}/content`"
+            download
+            class="btn btn-ghost btn-sm btn-square"
+            title="Download file"
+            x-show="fileUuid"
+          >
+            <i data-lucide="download" class="w-4 h-4"></i>
+          </a>
+
+          <!-- Close -->
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square"
+            @click="close()"
+            title="Close (ESC)"
+          >
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Viewer Container -->
+      <div
+        x-ref="viewerContainer"
+        class="flex-1 overflow-auto bg-base-200"
+        x-show="!loading && !error"
+        x-html="viewerHtml"
+      >
+      </div>
+
+      <!-- Loading State -->
+      <div
+        x-show="loading"
+        class="flex-1 flex items-center justify-center"
+        x-cloak
+      >
+        <span class="loading loading-spinner loading-lg"></span>
+      </div>
+
+      <!-- Error State -->
+      <div
+        x-show="error"
+        class="flex-1 flex items-center justify-center p-8"
+        x-cloak
+      >
+        <div class="text-center">
+          <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
+          <p class="text-lg font-medium mb-2">Failed to load file</p>
+          <p class="text-sm text-base-content/60" x-text="error"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Backdrop -->
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
+
+  <script>
+    function fileViewerModal() {
+      return {
+        open: false,
+        loading: false,
+        error: null,
+        fileUuid: null,
+        fileName: '',
+        mimeType: '',
+        viewerHtml: '',
+
+        async openFile(uuid, name, mimeType) {
+          this.fileUuid = uuid;
+          this.fileName = name || 'File';
+          this.mimeType = mimeType || '';
+          this.loading = true;
+          this.error = null;
+          this.viewerHtml = '';
+          this.open = true;
+
+          this.$refs.dialog.showModal();
+
+          try {
+            const response = await fetch(`/files/view/${uuid}`);
+            if (!response.ok) {
+              throw new Error(`Failed to load viewer: ${response.status}`);
+            }
+
+            this.viewerHtml = await response.text();
+
+            // Reinitialize Lucide icons after HTML is inserted
+            this.$nextTick(() => {
+              lucide.createIcons();
+            });
+          } catch (err) {
+            this.error = err.message;
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        close() {
+          this.$refs.dialog.close();
+          this.open = false;
+          this.fileUuid = null;
+          this.fileName = '';
+          this.mimeType = '';
+          this.viewerHtml = '';
+          this.error = null;
+        },
+
+        handleKeydown(event) {
+          if (!this.open) return;
+
+          if (event.key === 'Escape') {
+            this.close();
+          }
+        },
+
+        init() {
+          window.addEventListener('keydown', (e) => this.handleKeydown(e));
+          window.addEventListener('open-file-viewer', (e) => {
+            const { uuid, name, mime_type } = e.detail;
+            this.openFile(uuid, name, mime_type);
+          });
+        }
+      };
+    }
+  </script>
+</div>

@@ -1,0 +1,31 @@
+<!-- Image Viewer -->
+<div class="flex flex-col h-full" x-data="imageViewerData()" x-init="init()">
+  <!-- Toolbar -->
+  <div class="flex items-center justify-center gap-2 p-4 bg-base-100 border-b border-base-300">
+    <button type="button" class="btn btn-sm btn-ghost" @click="zoom(-0.2)" title="Zoom out (-)">
+      <i data-lucide="zoom-out" class="w-4 h-4"></i>
+    </button>
+    <span class="text-sm font-mono min-w-[4rem] text-center" x-text="Math.round(zoomLevel * 100) + '%'"></span>
+    <button type="button" class="btn btn-sm btn-ghost" @click="zoom(0.2)" title="Zoom in (+)">
+      <i data-lucide="zoom-in" class="w-4 h-4"></i>
+    </button>
+    <div class="divider divider-horizontal mx-2"></div>
+    <button type="button" class="btn btn-sm btn-ghost" @click="rotate(90)" title="Rotate (R)">
+      <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+    </button>
+    <button type="button" class="btn btn-sm btn-ghost" @click="reset()" title="Reset (0)">
+      <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+    </button>
+  </div>
+
+  <!-- Image Container -->
+  <div class="flex-1 overflow-auto flex items-center justify-center p-4">
+    <img
+      src="/api/v1/files/{{ file.uuid }}/content"
+      alt="{{ file.name }}"
+      class="max-w-full h-auto transition-transform duration-200"
+      :style="`transform: scale(${zoomLevel}) rotate(${rotation}deg)`"
+      x-ref="image"
+    />
+  </div>
+</div>

@@ -396,3 +396,55 @@ class FileViewSet(viewsets.ModelViewSet):
             'retention_days': retention_days,
             'force': force,
         }, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Get file content",
+        description="Serve file content with proper headers for inline viewing in browser.",
+        responses={
+            200: OpenApiResponse(
+                description="File content with appropriate Content-Type and Content-Disposition headers.",
+            ),
+            400: OpenApiResponse(description="Not a file (folder)."),
+            404: OpenApiResponse(description="File not found or no content."),
+        },
+    )
+    @action(detail=True, methods=['get'], url_path='content')
+    def content(self, request, uuid=None):
+        """Serve file content with proper headers for inline viewing."""
+        from django.http import FileResponse, HttpResponse
+
+        file_obj = self.get_object()
+
+        # Security: ownership check
+        if file_obj.owner != request.user:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Only serve files, not folders
+        if file_obj.node_type != File.NodeType.FILE:
+            return Response({'detail': 'Not a file.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # File must have content
+        if not file_obj.content:
+            return Response({'detail': 'No content.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # For text files, read and return directly (fixes streaming issues)
+        if file_obj.mime_type and file_obj.mime_type.startswith('text/'):
+            try:
+                with file_obj.content.open('r', encoding='utf-8') as f:
+                    content = f.read()
+                response = HttpResponse(content, content_type=file_obj.mime_type)
+                response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
+                return response
+            except Exception:
+                # Fallback to binary if UTF-8 fails
+                pass
+
+        # For other files, use FileResponse with proper streaming
+        response = FileResponse(
+            file_obj.content.open('rb'),
+            content_type=file_obj.mime_type or 'application/octet-stream',
+            as_attachment=False
+        )
+        response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
+
+        return response

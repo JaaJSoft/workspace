@@ -137,6 +137,8 @@
             data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
             {% if node.node_type == 'folder' and not is_trash_view %}
             @click="openFolderFromRow($event)"
+            {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
+            @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.mime_type }}')"
             {% endif %}
           >
             <td class="text-base-content/60" data-col="icon">
@@ -242,9 +244,20 @@
                   </li>
                   {% else %}
                   {% if node.node_type == 'file' and node.content %}
+                  {% if node.is_viewable %}
+                  <li>
+                    <button
+                      type="button"
+                      class="gap-3 rounded w-full text-left"
+                      @click="window.dispatchEvent(new CustomEvent('open-file-viewer', { detail: { uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}', mime_type: '{{ node.mime_type }}' } }))"
+                    >
+                      <i data-lucide="eye" class="w-4 h-4"></i>View in browser
+                    </button>
+                  </li>
+                  {% endif %}
                   <li>
                     <a href="{{ node.content.url }}" target="_blank" class="gap-3 rounded">
-                      <i data-lucide="eye" class="w-4 h-4"></i>View
+                      <i data-lucide="external-link" class="w-4 h-4"></i>Open in new tab
                     </a>
                   </li>
                   <li>

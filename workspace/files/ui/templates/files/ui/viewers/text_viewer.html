@@ -1,0 +1,61 @@
+<!-- Text/Code Viewer with Monaco Editor -->
+<div class="flex flex-col h-full" x-data="{ content: '{{ content|escapejs }}', originalContent: '{{ content|escapejs }}', isEditing: false, loading: false, error: null, saving: false, fileUuid: '{{ file.uuid }}', fileName: '{{ file.name }}', ...textViewerMethods() }" @keydown.window="handleKeydown($event)">
+  <!-- Toolbar -->
+  <div class="flex items-center justify-between gap-2 p-4 bg-base-100 border-b border-base-300">
+    <!-- Edit mode info -->
+    <div x-show="isEditing" class="flex items-center gap-2">
+      <i data-lucide="info" class="w-4 h-4 text-info"></i>
+      <span class="text-sm">Editing mode – Press Ctrl+S to save or ESC to cancel</span>
+    </div>
+
+    <!-- View mode placeholder -->
+    <div x-show="!isEditing" class="flex-1"></div>
+
+    <!-- Action buttons -->
+    <div class="flex gap-2">
+      <!-- Edit button (when not editing) -->
+      <button x-show="!isEditing" type="button" class="btn btn-sm btn-ghost" @click="startEdit()" title="Edit file">
+        <i data-lucide="pencil" class="w-4 h-4"></i>
+        Edit
+      </button>
+
+      <!-- Cancel and Save (when editing) -->
+      <button x-show="isEditing" type="button" class="btn btn-sm btn-ghost" @click="cancelEdit()">
+        <i data-lucide="x" class="w-4 h-4"></i>
+        Cancel
+      </button>
+      <button x-show="isEditing" type="button" class="btn btn-sm btn-primary" @click="save()">
+        <i data-lucide="save" class="w-4 h-4"></i>
+        Save
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div x-show="loading" class="flex-1 flex items-center justify-center" x-cloak>
+    <span class="loading loading-spinner loading-lg"></span>
+  </div>
+
+  <!-- Error State -->
+  <div x-show="!loading && error" class="flex-1 flex items-center justify-center p-8" x-cloak>
+    <div class="text-center">
+      <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
+      <p class="text-lg font-medium mb-2">Failed to load file</p>
+      <p class="text-sm text-base-content/60" x-text="error"></p>
+    </div>
+  </div>
+
+  <!-- Text Editor -->
+  <textarea
+    x-show="!loading && !error"
+    x-model="content"
+    :readonly="!isEditing"
+    :class="isEditing ? 'textarea-bordered bg-base-100' : 'bg-base-200'"
+    class="textarea w-full h-full font-mono text-sm text-base-content border-none focus:outline-none resize-none rounded-none flex-1"
+    spellcheck="false"
+    data-file-uuid="{{ file.uuid }}"
+    data-file-name="{{ file.name }}"
+    x-cloak
+    x-effect="if (isEditing && $el.value) $el.focus()"
+  ></textarea>
+</div>

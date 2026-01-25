@@ -145,6 +145,13 @@ class File(models.Model):
     def is_file(self):
         return self.node_type == self.NodeType.FILE
 
+    def is_viewable(self):
+        """Check if this file can be viewed in the browser."""
+        from .utils import FileTypeDetector
+        if self.node_type != self.NodeType.FILE:
+            return False
+        return FileTypeDetector.is_viewable(self.mime_type or '')
+
     def is_deleted(self):
         return self.deleted_at is not None
 

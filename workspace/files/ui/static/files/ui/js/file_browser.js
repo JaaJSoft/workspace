@@ -509,7 +509,7 @@ window.fileBrowser = function fileBrowser() {
 
 window.fileTableControls = function fileTableControls() {
   return {
-    storageKey: 'fileTableControls:v1',
+    storageKey: 'fileTableControls:v2',
     searchQuery: '',
     typeFilter: 'all',
     sortField: 'default',
@@ -561,6 +561,7 @@ window.fileTableControls = function fileTableControls() {
         return;
       }
       this.originalRows = Array.from(this.tbody.querySelectorAll('tr'));
+      this.initStorageKey();
       this.loadState();
       this.pruneMissingColumns();
       this.ready = true;
@@ -576,6 +577,18 @@ window.fileTableControls = function fileTableControls() {
       this.$watch('typeFilter', () => this.applyRows());
       this.$watch('sortField', () => this.applyRows());
       this.$watch('sortDir', () => this.applyRows());
+    },
+
+    initStorageKey() {
+      const baseKey = this.storageKey;
+      const columns = Array.from(this.table.querySelectorAll('thead th[data-col]'))
+        .map((cell) => cell.dataset.col)
+        .filter(Boolean);
+      if (columns.length) {
+        this.storageKey = `${baseKey}:${columns.join('|')}`;
+      } else {
+        this.storageKey = baseKey;
+      }
     },
 
     loadState() {

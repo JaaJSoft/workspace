@@ -247,19 +247,57 @@ class FileFavorite(models.Model):
 @receiver(pre_delete, sender=File)
 def delete_file_on_delete(sender, instance, **kwargs):
     """
-    Delete the physical file when a File instance is deleted.
+    Delete the physical file or folder when a File instance is deleted.
     This signal ensures files are deleted even in bulk operations.
+    For folders, attempts to remove the physical directory if it exists.
     """
     from django.core.files.storage import default_storage
     import logging
+    import os
+    import shutil
 
     logger = logging.getLogger(__name__)
 
     if instance.node_type == File.NodeType.FILE and instance.content:
+        # Handle file deletion
         try:
             file_path = instance.content.name
             if file_path and default_storage.exists(file_path):
                 default_storage.delete(file_path)
                 logger.info(f"Signal: Deleted physical file: {file_path}")
+
+                # Try to remove empty parent directories
+                try:
+                    dir_path = os.path.dirname(file_path)
+                    while dir_path and dir_path != 'files':
+                        full_path = os.path.join(default_storage.location, dir_path)
+                        if os.path.exists(full_path) and os.path.isdir(full_path):
+                            if not os.listdir(full_path):  # Directory is empty
+                                os.rmdir(full_path)
+                                logger.info(f"Signal: Deleted empty directory: {dir_path}")
+                                dir_path = os.path.dirname(dir_path)
+                            else:
+                                break  # Directory not empty, stop
+                        else:
+                            break
+                except Exception as e:
+                    logger.warning(f"Signal: Could not remove empty directory for {file_path}: {e}")
+
         except Exception as e:
             logger.error(f"Signal: Error deleting physical file {instance.content.name}: {e}")
+
+    elif instance.node_type == File.NodeType.FOLDER:
+        # Handle folder deletion - remove the physical directory if it exists
+        try:
+            # Build the folder path
+            folder_path = instance.path or instance.get_path()
+            if folder_path:
+                # Convert path to file system path
+                full_path = os.path.join(default_storage.location, 'files', instance.owner.username, folder_path.split('/', 1)[1] if '/' in folder_path else folder_path)
+
+                if os.path.exists(full_path) and os.path.isdir(full_path):
+                    # Remove directory and all its contents (in case there are orphaned files)
+                    shutil.rmtree(full_path)
+                    logger.info(f"Signal: Deleted folder and contents: {full_path}")
+        except Exception as e:
+            logger.warning(f"Signal: Could not delete folder {instance.name}: {e}")

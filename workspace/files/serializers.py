@@ -275,6 +275,8 @@ class FileSerializer(serializers.ModelSerializer):
         import logging
 
         logger = logging.getLogger(__name__)
+
+        # Handle content update for files
         if 'content' in validated_data:
             uploaded = validated_data.get('content')
             if instance.node_type == File.NodeType.FILE and uploaded is not None:
@@ -284,6 +286,7 @@ class FileSerializer(serializers.ModelSerializer):
                         uploaded,
                         validated_data.get('name', instance.name),
                     )
+                # Note: File replacement is now handled by OverwriteStorage
             else:
                 validated_data['size'] = None
 

@@ -1,0 +1,55 @@
+<div id="dashboard-insights" class="mt-4 space-y-3" x-init="$nextTick(() => lucide.createIcons())">
+  {% if favorite_nodes %}
+    <ul class="divide-y divide-base-200">
+      {% for node in favorite_nodes %}
+        <li class="py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-base-200 flex items-center justify-center flex-shrink-0">
+            {% if node.node_type == 'folder' %}
+              <i data-lucide="folder" class="w-4 h-4 text-warning"></i>
+            {% else %}
+              {% with node.mime_type as mime %}
+                {% if 'image' in mime %}
+                  <i data-lucide="image" class="w-4 h-4 text-success"></i>
+                {% elif 'video' in mime %}
+                  <i data-lucide="video" class="w-4 h-4 text-error"></i>
+                {% elif 'audio' in mime %}
+                  <i data-lucide="music" class="w-4 h-4 text-secondary"></i>
+                {% elif 'pdf' in mime %}
+                  <i data-lucide="file-text" class="w-4 h-4 text-error"></i>
+                {% elif 'zip' in mime or 'rar' in mime or 'tar' in mime or 'gz' in mime %}
+                  <i data-lucide="file-archive" class="w-4 h-4 text-warning"></i>
+                {% else %}
+                  <i data-lucide="file" class="w-4 h-4"></i>
+                {% endif %}
+              {% endwith %}
+            {% endif %}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <div class="font-medium truncate">{{ node.name }}</div>
+              <span class="badge badge-warning badge-outline text-xs">Favorite</span>
+            </div>
+            <div class="text-xs text-base-content/60 truncate">{{ node.path }}</div>
+          </div>
+          <div class="flex-shrink-0">
+            {% if node.node_type == 'folder' %}
+              <a href="/files/{{ node.uuid }}" class="btn btn-ghost btn-xs">Open</a>
+            {% elif node.content %}
+              <a href="{{ node.content.url }}" target="_blank" class="btn btn-ghost btn-xs">View</a>
+            {% else %}
+              <a href="{% if node.parent %}/files/{{ node.parent.uuid }}{% else %}/files{% endif %}" class="btn btn-ghost btn-xs">Open</a>
+            {% endif %}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="flex justify-end pt-3">
+      <a href="/files?favorites=1" class="btn btn-ghost btn-sm">View all favorites</a>
+    </div>
+  {% else %}
+    {% include "ui/partials/inline_alert.html" with type="info" message="No favorites yet. Star files or folders to keep them handy." %}
+    <div class="pt-3">
+      <a href="/files" class="btn btn-primary btn-sm">Browse files</a>
+    </div>
+  {% endif %}
+</div>

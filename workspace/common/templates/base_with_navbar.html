@@ -9,11 +9,11 @@
 {% endblock %}
 
 <!-- Drawer below navbar -->
-<div class="drawer {% block drawer_class %}{% endblock %} flex-1 min-h-0">
+<div class="drawer {% block drawer_class %}{% endblock %} {% block drawer_wrapper_class %}flex-1 min-h-0{% endblock %}">
   <input id="{% block drawer_id %}main-drawer{% endblock %}" type="checkbox" class="drawer-toggle" />
 
-  <div class="drawer-content flex flex-col h-full overflow-hidden">
-    <main class="{% block main_class %}container mx-auto p-4{% endblock %} flex-1 min-h-0">
+  <div class="drawer-content flex flex-col {% block drawer_content_class %}h-full overflow-hidden{% endblock %}">
+    <main class="{% block main_class %}container mx-auto p-4{% endblock %} {% block main_layout_class %}flex-1 min-h-0{% endblock %}">
       {% block content %}{% endblock %}
     </main>
   </div>

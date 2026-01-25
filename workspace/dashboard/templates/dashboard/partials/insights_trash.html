@@ -1,0 +1,32 @@
+<div id="dashboard-insights" class="mt-4 space-y-3" x-init="$nextTick(() => lucide.createIcons())">
+  {% if trash_nodes %}
+    <ul class="divide-y divide-base-200">
+      {% for node in trash_nodes %}
+        <li class="py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-base-200 flex items-center justify-center flex-shrink-0">
+            {% if node.node_type == 'folder' %}
+              <i data-lucide="folder" class="w-4 h-4 text-warning"></i>
+            {% else %}
+              <i data-lucide="file" class="w-4 h-4"></i>
+            {% endif %}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-medium truncate">{{ node.name }}</div>
+            <div class="text-xs text-base-content/60 truncate">{{ node.path }}</div>
+          </div>
+          <div class="text-xs text-base-content/50 hidden sm:block">
+            Deleted {{ node.deleted_at|date:"M j" }}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="flex justify-end pt-3">
+      <a href="/files/trash" class="btn btn-ghost btn-sm">Open trash</a>
+    </div>
+  {% else %}
+    {% include "ui/partials/inline_alert.html" with type="info" message="Trash is empty. Deleted items will show up here." %}
+    <div class="pt-3">
+      <a href="/files" class="btn btn-primary btn-sm">Browse files</a>
+    </div>
+  {% endif %}
+</div>

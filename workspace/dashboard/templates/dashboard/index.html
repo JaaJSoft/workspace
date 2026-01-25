@@ -1,120 +1,207 @@
 {% extends 'base_with_navbar.html' %}
+{% load file_filters %}
 
-{% block title %}Dashboard · Workspace{% endblock %}
+{% block title %}Dashboard - Workspace{% endblock %}
+{% block body_class %}bg-base-100 min-h-screen flex flex-col{% endblock %}
+{% block drawer_wrapper_class %}{% endblock %}
+{% block drawer_content_class %}{% endblock %}
+{% block main_layout_class %}{% endblock %}
 
 {% block content %}
-<div class="py-8">
-  <!-- Welcome Section -->
-  <div class="mb-8">
-    <h1 class="text-4xl font-bold text-base-content mb-2">
-      Welcome back, {{ user.username }}!
-    </h1>
-    <p class="text-base-content/60">
-      Here's what's happening in your workspace today.
-    </p>
-  </div>
-
-  <!-- Stats Grid -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-    <!-- Stat Card 1 -->
-    <div class="stats shadow border border-base-300">
-      <div class="stat">
-        <div class="stat-figure text-primary">
-          <i data-lucide="file" class="w-8 h-8"></i>
-        </div>
-        <div class="stat-title">Total Files</div>
-        <div class="stat-value text-primary">0</div>
-        <div class="stat-desc">No files yet</div>
-      </div>
+<div class="py-6 space-y-8">
+  <section class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div class="space-y-1">
+      <h1 class="text-3xl font-semibold text-base-content">Welcome back, {{ user.username }}.</h1>
+      <p class="text-base-content/60">Keep track of files, favorites, and recent activity.</p>
     </div>
-
-    <!-- Stat Card 2 -->
-    <div class="stats shadow border border-base-300">
-      <div class="stat">
-        <div class="stat-figure text-secondary">
-          <i data-lucide="users" class="w-8 h-8"></i>
-        </div>
-        <div class="stat-title">Team Members</div>
-        <div class="stat-value text-secondary">1</div>
-        <div class="stat-desc">Just you for now</div>
-      </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="/files" class="btn btn-primary gap-2">
+        <i data-lucide="hard-drive" class="w-4 h-4"></i>
+        Open files
+      </a>
+      <a href="/files?recent=1" class="btn btn-ghost gap-2">
+        <i data-lucide="clock" class="w-4 h-4"></i>
+        Recent
+      </a>
+      <a href="/files?favorites=1" class="btn btn-ghost gap-2">
+        <i data-lucide="star" class="w-4 h-4"></i>
+        Favorites
+      </a>
+      <a href="/files/trash" class="btn btn-ghost gap-2">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+        Trash
+      </a>
     </div>
+  </section>
 
-    <!-- Stat Card 3 -->
-    <div class="stats shadow border border-base-300">
-      <div class="stat">
-        <div class="stat-figure text-success">
-          <i data-lucide="check-circle" class="w-8 h-8"></i>
-        </div>
-        <div class="stat-title">Completed</div>
-        <div class="stat-value text-success">0</div>
-        <div class="stat-desc">Tasks done</div>
+  <section class="space-y-4">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <div>
+        <h2 class="text-xl font-semibold text-base-content">Overview</h2>
+        <p class="text-sm text-base-content/60">Your workspace at a glance.</p>
       </div>
+      <a
+        href="{% url 'dashboard:stats' %}"
+        class="btn btn-ghost btn-sm gap-2"
+        x-target="dashboard-stats"
+        aria-label="Refresh overview"
+        title="Refresh overview"
+      >
+        <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+        Refresh
+      </a>
     </div>
+    {% include 'dashboard/partials/stats.html' %}
+  </section>
 
-    <!-- Stat Card 4 -->
-    <div class="stats shadow border border-base-300">
-      <div class="stat">
-        <div class="stat-figure text-warning">
-          <i data-lucide="clock" class="w-8 h-8"></i>
-        </div>
-        <div class="stat-title">Pending</div>
-        <div class="stat-value text-warning">0</div>
-        <div class="stat-desc">Tasks to do</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Main Content Grid -->
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <!-- Recent Activity -->
-    <div class="lg:col-span-2">
-      <div class="card bg-base-100 shadow border border-base-300">
+  <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+    <div class="xl:col-span-2">
+      <div class="card bg-base-100 shadow border border-base-300" x-data="{ insightTab: '{{ insight_tab|default:"recent" }}' }">
         <div class="card-body">
-          <h2 class="card-title text-2xl mb-4">
-            <i data-lucide="activity" class="w-6 h-6"></i>
-            Recent Activity
-          </h2>
-          <div class="text-center py-12 text-base-content/60">
-            <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-4 opacity-40"></i>
-            <p>No activity yet. Start by creating something!</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Quick Actions -->
-    <div class="lg:col-span-1">
-      <div class="card bg-base-100 shadow border border-base-300">
-        <div class="card-body">
-          <h2 class="card-title text-2xl mb-4">
-            <i data-lucide="zap" class="w-6 h-6"></i>
-            Quick Actions
-          </h2>
-          <div class="space-y-2">
-            <a href="#" class="btn btn-primary w-full justify-start gap-3">
-              <i data-lucide="plus" class="w-5 h-5"></i>
-              Create New Item
-            </a>
-            <a href="/files" class="btn btn-outline w-full justify-start gap-3">
-              <i data-lucide="folder" class="w-5 h-5"></i>
-              Browse Files
-            </a>
-            <a href="#" class="btn btn-outline w-full justify-start gap-3">
-              <i data-lucide="settings" class="w-5 h-5"></i>
-              Settings
-            </a>
-            {% if user.is_staff %}
-              <div class="divider text-xs">Admin</div>
-              <a href="/admin/" class="btn btn-outline btn-error w-full justify-start gap-3">
-                <i data-lucide="shield" class="w-5 h-5"></i>
-                Admin Panel
+          <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div class="space-y-1">
+              <h2 class="card-title text-2xl">
+                <i data-lucide="activity" class="w-5 h-5"></i>
+                Insights
+              </h2>
+              <p class="text-sm text-base-content/60">Recent updates, starred items, and trash.</p>
+            </div>
+            <div class="tabs tabs-boxed">
+              <a
+                href="{% url 'dashboard:insights_recent' %}"
+                class="tab"
+                :class="insightTab === 'recent' ? 'tab-active' : ''"
+                @click="insightTab = 'recent'"
+                x-target="dashboard-insights"
+              >
+                Recent
               </a>
+              <a
+                href="{% url 'dashboard:insights_favorites' %}"
+                class="tab"
+                :class="insightTab === 'favorites' ? 'tab-active' : ''"
+                @click="insightTab = 'favorites'"
+                x-target="dashboard-insights"
+              >
+                Favorites
+              </a>
+              <a
+                href="{% url 'dashboard:insights_trash' %}"
+                class="tab"
+                :class="insightTab === 'trash' ? 'tab-active' : ''"
+                @click="insightTab = 'trash'"
+                x-target="dashboard-insights"
+              >
+                Trash
+              </a>
+            </div>
+          </div>
+
+          {% if insight_tab == 'favorites' %}
+            {% include 'dashboard/partials/insights_favorites.html' %}
+          {% elif insight_tab == 'trash' %}
+            {% include 'dashboard/partials/insights_trash.html' %}
+          {% else %}
+            {% include 'dashboard/partials/insights_recent.html' %}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-6">
+      <div class="card bg-base-100 shadow border border-base-300">
+        <div class="card-body">
+          <h3 class="card-title text-xl">
+            <i data-lucide="hard-drive" class="w-5 h-5"></i>
+            Storage
+          </h3>
+          <div class="mt-2 flex items-center justify-between gap-4">
+            <div>
+              <div class="text-sm text-base-content/60">Used</div>
+              <div class="text-2xl font-semibold">{{ stats.total_size|filesize }}</div>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-base-200 flex items-center justify-center text-base-content/60">
+              <i data-lucide="database" class="w-6 h-6"></i>
+            </div>
+          </div>
+          <div class="mt-4 grid grid-cols-2 gap-3 text-sm text-base-content/70">
+            <div class="flex items-center gap-2">
+              <i data-lucide="file" class="w-4 h-4"></i>
+              <span>{{ stats.file_count }} file{{ stats.file_count|pluralize }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="folder" class="w-4 h-4"></i>
+              <span>{{ stats.folder_count }} folder{{ stats.folder_count|pluralize }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="star" class="w-4 h-4"></i>
+              <span>{{ stats.favorite_count }} favorite{{ stats.favorite_count|pluralize }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+              <span>{{ stats.trash_count }} item{{ stats.trash_count|pluralize }} in trash</span>
+            </div>
+          </div>
+          <div class="mt-4 text-xs text-base-content/50">
+            {% if stats.last_updated %}
+              Last update {{ stats.last_updated|date:"M j, Y H:i" }}
+            {% else %}
+              No activity yet
             {% endif %}
           </div>
         </div>
       </div>
+
+      <div class="card bg-base-100 shadow border border-base-300">
+        <div class="card-body">
+          <h3 class="card-title text-xl">
+            <i data-lucide="zap" class="w-5 h-5"></i>
+            Quick actions
+          </h3>
+          <div class="space-y-2">
+            <a href="/files" class="btn btn-primary w-full justify-start gap-3">
+              <i data-lucide="folder-open" class="w-5 h-5"></i>
+              Open file browser
+            </a>
+            <a href="/files?recent=1" class="btn btn-outline w-full justify-start gap-3">
+              <i data-lucide="clock" class="w-5 h-5"></i>
+              Review recent items
+            </a>
+            <a href="/files?favorites=1" class="btn btn-outline w-full justify-start gap-3">
+              <i data-lucide="star" class="w-5 h-5"></i>
+              Manage favorites
+            </a>
+            <a href="/files/trash" class="btn btn-outline w-full justify-start gap-3">
+              <i data-lucide="trash-2" class="w-5 h-5"></i>
+              Open trash
+            </a>
+            <div class="divider text-xs">Utilities</div>
+            <a href="/health/" class="btn btn-ghost w-full justify-start gap-3">
+              <i data-lucide="activity" class="w-5 h-5"></i>
+              Health check
+            </a>
+            {% if user.is_staff %}
+              <a href="/admin/" class="btn btn-ghost w-full justify-start gap-3">
+                <i data-lucide="shield" class="w-5 h-5"></i>
+                Admin panel
+              </a>
+              <a href="/schema/swagger-ui/" class="btn btn-ghost w-full justify-start gap-3">
+                <i data-lucide="code-2" class="w-5 h-5"></i>
+                API docs
+              </a>
+            {% endif %}
+          </div>
+          <div class="mt-4 text-xs text-base-content/50 flex items-center gap-2">
+            <i data-lucide="command" class="w-4 h-4"></i>
+            Press
+            <kbd class="kbd kbd-xs">Ctrl</kbd>
+            +
+            <kbd class="kbd kbd-xs">K</kbd>
+            to search
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
+  </section>
 </div>
 {% endblock %}

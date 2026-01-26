@@ -43,7 +43,6 @@
         x-ref="viewerContainer"
         class="flex-1 overflow-auto bg-base-200"
         x-show="!loading && !error"
-        x-html="viewerHtml"
       >
       </div>
 
@@ -85,7 +84,6 @@
         fileUuid: null,
         fileName: '',
         mimeType: '',
-        viewerHtml: '',
 
         async openFile(uuid, name, mimeType) {
           this.fileUuid = uuid;
@@ -93,9 +91,13 @@
           this.mimeType = mimeType || '';
           this.loading = true;
           this.error = null;
-          this.viewerHtml = '';
           this.open = true;
 
+          const container = this.$refs.viewerContainer;
+          // Clear previous content
+          while (container.firstChild) {
+            container.removeChild(container.firstChild);
+          }
           this.$refs.dialog.showModal();
 
           try {
@@ -104,12 +106,30 @@
               throw new Error(`Failed to load viewer: ${response.status}`);
             }
 
-            this.viewerHtml = await response.text();
+            const html = await response.text();
 
-            // Reinitialize Lucide icons after HTML is inserted
-            this.$nextTick(() => {
-              lucide.createIcons();
+            // 1. Parse and insert HTML using safe DOM methods
+            const template = document.createElement('template');
+            template.innerHTML = html;
+            const content = template.content.cloneNode(true);
+
+            // 2. Execute scripts first (before Alpine sees the content)
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+              const newScript = document.createElement('script');
+              newScript.textContent = script.textContent;
+              document.head.appendChild(newScript);
+              script.remove();
             });
+
+            // 3. Append content to container
+            container.appendChild(content);
+
+            // 4. Now initialize Alpine on the content
+            Alpine.initTree(container);
+
+            // 5. Reinitialize Lucide icons
+            lucide.createIcons();
           } catch (err) {
             this.error = err.message;
           } finally {
@@ -123,8 +143,12 @@
           this.fileUuid = null;
           this.fileName = '';
           this.mimeType = '';
-          this.viewerHtml = '';
           this.error = null;
+          // Clear viewer content
+          const container = this.$refs.viewerContainer;
+          while (container.firstChild) {
+            container.removeChild(container.firstChild);
+          }
         },
 
         handleKeydown(event) {

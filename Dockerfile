@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Installer les dépendances Python
+# Install Python dependencies
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
@@ -18,32 +18,32 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/app/.venv/bin:$PATH
 
-# Création d'un user non-root (bonne pratique)
+# Create a non-root user
 RUN useradd -m appuser
 
 WORKDIR /app
 
-# Copier l'environnement virtuel depuis le builder
+# Copy virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
 
-# Copier le code
+# Copy the code
 COPY . .
 
-# Collecte des statiques à l'image (facilite le run)
-# Ces variables seront surchargées en runtime via docker-compose/env
+# Collect static files in the image (simplifies running)
+# These variables will be overridden at runtime via docker-compose/env
 ENV DJANGO_SETTINGS_MODULE=workspace.settings \
     SECRET_KEY=build-secret \
     DEBUG=0 \
     ALLOWED_HOSTS="*"
 
-# Nombre de workers et logs Gunicorn paramétrables (valeurs par défaut)
+# Gunicorn workers count and logs configurable (default values)
 ENV GUNICORN_WORKERS=3 \
     GUNICORN_LOG_LEVEL=info \
     GUNICORN_ACCESS_LOGFORMAT="%(h)s %(l)s %(u)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\" %(D)s"
 
 RUN python manage.py collectstatic --noinput
 
-# Droits et port
+# Permissions and port
 RUN chown -R appuser:appuser /app
 USER appuser
 EXPOSE 8000

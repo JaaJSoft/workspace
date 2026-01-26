@@ -5,36 +5,36 @@
     class="modal"
     @close="open = false"
   >
-    <div class="modal-box max-w-[95vw] max-h-[95vh] w-full h-full p-0 flex flex-col">
+    <div class="modal-box max-w-[90vw] max-h-[90vh] w-full h-full p-0 flex flex-col relative">
+      <!-- Actions (Top Right) -->
+      <div class="absolute top-4 right-4 z-10 flex items-center gap-2">
+        <!-- Download -->
+        <a
+          :href="`/api/v1/files/${fileUuid}/content`"
+          download
+          class="btn btn-ghost btn-sm btn-square"
+          title="Download file"
+          x-show="fileUuid"
+        >
+          <i data-lucide="download" class="w-4 h-4"></i>
+        </a>
+
+        <!-- Close -->
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          @click="close()"
+          title="Close (ESC)"
+        >
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
       <!-- Header -->
-      <div class="flex items-center justify-between p-4 border-b border-base-300 bg-base-100">
+      <div class="flex items-center p-4 pr-24 border-b border-base-300 bg-base-100">
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
           <p class="text-sm text-base-content/60" x-text="mimeType"></p>
-        </div>
-
-        <!-- Actions -->
-        <div class="flex items-center gap-2">
-          <!-- Download -->
-          <a
-            :href="`/api/v1/files/${fileUuid}/content`"
-            download
-            class="btn btn-ghost btn-sm btn-square"
-            title="Download file"
-            x-show="fileUuid"
-          >
-            <i data-lucide="download" class="w-4 h-4"></i>
-          </a>
-
-          <!-- Close -->
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm btn-square"
-            @click="close()"
-            title="Close (ESC)"
-          >
-            <i data-lucide="x" class="w-4 h-4"></i>
-          </button>
         </div>
       </div>
 
@@ -84,20 +84,23 @@
         fileUuid: null,
         fileName: '',
         mimeType: '',
+        loadedScripts: [],
 
         async openFile(uuid, name, mimeType) {
           this.fileUuid = uuid;
           this.fileName = name || 'File';
           this.mimeType = mimeType || '';
-          this.loading = true;
           this.error = null;
-          this.open = true;
 
           const container = this.$refs.viewerContainer;
-          // Clear previous content
-          while (container.firstChild) {
-            container.removeChild(container.firstChild);
-          }
+
+          // Clear previous content and scripts
+          container.replaceChildren();
+          this.loadedScripts.forEach(script => script.remove());
+          this.loadedScripts = [];
+
+          this.loading = true;
+          this.open = true;
           this.$refs.dialog.showModal();
 
           try {
@@ -106,30 +109,46 @@
               throw new Error(`Failed to load viewer: ${response.status}`);
             }
 
-            const html = await response.text();
+            let html = await response.text();
 
-            // 1. Parse and insert HTML using safe DOM methods
-            const template = document.createElement('template');
-            template.innerHTML = html;
-            const content = template.content.cloneNode(true);
+            // Extract scripts using regex
+            const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+            const scripts = [];
+            const matches = html.match(scriptRegex);
 
-            // 2. Execute scripts first (before Alpine sees the content)
-            const scripts = content.querySelectorAll('script');
-            scripts.forEach(script => {
+            if (matches) {
+              matches.forEach(scriptTag => {
+                const content = scriptTag.replace(/<script\b[^>]*>|<\/script>/gi, '');
+                scripts.push(content);
+              });
+
+              // Remove scripts from HTML
+              html = html.replace(scriptRegex, '');
+            }
+
+            // Execute scripts first
+            scripts.forEach(scriptContent => {
               const newScript = document.createElement('script');
-              newScript.textContent = script.textContent;
+              newScript.textContent = scriptContent;
               document.head.appendChild(newScript);
-              script.remove();
+              this.loadedScripts.push(newScript);
             });
 
-            // 3. Append content to container
-            container.appendChild(content);
+            // Set HTML content (scripts already removed)
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
 
-            // 4. Now initialize Alpine on the content
-            Alpine.initTree(container);
+            // Move all children to container one by one
+            while (temp.firstChild) {
+              container.appendChild(temp.firstChild);
+            }
 
-            // 5. Reinitialize Lucide icons
-            lucide.createIcons();
+            // Reinitialize Lucide icons after content is added
+            this.$nextTick(() => {
+              if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+              }
+            });
           } catch (err) {
             this.error = err.message;
           } finally {
@@ -145,10 +164,10 @@
           this.mimeType = '';
           this.error = null;
           // Clear viewer content
-          const container = this.$refs.viewerContainer;
-          while (container.firstChild) {
-            container.removeChild(container.firstChild);
-          }
+          this.$refs.viewerContainer.replaceChildren();
+          // Clear loaded scripts
+          this.loadedScripts.forEach(script => script.remove());
+          this.loadedScripts = [];
         },
 
         handleKeydown(event) {
@@ -160,11 +179,20 @@
         },
 
         init() {
-          window.addEventListener('keydown', (e) => this.handleKeydown(e));
-          window.addEventListener('open-file-viewer', (e) => {
+          // Prevent multiple initializations
+          if (this._initialized) {
+            return;
+          }
+          this._initialized = true;
+
+          this._keydownHandler = (e) => this.handleKeydown(e);
+          this._openFileHandler = (e) => {
             const { uuid, name, mime_type } = e.detail;
             this.openFile(uuid, name, mime_type);
-          });
+          };
+
+          window.addEventListener('keydown', this._keydownHandler);
+          window.addEventListener('open-file-viewer', this._openFileHandler);
         }
       };
     }

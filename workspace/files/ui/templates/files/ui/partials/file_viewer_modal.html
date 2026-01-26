@@ -86,7 +86,7 @@
         mimeType: '',
         loadedScripts: [],
 
-        async openFile(uuid, name, mimeType) {
+        async openFile(uuid, name, mimeType, updateUrl = true) {
           this.fileUuid = uuid;
           this.fileName = name || 'File';
           this.mimeType = mimeType || '';
@@ -102,6 +102,13 @@
           this.loading = true;
           this.open = true;
           this.$refs.dialog.showModal();
+
+          // Update URL with open parameter
+          if (updateUrl) {
+            const url = new URL(window.location);
+            url.searchParams.set('open', uuid);
+            window.history.pushState({}, '', url);
+          }
 
           try {
             const response = await fetch(`/files/view/${uuid}`);
@@ -168,6 +175,11 @@
           // Clear loaded scripts
           this.loadedScripts.forEach(script => script.remove());
           this.loadedScripts = [];
+
+          // Remove open parameter from URL
+          const url = new URL(window.location);
+          url.searchParams.delete('open');
+          window.history.pushState({}, '', url);
         },
 
         handleKeydown(event) {
@@ -178,7 +190,7 @@
           }
         },
 
-        init() {
+        async init() {
           // Prevent multiple initializations
           if (this._initialized) {
             return;
@@ -193,6 +205,54 @@
 
           window.addEventListener('keydown', this._keydownHandler);
           window.addEventListener('open-file-viewer', this._openFileHandler);
+
+          // Handle browser back/forward navigation
+          this._popStateHandler = async (event) => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const fileUuid = urlParams.get('open');
+
+            if (fileUuid && fileUuid !== this.fileUuid) {
+              // Open parameter present and different from current - open it
+              try {
+                const response = await fetch(`/api/v1/files/${fileUuid}`);
+                if (response.ok) {
+                  const fileData = await response.json();
+                  this.openFile(fileData.uuid, fileData.name, fileData.mime_type, false);
+                }
+              } catch (err) {
+                console.error('Failed to open file from URL:', err);
+              }
+            } else if (!fileUuid && this.open) {
+              // No open parameter but viewer is open - close it
+              this.$refs.dialog.close();
+              this.open = false;
+              this.fileUuid = null;
+              this.fileName = '';
+              this.mimeType = '';
+              this.error = null;
+              this.$refs.viewerContainer.replaceChildren();
+              this.loadedScripts.forEach(script => script.remove());
+              this.loadedScripts = [];
+            }
+          };
+          window.addEventListener('popstate', this._popStateHandler);
+
+          // Check if there's an open parameter in URL and open it
+          const urlParams = new URLSearchParams(window.location.search);
+          const fileUuid = urlParams.get('open');
+          if (fileUuid) {
+            try {
+              // Fetch file info from API
+              const response = await fetch(`/api/v1/files/${fileUuid}`);
+              if (response.ok) {
+                const fileData = await response.json();
+                // Open file without updating URL (already in URL)
+                this.openFile(fileData.uuid, fileData.name, fileData.mime_type, false);
+              }
+            } catch (err) {
+              console.error('Failed to open file from URL:', err);
+            }
+          }
         }
       };
     }

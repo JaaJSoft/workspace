@@ -1,0 +1,349 @@
+<!-- Context Menu Component -->
+<div
+  x-data="contextMenu()"
+  x-init="init()"
+  x-show="isOpen"
+  x-cloak
+  @click.outside="close()"
+  @keydown.escape.window="close()"
+  class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-64 p-1"
+  :style="`top: ${position.y}px; left: ${position.x}px;`"
+>
+  <template x-if="nodeData">
+    <ul class="menu menu-sm p-0">
+      <!-- View in browser (files only, if viewable) -->
+      <template x-if="nodeData.nodeType === 'file' && nodeData.isViewable && !nodeData.isTrash">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="viewFile()"
+          >
+            <i data-lucide="eye" class="w-4 h-4"></i>
+            <span>View in browser</span>
+            <kbd class="kbd kbd-xs ml-auto">Enter</kbd>
+          </button>
+        </li>
+      </template>
+
+      <!-- Open folder (folders only) -->
+      <template x-if="nodeData.nodeType === 'folder' && !nodeData.isTrash">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="openFolder()"
+          >
+            <i data-lucide="folder-open" class="w-4 h-4"></i>
+            <span>Open</span>
+            <kbd class="kbd kbd-xs ml-auto">Enter</kbd>
+          </button>
+        </li>
+      </template>
+
+      <!-- Open in new tab (files only) -->
+      <template x-if="nodeData.nodeType === 'file' && !nodeData.isTrash">
+        <li>
+          <a :href="`/api/v1/files/${nodeData.uuid}/content`" target="_blank" class="gap-3 rounded">
+            <i data-lucide="external-link" class="w-4 h-4"></i>
+            <span>Open in new tab</span>
+          </a>
+        </li>
+      </template>
+
+      <!-- Download (files only) -->
+      <template x-if="nodeData.nodeType === 'file' && !nodeData.isTrash">
+        <li>
+          <a :href="`/api/v1/files/${nodeData.uuid}/content`" download :download="nodeData.name" class="gap-3 rounded">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span>Download</span>
+            <kbd class="kbd kbd-xs ml-auto">Ctrl+S</kbd>
+          </a>
+        </li>
+      </template>
+
+      <!-- Copy link (files only) -->
+      <template x-if="nodeData.nodeType === 'file' && !nodeData.isTrash">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="copyLink()"
+          >
+            <i data-lucide="link" class="w-4 h-4"></i>
+            <span>Copy link</span>
+            <kbd class="kbd kbd-xs ml-auto">Ctrl+L</kbd>
+          </button>
+        </li>
+      </template>
+
+      <template x-if="!nodeData.isTrash">
+        <hr class="my-1 border-base-300" />
+      </template>
+
+      <!-- Favorite/Unfavorite -->
+      <template x-if="!nodeData.isTrash">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="toggleFavorite()"
+          >
+            <i data-lucide="star" class="w-4 h-4" :class="nodeData.isFavorite ? 'text-warning fill-current' : ''"></i>
+            <span x-text="nodeData.isFavorite ? 'Remove from favorites' : 'Add to favorites'"></span>
+            <kbd class="kbd kbd-xs ml-auto">F</kbd>
+          </button>
+        </li>
+      </template>
+
+      <!-- Rename -->
+      <template x-if="!nodeData.isTrash">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="rename()"
+          >
+            <i data-lucide="pencil" class="w-4 h-4"></i>
+            <span>Rename</span>
+            <kbd class="kbd kbd-xs ml-auto">F2</kbd>
+          </button>
+        </li>
+      </template>
+
+      <!-- Info/Properties -->
+      <template x-if="!nodeData.isTrash">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="showInfo()"
+          >
+            <i data-lucide="info" class="w-4 h-4"></i>
+            <span>Properties</span>
+            <kbd class="kbd kbd-xs ml-auto">Ctrl+I</kbd>
+          </button>
+        </li>
+      </template>
+
+      <hr class="my-1 border-base-300" />
+
+      <!-- Trash actions -->
+      <template x-if="nodeData.isTrash">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="restore()"
+          >
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            <span>Restore</span>
+          </button>
+        </li>
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded text-error"
+            @click="purge()"
+          >
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            <span>Delete permanently</span>
+          </button>
+        </li>
+      </template>
+
+      <!-- Delete (normal view) -->
+      <template x-if="!nodeData.isTrash">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded text-error"
+            @click="deleteNode()"
+          >
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            <span>Delete</span>
+            <kbd class="kbd kbd-xs ml-auto">Del</kbd>
+          </button>
+        </li>
+      </template>
+    </ul>
+  </template>
+</div>
+
+<script>
+function contextMenu() {
+  return {
+    isOpen: false,
+    position: { x: 0, y: 0 },
+    nodeData: null,
+
+    init() {
+      // Listen for context menu events
+      window.addEventListener('open-context-menu', (e) => {
+        this.open(e.detail.event, e.detail.nodeData);
+      });
+    },
+
+    open(event, nodeData) {
+      event.preventDefault();
+
+      this.nodeData = nodeData;
+      this.isOpen = true;
+
+      // Calculate position to avoid overflow
+      this.$nextTick(() => {
+        const menu = this.$el;
+        const menuRect = menu.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        let x = event.clientX;
+        let y = event.clientY;
+
+        // Adjust if menu would overflow right edge
+        if (x + menuRect.width > viewportWidth) {
+          x = viewportWidth - menuRect.width - 10;
+        }
+
+        // Adjust if menu would overflow bottom edge
+        if (y + menuRect.height > viewportHeight) {
+          y = viewportHeight - menuRect.height - 10;
+        }
+
+        this.position = { x, y };
+
+        // Reinitialize Lucide icons
+        if (typeof lucide !== 'undefined') {
+          this.$nextTick(() => lucide.createIcons());
+        }
+      });
+    },
+
+    close() {
+      this.isOpen = false;
+      this.nodeData = null;
+    },
+
+    viewFile() {
+      window.dispatchEvent(new CustomEvent('open-file-viewer', {
+        detail: {
+          uuid: this.nodeData.uuid,
+          name: this.nodeData.name,
+          mime_type: this.nodeData.mimeType
+        }
+      }));
+      this.close();
+    },
+
+    openFolder() {
+      const link = document.querySelector(`a[href="/files/${this.nodeData.uuid}"]`);
+      if (link) {
+        link.click();
+      }
+      this.close();
+    },
+
+    toggleFavorite() {
+      // Dispatch event for file browser to handle
+      window.dispatchEvent(new CustomEvent('file-action', {
+        detail: {
+          action: 'toggleFavorite',
+          uuid: this.nodeData.uuid,
+          isFavorite: this.nodeData.isFavorite
+        }
+      }));
+      this.close();
+    },
+
+    rename() {
+      // Dispatch event for file browser to handle
+      window.dispatchEvent(new CustomEvent('file-action', {
+        detail: {
+          action: 'rename',
+          uuid: this.nodeData.uuid,
+          name: this.nodeData.name
+        }
+      }));
+      this.close();
+    },
+
+    deleteNode() {
+      // Dispatch event for file browser to handle
+      window.dispatchEvent(new CustomEvent('file-action', {
+        detail: {
+          action: 'delete',
+          uuid: this.nodeData.uuid,
+          name: this.nodeData.name,
+          nodeType: this.nodeData.nodeType
+        }
+      }));
+      this.close();
+    },
+
+    restore() {
+      // Dispatch event for file browser to handle
+      window.dispatchEvent(new CustomEvent('file-action', {
+        detail: {
+          action: 'restore',
+          uuid: this.nodeData.uuid,
+          name: this.nodeData.name,
+          nodeType: this.nodeData.nodeType
+        }
+      }));
+      this.close();
+    },
+
+    purge() {
+      // Dispatch event for file browser to handle
+      window.dispatchEvent(new CustomEvent('file-action', {
+        detail: {
+          action: 'purge',
+          uuid: this.nodeData.uuid,
+          name: this.nodeData.name,
+          nodeType: this.nodeData.nodeType
+        }
+      }));
+      this.close();
+    },
+
+    copyLink() {
+      const url = new URL(window.location.origin + window.location.pathname);
+      url.searchParams.set('open', this.nodeData.uuid);
+
+      navigator.clipboard.writeText(url.toString()).then(() => {
+        // Show success toast using AppAlert
+        if (window.AppAlert) {
+          window.AppAlert.success('Link copied to clipboard', {
+            duration: 2000
+          });
+        }
+      }).catch(err => {
+        console.error('Failed to copy link:', err);
+        if (window.AppAlert) {
+          window.AppAlert.error('Failed to copy link');
+        }
+      });
+
+      this.close();
+    },
+
+    showInfo() {
+      // Show file properties using AppAlert for now
+      const info = [
+        `Name: ${this.nodeData.name}`,
+        `Type: ${this.nodeData.nodeType}`,
+        this.nodeData.mimeType ? `MIME Type: ${this.nodeData.mimeType}` : null,
+      ].filter(Boolean).join('\n');
+
+      if (window.AppAlert) {
+        window.AppAlert.info(info, {
+          title: 'File Properties',
+          duration: 0, // Don't auto-dismiss
+          dismissible: true
+        });
+      }
+      this.close();
+    }
+  };
+}
+</script>

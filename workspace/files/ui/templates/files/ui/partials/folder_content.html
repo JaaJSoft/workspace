@@ -140,6 +140,15 @@
             {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
             @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.mime_type }}')"
             {% endif %}
+            @contextmenu="openContextMenu($event, {
+              uuid: '{{ node.uuid }}',
+              name: '{{ node.name|escapejs }}',
+              nodeType: '{{ node.node_type }}',
+              mimeType: '{{ node.mime_type }}',
+              isFavorite: {{ node.is_favorite|yesno:'true,false' }},
+              isViewable: {{ node.is_viewable|yesno:'true,false' }},
+              isTrash: {{ is_trash_view|yesno:'true,false' }}
+            })"
           >
             <td class="text-base-content/60" data-col="icon">
               {% if node.node_type == 'folder' %}
@@ -215,99 +224,21 @@
             </td>
             {% if show_actions != False %}
             <td data-stop-row-click data-col="actions">
-              <div class="dropdown dropdown-end">
-                <label
-                  tabindex="0"
-                  class="btn btn-ghost btn-xs btn-circle opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                >
-                  <i data-lucide="more-vertical" class="w-4 h-4"></i>
-                </label>
-                <ul tabindex="0" class="dropdown-content z-50 menu menu-sm shadow-xl bg-base-100 border border-base-300 rounded-lg w-56 p-1 mt-2">
-                  {% if is_trash_view %}
-                  <li>
-                    <button
-                      type="button"
-                      class="gap-3 rounded"
-                      @click="confirmRestore('{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.node_type }}')"
-                    >
-                      <i data-lucide="rotate-ccw" class="w-4 h-4"></i>Restore
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      class="gap-3 rounded text-error"
-                      @click="confirmPurge('{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.node_type }}')"
-                    >
-                      <i data-lucide="trash-2" class="w-4 h-4"></i>Delete permanently
-                    </button>
-                  </li>
-                  {% else %}
-                  {% if node.node_type == 'file' and node.content %}
-                  {% if node.is_viewable %}
-                  <li>
-                    <button
-                      type="button"
-                      class="gap-3 rounded w-full text-left"
-                      @click="window.dispatchEvent(new CustomEvent('open-file-viewer', { detail: { uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}', mime_type: '{{ node.mime_type }}' } }))"
-                    >
-                      <i data-lucide="eye" class="w-4 h-4"></i>View in browser
-                    </button>
-                  </li>
-                  {% endif %}
-                  <li>
-                    <a href="{{ node.content.url }}" target="_blank" class="gap-3 rounded">
-                      <i data-lucide="external-link" class="w-4 h-4"></i>Open in new tab
-                    </a>
-                  </li>
-                  <li>
-                    <a href="{{ node.content.url }}" download class="gap-3 rounded">
-                      <i data-lucide="download" class="w-4 h-4"></i>Download
-                    </a>
-                  </li>
-                  {% endif %}
-                  {% if node.is_favorite %}
-                  <li>
-                    <button
-                      type="button"
-                      class="gap-3 rounded"
-                      @click="toggleFavorite('{{ node.uuid }}', true)"
-                    >
-                      <i data-lucide="star" class="w-4 h-4"></i>Remove from favorites
-                    </button>
-                  </li>
-                  {% else %}
-                  <li>
-                    <button
-                      type="button"
-                      class="gap-3 rounded"
-                      @click="toggleFavorite('{{ node.uuid }}', false)"
-                    >
-                      <i data-lucide="star" class="w-4 h-4"></i>Add to favorites
-                    </button>
-                  </li>
-                  {% endif %}
-                  <li>
-                    <button
-                      type="button"
-                      class="gap-3 rounded"
-                      @click="showRenameDialog('{{ node.uuid }}', '{{ node.name|escapejs }}')"
-                    >
-                      <i data-lucide="pencil" class="w-4 h-4"></i>Rename
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      class="gap-3 rounded text-error"
-                      @click="confirmDelete('{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.node_type }}')"
-                    >
-                      <i data-lucide="trash-2" class="w-4 h-4"></i>Delete
-                    </button>
-                  </li>
-                  {% endif %}
-                </ul>
-              </div>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-circle opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                @click="openContextMenu($event, {
+                  uuid: '{{ node.uuid }}',
+                  name: '{{ node.name|escapejs }}',
+                  nodeType: '{{ node.node_type }}',
+                  mimeType: '{{ node.mime_type }}',
+                  isFavorite: {{ node.is_favorite|yesno:'true,false' }},
+                  isViewable: {{ node.is_viewable|yesno:'true,false' }},
+                  isTrash: {{ is_trash_view|yesno:'true,false' }}
+                })"
+              >
+                <i data-lucide="more-vertical" class="w-4 h-4"></i>
+              </button>
             </td>
             {% endif %}
           </tr>

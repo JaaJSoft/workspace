@@ -89,6 +89,31 @@ window.fileBrowser = function fileBrowser() {
       return folderEl?.dataset.folder || '';
     },
 
+    init() {
+      // Listen for file actions from context menu
+      window.addEventListener('file-action', (e) => {
+        const { action, uuid, name, nodeType, isFavorite } = e.detail;
+
+        switch (action) {
+          case 'toggleFavorite':
+            this.toggleFavorite(uuid, isFavorite);
+            break;
+          case 'rename':
+            this.showRenameDialog(uuid, name);
+            break;
+          case 'delete':
+            this.confirmDelete(uuid, name, nodeType);
+            break;
+          case 'restore':
+            this.confirmRestore(uuid, name, nodeType);
+            break;
+          case 'purge':
+            this.confirmPurge(uuid, name, nodeType);
+            break;
+        }
+      });
+    },
+
     openFolderFromRow(event) {
       if (!event) return;
       const target = event.target instanceof Element ? event.target : event.target?.parentElement;
@@ -110,6 +135,14 @@ window.fileBrowser = function fileBrowser() {
       }
       window.dispatchEvent(new CustomEvent('open-file-viewer', {
         detail: { uuid, name, mime_type: mimeType }
+      }));
+    },
+
+    openContextMenu(event, nodeData) {
+      event.preventDefault();
+      // Dispatch event for context menu to listen
+      window.dispatchEvent(new CustomEvent('open-context-menu', {
+        detail: { event, nodeData }
       }));
     },
 
@@ -588,6 +621,14 @@ window.fileTableControls = function fileTableControls() {
       this.$watch('typeFilter', () => this.applyRows());
       this.$watch('sortField', () => this.applyRows());
       this.$watch('sortDir', () => this.applyRows());
+    },
+
+    openContextMenu(event, nodeData) {
+      event.preventDefault();
+      // Dispatch event for context menu to listen
+      window.dispatchEvent(new CustomEvent('open-context-menu', {
+        detail: { event, nodeData }
+      }));
     },
 
     initStorageKey() {

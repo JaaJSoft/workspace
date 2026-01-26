@@ -63,7 +63,7 @@
 {% endblock %}
 
 {% block content %}
-<div x-data="fileBrowser()" class="h-full flex flex-col">
+<div x-data="fileBrowser()" x-init="init()" class="h-full flex flex-col">
   {% partialdef folder-browser inline %}
   <div class="h-full flex flex-col" id="folder-browser" data-folder="{{ current_folder.uuid|default:'' }}" x-init="$nextTick(() => lucide.createIcons())">
 
@@ -125,6 +125,7 @@
 
 {% include 'files/ui/partials/dialogs.html' %}
 {% include 'files/ui/partials/file_viewer_modal.html' %}
+{% include 'files/ui/partials/context_menu.html' %}
 {% endblock %}
 
 {% block extra_scripts %}

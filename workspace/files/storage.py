@@ -20,7 +20,16 @@ class OverwriteStorage(FileSystemStorage):
         """
         # Delete the file if it already exists
         if self.exists(name):
-            self.delete(name)
+            try:
+                self.delete(name)
+                # Force garbage collection on Windows to release file handles
+                import gc
+                gc.collect()
+            except Exception as e:
+                # If deletion fails, log but don't fail the operation
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Could not delete existing file '{name}': {e}")
 
         # Return the name as-is (no random suffix)
         return name

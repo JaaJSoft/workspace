@@ -429,19 +429,25 @@ class FileViewSet(viewsets.ModelViewSet):
 
         # For text files, read and return directly (fixes streaming issues)
         if file_obj.mime_type and file_obj.mime_type.startswith('text/'):
+            file_handle = None
             try:
-                with file_obj.content.open('r', encoding='utf-8') as f:
-                    content = f.read()
+                file_handle = file_obj.content.open('rb')
+                content = file_handle.read().decode('utf-8')
                 response = HttpResponse(content, content_type=file_obj.mime_type)
                 response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
                 return response
             except Exception:
                 # Fallback to binary if UTF-8 fails
                 pass
+            finally:
+                if file_handle:
+                    file_handle.close()
 
         # For other files, use FileResponse with proper streaming
+        # FileResponse will close the file handle when done
+        file_handle = file_obj.content.open('rb')
         response = FileResponse(
-            file_obj.content.open('rb'),
+            file_handle,
             content_type=file_obj.mime_type or 'application/octet-stream',
             as_attachment=False
         )

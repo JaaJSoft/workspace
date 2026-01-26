@@ -88,10 +88,15 @@ class TextViewer(BaseViewer):
         from django.template.loader import render_to_string
 
         # Read file content
+        file_handle = None
         try:
-            content = self.file.content.read().decode('utf-8')
+            file_handle = self.file.content.open('rb')
+            content = file_handle.read().decode('utf-8')
         except (UnicodeDecodeError, AttributeError):
             content = ''
+        finally:
+            if file_handle:
+                file_handle.close()
 
         context = self.get_context(request)
         context.update({

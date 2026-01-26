@@ -60,6 +60,7 @@ class FileSerializer(serializers.ModelSerializer):
                 'help_text': 'File payload. Must be empty for folders.',
                 'allow_empty_file': True,
                 'required': False,
+                'write_only': True,
             },
             'size': {'help_text': 'File size in bytes.'},
             'mime_type': {'help_text': 'MIME type for file nodes.'},
@@ -235,9 +236,17 @@ class FileSerializer(serializers.ModelSerializer):
                         logger.info(f"Moving file from '{old_path}' to '{new_path}'")
 
                         if default_storage.exists(old_path):
-                            # Read the file
-                            with default_storage.open(old_path, 'rb') as f:
-                                content = f.read()
+                            # Read the file, ensuring it's closed
+                            file_handle = None
+                            try:
+                                file_handle = default_storage.open(old_path, 'rb')
+                                content = file_handle.read()
+                            finally:
+                                if file_handle:
+                                    file_handle.close()
+                                    # Force garbage collection to release file handles on Windows
+                                    import gc
+                                    gc.collect()
 
                             # Ensure directory exists and save to new location
                             new_dir = os.path.dirname(new_path)
@@ -322,9 +331,17 @@ class FileSerializer(serializers.ModelSerializer):
 
                         # Check if old file exists
                         if default_storage.exists(old_file_path):
-                            # Open and read the old file
-                            with default_storage.open(old_file_path, 'rb') as old_file:
+                            # Open and read the old file, ensuring it's closed
+                            old_file = None
+                            try:
+                                old_file = default_storage.open(old_file_path, 'rb')
                                 file_content = old_file.read()
+                            finally:
+                                if old_file:
+                                    old_file.close()
+                                    # Force garbage collection to release file handles on Windows
+                                    import gc
+                                    gc.collect()
 
                             # Save with new name
                             new_file_path = default_storage.save(new_file_path, ContentFile(file_content))
@@ -336,7 +353,8 @@ class FileSerializer(serializers.ModelSerializer):
                             if old_file_path != new_file_path:
                                 try:
                                     default_storage.delete(old_file_path)
-                                except Exception:
+                                except Exception as e:
+                                    logger.warning(f"Could not delete old file '{old_file_path}': {e}")
                                     pass  # Ignore delete errors
                     except Exception as e:
                         # Log error but don't fail the rename operation

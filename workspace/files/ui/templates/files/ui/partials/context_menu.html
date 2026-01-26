@@ -187,36 +187,48 @@ function contextMenu() {
     open(event, nodeData) {
       event.preventDefault();
 
+      // Update node data first
       this.nodeData = nodeData;
+
+      // If already open, just update position and return
+      if (this.isOpen) {
+        this.updatePosition(event);
+        return;
+      }
+
       this.isOpen = true;
 
       // Calculate position to avoid overflow
       this.$nextTick(() => {
-        const menu = this.$el;
-        const menuRect = menu.getBoundingClientRect();
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-
-        let x = event.clientX;
-        let y = event.clientY;
-
-        // Adjust if menu would overflow right edge
-        if (x + menuRect.width > viewportWidth) {
-          x = viewportWidth - menuRect.width - 10;
-        }
-
-        // Adjust if menu would overflow bottom edge
-        if (y + menuRect.height > viewportHeight) {
-          y = viewportHeight - menuRect.height - 10;
-        }
-
-        this.position = { x, y };
-
-        // Reinitialize Lucide icons
-        if (typeof lucide !== 'undefined') {
-          this.$nextTick(() => lucide.createIcons());
-        }
+        this.updatePosition(event);
       });
+    },
+
+    updatePosition(event) {
+      const menu = this.$el;
+      const menuRect = menu.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      let x = event.clientX;
+      let y = event.clientY;
+
+      // Adjust if menu would overflow right edge
+      if (x + menuRect.width > viewportWidth) {
+        x = viewportWidth - menuRect.width - 10;
+      }
+
+      // Adjust if menu would overflow bottom edge
+      if (y + menuRect.height > viewportHeight) {
+        y = viewportHeight - menuRect.height - 10;
+      }
+
+      this.position = { x, y };
+
+      // Reinitialize Lucide icons
+      if (typeof lucide !== 'undefined') {
+        this.$nextTick(() => lucide.createIcons());
+      }
     },
 
     close() {

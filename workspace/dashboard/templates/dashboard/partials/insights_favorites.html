@@ -35,7 +35,7 @@
             {% if node.node_type == 'folder' %}
               <a href="/files/{{ node.uuid }}" class="btn btn-ghost btn-xs">Open</a>
             {% elif node.content %}
-              <a href="{{ node.content.url }}" target="_blank" class="btn btn-ghost btn-xs">View</a>
+              <a href="/files?open={{ node.uuid }}" class="btn btn-ghost btn-xs">View</a>
             {% else %}
               <a href="{% if node.parent %}/files/{{ node.parent.uuid }}{% else %}/files{% endif %}" class="btn btn-ghost btn-xs">Open</a>
             {% endif %}

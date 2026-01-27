@@ -1,9 +1,12 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{% block title %}Workspace{% endblock %}</title>
+
+  <!-- Apply saved theme immediately to prevent white flash -->
+  <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');</script>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -47,21 +50,16 @@
       }
     });
 
-    // Theme handling
+    // Theme toggle functionality
     (function () {
-      const root = document.documentElement;
-      const saved = localStorage.getItem('theme') || 'light';
-      root.setAttribute('data-theme', saved);
-
-      // Theme toggle functionality
       const themeToggle = document.getElementById('themeToggle');
       if (themeToggle) {
-        // Set initial state based on saved theme
+        const saved = localStorage.getItem('theme') || 'light';
         themeToggle.checked = saved === 'dark';
 
         themeToggle.addEventListener('change', function() {
           const newTheme = this.checked ? 'dark' : 'light';
-          root.setAttribute('data-theme', newTheme);
+          document.documentElement.setAttribute('data-theme', newTheme);
           localStorage.setItem('theme', newTheme);
         });
       }

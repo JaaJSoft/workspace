@@ -41,6 +41,7 @@
             <option value="default">Default</option>
             <option value="name">Name</option>
             <option value="size">Size</option>
+            <option value="created">Created</option>
             <option value="modified">Modified</option>
             {% if not is_trash_view %}
             <option value="favorite">Favorite</option>
@@ -120,6 +121,7 @@
             <th class="w-10 text-center" data-col="favorite">Fav</th>
             {% endif %}
             <th class="hidden sm:table-cell" data-col="size">Size</th>
+            <th class="hidden md:table-cell" data-col="created">Created</th>
             <th class="hidden md:table-cell" data-col="modified">{% if is_trash_view %}Deleted{% else %}Modified{% endif %}</th>
             {% if show_actions != False %}
             <th class="w-16" data-col="actions"><span class="sr-only">Actions</span></th>
@@ -134,6 +136,7 @@
             data-node-type="{{ node.node_type }}"
             data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
             data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
+            data-created="{{ node.created_at|date:'U' }}"
             data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
             {% if node.node_type == 'folder' and not is_trash_view %}
             draggable="true"
@@ -203,6 +206,9 @@
               {% else %}
                 -
               {% endif %}
+            </td>
+            <td class="hidden md:table-cell text-sm text-base-content/70" data-col="created">
+              {{ node.created_at|date:"M j, Y" }}
             </td>
             <td class="hidden md:table-cell text-sm text-base-content/70" data-col="modified">
               {% if is_trash_view %}

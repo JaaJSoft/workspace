@@ -619,7 +619,7 @@ window.fileBrowser = function fileBrowser() {
 
 window.fileTableControls = function fileTableControls() {
   return {
-    storageKey: 'fileTableControls:v2',
+    storageKey: 'fileTableControls:v3',
     searchQuery: '',
     typeFilter: 'all',
     sortField: 'default',
@@ -629,24 +629,27 @@ window.fileTableControls = function fileTableControls() {
       { id: 'name', label: 'Name', required: true },
       { id: 'favorite', label: 'Fav', required: false },
       { id: 'size', label: 'Size', required: false },
+      { id: 'created', label: 'Created', required: false },
       { id: 'modified', label: 'Modified', required: false },
       { id: 'actions', label: 'Actions', required: false }
     ],
-    defaultColumnOrder: ['icon', 'name', 'favorite', 'size', 'modified', 'actions'],
+    defaultColumnOrder: ['icon', 'name', 'favorite', 'size', 'created', 'modified', 'actions'],
     defaultColumnVisibility: {
       icon: true,
       name: true,
       favorite: true,
       size: true,
+      created: false,
       modified: true,
       actions: true
     },
-    columnOrder: ['icon', 'name', 'favorite', 'size', 'modified', 'actions'],
+    columnOrder: ['icon', 'name', 'favorite', 'size', 'created', 'modified', 'actions'],
     columnVisibility: {
       icon: true,
       name: true,
       favorite: true,
       size: true,
+      created: false,
       modified: true,
       actions: true
     },
@@ -929,6 +932,8 @@ window.fileTableControls = function fileTableControls() {
           return row.dataset.name || '';
         case 'size':
           return parseInt(row.dataset.size || '0', 10);
+        case 'created':
+          return parseInt(row.dataset.created || '0', 10);
         case 'modified':
           return parseInt(row.dataset.updated || '0', 10);
         case 'favorite':

@@ -59,6 +59,21 @@ class File(models.Model):
     )
     size = models.BigIntegerField(null=True, blank=True, help_text="File size in bytes")
     mime_type = models.CharField(max_length=100, null=True, blank=True)
+
+    # Folder customization
+    icon = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Custom Lucide icon name for folders (e.g., 'briefcase', 'heart')"
+    )
+    color = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True,
+        help_text="Custom color class for folder icon (e.g., 'text-error', 'text-success')"
+    )
+
     path = models.TextField(
         blank=True,
         editable=False,

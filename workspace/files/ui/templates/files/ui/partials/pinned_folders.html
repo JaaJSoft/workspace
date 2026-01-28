@@ -42,7 +42,7 @@ Context variables:
     :title="collapsed ? '{{ pin.folder.name|escapejs }}' : ''"
     @click="if (draggingPinned) $event.preventDefault()"
   >
-    <i data-lucide="folder" class="w-5 h-5 flex-shrink-0 text-warning"></i>
+    <i data-lucide="{{ pin.folder.icon|default:'folder' }}" class="w-5 h-5 flex-shrink-0 {{ pin.folder.color|default:'text-warning' }}"></i>
     <span x-show="!collapsed" x-transition class="truncate flex-1">{{ pin.folder.name }}</span>
     <i data-lucide="grip-vertical" class="w-4 h-4 flex-shrink-0 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab" x-show="!collapsed"></i>
   </a>

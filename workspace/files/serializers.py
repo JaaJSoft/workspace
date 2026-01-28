@@ -39,6 +39,8 @@ class FileSerializer(serializers.ModelSerializer):
             'content',
             'size',
             'mime_type',
+            'icon',
+            'color',
             'owner',
             'created_at',
             'updated_at',

@@ -155,7 +155,7 @@
           >
             <td class="text-base-content/60" data-col="icon">
               {% if node.node_type == 'folder' %}
-                <i data-lucide="folder" class="w-5 h-5 text-warning"></i>
+                <i data-lucide="{{ node.icon|default:'folder' }}" class="w-5 h-5 {{ node.color|default:'text-warning' }}"></i>
               {% else %}
                 <i data-lucide="{{ node.mime_type|mime_to_lucide }}" class="w-5 h-5 {{ node.mime_type|mime_to_color }}"></i>
               {% endif %}

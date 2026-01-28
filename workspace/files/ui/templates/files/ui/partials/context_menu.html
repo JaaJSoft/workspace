@@ -8,7 +8,67 @@
   class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-64 p-1"
   :style="`top: ${position.y}px; left: ${position.x}px;`"
 >
-  <template x-if="nodeData">
+  <!-- Background menu (right-click on empty area) -->
+  <template x-if="isBackgroundMenu">
+    <ul class="menu menu-sm p-0">
+      <!-- Create folder -->
+      <li>
+        <button
+          type="button"
+          class="gap-3 rounded"
+          @click="createFolder()"
+        >
+          <i data-lucide="folder-plus" class="w-4 h-4"></i>
+          <span>New folder</span>
+        </button>
+      </li>
+
+      <!-- Create file -->
+      <li>
+        <button
+          type="button"
+          class="gap-3 rounded"
+          @click="createFile()"
+        >
+          <i data-lucide="file-text" class="w-4 h-4"></i>
+          <span>New file</span>
+        </button>
+      </li>
+
+      <!-- Upload -->
+      <li>
+        <button
+          type="button"
+          class="gap-3 rounded"
+          @click="uploadFiles()"
+        >
+          <i data-lucide="file-plus" class="w-4 h-4"></i>
+          <span>Upload files</span>
+        </button>
+      </li>
+
+      <!-- Paste (only show when clipboard has items) -->
+      <template x-if="hasClipboardItems">
+        <hr class="my-1 border-base-300" />
+      </template>
+      <template x-if="hasClipboardItems">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="pasteHere()"
+          >
+            <i data-lucide="clipboard-paste" class="w-4 h-4"></i>
+            <span>Paste</span>
+            <kbd class="kbd kbd-xs ml-auto">Ctrl+V</kbd>
+          </button>
+        </li>
+      </template>
+    </ul>
+  </template>
+
+  <!-- Node menu (right-click on file/folder) -->
+  <template x-if="nodeData && !isBackgroundMenu">
     <ul class="menu menu-sm p-0">
       <!-- View in browser (files only, if viewable) -->
       <template x-if="nodeData.nodeType === 'file' && nodeData.isViewable && !nodeData.isTrash">
@@ -125,6 +185,36 @@
         </li>
       </template>
 
+      <!-- Cut -->
+      <template x-if="!nodeData.isTrash">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="cut()"
+          >
+            <i data-lucide="scissors" class="w-4 h-4"></i>
+            <span>Cut</span>
+            <kbd class="kbd kbd-xs ml-auto">Ctrl+X</kbd>
+          </button>
+        </li>
+      </template>
+
+      <!-- Paste (only show when clipboard has items) -->
+      <template x-if="!nodeData.isTrash && nodeData.nodeType === 'folder' && hasClipboardItems">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="paste()"
+          >
+            <i data-lucide="clipboard-paste" class="w-4 h-4"></i>
+            <span>Paste here</span>
+            <kbd class="kbd kbd-xs ml-auto">Ctrl+V</kbd>
+          </button>
+        </li>
+      </template>
+
       <!-- Info/Properties -->
       <template x-if="!nodeData.isTrash">
         <li>
@@ -190,12 +280,27 @@ function contextMenu() {
     isOpen: false,
     position: { x: 0, y: 0 },
     nodeData: null,
+    isBackgroundMenu: false,
+    hasClipboardItems: false,
 
     init() {
-      // Listen for context menu events
+      // Listen for context menu events (on files/folders)
       window.addEventListener('open-context-menu', (e) => {
         this.open(e.detail.event, e.detail.nodeData);
       });
+
+      // Listen for background context menu events (on empty area)
+      window.addEventListener('open-background-context-menu', (e) => {
+        this.openBackground(e.detail.event);
+      });
+
+      // Listen for clipboard changes
+      window.addEventListener('clipboard-changed', () => {
+        this.hasClipboardItems = window.fileClipboard.hasItems();
+      });
+
+      // Initialize clipboard state
+      this.hasClipboardItems = window.fileClipboard.hasItems();
     },
 
     open(event, nodeData) {
@@ -203,6 +308,7 @@ function contextMenu() {
 
       // Update node data first
       this.nodeData = nodeData;
+      this.isBackgroundMenu = false;
 
       // If already open, just update position and return
       if (this.isOpen) {
@@ -213,6 +319,24 @@ function contextMenu() {
       this.isOpen = true;
 
       // Calculate position to avoid overflow
+      this.$nextTick(() => {
+        this.updatePosition(event);
+      });
+    },
+
+    openBackground(event) {
+      event.preventDefault();
+
+      this.nodeData = null;
+      this.isBackgroundMenu = true;
+
+      if (this.isOpen) {
+        this.updatePosition(event);
+        return;
+      }
+
+      this.isOpen = true;
+
       this.$nextTick(() => {
         this.updatePosition(event);
       });
@@ -370,6 +494,57 @@ function contextMenu() {
           uuid: this.nodeData.uuid,
           nodeType: this.nodeData.nodeType
         }
+      }));
+      this.close();
+    },
+
+    cut() {
+      window.dispatchEvent(new CustomEvent('file-action', {
+        detail: {
+          action: 'cut',
+          uuid: this.nodeData.uuid,
+          name: this.nodeData.name,
+          nodeType: this.nodeData.nodeType
+        }
+      }));
+      this.close();
+    },
+
+    paste() {
+      window.dispatchEvent(new CustomEvent('file-action', {
+        detail: {
+          action: 'paste',
+          uuid: this.nodeData.uuid
+        }
+      }));
+      this.close();
+    },
+
+    // Background menu actions
+    createFolder() {
+      window.dispatchEvent(new CustomEvent('folder-action', {
+        detail: { action: 'createFolder' }
+      }));
+      this.close();
+    },
+
+    createFile() {
+      window.dispatchEvent(new CustomEvent('folder-action', {
+        detail: { action: 'createFile' }
+      }));
+      this.close();
+    },
+
+    uploadFiles() {
+      window.dispatchEvent(new CustomEvent('folder-action', {
+        detail: { action: 'upload' }
+      }));
+      this.close();
+    },
+
+    pasteHere() {
+      window.dispatchEvent(new CustomEvent('folder-action', {
+        detail: { action: 'paste' }
       }));
       this.close();
     }

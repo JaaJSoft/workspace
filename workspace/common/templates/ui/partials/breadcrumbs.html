@@ -5,6 +5,7 @@
     - url (optional): if provided, renders as a link
     - code (optional bool): if true, wraps label in <code>
     - icon (optional): lucide icon name to display before the label
+    - icon_color (optional): CSS class for icon color (e.g., 'text-warning')
 
   Optional context:
     - x_target: Alpine AJAX target id for links (enables SPA-like navigation)
@@ -13,7 +14,7 @@
   Example:
     {% include "ui/partials/breadcrumbs.html" with breadcrumbs=[
       {"label": "Home", "url": "/", "icon": "home"},
-      {"label": "Section", "icon": "folder"},
+      {"label": "Section", "icon": "folder", "icon_color": "text-warning"},
       {"label": title, "code": true}
     ] %}
 
@@ -26,12 +27,12 @@
       <li>
         {% if item.url %}
           <a href="{{ item.url }}" class="flex items-center gap-1"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
-            {% if item.icon %}<i data-lucide="{{ item.icon }}" class="w-4 h-4"></i>{% endif %}
+            {% if item.icon %}<i data-lucide="{{ item.icon }}" class="w-4 h-4 {% if item.icon_color %}{{ item.icon_color }}{% endif %}"></i>{% endif %}
             {% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}
           </a>
         {% else %}
           <span class="flex items-center gap-1">
-            {% if item.icon %}<i data-lucide="{{ item.icon }}" class="w-4 h-4"></i>{% endif %}
+            {% if item.icon %}<i data-lucide="{{ item.icon }}" class="w-4 h-4 {% if item.icon_color %}{{ item.icon_color }}{% endif %}"></i>{% endif %}
             {% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}
           </span>
         {% endif %}

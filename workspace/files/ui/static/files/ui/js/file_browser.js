@@ -82,6 +82,29 @@ window.sidebarCollapse = function sidebarCollapse() {
   }
 }
 
+// Global clipboard for cut/paste operations
+window.fileClipboard = {
+  items: [],  // Array of {uuid, name, nodeType}
+
+  cut(items) {
+    this.items = items;
+    window.dispatchEvent(new CustomEvent('clipboard-changed'));
+  },
+
+  clear() {
+    this.items = [];
+    window.dispatchEvent(new CustomEvent('clipboard-changed'));
+  },
+
+  hasItems() {
+    return this.items.length > 0;
+  },
+
+  getItems() {
+    return this.items;
+  }
+};
+
 window.fileBrowser = function fileBrowser() {
   return {
     get currentFolder() {
@@ -113,12 +136,56 @@ window.fileBrowser = function fileBrowser() {
           case 'purge':
             this.confirmPurge(uuid, name, nodeType);
             break;
+          case 'cut':
+            this.cutToClipboard([{ uuid, name, nodeType }]);
+            break;
+          case 'paste':
+            this.pasteFromClipboard();
+            break;
         }
       });
 
       // Listen for folder icon changes (from properties modal)
       window.addEventListener('folder-icons-changed', () => {
         this.refreshFolderBrowser();
+      });
+
+      // Listen for folder background actions (from background context menu)
+      window.addEventListener('folder-action', (e) => {
+        const { action } = e.detail;
+        switch (action) {
+          case 'createFolder':
+            this.showCreateFolderDialog();
+            break;
+          case 'createFile':
+            this.showCreateFileDialog();
+            break;
+          case 'upload':
+            this.triggerUpload();
+            break;
+          case 'paste':
+            this.pasteFromClipboard();
+            break;
+        }
+      });
+
+      // Listen for bulk actions
+      window.addEventListener('bulk-action', (e) => {
+        const { action, uuids, add } = e.detail;
+        switch (action) {
+          case 'delete':
+            this.bulkDeleteItems(uuids);
+            break;
+          case 'favorite':
+            this.bulkToggleFavorite(uuids, add);
+            break;
+          case 'cut':
+            this.bulkCutToClipboard(uuids);
+            break;
+          case 'paste':
+            this.pasteFromClipboard();
+            break;
+        }
       });
     },
 
@@ -302,6 +369,13 @@ window.fileBrowser = function fileBrowser() {
         }
       } catch (error) {
         this.showAlert('error', 'Failed to create file');
+      }
+    },
+
+    triggerUpload() {
+      const input = document.getElementById('file-upload-input');
+      if (input) {
+        input.click();
       }
     },
 
@@ -524,6 +598,148 @@ window.fileBrowser = function fileBrowser() {
       }
     },
 
+    // Bulk actions
+    async bulkDeleteItems(uuids) {
+      if (!uuids || uuids.length === 0) return;
+
+      const count = uuids.length;
+      const confirmed = await AppDialog.confirm({
+        title: 'Delete Items',
+        message: `Are you sure you want to delete ${count} item${count > 1 ? 's' : ''}? They will be moved to trash.`,
+        confirmText: 'Delete',
+        confirmClass: 'btn-error'
+      });
+
+      if (!confirmed) return;
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const uuid of uuids) {
+        try {
+          const response = await fetch(`/api/v1/files/${uuid}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': this.getCsrfToken() }
+          });
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          errorCount++;
+        }
+      }
+
+      if (errorCount > 0) {
+        this.showAlert('warning', `Deleted ${successCount} items, ${errorCount} failed`);
+      } else {
+        this.showAlert('success', `Deleted ${successCount} item${successCount > 1 ? 's' : ''}`);
+      }
+
+      window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+      window.dispatchEvent(new CustomEvent('clear-file-selection'));
+      this.refreshFolderBrowser();
+    },
+
+    async bulkToggleFavorite(uuids, add) {
+      if (!uuids || uuids.length === 0) return;
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const uuid of uuids) {
+        try {
+          const response = await fetch(`/api/v1/files/${uuid}/favorite`, {
+            method: add ? 'POST' : 'DELETE',
+            headers: { 'X-CSRFToken': this.getCsrfToken() }
+          });
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          errorCount++;
+        }
+      }
+
+      const action = add ? 'Added to' : 'Removed from';
+      if (errorCount > 0) {
+        this.showAlert('warning', `${action} favorites: ${successCount} succeeded, ${errorCount} failed`);
+      } else {
+        this.showAlert('success', `${action} favorites: ${successCount} item${successCount > 1 ? 's' : ''}`);
+      }
+
+      window.dispatchEvent(new CustomEvent('clear-file-selection'));
+      this.refreshFolderBrowser();
+    },
+
+    // Clipboard operations
+    cutToClipboard(items) {
+      if (!items || items.length === 0) return;
+      window.fileClipboard.cut(items);
+      const count = items.length;
+      this.showAlert('info', `${count} item${count > 1 ? 's' : ''} cut to clipboard`);
+    },
+
+    bulkCutToClipboard(uuids) {
+      if (!uuids || uuids.length === 0) return;
+      // Get item details from DOM
+      const items = uuids.map(uuid => {
+        const row = document.querySelector(`tr[data-uuid="${uuid}"]`);
+        return {
+          uuid,
+          name: row?.dataset.name || '',
+          nodeType: row?.dataset.nodeType || 'file'
+        };
+      });
+      this.cutToClipboard(items);
+      window.dispatchEvent(new CustomEvent('clear-file-selection'));
+    },
+
+    async pasteFromClipboard() {
+      const items = window.fileClipboard.getItems();
+      if (!items || items.length === 0) {
+        this.showAlert('warning', 'Clipboard is empty');
+        return;
+      }
+
+      const targetFolderId = this.currentFolder || null;
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const item of items) {
+        try {
+          const response = await fetch(`/api/v1/files/${item.uuid}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this.getCsrfToken()
+            },
+            body: JSON.stringify({ parent: targetFolderId })
+          });
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          errorCount++;
+        }
+      }
+
+      if (errorCount > 0) {
+        this.showAlert('warning', `Moved ${successCount} items, ${errorCount} failed`);
+      } else {
+        this.showAlert('success', `Moved ${successCount} item${successCount > 1 ? 's' : ''}`);
+      }
+
+      window.fileClipboard.clear();
+      window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+      this.refreshFolderBrowser();
+    },
+
     async pinFolder(uuid) {
       if (!uuid) return;
       try {
@@ -619,12 +835,13 @@ window.fileBrowser = function fileBrowser() {
 
 window.fileTableControls = function fileTableControls() {
   return {
-    storageKey: 'fileTableControls:v3',
+    storageKey: 'fileTableControls:v4',
     searchQuery: '',
     typeFilter: 'all',
     sortField: 'default',
     sortDir: 'asc',
     columns: [
+      { id: 'select', label: 'Select', required: false },
       { id: 'icon', label: 'Type', required: true },
       { id: 'name', label: 'Name', required: true },
       { id: 'favorite', label: 'Fav', required: false },
@@ -633,8 +850,9 @@ window.fileTableControls = function fileTableControls() {
       { id: 'modified', label: 'Modified', required: false },
       { id: 'actions', label: 'Actions', required: false }
     ],
-    defaultColumnOrder: ['icon', 'name', 'favorite', 'size', 'created', 'modified', 'actions'],
+    defaultColumnOrder: ['select', 'icon', 'name', 'favorite', 'size', 'created', 'modified', 'actions'],
     defaultColumnVisibility: {
+      select: true,
       icon: true,
       name: true,
       favorite: true,
@@ -643,8 +861,9 @@ window.fileTableControls = function fileTableControls() {
       modified: true,
       actions: true
     },
-    columnOrder: ['icon', 'name', 'favorite', 'size', 'created', 'modified', 'actions'],
+    columnOrder: ['select', 'icon', 'name', 'favorite', 'size', 'created', 'modified', 'actions'],
     columnVisibility: {
+      select: true,
       icon: true,
       name: true,
       favorite: true,
@@ -657,6 +876,12 @@ window.fileTableControls = function fileTableControls() {
     tbody: null,
     originalRows: [],
     ready: false,
+
+    // Selection state
+    selectedUuids: new Set(),
+
+    // Clipboard state
+    hasClipboardItems: false,
 
     get orderedColumns() {
       return this.columnOrder
@@ -690,6 +915,17 @@ window.fileTableControls = function fileTableControls() {
       this.$watch('typeFilter', () => this.applyRows());
       this.$watch('sortField', () => this.applyRows());
       this.$watch('sortDir', () => this.applyRows());
+
+      // Clear selection after bulk actions
+      window.addEventListener('clear-file-selection', () => {
+        this.clearSelection();
+      });
+
+      // Track clipboard state
+      window.addEventListener('clipboard-changed', () => {
+        this.hasClipboardItems = window.fileClipboard.hasItems();
+      });
+      this.hasClipboardItems = window.fileClipboard.hasItems();
     },
 
     openContextMenu(event, nodeData) {
@@ -697,6 +933,107 @@ window.fileTableControls = function fileTableControls() {
       // Dispatch event for context menu to listen
       window.dispatchEvent(new CustomEvent('open-context-menu', {
         detail: { event, nodeData }
+      }));
+    },
+
+    openBackgroundContextMenu(event) {
+      // Check if click is on a row or interactive element
+      const target = event.target;
+      if (target.closest('tr[data-uuid], button, a, input, select, textarea')) {
+        return; // Let the row handle its own context menu
+      }
+
+      event.preventDefault();
+      // Dispatch event for background context menu
+      window.dispatchEvent(new CustomEvent('open-background-context-menu', {
+        detail: { event }
+      }));
+    },
+
+    // Selection methods
+    isSelected(uuid) {
+      return this.selectedUuids.has(uuid);
+    },
+
+    toggleRowSelection(uuid) {
+      if (this.selectedUuids.has(uuid)) {
+        this.selectedUuids.delete(uuid);
+      } else {
+        this.selectedUuids.add(uuid);
+      }
+      // Trigger reactivity
+      this.selectedUuids = new Set(this.selectedUuids);
+    },
+
+    toggleSelectAll() {
+      const visibleRows = Array.from(this.tbody.querySelectorAll('tr[data-uuid]'));
+      const visibleUuids = visibleRows.map(r => r.dataset.uuid).filter(Boolean);
+
+      const allSelected = visibleUuids.every(uuid => this.selectedUuids.has(uuid));
+
+      if (allSelected) {
+        // Deselect all visible
+        visibleUuids.forEach(uuid => this.selectedUuids.delete(uuid));
+      } else {
+        // Select all visible
+        visibleUuids.forEach(uuid => this.selectedUuids.add(uuid));
+      }
+      // Trigger reactivity
+      this.selectedUuids = new Set(this.selectedUuids);
+    },
+
+    get selectAllState() {
+      if (!this.tbody) return 'none';
+      const visibleRows = Array.from(this.tbody.querySelectorAll('tr[data-uuid]'));
+      const visibleUuids = visibleRows.map(r => r.dataset.uuid).filter(Boolean);
+      if (visibleUuids.length === 0) return 'none';
+
+      const selectedCount = visibleUuids.filter(uuid => this.selectedUuids.has(uuid)).length;
+      if (selectedCount === 0) return 'none';
+      if (selectedCount === visibleUuids.length) return 'all';
+      return 'partial';
+    },
+
+    clearSelection() {
+      this.selectedUuids = new Set();
+    },
+
+    getSelectedUuids() {
+      return Array.from(this.selectedUuids);
+    },
+
+    getSelectedCount() {
+      return this.selectedUuids.size;
+    },
+
+    // Bulk actions
+    bulkDelete() {
+      const uuids = this.getSelectedUuids();
+      if (uuids.length === 0) return;
+      window.dispatchEvent(new CustomEvent('bulk-action', {
+        detail: { action: 'delete', uuids }
+      }));
+    },
+
+    bulkFavorite(add) {
+      const uuids = this.getSelectedUuids();
+      if (uuids.length === 0) return;
+      window.dispatchEvent(new CustomEvent('bulk-action', {
+        detail: { action: 'favorite', uuids, add }
+      }));
+    },
+
+    bulkCut() {
+      const uuids = this.getSelectedUuids();
+      if (uuids.length === 0) return;
+      window.dispatchEvent(new CustomEvent('bulk-action', {
+        detail: { action: 'cut', uuids }
+      }));
+    },
+
+    bulkPaste() {
+      window.dispatchEvent(new CustomEvent('bulk-action', {
+        detail: { action: 'paste' }
       }));
     },
 

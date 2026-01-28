@@ -18,7 +18,8 @@ def build_breadcrumbs(folder):
         breadcrumbs.insert(0, {
             'label': current.name,
             'url': f'/files/{current.uuid}',
-            'icon': 'folder',
+            'icon': current.icon or 'folder',
+            'icon_color': current.color or 'text-warning',
         })
         current = current.parent
     # Add root "Files" at the beginning

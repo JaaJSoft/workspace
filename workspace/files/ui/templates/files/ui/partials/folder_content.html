@@ -15,8 +15,10 @@
 <div class="border-base-300 flex flex-col flex-1 min-h-0" x-data="fileTableControls()">
   <div class="card-body p-0 flex flex-col flex-1 min-h-0">
     {% if nodes %}
+    <!-- Toolbar: Filter bar OR Bulk action bar -->
     <div class="border-b border-base-300 bg-base-100 px-3 py-2">
-      <div class="flex flex-wrap items-center gap-2">
+      <!-- Filter bar (when nothing selected) -->
+      <div class="flex flex-wrap items-center gap-2" x-show="selectedUuids.size === 0">
         <label class="input input-sm input-bordered flex items-center gap-2 flex-1 min-w-[200px]">
           <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
           <input
@@ -61,6 +63,12 @@
         </div>
 
         <button type="button" class="btn btn-sm btn-ghost" @click="resetAll()" title="Reset filters and sorting">Reset</button>
+
+        <!-- Paste button (when clipboard has items) -->
+        <button x-show="hasClipboardItems" x-cloak type="button" class="btn btn-sm btn-primary gap-1" @click="bulkPaste()" title="Paste items here">
+          <i data-lucide="clipboard-paste" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Paste</span>
+        </button>
 
         <div class="dropdown dropdown-end" x-data="{ open: false }" :class="open ? 'dropdown-open' : ''" @click.outside="open = false">
           <button type="button" class="btn btn-sm btn-outline gap-2" @click="open = !open" :aria-expanded="open.toString()">
@@ -107,14 +115,50 @@
           </div>
         </div>
       </div>
+
+      <!-- Bulk action bar (when items selected) -->
+      <div class="flex items-center gap-2" x-show="selectedUuids.size > 0" x-cloak>
+        <span class="text-sm font-medium" x-text="selectedUuids.size + ' item' + (selectedUuids.size > 1 ? 's' : '') + ' selected'"></span>
+        <div class="flex items-center gap-1 ml-4">
+          <button type="button" @click="bulkFavorite(true)" class="btn btn-sm btn-ghost gap-1" title="Add to favorites">
+            <i data-lucide="star" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Favorite</span>
+          </button>
+          <button type="button" @click="bulkFavorite(false)" class="btn btn-sm btn-ghost gap-1" title="Remove from favorites">
+            <i data-lucide="star-off" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Unfavorite</span>
+          </button>
+          <button type="button" @click="bulkCut()" class="btn btn-sm btn-ghost gap-1" title="Cut to clipboard">
+            <i data-lucide="scissors" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Cut</span>
+          </button>
+          <button type="button" @click="bulkDelete()" class="btn btn-sm btn-ghost text-error gap-1" title="Delete">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Delete</span>
+          </button>
+        </div>
+        <button type="button" @click="clearSelection()" class="btn btn-sm btn-ghost ml-auto">
+          Cancel
+        </button>
+      </div>
     </div>
     {% endif %}
+
     <!-- Table container with overflow -->
-    <div class="overflow-auto flex-1 min-h-0">
+    <div class="overflow-auto flex-1 min-h-0"{% if not is_trash_view %} @contextmenu="openBackgroundContextMenu($event)"{% endif %}>
       {% if nodes %}
       <table class="table">
         <thead class="sticky top-0 z-10">
           <tr class="bg-base-200">
+            <th class="w-10" data-col="select">
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm"
+                @click="toggleSelectAll()"
+                :checked="selectAllState === 'all'"
+                :indeterminate="selectAllState === 'partial'"
+              />
+            </th>
             <th class="w-12" data-col="icon"><span class="sr-only">Type</span></th>
             <th data-col="name">Name</th>
             {% if not is_trash_view %}
@@ -132,6 +176,8 @@
           {% for node in nodes %}
           <tr
             class="hover group {% if node.node_type == 'folder' %}cursor-pointer{% endif %}"
+            :class="isSelected('{{ node.uuid }}') ? 'bg-primary/10' : ''"
+            data-uuid="{{ node.uuid }}"
             data-name="{{ node.name|lower }}"
             data-node-type="{{ node.node_type }}"
             data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
@@ -156,6 +202,14 @@
               isPinned: {% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'true,false' }}{% else %}false{% endif %}
             })"
           >
+            <td data-col="select" data-stop-row-click @click.stop>
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm"
+                :checked="isSelected('{{ node.uuid }}')"
+                @click="toggleRowSelection('{{ node.uuid }}')"
+              />
+            </td>
             <td class="text-base-content/60" data-col="icon">
               {% if node.node_type == 'folder' %}
                 <i data-lucide="{{ node.icon|default:'folder' }}" class="w-5 h-5 {{ node.color|default:'text-warning' }}"></i>

@@ -338,6 +338,50 @@ class FileViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(folders, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        summary="Reorder pinned folders",
+        description="Update the order of pinned folders. Send an array of folder UUIDs in the desired order.",
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'order': {
+                        'type': 'array',
+                        'items': {'type': 'string', 'format': 'uuid'},
+                        'description': 'Array of folder UUIDs in the desired order',
+                    },
+                },
+                'required': ['order'],
+            },
+        },
+        responses={
+            200: OpenApiResponse(description="Order updated successfully."),
+            400: OpenApiResponse(description="Invalid request."),
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='pinned/reorder')
+    def pinned_reorder(self, request):
+        """Reorder pinned folders."""
+        order = request.data.get('order', [])
+        if not isinstance(order, list):
+            return Response({'detail': 'order must be a list of UUIDs.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get existing pinned folders for user
+        pinned_map = {
+            str(p.folder_id): p
+            for p in PinnedFolder.objects.filter(owner=request.user)
+        }
+
+        # Update positions based on new order
+        for position, uuid in enumerate(order):
+            if uuid in pinned_map:
+                pin = pinned_map[uuid]
+                if pin.position != position:
+                    pin.position = position
+                    pin.save(update_fields=['position'])
+
+        return Response({'success': True}, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'], url_path='restore')
     def restore(self, request, uuid=None):
         """Restore a file or folder from trash."""

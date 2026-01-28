@@ -9,7 +9,13 @@ Context variables:
 {% endcomment %}
 
 {% for pin in pinned_folders %}
-<li class="list-none"
+<li class="list-none pinned-folder-item"
+    draggable="true"
+    data-pinned-uuid="{{ pin.folder.uuid }}"
+    @dragstart="onPinnedDragStart($event, '{{ pin.folder.uuid }}')"
+    @dragend="onPinnedDragEnd($event)"
+    @dragover.prevent="onPinnedDragOver($event, '{{ pin.folder.uuid }}')"
+    @drop.prevent="onPinnedDrop($event, '{{ pin.folder.uuid }}')"
     @contextmenu.prevent="$dispatch('open-context-menu', {
       event: $event,
       nodeData: {
@@ -26,13 +32,19 @@ Context variables:
 >
   <a
     href="/files/{{ pin.folder.uuid }}"
-    class="flex items-center hover:bg-base-300/50 p-2 text-base rounded-lg transition-colors"
-    :class="collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3'"
+    class="group flex items-center hover:bg-base-300/50 p-2 text-base rounded-lg transition-colors"
+    :class="[
+      collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3',
+      draggingPinned === '{{ pin.folder.uuid }}' ? 'opacity-50' : '',
+      dragOverPinned === '{{ pin.folder.uuid }}' ? 'ring-2 ring-primary/50 ring-offset-1' : ''
+    ]"
     x-target.push="folder-browser"
     :title="collapsed ? '{{ pin.folder.name|escapejs }}' : ''"
+    @click="if (draggingPinned) $event.preventDefault()"
   >
     <i data-lucide="folder" class="w-5 h-5 flex-shrink-0 text-warning"></i>
     <span x-show="!collapsed" x-transition class="truncate flex-1">{{ pin.folder.name }}</span>
+    <i data-lucide="grip-vertical" class="w-4 h-4 flex-shrink-0 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab" x-show="!collapsed"></i>
   </a>
 </li>
 {% empty %}

@@ -977,6 +977,9 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
     dragOver: false,
     dragCounter: 0,
     pinnedCount: 0,
+    // For reordering pinned folders
+    draggingPinned: null,
+    dragOverPinned: null,
 
     init() {
       // Set initial count from server-rendered list
@@ -1073,6 +1076,81 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
         }
       } catch (error) {
         // Silent fail for sidebar refresh
+      }
+    },
+
+    // Pinned folder reordering methods
+    onPinnedDragStart(event, uuid) {
+      this.draggingPinned = uuid;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('application/x-reorder-pinned', uuid);
+    },
+
+    onPinnedDragEnd(event) {
+      this.draggingPinned = null;
+      this.dragOverPinned = null;
+    },
+
+    onPinnedDragOver(event, uuid) {
+      if (!this.draggingPinned || this.draggingPinned === uuid) {
+        this.dragOverPinned = null;
+        return;
+      }
+      event.dataTransfer.dropEffect = 'move';
+      this.dragOverPinned = uuid;
+    },
+
+    async onPinnedDrop(event, targetUuid) {
+      const sourceUuid = this.draggingPinned;
+      if (!sourceUuid || sourceUuid === targetUuid) {
+        this.draggingPinned = null;
+        this.dragOverPinned = null;
+        return;
+      }
+
+      // Get current order from DOM
+      const list = document.getElementById('pinned-folders-list');
+      const items = Array.from(list.querySelectorAll('li.pinned-folder-item'));
+      const uuids = items.map(li => li.dataset.pinnedUuid);
+
+      // Calculate new order
+      const sourceIndex = uuids.indexOf(sourceUuid);
+      const targetIndex = uuids.indexOf(targetUuid);
+      if (sourceIndex === -1 || targetIndex === -1) return;
+
+      // Remove source and insert at target position
+      uuids.splice(sourceIndex, 1);
+      uuids.splice(targetIndex, 0, sourceUuid);
+
+      // Optimistically reorder in DOM
+      const sourceItem = items[sourceIndex];
+      const targetItem = items[targetIndex];
+      if (sourceIndex < targetIndex) {
+        targetItem.after(sourceItem);
+      } else {
+        targetItem.before(sourceItem);
+      }
+
+      this.draggingPinned = null;
+      this.dragOverPinned = null;
+
+      // Save new order to server
+      try {
+        const response = await fetch('/api/v1/files/pinned/reorder', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.getCsrfToken()
+          },
+          body: JSON.stringify({ order: uuids })
+        });
+        if (!response.ok) {
+          // Revert on error - refresh from server
+          this.refreshPinnedSection();
+        }
+      } catch (error) {
+        // Revert on error - refresh from server
+        this.refreshPinnedSection();
       }
     }
   };

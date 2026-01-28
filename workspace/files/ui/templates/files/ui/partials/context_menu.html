@@ -200,6 +200,21 @@
         </li>
       </template>
 
+      <!-- Copy -->
+      <template x-if="!nodeData.isTrash">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="copy()"
+          >
+            <i data-lucide="copy" class="w-4 h-4"></i>
+            <span>Copy</span>
+            <kbd class="kbd kbd-xs ml-auto">Ctrl+C</kbd>
+          </button>
+        </li>
+      </template>
+
       <!-- Paste (only show when clipboard has items) -->
       <template x-if="!nodeData.isTrash && nodeData.nodeType === 'folder' && hasClipboardItems">
         <li>
@@ -502,6 +517,18 @@ function contextMenu() {
       window.dispatchEvent(new CustomEvent('file-action', {
         detail: {
           action: 'cut',
+          uuid: this.nodeData.uuid,
+          name: this.nodeData.name,
+          nodeType: this.nodeData.nodeType
+        }
+      }));
+      this.close();
+    },
+
+    copy() {
+      window.dispatchEvent(new CustomEvent('file-action', {
+        detail: {
+          action: 'copy',
           uuid: this.nodeData.uuid,
           name: this.nodeData.name,
           nodeType: this.nodeData.nodeType

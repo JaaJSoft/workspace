@@ -132,6 +132,10 @@
             <i data-lucide="scissors" class="w-4 h-4"></i>
             <span class="hidden sm:inline">Cut</span>
           </button>
+          <button type="button" @click="bulkCopy()" class="btn btn-sm btn-ghost gap-1" title="Copy to clipboard">
+            <i data-lucide="copy" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Copy</span>
+          </button>
           <button type="button" @click="bulkDelete()" class="btn btn-sm btn-ghost text-error gap-1" title="Delete">
             <i data-lucide="trash-2" class="w-4 h-4"></i>
             <span class="hidden sm:inline">Delete</span>

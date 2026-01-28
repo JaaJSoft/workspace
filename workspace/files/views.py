@@ -496,6 +496,126 @@ class FileViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
     @extend_schema(
+        summary="Copy file or folder",
+        description=(
+            "Create a copy of a file or folder. For folders, copies recursively. "
+            "The copy is placed in the specified parent folder (or root if not specified)."
+        ),
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'parent': {
+                        'type': 'string',
+                        'format': 'uuid',
+                        'nullable': True,
+                        'description': 'Target parent folder UUID (null for root)',
+                    },
+                },
+            },
+        },
+        responses={
+            201: OpenApiResponse(
+                response=FileSerializer,
+                description="Copied file or folder.",
+            ),
+            400: OpenApiResponse(description="Invalid request."),
+        },
+    )
+    @action(detail=True, methods=['post'], url_path='copy')
+    def copy(self, request, uuid=None):
+        """Copy a file or folder to a new location."""
+        file_obj = self.get_object()
+        parent_uuid = request.data.get('parent')
+
+        # Resolve parent folder
+        parent = None
+        if parent_uuid:
+            try:
+                parent = File.objects.get(
+                    uuid=parent_uuid,
+                    owner=request.user,
+                    node_type=File.NodeType.FOLDER,
+                    deleted_at__isnull=True,
+                )
+            except File.DoesNotExist:
+                return Response(
+                    {'detail': 'Parent folder not found.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Cannot copy into itself or its descendants
+        if file_obj.node_type == File.NodeType.FOLDER and parent:
+            if parent.uuid == file_obj.uuid or parent.path.startswith(f"{file_obj.path}/"):
+                return Response(
+                    {'detail': 'Cannot copy folder into itself or its descendants.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Perform the copy
+        copied = self._copy_node(file_obj, parent, request.user)
+        serializer = self.get_serializer(copied)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def _copy_node(self, node, parent, owner):
+        """Recursively copy a file or folder."""
+        from django.core.files.base import ContentFile
+
+        # Generate unique name if needed
+        base_name = node.name
+        new_name = base_name
+        counter = 1
+
+        # Check for name conflicts in target location
+        siblings = File.objects.filter(
+            owner=owner,
+            parent=parent,
+            deleted_at__isnull=True,
+        )
+        existing_names = set(siblings.values_list('name', flat=True))
+
+        while new_name in existing_names:
+            # Add "Copy" suffix or increment counter
+            name_parts = base_name.rsplit('.', 1)
+            if len(name_parts) == 2 and node.node_type == File.NodeType.FILE:
+                new_name = f"{name_parts[0]} (Copy{'' if counter == 1 else f' {counter})'}).{name_parts[1]}"
+            else:
+                new_name = f"{base_name} (Copy{'' if counter == 1 else f' {counter}'})"
+            counter += 1
+
+        # Create the copy
+        copied = File(
+            owner=owner,
+            name=new_name,
+            node_type=node.node_type,
+            parent=parent,
+            mime_type=node.mime_type,
+            icon=node.icon,
+            color=node.color,
+        )
+
+        # Copy file content if it's a file
+        if node.node_type == File.NodeType.FILE and node.content:
+            # Read original content and create a copy
+            node.content.seek(0)
+            content_copy = ContentFile(node.content.read(), name=node.content.name)
+            copied.content = content_copy
+            copied.size = node.size
+
+        copied.save()
+
+        # Recursively copy children for folders
+        if node.node_type == File.NodeType.FOLDER:
+            children = File.objects.filter(
+                parent=node,
+                deleted_at__isnull=True,
+            )
+            for child in children:
+                self._copy_node(child, copied, owner)
+
+        return copied
+
+    @extend_schema(
         summary="Get file content",
         description="Serve file content with proper headers for inline viewing in browser.",
         responses={

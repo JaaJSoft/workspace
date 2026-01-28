@@ -82,17 +82,26 @@ window.sidebarCollapse = function sidebarCollapse() {
   }
 }
 
-// Global clipboard for cut/paste operations
+// Global clipboard for cut/copy/paste operations
 window.fileClipboard = {
   items: [],  // Array of {uuid, name, nodeType}
+  mode: null, // 'cut' or 'copy'
 
   cut(items) {
     this.items = items;
+    this.mode = 'cut';
+    window.dispatchEvent(new CustomEvent('clipboard-changed'));
+  },
+
+  copy(items) {
+    this.items = items;
+    this.mode = 'copy';
     window.dispatchEvent(new CustomEvent('clipboard-changed'));
   },
 
   clear() {
     this.items = [];
+    this.mode = null;
     window.dispatchEvent(new CustomEvent('clipboard-changed'));
   },
 
@@ -102,6 +111,18 @@ window.fileClipboard = {
 
   getItems() {
     return this.items;
+  },
+
+  getMode() {
+    return this.mode;
+  },
+
+  isCut() {
+    return this.mode === 'cut';
+  },
+
+  isCopy() {
+    return this.mode === 'copy';
   }
 };
 
@@ -138,6 +159,9 @@ window.fileBrowser = function fileBrowser() {
             break;
           case 'cut':
             this.cutToClipboard([{ uuid, name, nodeType }]);
+            break;
+          case 'copy':
+            this.copyToClipboard([{ uuid, name, nodeType }]);
             break;
           case 'paste':
             this.pasteFromClipboard();
@@ -181,6 +205,9 @@ window.fileBrowser = function fileBrowser() {
             break;
           case 'cut':
             this.bulkCutToClipboard(uuids);
+            break;
+          case 'copy':
+            this.bulkCopyToClipboard(uuids);
             break;
           case 'paste':
             this.pasteFromClipboard();
@@ -683,10 +710,29 @@ window.fileBrowser = function fileBrowser() {
       this.showAlert('info', `${count} item${count > 1 ? 's' : ''} cut to clipboard`);
     },
 
+    copyToClipboard(items) {
+      if (!items || items.length === 0) return;
+      window.fileClipboard.copy(items);
+      const count = items.length;
+      this.showAlert('info', `${count} item${count > 1 ? 's' : ''} copied to clipboard`);
+    },
+
     bulkCutToClipboard(uuids) {
       if (!uuids || uuids.length === 0) return;
-      // Get item details from DOM
-      const items = uuids.map(uuid => {
+      const items = this._getItemsFromUuids(uuids);
+      this.cutToClipboard(items);
+      window.dispatchEvent(new CustomEvent('clear-file-selection'));
+    },
+
+    bulkCopyToClipboard(uuids) {
+      if (!uuids || uuids.length === 0) return;
+      const items = this._getItemsFromUuids(uuids);
+      this.copyToClipboard(items);
+      window.dispatchEvent(new CustomEvent('clear-file-selection'));
+    },
+
+    _getItemsFromUuids(uuids) {
+      return uuids.map(uuid => {
         const row = document.querySelector(`tr[data-uuid="${uuid}"]`);
         return {
           uuid,
@@ -694,8 +740,6 @@ window.fileBrowser = function fileBrowser() {
           nodeType: row?.dataset.nodeType || 'file'
         };
       });
-      this.cutToClipboard(items);
-      window.dispatchEvent(new CustomEvent('clear-file-selection'));
     },
 
     async pasteFromClipboard() {
@@ -705,20 +749,35 @@ window.fileBrowser = function fileBrowser() {
         return;
       }
 
+      const isCopy = window.fileClipboard.isCopy();
       const targetFolderId = this.currentFolder || null;
       let successCount = 0;
       let errorCount = 0;
 
       for (const item of items) {
         try {
-          const response = await fetch(`/api/v1/files/${item.uuid}`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': this.getCsrfToken()
-            },
-            body: JSON.stringify({ parent: targetFolderId })
-          });
+          let response;
+          if (isCopy) {
+            // Copy: duplicate the file/folder
+            response = await fetch(`/api/v1/files/${item.uuid}/copy`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': this.getCsrfToken()
+              },
+              body: JSON.stringify({ parent: targetFolderId })
+            });
+          } else {
+            // Cut: move the file/folder
+            response = await fetch(`/api/v1/files/${item.uuid}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': this.getCsrfToken()
+              },
+              body: JSON.stringify({ parent: targetFolderId })
+            });
+          }
           if (response.ok) {
             successCount++;
           } else {
@@ -729,13 +788,17 @@ window.fileBrowser = function fileBrowser() {
         }
       }
 
+      const action = isCopy ? 'Copied' : 'Moved';
       if (errorCount > 0) {
-        this.showAlert('warning', `Moved ${successCount} items, ${errorCount} failed`);
+        this.showAlert('warning', `${action} ${successCount} items, ${errorCount} failed`);
       } else {
-        this.showAlert('success', `Moved ${successCount} item${successCount > 1 ? 's' : ''}`);
+        this.showAlert('success', `${action} ${successCount} item${successCount > 1 ? 's' : ''}`);
       }
 
-      window.fileClipboard.clear();
+      // Only clear clipboard on cut (move), keep it for copy
+      if (!isCopy) {
+        window.fileClipboard.clear();
+      }
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
       this.refreshFolderBrowser();
     },
@@ -1028,6 +1091,14 @@ window.fileTableControls = function fileTableControls() {
       if (uuids.length === 0) return;
       window.dispatchEvent(new CustomEvent('bulk-action', {
         detail: { action: 'cut', uuids }
+      }));
+    },
+
+    bulkCopy() {
+      const uuids = this.getSelectedUuids();
+      if (uuids.length === 0) return;
+      window.dispatchEvent(new CustomEvent('bulk-action', {
+        detail: { action: 'copy', uuids }
       }));
     },
 

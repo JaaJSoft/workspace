@@ -157,21 +157,7 @@
               {% if node.node_type == 'folder' %}
                 <i data-lucide="folder" class="w-5 h-5 text-warning"></i>
               {% else %}
-                {% with node.mime_type as mime %}
-                  {% if 'image' in mime %}
-                    <i data-lucide="image" class="w-5 h-5 text-success"></i>
-                  {% elif 'video' in mime %}
-                    <i data-lucide="video" class="w-5 h-5 text-error"></i>
-                  {% elif 'audio' in mime %}
-                    <i data-lucide="music" class="w-5 h-5 text-secondary"></i>
-                  {% elif 'pdf' in mime %}
-                    <i data-lucide="file-text" class="w-5 h-5 text-error"></i>
-                  {% elif 'zip' in mime or 'rar' in mime or 'tar' in mime or 'gz' in mime %}
-                    <i data-lucide="file-archive" class="w-5 h-5 text-warning"></i>
-                  {% else %}
-                    <i data-lucide="file" class="w-5 h-5"></i>
-                  {% endif %}
-                {% endwith %}
+                <i data-lucide="{{ node.mime_type|mime_to_lucide }}" class="w-5 h-5 {{ node.mime_type|mime_to_color }}"></i>
               {% endif %}
             </td>
             <td data-col="name">

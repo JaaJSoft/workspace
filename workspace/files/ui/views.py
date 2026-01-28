@@ -214,6 +214,44 @@ def trash(request):
 
 
 @login_required
+def properties(request, uuid):
+    """Return file/folder properties partial for the properties modal."""
+    from django.db.models import Sum
+
+    file_obj = get_object_or_404(File, uuid=uuid, owner=request.user)
+
+    # Check if favorite
+    is_favorite = FileFavorite.objects.filter(owner=request.user, file=file_obj).exists()
+
+    # Check if pinned (folders only)
+    is_pinned = False
+    if file_obj.node_type == File.NodeType.FOLDER:
+        is_pinned = PinnedFolder.objects.filter(owner=request.user, folder=file_obj).exists()
+
+    # For folders, get children count and total size
+    children_count = 0
+    total_size = 0
+    if file_obj.node_type == File.NodeType.FOLDER:
+        children = File.objects.filter(parent=file_obj, deleted_at__isnull=True)
+        children_count = children.count()
+        # Calculate total size recursively (simplified: just direct children for now)
+        total_size = File.objects.filter(
+            path__startswith=f"{file_obj.path}/",
+            owner=request.user,
+            deleted_at__isnull=True,
+            node_type=File.NodeType.FILE,
+        ).aggregate(total=Sum('size'))['total'] or 0
+
+    return render(request, 'files/ui/partials/properties_content.html', {
+        'file': file_obj,
+        'is_favorite': is_favorite,
+        'is_pinned': is_pinned,
+        'children_count': children_count,
+        'total_size': total_size,
+    })
+
+
+@login_required
 def pinned_folders(request):
     """Return pinned folders partial for Alpine AJAX loading."""
     # Get pinned folder IDs first

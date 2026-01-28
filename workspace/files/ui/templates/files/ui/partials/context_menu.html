@@ -365,20 +365,12 @@ function contextMenu() {
     },
 
     showInfo() {
-      // Show file properties using AppAlert for now
-      const info = [
-        `Name: ${this.nodeData.name}`,
-        `Type: ${this.nodeData.nodeType}`,
-        this.nodeData.mimeType ? `MIME Type: ${this.nodeData.mimeType}` : null,
-      ].filter(Boolean).join('\n');
-
-      if (window.AppAlert) {
-        window.AppAlert.info(info, {
-          title: 'File Properties',
-          duration: 0, // Don't auto-dismiss
-          dismissible: true
-        });
-      }
+      window.dispatchEvent(new CustomEvent('open-properties', {
+        detail: {
+          uuid: this.nodeData.uuid,
+          nodeType: this.nodeData.nodeType
+        }
+      }));
       this.close();
     }
   };

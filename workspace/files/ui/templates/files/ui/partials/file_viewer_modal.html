@@ -7,7 +7,18 @@
   >
     <div class="modal-box max-w-[90vw] max-h-[90vh] w-full h-full p-0 flex flex-col relative">
       <!-- Actions (Top Right) -->
-      <div class="absolute top-4 right-4 z-10 flex items-center gap-2">
+      <div class="absolute top-4 right-4 z-10 flex items-center gap-1">
+        <!-- Properties -->
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          title="Properties (Ctrl+I)"
+          x-show="fileUuid"
+          @click="openProperties()"
+        >
+          <i data-lucide="info" class="w-4 h-4"></i>
+        </button>
+
         <!-- Download -->
         <a
           :href="`/api/v1/files/${fileUuid}/content`"
@@ -180,6 +191,16 @@
           const url = new URL(window.location);
           url.searchParams.delete('open');
           window.history.pushState({}, '', url);
+        },
+
+        openProperties() {
+          if (!this.fileUuid) return;
+          window.dispatchEvent(new CustomEvent('open-properties', {
+            detail: {
+              uuid: this.fileUuid,
+              nodeType: 'file'
+            }
+          }));
         },
 
         handleKeydown(event) {

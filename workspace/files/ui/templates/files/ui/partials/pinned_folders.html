@@ -1,0 +1,45 @@
+{% comment %}
+Pinned Folders Partial
+======================
+Renders the list of pinned folders for the sidebar.
+Loaded via Alpine AJAX.
+
+Context variables:
+- pinned_folders: QuerySet of PinnedFolder objects
+{% endcomment %}
+
+{% for pin in pinned_folders %}
+<li class="list-none"
+    @contextmenu.prevent="$dispatch('open-context-menu', {
+      event: $event,
+      nodeData: {
+        uuid: '{{ pin.folder.uuid }}',
+        name: '{{ pin.folder.name|escapejs }}',
+        nodeType: 'folder',
+        mimeType: '',
+        isFavorite: {{ pin.folder.is_favorite|yesno:'true,false' }},
+        isViewable: false,
+        isTrash: false,
+        isPinned: true
+      }
+    })"
+>
+  <a
+    href="/files/{{ pin.folder.uuid }}"
+    class="flex items-center hover:bg-base-300/50 p-2 text-base rounded-lg transition-colors"
+    :class="collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3'"
+    x-target.push="folder-browser"
+    :title="collapsed ? '{{ pin.folder.name|escapejs }}' : ''"
+  >
+    <i data-lucide="folder" class="w-5 h-5 flex-shrink-0 text-warning"></i>
+    <span x-show="!collapsed" x-transition class="truncate flex-1">{{ pin.folder.name }}</span>
+  </a>
+</li>
+{% empty %}
+<li class="list-none px-2 py-3 text-sm text-base-content/40" x-show="!collapsed && !dragOver">
+  <span class="flex items-center gap-2 justify-center">
+    <i data-lucide="pin-off" class="w-4 h-4"></i>
+    No pinned folders
+  </span>
+</li>
+{% endfor %}

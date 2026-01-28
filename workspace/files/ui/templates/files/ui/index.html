@@ -13,7 +13,7 @@
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
 {% block drawer_sidebar %}
-<div class="drawer-side z-40 h-full" x-data="sidebarCollapse()" x-init="init()"
+<div class="drawer-side z-40 h-full" x-data="sidebarCollapse()"
   <label for="files-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
   <!-- Sidebar -->
@@ -43,13 +43,55 @@
     <div class="flex-1 overflow-y-auto py-4 px-3">
       <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
           :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-4 opacity-100'"
-          :aria-hidden="collapsed">Quick Access</h3>
+          :aria-hidden="collapsed">
+        <span class="flex items-center gap-2">
+          <i data-lucide="zap" class="w-3 h-3"></i>
+          Quick Access
+        </span>
+      </h3>
       <ul class="space-y-2">
         {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" %}
       </ul>
+
+      <!-- Pinned Folders -->
+      <div id="pinned-folders-section" x-data="pinnedFoldersSection()">
+        <hr class="my-3 border-base-300 transition-all duration-200"
+            :class="collapsed ? 'opacity-0' : 'opacity-100'"
+            x-show="!collapsed || pinnedCount > 0">
+        <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
+            :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'"
+            :aria-hidden="collapsed"
+            x-show="!collapsed || pinnedCount > 0">
+          <span class="flex items-center gap-2">
+            <i data-lucide="pin" class="w-3 h-3"></i>
+            Pinned
+          </span>
+        </h3>
+        <!-- Drop zone -->
+        <div
+          @dragover.prevent="onDragOver($event)"
+          @dragenter.prevent="onDragEnter($event)"
+          @dragleave="onDragLeave($event)"
+          @drop.prevent="onDrop($event)"
+          :class="dragOver ? 'bg-primary/10 ring-2 ring-primary/40 ring-inset rounded-lg scale-[1.02]' : ''"
+          class="transition-all duration-200 -mx-1 px-1 py-2 min-h-[60px]"
+        >
+          <ul class="space-y-2" id="pinned-folders-list" x-target="pinned-folders-list">
+            {% include 'files/ui/partials/pinned_folders.html' %}
+          </ul>
+          <!-- Drop hint when dragging -->
+          <div x-show="dragOver" x-cloak x-transition
+               class="text-xs text-primary font-medium text-center py-4 border-2 border-dashed border-primary/40 rounded-lg mt-2 bg-primary/5"
+               :class="collapsed ? 'hidden' : ''">
+            <i data-lucide="pin" class="w-4 h-4 inline-block mb-1"></i>
+            <br>
+            Drop to pin folder
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Toggle Button (Always at bottom) -->
@@ -63,7 +105,7 @@
 {% endblock %}
 
 {% block content %}
-<div x-data="fileBrowser()" x-init="init()" class="h-full flex flex-col">
+<div x-data="fileBrowser()" class="h-full flex flex-col">
   {% partialdef folder-browser inline %}
   <div class="h-full flex flex-col" id="folder-browser" data-folder="{{ current_folder.uuid|default:'' }}" x-init="$nextTick(() => lucide.createIcons())">
 

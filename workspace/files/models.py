@@ -243,6 +243,39 @@ class FileFavorite(models.Model):
         return f"{self.owner} -> {self.file}"
 
 
+class PinnedFolder(models.Model):
+    """User-pinned folders for quick sidebar access."""
+    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='pinned_folders',
+    )
+    folder = models.ForeignKey(
+        File,
+        on_delete=models.CASCADE,
+        related_name='pins',
+        limit_choices_to={'node_type': 'folder'},
+    )
+    position = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['owner', 'folder'],
+                name='unique_pinned_folder',
+            ),
+        ]
+        ordering = ['position', 'created_at']
+        indexes = [
+            models.Index(fields=['owner', 'position'], name='pinned_owner_pos'),
+        ]
+
+    def __str__(self):
+        return f"{self.owner} -> {self.folder}"
+
+
 # Signal to handle file deletion when using QuerySet.delete() or bulk operations
 @receiver(pre_delete, sender=File)
 def delete_file_on_delete(sender, instance, **kwargs):

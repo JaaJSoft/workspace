@@ -16,7 +16,7 @@ from drf_spectacular.utils import (
     extend_schema_view,
 )
 
-from .models import File, FileFavorite
+from .models import File, FileFavorite, PinnedFolder
 from .serializers import FileSerializer
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
@@ -243,7 +243,14 @@ class FileViewSet(viewsets.ModelViewSet):
             owner=self.request.user,
             file_id=OuterRef('pk'),
         )
-        queryset = queryset.annotate(is_favorite=Exists(favorite_subquery))
+        pinned_subquery = PinnedFolder.objects.filter(
+            owner=self.request.user,
+            folder_id=OuterRef('pk'),
+        )
+        queryset = queryset.annotate(
+            is_favorite=Exists(favorite_subquery),
+            is_pinned=Exists(pinned_subquery),
+        )
         if self.action in {'trash'} or self._is_trash_query():
             return queryset.filter(deleted_at__isnull=False)
         if self.action in {'restore', 'purge'}:
@@ -283,6 +290,53 @@ class FileViewSet(viewsets.ModelViewSet):
             return Response({'is_favorite': True}, status=status.HTTP_200_OK)
         FileFavorite.objects.filter(owner=request.user, file=file_obj).delete()
         return Response({'is_favorite': False}, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Pin or unpin a folder from sidebar",
+        description="POST to pin, DELETE to unpin a folder from the sidebar.",
+        responses={
+            200: OpenApiResponse(description="Pin status updated."),
+            400: OpenApiResponse(description="Not a folder."),
+        },
+    )
+    @action(detail=True, methods=['post', 'delete'], url_path='pin')
+    def pin(self, request, uuid=None):
+        """Pin or unpin a folder from the sidebar."""
+        file_obj = self.get_object()
+        if file_obj.node_type != File.NodeType.FOLDER:
+            return Response({'detail': 'Only folders can be pinned.'}, status=status.HTTP_400_BAD_REQUEST)
+        if request.method == 'POST':
+            max_pos = PinnedFolder.objects.filter(owner=request.user).order_by('-position').values_list('position', flat=True).first()
+            position = (max_pos or 0) + 1
+            PinnedFolder.objects.get_or_create(owner=request.user, folder=file_obj, defaults={'position': position})
+            return Response({'is_pinned': True}, status=status.HTTP_200_OK)
+        PinnedFolder.objects.filter(owner=request.user, folder=file_obj).delete()
+        return Response({'is_pinned': False}, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="List pinned folders",
+        description="Return the current user's pinned folders for the sidebar.",
+        responses={
+            200: OpenApiResponse(
+                response=FileSerializer(many=True),
+                description="List of pinned folders.",
+            ),
+        },
+    )
+    @action(detail=False, methods=['get'], url_path='pinned')
+    def pinned(self, request):
+        """List pinned folders."""
+        pinned_qs = PinnedFolder.objects.filter(
+            owner=request.user,
+            folder__deleted_at__isnull=True,
+        ).select_related('folder').order_by('position', 'created_at')
+        folder_ids = [p.folder_id for p in pinned_qs]
+        queryset = self.get_queryset().filter(pk__in=folder_ids, deleted_at__isnull=True)
+        # Preserve pin order
+        order_map = {fid: i for i, fid in enumerate(folder_ids)}
+        folders = sorted(queryset, key=lambda f: order_map.get(f.pk, 0))
+        serializer = self.get_serializer(folders, many=True)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'], url_path='restore')
     def restore(self, request, uuid=None):

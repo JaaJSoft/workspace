@@ -89,14 +89,17 @@ window.fileBrowser = function fileBrowser() {
       return folderEl?.dataset.folder || '';
     },
 
-    init() {
+    _initFileActions() {
       // Listen for file actions from context menu
       window.addEventListener('file-action', (e) => {
-        const { action, uuid, name, nodeType, isFavorite } = e.detail;
+        const { action, uuid, name, nodeType, isFavorite, isPinned } = e.detail;
 
         switch (action) {
           case 'toggleFavorite':
             this.toggleFavorite(uuid, isFavorite);
+            break;
+          case 'togglePin':
+            this.togglePin(uuid, isPinned);
             break;
           case 'rename':
             this.showRenameDialog(uuid, name);
@@ -341,6 +344,7 @@ window.fileBrowser = function fileBrowser() {
         });
         if (response.ok) {
           document.getElementById('rename-dialog').close();
+          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
           const data = await response.json();
@@ -360,6 +364,7 @@ window.fileBrowser = function fileBrowser() {
           }
         });
         if (response.ok) {
+          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
           this.showAlert('error', 'Failed to delete');
@@ -390,6 +395,7 @@ window.fileBrowser = function fileBrowser() {
           }
         });
         if (response.ok) {
+          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
           this.showAlert('error', 'Failed to restore');
@@ -420,6 +426,7 @@ window.fileBrowser = function fileBrowser() {
           }
         });
         if (response.ok) {
+          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
           this.showAlert('error', 'Failed to delete permanently');
@@ -451,6 +458,7 @@ window.fileBrowser = function fileBrowser() {
           }
         });
         if (response.ok) {
+          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
           this.refreshFolderBrowser();
         } else {
           this.showAlert('error', 'Failed to clean trash');
@@ -482,6 +490,58 @@ window.fileBrowser = function fileBrowser() {
         this.showAlert('error', data.detail || 'Failed to update favorites');
       } catch (error) {
         this.showAlert('error', 'Failed to update favorites');
+      }
+    },
+
+    async togglePin(uuid, isPinned) {
+      if (!uuid) return;
+      try {
+        const response = await fetch(`/api/v1/files/${uuid}/pin`, {
+          method: isPinned ? 'DELETE' : 'POST',
+          headers: {
+            'X-CSRFToken': this.getCsrfToken()
+          }
+        });
+        if (response.ok) {
+          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+          this.refreshFolderBrowser();
+          return;
+        }
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (error) {
+          data = {};
+        }
+        this.showAlert('error', data.detail || 'Failed to update pin');
+      } catch (error) {
+        this.showAlert('error', 'Failed to update pin');
+      }
+    },
+
+    async pinFolder(uuid) {
+      if (!uuid) return;
+      try {
+        const response = await fetch(`/api/v1/files/${uuid}/pin`, {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': this.getCsrfToken()
+          }
+        });
+        if (response.ok) {
+          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+          this.refreshFolderBrowser();
+          return;
+        }
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (error) {
+          data = {};
+        }
+        this.showAlert('error', data.detail || 'Failed to pin folder');
+      } catch (error) {
+        this.showAlert('error', 'Failed to pin folder');
       }
     },
 
@@ -543,6 +603,7 @@ window.fileBrowser = function fileBrowser() {
     },
 
     init() {
+      this._initFileActions();
       // Listen for form submissions from dialogs
       window.addEventListener('create-folder', (e) => this.createFolder(e.detail.name));
       window.addEventListener('create-file', (e) => this.createFile(e.detail.name, e.detail.fileType, e.detail.customExt));
@@ -906,6 +967,112 @@ window.fileTableControls = function fileTableControls() {
         this.tbody.appendChild(emptyRow);
       } else if (emptyRow) {
         emptyRow.remove();
+      }
+    }
+  };
+};
+
+window.pinnedFoldersSection = function pinnedFoldersSection() {
+  return {
+    dragOver: false,
+    dragCounter: 0,
+    pinnedCount: 0,
+
+    init() {
+      // Set initial count from server-rendered list
+      const list = document.getElementById('pinned-folders-list');
+      this.pinnedCount = list ? list.children.length : 0;
+
+      window.addEventListener('pinned-folders-changed', () => this.refreshPinnedSection());
+
+      this.$nextTick(() => {
+        if (typeof lucide !== 'undefined') {
+          lucide.createIcons({ nodes: [this.$el] });
+        }
+      });
+    },
+
+    getCsrfToken() {
+      return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+             document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
+    },
+
+    onDragOver(event) {
+      if (!event.dataTransfer.types.includes('application/x-pin-folder')) return;
+      event.dataTransfer.dropEffect = 'link';
+    },
+
+    onDragEnter(event) {
+      if (!event.dataTransfer.types.includes('application/x-pin-folder')) return;
+      this.dragCounter++;
+      this.dragOver = true;
+    },
+
+    onDragLeave(event) {
+      this.dragCounter--;
+      if (this.dragCounter <= 0) {
+        this.dragCounter = 0;
+        this.dragOver = false;
+      }
+    },
+
+    async onDrop(event) {
+      this.dragOver = false;
+      this.dragCounter = 0;
+      const raw = event.dataTransfer.getData('application/x-pin-folder');
+      if (!raw) return;
+      try {
+        const data = JSON.parse(raw);
+        if (!data.uuid) return;
+        const response = await fetch(`/api/v1/files/${data.uuid}/pin`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': this.getCsrfToken() }
+        });
+        if (response.ok) {
+          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+          const refreshLink = document.querySelector('[data-refresh-folder-browser]');
+          if (refreshLink) refreshLink.click();
+        } else {
+          let errData = {};
+          try { errData = await response.json(); } catch (e) {}
+          if (window.AppAlert) {
+            window.AppAlert.show({ type: 'error', message: errData.detail || 'Failed to pin folder', duration: 5000 });
+          }
+        }
+      } catch (error) {
+        if (window.AppAlert) {
+          window.AppAlert.show({ type: 'error', message: 'Failed to pin folder', duration: 5000 });
+        }
+      }
+    },
+
+    async refreshPinnedSection() {
+      try {
+        const response = await fetch('/files/pinned');
+        if (!response.ok) return;
+        const html = await response.text();
+        const currentList = document.getElementById('pinned-folders-list');
+        if (!currentList) return;
+
+        // Parse HTML safely using DOMParser and extract children
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newItems = Array.from(doc.body.children);
+
+        // Replace content with parsed DOM nodes
+        currentList.replaceChildren(...newItems);
+        this.pinnedCount = currentList.querySelectorAll('li').length;
+
+        // Re-initialize Lucide icons
+        if (typeof lucide !== 'undefined') {
+          lucide.createIcons({ nodes: [currentList] });
+        }
+        // Re-init Alpine on new content
+        if (window.Alpine?.initTree) {
+          window.Alpine.initTree(currentList);
+        }
+      } catch (error) {
+        // Silent fail for sidebar refresh
       }
     }
   };

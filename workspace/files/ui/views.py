@@ -4,7 +4,7 @@ from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404, render
 from django.http import HttpResponse
 
-from ..models import File, FileFavorite
+from ..models import File, FileFavorite, PinnedFolder
 from .viewers import ViewerRegistry
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
@@ -103,7 +103,14 @@ def _build_context(request, folder=None, is_trash_view=False):
         owner=request.user,
         file_id=OuterRef('pk'),
     )
-    nodes = nodes.annotate(is_favorite=Exists(favorite_subquery))
+    pinned_subquery = PinnedFolder.objects.filter(
+        owner=request.user,
+        folder_id=OuterRef('pk'),
+    )
+    nodes = nodes.annotate(
+        is_favorite=Exists(favorite_subquery),
+        is_pinned=Exists(pinned_subquery),
+    )
     if is_recent_view:
         nodes = nodes[:RECENT_FILES_LIMIT]
 
@@ -145,6 +152,23 @@ def _build_context(request, folder=None, is_trash_view=False):
         empty_title = None
         empty_message = None
 
+    pinned_folders_qs = PinnedFolder.objects.filter(
+        owner=request.user,
+        folder__deleted_at__isnull=True,
+    ).select_related('folder').order_by('position', 'created_at')
+
+    # Annotate pinned folders with is_favorite
+    pinned_folder_ids = [p.folder_id for p in pinned_folders_qs]
+    if pinned_folder_ids:
+        pinned_favorites = {
+            f.pk: f.is_favorite
+            for f in File.objects.filter(pk__in=pinned_folder_ids).annotate(
+                is_favorite=Exists(favorite_subquery)
+            )
+        }
+        for pin in pinned_folders_qs:
+            pin.folder.is_favorite = pinned_favorites.get(pin.folder_id, False)
+
     return {
         'nodes': nodes,
         'current_folder': current_folder,
@@ -163,6 +187,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         'current_view_url': current_view_url,
         'empty_title': empty_title,
         'empty_message': empty_message,
+        'pinned_folders': pinned_folders_qs,
     }
 
 
@@ -186,6 +211,37 @@ def trash(request):
         return render(request, 'files/ui/index.html#folder-browser', context)
 
     return render(request, 'files/ui/index.html', context)
+
+
+@login_required
+def pinned_folders(request):
+    """Return pinned folders partial for Alpine AJAX loading."""
+    # Get pinned folder IDs first
+    pinned_qs = PinnedFolder.objects.filter(
+        owner=request.user,
+        folder__deleted_at__isnull=True,
+    ).select_related('folder').order_by('position', 'created_at')
+
+    # Annotate folders with is_favorite
+    folder_ids = [p.folder_id for p in pinned_qs]
+    favorite_subquery = FileFavorite.objects.filter(
+        owner=request.user,
+        file_id=OuterRef('pk'),
+    )
+    folders_with_favorite = {
+        f.pk: f.is_favorite
+        for f in File.objects.filter(pk__in=folder_ids).annotate(
+            is_favorite=Exists(favorite_subquery)
+        )
+    }
+
+    # Attach is_favorite to each pinned folder's folder object
+    for pin in pinned_qs:
+        pin.folder.is_favorite = folders_with_favorite.get(pin.folder_id, False)
+
+    return render(request, 'files/ui/partials/pinned_folders.html', {
+        'pinned_folders': pinned_qs,
+    })
 
 
 @login_required

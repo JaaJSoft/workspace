@@ -1,7 +1,6 @@
 <!-- Context Menu Component -->
 <div
   x-data="contextMenu()"
-  x-init="init()"
   x-show="isOpen"
   x-cloak
   @click.outside="close()"
@@ -92,6 +91,21 @@
             <i data-lucide="star" class="w-4 h-4" :class="nodeData.isFavorite ? 'text-warning fill-current' : ''"></i>
             <span x-text="nodeData.isFavorite ? 'Remove from favorites' : 'Add to favorites'"></span>
             <kbd class="kbd kbd-xs ml-auto">F</kbd>
+          </button>
+        </li>
+      </template>
+
+      <!-- Pin/Unpin to sidebar (folders only) -->
+      <template x-if="nodeData.nodeType === 'folder' && !nodeData.isTrash">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="togglePin()"
+          >
+            <i data-lucide="pin" class="w-4 h-4" :class="nodeData.isPinned ? 'text-primary fill-current' : ''"></i>
+            <span x-text="nodeData.isPinned ? 'Unpin from sidebar' : 'Pin to sidebar'"></span>
+            <kbd class="kbd kbd-xs ml-auto">P</kbd>
           </button>
         </li>
       </template>
@@ -262,6 +276,17 @@ function contextMenu() {
           action: 'toggleFavorite',
           uuid: this.nodeData.uuid,
           isFavorite: this.nodeData.isFavorite
+        }
+      }));
+      this.close();
+    },
+
+    togglePin() {
+      window.dispatchEvent(new CustomEvent('file-action', {
+        detail: {
+          action: 'togglePin',
+          uuid: this.nodeData.uuid,
+          isPinned: this.nodeData.isPinned
         }
       }));
       this.close();

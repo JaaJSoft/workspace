@@ -12,7 +12,7 @@
     - is_trash_view: bool - render trash-specific actions
 {% endcomment %}
 
-<div class="border-base-300 flex flex-col flex-1 min-h-0" x-data="fileTableControls()" x-init="init()">
+<div class="border-base-300 flex flex-col flex-1 min-h-0" x-data="fileTableControls()">
   <div class="card-body p-0 flex flex-col flex-1 min-h-0">
     {% if nodes %}
     <div class="border-b border-base-300 bg-base-100 px-3 py-2">
@@ -136,6 +136,8 @@
             data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
             data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
             {% if node.node_type == 'folder' and not is_trash_view %}
+            draggable="true"
+            @dragstart="$event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
             @click="openFolderFromRow($event)"
             {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
             @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.mime_type }}')"
@@ -147,7 +149,8 @@
               mimeType: '{{ node.mime_type }}',
               isFavorite: {{ node.is_favorite|yesno:'true,false' }},
               isViewable: {{ node.is_viewable|yesno:'true,false' }},
-              isTrash: {{ is_trash_view|yesno:'true,false' }}
+              isTrash: {{ is_trash_view|yesno:'true,false' }},
+              isPinned: {% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'true,false' }}{% else %}false{% endif %}
             })"
           >
             <td class="text-base-content/60" data-col="icon">
@@ -234,7 +237,8 @@
                   mimeType: '{{ node.mime_type }}',
                   isFavorite: {{ node.is_favorite|yesno:'true,false' }},
                   isViewable: {{ node.is_viewable|yesno:'true,false' }},
-                  isTrash: {{ is_trash_view|yesno:'true,false' }}
+                  isTrash: {{ is_trash_view|yesno:'true,false' }},
+                  isPinned: {% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'true,false' }}{% else %}false{% endif %}
                 })"
               >
                 <i data-lucide="more-vertical" class="w-4 h-4"></i>

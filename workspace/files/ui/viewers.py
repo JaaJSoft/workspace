@@ -154,6 +154,36 @@ class ImageViewer(BaseViewer):
         return render_to_string('files/ui/viewers/image_viewer.html', self.get_context(request), request=request)
 
 
+class MarkdownViewer(BaseViewer):
+    """Viewer for Markdown files with rendered preview and raw editing."""
+
+    def render(self, request) -> str:
+        """Render Markdown viewer/editor."""
+        from django.template.loader import render_to_string
+        import mistune
+
+        file_handle = None
+        try:
+            file_handle = self.file.content.open('rb')
+            content = file_handle.read().decode('utf-8')
+        except (UnicodeDecodeError, AttributeError):
+            content = ''
+        finally:
+            if file_handle:
+                file_handle.close()
+
+        rendered_html = mistune.html(content) if content else ''
+
+        context = self.get_context(request)
+        context['content'] = content
+        context['rendered_html'] = rendered_html
+
+        return render_to_string('files/ui/viewers/markdown_viewer.html', context, request=request)
+
+    def can_edit(self) -> bool:
+        return True
+
+
 class PDFViewer(BaseViewer):
     """Viewer for PDF files."""
 
@@ -178,10 +208,11 @@ class MediaViewer(BaseViewer):
         return render_to_string('files/ui/viewers/media_viewer.html', context, request=request)
 
 
-# Register viewers
+# Register viewers – order matters: exact matches before wildcards
+ViewerRegistry.register(['text/markdown'], MarkdownViewer)
+
 ViewerRegistry.register([
     'text/plain',
-    'text/markdown',
     'text/csv',
     'text/html',
     'text/css',

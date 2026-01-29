@@ -596,9 +596,12 @@ class FileViewSet(viewsets.ModelViewSet):
 
         # Copy file content if it's a file
         if node.node_type == File.NodeType.FILE and node.content:
-            # Read original content and create a copy
-            node.content.seek(0)
-            content_copy = ContentFile(node.content.read(), name=node.content.name)
+            try:
+                node.content.open('rb')
+                content_data = node.content.read()
+            finally:
+                node.content.close()
+            content_copy = ContentFile(content_data, name=new_name)
             copied.content = content_copy
             copied.size = node.size
 

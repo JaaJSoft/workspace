@@ -157,6 +157,32 @@ class FileSerializer(serializers.ModelSerializer):
         if instance is not None and node_type is None:
             node_type = instance.node_type
 
+        # Validate parent assignment
+        if 'parent' in attrs and instance is not None:
+            parent = attrs['parent']
+            if parent is not None:
+                # Cannot move into a folder owned by another user
+                owner = instance.owner
+                if parent.owner_id != owner.id:
+                    raise serializers.ValidationError({
+                        'parent': 'Cannot move to a folder owned by another user.'
+                    })
+
+                # Cannot move a folder into itself
+                if instance.node_type == File.NodeType.FOLDER:
+                    if parent.pk == instance.pk:
+                        raise serializers.ValidationError({
+                            'parent': 'Cannot move a folder into itself.'
+                        })
+
+                    # Cannot move a folder into its own descendant
+                    instance_path = instance.path or instance.get_path()
+                    parent_path = parent.path or parent.get_path()
+                    if parent_path.startswith(f"{instance_path}/"):
+                        raise serializers.ValidationError({
+                            'parent': 'Cannot move a folder into one of its descendants.'
+                        })
+
         if node_type == File.NodeType.FILE:
             name = attrs.get('name') or (instance.name if instance else None)
             parent = attrs.get('parent') if 'parent' in attrs else (instance.parent if instance else None)

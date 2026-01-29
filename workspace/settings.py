@@ -91,8 +91,10 @@ INSTALLED_APPS = [
     'workspace.users',
 ]
 
-# Add Debug Toolbar only in DEBUG mode (after staticfiles)
-if DEBUG:
+# Add Debug Toolbar only in DEBUG mode and not during tests
+import sys
+TESTING = 'test' in sys.argv
+if DEBUG and not TESTING:
     INSTALLED_APPS.insert(
         INSTALLED_APPS.index('django.contrib.staticfiles') + 1,
         'debug_toolbar'
@@ -148,8 +150,8 @@ MIDDLEWARE = [
     # 'Workspace.common.middleware.RequestTimingMiddleware',
 ]
 
-# Add Debug Toolbar middleware only in DEBUG mode (after GZipMiddleware)
-if DEBUG:
+# Add Debug Toolbar middleware only in DEBUG mode and not during tests
+if DEBUG and not TESTING:
     # Find the position after GZipMiddleware
     gzip_idx = MIDDLEWARE.index('django.middleware.gzip.GZipMiddleware')
     MIDDLEWARE.insert(gzip_idx + 1, 'debug_toolbar.middleware.DebugToolbarMiddleware')

@@ -1,0 +1,51 @@
+<!-- Media Viewer (Video / Audio) -->
+<div class="flex flex-col h-full bg-base-200">
+
+  {% if is_video %}
+  <div class="flex-1 flex items-center justify-center overflow-hidden">
+    <video
+      controls
+      autoplay
+      class="max-w-full max-h-full"
+      src="/api/v1/files/{{ file.uuid }}/content"
+      preload="metadata"
+    >
+      Your browser does not support the video element.
+    </video>
+  </div>
+  {% endif %}
+
+  {% if is_audio %}
+  <div class="flex-1 flex items-center justify-center">
+    <div class="w-full max-w-lg px-6">
+      <div class="flex flex-col items-center gap-6">
+        <div class="w-24 h-24 rounded-full bg-base-300 flex items-center justify-center">
+          <i data-lucide="music" class="w-10 h-10 text-base-content/50"></i>
+        </div>
+        <p class="text-sm text-base-content/60 truncate max-w-full">{{ file.name }}</p>
+        <audio
+          controls
+          autoplay
+          class="w-full"
+          src="/api/v1/files/{{ file.uuid }}/content"
+          preload="metadata"
+        >
+          Your browser does not support the audio element.
+        </audio>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+(function() {
+  var FILE_UUID = '{{ file.uuid }}';
+  setTimeout(function() {
+    var root = document.querySelector('[src$="' + FILE_UUID + '/content"]');
+    if (root && typeof lucide !== 'undefined') {
+      lucide.createIcons({ nodes: [root.closest('.flex.flex-col')] });
+    }
+  }, 50);
+})();
+</script>

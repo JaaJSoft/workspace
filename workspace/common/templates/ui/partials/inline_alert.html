@@ -20,7 +20,7 @@
 {% endcomment %}
 
 {% if message or slot %}
-  <div class="alert alert-{{ type|default:'info' }} {{ class|default:'' }}"
+  <div class="alert alert-{{ type|default:'info' }} text-white {{ class|default:'' }}"
        {% if dismissible %}x-data="{ show: true }" x-show="show" x-transition{% endif %}>
 
     {% if icon|default:True %}

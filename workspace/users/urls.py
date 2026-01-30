@@ -1,7 +1,12 @@
 from django.urls import path
-from django.contrib.auth.views import LoginView, LogoutView
+
+from . import views
 
 urlpatterns = [
-    path('login', LoginView.as_view(template_name='users/auth/login.html'), name='login'),
-    path('logout', LogoutView.as_view(), name='logout'),
+    # API endpoints
+    path('api/v1/users/me', views.UserMeView.as_view(), name='user-me'),
+    path('api/v1/users/me/password', views.ChangePasswordView.as_view(), name='user-change-password'),
+    path('api/v1/users/password-rules', views.PasswordRulesView.as_view(), name='user-password-rules'),
+    # UI
+    path('profile', views.profile_view, name='user_profile'),
 ]

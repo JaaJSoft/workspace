@@ -179,12 +179,11 @@
             <div class="divider my-1"></div>
 
             <!-- Profile -->
-            <li class="{% if request.resolver_match.view_name == 'user:profile_html' %}disabled{% endif %}">
+            <li class="{% if request.resolver_match.view_name == 'user_profile' %}disabled{% endif %}">
               <a
-                href="#"
-                onclick="event.preventDefault(); {% if request.resolver_match.view_name != 'user:profile_html' %}showUserViewModal();{% endif %}"
+                href="/profile"
                 class="gap-3 {% if request.resolver_match.view_name != 'user:profile_html' %}hover:bg-primary/10 hover:text-primary{% endif %} transition-colors"
-                style="{% if request.resolver_match.view_name == 'user:profile_html' %}opacity: 0.4;{% endif %}"
+                {% if request.resolver_match.view_name == 'user_profile' %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
               >
                 <i data-lucide="user" class="w-4 h-4"></i>
                 <span class="font-medium">Profile</span>

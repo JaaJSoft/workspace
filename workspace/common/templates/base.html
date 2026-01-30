@@ -141,7 +141,7 @@
         const icon = iconName || icons[type] || icons.info;
 
         const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type} ${className}`;
+        alertDiv.className = `alert alert-${type} text-white ${className}`;
 
         let html = `<i data-lucide="${icon}" class="w-5 h-5 stroke-current shrink-0"></i>`;
 
@@ -165,7 +165,10 @@
 
         // Initialize lucide icons for this element
         if (typeof lucide !== 'undefined') {
-          lucide.createIcons({ nodes: [alertDiv] });
+          const iconNodes = alertDiv.querySelectorAll('[data-lucide]');
+          if (iconNodes.length) {
+            lucide.createIcons({ nodes: [...iconNodes] });
+          }
         }
 
         return alertDiv;

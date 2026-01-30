@@ -1,0 +1,253 @@
+{% extends 'base_with_navbar.html' %}
+
+{% block title %}Profile · Workspace{% endblock %}
+
+{% block body_class %}bg-base-100 min-h-screen{% endblock %}
+{% block drawer_wrapper_class %}{% endblock %}
+{% block drawer_content_class %}{% endblock %}
+{% block main_layout_class %}{% endblock %}
+{% block main_class %}container mx-auto p-4 max-w-3xl{% endblock %}
+
+{% block content %}
+<div class="py-6 space-y-8">
+  <!-- Page header -->
+  <div>
+    <h1 class="text-2xl font-bold">Profile</h1>
+    <p class="text-base-content/60 text-sm mt-1">View your account information and change your password.</p>
+  </div>
+
+  <!-- Account Information -->
+  <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card-body">
+      <h2 class="card-title text-lg gap-2">
+        <i data-lucide="user" class="w-5 h-5"></i>
+        Account Information
+      </h2>
+
+      <div class="flex items-center gap-5 mt-4 mb-6">
+        {% include 'ui/partials/user_avatar.html' with user=user size='lg' show_ring=True %}
+        <div>
+          <div class="text-xl font-semibold">{{ user.username }}</div>
+          <div class="text-sm text-base-content/60">{{ user.email|default:"No email set" }}</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Username -->
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">Username</span></label>
+          <input type="text" value="{{ user.username }}" class="input input-bordered" readonly />
+        </div>
+
+        <!-- Email -->
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">Email</span></label>
+          <input type="text" value="{{ user.email|default:'' }}" class="input input-bordered" readonly placeholder="Not set" />
+        </div>
+
+        <!-- First name -->
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">First Name</span></label>
+          <input type="text" value="{{ user.first_name|default:'' }}" class="input input-bordered" readonly placeholder="Not set" />
+        </div>
+
+        <!-- Last name -->
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">Last Name</span></label>
+          <input type="text" value="{{ user.last_name|default:'' }}" class="input input-bordered" readonly placeholder="Not set" />
+        </div>
+
+        <!-- Date joined -->
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">Date Joined</span></label>
+          <input type="text" value="{{ user.date_joined|date:'N j, Y' }}" class="input input-bordered" readonly />
+        </div>
+
+        <!-- Last login -->
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">Last Login</span></label>
+          <input type="text" value="{{ user.last_login|date:'N j, Y, P'|default:'Never' }}" class="input input-bordered" readonly />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change Password -->
+  <div class="card bg-base-100 border border-base-300 shadow-sm" x-data="changePasswordForm()">
+    <div class="card-body">
+      <h2 class="card-title text-lg gap-2">
+        <i data-lucide="lock" class="w-5 h-5"></i>
+        Change Password
+      </h2>
+
+      <!-- Password rules (populated via InlineAlert.create in init) -->
+      <div x-ref="rulesContainer" class="mt-4"></div>
+
+      <!-- Success/error feedback (populated via InlineAlert.create on submit) -->
+      <div x-ref="feedbackContainer"></div>
+
+      <!-- Form -->
+      <form @submit.prevent="submit()" class="mt-4 space-y-4">
+        {% csrf_token %}
+
+        <!-- Current password -->
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">Current Password</span></label>
+          <label class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors">
+            <i data-lucide="lock" class="w-4 h-4 text-base-content/40"></i>
+            <input
+              :type="showCurrent ? 'text' : 'password'"
+              x-model="currentPassword"
+              class="grow"
+              placeholder="Enter current password"
+              required
+              autocomplete="current-password"
+            />
+            <button type="button" @click="showCurrent = !showCurrent" class="btn btn-ghost btn-xs btn-circle" tabindex="-1">
+              <i x-show="!showCurrent" data-lucide="eye" class="w-4 h-4 text-base-content/40"></i>
+              <i x-show="showCurrent" data-lucide="eye-off" class="w-4 h-4 text-base-content/40"></i>
+            </button>
+          </label>
+        </div>
+
+        <!-- New password -->
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">New Password</span></label>
+          <label class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors">
+            <i data-lucide="key-round" class="w-4 h-4 text-base-content/40"></i>
+            <input
+              :type="showNew ? 'text' : 'password'"
+              x-model="newPassword"
+              class="grow"
+              placeholder="Enter new password"
+              required
+              autocomplete="new-password"
+            />
+            <button type="button" @click="showNew = !showNew" class="btn btn-ghost btn-xs btn-circle" tabindex="-1">
+              <i x-show="!showNew" data-lucide="eye" class="w-4 h-4 text-base-content/40"></i>
+              <i x-show="showNew" data-lucide="eye-off" class="w-4 h-4 text-base-content/40"></i>
+            </button>
+          </label>
+        </div>
+
+        <!-- Confirm password -->
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">Confirm New Password</span></label>
+          <label class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+                 :class="{ 'input-error': confirmMismatch }">
+            <i data-lucide="key-round" class="w-4 h-4 text-base-content/40"></i>
+            <input
+              :type="showConfirm ? 'text' : 'password'"
+              x-model="confirmPassword"
+              class="grow"
+              placeholder="Confirm new password"
+              required
+              autocomplete="new-password"
+            />
+            <button type="button" @click="showConfirm = !showConfirm" class="btn btn-ghost btn-xs btn-circle" tabindex="-1">
+              <i x-show="!showConfirm" data-lucide="eye" class="w-4 h-4 text-base-content/40"></i>
+              <i x-show="showConfirm" data-lucide="eye-off" class="w-4 h-4 text-base-content/40"></i>
+            </button>
+          </label>
+          <label class="label" x-show="confirmMismatch" x-cloak>
+            <span class="label-text-alt text-error">Passwords do not match.</span>
+          </label>
+        </div>
+
+        <!-- Submit -->
+        <div class="form-control mt-6">
+          <button type="submit" class="btn btn-primary gap-2" :disabled="!canSubmit">
+            <span x-show="!loading"><i data-lucide="save" class="w-4 h-4"></i></span>
+            <span x-show="loading" class="loading loading-spinner loading-sm"></span>
+            <span x-text="loading ? 'Updating...' : 'Update Password'"></span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function changePasswordForm() {
+    return {
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+      showCurrent: false,
+      showNew: false,
+      showConfirm: false,
+      loading: false,
+      rules: [],
+      async init() {
+        try {
+          const res = await fetch('/api/v1/users/password-rules');
+          const data = await res.json();
+          this.rules = data.rules || [];
+          if (this.rules.length > 0) {
+            this.renderRules();
+          }
+        } catch (e) {
+          this.rules = [];
+        }
+      },
+      renderRules() {
+        const container = this.$refs.rulesContainer;
+        if (!container) return;
+        const list = this.rules.map(r => '<li>' + r + '</li>').join('');
+        const html = '<div><div class="font-medium text-sm mb-1">Password requirements:</div>'
+          + '<ul class="list-disc list-inside text-sm space-y-0.5">' + list + '</ul></div>';
+        container.innerHTML = '';
+        container.appendChild(InlineAlert.create({ type: 'info', message: html }));
+      },
+      get confirmMismatch() {
+        return this.confirmPassword && this.newPassword !== this.confirmPassword;
+      },
+      get canSubmit() {
+        return this.currentPassword && this.newPassword && this.confirmPassword && !this.confirmMismatch && !this.loading;
+      },
+      async submit() {
+        if (this.$refs.feedbackContainer) this.$refs.feedbackContainer.innerHTML = '';
+        this.loading = true;
+        try {
+          const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+            || document.cookie.split('; ').find(function(c) { return c.startsWith('csrftoken='); })?.split('=')[1]
+            || '';
+          const res = await fetch('/api/v1/users/me/password', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({
+              current_password: this.currentPassword,
+              new_password: this.newPassword,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            this.currentPassword = '';
+            this.newPassword = '';
+            this.confirmPassword = '';
+            this.showFeedback('success', data.message || 'Password updated successfully.');
+          } else {
+            const msgs = data.errors || ['An unexpected error occurred.'];
+            this.showFeedback('error', msgs.join('<br>'));
+          }
+        } catch (e) {
+          this.showFeedback('error', 'Network error. Please try again.');
+        } finally {
+          this.loading = false;
+        }
+      },
+      showFeedback(type, message) {
+        const container = this.$refs.feedbackContainer;
+        if (!container) return;
+        container.innerHTML = '';
+        container.appendChild(InlineAlert.create({ type, message }));
+      },
+    };
+  }
+</script>
+{% endblock %}

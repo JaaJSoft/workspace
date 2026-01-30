@@ -2,23 +2,23 @@
 
 ## Quick Wins
 
-Améliorations rapides à fort impact sur l'existant.
+Quick improvements with high impact on existing features.
 
-- [ ] **Drag & drop upload** - Glisser des fichiers depuis l'OS directement dans le browser
-- [ ] **Preview PDF** - Viewer PDF intégré (pdf.js)
-- [ ] **Preview Markdown** - Rendu Markdown dans le file viewer
-- [ ] **Preview code** - Coloration syntaxique (highlight.js / Shiki)
-- [ ] **Raccourcis clavier globaux** - Ctrl+K command palette, Ctrl+N nouveau, Suppr, Ctrl+C/V
-- [ ] **Taille des dossiers** - Calcul récursif de la taille affichée dans les propriétés
-- [ ] **Breadcrumb cliquable dans les propriétés** - Naviguer au parent depuis la modale
-- [ ] **Multi-select avec Shift+Click** - Sélection de plage dans le file browser
-- [ ] **Download fichier/dossier** - Télécharger un fichier ou un dossier (zip)
-- [ ] **Quota utilisateur** - Limite de stockage par user avec jauge dans le dashboard
-- [ ] **Dark/Light mode persistant** - Sauvegarder le thème choisi côté serveur
-- [ ] **Notifications toast améliorées** - Stack de notifications avec auto-dismiss
-- [ ] **Empty states** - Illustrations quand un dossier/vue est vide
-- [ ] **Tri persistant** - Mémoriser le tri choisi par l'utilisateur (cookie/DB)
-- [ ] **Avatar upload** - Photo de profil utilisateur
+- [ ] **Drag & drop upload** - Drag files from OS directly into the browser
+- [ ] **Preview PDF** - Integrated PDF viewer (pdf.js)
+- [ ] **Preview Markdown** - Markdown rendering in the file viewer
+- [ ] **Preview code** - Syntax highlighting (highlight.js / Shiki)
+- [ ] **Global keyboard shortcuts** - Ctrl+K command palette, Ctrl+N new, Delete, Ctrl+C/V
+- [ ] **Folder sizes** - Recursive size calculation displayed in properties
+- [ ] **Clickable breadcrumb in properties** - Navigate to parent from modal
+- [ ] **Multi-select with Shift+Click** - Range selection in the file browser
+- [ ] **Download file/folder** - Download a file or folder (zip)
+- [ ] **User quota** - Storage limit per user with gauge in dashboard
+- [ ] **Persistent Dark/Light mode** - Save chosen theme server-side
+- [ ] **Enhanced toast notifications** - Notification stack with auto-dismiss
+- [ ] **Empty states** - Illustrations when a folder/view is empty
+- [ ] **Persistent sorting** - Remember user's chosen sort order (cookie/DB)
+- [ ] **Avatar upload** - User profile picture
 
 ---
 
@@ -26,250 +26,250 @@ Améliorations rapides à fort impact sur l'existant.
 
 ### 1. Notes & Wiki
 
-Un éditeur de documents collaboratif intégré, style Notion/Outline.
+An integrated collaborative document editor, Notion/Outline style.
 
-- [ ] Éditeur rich text (Tiptap / ProseMirror)
-- [ ] Pages hiérarchiques (arbre comme les fichiers)
-- [ ] Support Markdown natif
-- [ ] Templates de pages (meeting notes, specs, daily standup)
-- [ ] Liens entre pages (backlinks / graph)
-- [ ] Embed de fichiers depuis le module Files
-- [ ] Table des matières auto-générée
-- [ ] Export PDF / Markdown
-- [ ] Historique de versions (diff visuel)
-- [ ] Épingler des pages dans la sidebar
+- [ ] Rich text editor (Tiptap / ProseMirror)
+- [ ] Hierarchical pages (tree structure like files)
+- [ ] Native Markdown support
+- [ ] Page templates (meeting notes, specs, daily standup)
+- [ ] Page links (backlinks / graph)
+- [ ] Embed files from the Files module
+- [ ] Auto-generated table of contents
+- [ ] Export to PDF / Markdown
+- [ ] Version history (visual diff)
+- [ ] Pin pages in the sidebar
 
 ---
 
 ### 2. Tasks & Projects (Jira-like)
 
-Gestion de projets et suivi de tâches.
+Project management and task tracking.
 
-- [ ] Projets avec board Kanban (drag & drop)
-- [ ] Vue liste, board, calendrier, timeline (Gantt)
-- [ ] Tâches avec titre, description (rich text), assignee, priorité, labels
-- [ ] Sous-tâches et checklists
-- [ ] Statuts personnalisables par projet
-- [ ] Sprints avec dates de début/fin
-- [ ] Filtres sauvegardés et vues personnalisées
-- [ ] Commentaires sur les tâches
-- [ ] Pièces jointes (lien avec module Files)
-- [ ] Numérotation auto des tâches (PROJ-123)
-- [ ] Estimation de temps et time tracking
-- [ ] Dashboard projet (burndown chart, vélocité)
-- [ ] Notifications sur assignation et mentions
-- [ ] Recurring tasks (tâches récurrentes)
+- [ ] Projects with Kanban board (drag & drop)
+- [ ] List, board, calendar, timeline (Gantt) views
+- [ ] Tasks with title, description (rich text), assignee, priority, labels
+- [ ] Subtasks and checklists
+- [ ] Customizable statuses per project
+- [ ] Sprints with start/end dates
+- [ ] Saved filters and custom views
+- [ ] Task comments
+- [ ] Attachments (link with Files module)
+- [ ] Auto task numbering (PROJ-123)
+- [ ] Time estimation and time tracking
+- [ ] Project dashboard (burndown chart, velocity)
+- [ ] Notifications on assignment and mentions
+- [ ] Recurring tasks
 
 ---
 
 ### 3. Email Client
 
-Client email intégré pour centraliser la communication.
+Integrated email client to centralize communication.
 
-- [ ] Connexion IMAP/SMTP (multi-comptes)
-- [ ] Boîte de réception unifiée
-- [ ] Composer, répondre, transférer
-- [ ] Pièces jointes -> sauvegarde directe dans Files
-- [ ] Labels / tags personnalisés
-- [ ] Recherche full-text dans les emails
-- [ ] Signatures HTML par compte
-- [ ] Snooze / rappels
-- [ ] Convertir un email en tâche (lien avec Tasks)
-- [ ] Templates d'emails
-- [ ] Filtres et règles automatiques
+- [ ] IMAP/SMTP connection (multi-account)
+- [ ] Unified inbox
+- [ ] Compose, reply, forward
+- [ ] Attachments -> direct save to Files
+- [ ] Custom labels / tags
+- [ ] Full-text search in emails
+- [ ] HTML signatures per account
+- [ ] Snooze / reminders
+- [ ] Convert email to task (link with Tasks)
+- [ ] Email templates
+- [ ] Filters and automatic rules
 
 ---
 
 ### 4. Calendar & Scheduling
 
-Calendrier et planification.
+Calendar and planning.
 
-- [ ] Vue jour, semaine, mois
-- [ ] Événements avec titre, description, lieu, participants
-- [ ] Événements récurrents (RRULE)
+- [ ] Day, week, month views
+- [ ] Events with title, description, location, participants
+- [ ] Recurring events (RRULE)
 - [ ] Sync CalDAV / Google Calendar / Outlook
-- [ ] Rappels (email, notification in-app)
-- [ ] Créneaux de disponibilité (style Calendly)
-- [ ] Lien avec les tâches (deadlines visibles dans le calendrier)
-- [ ] Vue agenda (liste chronologique)
-- [ ] Fuseaux horaires
-- [ ] Invitations et RSVP
+- [ ] Reminders (email, in-app notification)
+- [ ] Availability slots (Calendly style)
+- [ ] Link with tasks (deadlines visible in calendar)
+- [ ] Agenda view (chronological list)
+- [ ] Time zones
+- [ ] Invitations and RSVP
 
 ---
 
 ### 5. Contacts & CRM
 
-Gestion de contacts et relation client.
+Contact management and customer relationship.
 
-- [ ] Fiches contacts (nom, email, téléphone, entreprise, notes)
-- [ ] Entreprises / organisations
-- [ ] Tags et segments
-- [ ] Historique des interactions (emails envoyés, meetings, tâches liées)
+- [ ] Contact cards (name, email, phone, company, notes)
+- [ ] Companies / organizations
+- [ ] Tags and segments
+- [ ] Interaction history (sent emails, meetings, related tasks)
 - [ ] Import/export CSV, vCard
-- [ ] Recherche et filtres avancés
-- [ ] Pipeline de deals (CRM simplifié)
-- [ ] Merge de doublons
-- [ ] Champs personnalisés
+- [ ] Advanced search and filters
+- [ ] Deal pipeline (simplified CRM)
+- [ ] Merge duplicates
+- [ ] Custom fields
 
 ---
 
 ### 6. Chat & Messaging
 
-Communication interne en temps réel.
+Real-time internal communication.
 
-- [ ] Channels publics et privés
-- [ ] Messages directs (1:1 et groupes)
-- [ ] Threads de discussion
-- [ ] Partage de fichiers (lien avec Files)
-- [ ] Réactions emoji
-- [ ] Mentions @user et @channel
-- [ ] Recherche dans les messages
-- [ ] Notifications push (WebSocket)
-- [ ] Statut en ligne / absent / occupé
-- [ ] Épingler des messages importants
-- [ ] Intégration avec Tasks (créer une tâche depuis un message)
+- [ ] Public and private channels
+- [ ] Direct messages (1:1 and groups)
+- [ ] Discussion threads
+- [ ] File sharing (link with Files)
+- [ ] Emoji reactions
+- [ ] @user and @channel mentions
+- [ ] Message search
+- [ ] Push notifications (WebSocket)
+- [ ] Online / away / busy status
+- [ ] Pin important messages
+- [ ] Integration with Tasks (create task from message)
 
 ---
 
 ### 7. Bookmarks & Links
 
-Gestionnaire de favoris et veille.
+Bookmark manager and monitoring.
 
-- [ ] Sauvegarder des URLs avec titre, description, tags
-- [ ] Capture automatique du titre et favicon
-- [ ] Screenshot/preview de la page
-- [ ] Collections / dossiers de bookmarks
-- [ ] Import depuis le navigateur (HTML bookmark file)
-- [ ] Recherche full-text
-- [ ] Partage de collections
-- [ ] Détection de liens morts
-- [ ] Extension navigateur pour sauvegarder en un clic
-- [ ] Lecture offline (archive de la page)
+- [ ] Save URLs with title, description, tags
+- [ ] Automatic title and favicon capture
+- [ ] Page screenshot/preview
+- [ ] Collections / bookmark folders
+- [ ] Import from browser (HTML bookmark file)
+- [ ] Full-text search
+- [ ] Share collections
+- [ ] Dead link detection
+- [ ] Browser extension for one-click save
+- [ ] Offline reading (page archive)
 
 ---
 
 ### 8. Time Tracking
 
-Suivi du temps de travail.
+Work time tracking.
 
-- [ ] Timer start/stop avec projet et tâche associés
-- [ ] Saisie manuelle d'heures
-- [ ] Vue timesheet hebdomadaire
-- [ ] Rapports par projet, client, période
+- [ ] Start/stop timer with associated project and task
+- [ ] Manual time entry
+- [ ] Weekly timesheet view
+- [ ] Reports by project, client, period
 - [ ] Export CSV / PDF
-- [ ] Objectifs hebdomadaires
-- [ ] Intégration native avec Tasks (tracker depuis une tâche)
-- [ ] Dashboard avec graphiques de répartition
-- [ ] Pomodoro timer intégré
-- [ ] Facturable vs non-facturable
+- [ ] Weekly goals
+- [ ] Native integration with Tasks (track from a task)
+- [ ] Dashboard with distribution charts
+- [ ] Integrated Pomodoro timer
+- [ ] Billable vs non-billable
 
 ---
 
 ### 9. Passwords & Secrets
 
-Gestionnaire de mots de passe et secrets.
+Password and secrets manager.
 
-- [ ] Coffre-fort chiffré (AES-256)
-- [ ] Entrées : login, mot de passe, URL, notes, TOTP
-- [ ] Générateur de mots de passe
-- [ ] Catégories et tags
-- [ ] Recherche rapide
-- [ ] Copie sécurisée dans le presse-papier (auto-clear)
-- [ ] Audit log des accès
-- [ ] Import depuis Bitwarden, 1Password, KeePass (CSV)
-- [ ] Chiffrement côté client (zero-knowledge)
-- [ ] Partage sécurisé de secrets (lien temporaire)
+- [ ] Encrypted vault (AES-256)
+- [ ] Entries: login, password, URL, notes, TOTP
+- [ ] Password generator
+- [ ] Categories and tags
+- [ ] Quick search
+- [ ] Secure clipboard copy (auto-clear)
+- [ ] Access audit log
+- [ ] Import from Bitwarden, 1Password, KeePass (CSV)
+- [ ] Client-side encryption (zero-knowledge)
+- [ ] Secure secret sharing (temporary link)
 
 ---
 
 ### 10. Dashboards & Analytics
 
-Tableaux de bord personnalisables.
+Customizable dashboards.
 
-- [ ] Widgets configurables (stats, graphiques, listes)
-- [ ] Dashboard par module (files, tasks, time, etc.)
-- [ ] Drag & drop pour organiser les widgets
-- [ ] KPIs personnalisés
-- [ ] Graphiques (Chart.js / Apache ECharts)
-- [ ] Dashboard d'activité globale (feed)
-- [ ] Export des rapports
-- [ ] Dashboards partagés entre users
+- [ ] Configurable widgets (stats, charts, lists)
+- [ ] Dashboard per module (files, tasks, time, etc.)
+- [ ] Drag & drop to organize widgets
+- [ ] Custom KPIs
+- [ ] Charts (Chart.js / Apache ECharts)
+- [ ] Global activity dashboard (feed)
+- [ ] Report export
+- [ ] Shared dashboards between users
 
 ---
 
 ### 11. Snippets & Code
 
-Gestionnaire de snippets de code.
+Code snippet manager.
 
-- [ ] Snippets avec coloration syntaxique
-- [ ] Support multi-langages
-- [ ] Tags et catégories
-- [ ] Recherche full-text dans le code
-- [ ] Versioning des snippets
-- [ ] Copie en un clic
-- [ ] Embed dans les Notes/Wiki
-- [ ] Import depuis GitHub Gists
-- [ ] Collections partagées
-- [ ] Support diff (comparer deux versions)
+- [ ] Snippets with syntax highlighting
+- [ ] Multi-language support
+- [ ] Tags and categories
+- [ ] Full-text search in code
+- [ ] Snippet versioning
+- [ ] One-click copy
+- [ ] Embed in Notes/Wiki
+- [ ] Import from GitHub Gists
+- [ ] Shared collections
+- [ ] Diff support (compare two versions)
 
 ---
 
 ### 12. Forms & Surveys
 
-Création de formulaires et sondages.
+Form and survey creation.
 
-- [ ] Builder drag & drop de formulaires
-- [ ] Types de champs : texte, choix, date, fichier, note, etc.
-- [ ] Logique conditionnelle (afficher si...)
-- [ ] Lien partageable (public ou authentifié)
-- [ ] Collecte et export des réponses (CSV, JSON)
-- [ ] Notifications sur nouvelle réponse
-- [ ] Templates de formulaires
-- [ ] Intégration avec Tasks (créer une tâche par réponse)
-- [ ] Statistiques des réponses
+- [ ] Drag & drop form builder
+- [ ] Field types: text, choice, date, file, note, etc.
+- [ ] Conditional logic (show if...)
+- [ ] Shareable link (public or authenticated)
+- [ ] Response collection and export (CSV, JSON)
+- [ ] Notifications on new response
+- [ ] Form templates
+- [ ] Integration with Tasks (create task per response)
+- [ ] Response statistics
 
 ---
 
 ## Transversal / Infrastructure
 
-Fonctionnalités partagées entre tous les modules.
+Features shared across all modules.
 
-### Recherche globale
-- [ ] Recherche unifiée across tous les modules (Ctrl+K)
-- [ ] Indexation full-text (PostgreSQL FTS ou Meilisearch)
-- [ ] Résultats groupés par type (fichier, tâche, note, contact...)
-- [ ] Recherche récente et suggestions
+### Global Search
+- [ ] Unified search across all modules (Ctrl+K)
+- [ ] Full-text indexing (PostgreSQL FTS or Meilisearch)
+- [ ] Results grouped by type (file, task, note, contact...)
+- [ ] Recent searches and suggestions
 
 ### Notifications
-- [ ] Centre de notifications in-app
-- [ ] WebSocket pour le temps réel
-- [ ] Préférences de notification par module
-- [ ] Email digest (quotidien/hebdomadaire)
-- [ ] Notification push (PWA)
+- [ ] In-app notification center
+- [ ] WebSocket for real-time
+- [ ] Notification preferences per module
+- [ ] Email digest (daily/weekly)
+- [ ] Push notifications (PWA)
 
-### Utilisateurs & Teams
-- [ ] Profils utilisateurs enrichis
-- [ ] Teams / groupes
-- [ ] Rôles et permissions par module
-- [ ] Invitation par email
+### Users & Teams
+- [ ] Enhanced user profiles
+- [ ] Teams / groups
+- [ ] Roles and permissions per module
+- [ ] Email invitation
 - [ ] SSO (SAML, OAuth2 - Google, GitHub, Microsoft)
 - [ ] 2FA (TOTP)
-- [ ] Audit log global
+- [ ] Global audit log
 
-### API & Intégrations
-- [ ] Webhooks configurables
-- [ ] API tokens personnels
+### API & Integrations
+- [ ] Configurable webhooks
+- [ ] Personal API tokens
 - [ ] Zapier / n8n / Make integration
-- [ ] Import/export global (JSON)
-- [ ] CLI pour interactions automatisées
-- [ ] SDK Python/JS
+- [ ] Global import/export (JSON)
+- [ ] CLI for automated interactions
+- [ ] Python/JS SDK
 
 ### UI/UX
-- [ ] PWA (Progressive Web App) - installable sur desktop/mobile
-- [ ] Responsive design mobile
-- [ ] Sidebar modulaire (chaque module = une section)
-- [ ] Thèmes personnalisables
-- [ ] Onboarding wizard pour les nouveaux utilisateurs
-- [ ] Mode focus (masquer la sidebar)
-- [ ] Raccourcis clavier par module
+- [ ] PWA (Progressive Web App) - installable on desktop/mobile
+- [ ] Mobile responsive design
+- [ ] Modular sidebar (each module = one section)
+- [ ] Customizable themes
+- [ ] Onboarding wizard for new users
+- [ ] Focus mode (hide sidebar)
+- [ ] Keyboard shortcuts per module
 - [ ] i18n (FR, EN minimum)

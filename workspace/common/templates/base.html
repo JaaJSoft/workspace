@@ -61,8 +61,34 @@
           const newTheme = this.checked ? 'dark' : 'light';
           document.documentElement.setAttribute('data-theme', newTheme);
           localStorage.setItem('theme', newTheme);
+          // Persist to user settings API
+          const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+            || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
+            || '';
+          fetch('/api/v1/settings/core/theme', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ value: newTheme }),
+          }).catch(() => {});
         });
       }
+    })();
+
+    // Sync theme from server (if logged in) — runs after paint to avoid blocking
+    (function () {
+      fetch('/api/v1/settings/core/theme')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data || !data.value) return;
+          const serverTheme = data.value;
+          if (serverTheme !== localStorage.getItem('theme')) {
+            localStorage.setItem('theme', serverTheme);
+            document.documentElement.setAttribute('data-theme', serverTheme);
+            const toggle = document.getElementById('themeToggle');
+            if (toggle) toggle.checked = (serverTheme === 'dark');
+          }
+        })
+        .catch(() => {});
     })();
 
     // Dialog utilities

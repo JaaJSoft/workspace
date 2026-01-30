@@ -1,0 +1,28 @@
+<div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+  {% for module in modules %}
+    {% if module.active %}
+      <a
+        href="{{ module.url }}"
+        class="group card bg-base-100 shadow border border-base-300 hover:border-{{ module.color }} transition-colors cursor-pointer"
+      >
+        <div class="card-body items-center text-center p-4 gap-2">
+          <div class="w-10 h-10 rounded-full bg-{{ module.color }}/10 flex items-center justify-center text-{{ module.color }} group-hover:bg-{{ module.color }}/20 transition-colors">
+            <i data-lucide="{{ module.icon }}" class="w-5 h-5"></i>
+          </div>
+          <span class="font-medium text-sm text-base-content">{{ module.name }}</span>
+          <span class="text-xs text-base-content/50 hidden sm:block">{{ module.description }}</span>
+        </div>
+      </a>
+    {% else %}
+      <div class="card bg-base-100 border border-dashed border-base-300 opacity-60">
+        <div class="card-body items-center text-center p-4 gap-2">
+          <div class="w-10 h-10 rounded-full bg-base-200 flex items-center justify-center text-base-content/40">
+            <i data-lucide="{{ module.icon }}" class="w-5 h-5"></i>
+          </div>
+          <span class="font-medium text-sm text-base-content/60">{{ module.name }}</span>
+          <span class="badge badge-ghost badge-xs">Coming soon</span>
+        </div>
+      </div>
+    {% endif %}
+  {% endfor %}
+</div>

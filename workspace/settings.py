@@ -223,6 +223,10 @@ SPECTACULAR_SETTINGS = {
             'name': 'Files',
             'description': 'Browse and manage files and folders.',
         },
+        {
+            'name': 'Settings',
+            'description': 'Per-user, per-module key-value settings.',
+        },
     ],
     'SWAGGER_UI_SETTINGS': {
         'persistAuthorization': True,

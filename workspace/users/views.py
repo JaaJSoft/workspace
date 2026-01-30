@@ -1,11 +1,18 @@
 from django.contrib.auth import password_validation, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
-from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    inline_serializer,
+)
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from workspace.users.models import UserSetting
 
 
 @extend_schema(tags=['Users'])
@@ -132,3 +139,103 @@ class ChangePasswordView(APIView):
 @login_required
 def profile_view(request):
     return render(request, 'users/profile/index.html')
+
+
+# ── Settings API ──────────────────────────────────────────────
+
+_setting_fields = {
+    'module': serializers.CharField(),
+    'key': serializers.CharField(),
+    'value': serializers.JSONField(allow_null=True),
+}
+
+
+@extend_schema(tags=['Settings'])
+class SettingsListView(APIView):
+    """List all settings for the authenticated user, optionally filtered by module."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="List user settings",
+        parameters=[
+            OpenApiParameter(name='module', type=str, required=False),
+        ],
+        responses={
+            200: inline_serializer(
+                name='SettingsListResponse',
+                fields={
+                    'results': serializers.ListField(
+                        child=inline_serializer(
+                            name='SettingItem',
+                            fields=_setting_fields,
+                        ),
+                    ),
+                },
+            ),
+        },
+    )
+    def get(self, request):
+        qs = UserSetting.objects.filter(user=request.user)
+        module = request.query_params.get('module')
+        if module:
+            qs = qs.filter(module=module)
+        results = list(qs.values('module', 'key', 'value'))
+        return Response({'results': results})
+
+
+@extend_schema(tags=['Settings'])
+class SettingDetailView(APIView):
+    """Read, write or delete a single setting identified by module + key."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Get a setting",
+        responses={
+            200: inline_serializer(name='SettingDetail', fields=_setting_fields),
+            404: OpenApiResponse(description="Setting not found."),
+        },
+    )
+    def get(self, request, module, key):
+        try:
+            obj = UserSetting.objects.get(user=request.user, module=module, key=key)
+        except UserSetting.DoesNotExist:
+            return Response(
+                {'detail': 'Setting not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({'module': obj.module, 'key': obj.key, 'value': obj.value})
+
+    @extend_schema(
+        summary="Create or update a setting",
+        request=inline_serializer(
+            name='SettingWriteRequest',
+            fields={'value': serializers.JSONField(allow_null=True)},
+        ),
+        responses={
+            200: inline_serializer(name='SettingWriteResponse', fields=_setting_fields),
+        },
+    )
+    def put(self, request, module, key):
+        value = request.data.get('value')
+        obj, _ = UserSetting.objects.update_or_create(
+            user=request.user, module=module, key=key,
+            defaults={'value': value},
+        )
+        return Response({'module': obj.module, 'key': obj.key, 'value': obj.value})
+
+    @extend_schema(
+        summary="Delete a setting",
+        responses={204: None},
+    )
+    def delete(self, request, module, key):
+        deleted, _ = UserSetting.objects.filter(
+            user=request.user, module=module, key=key,
+        ).delete()
+        if not deleted:
+            return Response(
+                {'detail': 'Setting not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)

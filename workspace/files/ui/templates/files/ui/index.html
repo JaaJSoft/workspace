@@ -23,12 +23,12 @@
     <div class="border-b border-base-300 py-4 px-3">
       <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
         <h2 class="text-xl font-semibold flex items-center gap-2" :class="collapsed ? '' : 'pl-2'">
-          <i data-lucide="hard-drive" class="w-6 h-6"></i>
+          <i data-lucide="hard-drive" class="w-6 h-6 text-primary"></i>
           <span x-show="!collapsed" x-transition>My Files</span>
         </h2>
         <button
           type="button"
-          class="btn btn-ghost btn-sm btn-square mr-1"
+          class="btn btn-ghost btn-sm btn-square mr-1 hover:text-primary"
           aria-label="Settings"
           title="Settings"
           x-show="!collapsed"
@@ -50,10 +50,10 @@
         </span>
       </h3>
       <ul class="space-y-2">
-        {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" %}
-        {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" %}
-        {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" %}
-        {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" %}
+        {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" color="primary" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" %}
+        {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" color="warning" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" %}
+        {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" %}
+        {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" %}
       </ul>
 
       <!-- Pinned Folders -->

@@ -9,6 +9,9 @@ Parameters:
 - icon: Lucide icon name (e.g., "folder", "clock", "trash-2")
 - icon_binding: Optional Alpine.js expression for dynamic icon names
 - label: Text label for the item
+- color: Optional DaisyUI color token (e.g., "primary", "warning", "error").
+         Controls icon tint when inactive and highlight when active.
+         Defaults to "primary" behaviour when omitted.
 - active: Boolean, whether this item is currently active (default: False)
 - active_binding: Optional Alpine.js expression to control active state
 - disabled: Boolean, whether this item is disabled (default: False)
@@ -24,11 +27,12 @@ Parameters:
 
 Usage Examples:
 ---------------
-{% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" active=True %}
+{% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" active=True color="primary" %}
 {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" disabled=True badge="Soon" %}
-{% include "ui/partials/drawer_item.html" with href="/trash" icon="trash-2" label="Trash" badge="5" badge_type="error" %}
+{% include "ui/partials/drawer_item.html" with href="/trash" icon="trash-2" label="Trash" color="error" badge="5" badge_type="error" %}
 {% endcomment %}
 
+{% with c=color|default:"primary" %}
 <li class="list-none">
   {% if disabled %}
     <span
@@ -62,13 +66,13 @@ Usage Examples:
     <a
       href="{{ href }}"
       {% if active_binding %}
-        class="flex items-center hover:bg-base-300/50 p-2 text-base rounded-lg transition-colors"
+        class="flex items-center p-2 text-base rounded-lg transition-colors"
         :class="[
           collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3',
-          ({{ active_binding|safe }}) ? 'bg-primary/10 text-primary hover:bg-primary/20' : ''
+          ({{ active_binding|safe }}) ? 'bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}'
         ]"
       {% else %}
-        class="flex items-center {% if active %}bg-primary/10 text-primary hover:bg-primary/20{% else %}hover:bg-base-300/50{% endif %} p-2 text-base rounded-lg transition-colors"
+        class="flex items-center {% if active %}bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}{% endif %} p-2 text-base rounded-lg transition-colors"
         :class="collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3'"
       {% endif %}
       {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %}
@@ -100,13 +104,13 @@ Usage Examples:
     <button
       type="button"
       {% if active_binding %}
-        class="flex items-center w-full text-left hover:bg-base-300/50 p-2 text-base rounded-lg transition-colors"
+        class="flex items-center w-full text-left p-2 text-base rounded-lg transition-colors"
         :class="[
           collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3',
-          ({{ active_binding|safe }}) ? 'bg-primary/10 text-primary hover:bg-primary/20' : ''
+          ({{ active_binding|safe }}) ? 'bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}'
         ]"
       {% else %}
-        class="flex items-center w-full text-left {% if active %}bg-primary/10 text-primary hover:bg-primary/20{% else %}hover:bg-base-300/50{% endif %} p-2 text-base rounded-lg transition-colors"
+        class="flex items-center w-full text-left {% if active %}bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}{% endif %} p-2 text-base rounded-lg transition-colors"
         :class="collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3'"
       {% endif %}
       {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %}
@@ -136,3 +140,4 @@ Usage Examples:
     </button>
   {% endif %}
 </li>
+{% endwith %}

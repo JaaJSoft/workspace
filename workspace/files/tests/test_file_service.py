@@ -220,6 +220,14 @@ class TestRename(TestCase):
         result = FileService.rename(f, 'same.txt')
         self.assertEqual(result.name, 'same.txt')
 
+    def test_rename_updates_mime_type(self):
+        content = ContentFile(b'hello', name='notes.txt')
+        f = FileService.create_file(self.user, 'notes.txt', content=content)
+        self.assertEqual(f.mime_type, 'text/plain')
+        FileService.rename(f, 'notes.md')
+        f.refresh_from_db()
+        self.assertEqual(f.mime_type, 'text/markdown')
+
     def test_rename_folder_updates_name(self):
         folder = FileService.create_folder(self.user, 'OldFolder')
         FileService.rename(folder, 'NewFolder')

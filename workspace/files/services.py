@@ -281,60 +281,69 @@ class FileService:
 
     @staticmethod
     def _rename_folder_storage(folder, old_folder_name, new_folder_name):
-        """Recursively rename storage paths for all files inside a folder."""
-        children = File.objects.filter(parent=folder)
+        """Rename a folder's directory on storage and update descendant paths.
 
-        for child in children:
-            if child.node_type == File.NodeType.FILE and child.content and child.content.name:
-                try:
-                    old_path = child.content.name
-                    segments = old_path.split('/')
-                    for i, seg in enumerate(segments):
-                        if seg == old_folder_name:
-                            segments[i] = new_folder_name
-                            break
-                    new_path = '/'.join(segments)
+        Tries an ``os.rename`` first (single OS call, works for empty or
+        populated directories).  Then walks descendants to fix up the
+        ``content.name`` stored in the DB — no file I/O needed since the
+        physical files were already moved.
+        """
+        storage_path = FileService._folder_storage_path(folder)
+        new_storage_path = os.path.join(os.path.dirname(storage_path), new_folder_name)
 
-                    if old_path != new_path and default_storage.exists(old_path):
-                        file_handle = None
-                        try:
-                            file_handle = default_storage.open(old_path, 'rb')
-                            content = file_handle.read()
-                        finally:
-                            if file_handle:
-                                file_handle.close()
-                                gc.collect()
+        try:
+            old_full = default_storage.path(storage_path)
+            new_full = default_storage.path(new_storage_path)
+            if os.path.isdir(old_full):
+                os.rename(old_full, new_full)
+        except NotImplementedError:
+            pass
+        except OSError as e:
+            logger.warning("Could not rename folder '%s' -> '%s': %s",
+                           storage_path, new_storage_path, e)
 
-                        saved_path = default_storage.save(new_path, ContentFile(content))
-                        child.content.name = saved_path
-                        child.save(update_fields=['content'])
-
-                        try:
-                            default_storage.delete(old_path)
-                        except Exception as e:
-                            logger.warning("Could not delete old file '%s': %s", old_path, e)
-                except Exception as e:
-                    logger.error("Error moving file '%s': %s", child.name, e)
-
-            elif child.node_type == File.NodeType.FOLDER:
-                FileService._rename_folder_storage(child, old_folder_name, new_folder_name)
+        # Update content.name in the DB for every descendant file.
+        FileService._update_descendant_content_names(
+            folder, old_folder_name, new_folder_name,
+        )
 
     @staticmethod
-    def _ensure_folder_on_storage(folder):
-        """Create the folder's directory on the storage backend if supported.
-
-        Builds the same path hierarchy used by ``file_upload_path``
-        (``files/<username>/<parent…>/<name>``) and calls ``os.makedirs``
-        when the storage exposes a local filesystem path.  Silently ignored
-        for backends that don't (e.g. S3).
-        """
+    def _folder_storage_path(folder):
+        """Return the storage-relative directory path for *folder*."""
         parts = [folder.name]
         node = folder.parent
         while node:
             parts.insert(0, node.name)
             node = node.parent
         parts.insert(0, folder.owner.username)
-        storage_path = os.path.join('files', *parts)
+        return os.path.join('files', *parts)
+
+    @staticmethod
+    def _update_descendant_content_names(folder, old_seg, new_seg):
+        """Walk descendants and fix ``content.name`` after a directory rename."""
+        for child in File.objects.filter(parent=folder):
+            if child.node_type == File.NodeType.FILE and child.content and child.content.name:
+                segments = child.content.name.split('/')
+                for i, seg in enumerate(segments):
+                    if seg == old_seg:
+                        segments[i] = new_seg
+                        break
+                new_path = '/'.join(segments)
+                if new_path != child.content.name:
+                    child.content.name = new_path
+                    child.save(update_fields=['content'])
+            elif child.node_type == File.NodeType.FOLDER:
+                FileService._update_descendant_content_names(child, old_seg, new_seg)
+
+    @staticmethod
+    def _ensure_folder_on_storage(folder):
+        """Create the folder's directory on the storage backend if supported.
+
+        Uses the same path hierarchy as ``file_upload_path``
+        (``files/<username>/<parent…>/<name>``).  Silently ignored for
+        backends that don't expose a local path (e.g. S3).
+        """
+        storage_path = FileService._folder_storage_path(folder)
         try:
             full_path = default_storage.path(storage_path)
             os.makedirs(full_path, exist_ok=True)

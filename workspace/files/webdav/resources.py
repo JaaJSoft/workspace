@@ -51,25 +51,33 @@ class RootCollection(DAVCollection):
         return {"type": "Directory"}
 
     def get_member_names(self):
-        return list(
+        self._prefetch_members()
+        return [f.name for f in self._members_cache]
+
+    def get_member(self, name):
+        self._prefetch_members()
+        for f in self._members_cache:
+            if f.name == name:
+                return self._wrap(f)
+        return None
+
+    def get_member_list(self):
+        self._prefetch_members()
+        return [self._wrap(f) for f in self._members_cache]
+
+    def _prefetch_members(self):
+        if hasattr(self, "_members_cache"):
+            return
+        self._members_cache = list(
             File.objects.filter(
                 owner=self._user,
                 parent__isnull=True,
                 deleted_at__isnull=True,
-            ).values_list("name", flat=True)
+            )
         )
 
-    def get_member(self, name):
-        try:
-            file_obj = File.objects.get(
-                owner=self._user,
-                parent__isnull=True,
-                name=name,
-                deleted_at__isnull=True,
-            )
-        except File.DoesNotExist:
-            return None
-        child_path = self.path.rstrip("/") + "/" + name
+    def _wrap(self, file_obj):
+        child_path = self.path.rstrip("/") + "/" + file_obj.name
         if file_obj.is_folder():
             return FolderResource(child_path, self.environ, file_obj)
         return FileResource(child_path, self.environ, file_obj)
@@ -102,26 +110,35 @@ class FolderResource(DAVCollection):
         return self._file.updated_at.timestamp()
 
     def get_member_names(self):
-        return list(
+        self._prefetch_members()
+        return [f.name for f in self._members_cache]
+
+    def get_member(self, name):
+        self._prefetch_members()
+        for f in self._members_cache:
+            if f.name == name:
+                return self._wrap(f)
+        return None
+
+    def get_member_list(self):
+        self._prefetch_members()
+        return [self._wrap(f) for f in self._members_cache]
+
+    def _prefetch_members(self):
+        if hasattr(self, "_members_cache"):
+            return
+        self._members_cache = list(
             File.objects.filter(
                 parent=self._file,
                 deleted_at__isnull=True,
-            ).values_list("name", flat=True)
+            )
         )
 
-    def get_member(self, name):
-        try:
-            child = File.objects.get(
-                parent=self._file,
-                name=name,
-                deleted_at__isnull=True,
-            )
-        except File.DoesNotExist:
-            return None
-        child_path = self.path.rstrip("/") + "/" + name
-        if child.is_folder():
-            return FolderResource(child_path, self.environ, child)
-        return FileResource(child_path, self.environ, child)
+    def _wrap(self, file_obj):
+        child_path = self.path.rstrip("/") + "/" + file_obj.name
+        if file_obj.is_folder():
+            return FolderResource(child_path, self.environ, file_obj)
+        return FileResource(child_path, self.environ, file_obj)
 
     def create_empty_resource(self, name):
         file_obj = FileService.create_file(

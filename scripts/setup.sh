@@ -1,4 +1,6 @@
 #!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/../.venv/Scripts/activate"
 
 # All-in-one setup script
 echo "====================================="

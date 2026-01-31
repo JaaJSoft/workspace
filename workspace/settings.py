@@ -232,6 +232,10 @@ SPECTACULAR_SETTINGS = {
             'name': 'Modules',
             'description': 'Workspace module registry.',
         },
+        {
+            'name': 'Search',
+            'description': 'Unified search across workspace modules.',
+        },
     ],
     'SWAGGER_UI_SETTINGS': {
         'persistAuthorization': True,

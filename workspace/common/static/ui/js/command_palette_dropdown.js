@@ -54,40 +54,20 @@ window.commandPaletteDropdown = function () {
       }
 
       this.loading = true;
-      setTimeout(() => {
-        this.results = [
-          {
-            uuid: 'mock-1',
-            name: 'Mock Result 1',
-            matched_value: 'Mock Result 1',
-            match_type: 'name',
-            type_icon: 'file-text',
-            profile_image_url: null
-          },
-          {
-            uuid: 'mock-2',
-            name: 'Mock Result 2',
-            matched_value: 'Mock Result 2',
-            match_type: 'name',
-            type_icon: 'folder',
-            profile_image_url: null
-          },
-          {
-            uuid: 'mock-3',
-            name: 'Mock Result 3',
-            matched_value: 'Mock Result 3',
-            match_type: 'name',
-            type_icon: 'tag',
-            profile_image_url: null
+      const q = encodeURIComponent(this.query);
+      fetch(`/api/v1/search?q=${q}`, { credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+          this.results = data.results || [];
+          this.loading = false;
+          if (window.lucide?.createIcons) {
+            this.$nextTick(() => window.lucide.createIcons());
           }
-        ].filter(item =>
-          item.name.toLowerCase().includes(this.query.toLowerCase())
-        );
-        this.loading = false;
-        if (window.lucide?.createIcons) {
-          this.$nextTick(() => window.lucide.createIcons());
-        }
-      }, 300);
+        })
+        .catch(() => {
+          this.results = [];
+          this.loading = false;
+        });
     },
 
     loadMore() {

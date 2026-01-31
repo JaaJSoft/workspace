@@ -1,5 +1,9 @@
+import logging
 import threading
 from dataclasses import dataclass, asdict
+from typing import Callable
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -14,9 +18,29 @@ class ModuleInfo:
     order: int = 0
 
 
+@dataclass(frozen=True)
+class SearchResult:
+    uuid: str
+    name: str
+    url: str
+    matched_value: str
+    match_type: str
+    type_icon: str
+    module_slug: str
+    module_color: str
+
+
+@dataclass(frozen=True)
+class SearchProviderInfo:
+    slug: str
+    module_slug: str
+    search_fn: Callable
+
+
 class ModuleRegistry:
     def __init__(self):
         self._modules: dict[str, ModuleInfo] = {}
+        self._search_providers: dict[str, SearchProviderInfo] = {}
         self._lock = threading.Lock()
 
     def register(self, module: ModuleInfo):
@@ -24,6 +48,29 @@ class ModuleRegistry:
             if module.slug in self._modules:
                 raise ValueError(f"Module with slug '{module.slug}' is already registered")
             self._modules[module.slug] = module
+
+    def register_search_provider(self, provider: SearchProviderInfo):
+        with self._lock:
+            if provider.module_slug not in self._modules:
+                raise ValueError(
+                    f"Module '{provider.module_slug}' must be registered before its search provider"
+                )
+            if provider.slug in self._search_providers:
+                raise ValueError(f"Search provider '{provider.slug}' is already registered")
+            self._search_providers[provider.slug] = provider
+
+    def search(self, query: str, user, limit: int = 10) -> list[dict]:
+        results = []
+        for provider in self._search_providers.values():
+            module = self._modules.get(provider.module_slug)
+            if not module or not module.active:
+                continue
+            try:
+                hits = provider.search_fn(query, user, limit)
+                results.extend(asdict(h) for h in hits)
+            except Exception:
+                logger.exception("Search provider '%s' failed", provider.slug)
+        return results
 
     def get_all(self) -> list[ModuleInfo]:
         return sorted(self._modules.values(), key=lambda m: m.order)

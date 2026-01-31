@@ -285,17 +285,16 @@ def _copy_as(file_obj, dest_parent, owner, new_name):
 
 
 def _resolve_parent(user, path_parts):
-    """Walk path segments to find the parent File (folder), or None for root."""
-    parent = None
-    for part in path_parts:
-        try:
-            parent = File.objects.get(
-                owner=user,
-                parent=parent,
-                name=part,
-                node_type=File.NodeType.FOLDER,
-                deleted_at__isnull=True,
-            )
-        except File.DoesNotExist:
-            return None
-    return parent
+    """Resolve path segments to a parent folder in a single query."""
+    if not path_parts:
+        return None
+    target_path = "/".join(path_parts)
+    try:
+        return File.objects.get(
+            owner=user,
+            path=target_path,
+            node_type=File.NodeType.FOLDER,
+            deleted_at__isnull=True,
+        )
+    except File.DoesNotExist:
+        return None

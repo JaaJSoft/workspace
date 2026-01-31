@@ -51,21 +51,39 @@ class WorkspaceDAVProvider(DAVProvider):
 
     @staticmethod
     def _walk_path(user, parts):
-        """Resolve path by walking parent->child one segment at a time."""
-        parent = None
-        node = None
-        for part in parts:
-            try:
-                node = File.objects.get(
+        """Resolve path by name + parent as a single query fallback.
+
+        Tries matching the leaf name with the expected parent path first
+        (1 query).  Falls back to a segment-by-segment walk only when
+        the parent path lookup also misses (e.g. stale ``path`` field).
+        """
+        if len(parts) == 1:
+            return (
+                File.objects.filter(
+                    owner=user,
+                    parent__isnull=True,
+                    name=parts[0],
+                    deleted_at__isnull=True,
+                ).first()
+            )
+
+        parent_path = "/".join(parts[:-1])
+        try:
+            parent = File.objects.get(
+                owner=user,
+                path=parent_path,
+                deleted_at__isnull=True,
+            )
+            return (
+                File.objects.filter(
                     owner=user,
                     parent=parent,
-                    name=part,
+                    name=parts[-1],
                     deleted_at__isnull=True,
-                )
-            except File.DoesNotExist:
-                return None
-            parent = node
-        return node
+                ).first()
+            )
+        except File.DoesNotExist:
+            return None
 
     @staticmethod
     def _get_user(environ):

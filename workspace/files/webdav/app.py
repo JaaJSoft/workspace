@@ -22,8 +22,8 @@ def create_webdav_app():
             "enable": True,
             "enable_loggers": [],
         },
-        "property_manager": True,
-        "lock_storage": True,
+        "property_manager": False,
+        "lock_storage": False,
         "dir_browser": {
             "enable": False,
         },

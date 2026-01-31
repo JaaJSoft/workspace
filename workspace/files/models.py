@@ -14,21 +14,18 @@ User = get_user_model()
 
 
 def file_upload_path(instance, filename):
-    """Generate upload path based on the node's position in the tree."""
-    # Get the directory path from parent nodes
-    path_parts = []
-    node = instance.parent
-    while node:
-        path_parts.insert(0, node.name)
-        node = node.parent
+    """Generate upload path based on the node's position in the tree.
 
-    # Add owner's username to isolate files by user
-    path_parts.insert(0, f'{instance.owner.username}')
-
-    # Combine with filename
-    if path_parts:
-        return os.path.join('files', *path_parts, filename)
-    return os.path.join('files', filename)
+    Uses ``instance.path`` (set by ``File.save()`` before
+    ``super().save()`` runs) to avoid walking the parent FK chain.
+    """
+    if instance.path:
+        # instance.path = "A/B/myfile.txt" — drop the last segment
+        parent_parts = instance.path.split('/')[:-1]
+        return os.path.join(
+            'files', instance.owner.username, *parent_parts, filename,
+        )
+    return os.path.join('files', instance.owner.username, filename)
 
 
 class File(models.Model):

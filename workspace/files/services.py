@@ -309,31 +309,46 @@ class FileService:
 
     @staticmethod
     def _folder_storage_path(folder):
-        """Return the storage-relative directory path for *folder*."""
-        parts = [folder.name]
-        node = folder.parent
-        while node:
-            parts.insert(0, node.name)
-            node = node.parent
-        parts.insert(0, folder.owner.username)
-        return os.path.join('files', *parts)
+        """Return the storage-relative directory path for *folder*.
+
+        Uses the pre-computed ``folder.path`` to avoid walking the parent
+        chain (which would trigger one lazy query per ancestor).
+        """
+        path = folder.path or folder.get_path()
+        return os.path.join('files', folder.owner.username, *path.split('/'))
 
     @staticmethod
     def _update_descendant_content_names(folder, old_seg, new_seg):
-        """Walk descendants and fix ``content.name`` after a directory rename."""
-        for child in File.objects.filter(parent=folder):
-            if child.node_type == File.NodeType.FILE and child.content and child.content.name:
-                segments = child.content.name.split('/')
-                for i, seg in enumerate(segments):
-                    if seg == old_seg:
-                        segments[i] = new_seg
-                        break
-                new_path = '/'.join(segments)
-                if new_path != child.content.name:
-                    child.content.name = new_path
-                    child.save(update_fields=['content'])
-            elif child.node_type == File.NodeType.FOLDER:
-                FileService._update_descendant_content_names(child, old_seg, new_seg)
+        """Fix ``content.name`` for all descendant files after a rename.
+
+        Uses the stored ``path`` field to find all descendants in a single
+        query, then applies a bulk update — avoiding the previous recursive
+        per-folder SELECT + per-file ``save()`` overhead.
+        """
+        folder_path = folder.path or folder.get_path()
+        descendants = list(
+            File.objects.filter(
+                path__startswith=f"{folder_path}/",
+                node_type=File.NodeType.FILE,
+            ).exclude(content='').exclude(content__isnull=True)
+        )
+
+        updated = []
+        for child in descendants:
+            if not child.content.name:
+                continue
+            segments = child.content.name.split('/')
+            for i, seg in enumerate(segments):
+                if seg == old_seg:
+                    segments[i] = new_seg
+                    break
+            new_path = '/'.join(segments)
+            if new_path != child.content.name:
+                child.content.name = new_path
+                updated.append(child)
+
+        if updated:
+            File.objects.bulk_update(updated, ['content'], batch_size=500)
 
     @staticmethod
     def _ensure_folder_on_storage(folder):
@@ -351,9 +366,28 @@ class FileService:
             pass
 
     @staticmethod
-    def _copy_node(node, parent, owner):
-        """Recursively copy a single node."""
-        new_name = FileService._unique_copy_name(node.name, node.node_type, parent, owner)
+    def _copy_node(node, parent, owner, _sibling_names=None):
+        """Recursively copy a single node.
+
+        *_sibling_names* is a mutable set of names already present in
+        *parent*.  When ``None`` (top-level call) the set is loaded once
+        from the DB.  For recursive children the caller passes an empty
+        set (the target folder was just created) so no extra query is
+        needed.
+        """
+        if _sibling_names is None:
+            _sibling_names = set(
+                File.objects.filter(
+                    owner=owner,
+                    parent=parent,
+                    deleted_at__isnull=True,
+                ).values_list('name', flat=True)
+            )
+
+        new_name = FileService._unique_copy_name(
+            node.name, node.node_type, _sibling_names,
+        )
+        _sibling_names.add(new_name)
 
         copied = File(
             owner=owner,
@@ -377,23 +411,16 @@ class FileService:
         copied.save()
 
         if node.node_type == File.NodeType.FOLDER:
+            # The folder was just created — no children yet, so start empty.
+            child_names = set()
             for child in File.objects.filter(parent=node, deleted_at__isnull=True):
-                FileService._copy_node(child, copied, owner)
+                FileService._copy_node(child, copied, owner, child_names)
 
         return copied
 
     @staticmethod
-    def _unique_copy_name(base_name, node_type, parent, owner):
-        """Generate a unique "(Copy)" name avoiding conflicts."""
-        existing_names = set(
-            File.objects.filter(
-                owner=owner,
-                parent=parent,
-                deleted_at__isnull=True,
-            ).values_list('name', flat=True)
-        )
-
-        # Try original name first (useful when copying to a different folder)
+    def _unique_copy_name(base_name, node_type, existing_names):
+        """Pick a unique name given a set of *existing_names*."""
         if base_name not in existing_names:
             return base_name
 

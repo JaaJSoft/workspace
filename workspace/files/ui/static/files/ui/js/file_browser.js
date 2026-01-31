@@ -1224,6 +1224,8 @@ window.fileTableControls = function fileTableControls() {
           this.applyAll();
           // Keep localStorage in sync
           this._saveToLocalStorage();
+          // Snapshot so saveState() can detect real changes
+          this._lastSyncedState = JSON.stringify(this._getStatePayload());
         })
         .catch(() => {});
     },
@@ -1251,14 +1253,19 @@ window.fileTableControls = function fileTableControls() {
       // Debounce server persist (500ms) to batch rapid changes
       clearTimeout(this._saveTimer);
       this._saveTimer = setTimeout(() => {
+        const payload = this._getStatePayload();
+        const serialized = JSON.stringify(payload);
+        if (serialized === this._lastSyncedState) return;
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
           || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
           || '';
         fetch('/api/v1/settings/files/table_controls', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ value: this._getStatePayload() }),
-        }).catch(() => {});
+          body: JSON.stringify({ value: payload }),
+        })
+          .then(() => { this._lastSyncedState = serialized; })
+          .catch(() => {});
       }, 500);
     },
 

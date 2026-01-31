@@ -2,6 +2,8 @@
   Partial pour les actions rapides (affiché quand query est vide)
   Paramètres:
   - on_click: handler supplémentaire lors du clic sur un lien (optionnel)
+  Contexte requis:
+  - workspace_active_modules: list of active module dicts from context processor
 {% endcomment %}
 <div x-show="query.length === 0" class="p-2">
   <div class="px-3 py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider">
@@ -24,40 +26,28 @@
       <kbd class="kbd kbd-xs">C</kbd>
     {% endif %}
   </a>
-  <a
-    href="/"
-    {% if on_click %}@click="{{ on_click }}"{% endif %}
-    @mouseenter="activeIndex = 1"
-    :class="isQuickActionActive(1) ? 'bg-base-300' : 'bg-transparent'"
-    class="flex items-center gap-3 px-3 py-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
-  >
-    <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-      <i data-lucide="home" class="w-4 h-4 text-primary"></i>
-    </div>
-    <div class="flex-1 min-w-0">
-      <div class="text-sm font-medium">Dashboard</div>
-    </div>
-  </a>
-  <a
-    href="#"
-    {% if on_click %}@click="{{ on_click }}"{% endif %}
-    @mouseenter="activeIndex = 2"
-    :class="isQuickActionActive(2) ? 'bg-base-300' : 'bg-transparent'"
-    class="flex items-center gap-3 px-3 py-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
-  >
-    <div class="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center flex-shrink-0">
-      <i data-lucide="folder" class="w-4 h-4 text-warning"></i>
-    </div>
-    <div class="flex-1 min-w-0">
-      <div class="text-sm font-medium">Files</div>
-    </div>
-  </a>
+  {% for module in workspace_active_modules %}
+    <a
+      href="{{ module.url }}"
+      {% if on_click %}@click="{{ on_click }}"{% endif %}
+      @mouseenter="activeIndex = {{ forloop.counter }}"
+      :class="isQuickActionActive({{ forloop.counter }}) ? 'bg-base-300' : 'bg-transparent'"
+      class="flex items-center gap-3 px-3 py-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
+    >
+      <div class="w-8 h-8 rounded-lg bg-{{ module.color }}/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="{{ module.icon }}" class="w-4 h-4 text-{{ module.color }}"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-medium">{{ module.name }}</div>
+      </div>
+    </a>
+  {% endfor %}
   {% if user.is_staff %}
     <a
       href="#"
       {% if on_click %}@click="{{ on_click }}"{% endif %}
-      @mouseenter="activeIndex = 3"
-      :class="isQuickActionActive(3) ? 'bg-base-300' : 'bg-transparent'"
+      @mouseenter="activeIndex = {{ workspace_active_modules|length|add:1 }}"
+      :class="isQuickActionActive({{ workspace_active_modules|length|add:1 }}) ? 'bg-base-300' : 'bg-transparent'"
       class="flex items-center gap-3 px-3 py-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
     >
       <div class="w-8 h-8 rounded-lg bg-info/10 flex items-center justify-center flex-shrink-0">

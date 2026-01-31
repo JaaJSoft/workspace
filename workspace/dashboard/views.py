@@ -2,60 +2,10 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Max, Q, Sum
 from django.shortcuts import render
 
+from workspace.common.module_registry import registry
 from workspace.files.models import File, FileFavorite
 
 INSIGHTS_LIMIT = 6
-
-WORKSPACE_MODULES = [
-    {
-        'name': 'Files',
-        'description': 'Store, organize and share files.',
-        'icon': 'hard-drive',
-        'color': 'primary',
-        'url': '/files',
-        'active': True,
-    },
-    {
-        'name': 'Emails',
-        'description': 'Send and receive emails.',
-        'icon': 'mail',
-        'color': 'secondary',
-        'url': None,
-        'active': False,
-    },
-    {
-        'name': 'Notes',
-        'description': 'Write and collaborate on documents.',
-        'icon': 'notebook-pen',
-        'color': 'accent',
-        'url': None,
-        'active': False,
-    },
-    {
-        'name': 'Calendar',
-        'description': 'Schedule events and reminders.',
-        'icon': 'calendar',
-        'color': 'info',
-        'url': None,
-        'active': False,
-    },
-    {
-        'name': 'Tasks',
-        'description': 'Track projects and to-dos.',
-        'icon': 'check-square',
-        'color': 'warning',
-        'url': None,
-        'active': False,
-    },
-    {
-        'name': 'Polls',
-        'description': 'Create surveys and collect responses.',
-        'icon': 'bar-chart-3',
-        'color': 'error',
-        'url': None,
-        'active': False,
-    },
-]
 
 
 def _get_stats(user):
@@ -111,7 +61,9 @@ def _build_dashboard_context(
     include_favorites=True,
     include_trash=True,
 ):
-    context = {'modules': WORKSPACE_MODULES}
+    context = {
+        'modules': [m for m in registry.get_for_template() if m['slug'] != 'dashboard'],
+    }
     if include_stats:
         context['stats'] = _get_stats(user)
     if include_recent:

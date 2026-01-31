@@ -171,6 +171,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'workspace.common.context_processors.workspace_modules',
                 # Expose `request_processing_ms` au template
                 # 'workspace.ui.context_processors.request_timing',
             ],
@@ -226,6 +227,10 @@ SPECTACULAR_SETTINGS = {
         {
             'name': 'Settings',
             'description': 'Per-user, per-module key-value settings.',
+        },
+        {
+            'name': 'Modules',
+            'description': 'Workspace module registry.',
         },
     ],
     'SWAGGER_UI_SETTINGS': {

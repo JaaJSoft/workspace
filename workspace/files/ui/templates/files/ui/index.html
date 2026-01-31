@@ -94,6 +94,13 @@
       </div>
     </div>
 
+    <!-- Help Button -->
+    <div class="px-3 pb-2">
+      <ul class="menu p-0">
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="info" onclick="document.getElementById('help-dialog').showModal()" tooltip="Help" %}
+      </ul>
+    </div>
+
     <!-- Toggle Button (Always at bottom) -->
     <div class="border-t border-base-300 py-4 px-3">
       <ul class="menu p-0" x-show="!isMobile()">

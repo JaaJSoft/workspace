@@ -1,5 +1,8 @@
 """Unit tests for FileService."""
 
+import os
+import shutil
+import tempfile
 from unittest.mock import MagicMock
 
 from django.contrib.auth import get_user_model
@@ -122,6 +125,52 @@ class TestCreateFolder(TestCase):
         )
         self.assertEqual(folder.icon, 'briefcase')
         self.assertEqual(folder.color, '#ff0000')
+
+
+class TestCreateFolderOnStorage(TestCase):
+    """Verify create_folder creates directories on FileSystemStorage."""
+
+    def setUp(self):
+        self.media_root = tempfile.mkdtemp()
+        self.user = User.objects.create_user(
+            username='storageuser', email='storage@test.com', password='pass'
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.media_root, ignore_errors=True)
+
+    @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.FileSystemStorage')
+    def test_root_folder_created_on_disk(self):
+        with self.settings(MEDIA_ROOT=self.media_root):
+            folder = FileService.create_folder(self.user, 'Photos')
+            expected = os.path.join(self.media_root, 'files', self.user.username, 'Photos')
+            self.assertTrue(os.path.isdir(expected))
+
+    @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.FileSystemStorage')
+    def test_nested_folder_created_on_disk(self):
+        with self.settings(MEDIA_ROOT=self.media_root):
+            parent = FileService.create_folder(self.user, 'Documents')
+            child = FileService.create_folder(self.user, 'Work', parent=parent)
+            expected = os.path.join(
+                self.media_root, 'files', self.user.username, 'Documents', 'Work'
+            )
+            self.assertTrue(os.path.isdir(expected))
+
+    @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.FileSystemStorage')
+    def test_deeply_nested_folder(self):
+        with self.settings(MEDIA_ROOT=self.media_root):
+            a = FileService.create_folder(self.user, 'A')
+            b = FileService.create_folder(self.user, 'B', parent=a)
+            c = FileService.create_folder(self.user, 'C', parent=b)
+            expected = os.path.join(
+                self.media_root, 'files', self.user.username, 'A', 'B', 'C'
+            )
+            self.assertTrue(os.path.isdir(expected))
+
+    @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.InMemoryStorage')
+    def test_silently_skipped_for_unsupported_backend(self):
+        folder = FileService.create_folder(self.user, 'Ignored')
+        self.assertEqual(folder.name, 'Ignored')
 
 
 @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.InMemoryStorage')

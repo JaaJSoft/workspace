@@ -124,8 +124,10 @@ class FileService:
 
         if file_obj.node_type == File.NodeType.FOLDER:
             FileService._rename_folder_storage(file_obj, old_name, new_name)
-        elif file_obj.content and file_obj.content.name:
-            FileService._rename_file_storage(file_obj, new_name)
+        else:
+            if file_obj.content and file_obj.content.name:
+                FileService._rename_file_storage(file_obj, new_name)
+            file_obj.mime_type = FileService.infer_mime_type(new_name)
 
         file_obj.name = new_name
         file_obj.save()

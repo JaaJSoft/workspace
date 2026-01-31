@@ -167,9 +167,13 @@ class FolderResource(DAVCollection):
         dest_parts = dest_path.strip("/").split("/")
         new_name = dest_parts[-1]
         dest_parent = _resolve_parent(self._user, dest_parts[:-1])
-        self._file.name = new_name
-        self._file.parent = dest_parent
-        self._file.save()
+
+        if new_name != self._file.name:
+            FileService.rename(self._file, new_name)
+
+        if dest_parent != self._file.parent:
+            self._file.parent = dest_parent
+            self._file.save()
 
     def support_recursive_delete(self):
         return True
@@ -231,10 +235,11 @@ class FileResource(DAVNonCollection):
         dest_parent = _resolve_parent(self._user, dest_parts[:-1])
 
         if is_move:
-            self._file.name = new_name
-            self._file.parent = dest_parent
-            self._file.save()
-            # Prevent the post-move delete() from soft-deleting the moved file.
+            if new_name != self._file.name:
+                FileService.rename(self._file, new_name)
+            if dest_parent != self._file.parent:
+                self._file.parent = dest_parent
+                self._file.save()
             self._moved = True
         else:
             _copy_as(self._file, dest_parent, self._user, new_name)

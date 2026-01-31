@@ -894,6 +894,7 @@ window.fileBrowser = function fileBrowser() {
       }
 
       this.refreshFolderBrowser();
+      window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
     },
 
     refreshFolderBrowser() {

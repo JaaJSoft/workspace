@@ -60,6 +60,9 @@ class FileService:
     def create_folder(owner, name, parent=None, *, icon=None, color=None):
         """Create a new folder record.
 
+        Also creates the directory on the storage backend when supported
+        (e.g. ``FileSystemStorage``).
+
         Returns:
             The saved File instance (node_type=FOLDER).
         """
@@ -72,6 +75,7 @@ class FileService:
             color=color,
         )
         folder.save()
+        FileService._ensure_folder_on_storage(folder)
         return folder
 
     @staticmethod
@@ -314,6 +318,28 @@ class FileService:
 
             elif child.node_type == File.NodeType.FOLDER:
                 FileService._rename_folder_storage(child, old_folder_name, new_folder_name)
+
+    @staticmethod
+    def _ensure_folder_on_storage(folder):
+        """Create the folder's directory on the storage backend if supported.
+
+        Builds the same path hierarchy used by ``file_upload_path``
+        (``files/<username>/<parent…>/<name>``) and calls ``os.makedirs``
+        when the storage exposes a local filesystem path.  Silently ignored
+        for backends that don't (e.g. S3).
+        """
+        parts = [folder.name]
+        node = folder.parent
+        while node:
+            parts.insert(0, node.name)
+            node = node.parent
+        parts.insert(0, folder.owner.username)
+        storage_path = os.path.join('files', *parts)
+        try:
+            full_path = default_storage.path(storage_path)
+            os.makedirs(full_path, exist_ok=True)
+        except NotImplementedError:
+            pass
 
     @staticmethod
     def _copy_node(node, parent, owner):

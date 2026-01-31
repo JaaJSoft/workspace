@@ -1,5 +1,7 @@
 # JaaJ Workspace
 
+> **Early Development** — This project is under active development and has not reached a stable release. APIs, database schemas, and features may change without notice or migration path. Use at your own risk.
+
 A self-hosted, modular productivity suite built with Django. Workspace brings together file management, dashboards, and user settings into a unified platform – with an extensible architecture designed for adding new modules (notes, tasks, calendar, and more).
 
 ## Features

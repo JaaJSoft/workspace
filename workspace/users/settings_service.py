@@ -18,9 +18,7 @@ from workspace.users.models import UserSetting
 def get_setting(user, module: str, key: str, *, default: Any = None) -> Any:
     """Return the value of a single setting, or *default* if it does not exist."""
     try:
-        return UserSetting.objects.values_list('value', flat=True).get(
-            user=user, module=module, key=key,
-        )
+        return UserSetting.objects.get(user=user, module=module, key=key).value
     except UserSetting.DoesNotExist:
         return default
 
@@ -44,12 +42,15 @@ def delete_setting(user, module: str, key: str) -> bool:
 
 def get_module_settings(user, module: str) -> dict[str, Any]:
     """Return all settings for a given module as a ``{key: value}`` dict."""
-    qs = UserSetting.objects.filter(user=user, module=module).values_list('key', 'value')
-    return dict(qs)
+    return {
+        s.key: s.value
+        for s in UserSetting.objects.filter(user=user, module=module)
+    }
 
 
 def get_all_settings(user) -> list[dict]:
     """Return every setting for *user* as a list of dicts."""
-    return list(
-        UserSetting.objects.filter(user=user).values('module', 'key', 'value')
-    )
+    return [
+        {'module': s.module, 'key': s.key, 'value': s.value}
+        for s in UserSetting.objects.filter(user=user)
+    ]

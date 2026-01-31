@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.users.models import UserSetting
+from workspace.users.settings_service import get_all_settings, get_module_settings
 
 
 @extend_schema(tags=['Users'])
@@ -176,11 +177,15 @@ class SettingsListView(APIView):
         },
     )
     def get(self, request):
-        qs = UserSetting.objects.filter(user=request.user)
         module = request.query_params.get('module')
         if module:
-            qs = qs.filter(module=module)
-        results = list(qs.values('module', 'key', 'value'))
+            module_settings = get_module_settings(request.user, module)
+            results = [
+                {'module': module, 'key': k, 'value': v}
+                for k, v in module_settings.items()
+            ]
+        else:
+            results = get_all_settings(request.user)
         return Response({'results': results})
 
 

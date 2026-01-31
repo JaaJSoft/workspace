@@ -3,6 +3,7 @@ from django.conf import settings
 from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404, render
 from django.http import HttpResponse
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from ..models import File, FileFavorite, PinnedFolder
 from .viewers import ViewerRegistry
@@ -193,6 +194,7 @@ def _build_context(request, folder=None, is_trash_view=False):
 
 
 @login_required
+@ensure_csrf_cookie
 def index(request, folder=None):
     """File browser view with optional folder navigation."""
     context = _build_context(request, folder=folder, is_trash_view=False)
@@ -204,6 +206,7 @@ def index(request, folder=None):
 
 
 @login_required
+@ensure_csrf_cookie
 def trash(request):
     """Trash view for deleted files and folders."""
     context = _build_context(request, is_trash_view=True)

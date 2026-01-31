@@ -939,6 +939,8 @@ window.fileTableControls = function fileTableControls() {
     tbody: null,
     originalRows: [],
     ready: false,
+    _initializing: true,
+    _saveTimer: null,
 
     // Selection state
     selectedUuids: new Set(),
@@ -967,6 +969,7 @@ window.fileTableControls = function fileTableControls() {
       this.pruneMissingColumns();
       this.ready = true;
       this.applyAll();
+      this._initializing = false;
 
       this.$nextTick(() => {
         if (typeof lucide !== 'undefined') {
@@ -1120,40 +1123,75 @@ window.fileTableControls = function fileTableControls() {
       }
     },
 
-    loadState() {
-      try {
-        const raw = localStorage.getItem(this.storageKey);
-        if (!raw) return;
-        const data = JSON.parse(raw);
-        if (Array.isArray(data.columnOrder)) {
-          this.columnOrder = data.columnOrder.slice();
-        }
-        if (data.columnVisibility && typeof data.columnVisibility === 'object') {
-          this.columnVisibility = { ...this.columnVisibility, ...data.columnVisibility };
-        }
-        if (typeof data.sortField === 'string') {
-          this.sortField = data.sortField;
-        }
-        if (data.sortDir === 'asc' || data.sortDir === 'desc') {
-          this.sortDir = data.sortDir;
-        }
-      } catch (error) {
-        // Ignore malformed state
+    _applyStateData(data) {
+      if (!data) return;
+      if (Array.isArray(data.columnOrder)) {
+        this.columnOrder = data.columnOrder.slice();
+      }
+      if (data.columnVisibility && typeof data.columnVisibility === 'object') {
+        this.columnVisibility = { ...this.columnVisibility, ...data.columnVisibility };
+      }
+      if (typeof data.sortField === 'string') {
+        this.sortField = data.sortField;
+      }
+      if (data.sortDir === 'asc' || data.sortDir === 'desc') {
+        this.sortDir = data.sortDir;
       }
     },
 
-    saveState() {
+    loadState() {
+      // 1. Apply localStorage immediately (synchronous, avoids flicker)
       try {
-        const payload = {
-          sortField: this.sortField,
-          sortDir: this.sortDir,
-          columnOrder: this.columnOrder,
-          columnVisibility: this.columnVisibility
-        };
-        localStorage.setItem(this.storageKey, JSON.stringify(payload));
-      } catch (error) {
-        // Ignore storage failures
-      }
+        const raw = localStorage.getItem(this.storageKey);
+        if (raw) this._applyStateData(JSON.parse(raw));
+      } catch (e) { /* ignore */ }
+
+      // 2. Fetch authoritative state from server, reconcile if different
+      fetch('/api/v1/settings/files/table_controls')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data || !data.value) return;
+          this._applyStateData(data.value);
+          this.pruneMissingColumns();
+          this.applyAll();
+          // Keep localStorage in sync
+          this._saveToLocalStorage();
+        })
+        .catch(() => {});
+    },
+
+    _getStatePayload() {
+      return {
+        sortField: this.sortField,
+        sortDir: this.sortDir,
+        columnOrder: this.columnOrder,
+        columnVisibility: this.columnVisibility
+      };
+    },
+
+    _saveToLocalStorage() {
+      try {
+        localStorage.setItem(this.storageKey, JSON.stringify(this._getStatePayload()));
+      } catch (e) { /* ignore */ }
+    },
+
+    saveState() {
+      // Always keep localStorage in sync (fast, synchronous)
+      this._saveToLocalStorage();
+      // Skip server persist during initial load
+      if (this._initializing) return;
+      // Debounce server persist (500ms) to batch rapid changes
+      clearTimeout(this._saveTimer);
+      this._saveTimer = setTimeout(() => {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
+          || '';
+        fetch('/api/v1/settings/files/table_controls', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ value: this._getStatePayload() }),
+        }).catch(() => {});
+      }, 500);
     },
 
     pruneMissingColumns() {

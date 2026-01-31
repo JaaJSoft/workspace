@@ -4,7 +4,7 @@ from django.core.files.base import ContentFile
 from rest_framework.test import APITestCase
 from rest_framework import status
 
-from .models import File, FileFavorite, PinnedFolder
+from workspace.files.models import File, FileFavorite, PinnedFolder
 
 User = get_user_model()
 

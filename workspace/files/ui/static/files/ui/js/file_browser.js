@@ -876,6 +876,26 @@ window.fileBrowser = function fileBrowser() {
       }
     },
 
+    async syncAndRefreshFolderBrowser() {
+      try {
+        const folderId = this.currentFolder;
+        const syncUrl = folderId
+          ? `/api/v1/files/${folderId}/sync`
+          : '/api/v1/files/sync';
+
+        await fetch(syncUrl, {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': this.getCsrfToken(),
+          },
+        });
+      } catch (error) {
+        console.warn('Folder sync failed:', error);
+      }
+
+      this.refreshFolderBrowser();
+    },
+
     refreshFolderBrowser() {
       const refreshLink = document.querySelector('[data-refresh-folder-browser]');
       if (refreshLink) {

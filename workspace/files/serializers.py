@@ -1,9 +1,9 @@
-import mimetypes
-
 from rest_framework import serializers
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
+
 from .models import File, FileFavorite, PinnedFolder
+from workspace.files.services import FileService
 
 
 class FileSerializer(serializers.ModelSerializer):
@@ -95,7 +95,6 @@ class FileSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_category(self, obj):
-        """Get file category based on MIME type."""
         from .utils import FileTypeDetector
 
         if obj.node_type != File.NodeType.FILE:
@@ -104,7 +103,6 @@ class FileSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_viewable(self, obj):
-        """Check if file can be viewed in browser."""
         from .utils import FileTypeDetector
 
         if obj.node_type != File.NodeType.FILE:
@@ -113,7 +111,6 @@ class FileSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_content_url(self, obj):
-        """Get URL to fetch file content for viewing."""
         if obj.node_type == File.NodeType.FILE and obj.content:
             return f'/api/v1/files/{obj.uuid}/content'
         return None
@@ -157,50 +154,26 @@ class FileSerializer(serializers.ModelSerializer):
         if instance is not None and node_type is None:
             node_type = instance.node_type
 
-        # Validate parent assignment
+        # Validate parent assignment via FileService
         if 'parent' in attrs and instance is not None:
-            parent = attrs['parent']
-            if parent is not None:
-                # Cannot move into a folder owned by another user
-                owner = instance.owner
-                if parent.owner_id != owner.id:
-                    raise serializers.ValidationError({
-                        'parent': 'Cannot move to a folder owned by another user.'
-                    })
+            try:
+                FileService.validate_move_target(instance, attrs['parent'])
+            except ValueError as e:
+                raise serializers.ValidationError({'parent': str(e)})
 
-                # Cannot move a folder into itself
-                if instance.node_type == File.NodeType.FOLDER:
-                    if parent.pk == instance.pk:
-                        raise serializers.ValidationError({
-                            'parent': 'Cannot move a folder into itself.'
-                        })
-
-                    # Cannot move a folder into its own descendant
-                    instance_path = instance.path or instance.get_path()
-                    parent_path = parent.path or parent.get_path()
-                    if parent_path.startswith(f"{instance_path}/"):
-                        raise serializers.ValidationError({
-                            'parent': 'Cannot move a folder into one of its descendants.'
-                        })
-
+        # Validate file name uniqueness via FileService
         if node_type == File.NodeType.FILE:
             name = attrs.get('name') or (instance.name if instance else None)
             parent = attrs.get('parent') if 'parent' in attrs else (instance.parent if instance else None)
             owner = instance.owner if instance else self.context['request'].user
             if name:
-                existing = File.objects.filter(
-                    owner=owner,
-                    parent=parent,
-                    node_type=File.NodeType.FILE,
-                    name__iexact=name,
-                    deleted_at__isnull=True,
-                )
-                if instance is not None:
-                    existing = existing.exclude(pk=instance.pk)
-                if existing.exists():
-                    raise serializers.ValidationError({
-                        'name': 'A file with the same name already exists in this folder.'
-                    })
+                try:
+                    FileService.check_name_available(
+                        owner, parent, name, node_type,
+                        exclude_pk=instance.pk if instance else None,
+                    )
+                except ValueError as e:
+                    raise serializers.ValidationError({'name': str(e)})
 
         return super().validate(attrs)
 
@@ -211,197 +184,35 @@ class FileSerializer(serializers.ModelSerializer):
             if uploaded is not None:
                 validated_data['size'] = uploaded.size
                 if not validated_data.get('mime_type'):
-                    validated_data['mime_type'] = self._infer_mime_type(
-                        uploaded,
+                    validated_data['mime_type'] = FileService.infer_mime_type(
                         validated_data.get('name'),
+                        uploaded=uploaded,
                     )
         else:
             validated_data['size'] = None
         return super().create(validated_data)
 
-    def _infer_mime_type(self, uploaded, name):
-        """Infer mime type from upload metadata or filename."""
-        if uploaded is not None:
-            content_type = getattr(uploaded, 'content_type', None)
-            if content_type and content_type != 'application/octet-stream':
-                return content_type
-        candidate_name = name or getattr(uploaded, 'name', None)
-        if candidate_name:
-            guessed, _ = mimetypes.guess_type(candidate_name)
-            if guessed:
-                return guessed
-        return getattr(uploaded, 'content_type', None) or 'application/octet-stream'
-
-
-    def _get_folder_path(self, folder):
-        """Build the full path for a folder based on its hierarchy."""
-        path_parts = []
-        current = folder
-        while current:
-            path_parts.insert(0, current.name)
-            current = current.parent
-
-        # Add base path: files/username/...
-        base_path = f"files/{folder.owner.username}"
-        if path_parts:
-            return f"{base_path}/{'/'.join(path_parts)}"
-        return base_path
-
-    def _rename_folder_files(self, folder, old_folder_name, new_folder_name):
-        """Recursively rename all files in a folder and its subfolders."""
-        import os
-        from django.core.files.storage import default_storage
-        from django.core.files.base import ContentFile
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        # Process all children
-        children = File.objects.filter(parent=folder)
-
-        for child in children:
-            if child.node_type == File.NodeType.FILE and child.content and child.content.name:
-                try:
-                    old_path = child.content.name
-
-                    # Replace the old folder name with the new one in the path
-                    # We need to be careful to replace only the correct occurrence
-                    path_segments = old_path.split('/')
-
-                    # Find the index where our folder appears
-                    for i, segment in enumerate(path_segments):
-                        if segment == old_folder_name:
-                            path_segments[i] = new_folder_name
-                            break
-
-                    new_path = '/'.join(path_segments)
-
-                    if old_path != new_path:
-                        logger.info(f"Moving file from '{old_path}' to '{new_path}'")
-
-                        if default_storage.exists(old_path):
-                            # Read the file, ensuring it's closed
-                            file_handle = None
-                            try:
-                                file_handle = default_storage.open(old_path, 'rb')
-                                content = file_handle.read()
-                            finally:
-                                if file_handle:
-                                    file_handle.close()
-                                    # Force garbage collection to release file handles on Windows
-                                    import gc
-                                    gc.collect()
-
-                            # Ensure directory exists and save to new location
-                            new_dir = os.path.dirname(new_path)
-                            saved_path = default_storage.save(new_path, ContentFile(content))
-
-                            # Update the database
-                            child.content.name = saved_path
-                            child.save(update_fields=['content'])
-
-                            # Delete old file
-                            try:
-                                default_storage.delete(old_path)
-                                logger.info(f"Deleted old file: '{old_path}'")
-                            except Exception as e:
-                                logger.warning(f"Could not delete old file '{old_path}': {e}")
-                        else:
-                            logger.warning(f"Old file does not exist: '{old_path}'")
-
-                except Exception as e:
-                    logger.error(f"Error moving file '{child.name}': {e}")
-
-            elif child.node_type == File.NodeType.FOLDER:
-                # Recursively process subfolders
-                self._rename_folder_files(child, old_folder_name, new_folder_name)
-
     def update(self, instance, validated_data):
-        """Override update to handle file and folder renaming on storage.
-
-        For files: Renames the physical file on storage.
-        For folders: Updates database name AND moves all contained files to new paths.
-        """
-        import os
-        from django.core.files.storage import default_storage
-        from django.core.files.base import ContentFile
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        # Handle content update for files
+        # Handle content update
         if 'content' in validated_data:
             uploaded = validated_data.get('content')
             if instance.node_type == File.NodeType.FILE and uploaded is not None:
                 validated_data['size'] = uploaded.size
                 if not validated_data.get('mime_type'):
-                    validated_data['mime_type'] = self._infer_mime_type(
-                        uploaded,
+                    validated_data['mime_type'] = FileService.infer_mime_type(
                         validated_data.get('name', instance.name),
+                        uploaded=uploaded,
                     )
-                # Note: File replacement is now handled by OverwriteStorage
             else:
                 validated_data['size'] = None
 
-        # Check if name is being changed
+        # Handle rename via FileService (storage moves)
         if 'name' in validated_data:
-            old_name = instance.name
             new_name = validated_data['name']
-
-            if old_name != new_name:
-                # Handle folder renaming - move all files inside
-                if instance.node_type == File.NodeType.FOLDER:
-                    logger.info(f"Renaming folder '{old_name}' to '{new_name}' and moving all contained files")
-
-                    # Rename all files in this folder and subfolders
-                    self._rename_folder_files(instance, old_name, new_name)
-
-                # Handle file renaming
-                elif instance.content and instance.content.name:
-                    try:
-                        # Get the current file path
-                        old_file_path = instance.content.name
-
-                        # Build the new file path (keep same directory, change filename)
-                        dir_path = os.path.dirname(old_file_path)
-                        # Get file extension from old file
-                        _, ext = os.path.splitext(old_file_path)
-                        # Keep extension if new name doesn't have one
-                        if '.' not in new_name and ext:
-                            new_filename = f"{new_name}{ext}"
-                        else:
-                            new_filename = new_name
-                        new_file_path = os.path.join(dir_path, new_filename)
-
-                        # Check if old file exists
-                        if default_storage.exists(old_file_path):
-                            # Open and read the old file, ensuring it's closed
-                            old_file = None
-                            try:
-                                old_file = default_storage.open(old_file_path, 'rb')
-                                file_content = old_file.read()
-                            finally:
-                                if old_file:
-                                    old_file.close()
-                                    # Force garbage collection to release file handles on Windows
-                                    import gc
-                                    gc.collect()
-
-                            # Save with new name
-                            new_file_path = default_storage.save(new_file_path, ContentFile(file_content))
-
-                            # Update the content field to point to new file
-                            instance.content.name = new_file_path
-
-                            # Delete the old file (only if it's different from the new one)
-                            if old_file_path != new_file_path:
-                                try:
-                                    default_storage.delete(old_file_path)
-                                except Exception as e:
-                                    logger.warning(f"Could not delete old file '{old_file_path}': {e}")
-                                    pass  # Ignore delete errors
-                    except Exception as e:
-                        # Log error but don't fail the rename operation
-                        logger.warning(f"Could not rename physical file from {old_file_path} to {new_name}: {e}")
+            if instance.name != new_name:
+                FileService.rename(instance, new_name)
+                # rename() already sets instance.name and saves,
+                # but super().update() will set it again from validated_data
+                # which is fine since it's the same value now.
 
         return super().update(instance, validated_data)

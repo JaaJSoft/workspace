@@ -264,6 +264,11 @@ Features shared across all modules.
 - [ ] CLI for automated interactions
 - [ ] Python/JS SDK
 
+### Desktop Integration
+- [ ] WebDAV server (wsgidav) — mount files as a network drive on any OS
+- [ ] macOS File Provider Extension — native Finder integration with sync status
+- [ ] Windows Cloud Files API — native Explorer integration (on-demand files)
+
 ### UI/UX
 - [ ] PWA (Progressive Web App) - installable on desktop/mobile
 - [ ] Mobile responsive design

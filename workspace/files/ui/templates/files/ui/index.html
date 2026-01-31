@@ -119,16 +119,21 @@
           <div class="flex items-center justify-between gap-4 mb-1">
             <div class="flex items-center gap-2 min-w-0">
               {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs x_target="folder-browser" x_target_history="push" %}
-              <a
-                href="{{ current_view_url }}"
+              <button
+                type="button"
                 class="btn btn-ghost btn-sm btn-square"
-                title="Refresh"
-                aria-label="Refresh"
-                x-target="folder-browser"
-                data-refresh-folder-browser
+                title="Sync & refresh"
+                aria-label="Sync and refresh folder"
+                @click="syncAndRefreshFolderBrowser()"
               >
                 <i data-lucide="rotate-cw" class="w-4 h-4"></i>
-              </a>
+              </button>
+              <a
+                href="{{ current_view_url }}"
+                class="hidden"
+                x-target="folder-browser"
+                data-refresh-folder-browser
+              ></a>
             </div>
 
             {% if is_trash_view %}

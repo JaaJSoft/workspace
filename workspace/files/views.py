@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.db.models import Exists, OuterRef
 from rest_framework import status, viewsets
@@ -16,8 +18,11 @@ from drf_spectacular.utils import (
     extend_schema_view,
 )
 
+logger = logging.getLogger(__name__)
+
 from .models import File, FileFavorite, PinnedFolder
 from .serializers import FileSerializer
+from workspace.files.services import FileService
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
 RECENT_FILES_MAX_LIMIT = getattr(settings, 'RECENT_FILES_MAX_LIMIT', 200)
@@ -553,70 +558,9 @@ class FileViewSet(viewsets.ModelViewSet):
                 )
 
         # Perform the copy
-        copied = self._copy_node(file_obj, parent, request.user)
+        copied = FileService.copy(file_obj, parent, request.user)
         serializer = self.get_serializer(copied)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    def _copy_node(self, node, parent, owner):
-        """Recursively copy a file or folder."""
-        from django.core.files.base import ContentFile
-
-        # Generate unique name if needed
-        base_name = node.name
-        new_name = base_name
-        counter = 1
-
-        # Check for name conflicts in target location
-        siblings = File.objects.filter(
-            owner=owner,
-            parent=parent,
-            deleted_at__isnull=True,
-        )
-        existing_names = set(siblings.values_list('name', flat=True))
-
-        while new_name in existing_names:
-            # Add "Copy" suffix or increment counter
-            name_parts = base_name.rsplit('.', 1)
-            if len(name_parts) == 2 and node.node_type == File.NodeType.FILE:
-                new_name = f"{name_parts[0]} (Copy{'' if counter == 1 else f' {counter})'}).{name_parts[1]}"
-            else:
-                new_name = f"{base_name} (Copy{'' if counter == 1 else f' {counter}'})"
-            counter += 1
-
-        # Create the copy
-        copied = File(
-            owner=owner,
-            name=new_name,
-            node_type=node.node_type,
-            parent=parent,
-            mime_type=node.mime_type,
-            icon=node.icon,
-            color=node.color,
-        )
-
-        # Copy file content if it's a file
-        if node.node_type == File.NodeType.FILE and node.content:
-            try:
-                node.content.open('rb')
-                content_data = node.content.read()
-            finally:
-                node.content.close()
-            content_copy = ContentFile(content_data, name=new_name)
-            copied.content = content_copy
-            copied.size = node.size
-
-        copied.save()
-
-        # Recursively copy children for folders
-        if node.node_type == File.NodeType.FOLDER:
-            children = File.objects.filter(
-                parent=node,
-                deleted_at__isnull=True,
-            )
-            for child in children:
-                self._copy_node(child, copied, owner)
-
-        return copied
 
     @extend_schema(
         summary="Get file content",
@@ -675,3 +619,69 @@ class FileViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
 
         return response
+
+    @extend_schema(
+        summary="Sync root folder with disk",
+        description=(
+            "Synchronize root-level files between disk storage and database for the "
+            "current user. Adds files present on disk but missing in DB, and "
+            "soft-deletes DB entries whose files no longer exist on disk."
+        ),
+        responses={
+            200: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description="Sync result summary.",
+            ),
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='sync')
+    def sync_root(self, request):
+        """Sync root-level files for the current user."""
+        from workspace.files.sync import FileSyncService
+
+        service = FileSyncService(log=logger)
+        result = service.sync_folder_shallow(request.user, parent_db=None)
+        return Response({
+            'files_created': result.files_created,
+            'folders_created': result.folders_created,
+            'files_soft_deleted': result.files_soft_deleted,
+            'folders_soft_deleted': result.folders_soft_deleted,
+            'errors': result.errors,
+        })
+
+    @extend_schema(
+        summary="Sync folder with disk",
+        description=(
+            "Synchronize a specific folder's immediate children between disk storage "
+            "and database. Adds files present on disk but missing in DB, and "
+            "soft-deletes DB entries whose files no longer exist on disk."
+        ),
+        responses={
+            200: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description="Sync result summary.",
+            ),
+            400: OpenApiResponse(description="Not a folder."),
+        },
+    )
+    @action(detail=True, methods=['post'], url_path='sync')
+    def sync_folder(self, request, uuid=None):
+        """Sync a specific folder's children for the current user."""
+        from workspace.files.sync import FileSyncService
+
+        file_obj = self.get_object()
+        if file_obj.node_type != File.NodeType.FOLDER:
+            return Response(
+                {'detail': 'Only folders can be synced.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = FileSyncService(log=logger)
+        result = service.sync_folder_shallow(request.user, parent_db=file_obj)
+        return Response({
+            'files_created': result.files_created,
+            'folders_created': result.folders_created,
+            'files_soft_deleted': result.files_soft_deleted,
+            'folders_soft_deleted': result.folders_soft_deleted,
+            'errors': result.errors,
+        })

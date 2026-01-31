@@ -4,20 +4,20 @@
 
 Quick improvements with high impact on existing features.
 
-- [ ] **Drag & drop upload** - Drag files from OS directly into the browser
-- [ ] **Preview PDF** - Integrated PDF viewer (pdf.js)
-- [ ] **Preview Markdown** - Markdown rendering in the file viewer
-- [ ] **Preview code** - Syntax highlighting (highlight.js / Shiki)
+- [x] **Drag & drop upload** - Drag files from OS directly into the browser
+- [x] **Preview PDF** - Integrated PDF viewer (pdf.js)
+- [x] **Preview Markdown** - Markdown rendering in the file viewer
+- [x] **Preview code** - Syntax highlighting (highlight.js / Shiki)
 - [ ] **Global keyboard shortcuts** - Ctrl+K command palette, Ctrl+N new, Delete, Ctrl+C/V
 - [ ] **Folder sizes** - Recursive size calculation displayed in properties
 - [ ] **Clickable breadcrumb in properties** - Navigate to parent from modal
 - [ ] **Multi-select with Shift+Click** - Range selection in the file browser
 - [ ] **Download file/folder** - Download a file or folder (zip)
 - [ ] **User quota** - Storage limit per user with gauge in dashboard
-- [ ] **Persistent Dark/Light mode** - Save chosen theme server-side
-- [ ] **Enhanced toast notifications** - Notification stack with auto-dismiss
-- [ ] **Empty states** - Illustrations when a folder/view is empty
-- [ ] **Persistent sorting** - Remember user's chosen sort order (cookie/DB)
+- [x] **Persistent Dark/Light mode** - Save chosen theme server-side
+- [x] **Enhanced toast notifications** - Notification stack with auto-dismiss
+- [x] **Empty states** - Illustrations when a folder/view is empty
+- [x] **Persistent sorting** - Remember user's chosen sort order (cookie/DB)
 - [ ] **Avatar upload** - User profile picture
 
 ---
@@ -235,9 +235,9 @@ Form and survey creation.
 Features shared across all modules.
 
 ### Global Search
-- [ ] Unified search across all modules (Ctrl+K)
+- [x] Unified search across all modules (Ctrl+K)
 - [ ] Full-text indexing (PostgreSQL FTS or Meilisearch)
-- [ ] Results grouped by type (file, task, note, contact...)
+- [x] Results grouped by type (file, task, note, contact...)
 - [ ] Recent searches and suggestions
 
 ### Notifications
@@ -267,8 +267,8 @@ Features shared across all modules.
 ### UI/UX
 - [ ] PWA (Progressive Web App) - installable on desktop/mobile
 - [ ] Mobile responsive design
-- [ ] Modular sidebar (each module = one section)
-- [ ] Customizable themes
+- [x] Modular sidebar (each module = one section)
+- [x] Customizable themes
 - [ ] Onboarding wizard for new users
 - [ ] Focus mode (hide sidebar)
 - [ ] Keyboard shortcuts per module

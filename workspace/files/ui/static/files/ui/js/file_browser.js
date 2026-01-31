@@ -409,7 +409,11 @@ window.fileBrowser = function fileBrowser() {
     async handleUpload(event) {
       const files = event.target.files;
       if (!files.length) return;
+      await this.uploadFiles(files);
+    },
 
+    async uploadFiles(files) {
+      let uploaded = 0;
       for (const file of files) {
         const formData = new FormData();
         formData.append('name', file.name);
@@ -427,7 +431,9 @@ window.fileBrowser = function fileBrowser() {
             },
             body: formData
           });
-          if (!response.ok) {
+          if (response.ok) {
+            uploaded++;
+          } else {
             const data = await response.json();
             this.showAlert('error', `Failed to upload ${file.name}: ${data.detail || 'Unknown error'}`);
           }
@@ -435,7 +441,48 @@ window.fileBrowser = function fileBrowser() {
           this.showAlert('error', `Failed to upload ${file.name}`);
         }
       }
-          this.refreshFolderBrowser();
+      if (uploaded > 0) {
+        this.showAlert('success', `Uploaded ${uploaded} file${uploaded > 1 ? 's' : ''}`);
+        this.refreshFolderBrowser();
+      }
+    },
+
+    // --- Drag & drop upload ---
+    dropZoneActive: false,
+    _dropCounter: 0,
+
+    get canUpload() {
+      return !!document.getElementById('file-upload-input');
+    },
+
+    onFileDragEnter(e) {
+      if (!e.dataTransfer.types.includes('Files') || !this.canUpload) return;
+      e.preventDefault();
+      this._dropCounter++;
+      this.dropZoneActive = true;
+    },
+
+    onFileDragOver(e) {
+      if (!e.dataTransfer.types.includes('Files') || !this.canUpload) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    },
+
+    onFileDragLeave() {
+      this._dropCounter--;
+      if (this._dropCounter <= 0) {
+        this._dropCounter = 0;
+        this.dropZoneActive = false;
+      }
+    },
+
+    async onFileDrop(e) {
+      e.preventDefault();
+      this._dropCounter = 0;
+      this.dropZoneActive = false;
+      const files = e.dataTransfer.files;
+      if (!files.length || !this.canUpload) return;
+      await this.uploadFiles(files);
     },
 
     async renameItem(uuid, newName) {

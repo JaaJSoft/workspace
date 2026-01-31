@@ -158,7 +158,20 @@
     </div>
 
     <!-- Main Content Area with Table -->
-    <div class="flex-1 overflow-hidden flex flex-col bg-base-200/30">
+    <div class="flex-1 overflow-hidden flex flex-col bg-base-200/30 relative"
+         @dragenter="onFileDragEnter($event)"
+         @dragover="onFileDragOver($event)"
+         @dragleave="onFileDragLeave($event)"
+         @drop.prevent="onFileDrop($event)">
+      <!-- Drop zone overlay -->
+      <div x-show="dropZoneActive" x-cloak x-transition.opacity
+           class="absolute inset-0 z-50 bg-base-100/90 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg flex items-center justify-center pointer-events-none">
+        <div class="text-center">
+          <i data-lucide="upload-cloud" class="w-12 h-12 mx-auto mb-3 text-primary"></i>
+          <p class="text-lg font-semibold text-primary">Drop files to upload</p>
+          <p class="text-sm text-base-content/60">Files will be added to the current folder</p>
+        </div>
+      </div>
       {% include 'files/ui/partials/folder_content.html' with nodes=nodes folder_stats=folder_stats empty_title=empty_title empty_message=empty_message %}
     </div>
   </div>

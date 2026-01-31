@@ -2,7 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Max, Q, Sum
 from django.shortcuts import render
 
-from workspace.common.module_registry import registry
+from workspace.core.module_registry import registry
 from workspace.files.models import File, FileFavorite
 
 INSIGHTS_LIMIT = 6

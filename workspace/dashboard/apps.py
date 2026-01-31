@@ -6,7 +6,7 @@ class DashboardConfig(AppConfig):
     name = 'workspace.dashboard'
 
     def ready(self):
-        from workspace.common.module_registry import ModuleInfo, registry
+        from workspace.core.module_registry import ModuleInfo, registry
 
         registry.register(ModuleInfo(
             name='Dashboard',

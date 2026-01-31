@@ -26,7 +26,7 @@ api_urlpatterns = [
     path('schema/swagger-ui/', login_required(SpectacularSwaggerView.as_view(url_name='schema')), name='swagger-ui'),
     path('schema/redoc/', login_required(SpectacularRedocView.as_view(url_name='schema')), name='redoc'),
     # API endpoints
-    path('', include('workspace.common.urls')),
+    path('', include('workspace.core.urls')),
     path('', include('workspace.files.urls')),
     path('', include('workspace.users.urls')),
     path('', include('workspace.dashboard.urls')),

@@ -1,6 +1,6 @@
 from dataclasses import asdict
 
-from workspace.common.module_registry import registry
+from workspace.core.module_registry import registry
 
 
 def workspace_modules(request):

@@ -120,3 +120,4 @@ db.sqlite3*
 
 /files/
 /NUL
+/.claude/settings.local.json

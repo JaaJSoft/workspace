@@ -54,16 +54,24 @@ def check_changelog(version: str) -> None:
 
 
 def check_git_clean() -> None:
+    # Files that the release script will commit itself
+    allowed = {"CHANGELOG.md"}
     result = subprocess.run(
         ["git", "status", "--porcelain"],
         capture_output=True,
         text=True,
         cwd=ROOT,
     )
-    if result.stdout.strip():
+    dirty = []
+    for line in result.stdout.splitlines():
+        # porcelain format: "XY filename"
+        filename = line[3:].strip().strip('"')
+        if filename not in allowed:
+            dirty.append(line)
+    if dirty:
         print("Error: git working directory is not clean.")
         print("Commit or stash your changes before releasing.")
-        print(result.stdout)
+        print("\n".join(dirty))
         sys.exit(1)
     print("  Git working directory is clean")
 
@@ -117,7 +125,7 @@ def update_readme(change_date: str) -> None:
 def git_commit_and_tag(version: str) -> None:
     tag = f"v{version}"
 
-    files = ["pyproject.toml", "LICENSE", "README.md"]
+    files = ["pyproject.toml", "LICENSE", "README.md", "CHANGELOG.md"]
 
     # Include uv.lock if it was modified
     result = subprocess.run(

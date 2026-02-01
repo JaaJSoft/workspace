@@ -1331,8 +1331,8 @@ window.fileTableControls = function fileTableControls() {
         return;
       }
 
-      // Enter: Open folder or view file
-      if (key === 'Enter') {
+      // Enter / Space: Open folder or view file
+      if (key === 'Enter' || key === ' ') {
         e.preventDefault();
         if (data.nodeType === 'folder') {
           const link = document.querySelector(`tr[data-uuid="${data.uuid}"] a[data-folder-link]`);

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- Add folder download as ZIP archive via `/api/v1/files/<uuid>/download`
+- Extend file download endpoint to support both files and folders
+- Update context menu with download option for folders ("Download as ZIP")
+- Fix release script consistency and license change date formatting
+
 ## 0.2.0
 
 - Add PostgreSQL support via `dj-database-url` and `psycopg`

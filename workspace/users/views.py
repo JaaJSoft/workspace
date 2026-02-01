@@ -13,7 +13,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.users.models import UserSetting
-from workspace.users.settings_service import get_all_settings, get_module_settings
 
 
 @extend_schema(tags=['Users'])
@@ -178,14 +177,10 @@ class SettingsListView(APIView):
     )
     def get(self, request):
         module = request.query_params.get('module')
+        qs = UserSetting.objects.filter(user=request.user)
         if module:
-            module_settings = get_module_settings(request.user, module)
-            results = [
-                {'module': module, 'key': k, 'value': v}
-                for k, v in module_settings.items()
-            ]
-        else:
-            results = get_all_settings(request.user)
+            qs = qs.filter(module=module)
+        results = list(qs.values('module', 'key', 'value'))
         return Response({'results': results})
 
 
@@ -203,14 +198,15 @@ class SettingDetailView(APIView):
         },
     )
     def get(self, request, module, key):
-        try:
-            obj = UserSetting.objects.get(user=request.user, module=module, key=key)
-        except UserSetting.DoesNotExist:
+        row = UserSetting.objects.filter(
+            user=request.user, module=module, key=key,
+        ).values('module', 'key', 'value').first()
+        if not row:
             return Response(
                 {'detail': 'Setting not found.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        return Response({'module': obj.module, 'key': obj.key, 'value': obj.value})
+        return Response(row)
 
     @extend_schema(
         summary="Create or update a setting",

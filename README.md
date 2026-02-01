@@ -58,6 +58,7 @@ This approach prioritizes operational simplicity, security, and the freedom to d
 - Soft-delete with trash and configurable retention (30 days)
 - File copy with conflict resolution
 - Custom folder icons and colors
+- WebDAV access with Django authentication
 
 ### Dashboard
 - Storage statistics and file/folder counts

@@ -1013,6 +1013,9 @@ window.fileTableControls = function fileTableControls() {
     // Selection state
     selectedUuids: new Set(),
 
+    // Hovered row (for shortcuts when nothing is selected)
+    hoveredUuid: null,
+
     // Clipboard state
     hasClipboardItems: false,
 
@@ -1060,6 +1063,13 @@ window.fileTableControls = function fileTableControls() {
         this.hasClipboardItems = window.fileClipboard.hasItems();
       });
       this.hasClipboardItems = window.fileClipboard.hasItems();
+
+      // Keyboard shortcuts (single listener — remove previous on re-init)
+      if (window._fileShortcutHandler) {
+        window.removeEventListener('keydown', window._fileShortcutHandler);
+      }
+      window._fileShortcutHandler = (e) => this._handleKeyboardShortcut(e);
+      window.addEventListener('keydown', window._fileShortcutHandler);
     },
 
     openContextMenu(event, nodeData) {
@@ -1177,6 +1187,192 @@ window.fileTableControls = function fileTableControls() {
       window.dispatchEvent(new CustomEvent('bulk-action', {
         detail: { action: 'paste' }
       }));
+    },
+
+    // --- Keyboard shortcuts ---
+
+    _isInputFocused() {
+      const el = document.activeElement;
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      if (tag === 'INPUT') {
+        const type = (el.type || '').toLowerCase();
+        // Checkboxes and radios don't accept text — allow shortcuts
+        if (type === 'checkbox' || type === 'radio') return false;
+        return true;
+      }
+      if (el.isContentEditable) return true;
+      return false;
+    },
+
+    _getRowDataByUuid(uuid) {
+      if (!uuid) return null;
+      const row = document.querySelector(`tr[data-uuid="${uuid}"]`);
+      if (!row) return null;
+      return {
+        uuid,
+        name: row.dataset.displayName || row.dataset.name || '',
+        nodeType: row.dataset.nodeType || 'file',
+        isFavorite: row.dataset.favorite === '1',
+        isPinned: row.dataset.pinned === '1',
+        mimeType: row.dataset.mimeType || '',
+        isViewable: row.dataset.viewable === '1',
+      };
+    },
+
+    _handleKeyboardShortcut(e) {
+      // Never interfere with events inside open dialogs
+      if (e.target.closest('dialog[open]')) return;
+      // Skip when typing in text inputs
+      if (this._isInputFocused()) return;
+
+      const ctrl = e.ctrlKey || e.metaKey;
+      const key = e.key;
+      const count = this.getSelectedCount();
+
+      // Determine target: selection takes priority, then hovered row
+      const useHover = count === 0 && this.hoveredUuid;
+
+      // --- Shortcuts that don't require any target ---
+
+      // Ctrl+V: Paste
+      if (ctrl && key === 'v') {
+        if (window.fileClipboard.hasItems()) {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent('folder-action', {
+            detail: { action: 'paste' }
+          }));
+        }
+        return;
+      }
+
+      // No target at all — nothing to act on
+      if (count === 0 && !useHover) return;
+
+      // --- Multi-selection shortcuts (selected items only) ---
+      if (count > 1) {
+        const uuids = this.getSelectedUuids();
+
+        if (key === 'Delete') {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'delete', uuids }
+          }));
+          return;
+        }
+
+        if (ctrl && key === 'x') {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'cut', uuids }
+          }));
+          return;
+        }
+
+        if (ctrl && key === 'c') {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'copy', uuids }
+          }));
+          return;
+        }
+
+        if ((key === 'f' || key === 'F') && !ctrl) {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'favorite', uuids, add: true }
+          }));
+          return;
+        }
+
+        // No single-item shortcuts for multi-selection
+        return;
+      }
+
+      // --- Single target: 1 selected item OR hovered item ---
+      const targetUuid = useHover ? this.hoveredUuid : this.getSelectedUuids()[0];
+      const data = this._getRowDataByUuid(targetUuid);
+      if (!data) return;
+
+      // Delete
+      if (key === 'Delete') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('file-action', {
+          detail: { action: 'delete', uuid: data.uuid, name: data.name, nodeType: data.nodeType }
+        }));
+        return;
+      }
+
+      // Ctrl+X: Cut
+      if (ctrl && key === 'x') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('file-action', {
+          detail: { action: 'cut', uuid: data.uuid, name: data.name, nodeType: data.nodeType }
+        }));
+        return;
+      }
+
+      // Ctrl+C: Copy
+      if (ctrl && key === 'c') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('file-action', {
+          detail: { action: 'copy', uuid: data.uuid, name: data.name, nodeType: data.nodeType }
+        }));
+        return;
+      }
+
+      // F: Toggle favorite
+      if ((key === 'f' || key === 'F') && !ctrl) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('file-action', {
+          detail: { action: 'toggleFavorite', uuid: data.uuid, isFavorite: data.isFavorite }
+        }));
+        return;
+      }
+
+      // Enter: Open folder or view file
+      if (key === 'Enter') {
+        e.preventDefault();
+        if (data.nodeType === 'folder') {
+          const link = document.querySelector(`tr[data-uuid="${data.uuid}"] a[data-folder-link]`);
+          if (link) link.click();
+        } else if (data.isViewable) {
+          window.dispatchEvent(new CustomEvent('open-file-viewer', {
+            detail: { uuid: data.uuid, name: data.name, mime_type: data.mimeType }
+          }));
+        }
+        return;
+      }
+
+      // F2: Rename
+      if (key === 'F2') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('file-action', {
+          detail: { action: 'rename', uuid: data.uuid, name: data.name }
+        }));
+        return;
+      }
+
+      // P: Pin/unpin (folders only)
+      if ((key === 'p' || key === 'P') && !ctrl) {
+        if (data.nodeType === 'folder') {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent('file-action', {
+            detail: { action: 'togglePin', uuid: data.uuid, isPinned: data.isPinned }
+          }));
+        }
+        return;
+      }
+
+      // Ctrl+I: Properties
+      if (ctrl && key === 'i') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('open-properties', {
+          detail: { uuid: data.uuid, nodeType: data.nodeType }
+        }));
+        return;
+      }
     },
 
     initStorageKey() {

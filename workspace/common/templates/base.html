@@ -110,6 +110,7 @@
           const cleanup = () => {
             okBtn.removeEventListener('click', onOk);
             dialog.removeEventListener('close', onClose);
+            dialog.removeEventListener('keydown', onKeydown);
           };
 
           const onOk = () => {
@@ -123,9 +124,18 @@
             resolve(false);
           };
 
+          const onKeydown = (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onOk();
+            }
+          };
+
           okBtn.addEventListener('click', onOk);
           dialog.addEventListener('close', onClose);
+          dialog.addEventListener('keydown', onKeydown);
           dialog.showModal();
+          okBtn.focus();
         });
       },
 

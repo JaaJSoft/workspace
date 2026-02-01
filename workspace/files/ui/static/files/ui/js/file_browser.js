@@ -80,6 +80,60 @@ window.navButtons = function navButtons() {
   };
 };
 
+// --- File browser preferences ---
+window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4 };
+window._filePrefsCache = { ...window._filePrefsDefaults };
+
+window.getFilePrefs = function() {
+  return window._filePrefsCache;
+};
+
+window.filePreferences = function filePreferences() {
+  const API_URL = '/api/v1/settings/files/preferences';
+
+  return {
+    prefs: { ...window._filePrefsCache },
+    _saveTimer: null,
+
+    init() {
+      fetch(API_URL, { credentials: 'same-origin' })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data && data.value && typeof data.value === 'object') {
+            this.prefs = { ...window._filePrefsDefaults, ...data.value };
+            this._broadcast();
+          }
+        })
+        .catch(() => {});
+    },
+
+    update(key, value) {
+      this.prefs[key] = value;
+      this._saveRemote();
+      this._broadcast();
+    },
+
+    _broadcast() {
+      window._filePrefsCache = { ...this.prefs };
+      window.dispatchEvent(new CustomEvent('preferences-changed', { detail: this.prefs }));
+    },
+
+    _saveRemote() {
+      clearTimeout(this._saveTimer);
+      this._saveTimer = setTimeout(() => {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
+          || '';
+        fetch(API_URL, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ value: this.prefs }),
+        }).catch(() => {});
+      }, 500);
+    },
+  };
+};
+
 window.sidebarCollapse = function sidebarCollapse() {
   return {
     collapsed: localStorage.getItem('sidebarCollapsed') === 'true',
@@ -95,6 +149,7 @@ window.sidebarCollapse = function sidebarCollapse() {
       }
       this.syncActiveView();
       window.addEventListener('popstate', () => this.syncActiveView());
+      window.addEventListener('nav-state-changed', () => this.syncActiveView());
       window.matchMedia('(max-width: 1023px)').addEventListener('change', (event) => {
         if (event.matches) {
           this.collapsed = true;
@@ -366,15 +421,16 @@ window.fileBrowser = function fileBrowser() {
     },
 
     async confirmDelete(uuid, name, nodeType) {
-      const confirmed = await AppDialog.confirm({
-        title: `Delete ${nodeType}?`,
-        message: `Move "${name}" to trash?${nodeType === 'folder' ? ' This will also move all contents.' : ''}`,
-        okLabel: 'Move to trash',
-        okClass: 'btn-error'
-      });
-      if (confirmed) {
-        this.deleteItem(uuid);
+      if (window.getFilePrefs().confirmBeforeDelete) {
+        const confirmed = await AppDialog.confirm({
+          title: `Delete ${nodeType}?`,
+          message: `Move "${name}" to trash?${nodeType === 'folder' ? ' This will also move all contents.' : ''}`,
+          okLabel: 'Move to trash',
+          okClass: 'btn-error'
+        });
+        if (!confirmed) return;
       }
+      this.deleteItem(uuid);
     },
 
     async createFolder(name) {
@@ -758,15 +814,16 @@ window.fileBrowser = function fileBrowser() {
     async bulkDeleteItems(uuids) {
       if (!uuids || uuids.length === 0) return;
 
-      const count = uuids.length;
-      const confirmed = await AppDialog.confirm({
-        title: 'Delete Items',
-        message: `Are you sure you want to delete ${count} item${count > 1 ? 's' : ''}? They will be moved to trash.`,
-        confirmText: 'Delete',
-        confirmClass: 'btn-error'
-      });
-
-      if (!confirmed) return;
+      if (window.getFilePrefs().confirmBeforeDelete) {
+        const count = uuids.length;
+        const confirmed = await AppDialog.confirm({
+          title: 'Delete Items',
+          message: `Are you sure you want to delete ${count} item${count > 1 ? 's' : ''}? They will be moved to trash.`,
+          confirmText: 'Delete',
+          confirmClass: 'btn-error'
+        });
+        if (!confirmed) return;
+      }
 
       let successCount = 0;
       let errorCount = 0;
@@ -1511,17 +1568,26 @@ window.fileTableControls = function fileTableControls() {
         if (raw) this._applyStateData(JSON.parse(raw));
       } catch (e) { /* ignore */ }
 
-      // 2. Fetch authoritative state from server, reconcile if different
+      // 2. Apply cached server state if available (already fetched this session)
+      if (window._tableControlsCache) {
+        this._applyStateData(window._tableControlsCache);
+        this.pruneMissingColumns();
+        this.applyAll();
+        this._saveToLocalStorage();
+        this._lastSyncedState = JSON.stringify(this._getStatePayload());
+        return;
+      }
+
+      // 3. First load: fetch from server, cache for subsequent navigations
       fetch('/api/v1/settings/files/table_controls')
         .then(r => r.ok ? r.json() : null)
         .then(data => {
           if (!data || !data.value) return;
+          window._tableControlsCache = data.value;
           this._applyStateData(data.value);
           this.pruneMissingColumns();
           this.applyAll();
-          // Keep localStorage in sync
           this._saveToLocalStorage();
-          // Snapshot so saveState() can detect real changes
           this._lastSyncedState = JSON.stringify(this._getStatePayload());
         })
         .catch(() => {});
@@ -1561,7 +1627,7 @@ window.fileTableControls = function fileTableControls() {
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
           body: JSON.stringify({ value: payload }),
         })
-          .then(() => { this._lastSyncedState = serialized; })
+          .then(() => { this._lastSyncedState = serialized; window._tableControlsCache = payload; })
           .catch(() => {});
       }, 500);
     },

@@ -26,16 +26,68 @@
           <i data-lucide="hard-drive" class="w-6 h-6 text-primary"></i>
           <span x-show="!collapsed" x-transition>My Files</span>
         </h2>
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm btn-square mr-1 hover:text-primary"
-          aria-label="Settings"
-          title="Settings"
-          x-show="!collapsed"
-          x-transition
-        >
-          <i data-lucide="settings" class="w-4 h-4"></i>
-        </button>
+        <div class="dropdown dropdown-end" x-data="filePreferences()" x-show="!collapsed" x-transition>
+          <button
+            type="button"
+            tabindex="0"
+            class="btn btn-ghost btn-sm btn-square mr-1 hover:text-primary"
+            aria-label="Settings"
+            title="Settings"
+          >
+            <i data-lucide="settings" class="w-4 h-4"></i>
+          </button>
+          <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1">
+            <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+              <i data-lucide="settings" class="w-4 h-4 text-primary"></i>
+              Preferences
+            </h4>
+            <div class="space-y-3">
+              <!-- Show hidden files -->
+              <label class="flex items-center justify-between gap-2 cursor-pointer">
+                <span class="text-sm">Show hidden files</span>
+                <input type="checkbox" class="toggle toggle-sm toggle-primary"
+                  :checked="prefs.showHiddenFiles"
+                  @change="update('showHiddenFiles', $event.target.checked)">
+              </label>
+              <!-- Confirm before delete -->
+              <label class="flex items-center justify-between gap-2 cursor-pointer">
+                <span class="text-sm">Confirm before delete</span>
+                <input type="checkbox" class="toggle toggle-sm toggle-primary"
+                  :checked="prefs.confirmBeforeDelete"
+                  @change="update('confirmBeforeDelete', $event.target.checked)">
+              </label>
+              <hr class="border-base-300">
+              <!-- Default sort -->
+              <div>
+                <label class="text-sm text-base-content/60 block mb-1">Default sort</label>
+                <select class="select select-bordered select-sm w-full"
+                  :value="prefs.defaultSort"
+                  @change="update('defaultSort', $event.target.value)">
+                  <option value="default">Default</option>
+                  <option value="name">Name</option>
+                  <option value="modified">Modified</option>
+                  <option value="created">Created</option>
+                  <option value="size">Size</option>
+                  <option value="type">Type</option>
+                </select>
+              </div>
+              <hr class="border-base-300">
+              <!-- Breadcrumb collapse threshold -->
+              <div>
+                <label class="text-sm text-base-content/60 block mb-1">
+                  Breadcrumb collapse after
+                </label>
+                <div class="flex items-center gap-2">
+                  <input type="range" min="2" max="8" step="1"
+                    class="range range-sm range-primary flex-1"
+                    :value="prefs.breadcrumbCollapse"
+                    @input="update('breadcrumbCollapse', parseInt($event.target.value))">
+                  <span class="text-sm font-mono w-5 text-center" x-text="prefs.breadcrumbCollapse"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

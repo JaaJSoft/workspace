@@ -31,6 +31,42 @@
     [x-cloak] {
       display: none !important;
     }
+
+    /* Breadcrumb separators */
+    .bc-sep > li + li::before {
+      content: "";
+      display: block;
+      margin: 0 0.375rem;
+      height: 0.375rem;
+      width: 0.375rem;
+      opacity: 0.4;
+      rotate: 45deg;
+      border-top: 1px solid;
+      border-right: 1px solid;
+      flex-shrink: 0;
+    }
+    .bc-sep.bc-sep-slash > li + li::before {
+      content: "/";
+      rotate: none;
+      border: none;
+      height: auto;
+      width: auto;
+    }
+    .bc-sep.bc-sep-dot > li + li::before {
+      content: "·";
+      rotate: none;
+      border: none;
+      height: auto;
+      width: auto;
+      font-size: 1.25em;
+    }
+    .bc-sep.bc-sep-arrow > li + li::before {
+      content: "→";
+      rotate: none;
+      border: none;
+      height: auto;
+      width: auto;
+    }
   </style>
 
   {% block extra_head %}{% endblock %}

@@ -1,3 +1,85 @@
+// --- Folder navigation history ---
+// Uses two persistent hidden <a> elements (#folder-nav-push / #folder-nav-replace)
+// to navigate via Alpine AJAX, just like clicking a folder link.
+window.folderNav = {
+  _stack: [],
+  _index: -1,
+  _skipPush: false,
+
+  init() {
+    this._stack = [window.location.pathname + window.location.search];
+    this._index = 0;
+    window.addEventListener('popstate', () => { this._skipPush = true; });
+  },
+
+  // Called from x-init on #folder-browser after every AJAX render
+  onNavigate(url) {
+    if (this._skipPush) {
+      const idx = this._stack.lastIndexOf(url);
+      if (idx !== -1) this._index = idx;
+      this._skipPush = false;
+    } else if (url !== this._stack[this._index]) {
+      this._stack = this._stack.slice(0, this._index + 1);
+      this._stack.push(url);
+      this._index = this._stack.length - 1;
+    }
+    window.dispatchEvent(new Event('nav-state-changed'));
+  },
+
+  canGoBack()    { return this._index > 0; },
+  canGoForward() { return this._index < this._stack.length - 1; },
+
+  back() {
+    if (!this.canGoBack()) return;
+    this._skipPush = true;
+    this._index--;
+    this._clickNavLink(this._stack[this._index], false);
+  },
+
+  forward() {
+    if (!this.canGoForward()) return;
+    this._skipPush = true;
+    this._index++;
+    this._clickNavLink(this._stack[this._index], false);
+  },
+
+  navigateTo(url) {
+    if (url) this._clickNavLink(url, true);
+  },
+
+  _clickNavLink(url, push) {
+    const link = document.getElementById(push ? 'folder-nav-push' : 'folder-nav-replace');
+    if (!link) return;
+    link.href = url;
+    link.click();
+  },
+};
+window.folderNav.init();
+
+// --- Navigation buttons Alpine component ---
+window.navButtons = function navButtons() {
+  return {
+    canGoBack: false,
+    canGoForward: false,
+    parentUrl: '',
+
+    init() {
+      this._syncState();
+      window.addEventListener('nav-state-changed', () => this._syncState());
+    },
+
+    _syncState() {
+      this.canGoBack = window.folderNav.canGoBack();
+      this.canGoForward = window.folderNav.canGoForward();
+      this.parentUrl = document.getElementById('folder-browser')?.dataset.parentUrl || '';
+    },
+
+    navigateUp() {
+      window.folderNav.navigateTo(this.parentUrl);
+    },
+  };
+};
+
 window.sidebarCollapse = function sidebarCollapse() {
   return {
     collapsed: localStorage.getItem('sidebarCollapsed') === 'true',
@@ -1229,6 +1311,25 @@ window.fileTableControls = function fileTableControls() {
 
       const ctrl = e.ctrlKey || e.metaKey;
       const key = e.key;
+
+      // Alt+Arrow navigation shortcuts (before any selection/hover checks)
+      if (e.altKey && key === 'ArrowLeft') {
+        e.preventDefault();
+        window.folderNav.back();
+        return;
+      }
+      if (e.altKey && key === 'ArrowRight') {
+        e.preventDefault();
+        window.folderNav.forward();
+        return;
+      }
+      if (e.altKey && key === 'ArrowUp') {
+        e.preventDefault();
+        const parentUrl = document.getElementById('folder-browser')?.dataset.parentUrl;
+        if (parentUrl) window.folderNav.navigateTo(parentUrl);
+        return;
+      }
+
       const count = this.getSelectedCount();
 
       // Determine target: selection takes priority, then hovered row

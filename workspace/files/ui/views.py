@@ -171,6 +171,8 @@ def _build_context(request, folder=None, is_trash_view=False):
         for pin in pinned_folders_qs:
             pin.folder.is_favorite = pinned_favorites.get(pin.folder_id, False)
 
+    parent_url = breadcrumbs[-2].get('url', '/files') if len(breadcrumbs) >= 2 else None
+
     return {
         'nodes': nodes,
         'current_folder': current_folder,
@@ -189,6 +191,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         'current_view_url': current_view_url,
         'empty_title': empty_title,
         'empty_message': empty_message,
+        'parent_url': parent_url,
         'pinned_folders': pinned_folders_qs,
     }
 

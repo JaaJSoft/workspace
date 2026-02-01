@@ -113,8 +113,11 @@
 
 {% block content %}
 <div x-data="fileBrowser()" class="h-full flex flex-col">
+  <!-- Persistent nav links for Alpine AJAX navigation (outside #folder-browser so they survive replacements) -->
+  <a id="folder-nav-push" class="hidden" x-target.push="folder-browser"></a>
+  <a id="folder-nav-replace" class="hidden" x-target.replace="folder-browser"></a>
   {% partialdef folder-browser inline %}
-  <div class="h-full flex flex-col" id="folder-browser" data-folder="{{ current_folder.uuid|default:'' }}" x-init="$nextTick(() => lucide.createIcons())">
+  <div class="h-full flex flex-col" id="folder-browser" data-folder="{{ current_folder.uuid|default:'' }}" data-view-url="{{ current_view_url }}" data-parent-url="{{ parent_url|default:'' }}" x-init="$nextTick(() => { lucide.createIcons(); window.folderNav.onNavigate($el.dataset.viewUrl); })">
 
     <!-- Top Header Bar -->
     <div class="bg-base-100 border-b border-base-300 p-4 lg:p-6">
@@ -125,16 +128,32 @@
           <!-- Breadcrumb row with action button aligned -->
           <div class="flex items-center justify-between gap-4 mb-1">
             <div class="flex items-center gap-2 min-w-0">
-              {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs x_target="folder-browser" x_target_history="push" %}
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm btn-square"
-                title="Sync & refresh"
-                aria-label="Sync and refresh folder"
-                @click="syncAndRefreshFolderBrowser()"
-              >
-                <i data-lucide="rotate-cw" class="w-4 h-4"></i>
-              </button>
+              <div class="join" x-data="navButtons()">
+                <button type="button"
+                  class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
+                  :class="canGoBack ? 'text-base-content' : 'text-base-content/20'"
+                  title="Back (Alt+Left)" :disabled="!canGoBack" @click="window.folderNav.back()">
+                  <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                </button>
+                <button type="button"
+                  class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
+                  :class="canGoForward ? 'text-base-content' : 'text-base-content/20'"
+                  title="Forward (Alt+Right)" :disabled="!canGoForward" @click="window.folderNav.forward()">
+                  <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </button>
+                <button type="button"
+                  class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
+                  :class="parentUrl ? 'text-base-content' : 'text-base-content/20'"
+                  title="Up (Alt+Up)" :disabled="!parentUrl" @click="navigateUp()">
+                  <i data-lucide="arrow-up" class="w-4 h-4"></i>
+                </button>
+                <button type="button" class="btn btn-ghost btn-sm btn-square join-item"
+                  title="Sync & refresh" aria-label="Sync and refresh folder"
+                  @click="syncAndRefreshFolderBrowser()">
+                  <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                </button>
+              </div>
+              {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs collapse=True x_target="folder-browser" x_target_history="push" %}
               <a
                 href="{{ current_view_url }}"
                 class="hidden"

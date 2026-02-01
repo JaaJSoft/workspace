@@ -100,7 +100,7 @@ def update_license(version: str, change_date: str) -> None:
     )
     content = re.sub(
         r"(Change Date:\s+)\S+",
-        rf"\1{change_date}",
+        rf"\g<1>{change_date}",
         content,
     )
 

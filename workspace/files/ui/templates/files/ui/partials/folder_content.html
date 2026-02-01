@@ -180,7 +180,7 @@
           {% for node in nodes %}
           <tr
             class="hover group {% if node.node_type == 'folder' %}cursor-pointer{% endif %}"
-            :class="isSelected('{{ node.uuid }}') ? 'bg-primary/10' : ''"
+            :class="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-primary/10' : ''"
             @mouseenter="hoveredUuid = '{{ node.uuid }}'"
             @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
             data-uuid="{{ node.uuid }}"
@@ -216,7 +216,7 @@
               <input
                 type="checkbox"
                 class="checkbox checkbox-sm"
-                :checked="isSelected('{{ node.uuid }}')"
+                :checked="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}')"
                 @click="toggleRowSelection('{{ node.uuid }}')"
               />
             </td>

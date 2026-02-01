@@ -1,3 +1,18 @@
+<!-- Monaco DaisyUI theme bridge — overrides inline styles via !important -->
+<style>
+  .monaco-editor,
+  .monaco-editor .monaco-editor-background,
+  .monaco-editor .margin {
+    background-color: oklch(var(--b2)) !important;
+  }
+  .monaco-editor .minimap-shadow-visible {
+    box-shadow: none !important;
+  }
+  .monaco-editor .scroll-decoration {
+    box-shadow: none !important;
+  }
+</style>
+
 <!-- Text/Code Viewer with Monaco Editor -->
 <div class="flex flex-col h-full"
      x-data="textViewerMonaco()"
@@ -131,6 +146,12 @@ window.textViewerMonaco = function() {
     }, 500);
   }
 
+  function _detectTheme() {
+    var dt = (document.documentElement.getAttribute('data-theme') || '').toLowerCase();
+    var dark = ['dark','dracula','night','sunset','dim','black','luxury','halloween','forest','coffee','business','synthwave'];
+    return dark.some(function(t) { return dt.includes(t); }) ? 'vs-dark' : 'vs';
+  }
+
   return {
     isDirty: false,
     saving: false,
@@ -193,7 +214,7 @@ window.textViewerMonaco = function() {
         _editor = monaco.editor.create(container, {
           value: content,
           language: language,
-          theme: self.detectTheme(),
+          theme: _detectTheme(),
           minimap: { enabled: self.minimapEnabled },
           wordWrap: self.wordWrap ? 'on' : 'off',
           fontSize: self.fontSize,
@@ -217,19 +238,13 @@ window.textViewerMonaco = function() {
         });
 
         _themeObserver = new MutationObserver(function() {
-          monaco.editor.setTheme(self.detectTheme());
+          monaco.editor.setTheme(_detectTheme());
         });
         _themeObserver.observe(document.documentElement, {
           attributes: true,
           attributeFilter: ['data-theme']
         });
       });
-    },
-
-    detectTheme() {
-      var dataTheme = document.documentElement.getAttribute('data-theme') || '';
-      var darkThemes = ['dark', 'dracula', 'night', 'sunset', 'dim', 'black', 'luxury', 'halloween', 'forest', 'coffee', 'business', 'synthwave'];
-      return darkThemes.some(function(t) { return dataTheme.toLowerCase().includes(t); }) ? 'vs-dark' : 'vs';
     },
 
     _currentPrefs() {

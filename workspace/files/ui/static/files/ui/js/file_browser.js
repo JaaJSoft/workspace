@@ -1070,7 +1070,11 @@ window.fileBrowser = function fileBrowser() {
             this.showAlert('error', 'Failed to refresh items');
             return;
           }
-          target.replaceWith(fresh);
+          if (window.Alpine?.mutateDom) {
+            window.Alpine.mutateDom(() => { target.replaceWith(fresh); });
+          } else {
+            target.replaceWith(fresh);
+          }
           if (window.Alpine?.initTree) {
             window.Alpine.initTree(fresh);
           }

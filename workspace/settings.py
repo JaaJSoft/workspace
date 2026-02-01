@@ -13,6 +13,8 @@ import mimetypes
 import os
 from pathlib import Path
 
+import dj_database_url
+
 # Fix MIME types for JavaScript modules on Windows
 mimetypes.add_type("application/javascript", ".js", True)
 mimetypes.add_type("application/javascript", ".mjs", True)
@@ -322,41 +324,32 @@ WSGI_APPLICATION = 'workspace.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-# Allow overriding SQLite DB file location via environment variables for volume mounts
-# Use SQLITE_PATH or DB_PATH; relative paths are resolved from BASE_DIR
-SQLITE_PATH = os.getenv('SQLITE_PATH') or os.getenv('DB_PATH')
-if SQLITE_PATH:
-    _db_name = Path(SQLITE_PATH)
-    if not _db_name.is_absolute():
-        _db_name = (BASE_DIR / _db_name).resolve()
-else:
-    _db_name = BASE_DIR / 'db.sqlite3'
-
-# Ensure the directory for the SQLite file exists (no error if it already exists)
-try:
-    Path(_db_name).parent.mkdir(parents=True, exist_ok=True)
-except Exception:
-    pass
-
+# Use DATABASE_URL for any backend:
+#   sqlite:///db.sqlite3               (relative to BASE_DIR)
+#   sqlite:////absolute/path/db.sqlite3
+#   postgres://user:pass@host:5432/dbname
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': _db_name,
-        'OPTIONS': {
-            'timeout': 60.0,  # secondes; augmentez si vous voyez "database is locked"
-            'init_command': (
-                "PRAGMA journal_mode=WAL; "
-                "PRAGMA foreign_keys=ON; "
-                "PRAGMA busy_timeout=60000; "  # 60s pour K8s avec concurrence
-                "PRAGMA synchronous=NORMAL; "
-                "PRAGMA temp_store=MEMORY; "
-                "PRAGMA mmap_size=268435456; "  # 256 MiB
-                "PRAGMA cache_size=-64000;"     # ~64 MiB (cache_size négatif = KiB)
-            ),
-        },
-        'CONN_MAX_AGE': 60,  # connexions persistantes 60s, réduit les réouvertures
-    }
+    'default': dj_database_url.config(default=f'sqlite:///{BASE_DIR / "db.sqlite3"}', conn_max_age=60),
 }
+
+# SQLite-specific optimizations (WAL mode, PRAGMAs)
+if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
+    try:
+        Path(DATABASES['default']['NAME']).parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+
+    DATABASES['default'].setdefault('OPTIONS', {})
+    DATABASES['default']['OPTIONS']['timeout'] = 60.0
+    DATABASES['default']['OPTIONS']['init_command'] = (
+        "PRAGMA journal_mode=WAL; "
+        "PRAGMA foreign_keys=ON; "
+        "PRAGMA busy_timeout=60000; "
+        "PRAGMA synchronous=NORMAL; "
+        "PRAGMA temp_store=MEMORY; "
+        "PRAGMA mmap_size=268435456; "
+        "PRAGMA cache_size=-64000;"
+    )
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

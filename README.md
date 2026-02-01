@@ -136,18 +136,18 @@ docker run -d -p 8000:8000 \
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|---|---|---|
-| `SECRET_KEY` | Django secret key | *required in production* |
-| `DEBUG` | Enable debug mode (`1`, `true`, `yes`, `on`) | `True` |
-| `ALLOWED_HOSTS` | Comma-separated allowed hosts | `*` |
-| `CSRF_TRUSTED_ORIGINS` | Comma-separated trusted CSRF origins | *(none)* |
-| `SQLITE_PATH` | Path to SQLite database (alias: `DB_PATH`) | `db.sqlite3` |
-| `REDIS_URL` | Redis URL for cache and sessions (alias: `DJANGO_REDIS_URL`) | *(none, in-memory fallback)* |
-| `STATIC_ROOT` | Collected static files directory | `staticfiles` |
-| `DJANGO_LOG_LEVEL` | Logging level | `INFO` |
-| `TRASH_RETENTION_DAYS` | Days before trashed items are permanently deleted | `30` |
-| `GUNICORN_WORKERS` | Gunicorn worker count (Docker) | `3` |
+| Variable               | Description                                                                         | Default                      |
+|------------------------|-------------------------------------------------------------------------------------|------------------------------|
+| `SECRET_KEY`           | Django secret key                                                                   | *required in production*     |
+| `DEBUG`                | Enable debug mode (`1`, `true`, `yes`, `on`)                                        | `True`                       |
+| `ALLOWED_HOSTS`        | Comma-separated allowed hosts                                                       | `*`                          |
+| `CSRF_TRUSTED_ORIGINS` | Comma-separated trusted CSRF origins                                                | *(none)*                     |
+| `DATABASE_URL`         | Database connection string (`sqlite:///db.sqlite3`, `postgres://user:pass@host/db`) | `sqlite:///db.sqlite3`       |
+| `REDIS_URL`            | Redis URL for cache and sessions (alias: `DJANGO_REDIS_URL`)                        | *(none, in-memory fallback)* |
+| `STATIC_ROOT`          | Collected static files directory                                                    | `staticfiles`                |
+| `DJANGO_LOG_LEVEL`     | Logging level                                                                       | `INFO`                       |
+| `TRASH_RETENTION_DAYS` | Days before trashed items are permanently deleted                                   | `30`                         |
+| `GUNICORN_WORKERS`     | Gunicorn worker count (Docker)                                                      | `3`                          |
 
 ## API
 

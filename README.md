@@ -82,7 +82,7 @@ Built with boring, reliable technology:
 |--------------------|------------------------------------------------|
 | **Backend**        | Django 6.0, Django REST Framework              |
 | **Frontend**       | Alpine.js, Tailwind CSS, DaisyUI, Lucide Icons |
-| **Database**       | SQLite (WAL mode) or PostgreSQL                |
+| **Database**       | SQLite (WAL mode)                              |
 | **Cache / Broker** | Redis (optional, for Celery tasks)             |
 | **Server**         | Gunicorn, WhiteNoise, Brotli compression       |
 | **Tooling**        | uv, Docker, drf-spectacular (OpenAPI)          |
@@ -133,86 +133,20 @@ docker run -d -p 8000:8000 \
   workspace
 ```
 
-### Docker Compose
-
-```yaml
-version: '3.8'
-services:
-  workspace:
-    build: .
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./db:/app/db
-      - ./files:/app/files
-    environment:
-      SECRET_KEY: your-secret-key-here
-      ALLOWED_HOSTS: localhost,yourdomain.com
-      DATABASE_ENGINE: sqlite  # or postgres
-```
-
-### Kubernetes (For Multi-Tenant Deployments)
-
-Deploy isolated instances per team/client:
-
-```yaml
-# Example: One pod per tenant with dedicated resources
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: workspace-client-a
-spec:
-  replicas: 1
-  template:
-    spec:
-      containers:
-      - name: workspace
-        image: workspace:latest
-        resources:
-          requests:
-            cpu: 500m
-            memory: 1Gi
-          limits:
-            cpu: 4000m
-            memory: 8Gi
-```
-
-See [deployment docs](docs/deployment.md) for full k8s manifests and best practices.
-
 ### Environment Variables
 
-| Variable           | Description                      | Default               |
-|--------------------|----------------------------------|-----------------------|
-| `SECRET_KEY`       | Django secret key                | *required*            |
-| `DEBUG`            | Enable debug mode                | `False`               |
-| `ALLOWED_HOSTS`    | Comma-separated allowed hosts    | `localhost,127.0.0.1` |
-| `DATABASE_ENGINE`  | Database backend (sqlite/postgres) | `sqlite`            |
-| `SQLITE_PATH`      | Path to SQLite database          | `db.sqlite3`          |
-| `DATABASE_URL`     | PostgreSQL connection string     | *(none)*              |
-| `REDIS_URL`        | Redis connection URL             | *(none)*              |
-| `GUNICORN_WORKERS` | Number of Gunicorn workers       | `3`                   |
-| `DJANGO_LOG_LEVEL` | Logging level                    | `INFO`                |
-
-## Project Structure
-
-```
-Workspace/
-├── workspace/               # Django project package
-│   ├── settings.py          # Main configuration
-│   ├── urls.py              # URL routing
-│   ├── core/                # Module registry & unified search
-│   ├── files/               # File management module
-│   │   └── ui/              # File browser views & templates
-│   ├── dashboard/           # Dashboard & insights
-│   ├── users/               # Authentication & user settings
-│   └── common/              # Shared templates & utilities
-├── templates/               # Root-level templates
-├── files/                   # File storage directory
-├── manage.py
-├── pyproject.toml
-├── Dockerfile
-└── IDEAS.md                 # Feature roadmap
-```
+| Variable | Description | Default |
+|---|---|---|
+| `SECRET_KEY` | Django secret key | *required in production* |
+| `DEBUG` | Enable debug mode (`1`, `true`, `yes`, `on`) | `True` |
+| `ALLOWED_HOSTS` | Comma-separated allowed hosts | `*` |
+| `CSRF_TRUSTED_ORIGINS` | Comma-separated trusted CSRF origins | *(none)* |
+| `SQLITE_PATH` | Path to SQLite database (alias: `DB_PATH`) | `db.sqlite3` |
+| `REDIS_URL` | Redis URL for cache and sessions (alias: `DJANGO_REDIS_URL`) | *(none, in-memory fallback)* |
+| `STATIC_ROOT` | Collected static files directory | `staticfiles` |
+| `DJANGO_LOG_LEVEL` | Logging level | `INFO` |
+| `TRASH_RETENTION_DAYS` | Days before trashed items are permanently deleted | `30` |
+| `GUNICORN_WORKERS` | Gunicorn worker count (Docker) | `3` |
 
 ## API
 
@@ -225,23 +159,6 @@ Interactive API documentation is available when the server is running:
 - **Swagger UI** — `/api/v1/schema/swagger-ui/`
 - **ReDoc** — `/api/v1/schema/redoc/`
 - **OpenAPI Schema** — `/api/v1/schema/`
-
-### Key Endpoints
-
-| Endpoint                                         | Description                        |
-|--------------------------------------------------|------------------------------------|
-| `GET/POST /api/v1/files`                         | List or create files/folders       |
-| `GET/PATCH/DELETE /api/v1/files/{uuid}`          | Retrieve, update, or delete a file |
-| `GET /api/v1/files/{uuid}/content`               | Download file content              |
-| `POST /api/v1/files/{uuid}/copy`                 | Copy a file or folder              |
-| `POST /api/v1/files/{uuid}/favorite`             | Toggle favorite                    |
-| `POST /api/v1/files/{uuid}/pin`                  | Pin/unpin folder                   |
-| `GET /api/v1/files/trash`                        | List trashed items                 |
-| `POST /api/v1/files/{uuid}/restore`              | Restore from trash                 |
-| `GET /api/v1/modules`                            | List registered modules            |
-| `GET /api/v1/search?q={query}`                   | Unified search                     |
-| `GET /api/v1/users/me`                           | Current user profile               |
-| `GET/PUT/DELETE /api/v1/settings/{module}/{key}` | User settings                      |
 
 ## Extending Workspace
 
@@ -315,6 +232,6 @@ Workspace is source-available under the Business Source License 1.1 (BSL 1.1).
 
 - Free to use, modify, and self-host for personal or internal business use.
 - You may not offer Workspace as a hosted or managed service to third parties without a commercial license.
-- This version will become available under the MIT License on 2030-02-01.
+- This version will become available under the MIT License on 2029-02-01.
 
 See `LICENSE` for full terms and `CHANGELOG.md` for the version timeline.

@@ -2,7 +2,51 @@
 
 > **Early Development** — This project is under active development and has not reached a stable release. APIs, database schemas, and features may change without notice or migration path. Use at your own risk.
 
-A self-hosted, modular productivity suite built with Django. Workspace brings together file management, dashboards, and user settings into a unified platform – with an extensible architecture designed for adding new modules (notes, tasks, calendar, and more).
+A self-hosted, modular productivity suite built with Django. Workspace brings together file management, dashboards, and extensible modules into a unified platform you control.
+
+**Run anywhere, scale everywhere** — from a Raspberry Pi to a Kubernetes cluster.
+
+## Why Workspace?
+
+Most productivity suites force you to choose: simple self-hosted tools that don't scale, or complex SaaS platforms you don't control.
+
+Workspace gives you both: **run anywhere, scale everywhere**.
+
+### Simplicity First
+At its core, Workspace is just Django + SQLite. You can run it on a Raspberry Pi, a $5/month VPS, or your laptop. No complex setup, no database servers to manage, no infrastructure lock-in.
+
+- **SQLite (WAL mode)** — Production-ready, zero-maintenance database. Perfect for individuals and small teams.
+- **Single binary deployment** — One Docker container, one process, done.
+- **Minimal dependencies** — Python, Django, and a file system. Redis is optional.
+
+### Scale When You Need It
+The same codebase that runs on SQLite can seamlessly switch to PostgreSQL for high-concurrency workloads or large datasets. The architecture supports multiple deployment strategies:
+
+**Personal/Small Teams:**
+- Run directly on a VPS with SQLite
+- Docker Compose for simple multi-user setups
+- Fly.io, Railway, or any PaaS with persistent volumes
+
+**Organizations:**
+- **Tenant isolation** — Deploy one instance per team/department with isolated data
+- **Kubernetes** — Run 10, 100, or 1000+ isolated instances on the same cluster
+- **Flexible resources** — Small instances (0.5 CPU / 1 GB RAM) for teams; dedicated nodes for enterprises
+
+**Enterprise:**
+- PostgreSQL backend for advanced features
+- Dedicated infrastructure or self-hosted on-premises
+- Custom authentication (SSO, LDAP) and compliance requirements
+
+### Why Tenant Isolation?
+
+Instead of building a complex multi-tenant system with `tenant_id` columns everywhere, Workspace uses **instance-per-tenant**:
+
+- **True data isolation** — No risk of accidental data leaks between users
+- **Independent scaling** — One team's traffic spike doesn't affect others
+- **Simplified security** — Each instance can have its own encryption keys, backups, and compliance rules
+- **Predictable costs** — Pay for what each team uses, not for complex shared infrastructure
+
+This approach prioritizes operational simplicity, security, and the freedom to deploy however you want — from a single Raspberry Pi to a Kubernetes cluster serving thousands of teams.
 
 ## Features
 
@@ -32,14 +76,18 @@ A self-hosted, modular productivity suite built with Django. Workspace brings to
 
 ## Tech Stack
 
+Built with boring, reliable technology:
+
 | Layer              | Technology                                     |
 |--------------------|------------------------------------------------|
-| **Backend**        | Django 6.0, Django REST Framework, Celery      |
+| **Backend**        | Django 6.0, Django REST Framework              |
 | **Frontend**       | Alpine.js, Tailwind CSS, DaisyUI, Lucide Icons |
-| **Database**       | SQLite (WAL mode)                              |
-| **Cache / Broker** | Redis (optional)                               |
+| **Database**       | SQLite (WAL mode) or PostgreSQL                |
+| **Cache / Broker** | Redis (optional, for Celery tasks)             |
 | **Server**         | Gunicorn, WhiteNoise, Brotli compression       |
 | **Tooling**        | uv, Docker, drf-spectacular (OpenAPI)          |
+
+No build steps, no frontend framework complexity, no microservices. Just Python and templates.
 
 ## Prerequisites
 
@@ -49,63 +97,101 @@ A self-hosted, modular productivity suite built with Django. Workspace brings to
 
 ## Getting Started
 
-### 1. Clone the repository
+### Quick Start (Local Development)
 
 ```bash
+# Clone the repository
 git clone <repository-url>
 cd Workspace
-```
 
-### 2. Install dependencies
-
-```bash
+# Install dependencies (using uv)
 uv sync
-```
 
-### 3. Run migrations
-
-```bash
+# Run migrations
 python manage.py migrate
-```
 
-### 4. Create a superuser
-
-```bash
+# Create a superuser
 python manage.py createsuperuser
-```
 
-### 5. Start the development server
-
-```bash
+# Start the development server
 python manage.py runserver
 ```
 
-The application is available at `http://localhost:8000`.
+Visit `http://localhost:8000` — that's it! No webpack, no npm, no build step.
 
-## Docker
+## Deployment
 
-Build and run with Docker:
+### Docker (Recommended)
 
 ```bash
 docker build -t workspace .
-docker run -p 8000:8000 \
-  -e SECRET_KEY=your-secret-key \
-  -e DEBUG=0 \
-  -e ALLOWED_HOSTS=localhost \
+docker run -d -p 8000:8000 \
+  -v workspace-db:/app/db \
+  -v workspace-files:/app/files \
+  -e SECRET_KEY=your-secret-key-here \
+  -e ALLOWED_HOSTS=yourdomain.com \
   workspace
 ```
 
+### Docker Compose
+
+```yaml
+version: '3.8'
+services:
+  workspace:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./db:/app/db
+      - ./files:/app/files
+    environment:
+      SECRET_KEY: your-secret-key-here
+      ALLOWED_HOSTS: localhost,yourdomain.com
+      DATABASE_ENGINE: sqlite  # or postgres
+```
+
+### Kubernetes (For Multi-Tenant Deployments)
+
+Deploy isolated instances per team/client:
+
+```yaml
+# Example: One pod per tenant with dedicated resources
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-client-a
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: workspace
+        image: workspace:latest
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 4000m
+            memory: 8Gi
+```
+
+See [deployment docs](docs/deployment.md) for full k8s manifests and best practices.
+
 ### Environment Variables
 
-| Variable           | Description                   | Default               |
-|--------------------|-------------------------------|-----------------------|
-| `SECRET_KEY`       | Django secret key             | *required*            |
-| `DEBUG`            | Enable debug mode             | `True`                |
-| `ALLOWED_HOSTS`    | Comma-separated allowed hosts | `localhost,127.0.0.1` |
-| `SQLITE_PATH`      | Path to SQLite database       | `db.sqlite3`          |
-| `REDIS_URL`        | Redis connection URL          | *(none)*              |
-| `GUNICORN_WORKERS` | Number of Gunicorn workers    | `3`                   |
-| `DJANGO_LOG_LEVEL` | Logging level                 | `INFO`                |
+| Variable           | Description                      | Default               |
+|--------------------|----------------------------------|-----------------------|
+| `SECRET_KEY`       | Django secret key                | *required*            |
+| `DEBUG`            | Enable debug mode                | `False`               |
+| `ALLOWED_HOSTS`    | Comma-separated allowed hosts    | `localhost,127.0.0.1` |
+| `DATABASE_ENGINE`  | Database backend (sqlite/postgres) | `sqlite`            |
+| `SQLITE_PATH`      | Path to SQLite database          | `db.sqlite3`          |
+| `DATABASE_URL`     | PostgreSQL connection string     | *(none)*              |
+| `REDIS_URL`        | Redis connection URL             | *(none)*              |
+| `GUNICORN_WORKERS` | Number of Gunicorn workers       | `3`                   |
+| `DJANGO_LOG_LEVEL` | Logging level                    | `INFO`                |
 
 ## Project Structure
 
@@ -157,32 +243,72 @@ Interactive API documentation is available when the server is running:
 | `GET /api/v1/users/me`                           | Current user profile               |
 | `GET/PUT/DELETE /api/v1/settings/{module}/{key}` | User settings                      |
 
-## Module System
+## Extending Workspace
 
-Workspace uses a dynamic module registry. Each module registers itself on startup with metadata (name, icon, color, URL) and an optional search provider. The registry is accessible via the `/api/v1/modules` endpoint and powers the sidebar navigation and unified search.
+### Module System
 
-Adding a new module involves:
+Workspace is designed to be modular. Each module (Files, Dashboard, Notes, Tasks, etc.) registers itself dynamically at startup.
 
-1. Creating a Django app under `workspace/`
-2. Registering a `ModuleInfo` in the app's `AppConfig.ready()` method
-3. Optionally registering a search provider for unified search
+**Adding a new module:**
 
-## Health Checks
+1. Create a Django app under `workspace/`
+2. Register a `ModuleInfo` in your app's `AppConfig.ready()` method:
+   ```python
+   from workspace.core.registry import registry, ModuleInfo
 
-Health check endpoints are available at `/health/` for orchestration and monitoring tools.
+   class MyModuleConfig(AppConfig):
+       def ready(self):
+           registry.register(ModuleInfo(
+               name='my_module',
+               display_name='My Module',
+               icon='sparkles',  # Lucide icon name
+               color='primary',
+               url='/my-module/',
+           ))
+   ```
+3. Optionally register a search provider for unified search
+
+Your module automatically appears in the sidebar and search results.
+
+### API-First Design
+
+Every feature is accessible via REST API. Build mobile apps, CLI tools, or integrations without touching the web UI.
+
+- **Full OpenAPI schema** — `/api/v1/schema/`
+- **Interactive docs** — `/api/v1/schema/swagger-ui/`
+- **No authentication quirks** — Standard Django REST Framework auth
+
+### Health Checks
+
+Kubernetes-ready health endpoints at `/health/` for liveness and readiness probes.
 
 ## Roadmap
 
-See [IDEAS.md](IDEAS.md) for the full feature roadmap, including planned modules:
+Workspace is in active development. Planned modules include:
 
-- Notes & Wiki
-- Tasks & Projects
-- Email Client
-- Calendar & Scheduling
-- Contacts & CRM
-- Chat & Messaging
-- And more
+- 📝 **Notes & Wiki** — Rich text editor with backlinks and page hierarchy
+- ✅ **Tasks & Projects** — Kanban boards, sprints, time tracking
+- 📧 **Email Client** — IMAP/SMTP integration with unified inbox
+- 📅 **Calendar** — CalDAV sync, recurring events, availability slots
+- 👥 **Contacts & CRM** — Contact management with interaction history
+- 💬 **Chat** — Real-time messaging with channels and threads
+- 🔗 **Bookmarks** — Save and organize links with automatic previews
+- 🔐 **Password Manager** — Encrypted vault with TOTP support
+
+See [IDEAS.md](IDEAS.md) for the complete roadmap and implementation details.
+
+## Contributing
+
+Contributions are welcome! Whether you're fixing bugs, adding features, or improving documentation:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+No CLA, no bureaucracy. Just code.
 
 ## License
 
-All rights reserved.
+All rights reserved. License to be determined before first stable release.

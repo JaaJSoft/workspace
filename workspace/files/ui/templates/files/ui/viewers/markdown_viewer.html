@@ -1,155 +1,162 @@
-<!-- Markdown Viewer/Editor -->
-<div class="flex flex-col h-full" id="md-viewer-{{ file.uuid }}">
+<!-- Markdown WYSIWYG Editor with Milkdown Crepe -->
+<div class="flex flex-col h-full"
+     x-data="markdownViewerCrepe()"
+     x-init="initEditor()"
+     @viewer-cleanup.window="dispose()">
 
   <!-- Toolbar -->
-  <div class="flex items-center justify-between gap-2 p-4 bg-base-100 border-b border-base-300">
-    <div id="md-edit-info-{{ file.uuid }}" style="display:none" class="flex items-center gap-2">
-      <i data-lucide="info" class="w-4 h-4 text-info"></i>
-      <span class="text-sm">Editing mode – Press Ctrl+S to save or ESC to cancel</span>
+  <div class="flex items-center justify-between gap-1 px-3 py-1.5 bg-base-100 border-b border-base-300">
+    <div class="flex items-center gap-2 min-w-0">
+      <span class="badge badge-sm badge-ghost font-mono">markdown</span>
+      <span x-show="isDirty" x-cloak class="flex items-center gap-1 text-warning text-xs whitespace-nowrap">
+        <span class="w-1.5 h-1.5 rounded-full bg-warning inline-block"></span>
+        Modified
+      </span>
     </div>
-    <div id="md-view-spacer-{{ file.uuid }}" class="flex-1"></div>
-    <div class="flex gap-2">
-      <button id="md-btn-edit-{{ file.uuid }}" type="button" class="btn btn-sm btn-ghost" title="Edit file">
-        <i data-lucide="pencil" class="w-4 h-4"></i>
-        Edit
-      </button>
-      <button id="md-btn-cancel-{{ file.uuid }}" type="button" class="btn btn-sm btn-ghost" style="display:none">
-        <i data-lucide="x" class="w-4 h-4"></i>
-        Cancel
-      </button>
-      <button id="md-btn-save-{{ file.uuid }}" type="button" class="btn btn-sm btn-primary" style="display:none">
-        <i data-lucide="save" class="w-4 h-4"></i>
+    <div class="flex items-center gap-0.5">
+      <!-- Save -->
+      <button type="button"
+              class="btn btn-primary btn-xs"
+              :disabled="!isDirty || saving"
+              @click="save()"
+              title="Save (Ctrl+S)">
+        <span x-show="saving" class="loading loading-spinner loading-xs"></span>
+        <i x-show="!saving" data-lucide="save" class="w-3.5 h-3.5"></i>
         Save
       </button>
     </div>
   </div>
 
-  <!-- Rendered Markdown (view mode) -->
-  <div id="md-rendered-{{ file.uuid }}"
-       class="flex-1 overflow-auto bg-base-100">
-    <div class="prose prose-sm sm:prose lg:prose-lg max-w-3xl mx-auto p-6 md:py-10 md:px-8">
-      {{ rendered_html|safe }}
+  <!-- Loading State -->
+  <div x-show="loading" class="flex-1 flex items-center justify-center" x-cloak>
+    <span class="loading loading-spinner loading-lg"></span>
+  </div>
+
+  <!-- Error State -->
+  <div x-show="!loading && error" class="flex-1 flex items-center justify-center p-8" x-cloak>
+    <div class="text-center">
+      <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
+      <p class="text-lg font-medium mb-2">Failed to load editor</p>
+      <p class="text-sm text-base-content/60" x-text="error"></p>
     </div>
   </div>
 
-  <!-- Raw Markdown (edit mode) -->
-  <div id="md-editor-wrap-{{ file.uuid }}" class="flex-1 flex justify-center overflow-auto bg-base-100" style="display:none">
-    <textarea
-      id="md-editor-{{ file.uuid }}"
-      class="textarea w-full max-w-3xl h-full font-mono text-sm text-base-content bg-base-100 border-none focus:outline-none resize-none p-6 md:py-10 md:px-8"
-      spellcheck="false"
-    >{{ content }}</textarea>
-  </div>
+  <!-- Milkdown Crepe Container -->
+  <div x-ref="crepeContainer"
+       x-show="!loading && !error"
+       class="flex-1 min-h-0 overflow-auto flex flex-col"
+       x-cloak></div>
 </div>
 
 <script>
-(function() {
-  var FILE_UUID = '{{ file.uuid }}';
-  var saving = false;
-  var editing = false;
+window.markdownViewerCrepe = function() {
+  // Keep complex objects OUT of Alpine's reactive scope
+  let _crepe = null;
+  let _keydownHandler = null;
+  let _container = null;
 
-  function $(id) { return document.getElementById(id); }
+  function getCSRFToken() {
+    var match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
+    return match ? match.split('=')[1] : '';
+  }
 
-  function initViewer() {
-    var root = $('md-viewer-' + FILE_UUID);
-    if (!root) return false;
+  return {
+    isDirty: false,
+    saving: false,
+    loading: true,
+    error: null,
+    originalContent: '{{ content|escapejs }}',
+    fileUuid: '{{ file.uuid }}',
+    fileName: '{{ file.name }}',
 
-    var rendered   = $('md-rendered-'    + FILE_UUID);
-    var editorWrap = $('md-editor-wrap-' + FILE_UUID);
-    var editor     = $('md-editor-'      + FILE_UUID);
-    var btnEdit    = $('md-btn-edit-'    + FILE_UUID);
-    var btnCancel  = $('md-btn-cancel-'  + FILE_UUID);
-    var btnSave    = $('md-btn-save-'    + FILE_UUID);
-    var editInfo   = $('md-edit-info-'   + FILE_UUID);
-    var viewSpacer = $('md-view-spacer-' + FILE_UUID);
+    async initEditor() {
+      var container = this.$refs.crepeContainer;
+      var self = this;
+      _container = container;
 
-    if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [root] });
+      try {
+        var mod = await import('https://esm.sh/@milkdown/crepe@7.17.3?bundle');
+        var Crepe = mod.Crepe;
 
-    function setEditMode(on) {
-      editing = on;
-      rendered.style.display   = on ? 'none' : '';
-      editorWrap.style.display = on ? ''     : 'none';
-      btnEdit.style.display    = on ? 'none' : '';
-      btnCancel.style.display  = on ? ''     : 'none';
-      btnSave.style.display    = on ? ''     : 'none';
-      editInfo.style.display   = on ? ''     : 'none';
-      viewSpacer.style.display = on ? 'none' : '';
-      if (on) editor.focus();
-    }
+        _crepe = new Crepe({
+          root: container,
+          defaultValue: self.originalContent,
+        });
 
-    btnEdit.addEventListener('click', function()   { setEditMode(true); });
-    btnCancel.addEventListener('click', function()  { editor.value = editor.defaultValue; setEditMode(false); });
-    btnSave.addEventListener('click', function()    { save(); });
+        await _crepe.create();
 
-    function handleKeydown(e) {
-      if (!editing) return;
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
-      if (e.key === 'Escape') { e.preventDefault(); editor.value = editor.defaultValue; setEditMode(false); }
-    }
-    window.addEventListener('keydown', handleKeydown);
+        // Use normalized markdown as baseline (Milkdown may reformat slightly)
+        self.originalContent = _crepe.getMarkdown();
 
-    // Cleanup on removal
-    var obs = new MutationObserver(function(muts) {
-      for (var i = 0; i < muts.length; i++) {
-        var removed = muts[i].removedNodes;
-        for (var j = 0; j < removed.length; j++) {
-          if (removed[j] === root || (removed[j].contains && removed[j].contains(root))) {
-            window.removeEventListener('keydown', handleKeydown);
-            obs.disconnect();
-            return;
+        // Track dirty state
+        _crepe.on(function(listener) {
+          listener.markdownUpdated(function(md) {
+            self.isDirty = md !== self.originalContent;
+          });
+        });
+
+        // Ctrl+S to save (capture phase to get it before ProseMirror)
+        _keydownHandler = function(e) {
+          if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            self.save();
           }
-        }
+        };
+        container.addEventListener('keydown', _keydownHandler, true);
+
+        self.loading = false;
+      } catch (err) {
+        console.error('Failed to load Milkdown:', err);
+        self.error = err.message || 'Failed to load editor';
+        self.loading = false;
       }
-    });
-    if (root.parentNode) obs.observe(root.parentNode, { childList: true, subtree: true });
+    },
 
-    function save() {
-      if (saving) return;
-      saving = true;
+    async save() {
+      if (!_crepe || this.saving || !this.isDirty) return;
+      this.saving = true;
 
-      var content = editor.value;
-      var blob = new Blob([content], { type: 'text/markdown' });
-      var fd = new FormData();
-      fd.append('content', blob, '{{ file.name|escapejs }}' || 'file.md');
+      try {
+        var content = _crepe.getMarkdown();
+        var blob = new Blob([content], { type: 'text/markdown' });
+        var formData = new FormData();
+        formData.append('content', blob, this.fileName || 'file.md');
 
-      var cookie = document.cookie.split('; ').find(function(r) { return r.startsWith('csrftoken='); });
-      var csrf = cookie ? cookie.split('=')[1] : '';
+        var response = await fetch('/api/v1/files/' + this.fileUuid, {
+          method: 'PATCH',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+          body: formData,
+        });
 
-      fetch('/api/v1/files/' + FILE_UUID, { method: 'PATCH', headers: { 'X-CSRFToken': csrf }, body: fd })
-        .then(function(res) {
-          if (!res.ok) throw new Error('Failed to save');
-          // Re-render server-side: fetch updated viewer HTML
-          return fetch('/files/view/' + FILE_UUID);
-        })
-        .then(function(res) {
-          if (!res.ok) throw new Error('Failed to reload');
-          return res.text();
-        })
-        .then(function(html) {
-          // Extract the rendered markdown from the response
-          var tmp = document.createElement('div');
-          tmp.innerHTML = html;
-          var newRendered = tmp.querySelector('#md-rendered-' + FILE_UUID);
-          if (newRendered) rendered.innerHTML = newRendered.innerHTML;
-          editor.defaultValue = editor.value;
-          setEditMode(false);
-          if (window.AppAlert) window.AppAlert.success('File saved successfully');
-        })
-        .catch(function(err) {
-          console.error('Failed to save:', err);
-          if (window.AppAlert) window.AppAlert.error('Failed to save: ' + err.message);
-        })
-        .finally(function() { saving = false; });
-    }
+        if (!response.ok) throw new Error('Failed to save');
 
-    return true;
-  }
+        this.originalContent = content;
+        this.isDirty = false;
 
-  // Script runs before HTML injection — wait for DOM
-  if (!initViewer()) {
-    setTimeout(function() {
-      if (!initViewer()) setTimeout(initViewer, 500);
-    }, 50);
-  }
-})();
+        if (window.AppAlert) {
+          window.AppAlert.success('File saved successfully');
+        }
+      } catch (error) {
+        console.error('Failed to save:', error);
+        if (window.AppAlert) {
+          window.AppAlert.error('Failed to save: ' + error.message);
+        }
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    dispose() {
+      if (_keydownHandler && _container) {
+        _container.removeEventListener('keydown', _keydownHandler, true);
+        _keydownHandler = null;
+        _container = null;
+      }
+      if (_crepe) {
+        _crepe.destroy();
+        _crepe = null;
+      }
+    },
+  };
+};
 </script>

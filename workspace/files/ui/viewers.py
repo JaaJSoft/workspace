@@ -197,9 +197,8 @@ class MarkdownViewer(BaseViewer):
     """Viewer for Markdown files with rendered preview and raw editing."""
 
     def render(self, request) -> str:
-        """Render Markdown viewer/editor."""
+        """Render Milkdown Crepe WYSIWYG editor for Markdown files."""
         from django.template.loader import render_to_string
-        import mistune
 
         file_handle = None
         try:
@@ -211,11 +210,8 @@ class MarkdownViewer(BaseViewer):
             if file_handle:
                 file_handle.close()
 
-        rendered_html = mistune.html(content) if content else ''
-
         context = self.get_context(request)
         context['content'] = content
-        context['rendered_html'] = rendered_html
 
         return render_to_string('files/ui/viewers/markdown_viewer.html', context, request=request)
 

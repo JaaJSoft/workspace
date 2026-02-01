@@ -3,6 +3,26 @@
 
 {% block title %}Files - Workspace{% endblock %}
 
+{% block extra_head %}
+<!-- Milkdown Crepe - External dependency CSS (loaded directly to avoid bare @import 404s) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prosemirror-view@1/style/prosemirror.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prosemirror-gapcursor@1/style/gapcursor.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prosemirror-virtual-cursor@0/style/virtual-cursor.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prosemirror-tables@1/style/tables.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0/dist/katex.min.css">
+<!-- Milkdown Crepe - Common feature styles (only files without bare @import) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/reset.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/block-edit.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/code-mirror.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/image-block.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/link-tooltip.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/list-item.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/placeholder.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/toolbar.css">
+<!-- Milkdown Crepe - DaisyUI theme bridge + custom rules (cursor, table, latex) -->
+<link rel="stylesheet" href="{% static 'files/ui/css/milkdown-overrides.css' %}">
+{% endblock %}
+
 {% block navbar %}
 {% include 'ui/partials/navbar.html' with navbar_full_width=True %}
 {% endblock %}

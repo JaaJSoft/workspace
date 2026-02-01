@@ -5,7 +5,10 @@
     class="modal"
     @close="open = false"
   >
-    <div class="modal-box max-w-[90vw] max-h-[90vh] w-full h-full p-0 flex flex-col relative">
+    <div
+      class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col relative transition-[max-width] duration-200"
+      :class="expanded ? 'max-w-[90vw]' : 'max-w-5xl'"
+    >
       <!-- Actions (Top Right) -->
       <div class="absolute top-4 right-4 z-10 flex items-center gap-1">
         <!-- Properties -->
@@ -17,6 +20,18 @@
           @click="openProperties()"
         >
           <i data-lucide="info" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Expand / Collapse -->
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          @click="toggleExpanded()"
+          :title="expanded ? 'Compact view' : 'Expand view'"
+          x-show="fileUuid"
+        >
+          <i x-show="!expanded" data-lucide="maximize-2" class="w-4 h-4"></i>
+          <i x-show="expanded" data-lucide="minimize-2" class="w-4 h-4" x-cloak></i>
         </button>
 
         <!-- Download -->
@@ -88,6 +103,14 @@
 
   <script>
     function fileViewerModal() {
+      var VIEWER_PREFS_URL = '/api/v1/settings/files/viewer';
+      var _prefsSaveTimer = null;
+
+      function getCSRFToken() {
+        var match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
+        return match ? match.split('=')[1] : '';
+      }
+
       return {
         open: false,
         loading: false,
@@ -96,6 +119,24 @@
         fileName: '',
         mimeType: '',
         loadedScripts: [],
+        expanded: false,
+
+        toggleExpanded() {
+          this.expanded = !this.expanded;
+          this._saveViewerPrefs();
+        },
+
+        _saveViewerPrefs() {
+          var prefs = { expanded: this.expanded };
+          clearTimeout(_prefsSaveTimer);
+          _prefsSaveTimer = setTimeout(function() {
+            fetch(VIEWER_PREFS_URL, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+              body: JSON.stringify({ value: prefs }),
+            }).catch(function() {});
+          }, 500);
+        },
 
         async openFile(uuid, name, mimeType, updateUrl = true) {
           this.fileUuid = uuid;
@@ -127,45 +168,45 @@
           try {
             const response = await fetch(`/files/view/${uuid}`);
             if (!response.ok) {
-              throw new Error(`Failed to load viewer: ${response.status}`);
+              throw new Error('Failed to load viewer: ' + response.status);
             }
 
-            let html = await response.text();
+            let rawHtml = await response.text();
 
             // Extract scripts using regex
             const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
             const scripts = [];
-            const matches = html.match(scriptRegex);
+            const matches = rawHtml.match(scriptRegex);
 
             if (matches) {
-              matches.forEach(scriptTag => {
+              matches.forEach(function(scriptTag) {
                 const content = scriptTag.replace(/<script\b[^>]*>|<\/script>/gi, '');
                 scripts.push(content);
               });
 
               // Remove scripts from HTML
-              html = html.replace(scriptRegex, '');
+              rawHtml = rawHtml.replace(scriptRegex, '');
             }
 
             // Execute scripts first
-            scripts.forEach(scriptContent => {
+            scripts.forEach(function(scriptContent) {
               const newScript = document.createElement('script');
               newScript.textContent = scriptContent;
               document.head.appendChild(newScript);
               this.loadedScripts.push(newScript);
-            });
+            }.bind(this));
 
-            // Set HTML content (scripts already removed)
-            const temp = document.createElement('div');
-            temp.innerHTML = html;
+            // Parse and inject HTML content (scripts already removed)
+            const temp = document.createElement('template');
+            temp.innerHTML = rawHtml;
 
-            // Move all children to container one by one
-            while (temp.firstChild) {
-              container.appendChild(temp.firstChild);
+            // Move all children to container
+            while (temp.content.firstChild) {
+              container.appendChild(temp.content.firstChild);
             }
 
             // Reinitialize Lucide icons after content is added
-            this.$nextTick(() => {
+            this.$nextTick(function() {
               if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
               }
@@ -224,6 +265,17 @@
           }
           this._initialized = true;
 
+          // Load viewer preferences
+          try {
+            var prefsResp = await fetch(VIEWER_PREFS_URL, { credentials: 'same-origin' });
+            if (prefsResp.ok) {
+              var data = await prefsResp.json();
+              if (data && data.value && typeof data.value === 'object') {
+                if (data.value.expanded !== undefined) this.expanded = data.value.expanded;
+              }
+            }
+          } catch (e) {}
+
           this._keydownHandler = (e) => this.handleKeydown(e);
           this._openFileHandler = (e) => {
             const { uuid, name, mime_type } = e.detail;
@@ -241,7 +293,7 @@
             if (fileUuid && fileUuid !== this.fileUuid) {
               // Open parameter present and different from current - open it
               try {
-                const response = await fetch(`/api/v1/files/${fileUuid}`);
+                const response = await fetch('/api/v1/files/' + fileUuid);
                 if (response.ok) {
                   const fileData = await response.json();
                   this.openFile(fileData.uuid, fileData.name, fileData.mime_type, false);
@@ -271,7 +323,7 @@
           if (fileUuid) {
             try {
               // Fetch file info from API
-              const response = await fetch(`/api/v1/files/${fileUuid}`);
+              const response = await fetch('/api/v1/files/' + fileUuid);
               if (response.ok) {
                 const fileData = await response.json();
                 // Open file without updating URL (already in URL)

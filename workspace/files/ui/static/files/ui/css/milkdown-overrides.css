@@ -1,0 +1,368 @@
+/*
+ * Milkdown Crepe — DaisyUI theme bridge + custom styles.
+ *
+ * 1) Override Milkdown CSS variables with DaisyUI oklch values so the
+ *    editor follows the active DaisyUI theme automatically (no JS toggle).
+ *
+ * 2) Custom styles extracted from common/ CSS files that contained
+ *    bare npm @import (which browsers can't resolve).
+ *    Source: @milkdown/crepe@7.17.3/lib/theme/common/{cursor,table,latex}.css
+ */
+
+/* ========================================================
+   DaisyUI theme bridge — maps Crepe vars to DaisyUI vars
+   ======================================================== */
+
+.milkdown {
+  --crepe-color-background: oklch(var(--b1));
+  --crepe-color-on-background: oklch(var(--bc));
+  --crepe-color-surface: oklch(var(--b2));
+  --crepe-color-outline: oklch(var(--b3));
+  --crepe-color-primary: oklch(var(--p));
+  --crepe-color-on-primary: oklch(var(--pc));
+  --crepe-color-selected: oklch(var(--p) / 0.12);
+  --crepe-color-hover: oklch(var(--b3) / 0.4);
+  --crepe-color-solid: oklch(var(--bc));
+  --crepe-color-line: oklch(var(--b3));
+  --crepe-color-inline-code: oklch(var(--b2));
+}
+
+/* ========================================================
+   Layout — make the editor fill its container fully
+   ======================================================== */
+
+.milkdown {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--crepe-color-background);
+}
+
+.milkdown .ProseMirror {
+  flex: 1;
+  min-height: 100%;
+}
+
+/* ========================================================
+   Icons — force inline SVGs to follow theme colors.
+   Milkdown injects SVGs with hardcoded fill="" attributes,
+   so !important is needed to override them.
+   ======================================================== */
+
+.milkdown {
+  color: var(--crepe-color-on-background);
+}
+
+.milkdown svg {
+  fill: currentColor !important;
+  color: inherit;
+}
+
+/* Stroke-based icons (toolbar uses outlined icons) */
+.milkdown svg[fill="none"],
+.milkdown svg[data-icon] {
+  fill: none !important;
+  stroke: currentColor !important;
+}
+
+.milkdown svg path[fill] {
+  fill: currentColor !important;
+}
+
+.milkdown svg path[stroke] {
+  stroke: currentColor !important;
+  fill: none !important;
+}
+
+/* --- cursor.css (custom rules) --- */
+
+.milkdown .crepe-drop-cursor {
+    background-color: color-mix(
+      in srgb,
+      var(--crepe-color-outline),
+      transparent 50%
+    );
+    opacity: 0.5;
+    transition: all 0.2s;
+    pointer-events: none;
+  }
+
+.milkdown .ProseMirror-gapcursor:after {
+    box-sizing: border-box;
+    border-top: 1px solid var(--crepe-color-on-background);
+  }
+
+.milkdown .ProseMirror-focused {
+    --prosemirror-virtual-cursor-color: var(--crepe-color-outline);
+  }
+
+/* --- table.css (custom rules) --- */
+
+.milkdown .milkdown-table-block {
+    display: block;
+    margin: 4px 0;
+  }
+
+.milkdown .milkdown-table-block th,
+    .milkdown .milkdown-table-block td {
+      border: 1px solid var(--crepe-color-outline);
+      padding: 4px 16px;
+    }
+
+.milkdown .milkdown-table-block th {
+      background: var(--crepe-color-surface);
+      font-weight: 600;
+    }
+
+.milkdown .milkdown-table-block th .ProseMirror-selectednode, .milkdown .milkdown-table-block td .ProseMirror-selectednode {
+        background-color: transparent !important;
+      }
+
+.milkdown .milkdown-table-block th:has(.ProseMirror-selectednode), .milkdown .milkdown-table-block td:has(.ProseMirror-selectednode) {
+        outline: 1px solid var(--crepe-color-primary);
+        outline-offset: -1px;
+      }
+
+.milkdown .milkdown-table-block .selectedCell::after {
+        background-color: var(--crepe-color-selected);
+        opacity: 0.4;
+      }
+
+.milkdown .milkdown-table-block .selectedCell ::-moz-selection {
+        background: transparent;
+      }
+
+.milkdown .milkdown-table-block .selectedCell ::selection {
+        background: transparent;
+      }
+
+.milkdown .milkdown-table-block .drag-preview {
+      background-color: var(--crepe-color-surface);
+      opacity: 0.4;
+      position: absolute;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      outline: 1px solid var(--crepe-color-primary);
+      outline-offset: -1px;
+    }
+
+.milkdown .milkdown-table-block .drag-preview[data-show='false'] {
+        display: none;
+      }
+
+.milkdown .milkdown-table-block .drag-preview th:has(.ProseMirror-selectednode), .milkdown .milkdown-table-block .drag-preview td:has(.ProseMirror-selectednode) {
+          outline: none;
+        }
+
+.milkdown .milkdown-table-block .handle {
+      position: absolute;
+      font-size: 14px;
+      transition: opacity ease-in-out 0.2s;
+    }
+
+.milkdown .milkdown-table-block .handle[data-show='false'] {
+      opacity: 0;
+    }
+
+.milkdown .milkdown-table-block svg {
+      fill: var(--crepe-color-on-background) !important;
+      color: var(--crepe-color-on-background);
+    }
+
+.milkdown .milkdown-table-block .cell-handle {
+      z-index: 50;
+      left: -999px;
+      top: -999px;
+      cursor: grab;
+      background-color: var(--crepe-color-surface);
+      color: var(--crepe-color-on-background);
+      border-radius: 100px;
+      box-shadow: var(--crepe-shadow-1);
+      transition: background-color 0.2s ease-in-out;
+    }
+
+.milkdown .milkdown-table-block .cell-handle:hover {
+        background-color: var(--crepe-color-hover);
+      }
+
+.milkdown .milkdown-table-block .cell-handle:has(.button-group:hover) {
+        background-color: var(--crepe-color-surface);
+      }
+
+.milkdown .milkdown-table-block .cell-handle[data-role='col-drag-handle'] {
+        transform: translateY(50%);
+        padding: 0 6px;
+        width: 28px;
+        height: 16px;
+      }
+
+.milkdown .milkdown-table-block .cell-handle[data-role='row-drag-handle'] {
+        transform: translateX(50%);
+        padding: 6px 0;
+        width: 16px;
+        height: 28px;
+      }
+
+.milkdown .milkdown-table-block .cell-handle .button-group {
+        position: absolute;
+        transform: translateX(-50%);
+        left: 50%;
+        top: -52px;
+        display: flex;
+        background-color: var(--crepe-color-surface);
+        border-radius: 8px;
+        box-shadow: var(--crepe-shadow-1);
+      }
+
+.milkdown .milkdown-table-block .cell-handle .button-group::after {
+          content: '';
+          position: absolute;
+          bottom: -8px;
+          height: 8px;
+          background-color: transparent;
+          width: 100%;
+        }
+
+.milkdown .milkdown-table-block .cell-handle .button-group[data-show='false'] {
+          display: none;
+        }
+
+.milkdown .milkdown-table-block .cell-handle .button-group button {
+          cursor: pointer;
+          margin: 6px;
+          padding: 4px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          border-radius: 4px;
+        }
+
+.milkdown .milkdown-table-block .cell-handle .button-group button svg {
+            width: 24px;
+            height: 24px;
+          }
+
+.milkdown .milkdown-table-block .cell-handle .button-group button:hover {
+            border-radius: 8px;
+            background-color: var(--crepe-color-hover);
+          }
+
+.milkdown .milkdown-table-block .cell-handle .button-group button:active {
+            background: var(--crepe-color-selected);
+          }
+
+.milkdown .milkdown-table-block .cell-handle:hover {
+        opacity: 1;
+      }
+
+.milkdown .milkdown-table-block .line-handle {
+      z-index: 20;
+      background-color: var(--crepe-color-primary);
+    }
+
+.milkdown .milkdown-table-block .line-handle:hover {
+        opacity: 1;
+      }
+
+.milkdown .milkdown-table-block .line-handle .add-button {
+        cursor: pointer;
+        background-color: var(--crepe-color-surface);
+        color: var(--crepe-color-on-background);
+        border-radius: 100px;
+        box-shadow: var(--crepe-shadow-1);
+        transition: background-color 0.2s ease-in-out;
+      }
+
+.milkdown .milkdown-table-block .line-handle .add-button svg {
+          width: 16px;
+          height: 16px;
+        }
+
+.milkdown .milkdown-table-block .line-handle .add-button:hover {
+          background-color: var(--crepe-color-hover);
+        }
+
+.milkdown .milkdown-table-block .line-handle .add-button:active {
+          background: var(--crepe-color-selected);
+        }
+
+.milkdown .milkdown-table-block .line-handle[data-role='x-line-drag-handle'] {
+        height: 1px;
+        z-index: 2;
+      }
+
+.milkdown .milkdown-table-block .line-handle[data-role='x-line-drag-handle'] .add-button {
+          position: absolute;
+          transform: translateX(-50%) translateY(-50%);
+          padding: 6px 0;
+          width: 16px;
+          height: 28px;
+        }
+
+.milkdown .milkdown-table-block .line-handle[data-role='y-line-drag-handle'] {
+        width: 1px;
+        z-index: 1;
+      }
+
+.milkdown .milkdown-table-block .line-handle[data-role='y-line-drag-handle'] .add-button {
+          position: absolute;
+          transform: translateY(-50%) translateX(-50%);
+          padding: 0 6px;
+          width: 28px;
+          height: 16px;
+        }
+
+.milkdown .milkdown-table-block .line-handle[data-display-type='indicator'] .add-button {
+          display: none;
+        }
+
+.milkdown .milkdown-table-block.readonly .handle {
+      display: none;
+    }
+
+/* --- latex.css (custom rules) --- */
+
+.milkdown span[data-type='math_inline'] {
+    padding: 0 4px;
+    display: inline-block;
+    vertical-align: bottom;
+    color: var(--crepe-color-primary);
+  }
+
+.milkdown .milkdown-latex-inline-edit[data-show='false'] {
+      display: none;
+    }
+
+.milkdown .milkdown-latex-inline-edit {
+    position: absolute;
+    background: var(--crepe-color-surface);
+    box-shadow: var(--crepe-shadow-1);
+    border-radius: 8px;
+    padding: 2px 6px 2px 12px;
+  }
+
+.milkdown .milkdown-latex-inline-edit .container {
+      display: flex;
+      gap: 6px;
+      align-items: flex-start;
+    }
+
+.milkdown .milkdown-latex-inline-edit .container button {
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+        border-radius: 8px;
+      }
+
+.milkdown .milkdown-latex-inline-edit .container button:hover {
+          background: var(--crepe-color-hover);
+        }
+
+.milkdown .milkdown-latex-inline-edit .ProseMirror {
+      padding: 0;
+      min-width: 174px;
+      max-width: 294px;
+      font-family: var(--crepe-font-code);
+    }

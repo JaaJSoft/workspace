@@ -1,110 +1,326 @@
 <!-- Text/Code Viewer with Monaco Editor -->
-<div class="flex flex-col h-full" x-data="{ content: '{{ content|escapejs }}', originalContent: '{{ content|escapejs }}', isEditing: false, loading: false, error: null, saving: false, fileUuid: '{{ file.uuid }}', fileName: '{{ file.name }}', ...textViewerMethods() }" @keydown.window="handleKeydown($event)">
+<div class="flex flex-col h-full"
+     x-data="textViewerMonaco()"
+     x-init="initEditor()"
+     @viewer-cleanup.window="dispose()">
+
   <!-- Toolbar -->
-  <div class="flex items-center justify-between gap-2 p-4 bg-base-100 border-b border-base-300">
-    <!-- Edit mode info -->
-    <div x-show="isEditing" class="flex items-center gap-2">
-      <i data-lucide="info" class="w-4 h-4 text-info"></i>
-      <span class="text-sm">Editing mode – Press Ctrl+S to save or ESC to cancel</span>
+  <div class="flex items-center justify-between gap-1 px-3 py-1.5 bg-base-100 border-b border-base-300">
+    <!-- Left: info -->
+    <div class="flex items-center gap-2 min-w-0">
+      <span class="badge badge-sm badge-ghost font-mono">{{ language }}</span>
+      <span x-show="isDirty" x-cloak class="flex items-center gap-1 text-warning text-xs whitespace-nowrap">
+        <span class="w-1.5 h-1.5 rounded-full bg-warning inline-block"></span>
+        Modified
+      </span>
     </div>
 
-    <!-- View mode placeholder -->
-    <div x-show="!isEditing" class="flex-1"></div>
-
-    <!-- Action buttons -->
-    <div class="flex gap-2">
-      <!-- Edit button (when not editing) -->
-      <button x-show="!isEditing" type="button" class="btn btn-sm btn-ghost" @click="startEdit()" title="Edit file">
-        <i data-lucide="pencil" class="w-4 h-4"></i>
-        Edit
+    <!-- Right: actions -->
+    <div class="flex items-center gap-0.5 flex-wrap">
+      <!-- Undo / Redo -->
+      <button type="button" class="btn btn-ghost btn-xs btn-square" @click="editorAction('undo')" title="Undo (Ctrl+Z)">
+        <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
+      </button>
+      <button type="button" class="btn btn-ghost btn-xs btn-square" @click="editorAction('redo')" title="Redo (Ctrl+Y)">
+        <i data-lucide="redo-2" class="w-3.5 h-3.5"></i>
       </button>
 
-      <!-- Cancel and Save (when editing) -->
-      <button x-show="isEditing" type="button" class="btn btn-sm btn-ghost" @click="cancelEdit()">
-        <i data-lucide="x" class="w-4 h-4"></i>
-        Cancel
+      <div class="w-px h-4 bg-base-300 mx-0.5"></div>
+
+      <!-- Find / Replace -->
+      <button type="button" class="btn btn-ghost btn-xs btn-square" @click="editorAction('find')" title="Find (Ctrl+F)">
+        <i data-lucide="search" class="w-3.5 h-3.5"></i>
       </button>
-      <button x-show="isEditing" type="button" class="btn btn-sm btn-primary" @click="save()">
-        <i data-lucide="save" class="w-4 h-4"></i>
+      <button type="button" class="btn btn-ghost btn-xs btn-square" @click="editorAction('replace')" title="Replace (Ctrl+H)">
+        <i data-lucide="replace" class="w-3.5 h-3.5"></i>
+      </button>
+
+      <div class="w-px h-4 bg-base-300 mx-0.5"></div>
+
+      <!-- Font size -->
+      <button type="button" class="btn btn-ghost btn-xs btn-square" @click="changeFontSize(-1)" title="Decrease font size">
+        <i data-lucide="a-arrow-down" class="w-3.5 h-3.5"></i>
+      </button>
+      <span class="text-xs font-mono w-6 text-center select-none" x-text="fontSize"></span>
+      <button type="button" class="btn btn-ghost btn-xs btn-square" @click="changeFontSize(1)" title="Increase font size">
+        <i data-lucide="a-arrow-up" class="w-3.5 h-3.5"></i>
+      </button>
+
+      <div class="w-px h-4 bg-base-300 mx-0.5"></div>
+
+      <!-- Tab size (cycle 2 → 4 → 8) -->
+      <button type="button" class="btn btn-ghost btn-xs gap-0.5 font-mono" @click="cycleTabSize()" title="Tab size (click to cycle)">
+        <i data-lucide="indent-increase" class="w-3.5 h-3.5"></i>
+        <span class="text-xs" x-text="tabSize"></span>
+      </button>
+
+      <div class="w-px h-4 bg-base-300 mx-0.5"></div>
+
+      <!-- Whitespace -->
+      <button type="button" class="btn btn-ghost btn-xs btn-square"
+              :class="showWhitespace ? 'btn-active' : ''"
+              @click="toggleWhitespace()" title="Toggle whitespace characters">
+        <i data-lucide="pilcrow" class="w-3.5 h-3.5"></i>
+      </button>
+      <!-- Line numbers -->
+      <button type="button" class="btn btn-ghost btn-xs btn-square"
+              :class="lineNumbers ? 'btn-active' : ''"
+              @click="toggleLineNumbers()" title="Toggle line numbers">
+        <i data-lucide="list-ordered" class="w-3.5 h-3.5"></i>
+      </button>
+      <!-- Word wrap -->
+      <button type="button" class="btn btn-ghost btn-xs btn-square"
+              :class="wordWrap ? 'btn-active' : ''"
+              @click="toggleWordWrap()" title="Toggle word wrap">
+        <i data-lucide="wrap-text" class="w-3.5 h-3.5"></i>
+      </button>
+      <!-- Minimap -->
+      <button type="button" class="btn btn-ghost btn-xs btn-square"
+              :class="minimapEnabled ? 'btn-active' : ''"
+              @click="toggleMinimap()" title="Toggle minimap">
+        <i data-lucide="map" class="w-3.5 h-3.5"></i>
+      </button>
+
+      <div class="w-px h-4 bg-base-300 mx-0.5"></div>
+
+      <!-- Save -->
+      <button type="button" class="btn btn-primary btn-xs"
+              :disabled="!isDirty || saving"
+              @click="save()" title="Save (Ctrl+S)">
+        <span x-show="saving" class="loading loading-spinner loading-xs"></span>
+        <i x-show="!saving" data-lucide="save" class="w-3.5 h-3.5"></i>
         Save
       </button>
     </div>
   </div>
 
-  <!-- Loading State -->
-  <div x-show="loading" class="flex-1 flex items-center justify-center" x-cloak>
-    <span class="loading loading-spinner loading-lg"></span>
-  </div>
-
-  <!-- Error State -->
-  <div x-show="!loading && error" class="flex-1 flex items-center justify-center p-8" x-cloak>
-    <div class="text-center">
-      <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
-      <p class="text-lg font-medium mb-2">Failed to load file</p>
-      <p class="text-sm text-base-content/60" x-text="error"></p>
-    </div>
-  </div>
-
-  <!-- Text Editor -->
-  <textarea
-    x-show="!loading && !error"
-    x-model="content"
-    :readonly="!isEditing"
-    :class="isEditing ? 'textarea-bordered bg-base-100' : 'bg-base-200'"
-    class="textarea w-full h-full font-mono text-sm text-base-content border-none focus:outline-none resize-none rounded-none flex-1"
-    spellcheck="false"
-    data-file-uuid="{{ file.uuid }}"
-    data-file-name="{{ file.name }}"
-    x-cloak
-    x-effect="if (isEditing && $el.value) $el.focus()"
-  ></textarea>
+  <!-- Monaco Container -->
+  <div x-ref="monacoContainer" class="flex-1 min-h-0"></div>
 </div>
 
 <script>
-window.textViewerMethods = function textViewerMethods() {
+window.textViewerMonaco = function() {
+  // Keep complex objects OUT of Alpine's reactive scope
+  let _editor = null;
+  let _themeObserver = null;
+  let _prefsSaveTimer = null;
+
+  var PREFS_URL = '/api/v1/settings/files/editor';
+  var PREFS_DEFAULTS = {
+    wordWrap: true,
+    minimap: true,
+    fontSize: 14,
+    tabSize: 2,
+    showWhitespace: false,
+    lineNumbers: true,
+  };
+
+  function getCSRFToken() {
+    var match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
+    return match ? match.split('=')[1] : '';
+  }
+
+  function savePrefsRemote(prefs) {
+    clearTimeout(_prefsSaveTimer);
+    _prefsSaveTimer = setTimeout(function() {
+      fetch(PREFS_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ value: prefs }),
+      }).catch(function() {});
+    }, 500);
+  }
+
   return {
-    handleKeydown(event) {
-      if (!this.isEditing) return;
+    isDirty: false,
+    saving: false,
+    wordWrap: PREFS_DEFAULTS.wordWrap,
+    minimapEnabled: PREFS_DEFAULTS.minimap,
+    fontSize: PREFS_DEFAULTS.fontSize,
+    tabSize: PREFS_DEFAULTS.tabSize,
+    showWhitespace: PREFS_DEFAULTS.showWhitespace,
+    lineNumbers: PREFS_DEFAULTS.lineNumbers,
+    originalContent: '{{ content|escapejs }}',
+    fileUuid: '{{ file.uuid }}',
+    fileName: '{{ file.name }}',
+    language: '{{ language }}',
 
-      // Ctrl+S / Cmd+S to save
-      if ((event.ctrlKey || event.metaKey) && event.key === 's') {
-        event.preventDefault();
-        this.save();
-      }
+    initEditor() {
+      var container = this.$refs.monacoContainer;
+      var content = this.originalContent;
+      var language = this.language;
+      var self = this;
 
-      // ESC to cancel
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        this.cancelEdit();
-      }
+      fetch(PREFS_URL, { credentials: 'same-origin' })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if (data && data.value && typeof data.value === 'object') {
+            var v = data.value;
+            self.wordWrap = v.wordWrap !== undefined ? v.wordWrap : PREFS_DEFAULTS.wordWrap;
+            self.minimapEnabled = v.minimap !== undefined ? v.minimap : PREFS_DEFAULTS.minimap;
+            self.fontSize = v.fontSize !== undefined ? v.fontSize : PREFS_DEFAULTS.fontSize;
+            self.tabSize = v.tabSize !== undefined ? v.tabSize : PREFS_DEFAULTS.tabSize;
+            self.showWhitespace = v.showWhitespace !== undefined ? v.showWhitespace : PREFS_DEFAULTS.showWhitespace;
+            self.lineNumbers = v.lineNumbers !== undefined ? v.lineNumbers : PREFS_DEFAULTS.lineNumbers;
+          }
+        })
+        .catch(function() {})
+        .finally(function() {
+          self._createEditor(container, content, language);
+        });
     },
 
-    startEdit() {
-      this.isEditing = true;
+    _createEditor(container, content, language) {
+      var self = this;
+
+      if (!window._monacoConfigured) {
+        require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+        window._monacoConfigured = true;
+      }
+
+      require(['vs/editor/editor.main'], function() {
+        if (!window.MonacoEnvironment) {
+          window.MonacoEnvironment = {
+            getWorkerUrl: function() {
+              return 'data:text/javascript;charset=utf-8,' + encodeURIComponent(
+                'self.MonacoEnvironment = { baseUrl: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/" };'
+                + 'importScripts("https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/base/worker/workerMain.js");'
+              );
+            }
+          };
+        }
+
+        _editor = monaco.editor.create(container, {
+          value: content,
+          language: language,
+          theme: self.detectTheme(),
+          minimap: { enabled: self.minimapEnabled },
+          wordWrap: self.wordWrap ? 'on' : 'off',
+          fontSize: self.fontSize,
+          tabSize: self.tabSize,
+          insertSpaces: true,
+          renderWhitespace: self.showWhitespace ? 'all' : 'selection',
+          lineNumbers: self.lineNumbers ? 'on' : 'off',
+          automaticLayout: true,
+          scrollBeyondLastLine: false,
+          smoothScrolling: true,
+          cursorBlinking: 'smooth',
+          padding: { top: 8, bottom: 8 },
+        });
+
+        _editor.onDidChangeModelContent(function() {
+          self.isDirty = _editor.getValue() !== self.originalContent;
+        });
+
+        _editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+          self.save();
+        });
+
+        _themeObserver = new MutationObserver(function() {
+          monaco.editor.setTheme(self.detectTheme());
+        });
+        _themeObserver.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ['data-theme']
+        });
+      });
+    },
+
+    detectTheme() {
+      var dataTheme = document.documentElement.getAttribute('data-theme') || '';
+      var darkThemes = ['dark', 'dracula', 'night', 'sunset', 'dim', 'black', 'luxury', 'halloween', 'forest', 'coffee', 'business', 'synthwave'];
+      return darkThemes.some(function(t) { return dataTheme.toLowerCase().includes(t); }) ? 'vs-dark' : 'vs';
+    },
+
+    _currentPrefs() {
+      return {
+        wordWrap: this.wordWrap,
+        minimap: this.minimapEnabled,
+        fontSize: this.fontSize,
+        tabSize: this.tabSize,
+        showWhitespace: this.showWhitespace,
+        lineNumbers: this.lineNumbers,
+      };
+    },
+
+    _persistPrefs() {
+      savePrefsRemote(this._currentPrefs());
+    },
+
+    editorAction(action) {
+      if (!_editor) return;
+      var actionMap = {
+        undo: 'undo',
+        redo: 'redo',
+        find: 'actions.find',
+        replace: 'editor.action.startFindReplaceAction',
+      };
+      _editor.trigger('toolbar', actionMap[action]);
+      _editor.focus();
+    },
+
+    changeFontSize(delta) {
+      var next = Math.min(32, Math.max(8, this.fontSize + delta));
+      if (next === this.fontSize) return;
+      this.fontSize = next;
+      if (_editor) _editor.updateOptions({ fontSize: this.fontSize });
+      this._persistPrefs();
+    },
+
+    cycleTabSize() {
+      var sizes = [2, 4, 8];
+      var idx = sizes.indexOf(this.tabSize);
+      this.tabSize = sizes[(idx + 1) % sizes.length];
+      if (_editor) {
+        _editor.getModel().updateOptions({ tabSize: this.tabSize });
+      }
+      this._persistPrefs();
+    },
+
+    toggleWhitespace() {
+      this.showWhitespace = !this.showWhitespace;
+      if (_editor) _editor.updateOptions({ renderWhitespace: this.showWhitespace ? 'all' : 'selection' });
+      this._persistPrefs();
+    },
+
+    toggleLineNumbers() {
+      this.lineNumbers = !this.lineNumbers;
+      if (_editor) _editor.updateOptions({ lineNumbers: this.lineNumbers ? 'on' : 'off' });
+      this._persistPrefs();
+    },
+
+    toggleWordWrap() {
+      this.wordWrap = !this.wordWrap;
+      if (_editor) _editor.updateOptions({ wordWrap: this.wordWrap ? 'on' : 'off' });
+      this._persistPrefs();
+    },
+
+    toggleMinimap() {
+      this.minimapEnabled = !this.minimapEnabled;
+      if (_editor) _editor.updateOptions({ minimap: { enabled: this.minimapEnabled } });
+      this._persistPrefs();
     },
 
     async save() {
-      if (this.saving) return;
-
+      if (!_editor || this.saving || !this.isDirty) return;
       this.saving = true;
 
       try {
-        const blob = new Blob([this.content], { type: 'text/plain' });
-        const formData = new FormData();
+        var content = _editor.getValue();
+        var blob = new Blob([content], { type: 'text/plain' });
+        var formData = new FormData();
         formData.append('content', blob, this.fileName || 'file.txt');
 
-        const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-
-        const response = await fetch(`/api/v1/files/${this.fileUuid}`, {
+        var response = await fetch('/api/v1/files/' + this.fileUuid, {
           method: 'PATCH',
-          headers: { 'X-CSRFToken': csrfToken },
-          body: formData
+          headers: { 'X-CSRFToken': getCSRFToken() },
+          body: formData,
         });
 
         if (!response.ok) throw new Error('Failed to save');
 
-        this.originalContent = this.content;
-        this.isEditing = false;
+        this.originalContent = content;
+        this.isDirty = false;
 
         if (window.AppAlert) {
           window.AppAlert.success('File saved successfully');
@@ -119,10 +335,17 @@ window.textViewerMethods = function textViewerMethods() {
       }
     },
 
-    cancelEdit() {
-      this.content = this.originalContent;
-      this.isEditing = false;
-    }
+    dispose() {
+      clearTimeout(_prefsSaveTimer);
+      if (_themeObserver) {
+        _themeObserver.disconnect();
+        _themeObserver = null;
+      }
+      if (_editor) {
+        _editor.dispose();
+        _editor = null;
+      }
+    },
   };
 };
 </script>

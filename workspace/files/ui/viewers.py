@@ -110,6 +110,17 @@ class TextViewer(BaseViewer):
 
     def _detect_language(self) -> str:
         """Detect programming language from file extension."""
+        # Handle files with no extension by name
+        name_lower = self.file.name.lower()
+        name_map = {
+            'dockerfile': 'dockerfile',
+            'makefile': 'makefile',
+            'gemfile': 'ruby',
+            'rakefile': 'ruby',
+        }
+        if '.' not in self.file.name and name_lower in name_map:
+            return name_map[name_lower]
+
         ext = self.file.name.split('.')[-1].lower() if '.' in self.file.name else ''
 
         lang_map = {
@@ -118,25 +129,55 @@ class TextViewer(BaseViewer):
             'ts': 'typescript',
             'tsx': 'typescript',
             'py': 'python',
+            'pyw': 'python',
             'html': 'html',
             'htm': 'html',
             'css': 'css',
             'scss': 'scss',
+            'less': 'less',
             'json': 'json',
+            'jsonc': 'json',
             'md': 'markdown',
             'xml': 'xml',
+            'svg': 'xml',
             'yaml': 'yaml',
             'yml': 'yaml',
             'sh': 'shell',
             'bash': 'shell',
+            'zsh': 'shell',
             'sql': 'sql',
             'php': 'php',
             'java': 'java',
             'c': 'c',
+            'h': 'c',
             'cpp': 'cpp',
+            'cxx': 'cpp',
+            'cc': 'cpp',
+            'hpp': 'cpp',
+            'cs': 'csharp',
             'go': 'go',
             'rs': 'rust',
             'rb': 'ruby',
+            'lua': 'lua',
+            'swift': 'swift',
+            'kt': 'kotlin',
+            'kts': 'kotlin',
+            'r': 'r',
+            'R': 'r',
+            'pl': 'perl',
+            'pm': 'perl',
+            'ini': 'ini',
+            'toml': 'ini',
+            'cfg': 'ini',
+            'dockerfile': 'dockerfile',
+            'ps1': 'powershell',
+            'psm1': 'powershell',
+            'bat': 'bat',
+            'cmd': 'bat',
+            'graphql': 'graphql',
+            'gql': 'graphql',
+            'proto': 'protobuf',
+            'tf': 'hcl',
         }
 
         return lang_map.get(ext, 'plaintext')

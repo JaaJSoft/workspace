@@ -105,6 +105,9 @@
 
           const container = this.$refs.viewerContainer;
 
+          // Dispatch cleanup event before removing DOM (lets Monaco dispose)
+          window.dispatchEvent(new CustomEvent('viewer-cleanup'));
+
           // Clear previous content and scripts
           container.replaceChildren();
           this.loadedScripts.forEach(script => script.remove());
@@ -175,6 +178,9 @@
         },
 
         close() {
+          // Dispatch cleanup event before removing DOM (lets Monaco dispose)
+          window.dispatchEvent(new CustomEvent('viewer-cleanup'));
+
           this.$refs.dialog.close();
           this.open = false;
           this.fileUuid = null;
@@ -245,6 +251,7 @@
               }
             } else if (!fileUuid && this.open) {
               // No open parameter but viewer is open - close it
+              window.dispatchEvent(new CustomEvent('viewer-cleanup'));
               this.$refs.dialog.close();
               this.open = false;
               this.fileUuid = null;

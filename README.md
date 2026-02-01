@@ -1,4 +1,4 @@
-# JaaJ Workspace
+# Workspace
 
 > **Early Development** — This project is under active development and has not reached a stable release. APIs, database schemas, and features may change without notice or migration path. Use at your own risk.
 
@@ -307,8 +307,14 @@ Contributions are welcome! Whether you're fixing bugs, adding features, or impro
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-No CLA, no bureaucracy. Just code.
+By contributing, you agree to the contributor license grant in `CONTRIBUTING.md`.
 
 ## License
 
-All rights reserved. License to be determined before first stable release.
+Workspace is source-available under the Business Source License 1.1 (BSL 1.1).
+
+- Free to use, modify, and self-host for personal or internal business use.
+- You may not offer Workspace as a hosted or managed service to third parties without a commercial license.
+- This version will become available under the MIT License on 2030-02-01.
+
+See `LICENSE` for full terms and `CHANGELOG.md` for the version timeline.

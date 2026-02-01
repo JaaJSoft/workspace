@@ -28,6 +28,44 @@ def file_upload_path(instance, filename):
     return os.path.join('files', instance.owner.username, filename)
 
 
+class MimeTypeRule(models.Model):
+    """Referential table for MIME type rules: icon, color, category, viewer."""
+
+    class Category(models.TextChoices):
+        TEXT = 'text', 'Text'
+        IMAGE = 'image', 'Image'
+        PDF = 'pdf', 'PDF'
+        VIDEO = 'video', 'Video'
+        AUDIO = 'audio', 'Audio'
+        UNKNOWN = 'unknown', 'Unknown'
+
+    class ViewerType(models.TextChoices):
+        TEXT = 'text', 'Text'
+        IMAGE = 'image', 'Image'
+        MARKDOWN = 'markdown', 'Markdown'
+        PDF = 'pdf', 'PDF'
+        MEDIA = 'media', 'Media'
+
+    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    pattern = models.CharField(max_length=100, unique=True, help_text="MIME type or wildcard (e.g. 'text/*')")
+    is_wildcard = models.BooleanField(default=False, editable=False)
+    priority = models.IntegerField(default=100, help_text="Lower = matched first")
+    icon = models.CharField(max_length=50, help_text="Lucide icon name")
+    color = models.CharField(max_length=50, help_text="DaisyUI/Tailwind color class")
+    category = models.CharField(max_length=10, choices=Category.choices, default=Category.UNKNOWN)
+    viewer_type = models.CharField(max_length=10, choices=ViewerType.choices, null=True, blank=True)
+
+    class Meta:
+        ordering = ['priority', 'pattern']
+
+    def __str__(self):
+        return self.pattern
+
+    def save(self, *args, **kwargs):
+        self.is_wildcard = self.pattern.endswith('/*')
+        super().save(*args, **kwargs)
+
+
 class File(models.Model):
     """Model representing a file or folder in a tree structure."""
 

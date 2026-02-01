@@ -265,7 +265,7 @@ Features shared across all modules.
 - [ ] Python/JS SDK
 
 ### Desktop Integration
-- [ ] WebDAV server (wsgidav) — mount files as a network drive on any OS
+- [x] WebDAV server (wsgidav) — mount files as a network drive on any OS (WIP)
 - [ ] macOS File Provider Extension — native Finder integration with sync status
 - [ ] Windows Cloud Files API — native Explorer integration (on-demand files)
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- Add PostgreSQL support via `dj-database-url` and `psycopg`
+- Sync Monaco editor basic theme with DaisyUI theme
+- Add GitHub Actions CI workflow for running tests
+- Configure Dependabot for `uv` package ecosystem
+- Add release automation script
+
 ## 0.1.0
 
 Initial public release.

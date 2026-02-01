@@ -110,12 +110,12 @@
         </li>
       </template>
 
-      <!-- Download (files only) -->
-      <template x-if="nodeData.nodeType === 'file' && !nodeData.isTrash">
+      <!-- Download (files and folders) -->
+      <template x-if="!nodeData.isTrash">
         <li>
-          <a :href="`/api/v1/files/${nodeData.uuid}/content`" download :download="nodeData.name" class="gap-3 rounded">
+          <a :href="`/api/v1/files/${nodeData.uuid}/download`" download :download="nodeData.nodeType === 'folder' ? nodeData.name + '.zip' : nodeData.name" class="gap-3 rounded">
             <i data-lucide="download" class="w-4 h-4"></i>
-            <span>Download</span>
+            <span x-text="nodeData.nodeType === 'folder' ? 'Download as ZIP' : 'Download'"></span>
           </a>
         </li>
       </template>

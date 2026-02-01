@@ -621,6 +621,72 @@ class FileViewSet(viewsets.ModelViewSet):
         return response
 
     @extend_schema(
+        summary="Download file or folder",
+        description=(
+            "Download a single file as an attachment, or an entire folder as a ZIP archive. "
+            "For folders, all non-deleted descendant files with content are included."
+        ),
+        responses={
+            200: OpenApiResponse(
+                description="File content or ZIP archive.",
+            ),
+            404: OpenApiResponse(description="File not found or no content."),
+        },
+    )
+    @action(detail=True, methods=['get'], url_path='download')
+    def download(self, request, uuid=None):
+        """Download a file or a folder as a ZIP archive."""
+        import io
+        import zipfile
+        from django.http import FileResponse, HttpResponse
+
+        file_obj = self.get_object()
+
+        if file_obj.owner != request.user:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Single file download
+        if file_obj.node_type == File.NodeType.FILE:
+            if not file_obj.content:
+                return Response({'detail': 'No content.'}, status=status.HTTP_404_NOT_FOUND)
+            file_handle = file_obj.content.open('rb')
+            response = FileResponse(
+                file_handle,
+                content_type=file_obj.mime_type or 'application/octet-stream',
+                as_attachment=True,
+                filename=file_obj.name,
+            )
+            return response
+
+        # Folder download as ZIP
+        folder_path = file_obj.path or file_obj.get_path()
+        prefix = f"{folder_path}/"
+        descendants = File.objects.filter(
+            owner=request.user,
+            node_type=File.NodeType.FILE,
+            deleted_at__isnull=True,
+            path__startswith=prefix,
+        ).exclude(content='').exclude(content__isnull=True)
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for desc in descendants:
+                # Relative path inside the ZIP: strip the folder's own path prefix
+                rel_path = desc.path[len(prefix):]
+                try:
+                    data = desc.content.read()
+                    desc.content.close()
+                    zf.writestr(rel_path, data)
+                except Exception:
+                    continue
+        buf.seek(0)
+
+        zip_name = f"{file_obj.name}.zip"
+        response = HttpResponse(buf.read(), content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="{zip_name}"'
+        return response
+
+    @extend_schema(
         summary="Sync root folder with disk",
         description=(
             "Synchronize root-level files between disk storage and database for the "

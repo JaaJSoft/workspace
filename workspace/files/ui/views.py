@@ -7,6 +7,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from ..models import File, FileFavorite, PinnedFolder
 from .viewers import ViewerRegistry
+from workspace.users.settings_service import get_setting
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
 
@@ -173,6 +174,9 @@ def _build_context(request, folder=None, is_trash_view=False):
 
     parent_url = breadcrumbs[-2].get('url', '/files') if len(breadcrumbs) >= 2 else None
 
+    file_prefs = get_setting(request.user, 'files', 'preferences', default={})
+    breadcrumb_collapse = file_prefs.get('breadcrumbCollapse', 4) if isinstance(file_prefs, dict) else 4
+
     return {
         'nodes': nodes,
         'current_folder': current_folder,
@@ -193,6 +197,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         'empty_message': empty_message,
         'parent_url': parent_url,
         'pinned_folders': pinned_folders_qs,
+        'breadcrumb_collapse': breadcrumb_collapse,
     }
 
 

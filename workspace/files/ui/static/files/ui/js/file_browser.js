@@ -111,6 +111,11 @@ window.filePreferences = function filePreferences() {
       this.prefs[key] = value;
       this._saveRemote();
       this._broadcast();
+      // Breadcrumb collapse is rendered server-side; refresh to apply
+      if (key === 'breadcrumbCollapse') {
+        const link = document.querySelector('[data-refresh-folder-browser]');
+        if (link) link.click();
+      }
     },
 
     _broadcast() {
@@ -1108,8 +1113,8 @@ window.fileTableControls = function fileTableControls() {
     storageKey: 'fileTableControls:v4',
     searchQuery: '',
     typeFilter: 'all',
-    sortField: 'default',
-    sortDir: 'asc',
+    sortField: window._filePrefsCache.defaultSort || 'default',
+    sortDir: window._filePrefsCache.defaultSortDir || 'asc',
     columns: [
       { id: 'select', label: 'Select', required: false },
       { id: 'icon', label: 'Type', required: true },
@@ -1145,6 +1150,7 @@ window.fileTableControls = function fileTableControls() {
     table: null,
     tbody: null,
     originalRows: [],
+    showHiddenFiles: window._filePrefsCache.showHiddenFiles || false,
     ready: false,
     _initializing: true,
     _saveTimer: null,
@@ -1191,6 +1197,15 @@ window.fileTableControls = function fileTableControls() {
       this.$watch('typeFilter', () => this.applyRows());
       this.$watch('sortField', () => this.applyRows());
       this.$watch('sortDir', () => this.applyRows());
+      this.$watch('showHiddenFiles', () => this.applyRows());
+
+      // Sync showHiddenFiles when preferences change
+      window.addEventListener('preferences-changed', (e) => {
+        const show = e.detail?.showHiddenFiles;
+        if (typeof show === 'boolean' && show !== this.showHiddenFiles) {
+          this.showHiddenFiles = show;
+        }
+      });
 
       // Clear selection after bulk actions
       window.addEventListener('clear-file-selection', () => {
@@ -1746,8 +1761,8 @@ window.fileTableControls = function fileTableControls() {
     resetAll() {
       this.searchQuery = '';
       this.typeFilter = 'all';
-      this.sortField = 'default';
-      this.sortDir = 'asc';
+      this.sortField = window._filePrefsCache.defaultSort || 'default';
+      this.sortDir = window._filePrefsCache.defaultSortDir || 'asc';
       this.resetColumns();
       this.applyRows();
     },
@@ -1777,8 +1792,11 @@ window.fileTableControls = function fileTableControls() {
 
     matchesFilter(row, query) {
       if (row.dataset.emptyRow) return false;
+      const name = row.dataset.name || '';
+      if (!this.showHiddenFiles && name.startsWith('.')) {
+        return false;
+      }
       if (query) {
-        const name = row.dataset.name || '';
         if (!name.includes(query)) {
           return false;
         }

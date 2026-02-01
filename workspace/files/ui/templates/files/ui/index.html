@@ -205,7 +205,7 @@
                   <i data-lucide="rotate-cw" class="w-4 h-4"></i>
                 </button>
               </div>
-              {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs collapse=True x_target="folder-browser" x_target_history="push" %}
+              {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs collapse=True collapse_after=breadcrumb_collapse x_target="folder-browser" x_target_history="push" %}
               <a
                 href="{{ current_view_url }}"
                 class="hidden"

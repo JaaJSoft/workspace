@@ -56,9 +56,10 @@ class DjangoBasicDomainController(BaseDomainController):
 def _cache_key(user_name, password):
     """Return a deterministic, non-reversible cache key for the given credentials.
 
-    Uses a process-local secret and keyed BLAKE2b so that the derived key
-    cannot be used as a standalone password hash outside this process.
+    Uses PBKDF2-HMAC with a process-local salt.  The iteration count is kept
+    modest (100 000 ≈ 30-50 ms) because this is only an in-memory cache key —
+    the real password verification is handled by Django's auth backend.
     """
     message = f"{user_name}:{password}".encode()
-    digest = hashlib.blake2b(message, key=_CACHE_KEY_SECRET).hexdigest()
-    return digest
+    dk = hashlib.pbkdf2_hmac("sha256", message, _CACHE_KEY_SECRET, 100_000)
+    return dk.hex()

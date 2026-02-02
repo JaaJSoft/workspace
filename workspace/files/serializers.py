@@ -159,7 +159,7 @@ class FileSerializer(serializers.ModelSerializer):
             try:
                 FileService.validate_move_target(instance, attrs['parent'])
             except ValueError as e:
-                raise serializers.ValidationError({'parent': str(e)})
+                raise serializers.ValidationError({'parent': e.args[0]})
 
         # Validate file name uniqueness via FileService
         if node_type == File.NodeType.FILE:
@@ -173,7 +173,7 @@ class FileSerializer(serializers.ModelSerializer):
                         exclude_pk=instance.pk if instance else None,
                     )
                 except ValueError as e:
-                    raise serializers.ValidationError({'name': str(e)})
+                    raise serializers.ValidationError({'name': e.args[0]})
 
         return super().validate(attrs)
 

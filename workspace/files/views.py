@@ -707,12 +707,14 @@ class FileViewSet(viewsets.ModelViewSet):
 
         service = FileSyncService(log=logger)
         result = service.sync_folder_shallow(request.user, parent_db=None)
+        for err in result.errors:
+            logger.warning("sync root: %s", err)
         return Response({
             'files_created': result.files_created,
             'folders_created': result.folders_created,
             'files_soft_deleted': result.files_soft_deleted,
             'folders_soft_deleted': result.folders_soft_deleted,
-            'errors': result.errors,
+            'error_count': len(result.errors),
         })
 
     @extend_schema(
@@ -744,10 +746,12 @@ class FileViewSet(viewsets.ModelViewSet):
 
         service = FileSyncService(log=logger)
         result = service.sync_folder_shallow(request.user, parent_db=file_obj)
+        for err in result.errors:
+            logger.warning("sync folder %s: %s", uuid, err)
         return Response({
             'files_created': result.files_created,
             'folders_created': result.folders_created,
             'files_soft_deleted': result.files_soft_deleted,
             'folders_soft_deleted': result.folders_soft_deleted,
-            'errors': result.errors,
+            'error_count': len(result.errors),
         })

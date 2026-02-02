@@ -1,7 +1,6 @@
 """Domain controller for WsgiDAV using Django's auth backend."""
 
 import hashlib
-import hmac
 import os
 import threading
 import time
@@ -57,9 +56,9 @@ class DjangoBasicDomainController(BaseDomainController):
 def _cache_key(user_name, password):
     """Return a deterministic, non-reversible cache key for the given credentials.
 
-    Uses a process-local secret and HMAC-SHA256 so that the derived key cannot
-    be used as a standalone password hash outside this process.
+    Uses a process-local secret and keyed BLAKE2b so that the derived key
+    cannot be used as a standalone password hash outside this process.
     """
     message = f"{user_name}:{password}".encode()
-    digest = hmac.new(_CACHE_KEY_SECRET, message, hashlib.sha256).hexdigest()
+    digest = hashlib.blake2b(message, key=_CACHE_KEY_SECRET).hexdigest()
     return digest

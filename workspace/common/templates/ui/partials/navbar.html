@@ -182,7 +182,7 @@
             <li class="{% if request.resolver_match.view_name == 'user_profile' %}disabled{% endif %}">
               <a
                 href="/profile"
-                class="gap-3 {% if request.resolver_match.view_name != 'user:profile_html' %}hover:bg-primary/10 hover:text-primary{% endif %} transition-colors"
+                class="gap-3 {% if request.resolver_match.view_name != 'user_profile' %}hover:bg-primary/10 hover:text-primary{% endif %} transition-colors"
                 {% if request.resolver_match.view_name == 'user_profile' %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
               >
                 <i data-lucide="user" class="w-4 h-4"></i>
@@ -191,8 +191,12 @@
             </li>
 
             <!-- Settings -->
-            <li>
-              <a href="#" class="gap-3 hover:bg-info/10 hover:text-info transition-colors">
+            <li class="{% if request.resolver_match.view_name == 'user_settings' %}disabled{% endif %}">
+              <a
+                href="/settings"
+                class="gap-3 {% if request.resolver_match.view_name != 'user_settings' %}hover:bg-info/10 hover:text-info{% endif %} transition-colors"
+                {% if request.resolver_match.view_name == 'user_settings' %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
+              >
                 <i data-lucide="settings" class="w-4 h-4"></i>
                 <span class="font-medium">Settings</span>
               </a>

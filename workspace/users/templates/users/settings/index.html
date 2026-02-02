@@ -1,0 +1,330 @@
+{% extends 'base_with_navbar.html' %}
+
+{% block title %}Settings · Workspace{% endblock %}
+
+{% block body_class %}bg-base-100 min-h-screen{% endblock %}
+{% block drawer_wrapper_class %}{% endblock %}
+{% block drawer_content_class %}{% endblock %}
+{% block main_layout_class %}{% endblock %}
+{% block main_class %}container mx-auto p-4 max-w-6xl{% endblock %}
+
+{% block content %}
+<div class="py-6" x-data="settingsPage()">
+  <!-- Page header -->
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold">Settings</h1>
+    <p class="text-base-content/60 text-sm mt-1">Manage your preferences and security settings.</p>
+  </div>
+
+  <div class="flex flex-col md:flex-row gap-6">
+    <!-- Sidebar -->
+    <nav class="md:w-64 flex-shrink-0">
+      <div class="border border-base-300 rounded-lg p-3 space-y-1 w-full">
+        <button
+          @click="tab = 'preferences'; updateHash()"
+          class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
+          :class="tab === 'preferences'
+            ? 'bg-primary/10 text-primary font-semibold'
+            : 'hover:bg-base-200 text-base-content'"
+        >
+          <i data-lucide="palette" class="w-4 h-4"></i>
+          Preferences
+        </button>
+        <button
+          @click="tab = 'security'; updateHash()"
+          class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
+          :class="tab === 'security'
+            ? 'bg-primary/10 text-primary font-semibold'
+            : 'hover:bg-base-200 text-base-content'"
+        >
+          <i data-lucide="shield" class="w-4 h-4"></i>
+          Security
+        </button>
+      </div>
+    </nav>
+
+    <!-- Content -->
+    <div class="flex-1 min-w-0">
+
+      <!-- Preferences Tab -->
+      <div x-show="tab === 'preferences'" x-data="themePickerForm()">
+        <div class="card bg-base-100 border border-base-300 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg gap-2">
+              <i data-lucide="palette" class="w-5 h-5"></i>
+              Appearance
+            </h2>
+
+            <p class="text-sm text-base-content/60 mt-1">Choose a theme for your workspace.</p>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
+              <template x-for="t in themes" :key="t.id">
+                <button
+                  type="button"
+                  @click="applyTheme(t.id)"
+                  class="rounded-lg border-2 p-3 text-left transition-all hover:scale-[1.02]"
+                  :class="current === t.id ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-base-content/20'"
+                >
+                  <!-- Mini theme preview -->
+                  <div class="flex gap-1 mb-2" :data-theme="t.id">
+                    <div class="rounded-full w-4 h-4 bg-primary"></div>
+                    <div class="rounded-full w-4 h-4 bg-secondary"></div>
+                    <div class="rounded-full w-4 h-4 bg-accent"></div>
+                    <div class="rounded-full w-4 h-4 bg-neutral"></div>
+                  </div>
+                  <span class="text-sm font-medium capitalize" x-text="t.label"></span>
+                </button>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Security Tab -->
+      <div x-show="tab === 'security'" x-cloak x-data="changePasswordForm()">
+        <div class="card bg-base-100 border border-base-300 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg gap-2">
+              <i data-lucide="lock" class="w-5 h-5"></i>
+              Change Password
+            </h2>
+
+            <!-- Password rules -->
+            <div x-ref="rulesContainer" class="mt-4"></div>
+
+            <!-- Success/error feedback -->
+            <div x-ref="feedbackContainer"></div>
+
+            <!-- Form -->
+            <form @submit.prevent="submit()" class="mt-4 space-y-4">
+              {% csrf_token %}
+
+              <!-- Current password -->
+              <div class="form-control">
+                <label class="label"><span class="label-text font-medium">Current Password</span></label>
+                <label class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors">
+                  <i data-lucide="lock" class="w-4 h-4 text-base-content/40"></i>
+                  <input
+                    :type="showCurrent ? 'text' : 'password'"
+                    x-model="currentPassword"
+                    class="grow"
+                    placeholder="Enter current password"
+                    required
+                    autocomplete="current-password"
+                  />
+                  <button type="button" @click="showCurrent = !showCurrent" class="btn btn-ghost btn-xs btn-circle" tabindex="-1">
+                    <i x-show="!showCurrent" data-lucide="eye" class="w-4 h-4 text-base-content/40"></i>
+                    <i x-show="showCurrent" data-lucide="eye-off" class="w-4 h-4 text-base-content/40"></i>
+                  </button>
+                </label>
+              </div>
+
+              <!-- New password -->
+              <div class="form-control">
+                <label class="label"><span class="label-text font-medium">New Password</span></label>
+                <label class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors">
+                  <i data-lucide="key-round" class="w-4 h-4 text-base-content/40"></i>
+                  <input
+                    :type="showNew ? 'text' : 'password'"
+                    x-model="newPassword"
+                    class="grow"
+                    placeholder="Enter new password"
+                    required
+                    autocomplete="new-password"
+                  />
+                  <button type="button" @click="showNew = !showNew" class="btn btn-ghost btn-xs btn-circle" tabindex="-1">
+                    <i x-show="!showNew" data-lucide="eye" class="w-4 h-4 text-base-content/40"></i>
+                    <i x-show="showNew" data-lucide="eye-off" class="w-4 h-4 text-base-content/40"></i>
+                  </button>
+                </label>
+              </div>
+
+              <!-- Confirm password -->
+              <div class="form-control">
+                <label class="label"><span class="label-text font-medium">Confirm New Password</span></label>
+                <label class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+                       :class="{ 'input-error': confirmMismatch }">
+                  <i data-lucide="key-round" class="w-4 h-4 text-base-content/40"></i>
+                  <input
+                    :type="showConfirm ? 'text' : 'password'"
+                    x-model="confirmPassword"
+                    class="grow"
+                    placeholder="Confirm new password"
+                    required
+                    autocomplete="new-password"
+                  />
+                  <button type="button" @click="showConfirm = !showConfirm" class="btn btn-ghost btn-xs btn-circle" tabindex="-1">
+                    <i x-show="!showConfirm" data-lucide="eye" class="w-4 h-4 text-base-content/40"></i>
+                    <i x-show="showConfirm" data-lucide="eye-off" class="w-4 h-4 text-base-content/40"></i>
+                  </button>
+                </label>
+                <label class="label" x-show="confirmMismatch" x-cloak>
+                  <span class="label-text-alt text-error">Passwords do not match.</span>
+                </label>
+              </div>
+
+              <!-- Submit -->
+              <div class="form-control mt-6">
+                <button type="submit" class="btn btn-primary gap-2" :disabled="!canSubmit">
+                  <span x-show="!loading"><i data-lucide="save" class="w-4 h-4"></i></span>
+                  <span x-show="loading" class="loading loading-spinner loading-sm"></span>
+                  <span x-text="loading ? 'Updating...' : 'Update Password'"></span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function settingsPage() {
+    return {
+      tab: (location.hash.replace('#', '') || 'preferences'),
+      init() {
+        window.addEventListener('hashchange', () => {
+          const hash = location.hash.replace('#', '');
+          if (hash === 'preferences' || hash === 'security') {
+            this.tab = hash;
+          }
+        });
+      },
+      updateHash() {
+        location.hash = this.tab;
+      },
+    };
+  }
+
+  function themePickerForm() {
+    return {
+      current: localStorage.getItem('theme') || 'light',
+      themes: [
+        { id: 'light',     label: 'Light' },
+        { id: 'dark',      label: 'Dark' },
+        { id: 'cupcake',   label: 'Cupcake' },
+        { id: 'emerald',   label: 'Emerald' },
+        { id: 'corporate', label: 'Corporate' },
+        { id: 'forest',    label: 'Forest' },
+        { id: 'dracula',   label: 'Dracula' },
+        { id: 'night',     label: 'Night' },
+        { id: 'winter',    label: 'Winter' },
+        { id: 'nord',      label: 'Nord' },
+        { id: 'sunset',    label: 'Sunset' },
+        { id: 'autumn',    label: 'Autumn' },
+      ],
+      applyTheme(id) {
+        this.current = id;
+        document.documentElement.setAttribute('data-theme', id);
+        localStorage.setItem('theme', id);
+        const toggle = document.getElementById('themeToggle');
+        if (toggle) toggle.checked = (id === 'dark');
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
+          || '';
+        fetch('/api/v1/settings/core/theme', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ value: id }),
+        });
+      },
+    };
+  }
+
+  function changePasswordForm() {
+    return {
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+      showCurrent: false,
+      showNew: false,
+      showConfirm: false,
+      loading: false,
+      rules: [],
+      async init() {
+        try {
+          const res = await fetch('/api/v1/users/password-rules');
+          const data = await res.json();
+          this.rules = data.rules || [];
+          if (this.rules.length > 0) {
+            this.renderRules();
+          }
+        } catch (e) {
+          this.rules = [];
+        }
+      },
+      renderRules() {
+        const container = this.$refs.rulesContainer;
+        if (!container) return;
+        // Rules come from Django's password_validators_help_texts() - trusted server content
+        const list = this.rules.map(r => {
+          const el = document.createElement('li');
+          el.textContent = r;
+          return el;
+        });
+        const wrapper = document.createElement('div');
+        const title = document.createElement('div');
+        title.className = 'font-medium text-sm mb-1';
+        title.textContent = 'Password requirements:';
+        const ul = document.createElement('ul');
+        ul.className = 'list-disc list-inside text-sm space-y-0.5';
+        list.forEach(li => ul.appendChild(li));
+        wrapper.appendChild(title);
+        wrapper.appendChild(ul);
+        container.replaceChildren();
+        container.appendChild(InlineAlert.create({ type: 'info', message: wrapper.outerHTML }));
+      },
+      get confirmMismatch() {
+        return this.confirmPassword && this.newPassword !== this.confirmPassword;
+      },
+      get canSubmit() {
+        return this.currentPassword && this.newPassword && this.confirmPassword && !this.confirmMismatch && !this.loading;
+      },
+      async submit() {
+        if (this.$refs.feedbackContainer) this.$refs.feedbackContainer.replaceChildren();
+        this.loading = true;
+        try {
+          const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+            || document.cookie.split('; ').find(function(c) { return c.startsWith('csrftoken='); })?.split('=')[1]
+            || '';
+          const res = await fetch('/api/v1/users/me/password', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({
+              current_password: this.currentPassword,
+              new_password: this.newPassword,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            this.currentPassword = '';
+            this.newPassword = '';
+            this.confirmPassword = '';
+            this.showFeedback('success', data.message || 'Password updated successfully.');
+          } else {
+            const msgs = data.errors || ['An unexpected error occurred.'];
+            this.showFeedback('error', msgs.join(', '));
+          }
+        } catch (e) {
+          this.showFeedback('error', 'Network error. Please try again.');
+        } finally {
+          this.loading = false;
+        }
+      },
+      showFeedback(type, message) {
+        const container = this.$refs.feedbackContainer;
+        if (!container) return;
+        container.replaceChildren();
+        container.appendChild(InlineAlert.create({ type, message }));
+      },
+    };
+  }
+</script>
+{% endblock %}

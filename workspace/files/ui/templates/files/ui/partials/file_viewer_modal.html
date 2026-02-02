@@ -171,22 +171,19 @@
               throw new Error('Failed to load viewer: ' + response.status);
             }
 
-            let rawHtml = await response.text();
+            const rawHtml = await response.text();
 
-            // Extract scripts using regex
-            const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+            // Parse HTML with the DOM parser instead of regex
+            const temp = document.createElement('template');
+            temp.innerHTML = rawHtml;  // same-origin server response
+
+            // Extract and remove script elements from parsed DOM
+            const scriptEls = temp.content.querySelectorAll('script');
             const scripts = [];
-            const matches = rawHtml.match(scriptRegex);
-
-            if (matches) {
-              matches.forEach(function(scriptTag) {
-                const content = scriptTag.replace(/<script\b[^>]*>|<\/script>/gi, '');
-                scripts.push(content);
-              });
-
-              // Remove scripts from HTML
-              rawHtml = rawHtml.replace(scriptRegex, '');
-            }
+            scriptEls.forEach(function(el) {
+              scripts.push(el.textContent);
+              el.remove();
+            });
 
             // Execute scripts first
             scripts.forEach(function(scriptContent) {
@@ -196,11 +193,7 @@
               this.loadedScripts.push(newScript);
             }.bind(this));
 
-            // Parse and inject HTML content (scripts already removed)
-            const temp = document.createElement('template');
-            temp.innerHTML = rawHtml;
-
-            // Move all children to container
+            // Move remaining children to container
             while (temp.content.firstChild) {
               container.appendChild(temp.content.firstChild);
             }

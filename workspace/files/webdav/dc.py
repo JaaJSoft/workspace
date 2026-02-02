@@ -1,6 +1,8 @@
 """Domain controller for WsgiDAV using Django's auth backend."""
 
 import hashlib
+import hmac
+import os
 import threading
 import time
 
@@ -10,6 +12,7 @@ from wsgidav.dc.base_dc import BaseDomainController
 _auth_cache = {}
 _auth_lock = threading.Lock()
 _AUTH_TTL = 60  # seconds
+_CACHE_KEY_SECRET = os.urandom(32)
 
 # TODO find a better way !!!!!
 class DjangoBasicDomainController(BaseDomainController):
@@ -52,5 +55,11 @@ class DjangoBasicDomainController(BaseDomainController):
 
 
 def _cache_key(user_name, password):
-    pw_hash = hashlib.sha256(password.encode()).hexdigest()
-    return f"{user_name}:{pw_hash}"
+    """Return a deterministic, non-reversible cache key for the given credentials.
+
+    Uses a process-local secret and HMAC-SHA256 so that the derived key cannot
+    be used as a standalone password hash outside this process.
+    """
+    message = f"{user_name}:{password}".encode()
+    digest = hmac.new(_CACHE_KEY_SECRET, message, hashlib.sha256).hexdigest()
+    return digest

@@ -16,7 +16,7 @@ Workspace gives you both: **run anywhere, scale everywhere**.
 At its core, Workspace is just Django + SQLite. You can run it on a Raspberry Pi, a $5/month VPS, or your laptop. No complex setup, no database servers to manage, no infrastructure lock-in.
 
 - **SQLite (WAL mode)** — Production-ready, zero-maintenance database. Perfect for individuals and small teams.
-- **Single binary deployment** — One Docker container, one process, done.
+- **Single docker deployment** — One Docker container, one process, done.
 - **Minimal dependencies** — Python, Django, and a file system. Redis is optional.
 
 ### Scale When You Need It

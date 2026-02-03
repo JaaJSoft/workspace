@@ -1,9 +1,12 @@
-"""Celery tasks for file synchronization."""
+"""Celery tasks for file synchronization and maintenance."""
 
 import logging
+from datetime import timedelta
 
 from celery import shared_task
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -36,6 +39,36 @@ def sync_all_users(self):
 
     logger.info("Full sync complete: %s", total)
     return total
+
+
+@shared_task(name='files.purge_trash', bind=True, max_retries=0)
+def purge_trash(self):
+    """Hard-delete files that have been in trash longer than TRASH_RETENTION_DAYS."""
+    from workspace.files.models import File
+
+    retention_days = getattr(settings, 'TRASH_RETENTION_DAYS', 30)
+    cutoff = timezone.now() - timedelta(days=retention_days)
+
+    qs = File.objects.filter(deleted_at__lte=cutoff)
+    files_count = qs.filter(node_type=File.NodeType.FILE).count()
+    folders_count = qs.filter(node_type=File.NodeType.FOLDER).count()
+
+    if not (files_count + folders_count):
+        logger.info("Trash purge: nothing to delete.")
+        return {'files_deleted': 0, 'folders_deleted': 0, 'retention_days': retention_days}
+
+    logger.info(
+        "Trash purge: deleting %d files and %d folders older than %d days",
+        files_count, folders_count, retention_days,
+    )
+    qs.delete()
+
+    logger.info("Trash purge complete.")
+    return {
+        'files_deleted': files_count,
+        'folders_deleted': folders_count,
+        'retention_days': retention_days,
+    }
 
 
 @shared_task(name='files.sync_folder', bind=True, max_retries=0)

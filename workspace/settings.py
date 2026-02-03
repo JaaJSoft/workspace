@@ -480,6 +480,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'files.sync_all_users',
         'schedule': 600.0,  # Every 10 minutes
     },
+    'purge-trash': {
+        'task': 'files.purge_trash',
+        'schedule': crontab(hour=2, minute=30),  # Every day at 2:30 AM
+    },
     'db-maintenance': {
         'task': 'core.db_maintenance',
         'schedule': crontab(hour=3, minute=0),  # Every day at 3:00 AM

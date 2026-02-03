@@ -199,6 +199,11 @@ window.sidebarCollapse = function sidebarCollapse() {
       const params = new URLSearchParams(window.location.search);
       const favorites = (params.get('favorites') || '').toLowerCase();
       const recent = (params.get('recent') || '').toLowerCase();
+      const shared = (params.get('shared') || '').toLowerCase();
+      if (['1', 'true', 'yes'].includes(shared)) {
+        this.activeView = 'shared';
+        return;
+      }
       if (['1', 'true', 'yes'].includes(favorites)) {
         this.activeView = 'favorites';
         return;
@@ -2180,5 +2185,250 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
         this.refreshPinnedSection();
       }
     }
+  };
+};
+
+window.userSelector = function userSelector(eventName) {
+  return {
+    query: '',
+    results: [],
+    loading: false,
+    showDropdown: false,
+    eventName: eventName || 'user-selected',
+
+    async search() {
+      const q = (this.query || '').trim();
+      if (q.length < 2) {
+        this.results = [];
+        this.showDropdown = false;
+        return;
+      }
+      this.loading = true;
+      try {
+        const resp = await fetch(`/api/v1/users/search?q=${encodeURIComponent(q)}&limit=10`, {
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          this.results = data.results || [];
+          this.showDropdown = true;
+        }
+      } catch (e) {
+        this.results = [];
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    selectUser(user) {
+      window.dispatchEvent(new CustomEvent(this.eventName, { detail: { user } }));
+      this.query = '';
+      this.results = [];
+      this.showDropdown = false;
+    },
+  };
+};
+
+window.shareModal = function shareModal() {
+  return {
+    open: false,
+    fileUuid: null,
+    fileName: '',
+    shares: [],        // existing shares from server
+    pendingAdds: [],   // users to add (staged), each has { ...user, permission: 'ro' }
+    pendingRemovals: new Set(), // user IDs to remove (staged)
+    pendingPermissionChanges: new Map(), // userId → newPermission for existing shares
+    loading: false,
+    saving: false,
+
+    get displayList() {
+      const permChanges = this.pendingPermissionChanges;
+      const existing = this.shares.map(s => ({
+        ...s,
+        permission: permChanges.has(s.id) ? permChanges.get(s.id) : s.permission,
+        _pending: false,
+        _removed: this.pendingRemovals.has(s.id),
+      }));
+      const added = this.pendingAdds.map(u => ({
+        id: u.id,
+        username: u.username,
+        first_name: u.first_name,
+        last_name: u.last_name,
+        permission: u.permission || 'ro',
+        _pending: true,
+        _removed: false,
+      }));
+      return [...existing, ...added];
+    },
+
+    get hasChanges() {
+      return this.pendingAdds.length > 0 || this.pendingRemovals.size > 0 || this.pendingPermissionChanges.size > 0;
+    },
+
+    init() {
+      window.addEventListener('open-share-modal', (e) => {
+        this.fileUuid = e.detail.uuid;
+        this.fileName = e.detail.name;
+        this.open = true;
+        this.pendingAdds = [];
+        this.pendingRemovals = new Set();
+        this.pendingPermissionChanges = new Map();
+        this.loadShares();
+        this.$nextTick(() => {
+          const dlg = this.$refs.shareDialog;
+          if (dlg && !dlg.open) dlg.showModal();
+          if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [this.$el] });
+        });
+      });
+
+      window.addEventListener('share-user-selected', (e) => {
+        this.stageAdd(e.detail.user);
+      });
+    },
+
+    async loadShares() {
+      if (!this.fileUuid) return;
+      this.loading = true;
+      try {
+        const resp = await fetch(`/api/v1/files/${this.fileUuid}/shares`, {
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          this.shares = await resp.json();
+        }
+      } catch (e) {
+        this.shares = [];
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    stageAdd(user) {
+      if (!user) return;
+      // Already in existing shares?
+      if (this.shares.some(s => s.id === user.id)) {
+        // If it was marked for removal, undo that
+        if (this.pendingRemovals.has(user.id)) {
+          this.pendingRemovals.delete(user.id);
+          this.pendingRemovals = new Set(this.pendingRemovals);
+        }
+        return;
+      }
+      // Already in pending adds?
+      if (this.pendingAdds.some(u => u.id === user.id)) return;
+      this.pendingAdds = [...this.pendingAdds, { ...user, permission: 'ro' }];
+    },
+
+    stageRemove(userId) {
+      // If it's a pending add, just remove from the list
+      const idx = this.pendingAdds.findIndex(u => u.id === userId);
+      if (idx !== -1) {
+        this.pendingAdds = this.pendingAdds.filter(u => u.id !== userId);
+        return;
+      }
+      // Otherwise mark existing share for removal
+      this.pendingRemovals.add(userId);
+      this.pendingRemovals = new Set(this.pendingRemovals);
+    },
+
+    undoRemove(userId) {
+      this.pendingRemovals.delete(userId);
+      this.pendingRemovals = new Set(this.pendingRemovals);
+    },
+
+    stagePermissionChange(userId, permission, isPending) {
+      if (isPending) {
+        // Update permission on pending add
+        this.pendingAdds = this.pendingAdds.map(u =>
+          u.id === userId ? { ...u, permission } : u
+        );
+        return;
+      }
+      // For existing shares, check if it differs from original
+      const original = this.shares.find(s => s.id === userId);
+      if (original && original.permission === permission) {
+        this.pendingPermissionChanges.delete(userId);
+      } else {
+        this.pendingPermissionChanges.set(userId, permission);
+      }
+      this.pendingPermissionChanges = new Map(this.pendingPermissionChanges);
+    },
+
+    async save() {
+      if (!this.fileUuid || !this.hasChanges) return;
+      this.saving = true;
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
+        || '';
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken,
+      };
+      let errors = 0;
+
+      // Process additions
+      for (const user of this.pendingAdds) {
+        try {
+          const resp = await fetch(`/api/v1/files/${this.fileUuid}/share`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ shared_with: user.id, permission: user.permission || 'ro' }),
+          });
+          if (!resp.ok) errors++;
+        } catch (e) { errors++; }
+      }
+
+      // Process permission changes for existing shares
+      for (const [userId, permission] of this.pendingPermissionChanges) {
+        try {
+          const resp = await fetch(`/api/v1/files/${this.fileUuid}/share`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ shared_with: userId, permission }),
+          });
+          if (!resp.ok) errors++;
+        } catch (e) { errors++; }
+      }
+
+      // Process removals
+      for (const userId of this.pendingRemovals) {
+        try {
+          const resp = await fetch(`/api/v1/files/${this.fileUuid}/share`, {
+            method: 'DELETE', headers,
+            body: JSON.stringify({ shared_with: userId }),
+          });
+          if (!resp.ok) errors++;
+        } catch (e) { errors++; }
+      }
+
+      this.saving = false;
+
+      if (errors > 0 && window.AppAlert) {
+        window.AppAlert.error(`Some changes failed (${errors} error${errors > 1 ? 's' : ''})`);
+      } else if (window.AppAlert) {
+        window.AppAlert.success('Sharing updated');
+      }
+
+      // Reset staged changes, reload, and close
+      this.pendingAdds = [];
+      this.pendingRemovals = new Set();
+      this.pendingPermissionChanges = new Map();
+      await this.loadShares();
+      window.dispatchEvent(new CustomEvent('shares-changed'));
+      // Refresh the folder browser so the shared badge updates
+      const refreshLink = document.querySelector('[data-refresh-folder-browser]');
+      if (refreshLink) refreshLink.click();
+      this.closeModal();
+    },
+
+    closeModal() {
+      this.open = false;
+      const dlg = this.$refs.shareDialog;
+      if (dlg && dlg.open) dlg.close();
+      this.fileUuid = null;
+      this.fileName = '';
+      this.shares = [];
+      this.pendingAdds = [];
+      this.pendingRemovals = new Set();
+      this.pendingPermissionChanges = new Map();
+    },
   };
 };

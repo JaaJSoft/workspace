@@ -32,8 +32,8 @@ Context:
     </div>
   </div>
 
-  {% if file.node_type == 'folder' %}
-  <!-- Icon Customization (folders only) -->
+  {% if file.node_type == 'folder' and is_owner %}
+  <!-- Icon Customization (folders only, owner) -->
   <div class="p-4 bg-base-200 rounded-lg space-y-3">
     <h5 class="text-sm font-medium flex items-center gap-2">
       <i data-lucide="palette" class="w-4 h-4"></i>
@@ -185,6 +185,58 @@ Context:
     </span>
     {% endif %}
   </div>
+
+  {% if file.node_type == 'file' %}
+  <!-- Sharing -->
+  <div class="p-4 bg-base-200 rounded-lg space-y-3">
+    <div class="flex items-center justify-between">
+      <h5 class="text-sm font-medium flex items-center gap-2">
+        <i data-lucide="share-2" class="w-4 h-4"></i>
+        Sharing
+      </h5>
+      {% if is_owner %}
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs gap-1"
+        onclick="window.dispatchEvent(new CustomEvent('open-share-modal', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}' } }))"
+      >
+        <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+        Manage
+      </button>
+      {% endif %}
+    </div>
+    {% if is_owner %}
+      {% if shares %}
+      <div class="space-y-1">
+        {% for share in shares %}
+        <div class="flex items-center gap-2 py-1">
+          <div class="avatar placeholder">
+            <div class="bg-neutral text-neutral-content w-7 h-7 rounded-full">
+              <span class="text-xs">{{ share.shared_with.username.0|upper }}</span>
+            </div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <span class="text-sm font-medium truncate block">{{ share.shared_with.username }}</span>
+          </div>
+          <span class="badge badge-sm {% if share.permission == 'rw' %}badge-primary{% else %}badge-ghost{% endif %}">
+            {% if share.permission == 'rw' %}Read & write{% else %}Read only{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/50">Not shared with anyone</p>
+      {% endif %}
+    {% else %}
+      <div class="flex items-center gap-2 py-1">
+        <span class="text-sm text-base-content/60">Your access</span>
+        <span class="badge badge-sm {% if share_permission == 'rw' %}badge-primary{% else %}badge-ghost{% endif %}">
+          {% if share_permission == 'rw' %}Read & write{% else %}Read only{% endif %}
+        </span>
+      </div>
+    {% endif %}
+  </div>
+  {% endif %}
 
   <!-- UUID (collapsible) -->
   <details class="group bg-base-200 rounded-lg">

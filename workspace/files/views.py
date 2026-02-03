@@ -1,7 +1,8 @@
 import logging
 
 from django.conf import settings
-from django.db.models import Exists, OuterRef
+from django.contrib.auth import get_user_model
+from django.db.models import Exists, OuterRef, Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -19,8 +20,11 @@ from drf_spectacular.utils import (
 )
 
 logger = logging.getLogger(__name__)
+User = get_user_model()
 
-from .models import File, FileFavorite, PinnedFolder
+from django.http import Http404
+
+from .models import File, FileFavorite, FileShare, PinnedFolder
 from .serializers import FileSerializer
 from workspace.files.services import FileService
 
@@ -243,7 +247,6 @@ class FileViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Filter by current user's files."""
-        queryset = File.objects.filter(owner=self.request.user)
         favorite_subquery = FileFavorite.objects.filter(
             owner=self.request.user,
             file_id=OuterRef('pk'),
@@ -252,9 +255,28 @@ class FileViewSet(viewsets.ModelViewSet):
             owner=self.request.user,
             folder_id=OuterRef('pk'),
         )
+        is_shared_subquery = FileShare.objects.filter(
+            file_id=OuterRef('pk'),
+        )
+
+        # Favorites: include both owned and shared-with-me files
+        if self.action == 'list' and self._is_favorites_query():
+            return File.objects.filter(
+                deleted_at__isnull=True,
+                favorites__owner=self.request.user,
+            ).filter(
+                Q(owner=self.request.user) | Q(shares__shared_with=self.request.user)
+            ).annotate(
+                is_favorite=Exists(favorite_subquery),
+                is_pinned=Exists(pinned_subquery),
+                is_shared=Exists(is_shared_subquery),
+            ).distinct()
+
+        queryset = File.objects.filter(owner=self.request.user)
         queryset = queryset.annotate(
             is_favorite=Exists(favorite_subquery),
             is_pinned=Exists(pinned_subquery),
+            is_shared=Exists(is_shared_subquery),
         )
         if self.action in {'trash'} or self._is_trash_query():
             return queryset.filter(deleted_at__isnull=False)
@@ -262,8 +284,6 @@ class FileViewSet(viewsets.ModelViewSet):
             return queryset
         queryset = queryset.filter(deleted_at__isnull=True)
         if self.action == 'list':
-            if self._is_favorites_query():
-                return queryset.filter(favorites__owner=self.request.user).distinct()
             if self._is_trash_query():
                 return queryset
             if not self._is_recent_query() and 'parent' not in self.request.query_params:
@@ -289,7 +309,15 @@ class FileViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post', 'delete'], url_path='favorite')
     def favorite(self, request, uuid=None):
         """Add or remove a file/folder from favorites."""
-        file_obj = self.get_object()
+        try:
+            file_obj = self.get_object()
+        except Http404:
+            # Not in user's queryset – check shared access
+            file_obj = File.objects.filter(
+                uuid=uuid, deleted_at__isnull=True,
+            ).first()
+            if not file_obj or not self._has_shared_access(request.user, file_obj):
+                raise
         if request.method == 'POST':
             FileFavorite.objects.get_or_create(owner=request.user, file=file_obj)
             return Response({'is_favorite': True}, status=status.HTTP_200_OK)
@@ -578,10 +606,18 @@ class FileViewSet(viewsets.ModelViewSet):
         """Serve file content with proper headers for inline viewing."""
         from django.http import FileResponse, HttpResponse
 
-        file_obj = self.get_object()
+        try:
+            file_obj = self.get_object()
+        except Exception:
+            # Not in user's queryset – check shared access
+            file_obj = File.objects.filter(
+                uuid=uuid, deleted_at__isnull=True,
+            ).first()
+            if not file_obj or not self._has_shared_access(request.user, file_obj):
+                return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Security: ownership check
-        if file_obj.owner != request.user:
+        # Security: ownership or shared-access check
+        if file_obj.owner != request.user and not self._has_shared_access(request.user, file_obj):
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         # Only serve files, not folders
@@ -640,9 +676,16 @@ class FileViewSet(viewsets.ModelViewSet):
         import zipfile
         from django.http import FileResponse, HttpResponse
 
-        file_obj = self.get_object()
+        try:
+            file_obj = self.get_object()
+        except Exception:
+            file_obj = File.objects.filter(
+                uuid=uuid, deleted_at__isnull=True,
+            ).first()
+            if not file_obj or not self._has_shared_access(request.user, file_obj):
+                return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        if file_obj.owner != request.user:
+        if file_obj.owner != request.user and not self._has_shared_access(request.user, file_obj):
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         # Single file download
@@ -755,3 +798,198 @@ class FileViewSet(viewsets.ModelViewSet):
             'folders_soft_deleted': result.folders_soft_deleted,
             'error_count': len(result.errors),
         })
+
+    def partial_update(self, request, *args, **kwargs):
+        try:
+            return super().partial_update(request, *args, **kwargs)
+        except Http404:
+            # Check rw shared access
+            file_obj = File.objects.filter(
+                uuid=kwargs.get('uuid'), deleted_at__isnull=True,
+            ).first()
+            if not file_obj or self._get_share_permission(request.user, file_obj) != FileShare.Permission.READ_WRITE:
+                raise
+            # Only allow content update — reject any other fields
+            allowed_fields = {'content'}
+            extra_fields = set(request.data.keys()) - allowed_fields
+            if extra_fields:
+                return Response(
+                    {'detail': 'Shared write access only allows updating file content.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            # Perform the content update
+            serializer = self.get_serializer(file_obj, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+
+    # ── Sharing ────────────────────────────────────────────────
+
+    @staticmethod
+    def _get_share_permission(user, file_obj):
+        """Return the share permission for *user* on *file_obj*, or None.
+
+        Only individual files can be shared (not folders).
+        Returns 'ro', 'rw', or None.
+        """
+        if file_obj.node_type != File.NodeType.FILE:
+            return None
+        share = FileShare.objects.filter(
+            file=file_obj,
+            shared_with=user,
+        ).values_list('permission', flat=True).first()
+        return share
+
+    @staticmethod
+    def _has_shared_access(user, file_obj):
+        """Check if *user* has read access to *file_obj* via a FileShare."""
+        return FileViewSet._get_share_permission(user, file_obj) is not None
+
+    @extend_schema(
+        summary="Share or unshare a file",
+        description="POST to share a file with a user, DELETE to remove the share. Only files can be shared (not folders).",
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'shared_with': {
+                        'type': 'integer',
+                        'description': 'User ID to share with / unshare from',
+                    },
+                },
+                'required': ['shared_with'],
+            },
+        },
+        responses={
+            201: OpenApiResponse(description="Share created."),
+            200: OpenApiResponse(description="Share removed or already exists."),
+            400: OpenApiResponse(description="Bad request."),
+            404: OpenApiResponse(description="File or user not found."),
+        },
+    )
+    @action(detail=True, methods=['post', 'delete'], url_path='share')
+    def share(self, request, uuid=None):
+        """Share or unshare a file with another user (files only)."""
+        file_obj = self.get_object()
+
+        if file_obj.node_type != File.NodeType.FILE:
+            return Response(
+                {'detail': 'Only files can be shared.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        shared_with_id = request.data.get('shared_with')
+        if not shared_with_id:
+            return Response(
+                {'detail': 'shared_with is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if int(shared_with_id) == request.user.pk:
+            return Response(
+                {'detail': 'Cannot share with yourself.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            target_user = User.objects.get(pk=shared_with_id, is_active=True)
+        except User.DoesNotExist:
+            return Response(
+                {'detail': 'User not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if request.method == 'POST':
+            permission = request.data.get('permission', FileShare.Permission.READ_ONLY)
+            if permission not in (FileShare.Permission.READ_ONLY, FileShare.Permission.READ_WRITE):
+                return Response(
+                    {'detail': 'Invalid permission. Must be "ro" or "rw".'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            share, created = FileShare.objects.get_or_create(
+                file=file_obj,
+                shared_with=target_user,
+                defaults={'shared_by': request.user, 'permission': permission},
+            )
+            if not created and share.permission != permission:
+                share.permission = permission
+                share.save(update_fields=['permission'])
+            return Response(
+                {'shared': True, 'permission': share.permission},
+                status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+            )
+
+        # DELETE
+        deleted, _ = FileShare.objects.filter(
+            file=file_obj,
+            shared_with=target_user,
+        ).delete()
+        if not deleted:
+            return Response(
+                {'detail': 'Share not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({'shared': False}, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="List shares for a file",
+        description="Return users who have access to this file via sharing.",
+        responses={
+            200: OpenApiResponse(description="List of shares."),
+        },
+    )
+    @action(detail=True, methods=['get'], url_path='shares')
+    def shares(self, request, uuid=None):
+        """List users a file is shared with."""
+        file_obj = self.get_object()
+        share_qs = FileShare.objects.filter(file=file_obj).select_related('shared_with')
+        results = [
+            {
+                'id': s.shared_with.pk,
+                'username': s.shared_with.username,
+                'first_name': s.shared_with.first_name,
+                'last_name': s.shared_with.last_name,
+                'permission': s.permission,
+                'shared_at': s.created_at,
+            }
+            for s in share_qs
+        ]
+        return Response(results)
+
+    @extend_schema(
+        summary="Files shared with me",
+        description="Return files that have been shared with the current user.",
+        responses={
+            200: OpenApiResponse(
+                response=FileSerializer(many=True),
+                description="List of shared files.",
+            ),
+        },
+    )
+    @action(detail=False, methods=['get'], url_path='shared-with-me')
+    def shared_with_me(self, request):
+        """List files shared with the current user."""
+        shared_file_ids = FileShare.objects.filter(
+            shared_with=request.user,
+        ).values_list('file_id', flat=True)
+        queryset = File.objects.filter(
+            pk__in=shared_file_ids,
+            node_type=File.NodeType.FILE,
+            deleted_at__isnull=True,
+        )
+        favorite_subquery = FileFavorite.objects.filter(
+            owner=request.user,
+            file_id=OuterRef('pk'),
+        )
+        is_shared_subquery = FileShare.objects.filter(
+            file_id=OuterRef('pk'),
+        )
+        queryset = queryset.annotate(
+            is_favorite=Exists(favorite_subquery),
+            is_pinned=Exists(
+                PinnedFolder.objects.filter(owner=request.user, folder_id=OuterRef('pk'))
+            ),
+            is_shared=Exists(is_shared_subquery),
+        ).order_by('name')
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)

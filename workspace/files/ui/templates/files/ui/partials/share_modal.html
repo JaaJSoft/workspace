@@ -1,0 +1,105 @@
+<!-- Share Modal -->
+<div x-data="shareModal()">
+  <dialog x-ref="shareDialog" class="modal" @close="closeModal()">
+    <div class="modal-box max-w-md">
+      <!-- Header -->
+      <div class="flex items-center gap-3 mb-4">
+        <div class="bg-secondary/10 rounded-lg p-2">
+          <i data-lucide="share-2" class="w-5 h-5 text-secondary"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-lg">Share</h3>
+          <p class="text-sm text-base-content/60 truncate max-w-[300px]" x-text="fileName"></p>
+        </div>
+      </div>
+
+      <!-- User search -->
+      <div class="mb-4">
+        <label class="text-sm font-medium mb-1 block">Add people</label>
+        {% include "ui/partials/user_selector.html" with on_select_event="share-user-selected" placeholder="Search by username or name..." %}
+      </div>
+
+      <!-- Current shares list -->
+      <div class="mb-4">
+        <label class="text-sm font-medium mb-2 block">Shared with</label>
+        <div class="space-y-1 max-h-48 overflow-y-auto">
+          <!-- Loading -->
+          <div x-show="loading" class="flex justify-center py-4">
+            <span class="loading loading-spinner loading-sm"></span>
+          </div>
+
+          <!-- Empty state -->
+          <div x-show="!loading && displayList.length === 0" class="text-sm text-base-content/60 text-center py-4">
+            Not shared with anyone yet
+          </div>
+
+          <!-- Share entries -->
+          <template x-for="entry in displayList" :key="entry.id">
+            <div
+              class="flex items-center gap-2 p-2 rounded-lg group"
+              :class="entry._removed ? 'bg-error/5 opacity-50' : 'hover:bg-base-200'"
+            >
+              <div class="avatar placeholder">
+                <div class="bg-neutral text-neutral-content w-8 h-8 rounded-full">
+                  <span class="text-sm" x-text="(entry.username || '?')[0].toUpperCase()"></span>
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-sm truncate" :class="entry._removed ? 'line-through' : ''" x-text="entry.username"></div>
+                <div
+                  class="text-xs text-base-content/60 truncate"
+                  x-show="entry.first_name || entry.last_name"
+                  x-text="((entry.first_name || '') + ' ' + (entry.last_name || '')).trim()"
+                ></div>
+              </div>
+              <template x-if="!entry._removed">
+                <select
+                  class="select select-xs select-bordered w-24"
+                  :value="entry.permission || 'ro'"
+                  @change="stagePermissionChange(entry.id, $event.target.value, entry._pending)"
+                >
+                  <option value="ro">Read only</option>
+                  <option value="rw">Read & write</option>
+                </select>
+              </template>
+              <template x-if="entry._pending && !entry._removed">
+                <span class="badge badge-sm badge-info">New</span>
+              </template>
+              <template x-if="entry._removed">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs"
+                  title="Undo removal"
+                  @click="undoRemove(entry.id)"
+                >Undo</button>
+              </template>
+              <template x-if="!entry._removed">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs btn-square text-error"
+                  title="Remove access"
+                  @click="stageRemove(entry.id)"
+                >&times;</button>
+              </template>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm btn-ghost" @click="closeModal()">Cancel</button>
+        <button
+          type="button"
+          class="btn btn-sm btn-primary"
+          :disabled="!hasChanges || saving"
+          @click="save()"
+        >
+          <span x-show="saving" class="loading loading-spinner loading-xs"></span>
+          <span x-text="saving ? 'Saving...' : 'Save'"></span>
+        </button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+</div>

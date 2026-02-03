@@ -168,8 +168,22 @@
         </li>
       </template>
 
-      <!-- Rename -->
-      <template x-if="!nodeData.isTrash">
+      <!-- Share (files only, owner only) -->
+      <template x-if="nodeData.nodeType === 'file' && !nodeData.isTrash && nodeData.isOwner">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="shareFile()"
+          >
+            <i data-lucide="share-2" class="w-4 h-4"></i>
+            <span>Share</span>
+          </button>
+        </li>
+      </template>
+
+      <!-- Rename (owner only) -->
+      <template x-if="!nodeData.isTrash && nodeData.isOwner">
         <li>
           <button
             type="button"
@@ -183,8 +197,8 @@
         </li>
       </template>
 
-      <!-- Cut -->
-      <template x-if="!nodeData.isTrash">
+      <!-- Cut (owner only) -->
+      <template x-if="!nodeData.isTrash && nodeData.isOwner">
         <li>
           <button
             type="button"
@@ -198,8 +212,8 @@
         </li>
       </template>
 
-      <!-- Copy -->
-      <template x-if="!nodeData.isTrash">
+      <!-- Copy (owner only) -->
+      <template x-if="!nodeData.isTrash && nodeData.isOwner">
         <li>
           <button
             type="button"
@@ -269,8 +283,8 @@
         </li>
       </template>
 
-      <!-- Delete (normal view) -->
-      <template x-if="!nodeData.isTrash">
+      <!-- Delete (normal view, owner only) -->
+      <template x-if="!nodeData.isTrash && nodeData.isOwner">
         <li>
           <button
             type="button"
@@ -498,6 +512,13 @@ function contextMenu() {
         }
       });
 
+      this.close();
+    },
+
+    shareFile() {
+      window.dispatchEvent(new CustomEvent('open-share-modal', {
+        detail: { uuid: this.nodeData.uuid, name: this.nodeData.name }
+      }));
       this.close();
     },
 

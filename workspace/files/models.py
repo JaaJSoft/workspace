@@ -293,6 +293,51 @@ class FileFavorite(models.Model):
         return f"{self.owner} -> {self.file}"
 
 
+class FileShare(models.Model):
+    """Share a file or folder with another user."""
+
+    class Permission(models.TextChoices):
+        READ_ONLY = 'ro', 'Read only'
+        READ_WRITE = 'rw', 'Read & write'
+
+    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    file = models.ForeignKey(
+        File,
+        on_delete=models.CASCADE,
+        related_name='shares',
+    )
+    shared_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='shared_files',
+    )
+    shared_with = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='received_shares',
+    )
+    permission = models.CharField(
+        max_length=2,
+        choices=Permission.choices,
+        default=Permission.READ_ONLY,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['file', 'shared_with'],
+                name='unique_file_share',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['shared_with', 'created_at'], name='file_share_recv_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.shared_by} -> {self.shared_with}: {self.file}"
+
+
 class PinnedFolder(models.Model):
     """User-pinned folders for quick sidebar access."""
     uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)

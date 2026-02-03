@@ -8,11 +8,11 @@ Quick improvements with high impact on existing features.
 - [x] **Preview PDF** - Integrated PDF viewer (pdf.js)
 - [x] **Preview Markdown** - Markdown rendering in the file viewer
 - [x] **Preview code** - Syntax highlighting (highlight.js / Shiki)
-- [ ] **Global keyboard shortcuts** - Ctrl+K command palette, Ctrl+N new, Delete, Ctrl+C/V
+- [x] **Global keyboard shortcuts** - Ctrl+K command palette, Ctrl+N new, Delete, Ctrl+C/V
 - [ ] **Folder sizes** - Recursive size calculation displayed in properties
 - [ ] **Clickable breadcrumb in properties** - Navigate to parent from modal
 - [ ] **Multi-select with Shift+Click** - Range selection in the file browser
-- [ ] **Download file/folder** - Download a file or folder (zip)
+- [x] **Download file/folder** - Download a file or folder (zip)
 - [ ] **User quota** - Storage limit per user with gauge in dashboard
 - [x] **Persistent Dark/Light mode** - Save chosen theme server-side
 - [x] **Enhanced toast notifications** - Notification stack with auto-dismiss
@@ -268,6 +268,12 @@ Features shared across all modules.
 - [x] WebDAV server (wsgidav) — mount files as a network drive on any OS (WIP)
 - [ ] macOS File Provider Extension — native Finder integration with sync status
 - [ ] Windows Cloud Files API — native Explorer integration (on-demand files)
+
+### Ops & Maintenance
+- [x] **SQLite maintenance job** — Celery Beat task (daily 3h) : PRAGMA optimize, WAL checkpoint, VACUUM, integrity check. Commande `manage.py db_maintenance` pour exécution manuelle.
+- [x] **Trash auto-purge** — Tâche Celery (daily 2h30) pour hard-delete les fichiers en corbeille depuis > `TRASH_RETENTION_DAYS`. Commande `manage.py purge_trash` avec `--days` et `--dry-run`.
+- [ ] **Session cleanup** — Tâche Celery pour `clearsessions` (purge des sessions DB expirées quand Redis n'est pas utilisé)
+- [ ] **Admin enrichi** — Enregistrer File, FileFavorite, PinnedFolder dans l'admin Django avec filtres et recherche
 
 ### UI/UX
 - [ ] PWA (Progressive Web App) - installable on desktop/mobile

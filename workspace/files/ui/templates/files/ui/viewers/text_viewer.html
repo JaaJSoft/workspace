@@ -24,14 +24,17 @@
     <!-- Left: info -->
     <div class="flex items-center gap-2 min-w-0">
       <span class="badge badge-sm badge-ghost font-mono">{{ language }}</span>
+      {% if can_edit %}
       <span x-show="isDirty" x-cloak class="flex items-center gap-1 text-warning text-xs whitespace-nowrap">
         <span class="w-1.5 h-1.5 rounded-full bg-warning inline-block"></span>
         Modified
       </span>
+      {% endif %}
     </div>
 
     <!-- Right: actions -->
     <div class="flex items-center gap-0.5 flex-wrap">
+      {% if can_edit %}
       <!-- Undo / Redo -->
       <button type="button" class="btn btn-ghost btn-xs btn-square" @click="editorAction('undo')" title="Undo (Ctrl+Z)">
         <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
@@ -41,14 +44,17 @@
       </button>
 
       <div class="w-px h-4 bg-base-300 mx-0.5"></div>
+      {% endif %}
 
       <!-- Find / Replace -->
       <button type="button" class="btn btn-ghost btn-xs btn-square" @click="editorAction('find')" title="Find (Ctrl+F)">
         <i data-lucide="search" class="w-3.5 h-3.5"></i>
       </button>
+      {% if can_edit %}
       <button type="button" class="btn btn-ghost btn-xs btn-square" @click="editorAction('replace')" title="Replace (Ctrl+H)">
         <i data-lucide="replace" class="w-3.5 h-3.5"></i>
       </button>
+      {% endif %}
 
       <div class="w-px h-4 bg-base-300 mx-0.5"></div>
 
@@ -96,6 +102,7 @@
         <i data-lucide="map" class="w-3.5 h-3.5"></i>
       </button>
 
+      {% if can_edit %}
       <div class="w-px h-4 bg-base-300 mx-0.5"></div>
 
       <!-- Save -->
@@ -106,6 +113,7 @@
         <i x-show="!saving" data-lucide="save" class="w-3.5 h-3.5"></i>
         Save
       </button>
+      {% endif %}
     </div>
   </div>
 
@@ -161,6 +169,7 @@ window.textViewerMonaco = function() {
     tabSize: PREFS_DEFAULTS.tabSize,
     showWhitespace: PREFS_DEFAULTS.showWhitespace,
     lineNumbers: PREFS_DEFAULTS.lineNumbers,
+    canEdit: {{ can_edit|yesno:'true,false' }},
     originalContent: '{{ content|escapejs }}',
     fileUuid: '{{ file.uuid }}',
     fileName: '{{ file.name }}',
@@ -215,6 +224,7 @@ window.textViewerMonaco = function() {
           value: content,
           language: language,
           theme: _detectTheme(),
+          readOnly: !self.canEdit,
           minimap: { enabled: self.minimapEnabled },
           wordWrap: self.wordWrap ? 'on' : 'off',
           fontSize: self.fontSize,
@@ -229,13 +239,15 @@ window.textViewerMonaco = function() {
           padding: { top: 8, bottom: 8 },
         });
 
-        _editor.onDidChangeModelContent(function() {
-          self.isDirty = _editor.getValue() !== self.originalContent;
-        });
+        if (self.canEdit) {
+          _editor.onDidChangeModelContent(function() {
+            self.isDirty = _editor.getValue() !== self.originalContent;
+          });
 
-        _editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
-          self.save();
-        });
+          _editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+            self.save();
+          });
+        }
 
         _themeObserver = new MutationObserver(function() {
           monaco.editor.setTheme(_detectTheme());

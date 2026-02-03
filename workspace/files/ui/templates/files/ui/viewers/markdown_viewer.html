@@ -8,11 +8,14 @@
   <div class="flex items-center justify-between gap-1 px-3 py-1.5 bg-base-100 border-b border-base-300">
     <div class="flex items-center gap-2 min-w-0">
       <span class="badge badge-sm badge-ghost font-mono">markdown</span>
+      {% if can_edit %}
       <span x-show="isDirty" x-cloak class="flex items-center gap-1 text-warning text-xs whitespace-nowrap">
         <span class="w-1.5 h-1.5 rounded-full bg-warning inline-block"></span>
         Modified
       </span>
+      {% endif %}
     </div>
+    {% if can_edit %}
     <div class="flex items-center gap-0.5">
       <!-- Save -->
       <button type="button"
@@ -25,6 +28,7 @@
         Save
       </button>
     </div>
+    {% endif %}
   </div>
 
   <!-- Loading State -->
@@ -61,6 +65,7 @@ window.markdownViewerCrepe = function() {
   }
 
   return {
+    canEdit: {{ can_edit|yesno:'true,false' }},
     isDirty: false,
     saving: false,
     loading: true,
@@ -78,31 +83,40 @@ window.markdownViewerCrepe = function() {
         var mod = await import('https://esm.sh/@milkdown/crepe@7.17.3?bundle');
         var Crepe = mod.Crepe;
 
-        _crepe = new Crepe({
+        var crepeOptions = {
           root: container,
           defaultValue: self.originalContent,
-        });
+        };
+
+        _crepe = new Crepe(crepeOptions);
 
         await _crepe.create();
+
+        // Set readonly if user cannot edit
+        if (!self.canEdit) {
+          _crepe.setReadonly(true);
+        }
 
         // Use normalized markdown as baseline (Milkdown may reformat slightly)
         self.originalContent = _crepe.getMarkdown();
 
-        // Track dirty state
-        _crepe.on(function(listener) {
-          listener.markdownUpdated(function(md) {
-            self.isDirty = md !== self.originalContent;
+        if (self.canEdit) {
+          // Track dirty state
+          _crepe.on(function(listener) {
+            listener.markdownUpdated(function(md) {
+              self.isDirty = md !== self.originalContent;
+            });
           });
-        });
 
-        // Ctrl+S to save (capture phase to get it before ProseMirror)
-        _keydownHandler = function(e) {
-          if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-            e.preventDefault();
-            self.save();
-          }
-        };
-        container.addEventListener('keydown', _keydownHandler, true);
+          // Ctrl+S to save (capture phase to get it before ProseMirror)
+          _keydownHandler = function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+              e.preventDefault();
+              self.save();
+            }
+          };
+          container.addEventListener('keydown', _keydownHandler, true);
+        }
 
         self.loading = false;
       } catch (err) {

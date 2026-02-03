@@ -72,9 +72,10 @@ class BaseViewer(ABC):
 
     def get_context(self, request) -> dict:
         """Get context data for template rendering."""
+        can_edit = self.can_edit() and getattr(self, '_user_can_edit', True)
         return {
             'file': self.file,
-            'can_edit': self.can_edit(),
+            'can_edit': can_edit,
         }
 
 

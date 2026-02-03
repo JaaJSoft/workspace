@@ -126,6 +126,7 @@
         {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" color="warning" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" %}
+        {% include "ui/partials/drawer_item.html" with href="/files?shared=1" icon="share-2" label="Shared with me" color="secondary" active=is_shared_view active_binding="activeView === 'shared'" onclick="setActiveView('shared')" x_target="folder-browser" x_target_history="push" %}
       </ul>
 
       <!-- Pinned Folders -->
@@ -285,6 +286,7 @@
 {% include 'files/ui/partials/file_viewer_modal.html' %}
 {% include 'files/ui/partials/properties_modal.html' %}
 {% include 'files/ui/partials/context_menu.html' %}
+{% include 'files/ui/partials/share_modal.html' %}
 {% endblock %}
 
 {% block extra_scripts %}

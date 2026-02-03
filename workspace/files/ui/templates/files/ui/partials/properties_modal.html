@@ -105,6 +105,13 @@
             const { uuid, nodeType } = e.detail;
             this.openProperties(uuid, nodeType);
           });
+
+          // Refresh properties when shares change (e.g. from share modal)
+          window.addEventListener('shares-changed', () => {
+            if (this.nodeUuid && this.$refs.dialog.open) {
+              this.openProperties(this.nodeUuid, this.nodeType);
+            }
+          });
         }
       };
     }

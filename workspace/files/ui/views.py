@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, render
 from django.http import HttpResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from ..models import File, FileFavorite, PinnedFolder
+from ..models import File, FileFavorite, FileShare, PinnedFolder
 from .viewers import ViewerRegistry
 from workspace.users.settings_service import get_setting
 
@@ -35,18 +35,29 @@ def build_breadcrumbs(folder):
 
 def _build_context(request, folder=None, is_trash_view=False):
     current_folder = None
+    is_shared_view = (
+        not is_trash_view and
+        str(request.GET.get('shared', '')).lower() in {'1', 'true', 'yes'}
+    )
     is_favorites_view = (
         not is_trash_view and
+        not is_shared_view and
         str(request.GET.get('favorites', '')).lower() in {'1', 'true', 'yes'}
     )
     is_recent_view = (
         not is_trash_view and
         not is_favorites_view and
+        not is_shared_view and
         str(request.GET.get('recent', '')).lower() in {'1', 'true', 'yes'}
     )
     breadcrumbs = [{'label': 'Files', 'url': '/files', 'icon': 'hard-drive'}]
 
-    if is_trash_view:
+    if is_shared_view:
+        breadcrumbs = [
+            {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
+            {'label': 'Shared with me', 'icon': 'share-2'},
+        ]
+    elif is_trash_view:
         breadcrumbs = [
             {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
             {'label': 'Trash', 'icon': 'trash-2'},
@@ -71,7 +82,16 @@ def _build_context(request, folder=None, is_trash_view=False):
         )
         breadcrumbs = build_breadcrumbs(current_folder)
 
-    if is_trash_view:
+    if is_shared_view:
+        shared_file_ids = FileShare.objects.filter(
+            shared_with=request.user,
+        ).values_list('file_id', flat=True)
+        nodes = File.objects.filter(
+            pk__in=shared_file_ids,
+            node_type=File.NodeType.FILE,
+            deleted_at__isnull=True,
+        ).order_by('name')
+    elif is_trash_view:
         nodes = File.objects.filter(
             owner=request.user,
             deleted_at__isnull=False,
@@ -80,9 +100,10 @@ def _build_context(request, folder=None, is_trash_view=False):
         ).order_by('-deleted_at', 'name')
     elif is_favorites_view:
         nodes = File.objects.filter(
-            owner=request.user,
             deleted_at__isnull=True,
             favorites__owner=request.user,
+        ).filter(
+            Q(owner=request.user) | Q(shares__shared_with=request.user)
         ).distinct().order_by('-node_type', 'name')
     elif is_recent_view:
         nodes = File.objects.filter(
@@ -110,9 +131,13 @@ def _build_context(request, folder=None, is_trash_view=False):
         owner=request.user,
         folder_id=OuterRef('pk'),
     )
+    is_shared_subquery = FileShare.objects.filter(
+        file_id=OuterRef('pk'),
+    )
     nodes = nodes.annotate(
         is_favorite=Exists(favorite_subquery),
         is_pinned=Exists(pinned_subquery),
+        is_shared=Exists(is_shared_subquery),
     )
     if is_recent_view:
         nodes = nodes[:RECENT_FILES_LIMIT]
@@ -129,7 +154,12 @@ def _build_context(request, folder=None, is_trash_view=False):
         else:
             folder_stats['folder_count'] += 1
 
-    if is_trash_view:
+    if is_shared_view:
+        page_title = 'Shared with me'
+        current_view_url = '/files?shared=1'
+        empty_title = 'Nothing shared with you'
+        empty_message = 'Files others share with you will appear here.'
+    elif is_trash_view:
         page_title = 'Trash'
         current_view_url = '/files/trash'
         empty_title = 'Trash is empty'
@@ -185,11 +215,13 @@ def _build_context(request, folder=None, is_trash_view=False):
         'is_favorites_view': is_favorites_view,
         'is_recent_view': is_recent_view,
         'is_trash_view': is_trash_view,
+        'is_shared_view': is_shared_view,
         'is_root_view': (
             not current_folder and
             not is_favorites_view and
             not is_recent_view and
-            not is_trash_view
+            not is_trash_view and
+            not is_shared_view
         ),
         'page_title': page_title,
         'current_view_url': current_view_url,
@@ -230,7 +262,21 @@ def properties(request, uuid):
     """Return file/folder properties partial for the properties modal."""
     from django.db.models import Sum
 
-    file_obj = get_object_or_404(File, uuid=uuid, owner=request.user)
+    # Try as owner first, then as shared recipient
+    file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
+    if not file_obj:
+        from django.http import Http404
+        raise Http404
+
+    is_owner = file_obj.owner == request.user
+    share_permission = None
+    if not is_owner:
+        share_permission = FileShare.objects.filter(
+            file=file_obj, shared_with=request.user,
+        ).values_list('permission', flat=True).first()
+        if share_permission is None:
+            from django.http import Http404
+            raise Http404
 
     # Check if favorite
     is_favorite = FileFavorite.objects.filter(owner=request.user, file=file_obj).exists()
@@ -246,20 +292,31 @@ def properties(request, uuid):
     if file_obj.node_type == File.NodeType.FOLDER:
         children = File.objects.filter(parent=file_obj, deleted_at__isnull=True)
         children_count = children.count()
-        # Calculate total size recursively (simplified: just direct children for now)
         total_size = File.objects.filter(
             path__startswith=f"{file_obj.path}/",
-            owner=request.user,
+            owner=file_obj.owner,
             deleted_at__isnull=True,
             node_type=File.NodeType.FILE,
         ).aggregate(total=Sum('size'))['total'] or 0
 
+    # Shares (files only, owner sees full list)
+    shares = []
+    if is_owner and file_obj.node_type == File.NodeType.FILE:
+        shares = list(
+            FileShare.objects.filter(file=file_obj)
+            .select_related('shared_with')
+            .order_by('created_at')
+        )
+
     return render(request, 'files/ui/partials/properties_content.html', {
         'file': file_obj,
+        'is_owner': is_owner,
         'is_favorite': is_favorite,
         'is_pinned': is_pinned,
         'children_count': children_count,
         'total_size': total_size,
+        'shares': shares,
+        'share_permission': share_permission,
     })
 
 
@@ -302,8 +359,23 @@ def view_file(request, uuid):
     Returns the appropriate viewer HTML based on file MIME type.
     Used by the file viewer modal to load content via Alpine AJAX.
     """
-    # Get file and check ownership
-    file_obj = get_object_or_404(File, uuid=uuid, owner=request.user, deleted_at__isnull=True)
+    # Get file — allow owner or shared-with user
+    file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
+    if not file_obj:
+        from django.http import Http404
+        raise Http404
+
+    # Determine user_can_edit based on ownership / share permission
+    if file_obj.owner == request.user:
+        user_can_edit = True
+    else:
+        share = FileShare.objects.filter(
+            file=file_obj, shared_with=request.user,
+        ).values_list('permission', flat=True).first()
+        if share is None:
+            from django.http import Http404
+            raise Http404
+        user_can_edit = share == FileShare.Permission.READ_WRITE
 
     # Only files can be viewed
     if file_obj.node_type != File.NodeType.FILE:
@@ -325,8 +397,9 @@ def view_file(request, uuid):
             status=400
         )
 
-    # Render viewer
+    # Render viewer with user_can_edit override
     viewer = ViewerClass(file_obj)
+    viewer._user_can_edit = user_can_edit
     html = viewer.render(request)
 
     return HttpResponse(html)

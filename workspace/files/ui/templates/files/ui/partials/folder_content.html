@@ -209,7 +209,9 @@
               isFavorite: {{ node.is_favorite|yesno:'true,false' }},
               isViewable: {{ node.is_viewable|yesno:'true,false' }},
               isTrash: {{ is_trash_view|yesno:'true,false' }},
-              isPinned: {% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'true,false' }}{% else %}false{% endif %}
+              isPinned: {% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'true,false' }}{% else %}false{% endif %},
+              isShared: {{ node.is_shared|yesno:'true,false' }},
+              isOwner: {% if node.owner_id == request.user.pk %}true{% else %}false{% endif %}
             })"
           >
             <td data-col="select" data-stop-row-click @click.stop>
@@ -294,7 +296,9 @@
                   isFavorite: {{ node.is_favorite|yesno:'true,false' }},
                   isViewable: {{ node.is_viewable|yesno:'true,false' }},
                   isTrash: {{ is_trash_view|yesno:'true,false' }},
-                  isPinned: {% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'true,false' }}{% else %}false{% endif %}
+                  isPinned: {% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'true,false' }}{% else %}false{% endif %},
+                  isShared: {{ node.is_shared|yesno:'true,false' }},
+                  isOwner: {% if node.owner_id == request.user.pk %}true{% else %}false{% endif %}
                 })"
               >
                 <i data-lucide="more-vertical" class="w-4 h-4"></i>

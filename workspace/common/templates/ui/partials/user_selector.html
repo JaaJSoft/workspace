@@ -1,0 +1,71 @@
+{% comment %}
+  Reusable user selector component with search-as-you-type.
+
+  Parameters:
+    - placeholder: Placeholder text for the search input (default: "Search users...")
+    - on_select_event: Custom event name dispatched when a user is selected (required)
+
+  Usage:
+    {% include "ui/partials/user_selector.html" with on_select_event="user-selected" placeholder="Add a user..." %}
+
+  The dispatched event contains { detail: { user: { id, username, first_name, last_name } } }
+{% endcomment %}
+
+<div x-data="userSelector('{{ on_select_event }}')" class="relative">
+  <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+    <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+    <input
+      type="text"
+      class="grow"
+      placeholder="{{ placeholder|default:'Search users...' }}"
+      x-model="query"
+      @input.debounce.300ms="search()"
+      @click.outside="showDropdown = false"
+      @keydown.escape="showDropdown = false"
+      autocomplete="off"
+    />
+    <span x-show="loading" class="loading loading-spinner loading-xs"></span>
+  </label>
+
+  <!-- Dropdown results -->
+  <div
+    x-show="showDropdown && results.length > 0"
+    x-cloak
+    class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+  >
+    <ul class="menu menu-sm p-1">
+      <template x-for="user in results" :key="user.id">
+        <li>
+          <button
+            type="button"
+            class="flex items-center gap-2 rounded"
+            @click="selectUser(user)"
+          >
+            <div class="avatar placeholder">
+              <div class="bg-neutral text-neutral-content w-6 h-6 rounded-full">
+                <span class="text-xs" x-text="(user.username || '?')[0].toUpperCase()"></span>
+              </div>
+            </div>
+            <div class="flex flex-col items-start">
+              <span class="font-medium text-sm" x-text="user.username"></span>
+              <span
+                class="text-xs text-base-content/60"
+                x-show="user.first_name || user.last_name"
+                x-text="((user.first_name || '') + ' ' + (user.last_name || '')).trim()"
+              ></span>
+            </div>
+          </button>
+        </li>
+      </template>
+    </ul>
+  </div>
+
+  <!-- No results -->
+  <div
+    x-show="showDropdown && results.length === 0 && query.length >= 2 && !loading"
+    x-cloak
+    class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
+  >
+    No users found
+  </div>
+</div>

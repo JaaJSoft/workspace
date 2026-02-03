@@ -14,7 +14,62 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from django.db.models import Q
+
 from workspace.users.models import UserSetting
+
+
+@extend_schema(tags=['Users'])
+class UserSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Search users",
+        description="Search for users by username, first name, or last name. Excludes the current user and inactive users.",
+        parameters=[
+            OpenApiParameter(name='q', type=str, required=True, description='Search query (min 2 chars)'),
+            OpenApiParameter(name='limit', type=int, required=False, description='Max results (default 10)'),
+        ],
+        responses={
+            200: inline_serializer(
+                name='UserSearchResponse',
+                fields={
+                    'results': serializers.ListField(
+                        child=inline_serializer(
+                            name='UserSearchItem',
+                            fields={
+                                'id': serializers.IntegerField(),
+                                'username': serializers.CharField(),
+                                'first_name': serializers.CharField(),
+                                'last_name': serializers.CharField(),
+                            },
+                        ),
+                    ),
+                },
+            ),
+        },
+    )
+    def get(self, request):
+        query = request.query_params.get('q', '').strip()
+        if len(query) < 2:
+            return Response({'results': []})
+
+        try:
+            limit = int(request.query_params.get('limit', 10))
+        except (TypeError, ValueError):
+            limit = 10
+        limit = min(max(limit, 1), 50)
+
+        users = User.objects.filter(
+            Q(username__icontains=query) |
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query),
+            is_active=True,
+        ).exclude(pk=request.user.pk).values(
+            'id', 'username', 'first_name', 'last_name',
+        )[:limit]
+
+        return Response({'results': list(users)})
 
 
 @extend_schema(tags=['Users'])

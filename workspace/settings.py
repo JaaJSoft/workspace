@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     'health_check.contrib.psutil',
     'health_check.contrib.db_heartbeat',
     # Workspace apps
+    'workspace.core',
     'workspace.common',
     'workspace.files',
     'workspace.files.ui',
@@ -472,9 +473,15 @@ CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes
 
 # Celery Beat schedule for periodic tasks
+from celery.schedules import crontab
+
 CELERY_BEAT_SCHEDULE = {
     'sync-all-user-files': {
         'task': 'files.sync_all_users',
         'schedule': 600.0,  # Every 10 minutes
+    },
+    'db-maintenance': {
+        'task': 'core.db_maintenance',
+        'schedule': crontab(hour=3, minute=0),  # Every day at 3:00 AM
     },
 }

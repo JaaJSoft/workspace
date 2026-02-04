@@ -2,7 +2,7 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef, Q, Subquery
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -245,6 +245,23 @@ class FileViewSet(viewsets.ModelViewSet):
             return RECENT_FILES_LIMIT
         return min(limit, RECENT_FILES_MAX_LIMIT)
 
+    def _resolve_file_with_access(self, uuid):
+        """Try get_object() (owner), fallback to shared access.
+
+        Returns (file_obj, is_owner, share_permission).
+        Raises Http404 if no access.
+        """
+        try:
+            file_obj = self.get_object()
+            return file_obj, True, None
+        except Http404:
+            file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
+            if file_obj:
+                perm = self._get_share_permission(self.request.user, file_obj)
+                if perm is not None:
+                    return file_obj, False, perm
+            raise
+
     def get_queryset(self):
         """Filter by current user's files."""
         favorite_subquery = FileFavorite.objects.filter(
@@ -258,6 +275,10 @@ class FileViewSet(viewsets.ModelViewSet):
         is_shared_subquery = FileShare.objects.filter(
             file_id=OuterRef('pk'),
         )
+        user_share_subquery = FileShare.objects.filter(
+            file_id=OuterRef('pk'),
+            shared_with=self.request.user,
+        ).values('permission')[:1]
 
         # Favorites: include both owned and shared-with-me files
         if self.action == 'list' and self._is_favorites_query():
@@ -270,6 +291,7 @@ class FileViewSet(viewsets.ModelViewSet):
                 is_favorite=Exists(favorite_subquery),
                 is_pinned=Exists(pinned_subquery),
                 is_shared=Exists(is_shared_subquery),
+                user_share_permission=Subquery(user_share_subquery),
             ).distinct()
 
         queryset = File.objects.filter(owner=self.request.user)
@@ -277,6 +299,7 @@ class FileViewSet(viewsets.ModelViewSet):
             is_favorite=Exists(favorite_subquery),
             is_pinned=Exists(pinned_subquery),
             is_shared=Exists(is_shared_subquery),
+            user_share_permission=Subquery(user_share_subquery),
         )
         if self.action in {'trash'} or self._is_trash_query():
             return queryset.filter(deleted_at__isnull=False)
@@ -309,15 +332,13 @@ class FileViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post', 'delete'], url_path='favorite')
     def favorite(self, request, uuid=None):
         """Add or remove a file/folder from favorites."""
-        try:
-            file_obj = self.get_object()
-        except Http404:
-            # Not in user's queryset – check shared access
-            file_obj = File.objects.filter(
-                uuid=uuid, deleted_at__isnull=True,
-            ).first()
-            if not file_obj or not self._has_shared_access(request.user, file_obj):
-                raise
+        from workspace.files.actions import ActionRegistry
+        file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+        if not ActionRegistry.is_action_available(
+            'toggle_favorite', request.user, file_obj,
+            is_owner=is_owner, share_permission=share_perm,
+        ):
+            return Response(status=status.HTTP_403_FORBIDDEN)
         if request.method == 'POST':
             FileFavorite.objects.get_or_create(owner=request.user, file=file_obj)
             return Response({'is_favorite': True}, status=status.HTTP_200_OK)
@@ -335,8 +356,12 @@ class FileViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post', 'delete'], url_path='pin')
     def pin(self, request, uuid=None):
         """Pin or unpin a folder from the sidebar."""
+        from workspace.files.actions import ActionRegistry
         file_obj = self.get_object()
-        if file_obj.node_type != File.NodeType.FOLDER:
+        if not ActionRegistry.is_action_available(
+            'toggle_pin', request.user, file_obj,
+            is_owner=True, share_permission=None,
+        ):
             return Response({'detail': 'Only folders can be pinned.'}, status=status.HTTP_400_BAD_REQUEST)
         if request.method == 'POST':
             max_pos = PinnedFolder.objects.filter(owner=request.user).order_by('-position').values_list('position', flat=True).first()
@@ -485,7 +510,24 @@ class FileViewSet(viewsets.ModelViewSet):
             owner=request.user,
             file_id=OuterRef('pk'),
         )
-        queryset = queryset.annotate(is_favorite=Exists(favorite_subquery))
+        pinned_subquery = PinnedFolder.objects.filter(
+            owner=request.user,
+            folder_id=OuterRef('pk'),
+        )
+        is_shared_subquery = FileShare.objects.filter(
+            file_id=OuterRef('pk'),
+        )
+        queryset = queryset.annotate(
+            is_favorite=Exists(favorite_subquery),
+            is_pinned=Exists(pinned_subquery),
+            is_shared=Exists(is_shared_subquery),
+            user_share_permission=Subquery(
+                FileShare.objects.filter(
+                    file_id=OuterRef('pk'),
+                    shared_with=request.user,
+                ).values('permission')[:1]
+            ),
+        )
         queryset = self.filter_queryset(queryset)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
@@ -607,17 +649,8 @@ class FileViewSet(viewsets.ModelViewSet):
         from django.http import FileResponse, HttpResponse
 
         try:
-            file_obj = self.get_object()
-        except Exception:
-            # Not in user's queryset – check shared access
-            file_obj = File.objects.filter(
-                uuid=uuid, deleted_at__isnull=True,
-            ).first()
-            if not file_obj or not self._has_shared_access(request.user, file_obj):
-                return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-
-        # Security: ownership or shared-access check
-        if file_obj.owner != request.user and not self._has_shared_access(request.user, file_obj):
+            file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+        except Http404:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         # Only serve files, not folders
@@ -677,15 +710,8 @@ class FileViewSet(viewsets.ModelViewSet):
         from django.http import FileResponse, HttpResponse
 
         try:
-            file_obj = self.get_object()
-        except Exception:
-            file_obj = File.objects.filter(
-                uuid=uuid, deleted_at__isnull=True,
-            ).first()
-            if not file_obj or not self._has_shared_access(request.user, file_obj):
-                return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-
-        if file_obj.owner != request.user and not self._has_shared_access(request.user, file_obj):
+            file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+        except Http404:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         # Single file download
@@ -727,6 +753,101 @@ class FileViewSet(viewsets.ModelViewSet):
         zip_name = f"{file_obj.name}.zip"
         response = HttpResponse(buf.read(), content_type='application/zip')
         response['Content-Disposition'] = f'attachment; filename="{zip_name}"'
+        return response
+
+    @extend_schema(
+        summary="Download multiple files/folders as ZIP",
+        description=(
+            "Download multiple files and folders as a single ZIP archive. "
+            "Folders are included recursively with their contents."
+        ),
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'uuids': {
+                        'type': 'array',
+                        'items': {'type': 'string', 'format': 'uuid'},
+                        'description': 'List of file/folder UUIDs to download',
+                    },
+                },
+                'required': ['uuids'],
+            },
+        },
+        responses={
+            200: OpenApiResponse(description="ZIP archive."),
+            400: OpenApiResponse(description="Invalid request."),
+            404: OpenApiResponse(description="One or more UUIDs not found."),
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='bulk-download')
+    def bulk_download(self, request):
+        """Download multiple files/folders as a single ZIP archive."""
+        import io
+        import zipfile
+        from django.http import HttpResponse
+
+        uuids = request.data.get('uuids', [])
+        if not isinstance(uuids, list) or len(uuids) == 0:
+            return Response(
+                {'detail': 'uuids must be a non-empty list.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(uuids) > 200:
+            return Response(
+                {'detail': 'Too many UUIDs (max 200).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        file_objects = list(
+            File.objects.filter(
+                uuid__in=uuids,
+                deleted_at__isnull=True,
+            ).filter(
+                Q(owner=request.user) | Q(shares__shared_with=request.user)
+            ).distinct()
+        )
+
+        if len(file_objects) != len(set(uuids)):
+            return Response(
+                {'detail': 'One or more UUIDs not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for obj in file_objects:
+                if obj.node_type == File.NodeType.FILE:
+                    if not obj.content:
+                        continue
+                    try:
+                        data = obj.content.read()
+                        obj.content.close()
+                        zf.writestr(obj.name, data)
+                    except Exception:
+                        continue
+                else:
+                    # Folder: add all descendant files
+                    folder_path = obj.path or obj.get_path()
+                    prefix = f"{folder_path}/"
+                    descendants = File.objects.filter(
+                        owner=request.user,
+                        node_type=File.NodeType.FILE,
+                        deleted_at__isnull=True,
+                        path__startswith=prefix,
+                    ).exclude(content='').exclude(content__isnull=True)
+                    for desc in descendants:
+                        rel_path = f"{obj.name}/{desc.path[len(prefix):]}"
+                        try:
+                            data = desc.content.read()
+                            desc.content.close()
+                            zf.writestr(rel_path, data)
+                        except Exception:
+                            continue
+        buf.seek(0)
+
+        response = HttpResponse(buf.read(), content_type='application/zip')
+        response['Content-Disposition'] = 'attachment; filename="download.zip"'
         return response
 
     @extend_schema(
@@ -804,8 +925,9 @@ class FileViewSet(viewsets.ModelViewSet):
             return super().partial_update(request, *args, **kwargs)
         except Http404:
             # Check rw shared access
+            uuid = kwargs.get('uuid')
             file_obj = File.objects.filter(
-                uuid=kwargs.get('uuid'), deleted_at__isnull=True,
+                uuid=uuid, deleted_at__isnull=True,
             ).first()
             if not file_obj or self._get_share_permission(request.user, file_obj) != FileShare.Permission.READ_WRITE:
                 raise
@@ -870,9 +992,13 @@ class FileViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post', 'delete'], url_path='share')
     def share(self, request, uuid=None):
         """Share or unshare a file with another user (files only)."""
+        from workspace.files.actions import ActionRegistry
         file_obj = self.get_object()
 
-        if file_obj.node_type != File.NodeType.FILE:
+        if not ActionRegistry.is_action_available(
+            'share', request.user, file_obj,
+            is_owner=True, share_permission=None,
+        ):
             return Response(
                 {'detail': 'Only files can be shared.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -957,6 +1083,92 @@ class FileViewSet(viewsets.ModelViewSet):
         return Response(results)
 
     @extend_schema(
+        summary="Get available actions for files/folders",
+        description=(
+            "Return available actions for a list of file/folder UUIDs. "
+            "Returns a map keyed by UUID, each value being the list of "
+            "available actions for that item."
+        ),
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'uuids': {
+                        'type': 'array',
+                        'items': {'type': 'string', 'format': 'uuid'},
+                        'description': 'List of file/folder UUIDs',
+                    },
+                },
+                'required': ['uuids'],
+            },
+        },
+        responses={
+            200: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description="Map of UUID to list of available actions.",
+            ),
+            400: OpenApiResponse(description="Invalid request."),
+            404: OpenApiResponse(description="One or more UUIDs not found."),
+        },
+    )
+    @action(detail=False, methods=['post'], url_path='actions')
+    def files_actions(self, request):
+        """Return available actions per file/folder for a set of UUIDs."""
+        from workspace.files.actions import ActionRegistry
+
+        uuids = request.data.get('uuids', [])
+        if not isinstance(uuids, list) or len(uuids) == 0:
+            return Response(
+                {'detail': 'uuids must be a non-empty list.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(uuids) > 200:
+            return Response(
+                {'detail': 'Too many UUIDs (max 200).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        favorite_subquery = FileFavorite.objects.filter(
+            owner=request.user,
+            file_id=OuterRef('pk'),
+        )
+        pinned_subquery = PinnedFolder.objects.filter(
+            owner=request.user,
+            folder_id=OuterRef('pk'),
+        )
+        user_share_subquery = FileShare.objects.filter(
+            file_id=OuterRef('pk'),
+            shared_with=request.user,
+        ).values('permission')[:1]
+
+        file_objects = list(
+            File.objects.filter(
+                uuid__in=uuids,
+            ).filter(
+                Q(owner=request.user) | Q(shares__shared_with=request.user)
+            ).annotate(
+                is_favorite=Exists(favorite_subquery),
+                is_pinned=Exists(pinned_subquery),
+                user_share_permission=Subquery(user_share_subquery),
+            ).distinct()
+        )
+
+        if len(file_objects) != len(set(uuids)):
+            return Response(
+                {'detail': 'One or more UUIDs not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        result = {}
+        for file_obj in file_objects:
+            is_owner = file_obj.owner_id == request.user.pk
+            share_perm = getattr(file_obj, 'user_share_permission', None)
+            result[str(file_obj.uuid)] = ActionRegistry.get_available_actions(
+                request.user, file_obj, is_owner=is_owner, share_permission=share_perm,
+            )
+        return Response(result)
+
+    @extend_schema(
         summary="Files shared with me",
         description="Return files that have been shared with the current user.",
         responses={
@@ -990,6 +1202,12 @@ class FileViewSet(viewsets.ModelViewSet):
                 PinnedFolder.objects.filter(owner=request.user, folder_id=OuterRef('pk'))
             ),
             is_shared=Exists(is_shared_subquery),
+            user_share_permission=Subquery(
+                FileShare.objects.filter(
+                    file_id=OuterRef('pk'),
+                    shared_with=request.user,
+                ).values('permission')[:1]
+            ),
         ).order_by('name')
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)

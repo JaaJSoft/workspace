@@ -283,14 +283,14 @@ window.fileBrowser = function fileBrowser() {
     _initFileActions() {
       // Listen for file actions from context menu
       window.addEventListener('file-action', (e) => {
-        const { action, uuid, name, nodeType, isFavorite, isPinned } = e.detail;
+        const { action, uuid, name, nodeType, state } = e.detail;
 
         switch (action) {
-          case 'toggleFavorite':
-            this.toggleFavorite(uuid, isFavorite);
+          case 'toggle_favorite':
+            this.toggleFavorite(uuid, state && state.is_favorite);
             break;
-          case 'togglePin':
-            this.togglePin(uuid, isPinned);
+          case 'toggle_pin':
+            this.togglePin(uuid, state && state.is_pinned);
             break;
           case 'rename':
             this.showRenameDialog(uuid, name);
@@ -310,7 +310,7 @@ window.fileBrowser = function fileBrowser() {
           case 'copy':
             this.copyToClipboard([{ uuid, name, nodeType }]);
             break;
-          case 'paste':
+          case 'paste_into':
             this.pasteFromClipboard();
             break;
         }
@@ -358,6 +358,15 @@ window.fileBrowser = function fileBrowser() {
             break;
           case 'paste':
             this.pasteFromClipboard();
+            break;
+          case 'restore':
+            this.bulkRestoreItems(uuids);
+            break;
+          case 'purge':
+            this.bulkPurgeItems(uuids);
+            break;
+          case 'pin':
+            this.bulkTogglePin(uuids, add);
             break;
         }
       });
@@ -898,6 +907,124 @@ window.fileBrowser = function fileBrowser() {
       this.refreshFolderBrowser();
     },
 
+    async bulkRestoreItems(uuids) {
+      if (!uuids || uuids.length === 0) return;
+
+      const count = uuids.length;
+      const confirmed = await AppDialog.confirm({
+        title: 'Restore items?',
+        message: `Restore ${count} item${count > 1 ? 's' : ''} from trash?`,
+        okLabel: 'Restore',
+        okClass: 'btn-primary'
+      });
+      if (!confirmed) return;
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const uuid of uuids) {
+        try {
+          const response = await fetch(`/api/v1/files/${uuid}/restore`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': this.getCsrfToken() }
+          });
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          errorCount++;
+        }
+      }
+
+      if (errorCount > 0) {
+        this.showAlert('warning', `Restored ${successCount} items, ${errorCount} failed`);
+      } else {
+        this.showAlert('success', `Restored ${successCount} item${successCount > 1 ? 's' : ''}`);
+      }
+
+      window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+      window.dispatchEvent(new CustomEvent('clear-file-selection'));
+      this.refreshFolderBrowser();
+    },
+
+    async bulkPurgeItems(uuids) {
+      if (!uuids || uuids.length === 0) return;
+
+      const count = uuids.length;
+      const confirmed = await AppDialog.confirm({
+        title: 'Delete permanently?',
+        message: `This will permanently delete ${count} item${count > 1 ? 's' : ''} and cannot be undone.`,
+        okLabel: 'Delete permanently',
+        okClass: 'btn-error'
+      });
+      if (!confirmed) return;
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const uuid of uuids) {
+        try {
+          const response = await fetch(`/api/v1/files/${uuid}/purge`, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': this.getCsrfToken() }
+          });
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          errorCount++;
+        }
+      }
+
+      if (errorCount > 0) {
+        this.showAlert('warning', `Permanently deleted ${successCount} items, ${errorCount} failed`);
+      } else {
+        this.showAlert('success', `Permanently deleted ${successCount} item${successCount > 1 ? 's' : ''}`);
+      }
+
+      window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+      window.dispatchEvent(new CustomEvent('clear-file-selection'));
+      this.refreshFolderBrowser();
+    },
+
+    async bulkTogglePin(uuids, add) {
+      if (!uuids || uuids.length === 0) return;
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const uuid of uuids) {
+        try {
+          const response = await fetch(`/api/v1/files/${uuid}/pin`, {
+            method: add ? 'POST' : 'DELETE',
+            headers: { 'X-CSRFToken': this.getCsrfToken() }
+          });
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          errorCount++;
+        }
+      }
+
+      const action = add ? 'Pinned' : 'Unpinned';
+      if (errorCount > 0) {
+        this.showAlert('warning', `${action} ${successCount} items, ${errorCount} failed`);
+      } else {
+        this.showAlert('success', `${action} ${successCount} item${successCount > 1 ? 's' : ''}`);
+      }
+
+      window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+      window.dispatchEvent(new CustomEvent('clear-file-selection'));
+      this.refreshFolderBrowser();
+    },
+
     // Clipboard operations
     cutToClipboard(items) {
       if (!items || items.length === 0) return;
@@ -1173,6 +1300,14 @@ window.fileTableControls = function fileTableControls() {
     // Clipboard state
     hasClipboardItems: false,
 
+    // Actions state (fetched from API, keyed by UUID)
+    actionsMap: {},
+    actionsLoading: false,
+
+    // Bulk actions (computed from actionsMap intersection)
+    bulkActions: [],
+    bulkActionsLoading: false,
+
     get orderedColumns() {
       return this.columnOrder
         .map((id) => this.columns.find((col) => col.id === id))
@@ -1226,6 +1361,12 @@ window.fileTableControls = function fileTableControls() {
         this.hasClipboardItems = window.fileClipboard.hasItems();
       });
       this.hasClipboardItems = window.fileClipboard.hasItems();
+
+      // Compute bulk actions from actionsMap when selection changes
+      this.$watch('selectedUuids', () => this._computeBulkActions());
+
+      // Fetch actions for all visible rows
+      this.fetchActions();
 
       // Keyboard shortcuts (single listener — remove previous on re-init)
       if (window._fileShortcutHandler) {
@@ -1313,37 +1454,144 @@ window.fileTableControls = function fileTableControls() {
       return this.selectedUuids.size;
     },
 
-    // Bulk actions
-    bulkDelete() {
-      const uuids = this.getSelectedUuids();
+    // Fetch actions for all visible rows from the API
+    async fetchActions() {
+      const rows = this.originalRows.length
+        ? this.originalRows
+        : Array.from((this.tbody || this.$el).querySelectorAll('tr[data-uuid]'));
+      const uuids = rows.map(r => r.dataset.uuid).filter(Boolean);
       if (uuids.length === 0) return;
-      window.dispatchEvent(new CustomEvent('bulk-action', {
-        detail: { action: 'delete', uuids }
-      }));
+
+      this.actionsLoading = true;
+      try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
+          || '';
+        const resp = await fetch('/api/v1/files/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ uuids }),
+        });
+        if (resp.ok) {
+          this.actionsMap = await resp.json();
+          this._computeBulkActions();
+        }
+      } catch (e) {
+        // silent
+      } finally {
+        this.actionsLoading = false;
+      }
     },
 
-    bulkFavorite(add) {
+    // Compute bulk actions: intersection of actions for all selected UUIDs, filtered to bulk-capable
+    _computeBulkActions() {
       const uuids = this.getSelectedUuids();
-      if (uuids.length === 0) return;
-      window.dispatchEvent(new CustomEvent('bulk-action', {
-        detail: { action: 'favorite', uuids, add }
-      }));
+      if (uuids.length === 0) {
+        this.bulkActions = [];
+        return;
+      }
+
+      const lists = uuids.map(uuid => this.actionsMap[uuid] || []);
+      if (lists.some(l => l.length === 0)) {
+        this.bulkActions = [];
+        return;
+      }
+
+      // Start with first file's bulk-capable actions, intersect with the rest
+      let common = lists[0].filter(a => a.bulk);
+      for (let i = 1; i < lists.length; i++) {
+        const ids = new Set(lists[i].filter(a => a.bulk).map(a => a.id));
+        common = common.filter(a => ids.has(a.id));
+        if (common.length === 0) break;
+      }
+
+      const catOrder = ['transfer', 'organize', 'edit', 'danger', 'trash'];
+      this.bulkActions = common.sort((a, b) => catOrder.indexOf(a.category) - catOrder.indexOf(b.category));
+
+      this.$nextTick(() => {
+        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [this.$el] });
+      });
     },
 
-    bulkCut() {
+    executeBulkAction(action) {
       const uuids = this.getSelectedUuids();
       if (uuids.length === 0) return;
-      window.dispatchEvent(new CustomEvent('bulk-action', {
-        detail: { action: 'cut', uuids }
-      }));
+
+      switch (action.id) {
+        case 'toggle_favorite': {
+          const allFav = uuids.every(uuid => {
+            const a = (this.actionsMap[uuid] || []).find(x => x.id === 'toggle_favorite');
+            return a && a.state && a.state.is_favorite;
+          });
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'favorite', uuids, add: !allFav }
+          }));
+          break;
+        }
+        case 'toggle_pin': {
+          const allPinned = uuids.every(uuid => {
+            const a = (this.actionsMap[uuid] || []).find(x => x.id === 'toggle_pin');
+            return a && a.state && a.state.is_pinned;
+          });
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'pin', uuids, add: !allPinned }
+          }));
+          break;
+        }
+        case 'download':
+          this._bulkDownload(uuids);
+          break;
+        case 'cut':
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'cut', uuids }
+          }));
+          break;
+        case 'copy':
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'copy', uuids }
+          }));
+          break;
+        case 'delete':
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'delete', uuids }
+          }));
+          break;
+        case 'restore':
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'restore', uuids }
+          }));
+          break;
+        case 'purge':
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'purge', uuids }
+          }));
+          break;
+      }
     },
 
-    bulkCopy() {
-      const uuids = this.getSelectedUuids();
-      if (uuids.length === 0) return;
-      window.dispatchEvent(new CustomEvent('bulk-action', {
-        detail: { action: 'copy', uuids }
-      }));
+    async _bulkDownload(uuids) {
+      try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
+          || '';
+        const resp = await fetch('/api/v1/files/bulk-download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ uuids }),
+        });
+        if (!resp.ok) return;
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'download.zip';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        // silent
+      }
     },
 
     bulkPaste() {
@@ -1377,11 +1625,19 @@ window.fileTableControls = function fileTableControls() {
         uuid,
         name: row.dataset.displayName || row.dataset.name || '',
         nodeType: row.dataset.nodeType || 'file',
-        isFavorite: row.dataset.favorite === '1',
-        isPinned: row.dataset.pinned === '1',
         mimeType: row.dataset.mimeType || '',
-        isViewable: row.dataset.viewable === '1',
+        actions: this.actionsMap[uuid] || [],
       };
+    },
+
+    _nodeHasAction(data, actionId) {
+      return data && data.actions && data.actions.some(a => a.id === actionId);
+    },
+
+    _getActionState(data, actionId) {
+      if (!data || !data.actions) return {};
+      const action = data.actions.find(a => a.id === actionId);
+      return action && action.state ? action.state : {};
     },
 
     _handleKeyboardShortcut(e) {
@@ -1478,7 +1734,7 @@ window.fileTableControls = function fileTableControls() {
       if (!data) return;
 
       // Delete
-      if (key === 'Delete') {
+      if (key === 'Delete' && this._nodeHasAction(data, 'delete')) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('file-action', {
           detail: { action: 'delete', uuid: data.uuid, name: data.name, nodeType: data.nodeType }
@@ -1487,7 +1743,7 @@ window.fileTableControls = function fileTableControls() {
       }
 
       // Ctrl+X: Cut
-      if (ctrl && key === 'x') {
+      if (ctrl && key === 'x' && this._nodeHasAction(data, 'cut')) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('file-action', {
           detail: { action: 'cut', uuid: data.uuid, name: data.name, nodeType: data.nodeType }
@@ -1496,7 +1752,7 @@ window.fileTableControls = function fileTableControls() {
       }
 
       // Ctrl+C: Copy
-      if (ctrl && key === 'c') {
+      if (ctrl && key === 'c' && this._nodeHasAction(data, 'copy')) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('file-action', {
           detail: { action: 'copy', uuid: data.uuid, name: data.name, nodeType: data.nodeType }
@@ -1505,10 +1761,11 @@ window.fileTableControls = function fileTableControls() {
       }
 
       // F: Toggle favorite
-      if ((key === 'f' || key === 'F') && !ctrl) {
+      if ((key === 'f' || key === 'F') && !ctrl && this._nodeHasAction(data, 'toggle_favorite')) {
         e.preventDefault();
+        const state = this._getActionState(data, 'toggle_favorite');
         window.dispatchEvent(new CustomEvent('file-action', {
-          detail: { action: 'toggleFavorite', uuid: data.uuid, isFavorite: data.isFavorite }
+          detail: { action: 'toggle_favorite', uuid: data.uuid, state }
         }));
         return;
       }
@@ -1516,10 +1773,10 @@ window.fileTableControls = function fileTableControls() {
       // Enter / Space: Open folder or view file
       if (key === 'Enter' || key === ' ') {
         e.preventDefault();
-        if (data.nodeType === 'folder') {
+        if (this._nodeHasAction(data, 'open')) {
           const link = document.querySelector(`tr[data-uuid="${data.uuid}"] a[data-folder-link]`);
           if (link) link.click();
-        } else if (data.isViewable) {
+        } else if (this._nodeHasAction(data, 'view')) {
           window.dispatchEvent(new CustomEvent('open-file-viewer', {
             detail: { uuid: data.uuid, name: data.name, mime_type: data.mimeType }
           }));
@@ -1528,7 +1785,7 @@ window.fileTableControls = function fileTableControls() {
       }
 
       // F2: Rename
-      if (key === 'F2') {
+      if (key === 'F2' && this._nodeHasAction(data, 'rename')) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('file-action', {
           detail: { action: 'rename', uuid: data.uuid, name: data.name }
@@ -1537,18 +1794,17 @@ window.fileTableControls = function fileTableControls() {
       }
 
       // P: Pin/unpin (folders only)
-      if ((key === 'p' || key === 'P') && !ctrl) {
-        if (data.nodeType === 'folder') {
-          e.preventDefault();
-          window.dispatchEvent(new CustomEvent('file-action', {
-            detail: { action: 'togglePin', uuid: data.uuid, isPinned: data.isPinned }
-          }));
-        }
+      if ((key === 'p' || key === 'P') && !ctrl && this._nodeHasAction(data, 'toggle_pin')) {
+        e.preventDefault();
+        const state = this._getActionState(data, 'toggle_pin');
+        window.dispatchEvent(new CustomEvent('file-action', {
+          detail: { action: 'toggle_pin', uuid: data.uuid, state }
+        }));
         return;
       }
 
       // Ctrl+I: Properties
-      if (ctrl && key === 'i') {
+      if (ctrl && key === 'i' && this._nodeHasAction(data, 'properties')) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('open-properties', {
           detail: { uuid: data.uuid, nodeType: data.nodeType }

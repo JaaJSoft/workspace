@@ -120,26 +120,14 @@
       <div class="flex items-center gap-2" x-show="selectedUuids.size > 0" x-cloak>
         <span class="text-sm font-medium" x-text="selectedUuids.size + ' item' + (selectedUuids.size > 1 ? 's' : '') + ' selected'"></span>
         <div class="flex items-center gap-1 ml-4">
-          <button type="button" @click="bulkFavorite(true)" class="btn btn-sm btn-ghost gap-1" title="Add to favorites">
-            <i data-lucide="star" class="w-4 h-4"></i>
-            <span class="hidden sm:inline">Favorite</span>
-          </button>
-          <button type="button" @click="bulkFavorite(false)" class="btn btn-sm btn-ghost gap-1" title="Remove from favorites">
-            <i data-lucide="star-off" class="w-4 h-4"></i>
-            <span class="hidden sm:inline">Unfavorite</span>
-          </button>
-          <button type="button" @click="bulkCut()" class="btn btn-sm btn-ghost gap-1" title="Cut to clipboard">
-            <i data-lucide="scissors" class="w-4 h-4"></i>
-            <span class="hidden sm:inline">Cut</span>
-          </button>
-          <button type="button" @click="bulkCopy()" class="btn btn-sm btn-ghost gap-1" title="Copy to clipboard">
-            <i data-lucide="copy" class="w-4 h-4"></i>
-            <span class="hidden sm:inline">Copy</span>
-          </button>
-          <button type="button" @click="bulkDelete()" class="btn btn-sm btn-ghost text-error gap-1" title="Delete">
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-            <span class="hidden sm:inline">Delete</span>
-          </button>
+          <template x-for="action in bulkActions" :key="action.id">
+            <button type="button" class="btn btn-sm btn-ghost gap-1" :class="action.css_class"
+                    :title="action.label" @click="executeBulkAction(action)">
+              <i :data-lucide="action.icon" class="w-4 h-4"></i>
+              <span class="hidden sm:inline" x-text="action.label"></span>
+            </button>
+          </template>
+          <span x-show="bulkActionsLoading" class="loading loading-spinner loading-xs ml-2"></span>
         </div>
         <button type="button" @click="clearSelection()" class="btn btn-sm btn-ghost ml-auto">
           Cancel
@@ -206,12 +194,7 @@
               name: '{{ node.name|escapejs }}',
               nodeType: '{{ node.node_type }}',
               mimeType: '{{ node.mime_type }}',
-              isFavorite: {{ node.is_favorite|yesno:'true,false' }},
-              isViewable: {{ node.is_viewable|yesno:'true,false' }},
-              isTrash: {{ is_trash_view|yesno:'true,false' }},
-              isPinned: {% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'true,false' }}{% else %}false{% endif %},
-              isShared: {{ node.is_shared|yesno:'true,false' }},
-              isOwner: {% if node.owner_id == request.user.pk %}true{% else %}false{% endif %}
+              actions: actionsMap['{{ node.uuid }}'] || []
             })"
           >
             <td data-col="select" data-stop-row-click @click.stop>
@@ -293,12 +276,7 @@
                   name: '{{ node.name|escapejs }}',
                   nodeType: '{{ node.node_type }}',
                   mimeType: '{{ node.mime_type }}',
-                  isFavorite: {{ node.is_favorite|yesno:'true,false' }},
-                  isViewable: {{ node.is_viewable|yesno:'true,false' }},
-                  isTrash: {{ is_trash_view|yesno:'true,false' }},
-                  isPinned: {% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'true,false' }}{% else %}false{% endif %},
-                  isShared: {{ node.is_shared|yesno:'true,false' }},
-                  isOwner: {% if node.owner_id == request.user.pk %}true{% else %}false{% endif %}
+                  actions: actionsMap['{{ node.uuid }}'] || []
                 })"
               >
                 <i data-lucide="more-vertical" class="w-4 h-4"></i>

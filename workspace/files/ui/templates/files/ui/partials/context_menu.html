@@ -70,230 +70,51 @@
   <!-- Node menu (right-click on file/folder) -->
   <template x-if="nodeData && !isBackgroundMenu">
     <ul class="menu menu-sm p-0">
-      <!-- View in browser (files only, if viewable) -->
-      <template x-if="nodeData.nodeType === 'file' && nodeData.isViewable && !nodeData.isTrash">
-        <li>
-          <button
-            type="button"
+      <template x-for="(action, idx) in nodeData.actions" :key="action.id">
+        <li
+          x-show="action.id !== 'paste_into' || hasClipboardItems"
+          :class="idx > 0 && action.category !== nodeData.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''"
+        >
+          <!-- Download action: <a> with download attribute -->
+          <a
+            x-show="action.id === 'download'"
+            :href="`/api/v1/files/${nodeData.uuid}/download`"
+            download
+            :download="nodeData.nodeType === 'folder' ? nodeData.name + '.zip' : nodeData.name"
             class="gap-3 rounded"
-            @click="viewFile()"
+            @click="close()"
           >
-            <i data-lucide="eye" class="w-4 h-4"></i>
-            <span>View in browser</span>
-            <kbd class="kbd kbd-xs ml-auto">Enter/Space</kbd>
-          </button>
-        </li>
-      </template>
-
-      <!-- Open folder (folders only) -->
-      <template x-if="nodeData.nodeType === 'folder' && !nodeData.isTrash">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded"
-            @click="openFolder()"
-          >
-            <i data-lucide="folder-open" class="w-4 h-4"></i>
-            <span>Open</span>
-            <kbd class="kbd kbd-xs ml-auto">Enter/Space</kbd>
-          </button>
-        </li>
-      </template>
-
-      <!-- Open in new tab (files only) -->
-      <template x-if="nodeData.nodeType === 'file' && !nodeData.isTrash">
-        <li>
-          <a :href="`/api/v1/files/${nodeData.uuid}/content`" target="_blank" class="gap-3 rounded">
-            <i data-lucide="external-link" class="w-4 h-4"></i>
-            <span>Open in new tab</span>
-          </a>
-        </li>
-      </template>
-
-      <!-- Download (files and folders) -->
-      <template x-if="!nodeData.isTrash">
-        <li>
-          <a :href="`/api/v1/files/${nodeData.uuid}/download`" download :download="nodeData.nodeType === 'folder' ? nodeData.name + '.zip' : nodeData.name" class="gap-3 rounded">
             <i data-lucide="download" class="w-4 h-4"></i>
-            <span x-text="nodeData.nodeType === 'folder' ? 'Download as ZIP' : 'Download'"></span>
+            <span x-text="action.label"></span>
           </a>
-        </li>
-      </template>
 
-      <!-- Copy link (files only) -->
-      <template x-if="nodeData.nodeType === 'file' && !nodeData.isTrash">
-        <li>
+          <!-- Open in new tab: <a> with target="_blank" -->
+          <a
+            x-show="action.id === 'open_new_tab'"
+            :href="`/api/v1/files/${nodeData.uuid}/content`"
+            target="_blank"
+            class="gap-3 rounded"
+            @click="close()"
+          >
+            <i data-lucide="external-link" class="w-4 h-4"></i>
+            <span x-text="action.label"></span>
+          </a>
+
+          <!-- Default: button with @click -->
           <button
+            x-show="action.id !== 'download' && action.id !== 'open_new_tab'"
             type="button"
             class="gap-3 rounded"
-            @click="copyLink()"
+            :class="action.css_class"
+            @click="executeAction(action)"
           >
-            <i data-lucide="link" class="w-4 h-4"></i>
-            <span>Copy link</span>
-          </button>
-        </li>
-      </template>
-
-      <template x-if="!nodeData.isTrash">
-        <hr class="my-1 border-base-300" />
-      </template>
-
-      <!-- Favorite/Unfavorite -->
-      <template x-if="!nodeData.isTrash">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded"
-            @click="toggleFavorite()"
-          >
-            <i data-lucide="star" class="w-4 h-4" :class="nodeData.isFavorite ? 'text-warning fill-current' : ''"></i>
-            <span x-text="nodeData.isFavorite ? 'Remove from favorites' : 'Add to favorites'"></span>
-            <kbd class="kbd kbd-xs ml-auto">F</kbd>
-          </button>
-        </li>
-      </template>
-
-      <!-- Pin/Unpin to sidebar (folders only) -->
-      <template x-if="nodeData.nodeType === 'folder' && !nodeData.isTrash">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded"
-            @click="togglePin()"
-          >
-            <i data-lucide="pin" class="w-4 h-4" :class="nodeData.isPinned ? 'text-primary fill-current' : ''"></i>
-            <span x-text="nodeData.isPinned ? 'Unpin from sidebar' : 'Pin to sidebar'"></span>
-            <kbd class="kbd kbd-xs ml-auto">P</kbd>
-          </button>
-        </li>
-      </template>
-
-      <!-- Share (files only, owner only) -->
-      <template x-if="nodeData.nodeType === 'file' && !nodeData.isTrash && nodeData.isOwner">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded"
-            @click="shareFile()"
-          >
-            <i data-lucide="share-2" class="w-4 h-4"></i>
-            <span>Share</span>
-          </button>
-        </li>
-      </template>
-
-      <!-- Rename (owner only) -->
-      <template x-if="!nodeData.isTrash && nodeData.isOwner">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded"
-            @click="rename()"
-          >
-            <i data-lucide="pencil" class="w-4 h-4"></i>
-            <span>Rename</span>
-            <kbd class="kbd kbd-xs ml-auto">F2</kbd>
-          </button>
-        </li>
-      </template>
-
-      <!-- Cut (owner only) -->
-      <template x-if="!nodeData.isTrash && nodeData.isOwner">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded"
-            @click="cut()"
-          >
-            <i data-lucide="scissors" class="w-4 h-4"></i>
-            <span>Cut</span>
-            <kbd class="kbd kbd-xs ml-auto">Ctrl+X</kbd>
-          </button>
-        </li>
-      </template>
-
-      <!-- Copy (owner only) -->
-      <template x-if="!nodeData.isTrash && nodeData.isOwner">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded"
-            @click="copy()"
-          >
-            <i data-lucide="copy" class="w-4 h-4"></i>
-            <span>Copy</span>
-            <kbd class="kbd kbd-xs ml-auto">Ctrl+C</kbd>
-          </button>
-        </li>
-      </template>
-
-      <!-- Paste (only show when clipboard has items) -->
-      <template x-if="!nodeData.isTrash && nodeData.nodeType === 'folder' && hasClipboardItems">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded"
-            @click="paste()"
-          >
-            <i data-lucide="clipboard-paste" class="w-4 h-4"></i>
-            <span>Paste here</span>
-            <kbd class="kbd kbd-xs ml-auto">Ctrl+V</kbd>
-          </button>
-        </li>
-      </template>
-
-      <!-- Info/Properties -->
-      <template x-if="!nodeData.isTrash">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded"
-            @click="showInfo()"
-          >
-            <i data-lucide="info" class="w-4 h-4"></i>
-            <span>Properties</span>
-            <kbd class="kbd kbd-xs ml-auto">Ctrl+I</kbd>
-          </button>
-        </li>
-      </template>
-
-      <hr class="my-1 border-base-300" />
-
-      <!-- Trash actions -->
-      <template x-if="nodeData.isTrash">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded"
-            @click="restore()"
-          >
-            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
-            <span>Restore</span>
-          </button>
-        </li>
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded text-error"
-            @click="purge()"
-          >
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-            <span>Delete permanently</span>
-          </button>
-        </li>
-      </template>
-
-      <!-- Delete (normal view, owner only) -->
-      <template x-if="!nodeData.isTrash && nodeData.isOwner">
-        <li>
-          <button
-            type="button"
-            class="gap-3 rounded text-error"
-            @click="deleteNode()"
-          >
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-            <span>Delete</span>
-            <kbd class="kbd kbd-xs ml-auto">Del</kbd>
+            <i
+              :data-lucide="action.icon"
+              class="w-4 h-4"
+              :class="iconClass(action)"
+            ></i>
+            <span x-text="action.label"></span>
+            <kbd x-show="action.shortcut" class="kbd kbd-xs ml-auto" x-text="action.shortcut"></kbd>
           </button>
         </li>
       </template>
@@ -401,168 +222,64 @@ function contextMenu() {
       this.nodeData = null;
     },
 
-    viewFile() {
-      window.dispatchEvent(new CustomEvent('open-file-viewer', {
-        detail: {
-          uuid: this.nodeData.uuid,
-          name: this.nodeData.name,
-          mime_type: this.nodeData.mimeType
-        }
-      }));
-      this.close();
-    },
-
-    openFolder() {
-      const link = document.querySelector(`a[href="/files/${this.nodeData.uuid}"]`);
-      if (link) {
-        link.click();
+    iconClass(action) {
+      if (action.id === 'toggle_favorite' && action.state && action.state.is_favorite) {
+        return 'text-warning fill-current';
       }
-      this.close();
+      if (action.id === 'toggle_pin' && action.state && action.state.is_pinned) {
+        return 'text-primary fill-current';
+      }
+      return '';
     },
 
-    toggleFavorite() {
-      // Dispatch event for file browser to handle
-      window.dispatchEvent(new CustomEvent('file-action', {
-        detail: {
-          action: 'toggleFavorite',
-          uuid: this.nodeData.uuid,
-          isFavorite: this.nodeData.isFavorite
-        }
-      }));
-      this.close();
-    },
-
-    togglePin() {
-      window.dispatchEvent(new CustomEvent('file-action', {
-        detail: {
-          action: 'togglePin',
-          uuid: this.nodeData.uuid,
-          isPinned: this.nodeData.isPinned
-        }
-      }));
-      this.close();
-    },
-
-    rename() {
-      // Dispatch event for file browser to handle
-      window.dispatchEvent(new CustomEvent('file-action', {
-        detail: {
-          action: 'rename',
-          uuid: this.nodeData.uuid,
-          name: this.nodeData.name
-        }
-      }));
-      this.close();
-    },
-
-    deleteNode() {
-      // Dispatch event for file browser to handle
-      window.dispatchEvent(new CustomEvent('file-action', {
-        detail: {
-          action: 'delete',
-          uuid: this.nodeData.uuid,
-          name: this.nodeData.name,
-          nodeType: this.nodeData.nodeType
-        }
-      }));
-      this.close();
-    },
-
-    restore() {
-      // Dispatch event for file browser to handle
-      window.dispatchEvent(new CustomEvent('file-action', {
-        detail: {
-          action: 'restore',
-          uuid: this.nodeData.uuid,
-          name: this.nodeData.name,
-          nodeType: this.nodeData.nodeType
-        }
-      }));
-      this.close();
-    },
-
-    purge() {
-      // Dispatch event for file browser to handle
-      window.dispatchEvent(new CustomEvent('file-action', {
-        detail: {
-          action: 'purge',
-          uuid: this.nodeData.uuid,
-          name: this.nodeData.name,
-          nodeType: this.nodeData.nodeType
-        }
-      }));
-      this.close();
-    },
-
-    copyLink() {
-      const url = new URL(window.location.origin + window.location.pathname);
-      url.searchParams.set('open', this.nodeData.uuid);
-
-      navigator.clipboard.writeText(url.toString()).then(() => {
-        // Show success toast using AppAlert
-        if (window.AppAlert) {
-          window.AppAlert.success('Link copied to clipboard', {
-            duration: 2000
+    executeAction(action) {
+      const nd = this.nodeData;
+      switch (action.id) {
+        case 'view':
+          window.dispatchEvent(new CustomEvent('open-file-viewer', {
+            detail: { uuid: nd.uuid, name: nd.name, mime_type: nd.mimeType }
+          }));
+          break;
+        case 'open':
+          document.querySelector(`a[href="/files/${nd.uuid}"]`)?.click();
+          break;
+        case 'copy_link': {
+          const url = new URL(window.location.origin + window.location.pathname);
+          url.searchParams.set('open', nd.uuid);
+          navigator.clipboard.writeText(url.toString()).then(() => {
+            if (window.AppAlert) {
+              window.AppAlert.success('Link copied to clipboard', { duration: 2000 });
+            }
+          }).catch(err => {
+            console.error('Failed to copy link:', err);
+            if (window.AppAlert) {
+              window.AppAlert.error('Failed to copy link');
+            }
           });
+          break;
         }
-      }).catch(err => {
-        console.error('Failed to copy link:', err);
-        if (window.AppAlert) {
-          window.AppAlert.error('Failed to copy link');
-        }
-      });
-
-      this.close();
-    },
-
-    shareFile() {
-      window.dispatchEvent(new CustomEvent('open-share-modal', {
-        detail: { uuid: this.nodeData.uuid, name: this.nodeData.name }
-      }));
-      this.close();
-    },
-
-    showInfo() {
-      window.dispatchEvent(new CustomEvent('open-properties', {
-        detail: {
-          uuid: this.nodeData.uuid,
-          nodeType: this.nodeData.nodeType
-        }
-      }));
-      this.close();
-    },
-
-    cut() {
-      window.dispatchEvent(new CustomEvent('file-action', {
-        detail: {
-          action: 'cut',
-          uuid: this.nodeData.uuid,
-          name: this.nodeData.name,
-          nodeType: this.nodeData.nodeType
-        }
-      }));
-      this.close();
-    },
-
-    copy() {
-      window.dispatchEvent(new CustomEvent('file-action', {
-        detail: {
-          action: 'copy',
-          uuid: this.nodeData.uuid,
-          name: this.nodeData.name,
-          nodeType: this.nodeData.nodeType
-        }
-      }));
-      this.close();
-    },
-
-    paste() {
-      window.dispatchEvent(new CustomEvent('file-action', {
-        detail: {
-          action: 'paste',
-          uuid: this.nodeData.uuid
-        }
-      }));
+        case 'share':
+          window.dispatchEvent(new CustomEvent('open-share-modal', {
+            detail: { uuid: nd.uuid, name: nd.name }
+          }));
+          break;
+        case 'properties':
+          window.dispatchEvent(new CustomEvent('open-properties', {
+            detail: { uuid: nd.uuid, nodeType: nd.nodeType }
+          }));
+          break;
+        default:
+          // All other actions dispatch file-action event
+          window.dispatchEvent(new CustomEvent('file-action', {
+            detail: {
+              action: action.id,
+              uuid: nd.uuid,
+              name: nd.name,
+              nodeType: nd.nodeType,
+              state: action.state || {}
+            }
+          }));
+      }
       this.close();
     },
 

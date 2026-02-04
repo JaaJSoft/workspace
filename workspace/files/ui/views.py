@@ -1,6 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404, render
 from django.http import HttpResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -134,10 +134,15 @@ def _build_context(request, folder=None, is_trash_view=False):
     is_shared_subquery = FileShare.objects.filter(
         file_id=OuterRef('pk'),
     )
+    user_share_subquery = FileShare.objects.filter(
+        file_id=OuterRef('pk'),
+        shared_with=request.user,
+    ).values('permission')[:1]
     nodes = nodes.annotate(
         is_favorite=Exists(favorite_subquery),
         is_pinned=Exists(pinned_subquery),
         is_shared=Exists(is_shared_subquery),
+        user_share_permission=Subquery(user_share_subquery),
     )
     if is_recent_view:
         nodes = nodes[:RECENT_FILES_LIMIT]

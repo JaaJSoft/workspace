@@ -13,12 +13,18 @@ Quick improvements with high impact on existing features.
 - [ ] **Clickable breadcrumb in properties** - Navigate to parent from modal
 - [ ] **Multi-select with Shift+Click** - Range selection in the file browser
 - [x] **Download file/folder** - Download a file or folder (zip)
+- [ ] **File/Folder ln** - Symbolic links for files and folders to add share folders or files to your workspace
+- [ ] **File/Folder permissions** - Read/Write/Delete permissions for files and folders
+- [ ] **File/Folder tags** - Add custom labels to files and folders
+- [ ] **team folders** - Share files with other users
 - [ ] **User quota** - Storage limit per user with gauge in dashboard
 - [x] **Persistent Dark/Light mode** - Save chosen theme server-side
 - [x] **Enhanced toast notifications** - Notification stack with auto-dismiss
 - [x] **Empty states** - Illustrations when a folder/view is empty
 - [x] **Persistent sorting** - Remember user's chosen sort order (cookie/DB)
 - [ ] **Avatar upload** - User profile picture
+- [ ] **File/Folder versioning** - Track changes to files and folders
+- [ ] **File/Folder history** - View previous versions of files and folders
 
 ---
 

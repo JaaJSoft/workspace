@@ -119,6 +119,19 @@
           </div>
         </div>
 
+        <!-- Tile size slider (mosaic view only) -->
+        <div class="flex items-center gap-1.5" x-show="viewMode === 'mosaic'" x-cloak>
+          <i data-lucide="grid-2x2" class="w-3 h-3 opacity-40"></i>
+          <input
+            type="range" min="1" max="5" step="1"
+            x-model.number="mosaicTileSize"
+            @change="setMosaicTileSize(mosaicTileSize)"
+            class="range range-xs w-24"
+            title="Tile size"
+          />
+          <i data-lucide="grid-2x2" class="w-5 h-5 opacity-40"></i>
+        </div>
+
         <!-- View toggle button (always visible at the end) -->
         <div class="join">
           <button
@@ -317,8 +330,8 @@
       </table>
 
       <!-- Mosaic/Grid view -->
-      <div class="p-4" x-show="viewMode === 'mosaic'" x-cloak>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4">
+      <div :class="mosaicTileSize <= 2 ? 'p-2' : 'p-4'" x-show="viewMode === 'mosaic'" x-cloak>
+        <div class="grid" :style="'grid-template-columns: repeat(auto-fill, minmax(' + tileMinWidth() + 'px, 1fr)); gap: ' + tileGap() + 'px'">
           {% for node in nodes %}
           <div
             class="bg-base-100 border border-base-300 rounded-lg hover:border-primary hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
@@ -391,20 +404,22 @@
             <!-- Preview/Icon area (square) -->
             <div class="relative w-full" style="padding-bottom: 100%;">
               <div class="absolute inset-0 flex items-center justify-center bg-base-200">
-                {% if node.node_type == 'folder' %}
-                  <i data-lucide="{{ node.icon|default:'folder' }}" class="w-16 h-16 {{ node.color|default:'text-warning' }}"></i>
-                {% else %}
-                  <i data-lucide="{{ node.mime_type|mime_to_lucide }}" class="w-16 h-16 {{ node.mime_type|mime_to_color }}"></i>
-                {% endif %}
+                <div :style="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'">
+                  {% if node.node_type == 'folder' %}
+                    <i data-lucide="{{ node.icon|default:'folder' }}" class="w-full h-full {{ node.color|default:'text-warning' }}"></i>
+                  {% else %}
+                    <i data-lucide="{{ node.mime_type|mime_to_lucide }}" class="w-full h-full {{ node.mime_type|mime_to_color }}"></i>
+                  {% endif %}
+                </div>
               </div>
             </div>
 
             <!-- File info -->
-            <div class="p-3 border-t border-base-300 flex-1">
-              <div class="flex items-start justify-between gap-2">
+            <div class="border-t border-base-300 flex-1" :class="mosaicTileSize <= 2 ? 'px-2 py-1.5' : 'p-3'">
+              <div class="flex items-start justify-between gap-1">
                 <div class="flex-1 min-w-0">
-                  <h3 class="font-medium text-sm truncate" title="{{ node.name }}">{{ node.name }}</h3>
-                  <p class="text-xs text-base-content/60 mt-1">
+                  <h3 class="font-medium truncate" :class="mosaicTileSize <= 2 ? 'text-xs' : 'text-sm'" title="{{ node.name }}">{{ node.name }}</h3>
+                  <p class="text-xs text-base-content/60" :class="mosaicTileSize <= 1 ? 'hidden' : 'mt-0.5'" x-cloak>
                     {% if node.node_type == 'file' %}
                       {{ node.size|filesize }}
                     {% else %}

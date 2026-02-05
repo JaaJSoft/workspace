@@ -81,7 +81,7 @@ window.navButtons = function navButtons() {
 };
 
 // --- File browser preferences ---
-window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list' };
+window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list', mosaicTileSize: 3 };
 window._filePrefsCache = { ...window._filePrefsDefaults };
 
 window.getFilePrefs = function() {
@@ -2826,16 +2826,19 @@ window.fileTableWithView = function fileTableWithView() {
 window.viewToggle = function viewToggle() {
   return {
     viewMode: 'list',
+    mosaicTileSize: 3,
 
     init() {
       // Initialize from user preferences
       const prefs = window.getFilePrefs();
       this.viewMode = prefs.defaultViewMode || 'list';
+      this.mosaicTileSize = prefs.mosaicTileSize || 3;
 
       // Listen for preference changes
       window.addEventListener('preferences-changed', (e) => {
-        if (e.detail && e.detail.defaultViewMode) {
-          this.viewMode = e.detail.defaultViewMode;
+        if (e.detail) {
+          if (e.detail.defaultViewMode) this.viewMode = e.detail.defaultViewMode;
+          if (e.detail.mosaicTileSize) this.mosaicTileSize = e.detail.mosaicTileSize;
         }
       });
 
@@ -2849,17 +2852,29 @@ window.viewToggle = function viewToggle() {
       });
     },
 
-    setViewMode(mode) {
-      this.viewMode = mode;
-      // Save to preferences
-      this._saveViewModePreference(mode);
+    // Tile size computed helpers
+    tileMinWidth() {
+      return { 1: 100, 2: 140, 3: 180, 4: 230, 5: 290 }[this.mosaicTileSize] || 180;
+    },
+    tileGap() {
+      return this.mosaicTileSize <= 2 ? 8 : 16;
+    },
+    tileIconSize() {
+      return { 1: 28, 2: 36, 3: 48, 4: 64, 5: 80 }[this.mosaicTileSize] || 48;
     },
 
-    _saveViewModePreference(mode) {
-      // Update cache
+    setViewMode(mode) {
+      this.viewMode = mode;
       window._filePrefsCache.defaultViewMode = mode;
+      this._saveFilePrefs();
+    },
 
-      // Save to server
+    setMosaicTileSize(size) {
+      window._filePrefsCache.mosaicTileSize = parseInt(size);
+      this._saveFilePrefs();
+    },
+
+    _saveFilePrefs() {
       const API_URL = '/api/v1/settings/files/preferences';
       const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
         || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
@@ -2871,9 +2886,7 @@ window.viewToggle = function viewToggle() {
           'Content-Type': 'application/json',
           'X-CSRFToken': csrfToken,
         },
-        body: JSON.stringify({
-          value: { ...window._filePrefsCache, defaultViewMode: mode }
-        }),
+        body: JSON.stringify({ value: { ...window._filePrefsCache } }),
         credentials: 'same-origin',
       }).catch(() => {});
     },

@@ -12,14 +12,14 @@
     - is_trash_view: bool - render trash-specific actions
 {% endcomment %}
 
-<div class="border-base-300 flex flex-col flex-1 min-h-0" x-data="fileTableControls()">
+<div class="border-base-300 flex flex-col flex-1 min-h-0" x-data="fileTableWithView()">
   <div class="card-body p-0 flex flex-col flex-1 min-h-0">
     {% if nodes %}
     <!-- Toolbar: Filter bar OR Bulk action bar -->
     <div class="border-b border-base-300 bg-base-100 px-3 py-2">
       <!-- Filter bar (when nothing selected) -->
       <div class="flex flex-wrap items-center gap-2" x-show="selectedUuids.size === 0">
-        <label class="input input-sm input-bordered flex items-center gap-2 flex-1 min-w-[200px]">
+        <label class="input input-sm input-bordered flex items-center gap-2 w-full sm:w-96">
           <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
           <input
             type="search"
@@ -70,7 +70,11 @@
           <span class="hidden sm:inline">Paste</span>
         </button>
 
-        <div class="dropdown dropdown-end" x-data="{ open: false }" :class="open ? 'dropdown-open' : ''" @click.outside="open = false">
+        <!-- Spacer to push view toggle to the right -->
+        <div class="flex-1"></div>
+
+        <!-- Columns button (only in list view) -->
+        <div class="dropdown dropdown-end" x-data="{ open: false }" :class="open ? 'dropdown-open' : ''" @click.outside="open = false" x-show="viewMode === 'list'" x-cloak>
           <button type="button" class="btn btn-sm btn-outline gap-2" @click="open = !open" :aria-expanded="open.toString()">
             <i data-lucide="columns-2" class="w-4 h-4"></i>
             <span class="hidden sm:inline">Columns</span>
@@ -114,6 +118,30 @@
             </div>
           </div>
         </div>
+
+        <!-- View toggle button (always visible at the end) -->
+        <div class="join">
+          <button
+            type="button"
+            class="btn btn-sm btn-outline join-item"
+            :class="viewMode === 'list' ? 'btn-active' : ''"
+            @click="setViewMode('list')"
+            title="List view"
+            aria-label="List view"
+          >
+            <i data-lucide="list" class="w-4 h-4"></i>
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline join-item"
+            :class="viewMode === 'mosaic' ? 'btn-active' : ''"
+            @click="setViewMode('mosaic')"
+            title="Mosaic view"
+            aria-label="Mosaic view"
+          >
+            <i data-lucide="grid-2x2" class="w-4 h-4"></i>
+          </button>
+        </div>
       </div>
 
       <!-- Bulk action bar (when items selected) -->
@@ -139,13 +167,13 @@
     <!-- Table container with overflow -->
     <div class="overflow-auto flex-1 min-h-0"{% if not is_trash_view %} @contextmenu="openBackgroundContextMenu($event)"{% endif %}>
       {% if nodes %}
-      <table class="table">
+      <table class="table [&_td]:align-middle [&_th]:align-middle" x-show="viewMode === 'list'" x-cloak>
         <thead class="sticky top-0 z-10">
           <tr class="bg-base-200">
             <th class="w-10" data-col="select">
               <input
                 type="checkbox"
-                class="checkbox checkbox-sm"
+                class="checkbox checkbox-sm align-middle"
                 @click="toggleSelectAll()"
                 :checked="selectAllState === 'all'"
                 :indeterminate="selectAllState === 'partial'"
@@ -200,9 +228,9 @@
             <td data-col="select" data-stop-row-click @click.stop>
               <input
                 type="checkbox"
-                class="checkbox checkbox-sm"
+                class="checkbox checkbox-sm align-middle"
                 :checked="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}')"
-                @click="toggleRowSelection('{{ node.uuid }}')"
+                @click="toggleRowSelection('{{ node.uuid }}', $event.shiftKey)"
               />
             </td>
             <td class="text-base-content/60" data-col="icon">
@@ -287,6 +315,124 @@
           {% endfor %}
         </tbody>
       </table>
+
+      <!-- Mosaic/Grid view -->
+      <div class="p-4" x-show="viewMode === 'mosaic'" x-cloak>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4">
+          {% for node in nodes %}
+          <div
+            class="bg-base-100 border border-base-300 rounded-lg hover:border-primary hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
+            :class="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'ring-2 ring-primary border-primary' : ''"
+            x-show="shouldShowCard('{{ node.name|lower }}', '{{ node.node_type }}', '{{ node.is_favorite|yesno:'1,0' }}')"
+            data-uuid="{{ node.uuid }}"
+            data-name="{{ node.name|lower }}"
+            data-display-name="{{ node.name }}"
+            data-node-type="{{ node.node_type }}"
+            data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
+            data-pinned="{% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'1,0' }}{% else %}0{% endif %}"
+            data-viewable="{{ node.is_viewable|yesno:'1,0' }}"
+            data-mime-type="{{ node.mime_type }}"
+            data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
+            data-created="{{ node.created_at|date:'U' }}"
+            data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
+            @mouseenter="hoveredUuid = '{{ node.uuid }}'"
+            @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
+            {% if node.node_type == 'folder' and not is_trash_view %}
+            draggable="true"
+            @dragstart="$event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
+            @click="navigateToFolder($event, '/files/{{ node.uuid }}')"
+            {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
+            @click="openFileFromCard($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.mime_type }}')"
+            {% endif %}
+            @contextmenu.prevent="openContextMenu($event, {
+              uuid: '{{ node.uuid }}',
+              name: '{{ node.name|escapejs }}',
+              nodeType: '{{ node.node_type }}',
+              mimeType: '{{ node.mime_type }}',
+              actions: actionsMap['{{ node.uuid }}'] || []
+            })"
+          >
+            <!-- Checkbox overlay (top-left) -->
+            <div class="absolute top-2 left-2 z-10" @click.stop>
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm bg-base-100/80 backdrop-blur-sm"
+                :class="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+                :checked="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}')"
+                @click="toggleRowSelection('{{ node.uuid }}', $event.shiftKey)"
+              />
+            </div>
+
+            <!-- Favorite button (top-right) -->
+            {% if not is_trash_view %}
+            <div class="absolute top-2 right-2 z-10" @click.stop>
+              {% if node.is_favorite %}
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-circle bg-base-100/80 backdrop-blur-sm"
+                aria-label="Remove from favorites"
+                @click="toggleFavorite('{{ node.uuid }}', true)"
+              >
+                <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
+              </button>
+              {% else %}
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-circle bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100"
+                aria-label="Add to favorites"
+                @click="toggleFavorite('{{ node.uuid }}', false)"
+              >
+                <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
+              </button>
+              {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Preview/Icon area (square) -->
+            <div class="relative w-full" style="padding-bottom: 100%;">
+              <div class="absolute inset-0 flex items-center justify-center bg-base-200">
+                {% if node.node_type == 'folder' %}
+                  <i data-lucide="{{ node.icon|default:'folder' }}" class="w-16 h-16 {{ node.color|default:'text-warning' }}"></i>
+                {% else %}
+                  <i data-lucide="{{ node.mime_type|mime_to_lucide }}" class="w-16 h-16 {{ node.mime_type|mime_to_color }}"></i>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- File info -->
+            <div class="p-3 border-t border-base-300 flex-1">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex-1 min-w-0">
+                  <h3 class="font-medium text-sm truncate" title="{{ node.name }}">{{ node.name }}</h3>
+                  <p class="text-xs text-base-content/60 mt-1">
+                    {% if node.node_type == 'file' %}
+                      {{ node.size|filesize }}
+                    {% else %}
+                      Folder
+                    {% endif %}
+                  </p>
+                </div>
+                {% if show_actions != False %}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs btn-circle flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  @click.stop="openContextMenu($event, {
+                    uuid: '{{ node.uuid }}',
+                    name: '{{ node.name|escapejs }}',
+                    nodeType: '{{ node.node_type }}',
+                    mimeType: '{{ node.mime_type }}',
+                    actions: actionsMap['{{ node.uuid }}'] || []
+                  })"
+                >
+                  <i data-lucide="more-vertical" class="w-4 h-4"></i>
+                </button>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
       {% else %}
       <div class="flex h-full items-center justify-center text-base-content/60">
         <div class="text-center">

@@ -81,7 +81,7 @@ window.navButtons = function navButtons() {
 };
 
 // --- File browser preferences ---
-window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4 };
+window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list' };
 window._filePrefsCache = { ...window._filePrefsDefaults };
 
 window.getFilePrefs = function() {
@@ -1293,6 +1293,7 @@ window.fileTableControls = function fileTableControls() {
 
     // Selection state
     selectedUuids: new Set(),
+    lastSelectedUuid: null, // Track last selected item for shift-click range selection
 
     // Hovered row (for shortcuts when nothing is selected)
     hoveredUuid: null,
@@ -1376,6 +1377,46 @@ window.fileTableControls = function fileTableControls() {
       window.addEventListener('keydown', window._fileShortcutHandler);
     },
 
+    openFolderFromRow(event) {
+      if (!event) return;
+      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+      if (target && target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
+        return;
+      }
+      // If items are selected, clicking should toggle selection instead of opening
+      if (this.selectedUuids.size > 0) {
+        const row = event.currentTarget;
+        const uuid = row?.dataset?.uuid;
+        if (uuid) {
+          this.toggleRowSelection(uuid, event.shiftKey);
+        }
+        return;
+      }
+      // Normal behavior: open folder
+      const row = event.currentTarget;
+      const link = row?.querySelector('[data-folder-link]');
+      if (link) {
+        link.click();
+      }
+    },
+
+    openFileFromRow(event, uuid, name, mimeType) {
+      if (!event) return;
+      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+      if (target && target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
+        return;
+      }
+      // If items are selected, clicking should toggle selection instead of opening
+      if (this.selectedUuids.size > 0) {
+        this.toggleRowSelection(uuid, event.shiftKey);
+        return;
+      }
+      // Normal behavior: open file viewer
+      window.dispatchEvent(new CustomEvent('open-file-viewer', {
+        detail: { uuid, name, mime_type: mimeType }
+      }));
+    },
+
     openContextMenu(event, nodeData) {
       event.preventDefault();
       // Dispatch event for context menu to listen
@@ -1385,10 +1426,10 @@ window.fileTableControls = function fileTableControls() {
     },
 
     openBackgroundContextMenu(event) {
-      // Check if click is on a row or interactive element
+      // Check if click is on a row/card or interactive element
       const target = event.target;
-      if (target.closest('tr[data-uuid], button, a, input, select, textarea')) {
-        return; // Let the row handle its own context menu
+      if (target.closest('tr[data-uuid], div[data-uuid].group, button, a, input, select, textarea')) {
+        return; // Let the row/card handle its own context menu
       }
 
       event.preventDefault();
@@ -1403,11 +1444,57 @@ window.fileTableControls = function fileTableControls() {
       return this.selectedUuids.has(uuid);
     },
 
-    toggleRowSelection(uuid) {
+    toggleRowSelection(uuid, shiftKey = false) {
+      // Shift-click: select range from last selected to current
+      if (shiftKey && this.lastSelectedUuid && this.lastSelectedUuid !== uuid) {
+        // Get all visible items in current view (filtered rows in list view, or all items in mosaic view)
+        let allUuids = [];
+
+        // Try to get from visible rows (after filtering/sorting)
+        if (this.visibleRows && this.visibleRows.length > 0) {
+          allUuids = this.visibleRows.map(r => r.dataset?.uuid).filter(Boolean);
+        } else {
+          // Fallback: get from DOM
+          // For list view: tbody > tr[data-uuid]
+          // For mosaic view: .grid > div[data-uuid]
+          const tbody = document.querySelector('tbody tr[data-uuid]');
+          const gridContainer = document.querySelector('div.grid div[data-uuid]');
+
+          if (tbody) {
+            // List view
+            const items = Array.from(document.querySelectorAll('tbody tr[data-uuid]'));
+            allUuids = items.map(r => r.dataset.uuid).filter(Boolean);
+          } else if (gridContainer) {
+            // Mosaic view
+            const items = Array.from(document.querySelectorAll('div.grid > div[data-uuid]'));
+            allUuids = items.map(r => r.dataset.uuid).filter(Boolean);
+          }
+        }
+
+        const startIdx = allUuids.indexOf(this.lastSelectedUuid);
+        const endIdx = allUuids.indexOf(uuid);
+
+        if (startIdx !== -1 && endIdx !== -1) {
+          const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+          for (let i = from; i <= to; i++) {
+            this.selectedUuids.add(allUuids[i]);
+          }
+          this.lastSelectedUuid = uuid;
+          this.selectedUuids = new Set(this.selectedUuids);
+          return;
+        }
+      }
+
+      // Normal toggle
       if (this.selectedUuids.has(uuid)) {
         this.selectedUuids.delete(uuid);
+        // If we deselect the last selected, clear it
+        if (this.lastSelectedUuid === uuid) {
+          this.lastSelectedUuid = null;
+        }
       } else {
         this.selectedUuids.add(uuid);
+        this.lastSelectedUuid = uuid;
       }
       // Trigger reactivity
       this.selectedUuids = new Set(this.selectedUuids);
@@ -1456,9 +1543,10 @@ window.fileTableControls = function fileTableControls() {
 
     // Fetch actions for all visible rows from the API
     async fetchActions() {
+      // Get elements with data-uuid from both list view (tr) and mosaic view (div)
       const rows = this.originalRows.length
         ? this.originalRows
-        : Array.from((this.tbody || this.$el).querySelectorAll('tr[data-uuid]'));
+        : Array.from((this.tbody || this.$el).querySelectorAll('tr[data-uuid], div[data-uuid]'));
       const uuids = rows.map(r => r.dataset.uuid).filter(Boolean);
       if (uuids.length === 0) return;
 
@@ -2686,5 +2774,150 @@ window.shareModal = function shareModal() {
       this.pendingRemovals = new Set();
       this.pendingPermissionChanges = new Map();
     },
+  };
+};
+
+// --- Combined file table with view toggle ---
+window.fileTableWithView = function fileTableWithView() {
+  const tableControls = fileTableControls();
+  const viewControls = viewToggle();
+
+  // Merge init methods
+  const tableInit = tableControls.init;
+  const viewInit = viewControls.init;
+
+  return {
+    ...tableControls,
+    ...viewControls,
+
+    // Method to check if a card should be visible in mosaic view (respects filters)
+    shouldShowCard(name, nodeType, isFavorite) {
+      // Hidden files filter
+      if (!this.showHiddenFiles && name.startsWith('.')) {
+        return false;
+      }
+      // Search query filter
+      const query = (this.searchQuery || '').trim().toLowerCase();
+      if (query && !name.includes(query)) {
+        return false;
+      }
+      // Type filter
+      if (this.typeFilter === 'files' && nodeType !== 'file') {
+        return false;
+      }
+      if (this.typeFilter === 'folders' && nodeType !== 'folder') {
+        return false;
+      }
+      if (this.typeFilter === 'favorites' && isFavorite !== '1') {
+        return false;
+      }
+      return true;
+    },
+
+    init() {
+      // Call both init methods
+      if (tableInit) tableInit.call(this);
+      if (viewInit) viewInit.call(this);
+    }
+  };
+};
+
+// --- View toggle component ---
+window.viewToggle = function viewToggle() {
+  return {
+    viewMode: 'list',
+
+    init() {
+      // Initialize from user preferences
+      const prefs = window.getFilePrefs();
+      this.viewMode = prefs.defaultViewMode || 'list';
+
+      // Listen for preference changes
+      window.addEventListener('preferences-changed', (e) => {
+        if (e.detail && e.detail.defaultViewMode) {
+          this.viewMode = e.detail.defaultViewMode;
+        }
+      });
+
+      // Re-init Lucide icons after view switch
+      this.$watch('viewMode', () => {
+        this.$nextTick(() => {
+          if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+          }
+        });
+      });
+    },
+
+    setViewMode(mode) {
+      this.viewMode = mode;
+      // Save to preferences
+      this._saveViewModePreference(mode);
+    },
+
+    _saveViewModePreference(mode) {
+      // Update cache
+      window._filePrefsCache.defaultViewMode = mode;
+
+      // Save to server
+      const API_URL = '/api/v1/settings/files/preferences';
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
+        || '';
+
+      fetch(API_URL, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({
+          value: { ...window._filePrefsCache, defaultViewMode: mode }
+        }),
+        credentials: 'same-origin',
+      }).catch(() => {});
+    },
+
+    navigateToFolder(event, url) {
+      // Only navigate if not clicking checkbox or action button
+      if (event.target.closest('input[type="checkbox"]') ||
+          event.target.closest('button') ||
+          event.target.closest('[data-stop-row-click]')) {
+        return;
+      }
+      // If items are selected, clicking should toggle selection instead of opening
+      if (this.selectedUuids.size > 0) {
+        const card = event.currentTarget;
+        const uuid = card?.dataset?.uuid;
+        if (uuid) {
+          this.toggleRowSelection(uuid, event.shiftKey);
+        }
+        return;
+      }
+      // Normal behavior: navigate to folder
+      const link = document.querySelector('#folder-nav-push');
+      if (link) {
+        link.href = url;
+        link.click();
+      }
+    },
+
+    openFileFromCard(event, uuid, name, mimeType) {
+      // Only open if not clicking checkbox or action button
+      if (event.target.closest('input[type="checkbox"]') ||
+          event.target.closest('button') ||
+          event.target.closest('[data-stop-row-click]')) {
+        return;
+      }
+      // If items are selected, clicking should toggle selection instead of opening
+      if (this.selectedUuids.size > 0) {
+        this.toggleRowSelection(uuid, event.shiftKey);
+        return;
+      }
+      // Normal behavior: open file viewer
+      window.dispatchEvent(new CustomEvent('open-file-viewer', {
+        detail: { uuid, name, mime_type: mimeType }
+      }));
+    }
   };
 };

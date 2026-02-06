@@ -9,7 +9,7 @@ from django.core.files.storage import default_storage
 logger = logging.getLogger(__name__)
 
 # Raster image MIME types that Pillow can handle
-THUMBNAIL_MIME_TYPES = frozenset({
+_RASTER_MIME_TYPES = frozenset({
     'image/jpeg',
     'image/png',
     'image/webp',
@@ -17,6 +17,13 @@ THUMBNAIL_MIME_TYPES = frozenset({
     'image/tiff',
     'image/gif',
 })
+
+# SVG MIME types (rasterized via cairosvg before Pillow processing)
+_SVG_MIME_TYPES = frozenset({
+    'image/svg+xml',
+})
+
+THUMBNAIL_MIME_TYPES = _RASTER_MIME_TYPES | _SVG_MIME_TYPES
 
 THUMBNAIL_MAX_SIZE = (512, 512)
 THUMBNAIL_QUALITY = 80
@@ -33,6 +40,23 @@ def can_generate_thumbnail(mime_type):
     return mime_type in THUMBNAIL_MIME_TYPES
 
 
+def _rasterize_svg(svg_data):
+    """Convert SVG bytes to a Pillow Image via cairosvg.
+
+    Renders the SVG at a size that fits within THUMBNAIL_MAX_SIZE while
+    preserving the aspect ratio.
+    """
+    import cairosvg
+    from PIL import Image
+
+    png_data = cairosvg.svg2png(
+        bytestring=svg_data,
+        output_width=THUMBNAIL_MAX_SIZE[0],
+        output_height=THUMBNAIL_MAX_SIZE[1],
+    )
+    return Image.open(BytesIO(png_data))
+
+
 def generate_thumbnail(file_obj):
     """Generate a WebP thumbnail for the given File instance.
 
@@ -45,13 +69,18 @@ def generate_thumbnail(file_obj):
 
     try:
         file_obj.content.open('rb')
-        img = Image.open(file_obj.content)
 
-        # Auto-rotate based on EXIF orientation
-        try:
-            img = ImageOps.exif_transpose(img)
-        except Exception:
-            pass
+        if file_obj.mime_type in _SVG_MIME_TYPES:
+            svg_data = file_obj.content.read()
+            img = _rasterize_svg(svg_data)
+        else:
+            img = Image.open(file_obj.content)
+
+            # Auto-rotate based on EXIF orientation
+            try:
+                img = ImageOps.exif_transpose(img)
+            except Exception:
+                pass
 
         # Convert to RGB for WebP output
         if img.mode in ('RGBA', 'LA', 'PA', 'P'):

@@ -95,6 +95,8 @@ class File(models.Model):
     size = models.BigIntegerField(null=True, blank=True, help_text="File size in bytes")
     mime_type = models.CharField(max_length=100, null=True, blank=True)
 
+    has_thumbnail = models.BooleanField(default=False)
+
     # Folder customization
     icon = models.CharField(
         max_length=50,
@@ -385,6 +387,10 @@ def delete_file_on_delete(sender, instance, **kwargs):
     import shutil
 
     logger = logging.getLogger(__name__)
+
+    if instance.node_type == File.NodeType.FILE and instance.has_thumbnail:
+        from workspace.files.services.thumbnails import delete_thumbnail
+        delete_thumbnail(instance.uuid)
 
     if instance.node_type == File.NodeType.FILE and instance.content:
         # Handle file deletion

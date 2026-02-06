@@ -690,6 +690,38 @@ class FileViewSet(viewsets.ModelViewSet):
         return response
 
     @extend_schema(
+        summary="Get file thumbnail",
+        description="Serve a pre-generated WebP thumbnail for image files.",
+        responses={
+            200: OpenApiResponse(description="WebP thumbnail image."),
+            404: OpenApiResponse(description="No thumbnail available."),
+        },
+    )
+    @action(detail=True, methods=['get'], url_path='thumbnail')
+    def thumbnail(self, request, uuid=None):
+        """Serve a pre-generated thumbnail for an image file."""
+        from django.http import FileResponse
+        from django.core.files.storage import default_storage
+        from workspace.files.services.thumbnails import get_thumbnail_path
+
+        try:
+            file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+        except Http404:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if file_obj.node_type != File.NodeType.FILE:
+            return Response({'detail': 'Not a file.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        thumb_path = get_thumbnail_path(file_obj.uuid)
+        if not default_storage.exists(thumb_path):
+            return Response({'detail': 'No thumbnail.'}, status=status.HTTP_404_NOT_FOUND)
+
+        file_handle = default_storage.open(thumb_path, 'rb')
+        response = FileResponse(file_handle, content_type='image/webp')
+        response['Cache-Control'] = 'public, max-age=86400'
+        return response
+
+    @extend_schema(
         summary="Download file or folder",
         description=(
             "Download a single file as an attachment, or an entire folder as a ZIP archive. "

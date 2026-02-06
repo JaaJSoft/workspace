@@ -403,6 +403,15 @@
 
             <!-- Preview/Icon area (square) -->
             <div class="relative w-full" style="padding-bottom: 100%;">
+              {% if node.has_thumbnail %}
+              <img
+                src="/api/v1/files/{{ node.uuid }}/thumbnail"
+                alt=""
+                class="absolute inset-0 w-full h-full object-cover bg-base-200"
+                loading="lazy"
+                decoding="async"
+              />
+              {% else %}
               <div class="absolute inset-0 flex items-center justify-center bg-base-200">
                 <div :style="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'">
                   {% if node.node_type == 'folder' %}
@@ -412,6 +421,7 @@
                   {% endif %}
                 </div>
               </div>
+              {% endif %}
             </div>
 
             <!-- File info -->

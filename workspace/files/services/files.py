@@ -109,6 +109,24 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def move(file_obj, new_parent):
+        """Move a file or folder to a new parent, handling physical storage.
+
+        Must be called BEFORE the parent is updated on the instance.
+        The caller (serializer) handles updating the parent field and saving.
+        """
+        old_parent_id = file_obj.parent_id
+        new_parent_id = new_parent.pk if new_parent else None
+        if old_parent_id == new_parent_id:
+            return
+
+        if file_obj.node_type == File.NodeType.FOLDER:
+            FileService._move_folder_storage(file_obj, new_parent)
+        else:
+            if file_obj.content and file_obj.content.name:
+                FileService._move_file_storage(file_obj, new_parent)
+
+    @staticmethod
     def rename(file_obj, new_name):
         """Rename a file or folder, moving physical storage files as needed.
 
@@ -147,6 +165,7 @@ class FileService:
         effective_name = name or file_obj.name
         file_obj.size = content.size
         file_obj.mime_type = FileService.infer_mime_type(effective_name, uploaded=content)
+        file_obj.has_thumbnail = False
         file_obj.content = content
         file_obj.save()
         return file_obj
@@ -419,6 +438,100 @@ class FileService:
                 FileService._copy_node(child, copied, owner, child_names)
 
         return copied
+
+    @staticmethod
+    def _parent_storage_path(owner, parent):
+        """Return the storage-relative directory for *parent* (or user root)."""
+        if parent:
+            return FileService._folder_storage_path(parent)
+        return os.path.join('files', owner.username)
+
+    @staticmethod
+    def _move_folder_storage(folder, new_parent):
+        """Move a folder directory on storage and update descendant content paths."""
+        old_storage_path = FileService._folder_storage_path(folder)
+        new_parent_storage = FileService._parent_storage_path(folder.owner, new_parent)
+        new_storage_path = os.path.join(new_parent_storage, folder.name)
+
+        if old_storage_path == new_storage_path:
+            return
+
+        # Move directory on disk
+        try:
+            old_full = default_storage.path(old_storage_path)
+            new_full = default_storage.path(new_storage_path)
+            if os.path.isdir(old_full):
+                os.makedirs(os.path.dirname(new_full), exist_ok=True)
+                os.rename(old_full, new_full)
+        except NotImplementedError:
+            pass
+        except OSError as e:
+            logger.warning("Could not move folder '%s' -> '%s': %s",
+                           old_storage_path, new_storage_path, e)
+
+        # Update content.name for all descendant files
+        folder_path = folder.path or folder.get_path()
+        descendants = list(
+            File.objects.filter(
+                path__startswith=f"{folder_path}/",
+                node_type=File.NodeType.FILE,
+            ).exclude(content='').exclude(content__isnull=True)
+        )
+
+        old_prefix = old_storage_path.replace('\\', '/')
+        new_prefix = new_storage_path.replace('\\', '/')
+
+        updated = []
+        for child in descendants:
+            if not child.content.name:
+                continue
+            content_name = child.content.name.replace('\\', '/')
+            if content_name.startswith(old_prefix + '/'):
+                child.content.name = new_prefix + content_name[len(old_prefix):]
+                updated.append(child)
+
+        if updated:
+            File.objects.bulk_update(updated, ['content'], batch_size=500)
+
+    @staticmethod
+    def _move_file_storage(file_obj, new_parent):
+        """Move a single file on storage to a new parent directory."""
+        old_path = file_obj.content.name
+        new_parent_storage = FileService._parent_storage_path(file_obj.owner, new_parent)
+        new_path = os.path.join(new_parent_storage, os.path.basename(old_path)).replace('\\', '/')
+
+        if old_path == new_path:
+            return
+
+        try:
+            old_full = default_storage.path(old_path)
+            new_full = default_storage.path(new_path)
+            if os.path.isfile(old_full):
+                os.makedirs(os.path.dirname(new_full), exist_ok=True)
+                os.rename(old_full, new_full)
+                file_obj.content.name = new_path
+        except NotImplementedError:
+            # Fallback for non-local storage backends
+            if not default_storage.exists(old_path):
+                logger.warning("File does not exist on storage: '%s'", old_path)
+                return
+            file_handle = None
+            try:
+                file_handle = default_storage.open(old_path, 'rb')
+                data = file_handle.read()
+            finally:
+                if file_handle:
+                    file_handle.close()
+                    gc.collect()
+            saved_path = default_storage.save(new_path, ContentFile(data))
+            file_obj.content.name = saved_path
+            if old_path != saved_path:
+                try:
+                    default_storage.delete(old_path)
+                except Exception as e:
+                    logger.warning("Could not delete old file '%s': %s", old_path, e)
+        except OSError as e:
+            logger.warning("Could not move file '%s' -> '%s': %s", old_path, new_path, e)
 
     @staticmethod
     def _unique_copy_name(base_name, node_type, existing_names):

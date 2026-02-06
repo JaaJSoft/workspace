@@ -53,3 +53,5 @@ docs/
 # Misc
 *.bak
 *.tmp
+/files/
+/thumbnails/

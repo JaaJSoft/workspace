@@ -226,4 +226,12 @@ class FileSerializer(serializers.ModelSerializer):
                 # but super().update() will set it again from validated_data
                 # which is fine since it's the same value now.
 
+        # Handle move via FileService (storage moves)
+        if 'parent' in validated_data:
+            new_parent = validated_data['parent']
+            old_parent_id = instance.parent_id
+            new_parent_id = new_parent.pk if new_parent else None
+            if old_parent_id != new_parent_id:
+                FileService.move(instance, new_parent)
+
         return super().update(instance, validated_data)

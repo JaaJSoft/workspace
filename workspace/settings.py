@@ -472,6 +472,11 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes
 
+# In development, run tasks synchronously in the current thread (no worker needed)
+if DEBUG:
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+
 # Celery Beat schedule for periodic tasks
 from celery.schedules import crontab
 
@@ -479,6 +484,10 @@ CELERY_BEAT_SCHEDULE = {
     'sync-all-user-files': {
         'task': 'files.sync_all_users',
         'schedule': 600.0,  # Every 10 minutes
+    },
+    'generate-thumbnails': {
+        'task': 'files.generate_thumbnails',
+        'schedule': 300.0,  # Every 5 minutes
     },
     'purge-trash': {
         'task': 'files.purge_trash',

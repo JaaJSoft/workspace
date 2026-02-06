@@ -71,6 +71,17 @@ def purge_trash(self):
     }
 
 
+@shared_task(name='files.generate_thumbnails', bind=True, max_retries=0)
+def generate_thumbnails(self):
+    """Generate thumbnails for image files that don't have one yet."""
+    from workspace.files.services.thumbnails import generate_missing_thumbnails
+
+    logger.info("Starting thumbnail generation...")
+    stats = generate_missing_thumbnails()
+    logger.info("Thumbnail generation complete: %s", stats)
+    return stats
+
+
 @shared_task(name='files.sync_folder', bind=True, max_retries=0)
 def sync_folder(self, user_id, folder_uuid=None):
     """Shallow sync for a single folder. Can be triggered via API."""

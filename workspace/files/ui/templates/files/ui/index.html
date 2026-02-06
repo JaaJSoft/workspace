@@ -242,7 +242,7 @@
                 <span class="hidden sm:inline">Empty trash</span>
               </button>
             </div>
-            {% else %}
+            {% elif not is_shared_view and not is_recent_view %}
             <!-- Action button with dropdown -->
             <div class="dropdown dropdown-end flex-shrink-0">
               <button tabindex="0" class="btn btn-primary btn-sm gap-2">

@@ -1,41 +1,74 @@
 {% comment %}
-User avatar partial - displays user avatar or initials
+User avatar partial - displays user avatar image or initials fallback
 Parameters:
   - user: The user object
   - size: 'xs', 'sm', 'md', 'lg' (default: 'md')
   - show_ring: Boolean to show ring around avatar (default: False)
 {% endcomment %}
+{% load avatar_tags %}
 
 {% if size == 'xs' %}
   {% with size_class='w-6 h-6 text-xs' %}
+    {% if user|has_avatar %}
+    <div class="avatar">
+      <div class="{{ size_class }} rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}" data-user-avatar>
+        <img src="/api/v1/users/{{ user.id }}/avatar" alt="{{ user.username }}" class="rounded-full object-cover w-full h-full" />
+      </div>
+    </div>
+    {% else %}
     <div class="avatar placeholder">
-      <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}">
+      <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}" data-user-avatar>
         <span>{{ user.username|slice:":1"|upper }}</span>
       </div>
     </div>
+    {% endif %}
   {% endwith %}
 {% elif size == 'sm' %}
   {% with size_class='w-8 h-8 text-xs' %}
+    {% if user|has_avatar %}
+    <div class="avatar">
+      <div class="{{ size_class }} rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}" data-user-avatar>
+        <img src="/api/v1/users/{{ user.id }}/avatar" alt="{{ user.username }}" class="rounded-full object-cover w-full h-full" />
+      </div>
+    </div>
+    {% else %}
     <div class="avatar placeholder">
-      <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}">
+      <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}" data-user-avatar>
         <span>{{ user.username|slice:":1"|upper }}</span>
       </div>
     </div>
+    {% endif %}
   {% endwith %}
 {% elif size == 'lg' %}
   {% with size_class='w-16 h-16 text-xl' %}
+    {% if user|has_avatar %}
+    <div class="avatar">
+      <div class="{{ size_class }} rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}" data-user-avatar>
+        <img src="/api/v1/users/{{ user.id }}/avatar" alt="{{ user.username }}" class="rounded-full object-cover w-full h-full" />
+      </div>
+    </div>
+    {% else %}
     <div class="avatar placeholder">
-      <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}">
+      <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}" data-user-avatar>
         <span>{{ user.username|slice:":1"|upper }}</span>
       </div>
     </div>
+    {% endif %}
   {% endwith %}
 {% else %}
   {% with size_class='w-10 h-10 text-sm' %}
+    {% if user|has_avatar %}
+    <div class="avatar">
+      <div class="{{ size_class }} rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}" data-user-avatar>
+        <img src="/api/v1/users/{{ user.id }}/avatar" alt="{{ user.username }}" class="rounded-full object-cover w-full h-full" />
+      </div>
+    </div>
+    {% else %}
     <div class="avatar placeholder">
-      <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}">
+      <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}" data-user-avatar>
         <span>{{ user.username|slice:":1"|upper }}</span>
       </div>
     </div>
+    {% endif %}
   {% endwith %}
 {% endif %}

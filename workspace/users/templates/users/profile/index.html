@@ -1,4 +1,5 @@
 {% extends 'base_with_navbar.html' %}
+{% load avatar_tags %}
 
 {% block title %}{{ profile_user.username }} · Workspace{% endblock %}
 
@@ -20,11 +21,19 @@
     <div class="px-6 pb-6">
       <!-- Avatar row -->
       <div class="flex items-start justify-between">
+        {% if profile_user|has_avatar %}
+        <div class="avatar -mt-14">
+          <div class="w-24 h-24 rounded-full ring-4 ring-base-100 shadow-lg">
+            <img src="/api/v1/users/{{ profile_user.id }}/avatar" alt="{{ profile_user.username }}" class="rounded-full object-cover" />
+          </div>
+        </div>
+        {% else %}
         <div class="avatar placeholder -mt-14">
           <div class="w-24 h-24 text-3xl bg-neutral text-neutral-content rounded-full ring-4 ring-base-100 shadow-lg">
             <span>{{ profile_user.username|slice:":1"|upper }}</span>
           </div>
         </div>
+        {% endif %}
         {% if is_own_profile %}
         <a href="/settings" class="btn btn-sm btn-ghost gap-2 text-base-content/60 hover:text-primary mt-3">
           <i data-lucide="settings" class="w-4 h-4"></i>

@@ -1,7 +1,8 @@
 from django.contrib.auth import password_validation, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.http import Http404
+from django.core.files.storage import default_storage
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import render
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -10,12 +11,14 @@ from drf_spectacular.utils import (
     inline_serializer,
 )
 from rest_framework import serializers, status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from django.db.models import Q
 
+from workspace.users import avatar_service
 from workspace.users.models import UserSetting
 
 
@@ -193,6 +196,133 @@ class ChangePasswordView(APIView):
         return Response({'message': 'Password updated successfully.'})
 
 
+AVATAR_MAX_SIZE = 10 * 1024 * 1024  # 10 MB
+AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+
+
+@extend_schema(tags=['Users'])
+class UserAvatarRetrieveView(APIView):
+    """Serve a user's avatar image (public)."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    @extend_schema(
+        summary="Get user avatar",
+        description="Serve the avatar image for a given user. Returns 404 if no avatar exists.",
+        responses={
+            200: OpenApiResponse(description="Avatar image (WebP)"),
+            304: OpenApiResponse(description="Not modified"),
+            404: OpenApiResponse(description="No avatar found"),
+        },
+    )
+    def get(self, request, user_id):
+        path = avatar_service.get_avatar_path(user_id)
+        if not default_storage.exists(path):
+            return HttpResponse(status=404)
+
+        etag = avatar_service.get_avatar_etag(user_id)
+        if etag:
+            if_none_match = request.META.get("HTTP_IF_NONE_MATCH")
+            if if_none_match and if_none_match.strip('"') == etag:
+                response = HttpResponse(status=304)
+                response["ETag"] = f'"{etag}"'
+                return response
+
+        avatar_file = default_storage.open(path, "rb")
+        response = FileResponse(avatar_file, content_type="image/webp")
+        response["Cache-Control"] = "public, max-age=3600"
+        if etag:
+            response["ETag"] = f'"{etag}"'
+        return response
+
+
+@extend_schema(tags=['Users'])
+class UserAvatarUploadView(APIView):
+    """Upload or delete the authenticated user's avatar."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    @extend_schema(
+        summary="Upload avatar",
+        description="Upload a profile picture. Crop coordinates are applied server-side.",
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "image": {"type": "string", "format": "binary"},
+                    "crop_x": {"type": "number"},
+                    "crop_y": {"type": "number"},
+                    "crop_w": {"type": "number"},
+                    "crop_h": {"type": "number"},
+                },
+                "required": ["image", "crop_x", "crop_y", "crop_w", "crop_h"],
+            }
+        },
+        responses={
+            200: inline_serializer(
+                name="AvatarUploadResponse",
+                fields={"message": serializers.CharField()},
+            ),
+            400: OpenApiResponse(description="Validation error"),
+        },
+    )
+    def post(self, request):
+        image = request.FILES.get("image")
+        if not image:
+            return Response(
+                {"errors": ["No image provided."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if image.content_type not in AVATAR_ALLOWED_TYPES:
+            return Response(
+                {"errors": ["Unsupported image type. Use JPEG, PNG, WebP, or GIF."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if image.size > AVATAR_MAX_SIZE:
+            return Response(
+                {"errors": ["Image too large. Maximum size is 10 MB."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            crop_x = float(request.data.get("crop_x", 0))
+            crop_y = float(request.data.get("crop_y", 0))
+            crop_w = float(request.data.get("crop_w", 0))
+            crop_h = float(request.data.get("crop_h", 0))
+        except (TypeError, ValueError):
+            return Response(
+                {"errors": ["Invalid crop coordinates."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if crop_w <= 0 or crop_h <= 0:
+            return Response(
+                {"errors": ["Crop width and height must be positive."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        avatar_service.process_and_save_avatar(
+            request.user, image, crop_x, crop_y, crop_w, crop_h,
+        )
+        return Response({"message": "Avatar updated successfully."})
+
+    @extend_schema(
+        summary="Delete avatar",
+        description="Remove the authenticated user's profile picture.",
+        responses={200: inline_serializer(
+            name="AvatarDeleteResponse",
+            fields={"message": serializers.CharField()},
+        )},
+    )
+    def delete(self, request):
+        avatar_service.delete_avatar(request.user)
+        return Response({"message": "Avatar removed."})
+
+
 @login_required
 def profile_view(request, username=None):
     if username is None:
@@ -210,7 +340,9 @@ def profile_view(request, username=None):
 
 @login_required
 def settings_view(request):
-    return render(request, 'users/settings/index.html')
+    return render(request, 'users/settings/index.html', {
+        'has_avatar': avatar_service.has_avatar(request.user),
+    })
 
 
 # ── Settings API ──────────────────────────────────────────────

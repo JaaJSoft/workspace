@@ -113,7 +113,12 @@ x-init="init()"
 
         <!-- Header actions -->
         <div class="flex items-center gap-0.5">
-          <button class="btn btn-ghost btn-sm btn-circle" title="Search in conversation — Coming soon" disabled>
+          <button
+            class="btn btn-ghost btn-sm btn-circle"
+            :class="showSearchPanel ? 'bg-base-200' : ''"
+            @click="toggleSearchPanel()"
+            title="Search in conversation"
+          >
             <i data-lucide="search" class="w-4 h-4"></i>
           </button>
           <button class="btn btn-ghost btn-sm btn-circle" title="Mute notifications — Coming soon" disabled>
@@ -272,15 +277,33 @@ x-init="init()"
         <!-- Info panel -->
         <div
           x-show="showInfoPanel" x-cloak
-          x-transition:enter="transition ease-out duration-200"
-          x-transition:enter-start="translate-x-full opacity-0"
-          x-transition:enter-end="translate-x-0 opacity-100"
-          x-transition:leave="transition ease-in duration-150"
-          x-transition:leave-start="translate-x-0 opacity-100"
-          x-transition:leave-end="translate-x-full opacity-0"
-          class="w-72 border-l border-base-300 bg-base-100 flex flex-col overflow-y-auto"
+          x-transition:enter="transition-[width] ease-out duration-200"
+          x-transition:enter-start="!w-0"
+          x-transition:enter-end="!w-72"
+          x-transition:leave="transition-[width] ease-in duration-150"
+          x-transition:leave-start="!w-72"
+          x-transition:leave-end="!w-0"
+          class="w-72 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden"
         >
-          {% include "chat/ui/partials/info_panel.html" %}
+          <div class="w-72 flex-1 overflow-y-auto">
+            {% include "chat/ui/partials/info_panel.html" %}
+          </div>
+        </div>
+
+        <!-- Search panel -->
+        <div
+          x-show="showSearchPanel" x-cloak
+          x-transition:enter="transition-[width] ease-out duration-200"
+          x-transition:enter-start="!w-0"
+          x-transition:enter-end="!w-72"
+          x-transition:leave="transition-[width] ease-in duration-150"
+          x-transition:leave-start="!w-72"
+          x-transition:leave-end="!w-0"
+          class="w-72 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden"
+        >
+          <div class="w-72 flex-1 overflow-y-auto">
+            {% include "chat/ui/partials/search_panel.html" %}
+          </div>
         </div>
       </div><!-- /content area -->
     </div>

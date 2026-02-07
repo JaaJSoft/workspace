@@ -457,3 +457,96 @@ class ConversationStatsTests(ChatTestMixin, APITestCase):
         self.client.force_authenticate(self.creator)
         resp = self.client.get(self.url(self.group.uuid))
         self.assertEqual(resp.data['reaction_count'], 0)
+
+
+class ConversationMessageSearchTests(ChatTestMixin, APITestCase):
+    """Tests for GET /api/v1/chat/conversations/<id>/messages/search?q=..."""
+
+    def url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}/messages/search'
+
+    def test_unauthenticated_rejected(self):
+        resp = self.client.get(self.url(self.group.uuid), {'q': 'hello'})
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_outsider_rejected(self):
+        self.client.force_authenticate(self.outsider)
+        resp = self.client.get(self.url(self.group.uuid), {'q': 'hello'})
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_empty_query_returns_400(self):
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(self.group.uuid), {'q': ''})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_missing_query_returns_400(self):
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_member_can_search(self):
+        Message.objects.create(
+            conversation=self.group, author=self.creator, body='hello world',
+        )
+        Message.objects.create(
+            conversation=self.group, author=self.member, body='goodbye world',
+        )
+
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(self.group.uuid), {'q': 'hello'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['count'], 1)
+        self.assertEqual(resp.data['query'], 'hello')
+        self.assertEqual(resp.data['results'][0]['body'], 'hello world')
+
+    def test_case_insensitive_search(self):
+        Message.objects.create(
+            conversation=self.group, author=self.creator, body='Hello World',
+        )
+
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(self.group.uuid), {'q': 'hello'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['count'], 1)
+
+    def test_deleted_messages_excluded(self):
+        Message.objects.create(
+            conversation=self.group, author=self.creator, body='visible hello',
+        )
+        Message.objects.create(
+            conversation=self.group, author=self.creator, body='deleted hello',
+            deleted_at=timezone.now(),
+        )
+
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(self.group.uuid), {'q': 'hello'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['count'], 1)
+        self.assertEqual(resp.data['results'][0]['body'], 'visible hello')
+
+    def test_no_results(self):
+        Message.objects.create(
+            conversation=self.group, author=self.creator, body='hello world',
+        )
+
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(self.group.uuid), {'q': 'nonexistent'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['count'], 0)
+        self.assertEqual(resp.data['results'], [])
+
+    def test_results_ordered_newest_first(self):
+        msg1 = Message.objects.create(
+            conversation=self.group, author=self.creator, body='first hello',
+        )
+        msg2 = Message.objects.create(
+            conversation=self.group, author=self.member, body='second hello',
+        )
+
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(self.group.uuid), {'q': 'hello'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['count'], 2)
+        # Newest first
+        self.assertEqual(resp.data['results'][0]['uuid'], str(msg2.uuid))
+        self.assertEqual(resp.data['results'][1]['uuid'], str(msg1.uuid))

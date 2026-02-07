@@ -1,0 +1,77 @@
+<!-- Search panel header -->
+<div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
+  <h4 class="font-semibold text-sm">Search messages</h4>
+  <button class="btn btn-ghost btn-xs btn-circle" @click="closeSearchPanel()">
+    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+  </button>
+</div>
+
+<div class="p-4 space-y-3">
+  <!-- Search input -->
+  <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+    <i data-lucide="search" class="w-3.5 h-3.5 opacity-50"></i>
+    <input
+      type="text"
+      x-ref="searchInput"
+      x-model="searchQuery"
+      @input.debounce.300ms="searchMessages()"
+      @keydown.escape="closeSearchPanel()"
+      class="grow"
+      placeholder="Search..."
+    />
+    <span
+      x-show="searchQuery"
+      class="btn btn-ghost btn-xs btn-circle"
+      @click="searchQuery = ''; searchResults = []"
+    >
+      <i data-lucide="x" class="w-3 h-3"></i>
+    </span>
+  </label>
+
+  <!-- Loading -->
+  <div x-show="searchLoading" class="flex justify-center py-4">
+    <span class="loading loading-spinner loading-sm text-info"></span>
+  </div>
+
+  <!-- Result count -->
+  <div
+    x-show="!searchLoading && searchQuery.trim().length >= 2 && searchResults.length > 0"
+    class="text-xs text-base-content/50"
+  >
+    <span x-text="searchResults.length"></span> result<span x-show="searchResults.length !== 1">s</span>
+  </div>
+
+  <!-- Results list -->
+  <div x-show="!searchLoading && searchResults.length > 0" class="space-y-1 max-h-[calc(100vh-16rem)] overflow-y-auto">
+    <template x-for="result in searchResults" :key="result.uuid">
+      <div class="rounded-lg px-3 py-2 hover:bg-base-200 transition-colors cursor-pointer text-sm" @click="scrollToMessage(result.uuid)">
+        <div class="flex items-center gap-2 mb-0.5">
+          <span class="font-medium text-xs" x-text="result.author.username"></span>
+          <span class="text-[0.65rem] text-base-content/40" x-text="formatDateTime(result.created_at)"></span>
+        </div>
+        <div
+          class="text-xs text-base-content/70 line-clamp-3 break-words msg-body"
+          x-html="highlightMatch(result.body_html, searchQuery)"
+        ></div>
+      </div>
+    </template>
+  </div>
+
+  <!-- Empty state: no results -->
+  <div
+    x-show="!searchLoading && searchQuery.trim().length >= 2 && searchResults.length === 0"
+    class="text-center py-6"
+  >
+    <i data-lucide="search-x" class="w-8 h-8 mx-auto text-base-content/20 mb-2"></i>
+    <p class="text-sm text-base-content/40">No messages found</p>
+  </div>
+
+  <!-- Empty state: prompt -->
+  <div
+    x-show="!searchLoading && searchQuery.trim().length < 2"
+    class="text-center py-6"
+  >
+    <i data-lucide="search" class="w-8 h-8 mx-auto text-base-content/20 mb-2"></i>
+    <p class="text-sm text-base-content/40">Type at least 2 characters to search</p>
+  </div>
+</div>

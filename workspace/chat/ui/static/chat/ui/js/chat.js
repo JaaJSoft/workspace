@@ -1260,7 +1260,6 @@ function chatApp(currentUserId) {
 
     async ctxMenuAction(action) {
       const uuid = this.ctxMenu.uuid;
-      const kind = this.ctxMenu.kind;
       this.ctxMenu.open = false;
 
       // Ensure the conversation is selected first for actions that need activeConversation

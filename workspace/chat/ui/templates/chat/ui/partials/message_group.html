@@ -31,7 +31,7 @@
           <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm
                       {% if is_own %}bg-info text-info-content{% else %}bg-base-200 text-base-content{% endif %}"
                id="msg-{{ msg.uuid }}"
-               data-body="{{ msg.body|escapejs }}">
+               data-body="{{ msg.body }}">
             <div class="msg-body break-words">{{ msg.body_html|safe }}</div>
             {% if msg.edited_at %}
               <span class="text-[0.65rem] opacity-50 italic ml-1">(edited)</span>

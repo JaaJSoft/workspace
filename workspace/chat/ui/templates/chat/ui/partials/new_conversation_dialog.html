@@ -1,108 +1,136 @@
 <dialog x-ref="newConvDialog" class="modal" @keydown.escape="$refs.newConvDialog.close()">
-  <div class="modal-box max-w-md">
-    <h3 class="font-bold text-lg mb-4">New conversation</h3>
+  <div class="modal-box max-w-md p-0 flex flex-col">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-5 pt-5 pb-2">
+      <h3 class="font-bold text-lg">New conversation</h3>
+      <button class="btn btn-ghost btn-sm btn-circle" @click="$refs.newConvDialog.close()">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
 
-    <!-- User search -->
-    <div class="form-control mb-3">
-      <label class="label">
-        <span class="label-text">Add participants</span>
-      </label>
-      <div class="relative">
-        <label class="input input-sm input-bordered flex items-center gap-2 w-full">
-          <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
-          <input
-            type="text"
-            class="grow"
-            placeholder="Search users..."
-            x-model="userSearchQuery"
-            @input.debounce.300ms="searchUsers()"
-            @click.outside="userSearchShowDropdown = false"
-            @keydown.escape="userSearchShowDropdown = false"
-            autocomplete="off"
-          />
-          <span x-show="userSearchLoading" class="loading loading-spinner loading-xs"></span>
+    <!-- Body -->
+    <div class="px-5 pb-5 flex flex-col gap-3">
+      <!-- To: tag-input -->
+      <div class="form-control">
+        <label class="label pb-1">
+          <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50">To</span>
         </label>
-
-        <!-- Dropdown results -->
-        <div
-          x-show="userSearchShowDropdown && userSearchResults.length > 0"
-          x-cloak
-          class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
-        >
-          <ul class="menu menu-sm p-1">
-            <template x-for="user in userSearchResults" :key="user.id">
-              <li>
-                <button
-                  type="button"
-                  class="flex items-center gap-2 rounded"
-                  @click="selectSearchedUser(user)"
-                >
-                  <div class="avatar placeholder">
-                    <div class="bg-neutral text-neutral-content w-6 h-6 rounded-full">
-                      <span class="text-xs" x-text="(user.username || '?')[0].toUpperCase()"></span>
-                    </div>
+        <div class="relative">
+          <div
+            class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-info/50 transition-colors cursor-text"
+            @click="$refs.userSearchInput.focus()"
+          >
+            <!-- Selected user chips -->
+            <template x-for="u in selectedUsers" :key="u.id">
+              <span class="badge badge-sm gap-1 pl-1.5 pr-0.5 py-2.5">
+                <div class="avatar placeholder">
+                  <div class="bg-neutral text-neutral-content w-4 h-4 rounded-full">
+                    <span class="text-[0.55rem]" x-text="(u.username || '?')[0].toUpperCase()"></span>
                   </div>
-                  <div class="flex flex-col items-start">
-                    <span class="font-medium text-sm" x-text="user.username"></span>
-                    <span
-                      class="text-xs text-base-content/60"
-                      x-show="user.first_name || user.last_name"
-                      x-text="((user.first_name || '') + ' ' + (user.last_name || '')).trim()"
-                    ></span>
-                  </div>
+                </div>
+                <span class="text-xs" x-text="u.username"></span>
+                <button @click.stop="removeSelectedUser(u.id)" class="btn btn-ghost btn-circle p-0 w-4 h-4 min-h-0 hover:bg-base-300">
+                  <i data-lucide="x" class="w-2.5 h-2.5"></i>
                 </button>
-              </li>
+              </span>
             </template>
-          </ul>
-        </div>
 
-        <!-- No results -->
-        <div
-          x-show="userSearchShowDropdown && userSearchResults.length === 0 && userSearchQuery.length >= 2 && !userSearchLoading"
-          x-cloak
-          class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
-        >
-          No users found
+            <!-- Inline search input -->
+            <input
+              type="text"
+              x-ref="userSearchInput"
+              class="grow bg-transparent outline-none text-sm min-w-[8rem] h-6"
+              placeholder="Search users..."
+              x-model="userSearchQuery"
+              @input.debounce.300ms="searchUsers()"
+              @keydown="handleUserSearchKeydown($event)"
+              @keydown.escape="userSearchShowDropdown = false"
+              @keydown.backspace="if (!userSearchQuery && selectedUsers.length) removeSelectedUser(selectedUsers[selectedUsers.length - 1].id)"
+              autocomplete="off"
+            />
+            <span x-show="userSearchLoading" class="loading loading-spinner loading-xs"></span>
+          </div>
+
+          <!-- Dropdown results -->
+          <div
+            x-show="userSearchShowDropdown && userSearchResults.length > 0"
+            x-cloak
+            @click.outside="userSearchShowDropdown = false"
+            class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+          >
+            <ul class="menu menu-sm p-1">
+              <template x-for="(user, idx) in userSearchResults" :key="user.id">
+                <li>
+                  <button
+                    type="button"
+                    class="flex items-center gap-2 rounded"
+                    :class="idx === userSearchHighlight ? 'active' : ''"
+                    :data-search-active="idx === userSearchHighlight"
+                    @click="selectSearchedUser(user); $refs.userSearchInput.focus()"
+                    @mouseenter="userSearchHighlight = idx"
+                  >
+                    <div class="avatar placeholder">
+                      <div class="bg-neutral text-neutral-content w-6 h-6 rounded-full">
+                        <span class="text-xs" x-text="(user.username || '?')[0].toUpperCase()"></span>
+                      </div>
+                    </div>
+                    <div class="flex flex-col items-start">
+                      <span class="font-medium text-sm" x-text="user.username"></span>
+                      <span
+                        class="text-xs text-base-content/60"
+                        x-show="user.first_name || user.last_name"
+                        x-text="((user.first_name || '') + ' ' + (user.last_name || '')).trim()"
+                      ></span>
+                    </div>
+                  </button>
+                </li>
+              </template>
+            </ul>
+          </div>
+
+          <!-- No results -->
+          <div
+            x-show="userSearchShowDropdown && userSearchResults.length === 0 && userSearchQuery.length >= 2 && !userSearchLoading"
+            x-cloak
+            @click.outside="userSearchShowDropdown = false"
+            class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
+          >
+            No users found
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Selected users chips -->
-    <div class="flex flex-wrap gap-1.5 mb-3" x-show="selectedUsers.length > 0" x-cloak>
-      <template x-for="u in selectedUsers" :key="u.id">
-        <span class="badge badge-info gap-1">
-          <span x-text="u.username"></span>
-          <button @click="removeSelectedUser(u.id)" class="btn btn-ghost btn-xs btn-circle p-0 w-4 h-4 min-h-0">
-            <i data-lucide="x" class="w-3 h-3"></i>
-          </button>
-        </span>
-      </template>
-    </div>
+      <!-- Group name (shown when 2+ users) -->
+      <div class="form-control" x-show="selectedUsers.length >= 2" x-cloak x-transition>
+        <label class="label pb-1">
+          <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50">Group name</span>
+          <span class="label-text-alt text-xs text-base-content/40">Optional</span>
+        </label>
+        <input
+          type="text"
+          class="input input-sm input-bordered w-full"
+          placeholder="e.g. Project Team"
+          x-model="newConvTitle"
+        />
+      </div>
 
-    <!-- Group title (shown when 2+ users) -->
-    <div class="form-control mb-4" x-show="selectedUsers.length >= 2" x-cloak>
-      <label class="label">
-        <span class="label-text">Group name (optional)</span>
-      </label>
-      <input
-        type="text"
-        class="input input-sm input-bordered w-full"
-        placeholder="e.g. Project Team"
-        x-model="newConvTitle"
-      />
-    </div>
-
-    <!-- Actions -->
-    <div class="modal-action">
-      <button class="btn btn-ghost btn-sm" @click="$refs.newConvDialog.close()">Cancel</button>
-      <button
-        class="btn btn-info btn-sm"
-        @click="createConversation()"
-        :disabled="selectedUsers.length === 0 || creatingConversation"
-      >
-        <span x-show="!creatingConversation">Start</span>
-        <span x-show="creatingConversation" class="loading loading-spinner loading-xs"></span>
-      </button>
+      <!-- Actions -->
+      <div class="flex justify-end gap-2 pt-1">
+        <button class="btn btn-ghost btn-sm" @click="$refs.newConvDialog.close()">Cancel</button>
+        <button
+          class="btn btn-info btn-sm gap-1.5"
+          @click="createConversation()"
+          :disabled="selectedUsers.length === 0 || creatingConversation"
+        >
+          <template x-if="!creatingConversation">
+            <span class="flex items-center gap-1.5">
+              <i data-lucide="message-circle-plus" class="w-4 h-4"></i>
+              Start chat
+            </span>
+          </template>
+          <span x-show="creatingConversation" class="loading loading-spinner loading-xs"></span>
+        </button>
+      </div>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">

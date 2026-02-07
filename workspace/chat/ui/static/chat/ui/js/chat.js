@@ -15,6 +15,7 @@ function chatApp(currentUserId) {
     userSearchResults: [],
     userSearchLoading: false,
     userSearchShowDropdown: false,
+    userSearchHighlight: -1,
     currentUserId: currentUserId,
     quickEmojis: ['\ud83d\udc4d', '\u2764\ufe0f', '\ud83d\ude02', '\ud83d\ude2e', '\ud83d\ude22', '\ud83c\udf89'],
 
@@ -478,6 +479,7 @@ function chatApp(currentUserId) {
       this.$refs.newConvDialog.showModal();
       this.$nextTick(() => {
         if (typeof lucide !== 'undefined') lucide.createIcons();
+        this.$refs.userSearchInput?.focus();
       });
     },
 
@@ -499,6 +501,7 @@ function chatApp(currentUserId) {
           this.userSearchResults = (data.results || []).filter(
             u => u.id !== this.currentUserId && !selectedIds.has(u.id)
           );
+          this.userSearchHighlight = -1;
           this.userSearchShowDropdown = true;
         }
       } catch (e) {
@@ -511,7 +514,40 @@ function chatApp(currentUserId) {
       this.addSelectedUser(user);
       this.userSearchQuery = '';
       this.userSearchResults = [];
+      this.userSearchHighlight = -1;
       this.userSearchShowDropdown = false;
+    },
+
+    handleUserSearchKeydown(e) {
+      const results = this.userSearchResults;
+      const dropdownOpen = this.userSearchShowDropdown && results.length > 0;
+
+      if (e.key === 'ArrowDown' && dropdownOpen) {
+        e.preventDefault();
+        this.userSearchHighlight = (this.userSearchHighlight + 1) % results.length;
+        this._scrollSearchHighlightIntoView();
+      } else if (e.key === 'ArrowUp' && dropdownOpen) {
+        e.preventDefault();
+        this.userSearchHighlight = this.userSearchHighlight <= 0
+          ? results.length - 1
+          : this.userSearchHighlight - 1;
+        this._scrollSearchHighlightIntoView();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (dropdownOpen && this.userSearchHighlight >= 0 && this.userSearchHighlight < results.length) {
+          this.selectSearchedUser(results[this.userSearchHighlight]);
+          this.$refs.userSearchInput?.focus();
+        } else if (this.selectedUsers.length > 0 && !this.userSearchQuery.trim()) {
+          this.createConversation();
+        }
+      }
+    },
+
+    _scrollSearchHighlightIntoView() {
+      this.$nextTick(() => {
+        const el = document.querySelector('[data-search-active="true"]');
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      });
     },
 
     addSelectedUser(user) {
@@ -696,8 +732,159 @@ function chatApp(currentUserId) {
     },
 
     insertEmoji(emoji) {
-      this.messageBody += emoji;
-      this.$nextTick(() => this.$refs.messageInput?.focus());
+      const ta = this.$refs.messageInput;
+      if (!ta) {
+        this.messageBody += emoji;
+        return;
+      }
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      this.messageBody = this.messageBody.slice(0, start) + emoji + this.messageBody.slice(end);
+      this.$nextTick(() => {
+        const pos = start + emoji.length;
+        ta.setSelectionRange(pos, pos);
+        ta.focus();
+      });
+    },
+
+    // ── Input keyboard shortcuts ────────────────────────────
+    handleInputKeydown(e) {
+      const ta = this.$refs.messageInput;
+
+      // Enter (without shift) → send / save edit
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.sendOrEdit();
+        return;
+      }
+
+      // Escape → cancel edit or blur
+      if (e.key === 'Escape') {
+        if (this.editingMessageUuid) {
+          this.cancelEdit();
+        } else {
+          ta?.blur();
+        }
+        return;
+      }
+
+      // Arrow Up when input is empty → edit last own message
+      if (e.key === 'ArrowUp' && !this.messageBody) {
+        this.editLastOwnMessage();
+        return;
+      }
+
+      const isMod = e.ctrlKey || e.metaKey;
+
+      // Ctrl/Cmd+B → bold
+      if (isMod && e.key === 'b') {
+        e.preventDefault();
+        this.wrapSelection('**');
+        return;
+      }
+
+      // Ctrl/Cmd+I → italic
+      if (isMod && e.key === 'i') {
+        e.preventDefault();
+        this.wrapSelection('*');
+        return;
+      }
+
+      // Ctrl/Cmd+E → inline code
+      if (isMod && e.key === 'e') {
+        e.preventDefault();
+        this.wrapSelection('`');
+        return;
+      }
+
+      // Ctrl/Cmd+Shift+X → strikethrough
+      if (isMod && e.shiftKey && e.key === 'X') {
+        e.preventDefault();
+        this.wrapSelection('~~');
+        return;
+      }
+    },
+
+    wrapSelection(marker) {
+      const ta = this.$refs.messageInput;
+      if (!ta) return;
+      ta.focus();
+
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const text = this.messageBody;
+      const selected = text.slice(start, end);
+
+      if (selected) {
+        // Wrap selected text
+        const wrapped = marker + selected + marker;
+        this.messageBody = text.slice(0, start) + wrapped + text.slice(end);
+        this.$nextTick(() => {
+          ta.setSelectionRange(start + marker.length, end + marker.length);
+          ta.focus();
+        });
+      } else {
+        // Insert empty markers with cursor between them
+        this.messageBody = text.slice(0, start) + marker + marker + text.slice(end);
+        this.$nextTick(() => {
+          const pos = start + marker.length;
+          ta.setSelectionRange(pos, pos);
+          ta.focus();
+        });
+      }
+    },
+
+    insertLink() {
+      const ta = this.$refs.messageInput;
+      if (!ta) return;
+      ta.focus();
+
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const text = this.messageBody;
+      const selected = text.slice(start, end);
+
+      if (selected) {
+        // Use selected text as the link text
+        const link = `[${selected}](url)`;
+        this.messageBody = text.slice(0, start) + link + text.slice(end);
+        this.$nextTick(() => {
+          // Select "url" for quick replacement
+          const urlStart = start + selected.length + 3; // [text](
+          const urlEnd = urlStart + 3; // url
+          ta.setSelectionRange(urlStart, urlEnd);
+          ta.focus();
+        });
+      } else {
+        // Insert template and select "text"
+        const link = '[text](url)';
+        this.messageBody = text.slice(0, start) + link + text.slice(end);
+        this.$nextTick(() => {
+          // Select "text" for quick replacement
+          ta.setSelectionRange(start + 1, start + 5);
+          ta.focus();
+        });
+      }
+    },
+
+    editLastOwnMessage() {
+      // Find the last message bubble authored by the current user
+      const container = document.getElementById('messages-container');
+      if (!container) return;
+
+      const bubbles = container.querySelectorAll('.msg-bubble[data-body]');
+      // Walk backwards to find the last one from current user
+      for (let i = bubbles.length - 1; i >= 0; i--) {
+        const bubble = bubbles[i];
+        // msg-group-end marks own messages (chat-end / right-aligned)
+        if (bubble.closest('.msg-group-end')) {
+          const msgId = bubble.id?.replace('msg-', '');
+          if (msgId) {
+            this.startEdit(msgId);
+            return;
+          }
+        }
+      }
     },
   };
 }

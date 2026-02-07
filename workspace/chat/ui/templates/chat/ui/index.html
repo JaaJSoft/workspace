@@ -24,6 +24,7 @@ x-init="init()"
 @chat-message_deleted.window="handleSSEMessageDeleted($event.detail)"
 @chat-reaction.window="handleSSEReaction($event.detail)"
 @chat-unread.window="handleSSEUnread($event.detail)"
+@keydown.window="if ($event.altKey && $event.key === 'n') { $event.preventDefault(); showNewConversationDialog(); }"
 {% endblock %}
 
 {% block drawer_sidebar %}
@@ -45,7 +46,7 @@ x-init="init()"
           x-show="!collapsed" x-transition
           class="btn btn-ghost btn-sm btn-square mr-1 hover:text-info"
           @click="showNewConversationDialog()"
-          title="New conversation"
+          title="New conversation (Alt+N)"
         >
           <i data-lucide="plus" class="w-4 h-4"></i>
         </button>
@@ -131,55 +132,109 @@ x-init="init()"
       </div>
 
       <!-- Input area -->
-      <div class="border-t border-base-300 p-3 bg-base-100">
+      <div class="p-3 bg-base-100 border-t border-base-300">
         <!-- Edit mode banner -->
-        <div x-show="editingMessageUuid" x-cloak class="flex items-center gap-2 mb-2 px-2 py-1 bg-info/10 rounded text-sm">
+        <div x-show="editingMessageUuid" x-cloak class="flex items-center gap-2 mb-2 px-3 py-1.5 bg-info/10 rounded-lg text-sm">
           <i data-lucide="pencil" class="w-4 h-4 text-info"></i>
-          <span class="text-info flex-1">Editing message</span>
+          <span class="text-info flex-1">Editing — <kbd class="kbd kbd-xs">Esc</kbd> to cancel</span>
           <button class="btn btn-ghost btn-xs btn-circle" @click="cancelEdit()">
             <i data-lucide="x" class="w-3 h-3"></i>
           </button>
         </div>
 
-        <div class="flex items-end gap-2">
-          <!-- Emoji picker -->
-          <div class="dropdown dropdown-top">
-            <button class="btn btn-ghost btn-sm btn-circle" tabindex="0">
-              <i data-lucide="smile" class="w-5 h-5"></i>
+        <!-- Input container -->
+        <div class="border border-base-300 rounded-xl transition-colors focus-within:border-info/50">
+          <!-- Toolbar + Send -->
+          <div class="flex items-center gap-0.5 px-2 py-1">
+            <!-- Formatting buttons (left) -->
+            <button class="btn btn-ghost btn-xs btn-square" title="Bold (Ctrl+B)" @click="wrapSelection('**')">
+              <i data-lucide="bold" class="w-3.5 h-3.5"></i>
             </button>
-            <div
-              tabindex="0"
-              class="dropdown-content mb-2 p-2 bg-base-100 border border-base-300 rounded-lg shadow-lg flex gap-1"
-            >
-              <template x-for="emoji in quickEmojis" :key="emoji">
-                <button
-                  class="btn btn-ghost btn-sm"
-                  @click="insertEmoji(emoji)"
-                  x-text="emoji"
-                ></button>
-              </template>
+            <button class="btn btn-ghost btn-xs btn-square" title="Italic (Ctrl+I)" @click="wrapSelection('*')">
+              <i data-lucide="italic" class="w-3.5 h-3.5"></i>
+            </button>
+            <button class="btn btn-ghost btn-xs btn-square" title="Strikethrough (Ctrl+Shift+X)" @click="wrapSelection('~~')">
+              <i data-lucide="strikethrough" class="w-3.5 h-3.5"></i>
+            </button>
+            <button class="btn btn-ghost btn-xs btn-square" title="Code (Ctrl+E)" @click="wrapSelection('`')">
+              <i data-lucide="code" class="w-3.5 h-3.5"></i>
+            </button>
+            <button class="btn btn-ghost btn-xs btn-square" title="Insert link" @click="insertLink()">
+              <i data-lucide="link" class="w-3.5 h-3.5"></i>
+            </button>
+
+            <div class="w-px self-stretch my-1 bg-base-300"></div>
+
+            <!-- Help popover -->
+            <div class="dropdown dropdown-top">
+              <button class="btn btn-ghost btn-xs btn-square opacity-40 hover:opacity-100" tabindex="0" title="Keyboard shortcuts">
+                <i data-lucide="circle-help" class="w-3.5 h-3.5"></i>
+              </button>
+              <div tabindex="0" class="dropdown-content mb-2 p-3 bg-base-100 border border-base-300 rounded-lg shadow-lg w-56 z-50">
+                <p class="text-xs font-semibold mb-1.5">Keyboard shortcuts</p>
+                <div class="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs text-base-content/70">
+                  <span>Send</span>            <kbd class="kbd kbd-xs">Enter</kbd>
+                  <span>New line</span>         <kbd class="kbd kbd-xs">Shift+Enter</kbd>
+                  <span>Bold</span>             <kbd class="kbd kbd-xs">Ctrl+B</kbd>
+                  <span>Italic</span>           <kbd class="kbd kbd-xs">Ctrl+I</kbd>
+                  <span>Code</span>             <kbd class="kbd kbd-xs">Ctrl+E</kbd>
+                  <span>Strikethrough</span>    <kbd class="kbd kbd-xs">Ctrl+Shift+X</kbd>
+                  <span>Edit last msg</span>    <kbd class="kbd kbd-xs">Arrow Up</kbd>
+                  <span>Cancel edit</span>      <kbd class="kbd kbd-xs">Esc</kbd>
+                  <span>New chat</span>          <kbd class="kbd kbd-xs">Alt+N</kbd>
+                </div>
+                <p class="text-xs text-base-content/40 mt-2">Markdown supported</p>
+              </div>
             </div>
+
+            <div class="flex-1"></div>
+
+            <!-- Emoji picker -->
+            <div class="dropdown dropdown-top dropdown-end">
+              <button class="btn btn-ghost btn-xs btn-square" tabindex="0" title="Emoji">
+                <i data-lucide="smile" class="w-3.5 h-3.5"></i>
+              </button>
+              <div
+                tabindex="0"
+                class="dropdown-content mb-2 p-2 bg-base-100 border border-base-300 rounded-lg shadow-lg flex gap-1"
+              >
+                <template x-for="emoji in quickEmojis" :key="emoji">
+                  <button
+                    class="btn btn-ghost btn-sm"
+                    @click="insertEmoji(emoji)"
+                    x-text="emoji"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <!-- Attach placeholder -->
+            <button class="btn btn-ghost btn-xs btn-square" title="Attach file — Coming soon" disabled>
+              <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
+            </button>
+
+            <div class="w-px self-stretch my-1 bg-base-300"></div>
+
+            <!-- Send button -->
+            <button
+              class="btn btn-info btn-sm btn-circle"
+              @click="sendOrEdit()"
+              :disabled="!messageBody.trim()"
+            >
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            </button>
           </div>
 
           <!-- Textarea -->
           <textarea
             x-ref="messageInput"
             x-model="messageBody"
-            @keydown.enter.exact.prevent="sendOrEdit()"
+            @keydown="handleInputKeydown($event)"
             @input="autoResize($el)"
-            class="textarea textarea-bordered flex-1 min-h-[2.5rem] max-h-[8rem] resize-none leading-snug py-2"
+            class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none"
             placeholder="Type a message..."
             rows="1"
           ></textarea>
-
-          <!-- Send button -->
-          <button
-            class="btn btn-info btn-sm btn-circle"
-            @click="sendOrEdit()"
-            :disabled="!messageBody.trim()"
-          >
-            <i data-lucide="send" class="w-4 h-4"></i>
-          </button>
         </div>
       </div>
     </div>

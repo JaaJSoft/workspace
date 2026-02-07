@@ -2,6 +2,7 @@ import json
 import time
 import uuid
 from datetime import timedelta
+import logging
 
 from django.core.cache import cache
 from django.http import StreamingHttpResponse
@@ -12,6 +13,9 @@ from django.views.decorators.gzip import gzip_page
 from .models import ConversationMember, Message, Reaction
 from .serializers import MessageSerializer
 from .services import get_unread_counts
+
+
+logger = logging.getLogger(__name__)
 
 
 def chat_stream(request):
@@ -72,7 +76,7 @@ def _event_stream(request):
         yield _format_sse('unread', unread)
         last_unread_push = time.time()
     except Exception:
-        pass
+        logger.exception("Failed to send initial unread counts for user %s", user_id)
 
     while True:
         elapsed = time.time() - start_time
@@ -93,7 +97,7 @@ def _event_stream(request):
                 unread = get_unread_counts(user)
                 yield _format_sse('unread', unread)
             except Exception:
-                pass
+                logger.exception("Failed to send periodic unread counts for user %s", user_id)
             last_unread_push = now
 
         # Check cache to see if there are new events

@@ -1,0 +1,70 @@
+<!-- Info panel header -->
+<div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
+  <h4 class="font-semibold text-sm">Conversation info</h4>
+  <button class="btn btn-ghost btn-xs btn-circle" @click="showInfoPanel = false">
+    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+  </button>
+</div>
+
+<div class="p-4 space-y-5">
+  <!-- Avatar + Name -->
+  <div class="flex flex-col items-center text-center gap-2">
+    <div x-html="conversationAvatar(activeConversation)" class="scale-150 mb-2"></div>
+    <h3 class="font-bold text-base" x-text="conversationName(activeConversation)"></h3>
+    <span
+      class="badge badge-sm"
+      :class="activeConversation.kind === 'dm' ? 'badge-ghost' : 'badge-info badge-outline'"
+      x-text="activeConversation.kind === 'dm' ? 'Direct message' : 'Group'"
+    ></span>
+  </div>
+
+  <!-- Details -->
+  <div class="space-y-2 text-sm">
+    <div class="flex items-center gap-2 text-base-content/60">
+      <i data-lucide="calendar" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span>Created <span x-text="formatDate(activeConversation.created_at)"></span></span>
+    </div>
+    <div class="flex items-center gap-2 text-base-content/60" x-show="activeConversation.kind === 'group' && activeConversation.title">
+      <i data-lucide="tag" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span x-text="activeConversation.title" class="truncate"></span>
+    </div>
+  </div>
+
+  <!-- Divider -->
+  <div class="divider my-0 text-xs text-base-content/40">
+    Members
+    <span class="badge badge-ghost badge-xs" x-text="activeConversation.members?.length || 0"></span>
+  </div>
+
+  <!-- Members list -->
+  <ul class="space-y-1">
+    <template x-for="member in activeConversation.members || []" :key="member.uuid">
+      <li class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors">
+        <div class="avatar placeholder flex-shrink-0">
+          <div class="w-8 h-8 rounded-full"
+               :class="member.user.id === currentUserId ? 'bg-info text-info-content' : 'bg-neutral text-neutral-content'">
+            <span class="text-xs" x-text="(member.user.username || '?')[0].toUpperCase()"></span>
+          </div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1.5">
+            <span class="text-sm font-medium truncate" x-text="member.user.username"></span>
+            <span
+              x-show="member.user.id === currentUserId"
+              class="badge badge-ghost badge-xs"
+            >you</span>
+            <span
+              x-show="member.user.id === activeConversation.created_by_id"
+              class="badge badge-info badge-xs badge-outline"
+            >creator</span>
+          </div>
+          <p
+            class="text-xs text-base-content/50 truncate"
+            x-show="memberDisplayName(member) !== member.user.username"
+            x-text="memberDisplayName(member)"
+          ></p>
+        </div>
+      </li>
+    </template>
+  </ul>
+</div>

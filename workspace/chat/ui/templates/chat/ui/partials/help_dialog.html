@@ -1,0 +1,121 @@
+<dialog id="chat-help-dialog" class="modal">
+  <div class="modal-box max-w-3xl">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </form>
+    <h3 class="font-bold text-xl mb-6 flex items-center gap-2">
+      <i data-lucide="circle-help" class="w-6 h-6 text-info"></i>
+      Help
+    </h3>
+
+    <div class="space-y-2">
+      <!-- Keyboard Shortcuts -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="chat-help-accordion" checked="checked" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="keyboard" class="w-4 h-4 text-info"></i>
+          Keyboard Shortcuts
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <h4 class="font-semibold mt-0 mb-2">Messages</h4>
+            <table class="table table-sm">
+              <tbody>
+                <tr><td><kbd class="kbd kbd-sm">Enter</kbd></td><td>Send message / save edit</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">Shift</kbd> + <kbd class="kbd kbd-sm">Enter</kbd></td><td>New line</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">Esc</kbd></td><td>Cancel edit / blur input</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">&uarr;</kbd></td><td>Edit last own message (when input is empty)</td></tr>
+              </tbody>
+            </table>
+            <h4 class="font-semibold mt-3 mb-2">Formatting</h4>
+            <table class="table table-sm">
+              <tbody>
+                <tr><td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">B</kbd></td><td>Bold</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">I</kbd></td><td>Italic</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">E</kbd></td><td>Inline code</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">Shift</kbd> + <kbd class="kbd kbd-sm">X</kbd></td><td>Strikethrough</td></tr>
+              </tbody>
+            </table>
+            <h4 class="font-semibold mt-3 mb-2">Navigation</h4>
+            <table class="table table-sm">
+              <tbody>
+                <tr><td><kbd class="kbd kbd-sm">Alt</kbd> + <kbd class="kbd kbd-sm">N</kbd></td><td>New conversation</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">K</kbd></td><td>Search conversations (command palette)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Markdown -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="chat-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="text" class="w-4 h-4 text-info"></i>
+          Markdown Formatting
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <p>Messages support Markdown syntax for rich text formatting:</p>
+            <table class="table table-sm">
+              <thead>
+                <tr><th>Syntax</th><th>Result</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
+                <tr><td><code>*italic*</code></td><td><em>italic</em></td></tr>
+                <tr><td><code>~~strikethrough~~</code></td><td><s>strikethrough</s></td></tr>
+                <tr><td><code>`inline code`</code></td><td><code>inline code</code></td></tr>
+                <tr><td><code>[link](url)</code></td><td><a class="link link-info">link</a></td></tr>
+                <tr><td><code>```code block```</code></td><td>Code block</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conversations -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="chat-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="message-circle" class="w-4 h-4 text-info"></i>
+          Conversations
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <ul>
+              <li><strong>Direct messages</strong> &mdash; Start a private conversation with one person.</li>
+              <li><strong>Group chats</strong> &mdash; Add two or more people and optionally name the group.</li>
+              <li><strong>Reactions</strong> &mdash; Hover over a message and click an emoji to react.</li>
+              <li><strong>Edit &amp; delete</strong> &mdash; Hover over your own messages to edit or delete them.</li>
+              <li><strong>Search</strong> &mdash; Use the command palette (<kbd class="kbd kbd-xs">Ctrl+K</kbd>) to quickly find and switch conversations.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Access -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="chat-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="code" class="w-4 h-4 text-info"></i>
+          API Access
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <ul>
+              <li><strong>Base URL:</strong> <code>/api/v1/chat</code></li>
+              <li><strong>Authentication:</strong> Use your session cookie or API token.</li>
+              <li><strong>Documentation:</strong> Full API docs are available at <a href="/api/docs" class="link link-info">/api/docs</a>.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

@@ -18,6 +18,7 @@ function chatApp(currentUserId) {
     userSearchHighlight: -1,
     currentUserId: currentUserId,
     quickEmojis: ['\ud83d\udc4d', '\u2764\ufe0f', '\ud83d\ude02', '\ud83d\ude2e', '\ud83d\ude22', '\ud83c\udf89'],
+    showInfoPanel: false,
 
     // Sidebar
     collapsed: JSON.parse(localStorage.getItem('chatSidebarCollapsed') || 'false'),
@@ -151,6 +152,7 @@ function chatApp(currentUserId) {
       this.hasMoreMessages = false;
       this.editingMessageUuid = null;
       this.messageBody = '';
+      this.showInfoPanel = false;
 
       if (updateUrl) {
         history.pushState({ conversationUuid: conv.uuid }, '', `/chat/${conv.uuid}`);
@@ -724,6 +726,27 @@ function chatApp(currentUserId) {
         .map(m => m.user.username);
       if (conv.kind === 'dm') return 'Direct message';
       return names.length + 1 + ' members';
+    },
+
+    toggleInfoPanel() {
+      this.showInfoPanel = !this.showInfoPanel;
+      if (this.showInfoPanel) {
+        this.$nextTick(() => {
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+      }
+    },
+
+    formatDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    },
+
+    memberDisplayName(member) {
+      const u = member.user;
+      const full = ((u.first_name || '') + ' ' + (u.last_name || '')).trim();
+      return full || u.username;
     },
 
     autoResize(el) {

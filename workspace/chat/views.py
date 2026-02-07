@@ -784,7 +784,7 @@ class GroupAvatarRetrieveView(APIView):
 
         avatar_file = default_storage.open(path, "rb")
         response = FileResponse(avatar_file, content_type="image/webp")
-        response["Cache-Control"] = "public, max-age=3600"
+        response["Cache-Control"] = "no-cache"
         if etag:
             response["ETag"] = f'"{etag}"'
         return response

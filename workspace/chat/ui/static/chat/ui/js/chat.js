@@ -704,19 +704,27 @@ function chatApp(currentUserId) {
       return names.join(', ');
     },
 
+    _avatarHtml(user, size, bgClass) {
+      const cls = `${size} rounded-full flex-shrink-0`;
+      if (user.avatar_url) {
+        return `<div class="${cls} overflow-hidden"><img src="${user.avatar_url}" alt="${user.username}" class="w-full h-full object-cover" /></div>`;
+      }
+      const initial = (user.username || '?')[0].toUpperCase();
+      return `<div class="${cls} ${bgClass} flex items-center justify-center"><span>${initial}</span></div>`;
+    },
+
     conversationAvatar(conv) {
       if (conv.kind === 'dm') {
         const other = conv.members?.find(m => m.user.id !== this.currentUserId);
-        const name = other ? other.user.username : '?';
-        const initial = name[0].toUpperCase();
-        return `<div class="avatar placeholder"><div class="w-10 h-10 rounded-full bg-neutral text-neutral-content"><span class="text-sm">${initial}</span></div></div>`;
+        if (other) return this._avatarHtml(other.user, 'w-10 h-10 text-sm', 'bg-neutral text-neutral-content');
+        return `<div class="w-10 h-10 rounded-full bg-neutral text-neutral-content flex items-center justify-center flex-shrink-0"><span class="text-sm">?</span></div>`;
       }
       const initials = (conv.members || [])
         .filter(m => m.user.id !== this.currentUserId)
         .slice(0, 2)
         .map(m => m.user.username[0].toUpperCase())
         .join('');
-      return `<div class="avatar placeholder"><div class="w-10 h-10 rounded-full bg-info text-info-content"><span class="text-sm">${initials || 'G'}</span></div></div>`;
+      return `<div class="w-10 h-10 rounded-full bg-info text-info-content flex items-center justify-center flex-shrink-0"><span class="text-sm">${initials || 'G'}</span></div>`;
     },
 
     membersList(conv) {

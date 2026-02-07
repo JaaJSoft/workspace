@@ -11,6 +11,7 @@ Expects in context:
 
 Alpine bindings reference the parent chatApp() x-data scope.
 {% endcomment %}
+{% load avatar_tags %}
 
 <div id="conversation-list">
 
@@ -51,10 +52,15 @@ Alpine bindings reference the parent chatApp() x-data scope.
           :title="collapsed ? '{{ conv.display_name|escapejs }}' : ''"
         >
           <div class="relative flex-shrink-0">
-            <div class="w-8 h-8 rounded-full flex items-center justify-center"
-                 :class="activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info text-info-content' : 'bg-neutral text-neutral-content'">
-              <span class="text-xs font-medium">{{ conv.avatar_initial }}</span>
-            </div>
+            {% if conv.other_user and conv.other_user|has_avatar %}
+              <div class="w-8 h-8 rounded-full overflow-hidden">
+                <img src="/api/v1/users/{{ conv.other_user.id }}/avatar" alt="{{ conv.other_user.username }}" class="w-full h-full object-cover" />
+              </div>
+            {% else %}
+              <div class="w-8 h-8 rounded-full bg-neutral text-neutral-content flex items-center justify-center">
+                <span class="text-xs font-medium">{{ conv.avatar_initial }}</span>
+              </div>
+            {% endif %}
             <div class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-info rounded-full border-2 border-base-200"
                  x-show="collapsed && (conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0)" x-cloak></div>
           </div>

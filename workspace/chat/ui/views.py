@@ -69,9 +69,11 @@ def _build_conversation_context(user):
         # Avatar
         if c.kind == Conversation.Kind.DM and other_members:
             c.avatar_initial = other_members[0].user.username[0].upper()
+            c.other_user = other_members[0].user
         else:
             initials = [m.user.username[0].upper() for m in other_members[:2]]
             c.avatar_initial = ''.join(initials) or 'G'
+            c.other_user = None
 
         # Last message preview & time ago
         if c._last_message:

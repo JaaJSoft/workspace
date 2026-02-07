@@ -1,0 +1,116 @@
+from django.conf import settings
+from django.db import models
+
+from workspace.common.uuids import uuid_v7_or_v4
+
+
+class Conversation(models.Model):
+    class Kind(models.TextChoices):
+        DM = 'dm', 'Direct Message'
+        GROUP = 'group', 'Group'
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    kind = models.CharField(max_length=5, choices=Kind.choices)
+    title = models.CharField(max_length=255, blank=True, default='')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='created_conversations',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['-updated_at']),
+        ]
+
+    def __str__(self):
+        return self.title or f'{self.kind} — {self.uuid}'
+
+
+class ConversationMember(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name='members',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='chat_memberships',
+    )
+    last_read_at = models.DateTimeField(null=True, blank=True)
+    joined_at = models.DateTimeField(auto_now_add=True)
+    left_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['conversation', 'user'],
+                name='unique_conversation_member',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['user', 'left_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.user} in {self.conversation}'
+
+
+class Message(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name='messages',
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='chat_messages',
+    )
+    body = models.TextField()
+    body_html = models.TextField(blank=True, default='')
+    edited_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['conversation', 'created_at']),
+            models.Index(fields=['conversation', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f'Message by {self.author} at {self.created_at}'
+
+
+class Reaction(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    message = models.ForeignKey(
+        Message,
+        on_delete=models.CASCADE,
+        related_name='reactions',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+    )
+    emoji = models.CharField(max_length=32)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['message', 'user', 'emoji'],
+                name='unique_reaction',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.user} reacted {self.emoji}'

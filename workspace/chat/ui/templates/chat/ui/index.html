@@ -28,6 +28,7 @@ x-init="init()"
 @keydown.window="
   if ($event.altKey && $event.key === 'n') { $event.preventDefault(); showNewConversationDialog(); }
   if (($event.ctrlKey || $event.metaKey) && $event.key === 'f' && activeConversation) { $event.preventDefault(); toggleSearchPanel(); }
+  if ($event.altKey && $event.key === 'i' && activeConversation) { $event.preventDefault(); toggleInfoPanel(); }
 "
 {% endblock %}
 
@@ -131,7 +132,7 @@ x-init="init()"
             class="btn btn-ghost btn-sm btn-circle"
             :class="showInfoPanel ? 'bg-base-200' : ''"
             @click="toggleInfoPanel()"
-            title="Conversation info"
+            title="Conversation info (Alt+I)"
           >
             <i data-lucide="info" class="w-4 h-4"></i>
           </button>
@@ -220,6 +221,7 @@ x-init="init()"
                   <span>Edit last msg</span>    <kbd class="kbd kbd-xs">Arrow Up</kbd>
                   <span>Cancel edit</span>      <kbd class="kbd kbd-xs">Esc</kbd>
                   <span>Search messages</span>   <kbd class="kbd kbd-xs">Ctrl+F</kbd>
+                  <span>Conversation info</span> <kbd class="kbd kbd-xs">Alt+I</kbd>
                   <span>New chat</span>          <kbd class="kbd kbd-xs">Alt+N</kbd>
                 </div>
                 <p class="text-xs text-base-content/40 mt-2">Markdown supported</p>

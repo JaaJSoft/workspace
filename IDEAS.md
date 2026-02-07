@@ -11,7 +11,7 @@ Quick improvements with high impact on existing features.
 - [x] **Global keyboard shortcuts** - Ctrl+K command palette, Ctrl+N new, Delete, Ctrl+C/V
 - [ ] **Folder sizes** - Recursive size calculation displayed in properties
 - [ ] **Clickable breadcrumb in properties** - Navigate to parent from modal
-- [ ] **Multi-select with Shift+Click** - Range selection in the file browser
+- [x] **Multi-select with Shift+Click** - Range selection in the file browser
 - [x] **Download file/folder** - Download a file or folder (zip)
 - [ ] **File/Folder ln** - Symbolic links for files and folders to add share folders or files to your workspace
 - [ ] **File/Folder permissions** - Read/Write/Delete permissions for files and folders

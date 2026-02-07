@@ -1,11 +1,10 @@
 function chatApp(currentUserId) {
   return {
-    // State
+    // ── State ──────────────────────────────────────────────
     conversations: [],
     activeConversation: null,
     messages: [],
     messageBody: '',
-    loadingConversations: true,
     loadingMessages: false,
     loadingMoreMessages: false,
     hasMoreMessages: false,
@@ -13,33 +12,66 @@ function chatApp(currentUserId) {
     selectedUsers: [],
     newConvTitle: '',
     creatingConversation: false,
-    // User search state
     userSearchQuery: '',
     userSearchResults: [],
     userSearchLoading: false,
     userSearchShowDropdown: false,
     currentUserId: currentUserId,
     quickEmojis: ['\ud83d\udc4d', '\u2764\ufe0f', '\ud83d\ude02', '\ud83d\ude2e', '\ud83d\ude22', '\ud83c\udf89'],
-    _lastReadAt: null,
 
-    // Init
+    // Sidebar
+    collapsed: JSON.parse(localStorage.getItem('chatSidebarCollapsed') || 'false'),
+
+    // ── Init ───────────────────────────────────────────────
     async init() {
-      await this.loadConversations();
+      // Load conversations from embedded JSON (fast first paint)
+      const dataEl = document.getElementById('conversations-data');
+      if (dataEl) {
+        try {
+          this.conversations = JSON.parse(dataEl.textContent);
+        } catch (e) {
+          console.error('Failed to parse embedded conversations', e);
+          await this.loadConversations();
+        }
+      } else {
+        await this.loadConversations();
+      }
+
+      // Auto-collapse on mobile
+      if (this.isMobile()) {
+        this.collapsed = true;
+      }
+      window.matchMedia('(max-width: 1023px)').addEventListener('change', (e) => {
+        if (e.matches) this.collapsed = true;
+      });
+
       this.$nextTick(() => {
         if (typeof lucide !== 'undefined') lucide.createIcons();
       });
     },
 
-    // CSRF token helper
+    // ── CSRF ───────────────────────────────────────────────
     _csrf() {
       return document.querySelector('[name=csrfmiddlewaretoken]')?.value
         || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
         || '';
     },
 
-    // Conversations
+    // ── Sidebar collapse ───────────────────────────────────
+    toggleCollapse() {
+      this.collapsed = !this.collapsed;
+      localStorage.setItem('chatSidebarCollapsed', JSON.stringify(this.collapsed));
+      setTimeout(() => {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      }, 300);
+    },
+
+    isMobile() {
+      return window.matchMedia('(max-width: 1023px)').matches;
+    },
+
+    // ── Conversations ──────────────────────────────────────
     async loadConversations() {
-      this.loadingConversations = true;
       try {
         const resp = await fetch('/api/v1/chat/conversations', { credentials: 'same-origin' });
         if (resp.ok) {
@@ -48,10 +80,50 @@ function chatApp(currentUserId) {
       } catch (e) {
         console.error('Failed to load conversations', e);
       }
-      this.loadingConversations = false;
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      });
+    },
+
+    async refreshConversationList() {
+      // Refresh the server-rendered sidebar list
+      try {
+        const resp = await fetch('/chat/conversations', {
+          credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (resp.ok) {
+          const html = await resp.text();
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
+          const newList = doc.getElementById('conversation-list');
+          const target = document.getElementById('conversation-list');
+          if (newList && target) {
+            target.innerHTML = newList.innerHTML;
+            this.$nextTick(() => {
+              if (typeof lucide !== 'undefined') lucide.createIcons();
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Failed to refresh conversation list', e);
+      }
+      // Also refresh local data
+      await this.loadConversations();
+    },
+
+    async selectConversationById(uuid) {
+      // Try local state first
+      let conv = this.conversations.find(c => c.uuid === uuid);
+      if (!conv) {
+        // Fetch from API
+        try {
+          const resp = await fetch(`/api/v1/chat/conversations/${uuid}`, { credentials: 'same-origin' });
+          if (!resp.ok) return;
+          conv = await resp.json();
+        } catch (e) {
+          console.error('Failed to load conversation', e);
+          return;
+        }
+      }
+      await this.selectConversation(conv);
     },
 
     async selectConversation(conv) {
@@ -74,7 +146,7 @@ function chatApp(currentUserId) {
       });
     },
 
-    // Messages
+    // ── Messages ───────────────────────────────────────────
     async loadMessages(conversationId) {
       this.loadingMessages = true;
       try {
@@ -145,7 +217,7 @@ function chatApp(currentUserId) {
       }
     },
 
-    // Sending messages
+    // ── Sending messages ───────────────────────────────────
     async sendOrEdit() {
       if (this.editingMessage) {
         await this.saveEdit();
@@ -189,7 +261,7 @@ function chatApp(currentUserId) {
       }
     },
 
-    // Editing
+    // ── Editing ────────────────────────────────────────────
     startEdit(msg) {
       this.editingMessage = msg;
       this.messageBody = msg.body;
@@ -234,7 +306,7 @@ function chatApp(currentUserId) {
       this.messageBody = '';
     },
 
-    // Deleting
+    // ── Deleting ───────────────────────────────────────────
     async deleteMessage(msg) {
       const ok = await AppDialog.confirm({
         title: 'Delete message',
@@ -265,7 +337,7 @@ function chatApp(currentUserId) {
       }
     },
 
-    // Reactions
+    // ── Reactions ──────────────────────────────────────────
     async toggleReaction(messageId, emoji) {
       try {
         const resp = await fetch(
@@ -321,7 +393,7 @@ function chatApp(currentUserId) {
       return Object.values(groups);
     },
 
-    // Read status
+    // ── Read status ────────────────────────────────────────
     async markAsRead(conversationId) {
       try {
         await fetch(`/api/v1/chat/conversations/${conversationId}/read`, {
@@ -332,7 +404,7 @@ function chatApp(currentUserId) {
       } catch (e) {}
     },
 
-    // New conversation
+    // ── New conversation ───────────────────────────────────
     showNewConversationDialog() {
       this.selectedUsers = [];
       this.newConvTitle = '';
@@ -359,7 +431,6 @@ function chatApp(currentUserId) {
         });
         if (resp.ok) {
           const data = await resp.json();
-          // Filter out already selected users and current user
           const selectedIds = new Set(this.selectedUsers.map(u => u.id));
           this.userSearchResults = (data.results || []).filter(
             u => u.id !== this.currentUserId && !selectedIds.has(u.id)
@@ -416,7 +487,9 @@ function chatApp(currentUserId) {
         if (resp.ok) {
           const conv = await resp.json();
           this.$refs.newConvDialog.close();
-          await this.loadConversations();
+
+          // Refresh both local data and server-rendered list
+          await this.refreshConversationList();
 
           // Select the newly created conversation
           const found = this.conversations.find(c => c.uuid === conv.uuid);
@@ -430,17 +503,15 @@ function chatApp(currentUserId) {
       this.creatingConversation = false;
     },
 
-    // SSE event handlers
+    // ── SSE event handlers ─────────────────────────────────
     handleSSEMessage(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        // Check if not a duplicate
         if (!this.messages.find(m => m.uuid === detail.message.uuid)) {
           this.messages.push(detail.message);
           this.$nextTick(() => {
             this.scrollToBottom();
             if (typeof lucide !== 'undefined') lucide.createIcons();
           });
-          // Auto mark as read
           this.markAsRead(detail.conversation_id);
         }
       }
@@ -448,6 +519,9 @@ function chatApp(currentUserId) {
       // Update conversation list
       this._updateConversationLastMessage(detail.conversation_id, detail.message);
       this._bumpConversationUnread(detail.conversation_id);
+
+      // Refresh the server-rendered sidebar
+      this.refreshConversationList();
     },
 
     handleSSEMessageEdited(detail) {
@@ -500,16 +574,18 @@ function chatApp(currentUserId) {
       // Update conversation list badges
       for (const conv of this.conversations) {
         const count = detail.conversations[conv.uuid] || 0;
-        // Don't update unread for the active (currently viewed) conversation
         if (this.activeConversation && conv.uuid === this.activeConversation.uuid) {
           conv.unread_count = 0;
         } else {
           conv.unread_count = count;
         }
       }
+
+      // Refresh server-rendered sidebar for unread badges
+      this.refreshConversationList();
     },
 
-    // Helpers
+    // ── Helpers ─────────────────────────────────────────────
     _updateConversationLastMessage(convId, msg) {
       const conv = this.conversations.find(c => c.uuid === convId);
       if (conv) {
@@ -541,7 +617,6 @@ function chatApp(currentUserId) {
         const other = conv.members?.find(m => m.user.id !== this.currentUserId);
         return other ? other.user.username : 'Direct Message';
       }
-      // Group without title — list member names
       const names = (conv.members || [])
         .filter(m => m.user.id !== this.currentUserId)
         .map(m => m.user.username)
@@ -557,7 +632,6 @@ function chatApp(currentUserId) {
         const initial = name[0].toUpperCase();
         return `<div class="avatar placeholder"><div class="w-10 h-10 rounded-full bg-neutral text-neutral-content"><span class="text-sm">${initial}</span></div></div>`;
       }
-      // Group
       const initials = (conv.members || [])
         .filter(m => m.user.id !== this.currentUserId)
         .slice(0, 2)
@@ -577,7 +651,7 @@ function chatApp(currentUserId) {
 
     truncate(text, maxLen) {
       if (!text) return '';
-      return text.length > maxLen ? text.slice(0, maxLen) + '...' : text;
+      return text.length > maxLen ? text.slice(0, maxLen) + '\u2026' : text;
     },
 
     timeAgo(dateStr) {

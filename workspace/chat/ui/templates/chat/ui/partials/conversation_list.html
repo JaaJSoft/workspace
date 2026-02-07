@@ -41,7 +41,8 @@ Alpine bindings reference the parent chatApp() x-data scope.
     </h3>
     <ul class="space-y-1">
       {% for conv in dm_conversations %}
-      <li class="list-none">
+      <li class="list-none group/conv"
+          @contextmenu="openConvContextMenu($event, '{{ conv.uuid }}', 'dm')">
         <button type="button"
           class="flex items-center w-full p-2 rounded-lg transition-colors"
           :class="[
@@ -67,7 +68,15 @@ Alpine bindings reference the parent chatApp() x-data scope.
           <div class="flex-1 min-w-0 text-left" x-show="!collapsed" x-transition>
             <div class="flex items-center justify-between gap-1">
               <span class="font-medium text-sm truncate">{{ conv.display_name }}</span>
-              <span class="text-xs text-base-content/50 flex-shrink-0">{{ conv.time_ago }}</span>
+              {# time_ago and more btn occupy the same slot — swap on hover #}
+              <span class="flex-shrink-0 w-8 h-5 inline-flex items-center justify-end">
+                <span class="text-xs text-base-content/50 group-hover/conv:hidden">{{ conv.time_ago }}</span>
+                <span class="hidden group-hover/conv:inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-base-content/10"
+                      @click.stop="openConvContextMenu($event, '{{ conv.uuid }}', 'dm')"
+                      title="More options">
+                  <i data-lucide="ellipsis" class="w-3.5 h-3.5"></i>
+                </span>
+              </span>
             </div>
             <div class="flex items-center justify-between gap-1 mt-0.5">
               <span class="text-xs text-base-content/50 truncate">{{ conv.last_message_preview }}</span>
@@ -102,7 +111,8 @@ Alpine bindings reference the parent chatApp() x-data scope.
     </h3>
     <ul class="space-y-1">
       {% for conv in group_conversations %}
-      <li class="list-none">
+      <li class="list-none group/conv"
+          @contextmenu="openConvContextMenu($event, '{{ conv.uuid }}', 'group')">
         <button type="button"
           class="flex items-center w-full p-2 rounded-lg transition-colors"
           :class="[
@@ -123,7 +133,15 @@ Alpine bindings reference the parent chatApp() x-data scope.
           <div class="flex-1 min-w-0 text-left" x-show="!collapsed" x-transition>
             <div class="flex items-center justify-between gap-1">
               <span class="font-medium text-sm truncate">{{ conv.display_name }}</span>
-              <span class="text-xs text-base-content/50 flex-shrink-0">{{ conv.time_ago }}</span>
+              {# time_ago and more btn occupy the same slot — swap on hover #}
+              <span class="flex-shrink-0 w-8 h-5 inline-flex items-center justify-end">
+                <span class="text-xs text-base-content/50 group-hover/conv:hidden">{{ conv.time_ago }}</span>
+                <span class="hidden group-hover/conv:inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-base-content/10"
+                      @click.stop="openConvContextMenu($event, '{{ conv.uuid }}', 'group')"
+                      title="More options">
+                  <i data-lucide="ellipsis" class="w-3.5 h-3.5"></i>
+                </span>
+              </span>
             </div>
             <div class="flex items-center justify-between gap-1 mt-0.5">
               <span class="text-xs text-base-content/50 truncate">{{ conv.last_message_preview }}</span>

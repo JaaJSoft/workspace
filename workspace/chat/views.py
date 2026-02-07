@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Count, F, OuterRef, Prefetch, Q, Subquery
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -475,6 +475,132 @@ class ReactionToggleView(APIView):
             'emoji': emoji,
             'message_id': str(message.uuid),
         })
+
+
+class MemberAddSerializer(serializers.Serializer):
+    user_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1,
+    )
+
+
+@extend_schema(tags=['Chat'])
+class ConversationMembersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Add members to a group conversation",
+        request=MemberAddSerializer,
+    )
+    def post(self, request, conversation_id):
+        membership = _get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {'detail': 'Not a member of this conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        conversation = Conversation.objects.get(pk=conversation_id)
+        if conversation.kind != Conversation.Kind.GROUP:
+            return Response(
+                {'detail': 'Can only add members to group conversations.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ser = MemberAddSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        user_ids = ser.validated_data['user_ids']
+
+        users = User.objects.filter(id__in=user_ids)
+        if users.count() != len(user_ids):
+            return Response(
+                {'detail': 'One or more user IDs are invalid.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        added = []
+        for u in users:
+            # Re-activate if they previously left, otherwise create
+            existing = ConversationMember.objects.filter(
+                conversation=conversation, user=u,
+            ).first()
+            if existing:
+                if existing.left_at is not None:
+                    existing.left_at = None
+                    existing.save(update_fields=['left_at'])
+                    added.append(u.id)
+                # Already active member — skip silently
+            else:
+                ConversationMember.objects.create(
+                    conversation=conversation, user=u,
+                )
+                added.append(u.id)
+
+        # Refetch conversation with members
+        conversation = (
+            Conversation.objects.filter(pk=conversation.pk)
+            .prefetch_related(
+                Prefetch(
+                    'members',
+                    queryset=ConversationMember.objects.filter(
+                        left_at__isnull=True,
+                    ).select_related('user'),
+                ),
+            )
+            .first()
+        )
+        return Response(
+            ConversationDetailSerializer(conversation).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+@extend_schema(tags=['Chat'])
+class ConversationMemberRemoveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Remove a member from a group conversation (creator only)")
+    def delete(self, request, conversation_id, user_id):
+        membership = _get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {'detail': 'Not a member of this conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        conversation = Conversation.objects.get(pk=conversation_id)
+        if conversation.kind != Conversation.Kind.GROUP:
+            return Response(
+                {'detail': 'Can only remove members from group conversations.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if conversation.created_by_id != request.user.id:
+            return Response(
+                {'detail': 'Only the group creator can remove members.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if user_id == request.user.id:
+            return Response(
+                {'detail': 'Cannot remove yourself. Use leave instead.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        target_membership = ConversationMember.objects.filter(
+            conversation=conversation,
+            user_id=user_id,
+            left_at__isnull=True,
+        ).first()
+        if not target_membership:
+            return Response(
+                {'detail': 'User is not an active member.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        target_membership.left_at = timezone.now()
+        target_membership.save(update_fields=['left_at'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(tags=['Chat'])

@@ -286,8 +286,14 @@ x-init="init()"
   </template>
 </div>
 
+<!-- Context menu -->
+<div id="conv-context-menu">
+{% include "chat/ui/partials/conversation_context_menu.html" %}
+</div>
+
 <!-- New conversation dialog -->
 {% include "chat/ui/partials/new_conversation_dialog.html" %}
+{% include "chat/ui/partials/add_member_dialog.html" %}
 {% include "chat/ui/partials/help_dialog.html" %}
 
 <!-- Embedded conversation data for fast Alpine init -->

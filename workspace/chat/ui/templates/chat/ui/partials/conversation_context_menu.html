@@ -1,0 +1,54 @@
+<!-- Conversation Context Menu -->
+<div
+  x-show="ctxMenu.open"
+  x-cloak
+  @click.outside="ctxMenu.open = false"
+  @keydown.escape.window="ctxMenu.open = false"
+  class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-56 p-1"
+  :style="`top: ${ctxMenu.y}px; left: ${ctxMenu.x}px;`"
+>
+  <ul class="menu menu-sm p-0">
+    <!-- Info panel -->
+    <li>
+      <button type="button" class="gap-3 rounded" @click="ctxMenuAction('info')">
+        <i data-lucide="info" class="w-4 h-4"></i>
+        <span>Conversation info</span>
+      </button>
+    </li>
+
+    <!-- Copy link -->
+    <li>
+      <button type="button" class="gap-3 rounded" @click="ctxMenuAction('copy_link')">
+        <i data-lucide="link" class="w-4 h-4"></i>
+        <span>Copy link</span>
+      </button>
+    </li>
+
+    <!-- Rename (group only) -->
+    <li x-show="ctxMenu.kind === 'group'">
+      <button type="button" class="gap-3 rounded" @click="ctxMenuAction('rename')">
+        <i data-lucide="pencil" class="w-4 h-4"></i>
+        <span>Rename</span>
+      </button>
+    </li>
+
+    <!-- Add members (group only) -->
+    <li x-show="ctxMenu.kind === 'group'">
+      <button type="button" class="gap-3 rounded" @click="ctxMenuAction('add_members')">
+        <i data-lucide="user-plus" class="w-4 h-4"></i>
+        <span>Add members</span>
+      </button>
+    </li>
+
+    <!-- Divider -->
+    <hr class="my-1 border-base-300" />
+
+    <!-- Leave -->
+    <li>
+      <button type="button" class="gap-3 rounded text-error" @click="ctxMenuAction('leave')">
+        <i data-lucide="log-out" class="w-4 h-4"></i>
+        <span>Leave conversation</span>
+      </button>
+    </li>
+  </ul>
+</div>

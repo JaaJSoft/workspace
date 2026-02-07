@@ -10,7 +10,17 @@
   <!-- Avatar + Name -->
   <div class="flex flex-col items-center text-center gap-2">
     <div x-html="conversationAvatar(activeConversation)" class="scale-150 mb-2"></div>
-    <h3 class="font-bold text-base" x-text="conversationName(activeConversation)"></h3>
+    <div class="flex items-center gap-1.5">
+      <h3 class="font-bold text-base" x-text="conversationName(activeConversation)"></h3>
+      <button
+        x-show="activeConversation.kind === 'group'"
+        class="btn btn-ghost btn-xs btn-circle opacity-50 hover:opacity-100"
+        @click="renameConversation()"
+        title="Rename group"
+      >
+        <i data-lucide="pencil" class="w-3 h-3"></i>
+      </button>
+    </div>
     <span
       class="badge badge-sm"
       :class="activeConversation.kind === 'dm' ? 'badge-ghost' : 'badge-info badge-outline'"
@@ -30,6 +40,25 @@
     </div>
   </div>
 
+  <!-- Actions -->
+  <div class="flex flex-wrap gap-1.5">
+    <button
+      class="btn btn-ghost btn-xs gap-1"
+      @click="copyConversationLink()"
+      :title="_linkCopied ? 'Copied!' : 'Copy link'"
+    >
+      <i :data-lucide="_linkCopied ? 'check' : 'link'" class="w-3 h-3"></i>
+      <span x-text="_linkCopied ? 'Copied!' : 'Copy link'"></span>
+    </button>
+    <button
+      class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
+      @click="leaveConversation()"
+    >
+      <i data-lucide="log-out" class="w-3 h-3"></i>
+      Leave
+    </button>
+  </div>
+
   <!-- Divider -->
   <div class="divider my-0 text-xs text-base-content/40">
     Members
@@ -38,8 +67,19 @@
 
   <!-- Members list -->
   <ul class="space-y-1">
+    <!-- Add members row -->
+    <li
+      x-show="activeConversation.kind === 'group'"
+      class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
+      @click="addMembersToConversation()"
+    >
+      <div class="w-8 h-8 rounded-full border-2 border-dashed border-base-content/20 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="plus" class="w-3.5 h-3.5 text-base-content/40"></i>
+      </div>
+      <span class="text-sm font-medium text-base-content/50">Add members</span>
+    </li>
     <template x-for="member in activeConversation.members || []" :key="member.uuid">
-      <li class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors">
+      <li class="group flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors">
         <div class="flex-shrink-0" x-html="_avatarHtml(member.user, 'w-8 h-8 text-xs', member.user.id === currentUserId ? 'bg-info text-info-content' : 'bg-neutral text-neutral-content')"></div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1.5">
@@ -59,6 +99,15 @@
             x-text="memberDisplayName(member)"
           ></p>
         </div>
+        <!-- Remove button (visible to creator, not on self) -->
+        <button
+          x-show="activeConversation.kind === 'group' && activeConversation.created_by_id === currentUserId && member.user.id !== currentUserId"
+          class="btn btn-ghost btn-xs btn-circle opacity-0 group-hover:opacity-100 text-error transition-opacity"
+          @click="removeMember(member.user.id)"
+          title="Remove from group"
+        >
+          <i data-lucide="x" class="w-3 h-3"></i>
+        </button>
       </li>
     </template>
   </ul>

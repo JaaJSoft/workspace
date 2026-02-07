@@ -19,6 +19,17 @@ function chatApp(currentUserId) {
     currentUserId: currentUserId,
     quickEmojis: ['\ud83d\udc4d', '\u2764\ufe0f', '\ud83d\ude02', '\ud83d\ude2e', '\ud83d\ude22', '\ud83c\udf89'],
     showInfoPanel: false,
+    // Add member dialog state
+    addMemberSearchQuery: '',
+    addMemberResults: [],
+    addMemberSelected: [],
+    addMemberLoading: false,
+    addMemberShowDropdown: false,
+    addMemberHighlight: -1,
+    addMemberSaving: false,
+    _linkCopied: false,
+    // Context menu state
+    ctxMenu: { open: false, x: 0, y: 0, uuid: null, kind: null },
 
     // Sidebar
     collapsed: JSON.parse(localStorage.getItem('chatSidebarCollapsed') || 'false'),
@@ -742,6 +753,267 @@ function chatApp(currentUserId) {
         this.$nextTick(() => {
           if (typeof lucide !== 'undefined') lucide.createIcons();
         });
+      }
+    },
+
+    // ── Conversation management ──────────────────────────────
+    async renameConversation() {
+      if (!this.activeConversation || this.activeConversation.kind !== 'group') return;
+      const current = this.activeConversation.title || '';
+      const title = prompt('Enter a new name for this group:', current);
+      if (title === null) return;
+      const trimmed = title.trim();
+      if (!trimmed || trimmed === current) return;
+
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+          body: JSON.stringify({ title: trimmed }),
+        });
+        if (resp.ok) {
+          this.activeConversation.title = trimmed;
+          const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
+          if (conv) conv.title = trimmed;
+          this.refreshConversationList();
+        }
+      } catch (e) {
+        console.error('Failed to rename conversation', e);
+      }
+    },
+
+    async leaveConversation() {
+      if (!this.activeConversation) return;
+      const ok = await AppDialog.confirm({
+        title: 'Leave conversation',
+        message: 'Are you sure you want to leave this conversation?',
+        okLabel: 'Leave',
+        okClass: 'btn-error',
+      });
+      if (!ok) return;
+
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+        });
+        if (resp.ok || resp.status === 204) {
+          this.conversations = this.conversations.filter(c => c.uuid !== this.activeConversation.uuid);
+          this.activeConversation = null;
+          this.showInfoPanel = false;
+          history.pushState({}, '', '/chat');
+          this.refreshConversationList();
+        }
+      } catch (e) {
+        console.error('Failed to leave conversation', e);
+      }
+    },
+
+    async addMembersToConversation() {
+      if (!this.activeConversation || this.activeConversation.kind !== 'group') return;
+      this.addMemberSelected = [];
+      this.addMemberSearchQuery = '';
+      this.addMemberResults = [];
+      this.addMemberShowDropdown = false;
+      this.addMemberHighlight = -1;
+      this.$refs.addMemberDialog.showModal();
+      this.$nextTick(() => {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        this.$refs.addMemberSearchInput?.focus();
+      });
+    },
+
+    async searchUsersForAdd() {
+      const q = (this.addMemberSearchQuery || '').trim();
+      if (q.length < 2) {
+        this.addMemberResults = [];
+        this.addMemberShowDropdown = false;
+        return;
+      }
+      this.addMemberLoading = true;
+      try {
+        const resp = await fetch(`/api/v1/users/search?q=${encodeURIComponent(q)}&limit=10`, {
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const existingIds = new Set((this.activeConversation.members || []).map(m => m.user.id));
+          const selectedIds = new Set(this.addMemberSelected.map(u => u.id));
+          this.addMemberResults = (data.results || []).filter(
+            u => u.id !== this.currentUserId && !existingIds.has(u.id) && !selectedIds.has(u.id)
+          );
+          this.addMemberHighlight = -1;
+          this.addMemberShowDropdown = true;
+        }
+      } catch (e) {
+        console.error('User search failed', e);
+      }
+      this.addMemberLoading = false;
+    },
+
+    handleAddMemberKeydown(e) {
+      const results = this.addMemberResults;
+      const dropdownOpen = this.addMemberShowDropdown && results.length > 0;
+
+      if (e.key === 'ArrowDown' && dropdownOpen) {
+        e.preventDefault();
+        this.addMemberHighlight = (this.addMemberHighlight + 1) % results.length;
+      } else if (e.key === 'ArrowUp' && dropdownOpen) {
+        e.preventDefault();
+        this.addMemberHighlight = this.addMemberHighlight <= 0 ? results.length - 1 : this.addMemberHighlight - 1;
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (dropdownOpen && this.addMemberHighlight >= 0 && this.addMemberHighlight < results.length) {
+          this.selectAddMember(results[this.addMemberHighlight]);
+          this.$refs.addMemberSearchInput?.focus();
+        } else if (this.addMemberSelected.length > 0 && !this.addMemberSearchQuery?.trim()) {
+          this.confirmAddMembers();
+        }
+      }
+    },
+
+    selectAddMember(user) {
+      if (!this.addMemberSelected.find(u => u.id === user.id)) {
+        this.addMemberSelected.push(user);
+      }
+      this.addMemberSearchQuery = '';
+      this.addMemberResults = [];
+      this.addMemberHighlight = -1;
+      this.addMemberShowDropdown = false;
+      this.$nextTick(() => {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      });
+    },
+
+    removeAddMember(userId) {
+      this.addMemberSelected = this.addMemberSelected.filter(u => u.id !== userId);
+    },
+
+    async confirmAddMembers() {
+      if (!this.addMemberSelected.length || !this.activeConversation) return;
+      this.addMemberSaving = true;
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/members`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+          body: JSON.stringify({ user_ids: this.addMemberSelected.map(u => u.id) }),
+        });
+        if (resp.ok) {
+          const updated = await resp.json();
+          this.activeConversation.members = updated.members;
+          const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
+          if (conv) conv.members = updated.members;
+          this.$refs.addMemberDialog.close();
+          this.refreshConversationList();
+          this.$nextTick(() => {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+          });
+        }
+      } catch (e) {
+        console.error('Failed to add members', e);
+      }
+      this.addMemberSaving = false;
+    },
+
+    async removeMember(userId) {
+      if (!this.activeConversation) return;
+      const member = this.activeConversation.members?.find(m => m.user.id === userId);
+      const name = member ? member.user.username : 'this member';
+      const ok = await AppDialog.confirm({
+        title: 'Remove member',
+        message: `Remove ${name} from this group?`,
+        okLabel: 'Remove',
+        okClass: 'btn-error',
+      });
+      if (!ok) return;
+
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/members/${userId}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+        });
+        if (resp.ok || resp.status === 204) {
+          this.activeConversation.members = this.activeConversation.members.filter(m => m.user.id !== userId);
+          const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
+          if (conv) conv.members = this.activeConversation.members;
+          this.refreshConversationList();
+          this.$nextTick(() => {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+          });
+        }
+      } catch (e) {
+        console.error('Failed to remove member', e);
+      }
+    },
+
+    copyConversationLink(uuid) {
+      const id = uuid || this.activeConversation?.uuid;
+      if (!id) return;
+      const url = `${window.location.origin}/chat/${id}`;
+      navigator.clipboard.writeText(url).then(() => {
+        this._linkCopied = true;
+        setTimeout(() => { this._linkCopied = false; }, 2000);
+      });
+    },
+
+    // ── Context menu ─────────────────────────────────────────
+    openConvContextMenu(event, uuid, kind) {
+      event.preventDefault();
+      const menu = document.getElementById('conv-context-menu');
+      if (!menu) return;
+
+      this.ctxMenu.uuid = uuid;
+      this.ctxMenu.kind = kind;
+      this.ctxMenu.open = true;
+
+      this.$nextTick(() => {
+        const rect = menu.getBoundingClientRect();
+        let x = event.clientX;
+        let y = event.clientY;
+        if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 10;
+        if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
+        this.ctxMenu.x = x;
+        this.ctxMenu.y = y;
+        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+      });
+    },
+
+    async ctxMenuAction(action) {
+      const uuid = this.ctxMenu.uuid;
+      const kind = this.ctxMenu.kind;
+      this.ctxMenu.open = false;
+
+      // Ensure the conversation is selected first for actions that need activeConversation
+      const needsActive = ['info', 'rename', 'add_members', 'leave'];
+      if (needsActive.includes(action)) {
+        if (!this.activeConversation || this.activeConversation.uuid !== uuid) {
+          await this.selectConversationById(uuid);
+        }
+      }
+
+      switch (action) {
+        case 'info':
+          this.showInfoPanel = true;
+          this.$nextTick(() => {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+          });
+          break;
+        case 'copy_link':
+          this.copyConversationLink(uuid);
+          break;
+        case 'rename':
+          this.renameConversation();
+          break;
+        case 'add_members':
+          this.addMembersToConversation();
+          break;
+        case 'leave':
+          this.leaveConversation();
+          break;
       }
     },
 

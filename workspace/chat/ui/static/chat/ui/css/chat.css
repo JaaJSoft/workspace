@@ -1,0 +1,20 @@
+/* Grouped bubble radius adjustments — connected look */
+
+/* Other user (left-aligned): reduce top-left corner on subsequent bubbles */
+.msg-group-start .msg-bubble:not(:first-child) {
+  border-top-left-radius: 0.25rem; /* 4px */
+}
+
+/* Own user (right-aligned): reduce top-right corner on subsequent bubbles */
+.msg-group-end .msg-bubble:not(:first-child) {
+  border-top-right-radius: 0.25rem; /* 4px */
+}
+
+/* Reduce bottom corners on non-last bubbles for a connected feel */
+.msg-group-start .msg-bubble:not(:last-of-type) {
+  border-bottom-left-radius: 0.25rem;
+}
+
+.msg-group-end .msg-bubble:not(:last-of-type) {
+  border-bottom-right-radius: 0.25rem;
+}

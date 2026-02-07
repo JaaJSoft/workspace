@@ -1,5 +1,6 @@
 import json
 import time
+import uuid
 from datetime import timedelta
 
 from django.core.cache import cache
@@ -98,7 +99,8 @@ def _event_stream(request):
         # Check cache to see if there are new events
         if now - last_check >= 2:
             last_check = now
-            cache_value = cache.get(f'chat:last_event:{user_id}')
+            cache_key = f'chat:last_event:{user_id}'
+            cache_value = cache.get(cache_key)
 
             if cache_value and cache_value != last_cache_value:
                 last_cache_value = cache_value
@@ -112,7 +114,7 @@ def _event_stream(request):
                 )
 
                 # New messages
-                new_messages = (
+                new_messages = list(
                     Message.objects.filter(
                         conversation_id__in=member_conv_ids,
                         created_at__gt=since,
@@ -123,7 +125,6 @@ def _event_stream(request):
                     .select_related('author')
                     .order_by('created_at')[:50]
                 )
-
                 for msg in new_messages:
                     seen_message_ids.add(msg.uuid)
                     data = {
@@ -214,13 +215,20 @@ def _event_stream(request):
         time.sleep(1)
 
 
+class _SSEEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, uuid.UUID):
+            return str(obj)
+        return super().default(obj)
+
+
 def _format_sse(event, data, event_id=None):
     """Format an SSE event string."""
     lines = []
     lines.append(f'event: {event}')
     if event_id:
         lines.append(f'id: {event_id}')
-    lines.append(f'data: {json.dumps(data)}')
+    lines.append(f'data: {json.dumps(data, cls=_SSEEncoder)}')
     lines.append('')
     lines.append('')
     return '\n'.join(lines)

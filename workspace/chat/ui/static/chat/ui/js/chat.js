@@ -3,12 +3,11 @@ function chatApp(currentUserId) {
     // ── State ──────────────────────────────────────────────
     conversations: [],
     activeConversation: null,
-    messages: [],
     messageBody: '',
     loadingMessages: false,
     loadingMoreMessages: false,
     hasMoreMessages: false,
-    editingMessage: null,
+    editingMessageUuid: null,
     selectedUsers: [],
     newConvTitle: '',
     creatingConversation: false,
@@ -44,6 +43,31 @@ function chatApp(currentUserId) {
       window.matchMedia('(max-width: 1023px)').addEventListener('change', (e) => {
         if (e.matches) this.collapsed = true;
       });
+
+      // Handle browser back/forward
+      window.addEventListener('popstate', (e) => {
+        const uuid = e.state?.conversationUuid || null;
+        if (uuid) {
+          this.selectConversationById(uuid, false);
+        } else {
+          this.activeConversation = null;
+        }
+      });
+
+      // Auto-select conversation from URL (e.g. /chat/<uuid>)
+      const initialEl = document.getElementById('initial-conversation');
+      if (initialEl) {
+        try {
+          const uuid = JSON.parse(initialEl.textContent);
+          if (uuid) {
+            // Replace current history entry so back goes to /chat
+            history.replaceState({ conversationUuid: uuid }, '', `/chat/${uuid}`);
+            await this.selectConversationById(uuid, false);
+          }
+        } catch (e) {
+          console.error('Failed to parse initial conversation', e);
+        }
+      }
 
       this.$nextTick(() => {
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -83,7 +107,6 @@ function chatApp(currentUserId) {
     },
 
     async refreshConversationList() {
-      // Refresh the server-rendered sidebar list
       try {
         const resp = await fetch('/chat/conversations', {
           credentials: 'same-origin',
@@ -105,15 +128,11 @@ function chatApp(currentUserId) {
       } catch (e) {
         console.error('Failed to refresh conversation list', e);
       }
-      // Also refresh local data
-      await this.loadConversations();
     },
 
-    async selectConversationById(uuid) {
-      // Try local state first
+    async selectConversationById(uuid, updateUrl = true) {
       let conv = this.conversations.find(c => c.uuid === uuid);
       if (!conv) {
-        // Fetch from API
         try {
           const resp = await fetch(`/api/v1/chat/conversations/${uuid}`, { credentials: 'same-origin' });
           if (!resp.ok) return;
@@ -123,79 +142,117 @@ function chatApp(currentUserId) {
           return;
         }
       }
-      await this.selectConversation(conv);
+      await this.selectConversation(conv, updateUrl);
     },
 
-    async selectConversation(conv) {
+    async selectConversation(conv, updateUrl = true) {
       this.activeConversation = conv;
-      this.messages = [];
       this.hasMoreMessages = false;
-      this.editingMessage = null;
+      this.editingMessageUuid = null;
       this.messageBody = '';
+
+      if (updateUrl) {
+        history.pushState({ conversationUuid: conv.uuid }, '', `/chat/${conv.uuid}`);
+      }
+
+      // Wait for Alpine to render the x-if="activeConversation" template
+      // so that #messages-container exists in the DOM
+      await this.$nextTick();
 
       await this.loadMessages(conv.uuid);
       await this.markAsRead(conv.uuid);
 
-      // Update unread count locally
       conv.unread_count = 0;
 
       this.$nextTick(() => {
         this.scrollToBottom();
         this.$refs.messageInput?.focus();
-        if (typeof lucide !== 'undefined') lucide.createIcons();
       });
     },
 
-    // ── Messages ───────────────────────────────────────────
+    // ── Messages (server-rendered HTML) ─────────────────────
+    _initMessagesDom(container) {
+      // Initialize Alpine on dynamically injected HTML and refresh Lucide icons
+      if (typeof Alpine !== 'undefined') Alpine.initTree(container);
+      if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [container] });
+    },
+
     async loadMessages(conversationId) {
       this.loadingMessages = true;
+      const container = document.getElementById('messages-container');
+      if (container) container.innerHTML = '';
+
       try {
         const resp = await fetch(
-          `/api/v1/chat/conversations/${conversationId}/messages?limit=50`,
+          `/chat/${conversationId}/messages`,
           { credentials: 'same-origin' }
         );
         if (resp.ok) {
-          const data = await resp.json();
-          this.messages = data.messages;
-          this.hasMoreMessages = data.has_more;
+          const html = await resp.text();
+          if (container) {
+            container.innerHTML = html;
+            this._initMessagesDom(container);
+            this._readPaginationState();
+          }
         }
       } catch (e) {
         console.error('Failed to load messages', e);
       }
       this.loadingMessages = false;
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      });
+    },
+
+    _readPaginationState() {
+      const list = document.getElementById('message-list');
+      if (!list) return;
+      this.hasMoreMessages = list.dataset.hasMore === 'true';
     },
 
     async loadMoreMessages() {
       if (!this.activeConversation || !this.hasMoreMessages || this.loadingMoreMessages) return;
 
       this.loadingMoreMessages = true;
-      const firstMsg = this.messages[0];
-      if (!firstMsg) {
+      const list = document.getElementById('message-list');
+      const firstUuid = list?.dataset.firstUuid;
+      if (!firstUuid) {
         this.loadingMoreMessages = false;
         return;
       }
 
-      const container = this.$refs.messagesContainer;
-      const prevScrollHeight = container.scrollHeight;
+      const scrollContainer = this.$refs.messagesContainer;
+      const prevScrollHeight = scrollContainer.scrollHeight;
 
       try {
         const resp = await fetch(
-          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages?before=${firstMsg.uuid}&limit=50`,
+          `/chat/${this.activeConversation.uuid}/messages?before=${firstUuid}`,
           { credentials: 'same-origin' }
         );
         if (resp.ok) {
-          const data = await resp.json();
-          this.messages = [...data.messages, ...this.messages];
-          this.hasMoreMessages = data.has_more;
+          const html = await resp.text();
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
+          const newList = doc.getElementById('message-list');
 
-          // Maintain scroll position
-          this.$nextTick(() => {
-            container.scrollTop = container.scrollHeight - prevScrollHeight;
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-          });
+          if (newList && list) {
+            // Update pagination data from the new response
+            this.hasMoreMessages = newList.dataset.hasMore === 'true';
+            list.dataset.hasMore = newList.dataset.hasMore;
+            if (newList.dataset.firstUuid) {
+              list.dataset.firstUuid = newList.dataset.firstUuid;
+            }
+
+            // Prepend new content before existing content
+            const fragment = document.createDocumentFragment();
+            while (newList.firstChild) {
+              fragment.appendChild(newList.firstChild);
+            }
+            list.insertBefore(fragment, list.firstChild);
+            this._initMessagesDom(list);
+
+            // Maintain scroll position
+            this.$nextTick(() => {
+              scrollContainer.scrollTop = scrollContainer.scrollHeight - prevScrollHeight;
+            });
+          }
         }
       } catch (e) {
         console.error('Failed to load more messages', e);
@@ -219,7 +276,7 @@ function chatApp(currentUserId) {
 
     // ── Sending messages ───────────────────────────────────
     async sendOrEdit() {
-      if (this.editingMessage) {
+      if (this.editingMessageUuid) {
         await this.saveEdit();
       } else {
         await this.sendMessage();
@@ -248,12 +305,10 @@ function chatApp(currentUserId) {
 
         if (resp.ok) {
           const msg = await resp.json();
-          this.messages.push(msg);
           this._updateConversationLastMessage(this.activeConversation.uuid, msg);
-          this.$nextTick(() => {
-            this.scrollToBottom();
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-          });
+          // Re-fetch messages to get proper server-rendered grouping
+          await this._refreshCurrentMessages();
+          this.$nextTick(() => this.scrollToBottom());
         }
       } catch (e) {
         console.error('Failed to send message', e);
@@ -261,25 +316,49 @@ function chatApp(currentUserId) {
       }
     },
 
+    async _refreshCurrentMessages() {
+      // Reload server-rendered messages for the active conversation
+      if (!this.activeConversation) return;
+      const container = document.getElementById('messages-container');
+      try {
+        const resp = await fetch(
+          `/chat/${this.activeConversation.uuid}/messages`,
+          { credentials: 'same-origin' }
+        );
+        if (resp.ok) {
+          const html = await resp.text();
+          if (container) {
+            container.innerHTML = html;
+            this._initMessagesDom(container);
+            this._readPaginationState();
+          }
+        }
+      } catch (e) {
+        console.error('Failed to refresh messages', e);
+      }
+    },
+
     // ── Editing ────────────────────────────────────────────
-    startEdit(msg) {
-      this.editingMessage = msg;
-      this.messageBody = msg.body;
+    startEdit(msgUuid) {
+      const el = document.getElementById(`msg-${msgUuid}`);
+      if (!el) return;
+      this.editingMessageUuid = msgUuid;
+      this.messageBody = el.dataset.body || '';
       this.$nextTick(() => this.$refs.messageInput?.focus());
     },
 
     cancelEdit() {
-      this.editingMessage = null;
+      this.editingMessageUuid = null;
       this.messageBody = '';
     },
 
     async saveEdit() {
       const body = this.messageBody.trim();
-      if (!body || !this.editingMessage) return;
+      if (!body || !this.editingMessageUuid) return;
 
       try {
         const resp = await fetch(
-          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/${this.editingMessage.uuid}`,
+          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/${this.editingMessageUuid}`,
           {
             method: 'PATCH',
             headers: {
@@ -293,21 +372,30 @@ function chatApp(currentUserId) {
 
         if (resp.ok) {
           const updated = await resp.json();
-          const idx = this.messages.findIndex(m => m.uuid === updated.uuid);
-          if (idx !== -1) {
-            this.messages[idx] = updated;
+          // Update the DOM element directly
+          const el = document.getElementById(`msg-${updated.uuid}`);
+          if (el) {
+            const bodyEl = el.querySelector('.msg-body');
+            if (bodyEl) bodyEl.innerHTML = updated.body_html;
+            // Add edited indicator if not already present
+            if (!el.querySelector('.edited-indicator')) {
+              const indicator = document.createElement('span');
+              indicator.className = 'text-[0.65rem] opacity-50 italic ml-1 edited-indicator';
+              indicator.textContent = '(edited)';
+              el.appendChild(indicator);
+            }
           }
         }
       } catch (e) {
         console.error('Failed to edit message', e);
       }
 
-      this.editingMessage = null;
+      this.editingMessageUuid = null;
       this.messageBody = '';
     },
 
     // ── Deleting ───────────────────────────────────────────
-    async deleteMessage(msg) {
+    async deleteMessage(msgUuid) {
       const ok = await AppDialog.confirm({
         title: 'Delete message',
         message: 'Are you sure you want to delete this message?',
@@ -318,7 +406,7 @@ function chatApp(currentUserId) {
 
       try {
         const resp = await fetch(
-          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/${msg.uuid}`,
+          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/${msgUuid}`,
           {
             method: 'DELETE',
             headers: { 'X-CSRFToken': this._csrf() },
@@ -327,9 +415,16 @@ function chatApp(currentUserId) {
         );
 
         if (resp.ok) {
-          const idx = this.messages.findIndex(m => m.uuid === msg.uuid);
-          if (idx !== -1) {
-            this.messages[idx].deleted_at = new Date().toISOString();
+          // Replace the message bubble with a "deleted" placeholder
+          const el = document.getElementById(`msg-${msgUuid}`);
+          if (el) {
+            // Replace the entire row (parent .group/msg div) with a simple deleted indicator
+            const row = el.closest('.group\\/msg') || el.parentElement;
+            const placeholder = document.createElement('div');
+            placeholder.className = 'msg-bubble rounded-2xl px-3 py-1.5 text-sm italic bg-base-200 text-base-content/40';
+            placeholder.id = `msg-${msgUuid}`;
+            placeholder.textContent = 'Message deleted';
+            row.replaceWith(placeholder);
           }
         }
       } catch (e) {
@@ -354,43 +449,12 @@ function chatApp(currentUserId) {
         );
 
         if (resp.ok) {
-          const data = await resp.json();
-          const msg = this.messages.find(m => m.uuid === messageId);
-          if (!msg) return;
-
-          if (data.action === 'added') {
-            msg.reactions.push({
-              uuid: crypto.randomUUID(),
-              emoji,
-              user: { id: this.currentUserId, username: 'You' },
-              created_at: new Date().toISOString(),
-            });
-          } else {
-            msg.reactions = msg.reactions.filter(
-              r => !(r.emoji === emoji && r.user.id === this.currentUserId)
-            );
-          }
+          // Re-fetch to get server-rendered reactions with proper grouping
+          await this._refreshCurrentMessages();
         }
       } catch (e) {
         console.error('Failed to toggle reaction', e);
       }
-    },
-
-    groupReactions(msg) {
-      if (!msg.reactions || msg.reactions.length === 0) return [];
-
-      const groups = {};
-      for (const r of msg.reactions) {
-        if (!groups[r.emoji]) {
-          groups[r.emoji] = { emoji: r.emoji, count: 0, users: [], hasCurrentUser: false };
-        }
-        groups[r.emoji].count++;
-        groups[r.emoji].users.push(r.user.username);
-        if (r.user.id === this.currentUserId) {
-          groups[r.emoji].hasCurrentUser = true;
-        }
-      }
-      return Object.values(groups);
     },
 
     // ── Read status ────────────────────────────────────────
@@ -488,10 +552,8 @@ function chatApp(currentUserId) {
           const conv = await resp.json();
           this.$refs.newConvDialog.close();
 
-          // Refresh both local data and server-rendered list
           await this.refreshConversationList();
 
-          // Select the newly created conversation
           const found = this.conversations.find(c => c.uuid === conv.uuid);
           if (found) {
             await this.selectConversation(found);
@@ -504,74 +566,57 @@ function chatApp(currentUserId) {
     },
 
     // ── SSE event handlers ─────────────────────────────────
-    handleSSEMessage(detail) {
+    async handleSSEMessage(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        if (!this.messages.find(m => m.uuid === detail.message.uuid)) {
-          this.messages.push(detail.message);
-          this.$nextTick(() => {
-            this.scrollToBottom();
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-          });
+        // Check if message already exists in the DOM
+        if (!document.getElementById(`msg-${detail.message.uuid}`)) {
+          await this._refreshCurrentMessages();
+          this.scrollToBottom();
           this.markAsRead(detail.conversation_id);
         }
       }
 
-      // Update conversation list
       this._updateConversationLastMessage(detail.conversation_id, detail.message);
       this._bumpConversationUnread(detail.conversation_id);
-
-      // Refresh the server-rendered sidebar
       this.refreshConversationList();
     },
 
     handleSSEMessageEdited(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        const msg = this.messages.find(m => m.uuid === detail.message_id);
-        if (msg) {
-          msg.body = detail.body;
-          msg.body_html = detail.body_html;
-          msg.edited_at = detail.edited_at;
+        const el = document.getElementById(`msg-${detail.message_id}`);
+        if (el) {
+          const bodyEl = el.querySelector('.msg-body');
+          if (bodyEl) bodyEl.innerHTML = detail.body_html;
+          if (!el.querySelector('.edited-indicator')) {
+            const indicator = document.createElement('span');
+            indicator.className = 'text-[0.65rem] opacity-50 italic ml-1 edited-indicator';
+            indicator.textContent = '(edited)';
+            el.appendChild(indicator);
+          }
+          el.dataset.body = detail.body;
         }
       }
     },
 
     handleSSEMessageDeleted(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        const msg = this.messages.find(m => m.uuid === detail.message_id);
-        if (msg) {
-          msg.deleted_at = new Date().toISOString();
-        }
+        // Re-fetch to get proper grouping after deletion
+        this._refreshCurrentMessages();
       }
     },
 
-    handleSSEReaction(detail) {
+    async handleSSEReaction(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        const msg = this.messages.find(m => m.uuid === detail.message_id);
-        if (msg) {
-          if (detail.action === 'added') {
-            msg.reactions.push({
-              uuid: crypto.randomUUID(),
-              emoji: detail.emoji,
-              user: detail.user,
-              created_at: new Date().toISOString(),
-            });
-          } else {
-            msg.reactions = msg.reactions.filter(
-              r => !(r.emoji === detail.emoji && r.user.id === detail.user.id)
-            );
-          }
-        }
+        await this._refreshCurrentMessages();
       }
     },
 
     handleSSEUnread(detail) {
-      // Update global store
       if (typeof Alpine !== 'undefined' && Alpine.store('chat')) {
         Alpine.store('chat').totalUnread = detail.total;
         Alpine.store('chat').conversationUnreads = detail.conversations;
       }
 
-      // Update conversation list badges
       for (const conv of this.conversations) {
         const count = detail.conversations[conv.uuid] || 0;
         if (this.activeConversation && conv.uuid === this.activeConversation.uuid) {
@@ -580,9 +625,6 @@ function chatApp(currentUserId) {
           conv.unread_count = count;
         }
       }
-
-      // Refresh server-rendered sidebar for unread badges
-      this.refreshConversationList();
     },
 
     // ── Helpers ─────────────────────────────────────────────
@@ -597,7 +639,6 @@ function chatApp(currentUserId) {
         };
         conv.updated_at = msg.created_at;
       }
-      // Re-sort conversations
       this.conversations.sort((a, b) => {
         return new Date(b.updated_at) - new Date(a.updated_at);
       });
@@ -647,30 +688,6 @@ function chatApp(currentUserId) {
         .map(m => m.user.username);
       if (conv.kind === 'dm') return 'Direct message';
       return names.length + 1 + ' members';
-    },
-
-    truncate(text, maxLen) {
-      if (!text) return '';
-      return text.length > maxLen ? text.slice(0, maxLen) + '\u2026' : text;
-    },
-
-    timeAgo(dateStr) {
-      if (!dateStr) return '';
-      const date = new Date(dateStr);
-      const now = new Date();
-      const diff = Math.floor((now - date) / 1000);
-
-      if (diff < 60) return 'now';
-      if (diff < 3600) return Math.floor(diff / 60) + 'm';
-      if (diff < 86400) return Math.floor(diff / 3600) + 'h';
-      if (diff < 604800) return Math.floor(diff / 86400) + 'd';
-      return date.toLocaleDateString();
-    },
-
-    formatTime(dateStr) {
-      if (!dateStr) return '';
-      const date = new Date(dateStr);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     },
 
     autoResize(el) {

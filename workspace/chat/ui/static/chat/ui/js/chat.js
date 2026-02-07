@@ -135,6 +135,13 @@ function chatApp(currentUserId) {
           const target = document.getElementById('conversation-list');
           if (newList && target) {
             target.innerHTML = newList.innerHTML;
+            // Bust browser memory cache for avatar images that were updated this session
+            for (const conv of this.conversations) {
+              if (conv.avatar_url && conv.avatar_url.includes('?t=')) {
+                const img = target.querySelector(`img[src*="/conversations/${conv.uuid}/avatar/"]`);
+                if (img) img.src = conv.avatar_url;
+              }
+            }
             this.$nextTick(() => {
               if (typeof lucide !== 'undefined') lucide.createIcons();
             });
@@ -783,7 +790,13 @@ function chatApp(currentUserId) {
     async renameConversation() {
       if (!this.activeConversation || this.activeConversation.kind !== 'group') return;
       const current = this.activeConversation.title || '';
-      const title = prompt('Enter a new name for this group:', current);
+      const title = await AppDialog.prompt({
+        title: 'Rename group',
+        message: 'Enter a new name for this group:',
+        value: current,
+        placeholder: 'Group name',
+        okLabel: 'Rename',
+      });
       if (title === null) return;
       const trimmed = title.trim();
       if (!trimmed || trimmed === current) return;
@@ -974,23 +987,54 @@ function chatApp(currentUserId) {
     },
 
     // ── Group avatar ──────────────────────────────────────────
-    async uploadGroupAvatar(fileInput) {
+    _cropper: null,
+    _cropFile: null,
+    _cropUploading: false,
+
+    uploadGroupAvatar(fileInput) {
       if (!this.activeConversation || this.activeConversation.kind !== 'group') return;
       const file = fileInput.files?.[0];
       if (!file) return;
+      this._cropFile = file;
 
-      // Read image dimensions for full-image crop
-      const img = new window.Image();
-      const url = URL.createObjectURL(file);
-      await new Promise((resolve) => { img.onload = resolve; img.src = url; });
-      URL.revokeObjectURL(url);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.$refs.cropperImage.src = e.target.result;
+        this.$refs.cropperDialog.showModal();
 
+        this.$nextTick(() => {
+          if (this._cropper) {
+            this._cropper.destroy();
+          }
+          this._cropper = new Cropper(this.$refs.cropperImage, {
+            aspectRatio: 1,
+            viewMode: 1,
+            movable: true,
+            zoomable: true,
+            rotatable: false,
+            scalable: false,
+            guides: true,
+            center: true,
+            highlight: false,
+            background: true,
+          });
+        });
+      };
+      reader.readAsDataURL(file);
+      fileInput.value = '';
+    },
+
+    async confirmAvatarCrop() {
+      if (!this._cropper || !this._cropFile || !this.activeConversation) return;
+      this._cropUploading = true;
+
+      const data = this._cropper.getData(true);
       const formData = new FormData();
-      formData.append('image', file);
-      formData.append('crop_x', '0');
-      formData.append('crop_y', '0');
-      formData.append('crop_w', String(img.naturalWidth));
-      formData.append('crop_h', String(img.naturalHeight));
+      formData.append('image', this._cropFile);
+      formData.append('crop_x', data.x);
+      formData.append('crop_y', data.y);
+      formData.append('crop_w', data.width);
+      formData.append('crop_h', data.height);
 
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/avatar`, {
@@ -1001,7 +1045,6 @@ function chatApp(currentUserId) {
         });
         if (resp.ok) {
           const avatarUrl = `/api/v1/chat/conversations/${this.activeConversation.uuid}/avatar/image`;
-          // Cache-bust by appending timestamp
           const bustUrl = `${avatarUrl}?t=${Date.now()}`;
           this.activeConversation.avatar_url = bustUrl;
           const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
@@ -1010,8 +1053,24 @@ function chatApp(currentUserId) {
         }
       } catch (e) {
         console.error('Failed to upload group avatar', e);
+      } finally {
+        this._cropUploading = false;
+        this.$refs.cropperDialog.close();
+        if (this._cropper) {
+          this._cropper.destroy();
+          this._cropper = null;
+        }
+        this._cropFile = null;
       }
-      fileInput.value = '';
+    },
+
+    cancelAvatarCrop() {
+      this.$refs.cropperDialog.close();
+      if (this._cropper) {
+        this._cropper.destroy();
+        this._cropper = null;
+      }
+      this._cropFile = null;
     },
 
     async removeGroupAvatar() {

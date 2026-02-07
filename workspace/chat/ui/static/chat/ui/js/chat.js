@@ -500,7 +500,9 @@ function chatApp(currentUserId) {
           headers: { 'X-CSRFToken': this._csrf() },
           credentials: 'same-origin',
         });
-      } catch (e) {}
+      } catch (e) {
+        console.error('Failed to mark as read', e);
+      }
     },
 
     // ── New conversation ───────────────────────────────────

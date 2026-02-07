@@ -1,9 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
-from django.db.models import Count, F, Max, Min, OuterRef, Prefetch, Q, Subquery
+from django.db.models import Count, F, Max, Min, OuterRef, Prefetch, Subquery
 from django.http import FileResponse, HttpResponse
 from django.utils import timezone
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse, inline_serializer
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -15,7 +15,6 @@ from .models import Conversation, ConversationMember, Message, Reaction
 from .serializers import (
     ConversationCreateSerializer,
     ConversationDetailSerializer,
-    ConversationListSerializer,
     MessageCreateSerializer,
     MessageEditSerializer,
     MessageSerializer,

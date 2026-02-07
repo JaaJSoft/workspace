@@ -7,8 +7,6 @@ import logging
 from django.core.cache import cache
 from django.http import StreamingHttpResponse
 from django.utils import timezone
-from django.utils.decorators import method_decorator
-from django.views.decorators.gzip import gzip_page
 
 from .models import ConversationMember, Message, Reaction
 from .serializers import MessageSerializer

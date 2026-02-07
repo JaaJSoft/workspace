@@ -176,6 +176,59 @@
         });
       },
 
+      prompt({ title = 'Input', message = '', value = '', placeholder = '', okLabel = 'OK', cancelLabel = 'Cancel', okClass = 'btn-primary' } = {}) {
+        return new Promise((resolve) => {
+          const dialog = document.getElementById('app-dialog-prompt');
+          const titleEl = document.getElementById('app-dialog-prompt-title');
+          const messageEl = document.getElementById('app-dialog-prompt-message');
+          const input = document.getElementById('app-dialog-prompt-input');
+          const okBtn = document.getElementById('app-dialog-prompt-ok');
+          const cancelBtn = document.getElementById('app-dialog-prompt-cancel');
+
+          titleEl.textContent = title;
+          messageEl.textContent = message;
+          messageEl.style.display = message ? '' : 'none';
+          input.value = value;
+          input.placeholder = placeholder;
+          okBtn.textContent = okLabel;
+          cancelBtn.textContent = cancelLabel;
+          okBtn.className = `btn btn-sm ${okClass}`;
+
+          const cleanup = () => {
+            okBtn.removeEventListener('click', onOk);
+            dialog.removeEventListener('close', onClose);
+            input.removeEventListener('keydown', onKeydown);
+          };
+
+          const onOk = () => {
+            cleanup();
+            const val = input.value;
+            dialog.close();
+            resolve(val);
+          };
+
+          const onClose = () => {
+            cleanup();
+            resolve(null);
+          };
+
+          const onKeydown = (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              e.stopPropagation();
+              onOk();
+            }
+          };
+
+          okBtn.addEventListener('click', onOk);
+          dialog.addEventListener('close', onClose);
+          input.addEventListener('keydown', onKeydown);
+          dialog.showModal();
+          input.focus();
+          input.select();
+        });
+      },
+
       message({ title = 'Message', message = 'Done.', okLabel = 'OK' } = {}) {
         return new Promise((resolve) => {
           const dialog = document.getElementById('app-dialog-message');

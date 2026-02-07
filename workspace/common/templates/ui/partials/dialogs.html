@@ -16,6 +16,29 @@
   </form>
   </dialog>
 
+<!-- Prompt dialog -->
+<dialog id="app-dialog-prompt" class="modal">
+  <div class="modal-box">
+    <h3 id="app-dialog-prompt-title" class="font-bold text-lg">Input</h3>
+    <p id="app-dialog-prompt-message" class="py-2 text-base-content/70"></p>
+    <input
+      id="app-dialog-prompt-input"
+      type="text"
+      class="input input-bordered w-full"
+      autocomplete="off"
+    />
+    <div class="modal-action">
+      <form method="dialog">
+        <button id="app-dialog-prompt-cancel" class="btn btn-ghost btn-sm">Cancel</button>
+      </form>
+      <button id="app-dialog-prompt-ok" class="btn btn-primary btn-sm">OK</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
 <!-- Message/Error dialog -->
 <dialog id="app-dialog-message" class="modal">
   <div class="modal-box">

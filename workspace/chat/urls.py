@@ -27,6 +27,11 @@ urlpatterns = [
     ),
     # Messages
     path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/messages/search',
+        views.ConversationMessageSearchView.as_view(),
+        name='chat-message-search',
+    ),
+    path(
         'api/v1/chat/conversations/<uuid:conversation_id>/messages',
         views.MessageListView.as_view(),
         name='chat-messages',

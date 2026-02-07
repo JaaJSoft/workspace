@@ -30,6 +30,11 @@ function chatApp(currentUserId) {
     addMemberHighlight: -1,
     addMemberSaving: false,
     _linkCopied: false,
+    // Search panel state
+    showSearchPanel: false,
+    searchQuery: '',
+    searchResults: [],
+    searchLoading: false,
     // Context menu state
     ctxMenu: { open: false, x: 0, y: 0, uuid: null, kind: null },
 
@@ -174,6 +179,10 @@ function chatApp(currentUserId) {
       this.messageBody = '';
       this.showInfoPanel = false;
       this.conversationStats = null;
+      this.showSearchPanel = false;
+      this.searchQuery = '';
+      this.searchResults = [];
+      this.searchLoading = false;
 
       if (updateUrl) {
         history.pushState({ conversationUuid: conv.uuid }, '', `/chat/${conv.uuid}`);
@@ -761,6 +770,7 @@ function chatApp(currentUserId) {
     toggleInfoPanel() {
       this.showInfoPanel = !this.showInfoPanel;
       if (this.showInfoPanel) {
+        this.closeSearchPanel();
         this.$nextTick(() => {
           if (typeof lucide !== 'undefined') lucide.createIcons();
         });
@@ -784,6 +794,91 @@ function chatApp(currentUserId) {
         console.error('Failed to load conversation stats', e);
       }
       this.loadingStats = false;
+    },
+
+    // ── Search panel ────────────────────────────────────────
+    toggleSearchPanel() {
+      this.showSearchPanel = !this.showSearchPanel;
+      if (this.showSearchPanel) {
+        this.showInfoPanel = false;
+        this.$nextTick(() => {
+          this.$refs.searchInput?.focus();
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+      } else {
+        this.closeSearchPanel();
+      }
+    },
+
+    closeSearchPanel() {
+      this.showSearchPanel = false;
+      this.searchQuery = '';
+      this.searchResults = [];
+      this.searchLoading = false;
+    },
+
+    async searchMessages() {
+      const q = (this.searchQuery || '').trim();
+      if (q.length < 2) {
+        this.searchResults = [];
+        return;
+      }
+      if (!this.activeConversation) return;
+
+      this.searchLoading = true;
+      try {
+        const resp = await fetch(
+          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/search?q=${encodeURIComponent(q)}`,
+          { credentials: 'same-origin' }
+        );
+        if (resp.ok) {
+          const data = await resp.json();
+          this.searchResults = data.results || [];
+        }
+      } catch (e) {
+        console.error('Failed to search messages', e);
+      }
+      this.searchLoading = false;
+    },
+
+    highlightMatch(bodyHtml, query) {
+      if (!query || !bodyHtml) return bodyHtml;
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escaped})`, 'gi');
+      return bodyHtml.replace(regex, '<mark class="bg-warning/40 rounded px-0.5">$1</mark>');
+    },
+
+    scrollToMessage(uuid) {
+      const el = document.getElementById(`msg-${uuid}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
+        setTimeout(() => {
+          el.classList.remove('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
+        }, 2000);
+        return;
+      }
+      // Message not loaded yet — load all then retry
+      this._loadAllAndScrollTo(uuid);
+    },
+
+    async _loadAllAndScrollTo(uuid) {
+      // Keep loading older messages until we find it or run out
+      let attempts = 0;
+      while (this.hasMoreMessages && attempts < 20) {
+        await this.loadMoreMessages();
+        attempts++;
+        const el = document.getElementById(`msg-${uuid}`);
+        if (el) {
+          await this.$nextTick();
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
+          setTimeout(() => {
+            el.classList.remove('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-base-100');
+          }, 2000);
+          return;
+        }
+      }
     },
 
     // ── Conversation management ──────────────────────────────

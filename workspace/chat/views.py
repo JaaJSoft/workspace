@@ -833,3 +833,59 @@ class ConversationStatsView(APIView):
             'last_message_at': aggregates['last_message_at'],
             'messages_per_member': messages_per_member,
         })
+
+
+@extend_schema(tags=['Chat'])
+class ConversationMessageSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Search messages in a conversation",
+        parameters=[
+            OpenApiParameter(name='q', type=str, required=True),
+        ],
+    )
+    def get(self, request, conversation_id):
+        membership = _get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {'detail': 'Not a member of this conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        query = request.query_params.get('q', '').strip()
+        if not query:
+            return Response(
+                {'detail': 'Query parameter "q" is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        messages = (
+            Message.objects.filter(
+                conversation_id=conversation_id,
+                body__icontains=query,
+                deleted_at__isnull=True,
+            )
+            .select_related('author')
+            .order_by('-created_at')[:50]
+        )
+
+        results = [
+            {
+                'uuid': str(msg.uuid),
+                'author': {
+                    'id': msg.author.id,
+                    'username': msg.author.username,
+                },
+                'body': msg.body,
+                'body_html': msg.body_html,
+                'created_at': msg.created_at.isoformat(),
+            }
+            for msg in messages
+        ]
+
+        return Response({
+            'results': results,
+            'query': query,
+            'count': len(results),
+        })

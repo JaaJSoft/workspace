@@ -35,6 +35,7 @@ function chatApp(currentUserId) {
     searchQuery: '',
     searchResults: [],
     searchLoading: false,
+    searchHighlight: -1,
     // Context menu state
     ctxMenu: { open: false, x: 0, y: 0, uuid: null, kind: null },
 
@@ -183,6 +184,7 @@ function chatApp(currentUserId) {
       this.searchQuery = '';
       this.searchResults = [];
       this.searchLoading = false;
+      this.searchHighlight = -1;
 
       if (updateUrl) {
         history.pushState({ conversationUuid: conv.uuid }, '', `/chat/${conv.uuid}`);
@@ -815,6 +817,7 @@ function chatApp(currentUserId) {
       this.searchQuery = '';
       this.searchResults = [];
       this.searchLoading = false;
+      this.searchHighlight = -1;
     },
 
     async searchMessages() {
@@ -834,11 +837,38 @@ function chatApp(currentUserId) {
         if (resp.ok) {
           const data = await resp.json();
           this.searchResults = data.results || [];
+          this.searchHighlight = -1;
         }
       } catch (e) {
         console.error('Failed to search messages', e);
       }
       this.searchLoading = false;
+    },
+
+    handleSearchKeydown(e) {
+      if (!this.searchResults.length) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        this.searchHighlight = (this.searchHighlight + 1) % this.searchResults.length;
+        this._scrollSearchResultIntoView();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        this.searchHighlight = this.searchHighlight <= 0
+          ? this.searchResults.length - 1
+          : this.searchHighlight - 1;
+        this._scrollSearchResultIntoView();
+      } else if (e.key === 'Enter' && this.searchHighlight >= 0) {
+        e.preventDefault();
+        this.scrollToMessage(this.searchResults[this.searchHighlight].uuid);
+      }
+    },
+
+    _scrollSearchResultIntoView() {
+      this.$nextTick(() => {
+        const el = document.querySelector('[data-search-result-active="true"]');
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      });
     },
 
     highlightMatch(bodyHtml, query) {

@@ -15,6 +15,7 @@
       x-ref="searchInput"
       x-model="searchQuery"
       @input.debounce.300ms="searchMessages()"
+      @keydown="handleSearchKeydown($event)"
       @keydown.escape="closeSearchPanel()"
       class="grow"
       placeholder="Search..."
@@ -43,8 +44,14 @@
 
   <!-- Results list -->
   <div x-show="!searchLoading && searchResults.length > 0" class="space-y-1 max-h-[calc(100vh-16rem)] overflow-y-auto">
-    <template x-for="result in searchResults" :key="result.uuid">
-      <div class="rounded-lg px-3 py-2 hover:bg-base-200 transition-colors cursor-pointer text-sm" @click="scrollToMessage(result.uuid)">
+    <template x-for="(result, idx) in searchResults" :key="result.uuid">
+      <div
+        class="rounded-lg px-3 py-2 hover:bg-base-200 transition-colors cursor-pointer text-sm"
+        :class="searchHighlight === idx ? 'bg-base-200' : ''"
+        :data-search-result-active="searchHighlight === idx"
+        @click="scrollToMessage(result.uuid)"
+        @mouseenter="searchHighlight = idx"
+      >
         <div class="flex items-center gap-2 mb-0.5">
           <span class="font-medium text-xs" x-text="result.author.username"></span>
           <span class="text-[0.65rem] text-base-content/40" x-text="formatDateTime(result.created_at)"></span>

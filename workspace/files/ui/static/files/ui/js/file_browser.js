@@ -2364,6 +2364,20 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
 
       window.addEventListener('pinned-folders-changed', () => this.refreshPinnedSection());
 
+      // Listen for pinned folder context menu events
+      window.addEventListener('open-pinned-folder-context-menu', (e) => {
+        this.openContextMenu(e.detail.event, {
+          uuid: e.detail.uuid,
+          name: e.detail.name,
+          nodeType: 'folder',
+          mimeType: '',
+          isFavorite: e.detail.isFavorite,
+          isViewable: false,
+          isTrash: false,
+          isPinned: true
+        });
+      });
+
       this.$nextTick(() => {
         if (typeof lucide !== 'undefined') {
           lucide.createIcons({ nodes: [this.$el] });
@@ -2453,6 +2467,31 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
       } catch (error) {
         // Silent fail for sidebar refresh
       }
+    },
+
+    async openContextMenu(event, nodeData) {
+      event.preventDefault();
+
+      // Load actions for the pinned folder
+      try {
+        const csrfToken = this.getCsrfToken();
+        const resp = await fetch('/api/v1/files/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ uuids: [nodeData.uuid] }),
+        });
+        if (resp.ok) {
+          const actionsMap = await resp.json();
+          nodeData.actions = actionsMap[nodeData.uuid] || [];
+        }
+      } catch (e) {
+        // Fallback to empty actions
+        nodeData.actions = [];
+      }
+
+      window.dispatchEvent(new CustomEvent('open-context-menu', {
+        detail: { event, nodeData }
+      }));
     },
 
     // Pinned folder reordering methods

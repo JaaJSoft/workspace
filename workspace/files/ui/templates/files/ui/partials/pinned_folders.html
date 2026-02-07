@@ -16,19 +16,7 @@ Context variables:
     @dragend="onPinnedDragEnd($event)"
     @dragover.prevent="onPinnedDragOver($event, '{{ pin.folder.uuid }}')"
     @drop.prevent="onPinnedDrop($event, '{{ pin.folder.uuid }}')"
-    @contextmenu.prevent="$dispatch('open-context-menu', {
-      event: $event,
-      nodeData: {
-        uuid: '{{ pin.folder.uuid }}',
-        name: '{{ pin.folder.name|escapejs }}',
-        nodeType: 'folder',
-        mimeType: '',
-        isFavorite: {{ pin.folder.is_favorite|yesno:'true,false' }},
-        isViewable: false,
-        isTrash: false,
-        isPinned: true
-      }
-    })"
+    @contextmenu.prevent="window.dispatchEvent(new CustomEvent('open-pinned-folder-context-menu', { detail: { event: $event, uuid: '{{ pin.folder.uuid }}', name: '{{ pin.folder.name|escapejs }}', isFavorite: {{ pin.folder.is_favorite|yesno:'true,false' }} } }))"
 >
   <a
     href="/files/{{ pin.folder.uuid }}"

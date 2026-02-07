@@ -92,6 +92,8 @@ INSTALLED_APPS = [
     'workspace.files.ui',
     'workspace.dashboard',
     'workspace.users',
+    'workspace.chat',
+    'workspace.chat.ui',
 ]
 
 # Add Debug Toolbar only in DEBUG mode and not during tests
@@ -238,6 +240,10 @@ SPECTACULAR_SETTINGS = {
         {
             'name': 'Search',
             'description': 'Unified search across workspace modules.',
+        },
+        {
+            'name': 'Chat',
+            'description': 'Real-time messaging with direct and group conversations.',
         },
     ],
     'SWAGGER_UI_SETTINGS': {

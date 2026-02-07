@@ -19,6 +19,8 @@ function chatApp(currentUserId) {
     currentUserId: currentUserId,
     quickEmojis: ['\ud83d\udc4d', '\u2764\ufe0f', '\ud83d\ude02', '\ud83d\ude2e', '\ud83d\ude22', '\ud83c\udf89'],
     showInfoPanel: false,
+    conversationStats: null,
+    loadingStats: false,
     // Add member dialog state
     addMemberSearchQuery: '',
     addMemberResults: [],
@@ -164,6 +166,7 @@ function chatApp(currentUserId) {
       this.editingMessageUuid = null;
       this.messageBody = '';
       this.showInfoPanel = false;
+      this.conversationStats = null;
 
       if (updateUrl) {
         history.pushState({ conversationUuid: conv.uuid }, '', `/chat/${conv.uuid}`);
@@ -727,6 +730,10 @@ function chatApp(currentUserId) {
         if (other) return this._avatarHtml(other.user, 'w-10 h-10 text-sm', 'bg-neutral text-neutral-content');
         return `<div class="w-10 h-10 rounded-full bg-neutral text-neutral-content flex items-center justify-center flex-shrink-0"><span class="text-sm">?</span></div>`;
       }
+      // Group with custom avatar
+      if (conv.avatar_url) {
+        return `<div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0"><img src="${conv.avatar_url}" alt="Group avatar" class="w-full h-full object-cover" /></div>`;
+      }
       const initials = (conv.members || [])
         .filter(m => m.user.id !== this.currentUserId)
         .slice(0, 2)
@@ -750,7 +757,26 @@ function chatApp(currentUserId) {
         this.$nextTick(() => {
           if (typeof lucide !== 'undefined') lucide.createIcons();
         });
+        if (this.activeConversation) {
+          this.loadConversationStats(this.activeConversation.uuid);
+        }
       }
+    },
+
+    async loadConversationStats(conversationId) {
+      this.loadingStats = true;
+      this.conversationStats = null;
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${conversationId}/stats`, {
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          this.conversationStats = await resp.json();
+        }
+      } catch (e) {
+        console.error('Failed to load conversation stats', e);
+      }
+      this.loadingStats = false;
     },
 
     // ── Conversation management ──────────────────────────────
@@ -947,6 +973,75 @@ function chatApp(currentUserId) {
       }
     },
 
+    // ── Group avatar ──────────────────────────────────────────
+    async uploadGroupAvatar(fileInput) {
+      if (!this.activeConversation || this.activeConversation.kind !== 'group') return;
+      const file = fileInput.files?.[0];
+      if (!file) return;
+
+      // Read image dimensions for full-image crop
+      const img = new window.Image();
+      const url = URL.createObjectURL(file);
+      await new Promise((resolve) => { img.onload = resolve; img.src = url; });
+      URL.revokeObjectURL(url);
+
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('crop_x', '0');
+      formData.append('crop_y', '0');
+      formData.append('crop_w', String(img.naturalWidth));
+      formData.append('crop_h', String(img.naturalHeight));
+
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/avatar`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+          body: formData,
+        });
+        if (resp.ok) {
+          const avatarUrl = `/api/v1/chat/conversations/${this.activeConversation.uuid}/avatar/image`;
+          // Cache-bust by appending timestamp
+          const bustUrl = `${avatarUrl}?t=${Date.now()}`;
+          this.activeConversation.avatar_url = bustUrl;
+          const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
+          if (conv) conv.avatar_url = bustUrl;
+          this.refreshConversationList();
+        }
+      } catch (e) {
+        console.error('Failed to upload group avatar', e);
+      }
+      fileInput.value = '';
+    },
+
+    async removeGroupAvatar() {
+      if (!this.activeConversation || this.activeConversation.kind !== 'group') return;
+
+      const ok = await AppDialog.confirm({
+        title: 'Remove avatar',
+        message: 'Remove the group avatar?',
+        okLabel: 'Remove',
+        okClass: 'btn-error',
+      });
+      if (!ok) return;
+
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/avatar`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+        });
+        if (resp.ok || resp.status === 200) {
+          this.activeConversation.avatar_url = null;
+          const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
+          if (conv) conv.avatar_url = null;
+          this.refreshConversationList();
+        }
+      } catch (e) {
+        console.error('Failed to remove group avatar', e);
+      }
+    },
+
     copyConversationLink(uuid) {
       const id = uuid || this.activeConversation?.uuid;
       if (!id) return;
@@ -998,6 +1093,9 @@ function chatApp(currentUserId) {
           this.$nextTick(() => {
             if (typeof lucide !== 'undefined') lucide.createIcons();
           });
+          if (this.activeConversation) {
+            this.loadConversationStats(this.activeConversation.uuid);
+          }
           break;
         case 'copy_link':
           this.copyConversationLink(uuid);
@@ -1018,6 +1116,12 @@ function chatApp(currentUserId) {
       if (!iso) return '';
       const d = new Date(iso);
       return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    },
+
+    formatDateTime(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     },
 
     memberDisplayName(member) {

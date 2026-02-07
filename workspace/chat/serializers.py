@@ -60,6 +60,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.IntegerField(read_only=True, default=0)
+    avatar_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
@@ -67,6 +68,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
             'uuid', 'kind', 'title', 'created_by_id',
             'created_at', 'updated_at',
             'members', 'last_message', 'unread_count',
+            'avatar_url',
         ]
 
     def get_last_message(self, obj):
@@ -83,16 +85,28 @@ class ConversationListSerializer(serializers.ModelSerializer):
             return LastMessageSerializer(msg).data
         return None
 
+    def get_avatar_url(self, obj):
+        if obj.has_avatar:
+            return f'/api/v1/chat/conversations/{obj.uuid}/avatar/image'
+        return None
+
 
 class ConversationDetailSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
+    avatar_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
         fields = [
             'uuid', 'kind', 'title', 'created_by_id',
             'created_at', 'updated_at', 'members',
+            'avatar_url',
         ]
+
+    def get_avatar_url(self, obj):
+        if obj.has_avatar:
+            return f'/api/v1/chat/conversations/{obj.uuid}/avatar/image'
+        return None
 
 
 class ConversationCreateSerializer(serializers.Serializer):

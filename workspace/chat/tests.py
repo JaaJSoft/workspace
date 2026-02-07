@@ -1,9 +1,12 @@
+from io import BytesIO
+
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.chat.models import Conversation, ConversationMember
+from workspace.chat.models import Conversation, ConversationMember, Message, Reaction
 
 User = get_user_model()
 
@@ -270,3 +273,187 @@ class LeaveConversationTests(ChatTestMixin, APITestCase):
         self.client.force_authenticate(self.member)
         resp = self.client.delete(self.url(self.group.uuid))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+def _make_test_image():
+    """Create a minimal in-memory PNG for upload tests."""
+    buf = BytesIO()
+    img = Image.new('RGB', (100, 100), color='red')
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    buf.name = 'test.png'
+    return buf
+
+
+class GroupAvatarUploadTests(ChatTestMixin, APITestCase):
+    """Tests for POST /api/v1/chat/conversations/<id>/avatar"""
+
+    def url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}/avatar'
+
+    def test_unauthenticated_rejected(self):
+        image = _make_test_image()
+        resp = self.client.post(self.url(self.group.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_outsider_cannot_upload(self):
+        self.client.force_authenticate(self.outsider)
+        image = _make_test_image()
+        resp = self.client.post(self.url(self.group.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_member_can_upload(self):
+        self.client.force_authenticate(self.member)
+        image = _make_test_image()
+        resp = self.client.post(self.url(self.group.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.group.refresh_from_db()
+        self.assertTrue(self.group.has_avatar)
+
+    def test_dm_returns_400(self):
+        self.client.force_authenticate(self.creator)
+        image = _make_test_image()
+        resp = self.client.post(self.url(self.dm.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class GroupAvatarDeleteTests(ChatTestMixin, APITestCase):
+    """Tests for DELETE /api/v1/chat/conversations/<id>/avatar"""
+
+    def url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}/avatar'
+
+    def _upload_avatar(self):
+        """Helper to upload an avatar as creator first."""
+        self.client.force_authenticate(self.creator)
+        image = _make_test_image()
+        self.client.post(self.url(self.group.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+
+    def test_member_can_delete(self):
+        self._upload_avatar()
+        self.client.force_authenticate(self.member)
+        resp = self.client.delete(self.url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.group.refresh_from_db()
+        self.assertFalse(self.group.has_avatar)
+
+    def test_outsider_cannot_delete(self):
+        self._upload_avatar()
+        self.client.force_authenticate(self.outsider)
+        resp = self.client.delete(self.url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class GroupAvatarRetrieveTests(ChatTestMixin, APITestCase):
+    """Tests for GET /api/v1/chat/conversations/<id>/avatar/image"""
+
+    def upload_url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}/avatar'
+
+    def retrieve_url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}/avatar/image'
+
+    def test_404_when_no_avatar(self):
+        resp = self.client.get(self.retrieve_url(self.group.uuid))
+        self.assertEqual(resp.status_code, 404)
+
+    def test_retrieve_after_upload(self):
+        self.client.force_authenticate(self.creator)
+        image = _make_test_image()
+        self.client.post(self.upload_url(self.group.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+        self.client.logout()
+        resp = self.client.get(self.retrieve_url(self.group.uuid))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'image/webp')
+
+
+class ConversationStatsTests(ChatTestMixin, APITestCase):
+    """Tests for GET /api/v1/chat/conversations/<id>/stats"""
+
+    def url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}/stats'
+
+    def test_unauthenticated_rejected(self):
+        resp = self.client.get(self.url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_outsider_cannot_view_stats(self):
+        self.client.force_authenticate(self.outsider)
+        resp = self.client.get(self.url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_member_can_view_stats(self):
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_empty_conversation_stats(self):
+        self.client.force_authenticate(self.creator)
+        resp = self.client.get(self.url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['message_count'], 0)
+        self.assertEqual(resp.data['reaction_count'], 0)
+        self.assertIsNone(resp.data['first_message_at'])
+        self.assertIsNone(resp.data['last_message_at'])
+        self.assertEqual(resp.data['messages_per_member'], [])
+
+    def test_stats_with_messages_and_reactions(self):
+        msg1 = Message.objects.create(
+            conversation=self.group, author=self.creator, body='hello',
+        )
+        msg2 = Message.objects.create(
+            conversation=self.group, author=self.member, body='hi',
+        )
+        Message.objects.create(
+            conversation=self.group, author=self.creator, body='third',
+        )
+        Reaction.objects.create(message=msg1, user=self.member, emoji='👍')
+        Reaction.objects.create(message=msg2, user=self.creator, emoji='❤️')
+
+        self.client.force_authenticate(self.creator)
+        resp = self.client.get(self.url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['message_count'], 3)
+        self.assertEqual(resp.data['reaction_count'], 2)
+        self.assertIsNotNone(resp.data['first_message_at'])
+        self.assertIsNotNone(resp.data['last_message_at'])
+        # Creator has 2 messages, member has 1
+        per_member = {e['username']: e['count'] for e in resp.data['messages_per_member']}
+        self.assertEqual(per_member['creator'], 2)
+        self.assertEqual(per_member['member'], 1)
+
+    def test_deleted_messages_excluded(self):
+        Message.objects.create(
+            conversation=self.group, author=self.creator, body='visible',
+        )
+        Message.objects.create(
+            conversation=self.group, author=self.creator, body='deleted',
+            deleted_at=timezone.now(),
+        )
+
+        self.client.force_authenticate(self.creator)
+        resp = self.client.get(self.url(self.group.uuid))
+        self.assertEqual(resp.data['message_count'], 1)
+
+    def test_reactions_on_deleted_messages_excluded(self):
+        deleted_msg = Message.objects.create(
+            conversation=self.group, author=self.creator, body='deleted',
+            deleted_at=timezone.now(),
+        )
+        Reaction.objects.create(message=deleted_msg, user=self.member, emoji='👍')
+
+        self.client.force_authenticate(self.creator)
+        resp = self.client.get(self.url(self.group.uuid))
+        self.assertEqual(resp.data['reaction_count'], 0)

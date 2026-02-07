@@ -57,10 +57,39 @@
       </div>
 
       <!-- Header -->
-      <div class="flex items-center p-4 pr-24 border-b border-base-300 bg-base-100">
+      <div class="flex items-center gap-2 p-4 pr-24 border-b border-base-300 bg-base-100">
+        <!-- Prev / Next buttons -->
+        <div class="flex items-center gap-0.5 shrink-0" x-show="_totalViewable() > 1">
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square"
+            title="Previous file"
+            :disabled="_currentIndex() <= 0"
+            @click="navigatePrev()"
+          >
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square"
+            title="Next file"
+            :disabled="_currentIndex() < 0 || _currentIndex() >= _totalViewable() - 1"
+            @click="navigateNext()"
+          >
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
-          <p class="text-sm text-base-content/60" x-text="mimeType"></p>
+          <div class="flex items-center gap-2">
+            <p class="text-sm text-base-content/60" x-text="mimeType"></p>
+            <span
+              class="text-xs text-base-content/40"
+              x-show="_totalViewable() > 1"
+              x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"
+            ></span>
+          </div>
         </div>
       </div>
 
@@ -120,6 +149,46 @@
         mimeType: '',
         loadedScripts: [],
         expanded: false,
+
+        _getViewableFiles() {
+          var rows = document.querySelectorAll('[data-uuid][data-viewable="1"][data-node-type="file"]');
+          return Array.from(rows)
+            .filter(function(r) { return r.offsetParent !== null; })
+            .map(function(r) {
+              return {
+                uuid: r.dataset.uuid,
+                name: r.dataset.displayName,
+                mimeType: r.dataset.mimeType,
+              };
+            });
+        },
+
+        navigateNext() {
+          var files = this._getViewableFiles();
+          var idx = files.findIndex(f => f.uuid === this.fileUuid);
+          if (idx >= 0 && idx < files.length - 1) {
+            var next = files[idx + 1];
+            this.openFile(next.uuid, next.name, next.mimeType);
+          }
+        },
+
+        navigatePrev() {
+          var files = this._getViewableFiles();
+          var idx = files.findIndex(f => f.uuid === this.fileUuid);
+          if (idx > 0) {
+            var prev = files[idx - 1];
+            this.openFile(prev.uuid, prev.name, prev.mimeType);
+          }
+        },
+
+        _currentIndex() {
+          var files = this._getViewableFiles();
+          return files.findIndex(f => f.uuid === this.fileUuid);
+        },
+
+        _totalViewable() {
+          return this._getViewableFiles().length;
+        },
 
         toggleExpanded() {
           this.expanded = !this.expanded;
@@ -248,6 +317,20 @@
 
           if (event.key === 'Escape') {
             this.close();
+          }
+
+          // Arrow navigation — skip if focus is in an editable element
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            var tag = document.activeElement && document.activeElement.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            if (document.activeElement && document.activeElement.isContentEditable) return;
+
+            event.preventDefault();
+            if (event.key === 'ArrowLeft') {
+              this.navigatePrev();
+            } else {
+              this.navigateNext();
+            }
           }
         },
 

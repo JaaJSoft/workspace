@@ -329,6 +329,13 @@ class FileViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        summary="Favorite or unfavorite a file/folder",
+        description="POST to add to favorites, DELETE to remove from favorites.",
+        responses={
+            200: OpenApiResponse(description="Favorite status updated."),
+        },
+    )
     @action(detail=True, methods=['post', 'delete'], url_path='favorite')
     def favorite(self, request, uuid=None):
         """Add or remove a file/folder from favorites."""
@@ -440,6 +447,14 @@ class FileViewSet(viewsets.ModelViewSet):
 
         return Response({'success': True}, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary="Restore from trash",
+        description="Restore a previously trashed file or folder.",
+        responses={
+            200: OpenApiResponse(description="Item restored."),
+            400: OpenApiResponse(description="Item is not in trash."),
+        },
+    )
     @action(detail=True, methods=['post'], url_path='restore')
     def restore(self, request, uuid=None):
         """Restore a file or folder from trash."""
@@ -449,6 +464,14 @@ class FileViewSet(viewsets.ModelViewSet):
         restored = file_obj.restore()
         return Response({'restored': restored}, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary="Permanently delete",
+        description="Permanently delete a trashed file or folder. This action is irreversible.",
+        responses={
+            204: OpenApiResponse(description="Item permanently deleted."),
+            400: OpenApiResponse(description="Item is not in trash."),
+        },
+    )
     @action(detail=True, methods=['delete'], url_path='purge')
     def purge(self, request, uuid=None):
         """Permanently delete a file or folder."""

@@ -601,12 +601,9 @@ function chatApp(currentUserId) {
           const conv = await resp.json();
           this.$refs.newConvDialog.close();
 
-          await this.refreshConversationList();
-
-          const found = this.conversations.find(c => c.uuid === conv.uuid);
-          if (found) {
-            await this.selectConversation(found);
-          }
+          this.conversations.unshift(conv);
+          this.refreshConversationList();
+          await this.selectConversation(conv);
         }
       } catch (e) {
         console.error('Failed to create conversation', e);

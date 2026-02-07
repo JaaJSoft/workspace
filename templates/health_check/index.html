@@ -1,97 +1,77 @@
-{% extends "base_with_navbar.html" %}
-{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>System Health</title>
+  <meta name="robots" content="noindex"/>
 
-{% block title %}Health Check · Workspace{% endblock %}
+  <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');</script>
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" type="text/css"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="icon" href="https://fav.farm/👥"/>
 
-{% block extra_head %}
-<script src="https://unpkg.com/lucide@latest"></script>
-{% endblock %}
+  <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-base-200 min-h-screen flex items-center justify-center p-4">
 
-{% block content %}
-<div class="flex items-center justify-between mb-6">
-  <div>
-    <h1 class="text-2xl font-semibold">System Health</h1>
-    <p class="text-sm text-base-content/70 mt-1">Monitor service health and system checks</p>
-  </div>
-  <div class="flex gap-2">
-    <button onclick="location.reload()" class="btn btn-sm btn-ghost">
-      <i data-lucide="refresh-cw" class="h-4 w-4"></i>
-      Refresh
-    </button>
-    <a href="?format=json" class="btn btn-sm btn-primary">View JSON</a>
-  </div>
-</div>
+  <div class="w-full max-w-2xl">
+    <!-- Status badge -->
+    <div class="flex flex-col items-center mb-8">
+      {% if errors %}
+        <div class="w-16 h-16 rounded-full bg-error/10 flex items-center justify-center mb-4">
+          <i data-lucide="alert-triangle" class="w-8 h-8 text-error"></i>
+        </div>
+        <h1 class="text-2xl font-bold">System Unhealthy</h1>
+        <p class="text-base-content/50 text-sm mt-1">One or more services have issues</p>
+      {% else %}
+        <div class="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mb-4">
+          <i data-lucide="check-circle" class="w-8 h-8 text-success"></i>
+        </div>
+        <h1 class="text-2xl font-bold">All Systems Operational</h1>
+        <p class="text-base-content/50 text-sm mt-1">All services are running normally</p>
+      {% endif %}
+    </div>
 
-<!-- Probe Tabs -->
-<div class="mb-6">
-  <div class="tabs tabs-boxed">
-    <a href="/health/" class="tab {% if request.path == '/health/' %}tab-active{% endif %}">
-      <i data-lucide="clipboard-list" class="h-4 w-4 mr-1"></i>
-      Full Health
-    </a>
-    <a href="/health/startup-probe/" class="tab {% if 'startup-probe' in request.path %}tab-active{% endif %}">
-      <i data-lucide="zap" class="h-4 w-4 mr-1"></i>
-      Startup Probe
-    </a>
-    <a href="/health/liveness-probe/" class="tab {% if 'liveness-probe' in request.path %}tab-active{% endif %}">
-      <i data-lucide="heart-pulse" class="h-4 w-4 mr-1"></i>
-      Liveness Probe
-    </a>
-  </div>
-</div>
-
-<!-- Health Check Cards -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-  {% for plugin in plugins %}
-    <div class="card bg-base-100 shadow-md border {% if plugin.status %}border-success/20{% else %}border-error/20{% endif %} hover:shadow-lg transition-shadow">
-      <div class="card-body">
-        <div class="flex items-start justify-between gap-4 mb-3">
-          <div class="flex-1">
-            <h2 class="card-title text-base">
-              {% if plugin.status %}
-                <i data-lucide="circle-check" class="h-5 w-5 text-success"></i>
-              {% else %}
-                <i data-lucide="circle-x" class="h-5 w-5 text-error"></i>
-              {% endif %}
-              {{ plugin.identifier }}
-            </h2>
-          </div>
-          <div class="badge {% if plugin.status %}badge-success{% else %}badge-error{% endif %} badge-sm">
-            {% if plugin.status %}✓ OK{% else %}✗ FAIL{% endif %}
-          </div>
+    <!-- Services card -->
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-0">
+        <div class="px-5 py-3 border-b border-base-300">
+          <h2 class="font-semibold text-sm text-base-content/70 uppercase tracking-wide">Services</h2>
         </div>
 
-        <div class="text-sm {% if plugin.status %}text-success{% else %}text-error{% endif %} mb-3">
-          {{ plugin.pretty_status|linebreaks }}
-        </div>
-
-        <div class="flex items-center justify-between text-xs text-base-content/60 pt-2 border-t border-base-300">
-          <span class="flex items-center gap-1">
-            <i data-lucide="clock" class="h-3 w-3"></i>
-            {{ plugin.time_taken|floatformat:3 }}s
-          </span>
-          {% if plugin.status %}
-            <span class="text-success">Healthy</span>
-          {% else %}
-            <span class="text-error">Needs attention</span>
-          {% endif %}
-        </div>
+        <ul class="divide-y divide-base-300">
+          {% for plugin in plugins %}
+            <li class="flex items-center justify-between gap-4 px-5 py-3">
+              <div class="flex items-center gap-3 min-w-0">
+                {% if plugin.status %}
+                  <i data-lucide="check-circle" class="w-4 h-4 text-success shrink-0"></i>
+                {% else %}
+                  <i data-lucide="x-circle" class="w-4 h-4 text-error shrink-0"></i>
+                {% endif %}
+                <span class="font-medium truncate">{{ plugin }}</span>
+              </div>
+              <div class="flex items-center gap-3 shrink-0">
+                {% if not plugin.status %}
+                  <span class="badge badge-error badge-sm">Error</span>
+                {% else %}
+                  <span class="badge badge-success badge-sm">OK</span>
+                {% endif %}
+                <span class="text-xs text-base-content/40 font-mono w-16 text-right">{{ plugin.time_taken|floatformat:3 }}s</span>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
       </div>
     </div>
-  {% endfor %}
-</div>
 
-{% if not plugins %}
-  <div class="alert">
-    <i data-lucide="info" class="stroke-current shrink-0 h-6 w-6"></i>
-    <span>No health checks configured.</span>
+    <!-- Footer -->
+    <p class="text-center text-xs text-base-content/30 mt-6">
+      Checked at {% now "SHORT_DATETIME_FORMAT" %}
+    </p>
   </div>
-{% endif %}
 
-{% endblock %}
-
-{% block extra_scripts %}
-<script>
-  lucide.createIcons();
-</script>
-{% endblock %}
+  <script>document.addEventListener('DOMContentLoaded', function() { if (typeof lucide !== 'undefined') lucide.createIcons(); });</script>
+</body>
+</html>

@@ -7,7 +7,8 @@ an avatar is tracked via a ``UserSetting(module='profile', key='has_avatar')``.
 
 from __future__ import annotations
 
-import hashlib
+import hmac
+import os
 import logging
 from io import BytesIO
 
@@ -16,6 +17,8 @@ from django.core.files.storage import default_storage
 from PIL import Image, ImageOps
 
 from workspace.users.settings_service import delete_setting, get_setting, set_setting
+
+_ETAG_SECRET = os.urandom(32)
 
 logger = logging.getLogger(__name__)
 
@@ -91,4 +94,4 @@ def get_avatar_etag(user_id: int) -> str | None:
     except (FileNotFoundError, OSError):
         return None
     raw = f"{user_id}-{mtime}"
-    return hashlib.md5(raw.encode()).hexdigest()
+    return hmac.new(_ETAG_SECRET, raw.encode(), "sha256").hexdigest()

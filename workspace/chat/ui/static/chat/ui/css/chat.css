@@ -18,3 +18,10 @@
 .msg-group-end .msg-bubble:not(:last-of-type) {
   border-bottom-right-radius: 0.25rem;
 }
+
+/* Chat input: remove inner textarea focus ring — outer container handles it */
+.textarea-ghost:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}

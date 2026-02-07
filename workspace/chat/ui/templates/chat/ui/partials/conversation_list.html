@@ -44,7 +44,7 @@ Alpine bindings reference the parent chatApp() x-data scope.
         <button type="button"
           class="flex items-center w-full p-2 rounded-lg transition-colors"
           :class="[
-            collapsed ? 'justify-center px-0 mx-auto' : 'gap-3',
+            collapsed ? 'justify-center w-10 h-10 px-0 mx-auto' : 'gap-3',
             activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info/10 text-info hover:bg-info/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-info'
           ]"
           @click="selectConversationById('{{ conv.uuid }}')"
@@ -55,10 +55,8 @@ Alpine bindings reference the parent chatApp() x-data scope.
                  :class="activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info text-info-content' : 'bg-neutral text-neutral-content'">
               <span class="text-xs font-medium">{{ conv.avatar_initial }}</span>
             </div>
-            {% if conv.unread_count > 0 %}
             <div class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-info rounded-full border-2 border-base-200"
-                 x-show="collapsed" x-cloak></div>
-            {% endif %}
+                 x-show="collapsed && (conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0)" x-cloak></div>
           </div>
           <div class="flex-1 min-w-0 text-left" x-show="!collapsed" x-transition>
             <div class="flex items-center justify-between gap-1">
@@ -67,9 +65,10 @@ Alpine bindings reference the parent chatApp() x-data scope.
             </div>
             <div class="flex items-center justify-between gap-1 mt-0.5">
               <span class="text-xs text-base-content/50 truncate">{{ conv.last_message_preview }}</span>
-              {% if conv.unread_count > 0 %}
-              <span class="badge badge-info badge-xs flex-shrink-0">{{ conv.unread_count }}</span>
-              {% endif %}
+              <span class="badge badge-info badge-xs flex-shrink-0"
+                    x-show="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0"
+                    x-text="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count"
+                    x-cloak></span>
             </div>
           </div>
         </button>
@@ -101,7 +100,7 @@ Alpine bindings reference the parent chatApp() x-data scope.
         <button type="button"
           class="flex items-center w-full p-2 rounded-lg transition-colors"
           :class="[
-            collapsed ? 'justify-center px-0 mx-auto' : 'gap-3',
+            collapsed ? 'justify-center w-10 h-10 px-0 mx-auto' : 'gap-3',
             activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info/10 text-info hover:bg-info/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-info'
           ]"
           @click="selectConversationById('{{ conv.uuid }}')"
@@ -112,10 +111,8 @@ Alpine bindings reference the parent chatApp() x-data scope.
                  :class="activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info text-info-content' : 'bg-info/20 text-info'">
               <span class="text-xs font-medium">{{ conv.avatar_initial }}</span>
             </div>
-            {% if conv.unread_count > 0 %}
             <div class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-info rounded-full border-2 border-base-200"
-                 x-show="collapsed" x-cloak></div>
-            {% endif %}
+                 x-show="collapsed && (conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0)" x-cloak></div>
           </div>
           <div class="flex-1 min-w-0 text-left" x-show="!collapsed" x-transition>
             <div class="flex items-center justify-between gap-1">
@@ -124,9 +121,10 @@ Alpine bindings reference the parent chatApp() x-data scope.
             </div>
             <div class="flex items-center justify-between gap-1 mt-0.5">
               <span class="text-xs text-base-content/50 truncate">{{ conv.last_message_preview }}</span>
-              {% if conv.unread_count > 0 %}
-              <span class="badge badge-info badge-xs flex-shrink-0">{{ conv.unread_count }}</span>
-              {% endif %}
+              <span class="badge badge-info badge-xs flex-shrink-0"
+                    x-show="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0"
+                    x-text="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count"
+                    x-cloak></span>
             </div>
           </div>
         </button>

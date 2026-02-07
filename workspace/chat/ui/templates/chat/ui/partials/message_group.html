@@ -39,11 +39,11 @@
           </div>
 
           {# Hover toolbar — floats below the bubble #}
-          <div class="absolute -bottom-3 {% if is_own %}left-0{% else %}right-0{% endif %} opacity-0 group-hover/msg:opacity-100 transition-opacity z-10"
+          <div class="absolute top-full mt-0.5 {% if is_own %}left-0{% else %}right-0{% endif %} opacity-0 group-hover/msg:opacity-100 transition-opacity z-10"
                x-data="{ emojiOpen: false }">
             <div class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-sm px-0.5 py-0.5">
               {# Reaction picker #}
-              <div class="dropdown dropdown-bottom {% if is_own %}{% else %}dropdown-end{% endif %}">
+              <div class="dropdown dropdown-bottom {% if is_own %}dropdown-end{% endif %}">
                 <button class="btn btn-ghost btn-xs btn-circle"
                         @click="emojiOpen = !emojiOpen"
                         title="React">

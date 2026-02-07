@@ -25,7 +25,10 @@ x-init="init()"
 @chat-message_deleted.window="handleSSEMessageDeleted($event.detail)"
 @chat-reaction.window="handleSSEReaction($event.detail)"
 @chat-unread.window="handleSSEUnread($event.detail)"
-@keydown.window="if ($event.altKey && $event.key === 'n') { $event.preventDefault(); showNewConversationDialog(); }"
+@keydown.window="
+  if ($event.altKey && $event.key === 'n') { $event.preventDefault(); showNewConversationDialog(); }
+  if (($event.ctrlKey || $event.metaKey) && $event.key === 'f' && activeConversation) { $event.preventDefault(); toggleSearchPanel(); }
+"
 {% endblock %}
 
 {% block drawer_sidebar %}
@@ -117,7 +120,7 @@ x-init="init()"
             class="btn btn-ghost btn-sm btn-circle"
             :class="showSearchPanel ? 'bg-base-200' : ''"
             @click="toggleSearchPanel()"
-            title="Search in conversation"
+            title="Search in conversation (Ctrl+F)"
           >
             <i data-lucide="search" class="w-4 h-4"></i>
           </button>
@@ -216,6 +219,7 @@ x-init="init()"
                   <span>Strikethrough</span>    <kbd class="kbd kbd-xs">Ctrl+Shift+X</kbd>
                   <span>Edit last msg</span>    <kbd class="kbd kbd-xs">Arrow Up</kbd>
                   <span>Cancel edit</span>      <kbd class="kbd kbd-xs">Esc</kbd>
+                  <span>Search messages</span>   <kbd class="kbd kbd-xs">Ctrl+F</kbd>
                   <span>New chat</span>          <kbd class="kbd kbd-xs">Alt+N</kbd>
                 </div>
                 <p class="text-xs text-base-content/40 mt-2">Markdown supported</p>

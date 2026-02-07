@@ -42,6 +42,12 @@ urlpatterns = [
         views.ReactionToggleView.as_view(),
         name='chat-reaction-toggle',
     ),
+    # Stats
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/stats',
+        views.ConversationStatsView.as_view(),
+        name='chat-conversation-stats',
+    ),
     # Read / Unread
     path(
         'api/v1/chat/conversations/<uuid:conversation_id>/read',
@@ -52,6 +58,17 @@ urlpatterns = [
         'api/v1/chat/unread-counts',
         views.UnreadCountsView.as_view(),
         name='chat-unread-counts',
+    ),
+    # Group avatars
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/avatar',
+        views.GroupAvatarUploadView.as_view(),
+        name='chat-group-avatar-upload',
+    ),
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/avatar/image',
+        views.GroupAvatarRetrieveView.as_view(),
+        name='chat-group-avatar-retrieve',
     ),
     # SSE
     path(

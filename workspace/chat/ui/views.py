@@ -1,7 +1,9 @@
 import json
+from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import OuterRef, Prefetch, Subquery
+from django.http import HttpResponseForbidden
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -97,7 +99,7 @@ def _build_conversation_context(user):
 
 @login_required
 @ensure_csrf_cookie
-def chat_view(request):
+def chat_view(request, conversation_uuid=None):
     """Main chat page with server-rendered conversation list."""
     conv_list = _build_conversation_context(request.user)
     serializer = ConversationListSerializer(conv_list, many=True)
@@ -107,6 +109,7 @@ def chat_view(request):
         'dm_conversations': [c for c in conv_list if c.kind == Conversation.Kind.DM],
         'group_conversations': [c for c in conv_list if c.kind == Conversation.Kind.GROUP],
         'conversations_json': json.dumps(serializer.data),
+        'initial_conversation_uuid': str(conversation_uuid) if conversation_uuid else '',
     })
 
 
@@ -117,4 +120,98 @@ def conversation_list_view(request):
     return render(request, 'chat/ui/partials/conversation_list.html', {
         'dm_conversations': [c for c in conv_list if c.kind == Conversation.Kind.DM],
         'group_conversations': [c for c in conv_list if c.kind == Conversation.Kind.GROUP],
+    })
+
+
+def group_messages(messages, current_user):
+    """Group consecutive messages by same author within 5 min, with date separators.
+
+    Returns a list of dicts:
+      {'type': 'date', 'date': date_obj}
+      {'type': 'messages', 'author': user, 'is_own': bool, 'messages': [msg, ...]}
+    """
+    groups = []
+    current_date = None
+    current_group = None
+
+    for msg in messages:
+        msg_date = timezone.localdate(msg.created_at)
+
+        # Insert date separator when the day changes
+        if msg_date != current_date:
+            if current_group:
+                groups.append(current_group)
+                current_group = None
+            groups.append({'type': 'date', 'date': msg_date})
+            current_date = msg_date
+
+        # Check if this message continues the current group
+        can_group = (
+            current_group
+            and current_group['author'].id == msg.author_id
+            and not msg.deleted_at
+            and not (current_group['messages'][-1].deleted_at)
+            and (msg.created_at - current_group['messages'][-1].created_at) < timedelta(minutes=5)
+        )
+
+        if can_group:
+            current_group['messages'].append(msg)
+        else:
+            if current_group:
+                groups.append(current_group)
+            current_group = {
+                'type': 'messages',
+                'author': msg.author,
+                'is_own': msg.author_id == current_user.id,
+                'messages': [msg],
+            }
+
+    if current_group:
+        groups.append(current_group)
+
+    return groups
+
+
+@login_required
+def conversation_messages_view(request, conversation_uuid):
+    """Partial: server-rendered grouped messages for a conversation."""
+    membership = ConversationMember.objects.filter(
+        conversation_id=conversation_uuid,
+        user=request.user,
+        left_at__isnull=True,
+    ).first()
+    if not membership:
+        return HttpResponseForbidden()
+
+    qs = (
+        Message.objects
+        .filter(conversation_id=conversation_uuid)
+        .select_related('author')
+        .prefetch_related('reactions__user')
+        .order_by('-created_at')
+    )
+
+    before = request.GET.get('before')
+    if before:
+        try:
+            cursor_msg = Message.objects.get(uuid=before)
+            qs = qs.filter(created_at__lt=cursor_msg.created_at)
+        except Message.DoesNotExist:
+            pass
+
+    limit = 50
+    messages_page = list(qs[:limit + 1])
+    has_more = len(messages_page) > limit
+    messages_page = messages_page[:limit]
+    messages_page.reverse()  # Back to chronological order
+
+    groups = group_messages(messages_page, request.user)
+
+    first_uuid = str(messages_page[0].uuid) if messages_page else ''
+
+    return render(request, 'chat/ui/partials/message_list.html', {
+        'groups': groups,
+        'has_more': has_more,
+        'first_uuid': first_uuid,
+        'current_user': request.user,
     })

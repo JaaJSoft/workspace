@@ -29,6 +29,7 @@ class ReactionSerializer(serializers.ModelSerializer):
 class MessageSerializer(serializers.ModelSerializer):
     author = MemberUserSerializer()
     reactions = ReactionSerializer(many=True, read_only=True)
+    conversation_id = serializers.UUIDField()
 
     class Meta:
         model = Message

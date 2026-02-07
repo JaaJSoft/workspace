@@ -1,0 +1,31 @@
+{% if groups %}
+<div class="flex flex-wrap gap-1 items-center px-1 mt-0.5">
+  {% for g in groups %}
+    <button class="badge badge-sm cursor-pointer transition-colors
+                   {% if g.has_mine %}badge-info{% else %}badge-ghost hover:badge-info/50{% endif %}"
+            @click="toggleReaction('{{ message_uuid }}', '{{ g.emoji }}')"
+            title="{{ g.users|join:', ' }}">
+      <span>{{ g.emoji }}</span>
+      {% if g.count > 1 %}
+        <span class="ml-0.5">{{ g.count }}</span>
+      {% endif %}
+    </button>
+  {% endfor %}
+
+  {# Add reaction picker — uses Alpine quickEmojis from parent scope #}
+  <div class="dropdown dropdown-top" x-data="{ open: false }">
+    <button class="btn btn-ghost btn-xs btn-circle opacity-50 hover:opacity-100 transition-opacity"
+            @click="open = !open">
+      <i data-lucide="smile-plus" class="w-3 h-3"></i>
+    </button>
+    <div x-show="open" x-cloak @click.outside="open = false"
+         class="dropdown-content mb-1 p-1 bg-base-100 border border-base-300 rounded-lg shadow-lg flex gap-0.5">
+      <template x-for="emoji in quickEmojis" :key="emoji">
+        <button class="btn btn-ghost btn-xs"
+                @click="toggleReaction('{{ message_uuid }}', emoji); open = false"
+                x-text="emoji"></button>
+      </template>
+    </div>
+  </div>
+</div>
+{% endif %}

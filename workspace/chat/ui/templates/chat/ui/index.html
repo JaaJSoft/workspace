@@ -3,6 +3,10 @@
 
 {% block title %}Chat - Workspace{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}">
+{% endblock %}
+
 {% block navbar %}
 {% include 'ui/partials/navbar.html' with navbar_full_width=True %}
 {% endblock %}
@@ -86,7 +90,7 @@ x-init="init()"
         <!-- Back button (mobile) -->
         <button
           class="btn btn-ghost btn-sm btn-circle lg:hidden"
-          @click="activeConversation = null"
+          @click="activeConversation = null; history.pushState({}, '', '/chat')"
         >
           <i data-lucide="arrow-left" class="w-5 h-5"></i>
         </button>
@@ -101,7 +105,7 @@ x-init="init()"
 
       <!-- Messages -->
       <div
-        class="flex-1 overflow-y-auto p-4 space-y-1"
+        class="flex-1 overflow-y-auto p-4"
         x-ref="messagesContainer"
         @scroll="handleScroll()"
       >
@@ -122,121 +126,14 @@ x-init="init()"
           <span class="loading loading-spinner loading-md text-info"></span>
         </div>
 
-        <!-- Message bubbles -->
-        <template x-for="(msg, index) in messages" :key="msg.uuid">
-          <div>
-            <!-- New messages separator -->
-            <template x-if="msg._isNewSeparator">
-              <div class="divider text-xs text-info my-2">New messages</div>
-            </template>
-
-            <!-- Deleted message -->
-            <template x-if="msg.deleted_at">
-              <div class="chat" :class="msg.author.id === currentUserId ? 'chat-end' : 'chat-start'">
-                <div class="chat-bubble bg-base-200 text-base-content/40 text-sm italic">
-                  Message deleted
-                </div>
-              </div>
-            </template>
-
-            <!-- Normal message -->
-            <template x-if="!msg.deleted_at">
-              <div class="chat" :class="msg.author.id === currentUserId ? 'chat-end' : 'chat-start'">
-                <!-- Avatar -->
-                <div class="chat-image">
-                  <div class="avatar placeholder">
-                    <div class="w-8 h-8 rounded-full bg-neutral text-neutral-content">
-                      <span class="text-xs" x-text="msg.author.username[0].toUpperCase()"></span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Header -->
-                <div class="chat-header text-xs mb-0.5">
-                  <span class="font-medium" x-text="msg.author.username"></span>
-                  <time class="text-base-content/50 ml-1" x-text="formatTime(msg.created_at)"></time>
-                  <span x-show="msg.edited_at" class="text-base-content/40 ml-1 italic" x-cloak>(edited)</span>
-                </div>
-
-                <!-- Body -->
-                <div
-                  class="chat-bubble relative group"
-                  :class="msg.author.id === currentUserId ? 'chat-bubble-info' : ''"
-                >
-                  <div class="text-sm" x-html="msg.body_html"></div>
-
-                  <!-- Actions on hover (own messages) -->
-                  <div
-                    x-show="msg.author.id === currentUserId"
-                    class="absolute -top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5"
-                    :class="msg.author.id === currentUserId ? '-left-16' : '-right-16'"
-                    x-cloak
-                  >
-                    <button
-                      class="btn btn-ghost btn-xs btn-circle"
-                      @click="startEdit(msg)"
-                      title="Edit"
-                    >
-                      <i data-lucide="pencil" class="w-3 h-3"></i>
-                    </button>
-                    <button
-                      class="btn btn-ghost btn-xs btn-circle text-error"
-                      @click="deleteMessage(msg)"
-                      title="Delete"
-                    >
-                      <i data-lucide="trash-2" class="w-3 h-3"></i>
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Reactions -->
-                <div class="chat-footer mt-1 flex flex-wrap gap-1 items-center">
-                  <template x-for="group in groupReactions(msg)" :key="group.emoji">
-                    <button
-                      class="badge badge-sm cursor-pointer transition-colors"
-                      :class="group.hasCurrentUser ? 'badge-info' : 'badge-ghost hover:badge-info/50'"
-                      @click="toggleReaction(msg.uuid, group.emoji)"
-                      :title="group.users.join(', ')"
-                    >
-                      <span x-text="group.emoji"></span>
-                      <span class="ml-0.5" x-text="group.count" x-show="group.count > 1"></span>
-                    </button>
-                  </template>
-
-                  <!-- Add reaction button -->
-                  <div class="dropdown dropdown-top" x-data="{ open: false }">
-                    <button
-                      class="btn btn-ghost btn-xs btn-circle opacity-0 group-hover:opacity-100 transition-opacity"
-                      @click="open = !open"
-                    >
-                      <i data-lucide="smile-plus" class="w-3 h-3"></i>
-                    </button>
-                    <div
-                      x-show="open"
-                      x-cloak
-                      @click.outside="open = false"
-                      class="dropdown-content mb-1 p-1 bg-base-100 border border-base-300 rounded-lg shadow-lg flex gap-0.5"
-                    >
-                      <template x-for="emoji in quickEmojis" :key="emoji">
-                        <button
-                          class="btn btn-ghost btn-xs"
-                          @click="toggleReaction(msg.uuid, emoji); open = false"
-                          x-text="emoji"
-                        ></button>
-                      </template>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </template>
-          </div>
-        </template>
+        <!-- Server-rendered messages container -->
+        <div id="messages-container"></div>
       </div>
 
       <!-- Input area -->
       <div class="border-t border-base-300 p-3 bg-base-100">
         <!-- Edit mode banner -->
-        <div x-show="editingMessage" x-cloak class="flex items-center gap-2 mb-2 px-2 py-1 bg-info/10 rounded text-sm">
+        <div x-show="editingMessageUuid" x-cloak class="flex items-center gap-2 mb-2 px-2 py-1 bg-info/10 rounded text-sm">
           <i data-lucide="pencil" class="w-4 h-4 text-info"></i>
           <span class="text-info flex-1">Editing message</span>
           <button class="btn btn-ghost btn-xs btn-circle" @click="cancelEdit()">
@@ -294,6 +191,7 @@ x-init="init()"
 
 <!-- Embedded conversation data for fast Alpine init -->
 <script id="conversations-data" type="application/json">{{ conversations_json|safe }}</script>
+{% if initial_conversation_uuid %}<script id="initial-conversation" type="application/json">"{{ initial_conversation_uuid }}"</script>{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}

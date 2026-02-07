@@ -1,0 +1,73 @@
+{% load chat_tags avatar_tags %}
+{% with author=group.author is_own=group.is_own messages=group.messages first_msg=group.messages.0 %}
+<div class="msg-group {% if is_own %}msg-group-end{% else %}msg-group-start{% endif %} flex gap-2 mb-3 {% if is_own %}flex-row-reverse{% endif %}">
+
+  {# Avatar column #}
+  <div class="flex-shrink-0 w-8 mt-auto">
+    {% include "ui/partials/user_avatar.html" with user=author size="sm" %}
+  </div>
+
+  {# Message column #}
+  <div class="flex flex-col {% if is_own %}items-end{% else %}items-start{% endif %} gap-0.5 min-w-0 max-w-[75%]">
+    {# Header: username + time #}
+    <div class="flex items-baseline gap-1.5 px-1 text-xs">
+      {% if not is_own %}
+        <span class="font-semibold text-base-content">{{ author.username }}</span>
+      {% endif %}
+      <time class="text-base-content/50">{{ first_msg.created_at|format_time }}</time>
+    </div>
+
+    {# Bubbles #}
+    {% for msg in messages %}
+      {% if msg.deleted_at %}
+        <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm italic
+                    bg-base-200 text-base-content/40"
+             id="msg-{{ msg.uuid }}">
+          Message deleted
+        </div>
+      {% else %}
+        <div class="relative group/msg flex items-center gap-1 {% if is_own %}flex-row-reverse{% endif %}">
+          {# Bubble #}
+          <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm
+                      {% if is_own %}bg-info text-info-content{% else %}bg-base-200 text-base-content{% endif %}"
+               id="msg-{{ msg.uuid }}"
+               data-body="{{ msg.body|escapejs }}">
+            <div class="msg-body break-words">{{ msg.body_html|safe }}</div>
+            {% if msg.edited_at %}
+              <span class="text-[0.65rem] opacity-50 italic ml-1">(edited)</span>
+            {% endif %}
+          </div>
+
+          {# Hover actions (own messages) #}
+          {% if is_own %}
+            <div class="flex gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+              <button class="btn btn-ghost btn-xs btn-circle"
+                      @click="startEdit('{{ msg.uuid }}')"
+                      title="Edit">
+                <i data-lucide="pencil" class="w-3 h-3"></i>
+              </button>
+              <button class="btn btn-ghost btn-xs btn-circle text-error"
+                      @click="deleteMessage('{{ msg.uuid }}')"
+                      title="Delete">
+                <i data-lucide="trash-2" class="w-3 h-3"></i>
+              </button>
+            </div>
+          {% endif %}
+        </div>
+
+        {# Reactions #}
+        {% render_reactions msg current_user %}
+      {% endif %}
+    {% endfor %}
+
+    {# Trailing time for multi-message groups #}
+    {% if messages|length > 1 %}
+      {% with last_msg=messages|last %}
+        {% if not last_msg.deleted_at %}
+          <time class="text-[0.65rem] text-base-content/40 px-1">{{ last_msg.created_at|format_time }}</time>
+        {% endif %}
+      {% endwith %}
+    {% endif %}
+  </div>
+</div>
+{% endwith %}

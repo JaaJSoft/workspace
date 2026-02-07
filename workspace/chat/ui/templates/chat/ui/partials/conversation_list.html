@@ -1,0 +1,141 @@
+{% comment %}
+Conversation List Partial
+=========================
+Server-rendered conversation list for the chat sidebar.
+Used both for initial page render ({% include %}) and for
+alpine-ajax refresh via /chat/conversations.
+
+Expects in context:
+  - dm_conversations: list of DM Conversation objects (with display_name, avatar_initial, etc.)
+  - group_conversations: list of Group Conversation objects
+
+Alpine bindings reference the parent chatApp() x-data scope.
+{% endcomment %}
+
+<div id="conversation-list">
+
+{% if not dm_conversations and not group_conversations %}
+  <div class="text-center py-8" x-show="!collapsed">
+    <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-info/10 flex items-center justify-center">
+      <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
+    </div>
+    <p class="text-sm text-base-content/60 mb-3">No conversations yet</p>
+    <button class="btn btn-info btn-xs" @click="showNewConversationDialog()">
+      <i data-lucide="plus" class="w-3 h-3"></i> New chat
+    </button>
+  </div>
+
+{% else %}
+
+  {# ── Direct Messages ── #}
+  {% if dm_conversations %}
+  <div>
+    <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
+        :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'"
+        :aria-hidden="collapsed">
+      <span class="flex items-center gap-2">
+        <i data-lucide="user" class="w-3 h-3"></i>
+        Direct Messages
+      </span>
+    </h3>
+    <ul class="space-y-1">
+      {% for conv in dm_conversations %}
+      <li class="list-none">
+        <button type="button"
+          class="flex items-center w-full p-2 rounded-lg transition-colors"
+          :class="[
+            collapsed ? 'justify-center px-0 mx-auto' : 'gap-3',
+            activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info/10 text-info hover:bg-info/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-info'
+          ]"
+          @click="selectConversationById('{{ conv.uuid }}')"
+          :title="collapsed ? '{{ conv.display_name|escapejs }}' : ''"
+        >
+          <div class="relative flex-shrink-0">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center"
+                 :class="activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info text-info-content' : 'bg-neutral text-neutral-content'">
+              <span class="text-xs font-medium">{{ conv.avatar_initial }}</span>
+            </div>
+            {% if conv.unread_count > 0 %}
+            <div class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-info rounded-full border-2 border-base-200"
+                 x-show="collapsed" x-cloak></div>
+            {% endif %}
+          </div>
+          <div class="flex-1 min-w-0 text-left" x-show="!collapsed" x-transition>
+            <div class="flex items-center justify-between gap-1">
+              <span class="font-medium text-sm truncate">{{ conv.display_name }}</span>
+              <span class="text-xs text-base-content/50 flex-shrink-0">{{ conv.time_ago }}</span>
+            </div>
+            <div class="flex items-center justify-between gap-1 mt-0.5">
+              <span class="text-xs text-base-content/50 truncate">{{ conv.last_message_preview }}</span>
+              {% if conv.unread_count > 0 %}
+              <span class="badge badge-info badge-xs flex-shrink-0">{{ conv.unread_count }}</span>
+              {% endif %}
+            </div>
+          </div>
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if dm_conversations and group_conversations %}
+  <hr class="my-3 border-base-300 transition-all duration-200"
+      :class="collapsed ? 'opacity-0' : 'opacity-100'">
+  {% endif %}
+
+  {# ── Groups ── #}
+  {% if group_conversations %}
+  <div>
+    <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
+        :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'"
+        :aria-hidden="collapsed">
+      <span class="flex items-center gap-2">
+        <i data-lucide="users" class="w-3 h-3"></i>
+        Groups
+      </span>
+    </h3>
+    <ul class="space-y-1">
+      {% for conv in group_conversations %}
+      <li class="list-none">
+        <button type="button"
+          class="flex items-center w-full p-2 rounded-lg transition-colors"
+          :class="[
+            collapsed ? 'justify-center px-0 mx-auto' : 'gap-3',
+            activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info/10 text-info hover:bg-info/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-info'
+          ]"
+          @click="selectConversationById('{{ conv.uuid }}')"
+          :title="collapsed ? '{{ conv.display_name|escapejs }}' : ''"
+        >
+          <div class="relative flex-shrink-0">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center"
+                 :class="activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info text-info-content' : 'bg-info/20 text-info'">
+              <span class="text-xs font-medium">{{ conv.avatar_initial }}</span>
+            </div>
+            {% if conv.unread_count > 0 %}
+            <div class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-info rounded-full border-2 border-base-200"
+                 x-show="collapsed" x-cloak></div>
+            {% endif %}
+          </div>
+          <div class="flex-1 min-w-0 text-left" x-show="!collapsed" x-transition>
+            <div class="flex items-center justify-between gap-1">
+              <span class="font-medium text-sm truncate">{{ conv.display_name }}</span>
+              <span class="text-xs text-base-content/50 flex-shrink-0">{{ conv.time_ago }}</span>
+            </div>
+            <div class="flex items-center justify-between gap-1 mt-0.5">
+              <span class="text-xs text-base-content/50 truncate">{{ conv.last_message_preview }}</span>
+              {% if conv.unread_count > 0 %}
+              <span class="badge badge-info badge-xs flex-shrink-0">{{ conv.unread_count }}</span>
+              {% endif %}
+            </div>
+          </div>
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+{% endif %}
+
+</div>

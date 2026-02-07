@@ -14,6 +14,17 @@ urlpatterns = [
         views.ConversationDetailView.as_view(),
         name='chat-conversation-detail',
     ),
+    # Members
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/members',
+        views.ConversationMembersView.as_view(),
+        name='chat-conversation-members',
+    ),
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/members/<int:user_id>',
+        views.ConversationMemberRemoveView.as_view(),
+        name='chat-conversation-member-remove',
+    ),
     # Messages
     path(
         'api/v1/chat/conversations/<uuid:conversation_id>/messages',

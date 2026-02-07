@@ -1,0 +1,126 @@
+<dialog x-ref="addMemberDialog" class="modal" @keydown.escape="$refs.addMemberDialog.close()">
+  <div class="modal-box max-w-md p-0 flex flex-col">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-5 pt-5 pb-2">
+      <h3 class="font-bold text-lg">Add members</h3>
+      <button class="btn btn-ghost btn-sm btn-circle" @click="$refs.addMemberDialog.close()">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="px-5 pb-5 flex flex-col gap-3">
+      <!-- Search input with chips -->
+      <div class="form-control">
+        <label class="label pb-1">
+          <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50">Search users</span>
+        </label>
+        <div class="relative">
+          <div
+            class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-info/50 transition-colors cursor-text"
+            @click="$refs.addMemberSearchInput.focus()"
+          >
+            <!-- Selected user chips -->
+            <template x-for="u in addMemberSelected" :key="u.id">
+              <span class="badge badge-sm gap-1 pl-0.5 pr-0.5 py-2.5">
+                <template x-if="u.avatar_url">
+                  <div class="w-4 h-4 rounded-full overflow-hidden flex-shrink-0"><img :src="u.avatar_url" style="width:100%;height:100%;object-fit:cover;" /></div>
+                </template>
+                <template x-if="!u.avatar_url">
+                  <div class="w-4 h-4 rounded-full bg-neutral text-neutral-content flex items-center justify-center flex-shrink-0"><span class="text-[0.55rem]" x-text="(u.username || '?')[0].toUpperCase()"></span></div>
+                </template>
+                <span class="text-xs" x-text="u.username"></span>
+                <button @click.stop="removeAddMember(u.id)" class="btn btn-ghost btn-circle p-0 w-4 h-4 min-h-0 hover:bg-base-300">
+                  <i data-lucide="x" class="w-2.5 h-2.5"></i>
+                </button>
+              </span>
+            </template>
+
+            <!-- Inline search input -->
+            <input
+              type="text"
+              x-ref="addMemberSearchInput"
+              class="grow bg-transparent outline-none text-sm min-w-[8rem] h-6"
+              placeholder="Search users..."
+              x-model="addMemberSearchQuery"
+              @input.debounce.300ms="searchUsersForAdd()"
+              @keydown="handleAddMemberKeydown($event)"
+              @keydown.escape="addMemberShowDropdown = false"
+              @keydown.backspace="if (!addMemberSearchQuery && addMemberSelected.length) removeAddMember(addMemberSelected[addMemberSelected.length - 1].id)"
+              autocomplete="off"
+            />
+            <span x-show="addMemberLoading" class="loading loading-spinner loading-xs"></span>
+          </div>
+
+          <!-- Dropdown results -->
+          <div
+            x-show="addMemberShowDropdown && addMemberResults.length > 0"
+            x-cloak
+            @click.outside="addMemberShowDropdown = false"
+            class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+          >
+            <ul class="menu menu-sm p-1">
+              <template x-for="(user, idx) in addMemberResults" :key="user.id">
+                <li>
+                  <button
+                    type="button"
+                    class="flex items-center gap-2 rounded"
+                    :class="idx === addMemberHighlight ? 'active' : ''"
+                    @click="selectAddMember(user); $refs.addMemberSearchInput.focus()"
+                    @mouseenter="addMemberHighlight = idx"
+                  >
+                    <template x-if="user.avatar_url">
+                      <div class="w-6 h-6 rounded-full overflow-hidden flex-shrink-0"><img :src="user.avatar_url" style="width:100%;height:100%;object-fit:cover;" /></div>
+                    </template>
+                    <template x-if="!user.avatar_url">
+                      <div class="w-6 h-6 rounded-full bg-neutral text-neutral-content flex items-center justify-center flex-shrink-0"><span class="text-xs" x-text="(user.username || '?')[0].toUpperCase()"></span></div>
+                    </template>
+                    <div class="flex flex-col items-start">
+                      <span class="font-medium text-sm" x-text="user.username"></span>
+                      <span
+                        class="text-xs text-base-content/60"
+                        x-show="user.first_name || user.last_name"
+                        x-text="((user.first_name || '') + ' ' + (user.last_name || '')).trim()"
+                      ></span>
+                    </div>
+                  </button>
+                </li>
+              </template>
+            </ul>
+          </div>
+
+          <!-- No results -->
+          <div
+            x-show="addMemberShowDropdown && addMemberResults.length === 0 && (addMemberSearchQuery || '').length >= 2 && !addMemberLoading"
+            x-cloak
+            @click.outside="addMemberShowDropdown = false"
+            class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
+          >
+            No users found
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex justify-end gap-2 pt-1">
+        <button class="btn btn-ghost btn-sm" @click="$refs.addMemberDialog.close()">Cancel</button>
+        <button
+          class="btn btn-info btn-sm gap-1.5"
+          @click="confirmAddMembers()"
+          :disabled="addMemberSelected.length === 0 || addMemberSaving"
+        >
+          <template x-if="!addMemberSaving">
+            <span class="flex items-center gap-1.5">
+              <i data-lucide="user-plus" class="w-4 h-4"></i>
+              Add
+            </span>
+          </template>
+          <span x-show="addMemberSaving" class="loading loading-spinner loading-xs"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

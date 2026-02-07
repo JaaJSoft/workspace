@@ -68,11 +68,20 @@ class UserSearchView(APIView):
             Q(first_name__icontains=query) |
             Q(last_name__icontains=query),
             is_active=True,
-        ).exclude(pk=request.user.pk).values(
-            'id', 'username', 'first_name', 'last_name',
-        )[:limit]
+        ).exclude(pk=request.user.pk)[:limit]
 
-        return Response({'results': list(users)})
+        results = []
+        for u in users:
+            entry = {
+                'id': u.id,
+                'username': u.username,
+                'first_name': u.first_name,
+                'last_name': u.last_name,
+                'avatar_url': f'/api/v1/users/{u.id}/avatar' if avatar_service.has_avatar(u) else None,
+            }
+            results.append(entry)
+
+        return Response({'results': results})
 
 
 @extend_schema(tags=['Users'])

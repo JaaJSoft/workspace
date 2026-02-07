@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from workspace.users.avatar_service import has_avatar
+
 from .models import Conversation, ConversationMember, Message, Reaction
 
 
@@ -8,6 +10,12 @@ class MemberUserSerializer(serializers.Serializer):
     username = serializers.CharField()
     first_name = serializers.CharField()
     last_name = serializers.CharField()
+    avatar_url = serializers.SerializerMethodField()
+
+    def get_avatar_url(self, user):
+        if has_avatar(user):
+            return f'/api/v1/users/{user.id}/avatar'
+        return None
 
 
 class ConversationMemberSerializer(serializers.ModelSerializer):

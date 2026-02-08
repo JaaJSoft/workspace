@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import avatar_service as group_avatar_service
-from .models import Conversation, ConversationMember, Message, Reaction
+from .models import Conversation, ConversationMember, Message, PinnedConversation, Reaction
 from .serializers import (
     ConversationCreateSerializer,
     ConversationDetailSerializer,
@@ -91,9 +91,18 @@ class ConversationListView(APIView):
             for m in Message.objects.filter(uuid__in=last_msg_ids).select_related('author')
         }
 
+        # Build pin map
+        pin_map = {
+            str(p.conversation_id): p.position
+            for p in PinnedConversation.objects.filter(owner=user)
+        }
+
         for c in conv_list:
             c._last_message = last_msgs.get(c._last_msg_id)
             c.unread_count = unread_map.get(str(c.uuid), 0)
+            pin_pos = pin_map.get(str(c.uuid))
+            c.is_pinned = pin_pos is not None
+            c.pin_position = pin_pos
 
         serializer = ConversationListSerializer(conv_list, many=True)
         return Response(serializer.data)
@@ -888,3 +897,75 @@ class ConversationMessageSearchView(APIView):
             'query': query,
             'count': len(results),
         })
+
+
+@extend_schema(tags=['Chat'])
+class ConversationPinView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Pin a conversation")
+    def post(self, request, conversation_id):
+        membership = _get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {'detail': 'Not a member of this conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if PinnedConversation.objects.filter(
+            owner=request.user, conversation_id=conversation_id,
+        ).exists():
+            return Response({'detail': 'Already pinned.'}, status=status.HTTP_200_OK)
+
+        max_pos = PinnedConversation.objects.filter(
+            owner=request.user,
+        ).aggregate(max_pos=Max('position'))['max_pos']
+        next_pos = (max_pos or 0) + 1
+
+        PinnedConversation.objects.create(
+            owner=request.user,
+            conversation_id=conversation_id,
+            position=next_pos,
+        )
+        return Response({'status': 'pinned'}, status=status.HTTP_201_CREATED)
+
+    @extend_schema(summary="Unpin a conversation")
+    def delete(self, request, conversation_id):
+        deleted, _ = PinnedConversation.objects.filter(
+            owner=request.user, conversation_id=conversation_id,
+        ).delete()
+        if not deleted:
+            return Response(
+                {'detail': 'Not pinned.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=['Chat'])
+class ConversationPinReorderView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Reorder pinned conversations")
+    def post(self, request):
+        order = request.data.get('order', [])
+        if not isinstance(order, list):
+            return Response(
+                {'detail': '"order" must be a list of conversation UUIDs.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        pins = PinnedConversation.objects.filter(owner=request.user)
+        pin_map = {str(p.conversation_id): p for p in pins}
+
+        to_update = []
+        for i, uuid_str in enumerate(order):
+            pin = pin_map.get(uuid_str)
+            if pin:
+                pin.position = i
+                to_update.append(pin)
+
+        if to_update:
+            PinnedConversation.objects.bulk_update(to_update, ['position'])
+
+        return Response({'status': 'ok'})

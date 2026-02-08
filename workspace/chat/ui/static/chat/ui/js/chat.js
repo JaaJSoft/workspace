@@ -37,7 +37,10 @@ function chatApp(currentUserId) {
     searchLoading: false,
     searchHighlight: -1,
     // Context menu state
-    ctxMenu: { open: false, x: 0, y: 0, uuid: null, kind: null },
+    ctxMenu: { open: false, x: 0, y: 0, uuid: null, kind: null, isPinned: false },
+    // Pinned drag & drop
+    draggingPinned: null,
+    dragOverPinned: null,
 
     // Sidebar
     collapsed: JSON.parse(localStorage.getItem('chatSidebarCollapsed') || 'false'),
@@ -709,6 +712,10 @@ function chatApp(currentUserId) {
         conv.updated_at = msg.created_at;
       }
       this.conversations.sort((a, b) => {
+        // Pinned conversations always come first, sorted by pin_position
+        if (a.is_pinned && !b.is_pinned) return -1;
+        if (!a.is_pinned && b.is_pinned) return 1;
+        if (a.is_pinned && b.is_pinned) return (a.pin_position || 0) - (b.pin_position || 0);
         return new Date(b.updated_at) - new Date(a.updated_at);
       });
     },
@@ -1238,14 +1245,109 @@ function chatApp(currentUserId) {
       });
     },
 
+    // ── Pinning ─────────────────────────────────────────────
+    async pinConversation(uuid) {
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${uuid}/pin`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+        });
+        if (resp.ok || resp.status === 201) {
+          const conv = this.conversations.find(c => c.uuid === uuid);
+          if (conv) conv.is_pinned = true;
+          this.refreshConversationList();
+        }
+      } catch (e) {
+        console.error('Failed to pin conversation', e);
+      }
+    },
+
+    async unpinConversation(uuid) {
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${uuid}/pin`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+        });
+        if (resp.ok || resp.status === 204) {
+          const conv = this.conversations.find(c => c.uuid === uuid);
+          if (conv) conv.is_pinned = false;
+          this.refreshConversationList();
+        }
+      } catch (e) {
+        console.error('Failed to unpin conversation', e);
+      }
+    },
+
+    onPinnedDragStart(event, uuid) {
+      this.draggingPinned = uuid;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', uuid);
+      event.target.classList.add('opacity-50');
+    },
+
+    onPinnedDragEnd(event) {
+      this.draggingPinned = null;
+      this.dragOverPinned = null;
+      event.target.classList.remove('opacity-50');
+    },
+
+    onPinnedDragOver(event, uuid) {
+      if (!this.draggingPinned || this.draggingPinned === uuid) return;
+      event.dataTransfer.dropEffect = 'move';
+      this.dragOverPinned = uuid;
+    },
+
+    async onPinnedDrop(event, targetUuid) {
+      const srcUuid = this.draggingPinned;
+      this.draggingPinned = null;
+      this.dragOverPinned = null;
+
+      if (!srcUuid || srcUuid === targetUuid) return;
+
+      // Build current pinned order from the DOM list items
+      const listEl = event.target.closest('ul');
+      if (!listEl) return;
+
+      const items = [...listEl.querySelectorAll('li[draggable]')];
+      const order = items.map(li => li.dataset.conversationUuid).filter(Boolean);
+
+      // Reorder: move srcUuid before targetUuid
+      const srcIdx = order.indexOf(srcUuid);
+      const tgtIdx = order.indexOf(targetUuid);
+      if (srcIdx === -1 || tgtIdx === -1) return;
+
+      order.splice(srcIdx, 1);
+      const newTgtIdx = order.indexOf(targetUuid);
+      order.splice(newTgtIdx, 0, srcUuid);
+
+      // Persist reorder
+      try {
+        await fetch('/api/v1/chat/conversations/pin-reorder', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this._csrf(),
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({ order }),
+        });
+        this.refreshConversationList();
+      } catch (e) {
+        console.error('Failed to reorder pinned conversations', e);
+      }
+    },
+
     // ── Context menu ─────────────────────────────────────────
-    openConvContextMenu(event, uuid, kind) {
+    openConvContextMenu(event, uuid, kind, isPinned = false) {
       event.preventDefault();
       const menu = document.getElementById('conv-context-menu');
       if (!menu) return;
 
       this.ctxMenu.uuid = uuid;
       this.ctxMenu.kind = kind;
+      this.ctxMenu.isPinned = isPinned || this.conversations.find(c => c.uuid === uuid)?.is_pinned || false;
       this.ctxMenu.open = true;
 
       this.$nextTick(() => {
@@ -1284,6 +1386,12 @@ function chatApp(currentUserId) {
           break;
         case 'copy_link':
           this.copyConversationLink(uuid);
+          break;
+        case 'pin':
+          this.pinConversation(uuid);
+          break;
+        case 'unpin':
+          this.unpinConversation(uuid);
           break;
         case 'rename':
           this.renameConversation();

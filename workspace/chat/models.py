@@ -115,3 +115,35 @@ class Reaction(models.Model):
 
     def __str__(self):
         return f'{self.user} reacted {self.emoji}'
+
+
+class PinnedConversation(models.Model):
+    """User-pinned conversations for quick sidebar access."""
+    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='pinned_conversations',
+    )
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name='pins',
+    )
+    position = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['owner', 'conversation'],
+                name='unique_pinned_conversation',
+            ),
+        ]
+        ordering = ['position', 'created_at']
+        indexes = [
+            models.Index(fields=['owner', 'position']),
+        ]
+
+    def __str__(self):
+        return f'{self.owner} pinned {self.conversation}'

@@ -15,7 +15,7 @@ Alpine bindings reference the parent chatApp() x-data scope.
 
 <div id="conversation-list">
 
-{% if not dm_conversations and not group_conversations %}
+{% if not dm_conversations and not group_conversations and not pinned_conversations %}
   <div class="text-center py-8" x-show="!collapsed">
     <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-info/10 flex items-center justify-center">
       <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
@@ -27,6 +27,90 @@ Alpine bindings reference the parent chatApp() x-data scope.
   </div>
 
 {% else %}
+
+  {# ── Pinned ── #}
+  {% if pinned_conversations %}
+  <div>
+    <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
+        :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'"
+        :aria-hidden="collapsed">
+      <span class="flex items-center gap-2">
+        <i data-lucide="pin" class="w-3 h-3"></i>
+        Pinned
+      </span>
+    </h3>
+    <ul class="space-y-1">
+      {% for conv in pinned_conversations %}
+      <li class="list-none group/conv"
+          draggable="true"
+          data-conversation-uuid="{{ conv.uuid }}"
+          @dragstart="onPinnedDragStart($event, '{{ conv.uuid }}')"
+          @dragend="onPinnedDragEnd($event)"
+          @dragover.prevent="onPinnedDragOver($event, '{{ conv.uuid }}')"
+          @drop.prevent="onPinnedDrop($event, '{{ conv.uuid }}')"
+          :class="dragOverPinned === '{{ conv.uuid }}' ? 'border-t-2 border-info' : ''"
+          @contextmenu="openConvContextMenu($event, '{{ conv.uuid }}', '{{ conv.kind }}', true)">
+        <button type="button"
+          class="flex items-center w-full p-2 rounded-lg transition-colors"
+          :class="[
+            collapsed ? 'justify-center w-10 h-10 px-0 mx-auto' : 'gap-3',
+            activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info/10 text-info hover:bg-info/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-info'
+          ]"
+          @click="selectConversationById('{{ conv.uuid }}')"
+          :title="collapsed ? '{{ conv.display_name|escapejs }}' : ''"
+        >
+          <div class="relative flex-shrink-0">
+            {% if conv.other_user and conv.other_user|has_avatar %}
+              <div class="w-8 h-8 rounded-full overflow-hidden">
+                <img src="/api/v1/users/{{ conv.other_user.id }}/avatar" alt="{{ conv.other_user.username }}" class="w-full h-full object-cover" />
+              </div>
+            {% elif conv.has_avatar %}
+              <div class="w-8 h-8 rounded-full overflow-hidden">
+                <img src="/api/v1/chat/conversations/{{ conv.uuid }}/avatar/image" alt="{{ conv.display_name|escapejs }}" class="w-full h-full object-cover" />
+              </div>
+            {% else %}
+              <div class="w-8 h-8 rounded-full flex items-center justify-center"
+                   :class="activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info text-info-content' : 'bg-{% if conv.kind == 'dm' %}neutral text-neutral-content{% else %}info/20 text-info{% endif %}'">
+                <span class="text-xs font-medium">{{ conv.avatar_initial }}</span>
+              </div>
+            {% endif %}
+            <div class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-info rounded-full border-2 border-base-200"
+                 x-show="collapsed && (conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0)" x-cloak></div>
+          </div>
+          <div class="flex-1 min-w-0 text-left" x-show="!collapsed" x-transition>
+            <div class="flex items-center justify-between gap-1">
+              <span class="font-medium text-sm truncate flex items-center gap-1">
+                {{ conv.display_name }}
+                <i data-lucide="pin" class="w-3 h-3 text-base-content/30 flex-shrink-0"></i>
+              </span>
+              <span class="flex-shrink-0 w-8 h-5 inline-flex items-center justify-end">
+                <span class="text-xs text-base-content/50 group-hover/conv:hidden">{{ conv.time_ago }}</span>
+                <span class="hidden group-hover/conv:inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-base-content/10"
+                      @click.stop="openConvContextMenu($event, '{{ conv.uuid }}', '{{ conv.kind }}', true)"
+                      title="More options">
+                  <i data-lucide="ellipsis" class="w-3.5 h-3.5"></i>
+                </span>
+              </span>
+            </div>
+            <div class="flex items-center justify-between gap-1 mt-0.5">
+              <span class="text-xs text-base-content/50 truncate">{{ conv.last_message_preview }}</span>
+              <span class="badge badge-info badge-xs flex-shrink-0"
+                    x-show="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0"
+                    x-text="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count"
+                    x-cloak></span>
+            </div>
+          </div>
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  {% if dm_conversations or group_conversations %}
+  <hr class="my-3 border-base-300 transition-all duration-200"
+      :class="collapsed ? 'opacity-0' : 'opacity-100'">
+  {% endif %}
+  {% endif %}
 
   {# ── Direct Messages ── #}
   {% if dm_conversations %}

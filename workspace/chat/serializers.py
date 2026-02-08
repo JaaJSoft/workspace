@@ -61,6 +61,8 @@ class ConversationListSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.IntegerField(read_only=True, default=0)
     avatar_url = serializers.SerializerMethodField()
+    is_pinned = serializers.BooleanField(read_only=True, default=False)
+    pin_position = serializers.IntegerField(read_only=True, default=None)
 
     class Meta:
         model = Conversation
@@ -68,7 +70,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
             'uuid', 'kind', 'title', 'created_by_id',
             'created_at', 'updated_at',
             'members', 'last_message', 'unread_count',
-            'avatar_url',
+            'avatar_url', 'is_pinned', 'pin_position',
         ]
 
     def get_last_message(self, obj):

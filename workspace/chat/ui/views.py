@@ -8,7 +8,7 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.chat.models import Conversation, ConversationMember, Message
+from workspace.chat.models import Conversation, ConversationMember, Message, PinnedConversation
 from workspace.chat.serializers import ConversationListSerializer
 from workspace.chat.services import get_unread_counts
 
@@ -49,10 +49,21 @@ def _build_conversation_context(user):
     unread_data = get_unread_counts(user)
     unread_map = unread_data.get('conversations', {})
 
+    # Build pin map: {conversation_uuid: position}
+    pin_map = {
+        str(p.conversation_id): p.position
+        for p in PinnedConversation.objects.filter(owner=user)
+    }
+
     now = timezone.now()
     for c in conv_list:
         c._last_message = last_msgs.get(c._last_msg_id)
         c.unread_count = unread_map.get(str(c.uuid), 0)
+
+        # Pin data
+        pin_pos = pin_map.get(str(c.uuid))
+        c.is_pinned = pin_pos is not None
+        c.pin_position = pin_pos if pin_pos is not None else None
 
         # Resolve display name
         active_members = list(c.members.all())
@@ -106,10 +117,17 @@ def chat_view(request, conversation_uuid=None):
     conv_list = _build_conversation_context(request.user)
     serializer = ConversationListSerializer(conv_list, many=True)
 
+    pinned = sorted(
+        [c for c in conv_list if c.is_pinned],
+        key=lambda c: (c.pin_position or 0, c.created_at),
+    )
+    pinned_uuids = {str(c.uuid) for c in pinned}
+
     return render(request, 'chat/ui/index.html', {
         'conversations': conv_list,
-        'dm_conversations': [c for c in conv_list if c.kind == Conversation.Kind.DM],
-        'group_conversations': [c for c in conv_list if c.kind == Conversation.Kind.GROUP],
+        'pinned_conversations': pinned,
+        'dm_conversations': [c for c in conv_list if c.kind == Conversation.Kind.DM and str(c.uuid) not in pinned_uuids],
+        'group_conversations': [c for c in conv_list if c.kind == Conversation.Kind.GROUP and str(c.uuid) not in pinned_uuids],
         'conversations_json': json.dumps(serializer.data),
         'initial_conversation_uuid': str(conversation_uuid) if conversation_uuid else '',
     })
@@ -119,9 +137,17 @@ def chat_view(request, conversation_uuid=None):
 def conversation_list_view(request):
     """Partial: conversation list HTML for alpine-ajax refresh."""
     conv_list = _build_conversation_context(request.user)
+
+    pinned = sorted(
+        [c for c in conv_list if c.is_pinned],
+        key=lambda c: (c.pin_position or 0, c.created_at),
+    )
+    pinned_uuids = {str(c.uuid) for c in pinned}
+
     return render(request, 'chat/ui/partials/conversation_list.html', {
-        'dm_conversations': [c for c in conv_list if c.kind == Conversation.Kind.DM],
-        'group_conversations': [c for c in conv_list if c.kind == Conversation.Kind.GROUP],
+        'pinned_conversations': pinned,
+        'dm_conversations': [c for c in conv_list if c.kind == Conversation.Kind.DM and str(c.uuid) not in pinned_uuids],
+        'group_conversations': [c for c in conv_list if c.kind == Conversation.Kind.GROUP and str(c.uuid) not in pinned_uuids],
     })
 
 

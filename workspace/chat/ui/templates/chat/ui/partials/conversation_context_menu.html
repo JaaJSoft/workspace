@@ -24,6 +24,20 @@
       </button>
     </li>
 
+    <!-- Pin / Unpin -->
+    <li x-show="!ctxMenu.isPinned">
+      <button type="button" class="gap-3 rounded" @click="ctxMenuAction('pin')">
+        <i data-lucide="pin" class="w-4 h-4"></i>
+        <span>Pin conversation</span>
+      </button>
+    </li>
+    <li x-show="ctxMenu.isPinned">
+      <button type="button" class="gap-3 rounded" @click="ctxMenuAction('unpin')">
+        <i data-lucide="pin-off" class="w-4 h-4"></i>
+        <span>Unpin conversation</span>
+      </button>
+    </li>
+
     <!-- Rename (group only) -->
     <li x-show="ctxMenu.kind === 'group'">
       <button type="button" class="gap-3 rounded" @click="ctxMenuAction('rename')">

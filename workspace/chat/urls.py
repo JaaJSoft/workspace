@@ -75,6 +75,17 @@ urlpatterns = [
         views.GroupAvatarRetrieveView.as_view(),
         name='chat-group-avatar-retrieve',
     ),
+    # Pinning (pin-reorder before uuid patterns to avoid ambiguity)
+    path(
+        'api/v1/chat/conversations/pin-reorder',
+        views.ConversationPinReorderView.as_view(),
+        name='chat-conversation-pin-reorder',
+    ),
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/pin',
+        views.ConversationPinView.as_view(),
+        name='chat-conversation-pin',
+    ),
     # SSE
     path(
         'api/v1/chat/stream',

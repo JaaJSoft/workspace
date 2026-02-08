@@ -1,0 +1,113 @@
+<dialog id="calendar-help-dialog" class="modal">
+  <div class="modal-box max-w-3xl">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </form>
+    <h3 class="font-bold text-xl mb-6 flex items-center gap-2">
+      <i data-lucide="circle-help" class="w-6 h-6 text-info"></i>
+      Help
+    </h3>
+
+    <div class="space-y-2">
+      <!-- Keyboard Shortcuts -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="calendar-help-accordion" checked="checked" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="keyboard" class="w-4 h-4 text-accent"></i>
+          Keyboard Shortcuts
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <h4 class="font-semibold mt-0 mb-2">Navigation</h4>
+            <table class="table table-sm">
+              <tbody>
+                <tr><td><kbd class="kbd kbd-sm">T</kbd></td><td>Go to today</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">&larr;</kbd></td><td>Previous period</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">&rarr;</kbd></td><td>Next period</td></tr>
+              </tbody>
+            </table>
+            <h4 class="font-semibold mt-3 mb-2">Views</h4>
+            <table class="table table-sm">
+              <tbody>
+                <tr><td><kbd class="kbd kbd-sm">M</kbd></td><td>Month view</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">W</kbd></td><td>Week view</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">D</kbd></td><td>Day view</td></tr>
+              </tbody>
+            </table>
+            <h4 class="font-semibold mt-3 mb-2">Actions</h4>
+            <table class="table table-sm">
+              <tbody>
+                <tr><td><kbd class="kbd kbd-sm">N</kbd></td><td>New event</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">Esc</kbd></td><td>Close panel / modal</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">K</kbd></td><td>Command palette</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">?</kbd></td><td>Show this help</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Calendar Management -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="calendar-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="calendar" class="w-4 h-4 text-accent"></i>
+          Calendar Management
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <ul>
+              <li><strong>Multiple calendars</strong> &mdash; Create separate calendars for work, personal, etc.</li>
+              <li><strong>Color coding</strong> &mdash; Assign colors to calendars to distinguish events at a glance.</li>
+              <li><strong>Visibility</strong> &mdash; Toggle calendar checkboxes in the sidebar to show/hide their events.</li>
+              <li><strong>Subscribed calendars</strong> &mdash; Calendars shared with you appear under "Other calendars".</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Events -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="calendar-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="calendar-plus" class="w-4 h-4 text-accent"></i>
+          Events
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <ul>
+              <li><strong>Create</strong> &mdash; Click a date or drag a time range on the calendar, or press <kbd class="kbd kbd-xs">N</kbd>.</li>
+              <li><strong>Quick duration</strong> &mdash; Use duration chips (30m, 1h, 2h...) when creating an event.</li>
+              <li><strong>Invite guests</strong> &mdash; Search and add users as guests to your events.</li>
+              <li><strong>Respond</strong> &mdash; Accept or decline event invitations from the detail panel.</li>
+              <li><strong>Detail panel</strong> &mdash; Click an event to open its details in the right panel.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Access -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="calendar-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="code" class="w-4 h-4 text-accent"></i>
+          API Access
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <ul>
+              <li><strong>Base URL:</strong> <code>/api/v1/calendar</code></li>
+              <li><strong>Authentication:</strong> Use your session cookie or API token.</li>
+              <li><strong>Documentation:</strong> Full API docs are available at <a href="/api/docs" class="link link-accent">/api/docs</a>.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

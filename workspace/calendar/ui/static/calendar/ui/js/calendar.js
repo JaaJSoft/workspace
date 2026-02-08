@@ -696,6 +696,49 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.form.end = this.form.all_day ? this.toLocalDate(d.toISOString()) : this.toLocalDatetime(d.toISOString());
     },
 
+    // --- Keyboard shortcuts ---
+    handleKeydown(e) {
+      // Skip when typing in inputs, textareas, selects
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      // Skip when a modal is open
+      if (this.showModal || this.showCalendarModal) return;
+
+      const key = e.key;
+
+      // Navigation
+      if (key === 'ArrowLeft') { e.preventDefault(); this.calendarPrev(); return; }
+      if (key === 'ArrowRight') { e.preventDefault(); this.calendarNext(); return; }
+      if (key === 't' || key === 'T') { e.preventDefault(); this.calendarToday(); return; }
+
+      // Views
+      if (key === 'm' || key === 'M') { e.preventDefault(); this.changeView('dayGridMonth'); return; }
+      if (key === 'w' || key === 'W') { e.preventDefault(); this.changeView('timeGridWeek'); return; }
+      if (key === 'd' || key === 'D') { e.preventDefault(); this.changeView('timeGridDay'); return; }
+
+      // New event
+      if (key === 'n' || key === 'N') {
+        e.preventDefault();
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        const start = `${dateStr}T${timeStr}`;
+        this.openCreateModal(start, this._addHour(now.toISOString()), false);
+        return;
+      }
+
+      // Close panel
+      if (key === 'Escape' && this.showPanel) { e.preventDefault(); this.closePanel(); return; }
+
+      // Help
+      if (key === '?') {
+        e.preventDefault();
+        const dlg = document.getElementById('calendar-help-dialog');
+        if (dlg) { dlg.showModal(); lucide?.createIcons(); }
+      }
+    },
+
     // --- Helpers ---
     toLocalDatetime(isoStr) {
       if (!isoStr) return '';

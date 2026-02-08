@@ -13,7 +13,7 @@
 
 {% block drawer_class %}drawer-open{% endblock %}
 {% block drawer_id %}calendar-drawer{% endblock %}
-{% block drawer_attrs %}x-data="calendarApp({{ calendars_json }})" @calendar-member-selected.window="addMember($event)"{% endblock %}
+{% block drawer_attrs %}x-data="calendarApp({{ calendars_json }})" @calendar-member-selected.window="addMember($event)" @keydown.window="handleKeydown($event)"{% endblock %}
 
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
@@ -223,8 +223,11 @@
       </template>
     </div>
 
-    <!-- Collapse toggle (bottom) -->
+    <!-- Bottom actions -->
     <div class="border-t border-base-300 py-4 px-3">
+      <ul class="menu p-0">
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="info" onclick="document.getElementById('calendar-help-dialog').showModal(); lucide?.createIcons()" tooltip="Help" %}
+      </ul>
       <ul class="menu p-0" x-show="!isMobile()">
         {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
       </ul>
@@ -521,6 +524,8 @@
     </form>
   </div>
 </dialog>
+
+{% include "calendar/ui/partials/help_dialog.html" %}
 {% endblock %}
 
 {% block extra_scripts %}

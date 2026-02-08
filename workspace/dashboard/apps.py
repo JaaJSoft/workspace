@@ -40,16 +40,6 @@ class DashboardConfig(AppConfig):
                 order=30,
             ),
             ModuleInfo(
-                name='Calendar',
-                slug='calendar',
-                description='Schedule events and reminders.',
-                icon='calendar',
-                color='info',
-                url=None,
-                active=False,
-                order=40,
-            ),
-            ModuleInfo(
                 name='Tasks',
                 slug='tasks',
                 description='Track projects and to-dos.',

@@ -31,12 +31,14 @@ api_urlpatterns = [
     path('', include('workspace.users.urls')),
     path('', include('workspace.dashboard.urls')),
     path('', include('workspace.chat.urls')),
+    path('', include('workspace.calendar.urls')),
 ]
 
 ui_urlpatterns = [
     # UI apps
     path('files', include('workspace.files.ui.urls')),
     path('chat', include('workspace.chat.ui.urls')),
+    path('calendar', include('workspace.calendar.ui.urls')),
 ]
 
 urlpatterns = [

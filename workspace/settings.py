@@ -94,6 +94,8 @@ INSTALLED_APPS = [
     'workspace.users',
     'workspace.chat',
     'workspace.chat.ui',
+    'workspace.calendar',
+    'workspace.calendar.ui',
 ]
 
 # Add Debug Toolbar only in DEBUG mode and not during tests

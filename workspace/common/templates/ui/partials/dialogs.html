@@ -2,8 +2,11 @@
 <!-- Confirm dialog -->
 <dialog id="app-dialog-confirm" class="modal">
   <div class="modal-box">
-    <h3 id="app-dialog-confirm-title" class="font-bold text-lg">Confirm</h3>
-    <p id="app-dialog-confirm-message" class="py-2">Are you sure?</p>
+    <div class="flex items-center gap-3">
+      <div id="app-dialog-confirm-icon" class="hidden flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"></div>
+      <h3 id="app-dialog-confirm-title" class="font-bold text-lg">Confirm</h3>
+    </div>
+    <p id="app-dialog-confirm-message" class="py-2 mt-2">Are you sure?</p>
     <div class="modal-action">
       <form method="dialog">
         <button id="app-dialog-confirm-cancel" class="btn btn-ghost btn-sm">Cancel</button>
@@ -14,19 +17,28 @@
   <form method="dialog" class="modal-backdrop">
     <button>close</button>
   </form>
-  </dialog>
+</dialog>
 
 <!-- Prompt dialog -->
 <dialog id="app-dialog-prompt" class="modal">
   <div class="modal-box">
-    <h3 id="app-dialog-prompt-title" class="font-bold text-lg">Input</h3>
-    <p id="app-dialog-prompt-message" class="py-2 text-base-content/70"></p>
+    <div class="flex items-center gap-3">
+      <div id="app-dialog-prompt-icon" class="hidden flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"></div>
+      <h3 id="app-dialog-prompt-title" class="font-bold text-lg">Input</h3>
+    </div>
+    <p id="app-dialog-prompt-message" class="text-sm text-base-content/70"></p>
     <input
       id="app-dialog-prompt-input"
       type="text"
-      class="input input-bordered w-full"
+      class="input input-bordered w-full mt-4"
       autocomplete="off"
     />
+    <textarea
+      id="app-dialog-prompt-textarea"
+      class="textarea textarea-bordered w-full mt-4 hidden"
+      autocomplete="off"
+      rows="4"
+    ></textarea>
     <div class="modal-action">
       <form method="dialog">
         <button id="app-dialog-prompt-cancel" class="btn btn-ghost btn-sm">Cancel</button>
@@ -42,8 +54,11 @@
 <!-- Message/Error dialog -->
 <dialog id="app-dialog-message" class="modal">
   <div class="modal-box">
-    <h3 id="app-dialog-message-title" class="font-bold text-lg">Message</h3>
-    <p id="app-dialog-message-message" class="py-2">Done.</p>
+    <div class="flex items-center gap-3">
+      <div id="app-dialog-message-icon" class="hidden flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"></div>
+      <h3 id="app-dialog-message-title" class="font-bold text-lg">Message</h3>
+    </div>
+    <p id="app-dialog-message-message" class="py-2 mt-2">Done.</p>
     <div class="modal-action">
       <form method="dialog">
         <button id="app-dialog-message-ok" class="btn btn-sm">OK</button>

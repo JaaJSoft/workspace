@@ -1,0 +1,532 @@
+{% extends 'base_with_navbar.html' %}
+{% load static %}
+
+{% block title %}Calendar - Workspace{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'calendar/ui/css/calendar.css' %}" />
+{% endblock %}
+
+{% block navbar %}
+{% include 'ui/partials/navbar.html' with navbar_full_width=True %}
+{% endblock %}
+
+{% block drawer_class %}drawer-open{% endblock %}
+{% block drawer_id %}calendar-drawer{% endblock %}
+{% block drawer_attrs %}x-data="calendarApp({{ calendars_json }})" @calendar-member-selected.window="addMember($event)"{% endblock %}
+
+{% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
+
+{% block drawer_sidebar %}
+<div class="drawer-side z-40 h-full">
+  <label for="calendar-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+
+  <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
+         :class="collapsed ? 'w-16' : 'w-72'">
+
+    <!-- Header -->
+    <div class="border-b border-base-300 py-4 px-3">
+      <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
+        <h2 class="text-xl font-semibold flex items-center gap-2" :class="collapsed ? '' : 'pl-2'">
+          <i data-lucide="calendar" class="w-6 h-6 text-accent"></i>
+          <span x-show="!collapsed" x-transition>Calendar</span>
+        </h2>
+        <div x-show="!collapsed" x-transition class="flex items-center gap-0.5">
+          <button type="button" class="btn btn-ghost btn-sm hover:text-accent" @click="calendarToday()">Today</button>
+          <div class="dropdown dropdown-end">
+            <button type="button" tabindex="0" class="btn btn-ghost btn-sm btn-square hover:text-accent" title="Settings">
+              <i data-lucide="settings" class="w-4 h-4"></i>
+            </button>
+            <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1">
+              <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+                <i data-lucide="settings" class="w-4 h-4 text-accent"></i>
+                Preferences
+              </h4>
+              <div class="space-y-3">
+                <!-- Default view -->
+                <div>
+                  <label class="text-sm text-base-content/60 block mb-1">Default view</label>
+                  <select class="select select-bordered select-sm w-full"
+                    :value="prefs.defaultView"
+                    @change="updatePref('defaultView', $event.target.value)">
+                    <option value="dayGridMonth">Month</option>
+                    <option value="timeGridWeek">Week</option>
+                    <option value="timeGridDay">Day</option>
+                  </select>
+                </div>
+                <hr class="border-base-300">
+                <!-- First day of week -->
+                <div>
+                  <label class="text-sm text-base-content/60 block mb-1">First day of week</label>
+                  <select class="select select-bordered select-sm w-full"
+                    :value="prefs.firstDay"
+                    @change="updatePref('firstDay', parseInt($event.target.value))">
+                    <option value="1">Monday</option>
+                    <option value="0">Sunday</option>
+                    <option value="6">Saturday</option>
+                  </select>
+                </div>
+                <hr class="border-base-300">
+                <!-- Time format -->
+                <div>
+                  <label class="text-sm text-base-content/60 block mb-1">Time format</label>
+                  <select class="select select-bordered select-sm w-full"
+                    :value="prefs.timeFormat"
+                    @change="updatePref('timeFormat', $event.target.value)">
+                    <option value="24h">24h (14:00)</option>
+                    <option value="12h">12h (2:00 PM)</option>
+                  </select>
+                </div>
+                <hr class="border-base-300">
+                <!-- Week numbers -->
+                <label class="flex items-center justify-between gap-2 cursor-pointer">
+                  <span class="text-sm">Show week numbers</span>
+                  <input type="checkbox" class="toggle toggle-sm toggle-accent"
+                    :checked="prefs.weekNumbers"
+                    @change="updatePref('weekNumbers', $event.target.checked)">
+                </label>
+                <!-- Default all day -->
+                <label class="flex items-center justify-between gap-2 cursor-pointer">
+                  <span class="text-sm">Default to all day</span>
+                  <input type="checkbox" class="toggle toggle-sm toggle-accent"
+                    :checked="prefs.defaultAllDay"
+                    @change="updatePref('defaultAllDay', $event.target.checked)">
+                </label>
+                <hr class="border-base-300">
+                <!-- Max events per day -->
+                <div>
+                  <label class="text-sm text-base-content/60 block mb-1">Max events per day</label>
+                  <div class="flex items-center gap-2">
+                    <input type="range" min="2" max="8" step="1"
+                      class="range range-sm range-accent flex-1"
+                      :value="prefs.dayMaxEvents"
+                      @input="updatePref('dayMaxEvents', parseInt($event.target.value))">
+                    <span class="text-sm font-mono w-5 text-center" x-text="prefs.dayMaxEvents"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- View controls (hidden when collapsed) -->
+    <div class="border-b border-base-300 overflow-hidden transition-all duration-200"
+         :class="collapsed ? 'max-h-0 py-0 opacity-0 border-b-0' : 'max-h-40 opacity-100 py-3 px-3'">
+      <!-- Navigation: prev / period title / next -->
+      <div class="flex items-center justify-between mb-2">
+        <button type="button" class="btn btn-ghost btn-xs btn-square" @click="calendarPrev()" title="Previous">
+          <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        </button>
+        <span class="text-sm font-semibold text-base-content truncate" x-text="currentTitle"></span>
+        <button type="button" class="btn btn-ghost btn-xs btn-square" @click="calendarNext()" title="Next">
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <!-- View mode -->
+      <div class="flex gap-1 mb-2">
+        <button type="button" class="btn btn-xs flex-1"
+                :class="currentView === 'dayGridMonth' ? 'btn-primary' : 'btn-ghost'"
+                @click="changeView('dayGridMonth')">Month</button>
+        <button type="button" class="btn btn-xs flex-1"
+                :class="currentView === 'timeGridWeek' ? 'btn-primary' : 'btn-ghost'"
+                @click="changeView('timeGridWeek')">Week</button>
+        <button type="button" class="btn btn-xs flex-1"
+                :class="currentView === 'timeGridDay' ? 'btn-primary' : 'btn-ghost'"
+                @click="changeView('timeGridDay')">Day</button>
+      </div>
+    </div>
+
+    <!-- Calendar lists (scrollable) -->
+    <div class="flex-1 overflow-y-auto py-4 px-3">
+
+      <!-- My Calendars -->
+      <div class="flex items-center justify-between overflow-hidden transition-all duration-200"
+           :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'">
+        <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider">
+          <span class="flex items-center gap-2">
+            <i data-lucide="user" class="w-3 h-3"></i>
+            My calendars
+          </span>
+        </h3>
+        <button type="button" class="btn btn-ghost btn-xs btn-square" @click="createCalendar()" title="New calendar">
+          <i data-lucide="plus" class="w-3 h-3"></i>
+        </button>
+      </div>
+
+      <ul class="space-y-1 mb-4">
+        <template x-for="cal in ownedCalendars" :key="cal.uuid">
+          <li class="flex items-center gap-2 p-1.5 rounded-lg text-sm hover:bg-base-content/5 group cursor-pointer"
+              :class="collapsed ? 'justify-center' : ''">
+            <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center"
+                  :class="'text-' + cal.color"
+                  :title="collapsed ? cal.name : ''">
+              <i data-lucide="calendar" class="w-4 h-4"></i>
+            </span>
+            <span x-show="!collapsed" x-transition class="flex-1 truncate" x-text="cal.name"></span>
+            <div x-show="!collapsed" class="flex items-center gap-0.5">
+              <div class="opacity-0 group-hover:opacity-100 flex gap-0.5">
+                <button type="button" class="btn btn-ghost btn-xs btn-square" @click.stop="editCalendar(cal)" title="Edit">
+                  <i data-lucide="pencil" class="w-3 h-3"></i>
+                </button>
+                <button type="button" class="btn btn-ghost btn-xs btn-square" @click.stop="deleteCalendar(cal)" title="Delete">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i>
+                </button>
+              </div>
+              <input type="checkbox" class="checkbox checkbox-xs"
+                     :class="'checkbox-' + cal.color"
+                     :checked="visibleCalendars[cal.uuid]"
+                     @change="toggleCalendarVisibility(cal.uuid)">
+            </div>
+          </li>
+        </template>
+        <li x-show="ownedCalendars.length === 0 && !collapsed"
+            class="text-xs text-base-content/40 px-1.5 py-1">
+          No calendars yet
+        </li>
+      </ul>
+
+      <!-- Other Calendars (subscribed) -->
+      <template x-if="subscribedCalendars.length > 0">
+        <div>
+          <hr class="mb-3 border-base-300 transition-all duration-200"
+              :class="collapsed ? 'opacity-0' : 'opacity-100'">
+          <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
+              :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'">
+            <span class="flex items-center gap-2">
+              <i data-lucide="users" class="w-3 h-3"></i>
+              Other calendars
+            </span>
+          </h3>
+          <ul class="space-y-1">
+            <template x-for="cal in subscribedCalendars" :key="cal.uuid">
+              <li class="flex items-center gap-2 p-1.5 rounded-lg text-sm hover:bg-base-content/5"
+                  :class="collapsed ? 'justify-center' : ''">
+                <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center"
+                      :class="'text-' + cal.color"
+                      :title="collapsed ? cal.name : ''">
+                  <i data-lucide="calendar" class="w-4 h-4"></i>
+                </span>
+                <span x-show="!collapsed" x-transition class="flex-1 truncate">
+                  <span x-text="cal.name"></span>
+                  <span class="text-base-content/40" x-text="'(' + cal.owner.username + ')'"></span>
+                </span>
+                <input x-show="!collapsed" type="checkbox" class="checkbox checkbox-xs flex-shrink-0"
+                       :class="'checkbox-' + cal.color"
+                       :checked="visibleCalendars[cal.uuid]"
+                       @change="toggleCalendarVisibility(cal.uuid)">
+              </li>
+            </template>
+          </ul>
+        </div>
+      </template>
+    </div>
+
+    <!-- Collapse toggle (bottom) -->
+    <div class="border-t border-base-300 py-4 px-3">
+      <ul class="menu p-0" x-show="!isMobile()">
+        {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+      </ul>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="flex h-full min-h-0">
+  <!-- Calendar -->
+  <div class="flex-1 flex flex-col min-w-0">
+    <div x-ref="calendarEl" class="flex-1 min-h-0"></div>
+  </div>
+
+  <!-- Event detail panel (right sidebar) -->
+  <div
+    x-show="showPanel" x-cloak
+    x-transition:enter="transition-[width] ease-out duration-200"
+    x-transition:enter-start="!w-0"
+    x-transition:enter-end="!w-80"
+    x-transition:leave="transition-[width] ease-in duration-150"
+    x-transition:leave-start="!w-80"
+    x-transition:leave-end="!w-0"
+    class="w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden"
+  >
+    <div class="w-80 flex-1 overflow-y-auto">
+      <!-- Color accent bar + header -->
+      <div class="relative">
+        <div class="h-1.5"
+             :style="'background-color: oklch(var(--' + ({primary:'p',secondary:'s',accent:'a',info:'in',success:'su',warning:'wa',error:'er'}[eventCalendarColor()]) + '))'"></div>
+        <div class="flex items-start justify-between p-4 pb-3">
+          <div class="flex-1 min-w-0">
+            <h3 class="font-bold text-lg leading-tight" x-text="form.title"></h3>
+            <!-- Calendar indicator -->
+            <div class="flex items-center gap-1.5 mt-1.5" x-show="eventCalendarObj()">
+              <span class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    :style="'background-color: oklch(var(--' + ({primary:'p',secondary:'s',accent:'a',info:'in',success:'su',warning:'wa',error:'er'}[eventCalendarColor()]) + '))'"></span>
+              <span class="text-xs text-base-content/50 truncate" x-text="eventCalendarObj()?.name"></span>
+            </div>
+          </div>
+          <button type="button" class="btn btn-sm btn-circle btn-ghost flex-shrink-0 -mt-1 -mr-1" @click="closePanel()">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Panel content -->
+      <div class="px-4 pb-4 space-y-4">
+        <!-- Date & time card -->
+        <div class="bg-base-200/50 rounded-lg p-3 space-y-1">
+          <div class="flex items-center gap-2 text-sm font-medium">
+            <i data-lucide="calendar-days" class="w-4 h-4 opacity-50 flex-shrink-0"></i>
+            <span x-text="panelDateDisplay()"></span>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-base-content/60">
+            <i data-lucide="clock" class="w-3.5 h-3.5 opacity-40 flex-shrink-0"></i>
+            <span x-text="panelTimeLabel()"></span>
+          </div>
+        </div>
+
+        <!-- Location -->
+        <template x-if="form.location">
+          <div class="flex items-center gap-2.5 text-sm">
+            <i data-lucide="map-pin" class="w-4 h-4 opacity-50 flex-shrink-0"></i>
+            <span x-text="form.location"></span>
+          </div>
+        </template>
+
+        <!-- Description -->
+        <template x-if="form.description">
+          <div class="flex items-start gap-2.5 text-sm">
+            <i data-lucide="align-left" class="w-4 h-4 opacity-50 mt-0.5 flex-shrink-0"></i>
+            <p class="text-base-content/70 whitespace-pre-wrap" x-text="form.description"></p>
+          </div>
+        </template>
+
+        <!-- People section -->
+        <div class="border-t border-base-200 pt-3 space-y-3">
+          <!-- Organizer -->
+          <div class="flex items-center gap-2.5 text-sm">
+            <div class="avatar placeholder">
+              <div class="bg-neutral text-neutral-content w-7 h-7 rounded-full">
+                <span class="text-xs" x-text="eventOwner?.username?.[0]?.toUpperCase()"></span>
+              </div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <span class="font-medium block truncate" x-text="eventOwner?.username"></span>
+              <span class="text-xs text-base-content/40">Organizer</span>
+            </div>
+          </div>
+
+          <!-- Members -->
+          <template x-if="eventMembers.length > 0">
+            <div class="space-y-2">
+              <div class="text-xs font-medium text-base-content/40 uppercase tracking-wider flex items-center gap-1.5">
+                Guests
+                <span class="badge badge-xs badge-ghost" x-text="eventMembers.length"></span>
+              </div>
+              <template x-for="member in eventMembers" :key="member.uuid">
+                <div class="flex items-center justify-between text-sm">
+                  <div class="flex items-center gap-2.5">
+                    <div class="avatar placeholder">
+                      <div class="bg-neutral text-neutral-content w-7 h-7 rounded-full">
+                        <span class="text-xs" x-text="member.user.username[0].toUpperCase()"></span>
+                      </div>
+                    </div>
+                    <span class="truncate" x-text="member.user.username"></span>
+                  </div>
+                  <span class="badge badge-xs"
+                        :class="{'badge-success': member.status==='accepted','badge-warning': member.status==='pending','badge-error': member.status==='declined'}"
+                        x-text="member.status"></span>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <!-- Invitation response -->
+        <template x-if="myInviteStatus !== null">
+          <div class="flex gap-2 pt-2 border-t border-base-200">
+            <button type="button" class="btn btn-sm flex-1" :class="myInviteStatus==='accepted' ? 'btn-success' : 'btn-ghost'" @click="respondToInvitation('accepted')">
+              <i data-lucide="check" class="w-4 h-4"></i> Accept
+            </button>
+            <button type="button" class="btn btn-sm flex-1" :class="myInviteStatus==='declined' ? 'btn-error' : 'btn-ghost'" @click="respondToInvitation('declined')">
+              <i data-lucide="x" class="w-4 h-4"></i> Decline
+            </button>
+          </div>
+        </template>
+
+        <!-- Owner actions -->
+        <template x-if="isOwner()">
+          <div class="flex gap-2 pt-2 border-t border-base-200">
+            <button type="button" class="btn btn-sm btn-primary flex-1" @click="openEditModal()">
+              <i data-lucide="pencil" class="w-4 h-4"></i> Edit
+            </button>
+            <button type="button" class="btn btn-sm btn-error btn-outline" @click="deleteEvent()" :disabled="deleting">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Calendar Create/Edit Modal -->
+<dialog class="modal" :class="showCalendarModal && 'modal-open'" @click.self="showCalendarModal = false" @keydown.escape.window="showCalendarModal = false">
+  <div class="modal-box w-11/12 max-w-sm">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <span class="w-8 h-8 rounded-full flex items-center justify-center"
+              :class="calendarModalMode === 'create' ? 'bg-accent/10 text-accent' : 'bg-primary/10 text-primary'">
+          <i :data-lucide="calendarModalMode === 'create' ? 'calendar-plus' : 'pencil'" class="w-4 h-4"></i>
+        </span>
+        <span x-text="calendarModalMode === 'create' ? 'New calendar' : 'Edit calendar'"></span>
+      </h3>
+      <button type="button" class="btn btn-sm btn-circle btn-ghost" @click="showCalendarModal = false">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form @submit.prevent="saveCalendar()" class="space-y-4">
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Name</span></div>
+        <input id="calendar-form-name" type="text" class="input input-bordered input-sm w-full"
+               x-model="calendarForm.name" placeholder="Calendar name" required />
+      </label>
+
+      <div>
+        <div class="label"><span class="label-text">Color</span></div>
+        <div class="flex flex-wrap gap-2">
+          <template x-for="c in calendarColors" :key="c">
+            <button type="button"
+                    class="w-8 h-8 rounded-full flex items-center justify-center transition-all border-2"
+                    :class="calendarForm.color === c
+                      ? 'border-base-content scale-110 ring-2 ring-base-content/20'
+                      : 'border-transparent hover:scale-105'"
+                    :style="'background-color: oklch(var(--' + ({primary:'p',secondary:'s',accent:'a',info:'in',success:'su',warning:'wa',error:'er'}[c]) + '))'"
+                    @click="calendarForm.color = c">
+              <i data-lucide="check" class="w-4 h-4" x-show="calendarForm.color === c"
+                 :style="'color: oklch(var(--' + ({primary:'pc',secondary:'sc',accent:'ac',info:'inc',success:'suc',warning:'wac',error:'erc'}[c]) + '))'"></i>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm btn-ghost" @click="showCalendarModal = false">Cancel</button>
+        <button type="submit" class="btn btn-sm btn-primary" :disabled="!calendarForm.name.trim()">
+          <span x-text="calendarModalMode === 'create' ? 'Create' : 'Save'"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- Event Create/Edit Modal -->
+<dialog class="modal" :class="showModal && 'modal-open'" @click.self="closeModal()" @keydown.escape.window="closeModal()">
+  <div class="modal-box w-11/12 max-w-lg">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-lg" x-text="modalMode === 'create' ? 'New event' : 'Edit event'"></h3>
+      <button type="button" class="btn btn-sm btn-circle btn-ghost" @click="closeModal()">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form @submit.prevent="saveEvent()" class="space-y-3">
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Title</span></div>
+        <input type="text" class="input input-bordered input-sm w-full" x-model="form.title" placeholder="Event title" required />
+      </label>
+
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Calendar</span></div>
+        <select class="select select-bordered select-sm w-full" x-model="form.calendar_id">
+          <template x-for="cal in ownedCalendars" :key="cal.uuid">
+            <option :value="cal.uuid" x-text="cal.name"></option>
+          </template>
+        </select>
+      </label>
+
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" class="toggle toggle-sm toggle-primary" :checked="form.all_day" @change="toggleAllDay()" />
+        <span class="label-text">All day</span>
+      </label>
+
+      <div class="grid grid-cols-2 gap-2">
+        <label class="form-control">
+          <div class="label"><span class="label-text">Start</span></div>
+          <input :type="form.all_day ? 'date' : 'datetime-local'" class="input input-bordered input-sm w-full"
+                 x-model="form.start" required />
+        </label>
+        <label class="form-control">
+          <div class="label"><span class="label-text">End</span></div>
+          <input :type="form.all_day ? 'date' : 'datetime-local'" class="input input-bordered input-sm w-full"
+                 x-model="form.end" :min="form.start" />
+        </label>
+      </div>
+      <!-- Duration shortcuts -->
+      <div class="flex flex-wrap gap-1" x-show="form.start">
+        <template x-if="!form.all_day">
+          <div class="flex flex-wrap gap-1">
+            <template x-for="d in [{l:'30m',m:30},{l:'1h',m:60},{l:'1h30',m:90},{l:'2h',m:120},{l:'3h',m:180}]" :key="d.m">
+              <button type="button" class="badge badge-sm cursor-pointer hover:badge-primary transition-colors"
+                      :class="activeDuration() === d.m ? 'badge-primary' : 'badge-outline'"
+                      @click="applyDuration(d.m)" x-text="d.l"></button>
+            </template>
+          </div>
+        </template>
+        <template x-if="form.all_day">
+          <div class="flex flex-wrap gap-1">
+            <template x-for="d in [{l:'1 day',m:1},{l:'2 days',m:2},{l:'3 days',m:3},{l:'1 week',m:7}]" :key="d.m">
+              <button type="button" class="badge badge-sm cursor-pointer hover:badge-primary transition-colors"
+                      :class="activeDuration() === d.m * 1440 ? 'badge-primary' : 'badge-outline'"
+                      @click="applyDuration(d.m * 1440)" x-text="d.l"></button>
+            </template>
+          </div>
+        </template>
+      </div>
+
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Location</span></div>
+        <input type="text" class="input input-bordered input-sm w-full" x-model="form.location" placeholder="Add a location" />
+      </label>
+
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Description</span></div>
+        <textarea class="textarea textarea-bordered textarea-sm w-full" rows="2" x-model="form.description" placeholder="Add a description"></textarea>
+      </label>
+
+      <div>
+        <div class="label"><span class="label-text">Invite guests</span></div>
+        {% include "ui/partials/user_selector.html" with on_select_event="calendar-member-selected" placeholder="Search users to invite..." %}
+        <div class="flex flex-wrap gap-1 mt-2">
+          <template x-for="member in selectedMembers" :key="member.id">
+            <span class="badge badge-outline gap-1">
+              <span x-text="member.username"></span>
+              <button type="button" class="btn btn-ghost btn-circle btn-xs" @click="removeMember(member.id)">
+                <i data-lucide="x" class="w-3 h-3"></i>
+              </button>
+            </span>
+          </template>
+        </div>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm btn-ghost" @click="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-sm btn-primary" :disabled="saving || !form.title.trim()">
+          <span x-show="saving" class="loading loading-spinner loading-xs"></span>
+          <span x-text="modalMode === 'create' ? 'Create' : 'Save'"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+</dialog>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="{% static 'calendar/ui/js/calendar.js' %}"></script>
+<script>
+  document.body.dataset.userId = '{{ request.user.id }}';
+</script>
+{% endblock %}

@@ -1,3 +1,4 @@
+{% load static %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -129,14 +130,27 @@
 
     // Dialog utilities
     const AppDialog = {
-      confirm({ title = 'Confirm', message = 'Are you sure?', okLabel = 'OK', cancelLabel = 'Cancel', okClass = 'btn-primary' } = {}) {
+      _setIcon(iconEl, icon, iconClass) {
+        if (icon) {
+          iconEl.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i>`;
+          iconEl.className = `flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${iconClass || 'bg-base-200 text-base-content'}`;
+          if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [iconEl] });
+        } else {
+          iconEl.innerHTML = '';
+          iconEl.className = 'hidden';
+        }
+      },
+
+      confirm({ title = 'Confirm', message = 'Are you sure?', okLabel = 'OK', cancelLabel = 'Cancel', okClass = 'btn-primary', icon = '', iconClass = '' } = {}) {
         return new Promise((resolve) => {
           const dialog = document.getElementById('app-dialog-confirm');
+          const iconEl = document.getElementById('app-dialog-confirm-icon');
           const titleEl = document.getElementById('app-dialog-confirm-title');
           const messageEl = document.getElementById('app-dialog-confirm-message');
           const okBtn = document.getElementById('app-dialog-confirm-ok');
           const cancelBtn = document.getElementById('app-dialog-confirm-cancel');
 
+          this._setIcon(iconEl, icon, iconClass);
           titleEl.textContent = title;
           messageEl.textContent = message;
           okBtn.textContent = okLabel;
@@ -176,20 +190,36 @@
         });
       },
 
-      prompt({ title = 'Input', message = '', value = '', placeholder = '', okLabel = 'OK', cancelLabel = 'Cancel', okClass = 'btn-primary' } = {}) {
+      prompt({ title = 'Input', message = '', value = '', placeholder = '', okLabel = 'OK', cancelLabel = 'Cancel', okClass = 'btn-primary', icon = '', iconClass = '', inputSize = 'md' } = {}) {
         return new Promise((resolve) => {
           const dialog = document.getElementById('app-dialog-prompt');
+          const iconEl = document.getElementById('app-dialog-prompt-icon');
           const titleEl = document.getElementById('app-dialog-prompt-title');
           const messageEl = document.getElementById('app-dialog-prompt-message');
           const input = document.getElementById('app-dialog-prompt-input');
+          const textarea = document.getElementById('app-dialog-prompt-textarea');
           const okBtn = document.getElementById('app-dialog-prompt-ok');
           const cancelBtn = document.getElementById('app-dialog-prompt-cancel');
 
+          this._setIcon(iconEl, icon, iconClass);
           titleEl.textContent = title;
           messageEl.textContent = message;
           messageEl.style.display = message ? '' : 'none';
-          input.value = value;
-          input.placeholder = placeholder;
+
+          const useTextarea = inputSize === 'textarea';
+          const activeInput = useTextarea ? textarea : input;
+          const hiddenInput = useTextarea ? input : textarea;
+
+          activeInput.classList.remove('hidden');
+          hiddenInput.classList.add('hidden');
+
+          activeInput.value = value;
+          activeInput.placeholder = placeholder;
+
+          if (!useTextarea) {
+            input.className = `input input-bordered w-full mt-4 ${inputSize === 'sm' ? 'input-sm' : ''}`;
+          }
+
           okBtn.textContent = okLabel;
           cancelBtn.textContent = cancelLabel;
           okBtn.className = `btn btn-sm ${okClass}`;
@@ -197,12 +227,12 @@
           const cleanup = () => {
             okBtn.removeEventListener('click', onOk);
             dialog.removeEventListener('close', onClose);
-            input.removeEventListener('keydown', onKeydown);
+            activeInput.removeEventListener('keydown', onKeydown);
           };
 
           const onOk = () => {
             cleanup();
-            const val = input.value;
+            const val = activeInput.value;
             dialog.close();
             resolve(val);
           };
@@ -213,7 +243,7 @@
           };
 
           const onKeydown = (e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !useTextarea) {
               e.preventDefault();
               e.stopPropagation();
               onOk();
@@ -222,20 +252,22 @@
 
           okBtn.addEventListener('click', onOk);
           dialog.addEventListener('close', onClose);
-          input.addEventListener('keydown', onKeydown);
+          activeInput.addEventListener('keydown', onKeydown);
           dialog.showModal();
-          input.focus();
-          input.select();
+          activeInput.focus();
+          activeInput.select();
         });
       },
 
-      message({ title = 'Message', message = 'Done.', okLabel = 'OK' } = {}) {
+      message({ title = 'Message', message = 'Done.', okLabel = 'OK', icon = '', iconClass = '' } = {}) {
         return new Promise((resolve) => {
           const dialog = document.getElementById('app-dialog-message');
+          const iconEl = document.getElementById('app-dialog-message-icon');
           const titleEl = document.getElementById('app-dialog-message-title');
           const messageEl = document.getElementById('app-dialog-message-message');
           const okBtn = document.getElementById('app-dialog-message-ok');
 
+          this._setIcon(iconEl, icon, iconClass);
           titleEl.textContent = title;
           messageEl.textContent = message;
           okBtn.textContent = okLabel;
@@ -251,7 +283,7 @@
       },
 
       error({ title = 'Error', message = 'An error occurred.', okLabel = 'OK' } = {}) {
-        return this.message({ title, message, okLabel });
+        return this.message({ title, message, okLabel, icon: 'circle-alert', iconClass: 'bg-error/10 text-error' });
       }
     };
 
@@ -310,6 +342,9 @@
       }
     };
   </script>
+
+  <!-- Shared components -->
+  <script src="{% static 'ui/js/user_selector.js' %}"></script>
 
   {% if user.is_authenticated %}
   <!-- Chat unread store + SSE -->

@@ -2571,46 +2571,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
   };
 };
 
-window.userSelector = function userSelector(eventName) {
-  return {
-    query: '',
-    results: [],
-    loading: false,
-    showDropdown: false,
-    eventName: eventName || 'user-selected',
-
-    async search() {
-      const q = (this.query || '').trim();
-      if (q.length < 2) {
-        this.results = [];
-        this.showDropdown = false;
-        return;
-      }
-      this.loading = true;
-      try {
-        const resp = await fetch(`/api/v1/users/search?q=${encodeURIComponent(q)}&limit=10`, {
-          credentials: 'same-origin',
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          this.results = data.results || [];
-          this.showDropdown = true;
-        }
-      } catch (e) {
-        this.results = [];
-      } finally {
-        this.loading = false;
-      }
-    },
-
-    selectUser(user) {
-      window.dispatchEvent(new CustomEvent(this.eventName, { detail: { user } }));
-      this.query = '';
-      this.results = [];
-      this.showDropdown = false;
-    },
-  };
-};
+// userSelector is now provided globally by common/static/ui/js/user_selector.js
 
 window.shareModal = function shareModal() {
   return {

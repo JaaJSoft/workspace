@@ -1,5 +1,6 @@
 {% comment %}
   Reusable user selector component with search-as-you-type.
+  Features: real avatars, keyboard navigation (arrows + enter), hover highlight.
 
   Parameters:
     - placeholder: Placeholder text for the search input (default: "Search users...")
@@ -8,7 +9,7 @@
   Usage:
     {% include "ui/partials/user_selector.html" with on_select_event="user-selected" placeholder="Add a user..." %}
 
-  The dispatched event contains { detail: { user: { id, username, first_name, last_name } } }
+  The dispatched event contains { detail: { user: { id, username, first_name, last_name, avatar_url } } }
 {% endcomment %}
 
 <div x-data="userSelector('{{ on_select_event }}')" class="relative">
@@ -20,8 +21,9 @@
       placeholder="{{ placeholder|default:'Search users...' }}"
       x-model="query"
       @input.debounce.300ms="search()"
-      @click.outside="showDropdown = false"
+      @keydown="handleKeydown($event)"
       @keydown.escape="showDropdown = false"
+      @click.outside="showDropdown = false"
       autocomplete="off"
     />
     <span x-show="loading" class="loading loading-spinner loading-xs"></span>
@@ -34,18 +36,27 @@
     class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
   >
     <ul class="menu menu-sm p-1">
-      <template x-for="user in results" :key="user.id">
+      <template x-for="(user, idx) in results" :key="user.id">
         <li>
           <button
             type="button"
             class="flex items-center gap-2 rounded"
+            :class="idx === highlight ? 'active' : ''"
             @click="selectUser(user)"
+            @mouseenter="highlight = idx"
           >
-            <div class="avatar placeholder">
-              <div class="bg-neutral text-neutral-content w-6 h-6 rounded-full">
-                <span class="text-xs" x-text="(user.username || '?')[0].toUpperCase()"></span>
+            <template x-if="user.avatar_url">
+              <div class="w-7 h-7 rounded-full overflow-hidden flex-shrink-0">
+                <img :src="user.avatar_url" class="w-full h-full object-cover" />
               </div>
-            </div>
+            </template>
+            <template x-if="!user.avatar_url">
+              <div class="avatar placeholder">
+                <div class="bg-neutral text-neutral-content w-7 h-7 rounded-full">
+                  <span class="text-xs" x-text="(user.username || '?')[0].toUpperCase()"></span>
+                </div>
+              </div>
+            </template>
             <div class="flex flex-col items-start">
               <span class="font-medium text-sm" x-text="user.username"></span>
               <span

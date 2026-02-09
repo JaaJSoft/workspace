@@ -142,12 +142,16 @@ x-init="init()"
       <!-- Content area: messages + optional info panel -->
       <div class="flex-1 flex min-h-0">
         <!-- Messages column -->
-        <div class="flex-1 flex flex-col min-w-0">
+        <div class="flex-1 flex flex-col min-w-0 relative">
           <!-- Messages -->
           <div
             class="flex-1 overflow-y-auto p-4"
             x-ref="messagesContainer"
             @scroll="handleScroll()"
+            @dragenter.prevent="handleDragEnter($event)"
+            @dragover.prevent="handleDragOver($event)"
+            @dragleave.prevent="handleDragLeave($event)"
+            @drop.prevent="handleDrop($event)"
           >
             <!-- Load more -->
             <div x-show="hasMoreMessages" class="flex justify-center py-2">
@@ -170,8 +174,22 @@ x-init="init()"
             <div id="messages-container"></div>
           </div>
 
+          <!-- Drag-drop overlay -->
+          <div x-show="isDraggingOver" x-cloak
+               class="absolute inset-0 z-50 flex items-center justify-center bg-base-100/80 border-2 border-dashed border-info rounded-xl pointer-events-none">
+            <div class="text-center">
+              <i data-lucide="upload" class="w-8 h-8 text-info mx-auto mb-2"></i>
+              <p class="text-sm font-medium text-info">Drop files to attach</p>
+            </div>
+          </div>
+
           <!-- Input area -->
-          <div class="p-3 bg-base-100 border-t border-base-300">
+          <div class="p-3 bg-base-100 border-t border-base-300"
+               @dragenter.prevent="handleDragEnter($event)"
+               @dragover.prevent="handleDragOver($event)"
+               @dragleave.prevent="handleDragLeave($event)"
+               @drop.prevent="handleDrop($event)">
+
             <!-- Edit mode banner -->
             <div x-show="editingMessageUuid" x-cloak class="flex items-center gap-2 mb-2 px-3 py-1.5 bg-info/10 rounded-lg text-sm">
               <i data-lucide="pencil" class="w-4 h-4 text-info"></i>
@@ -179,6 +197,32 @@ x-init="init()"
               <button class="btn btn-ghost btn-xs btn-circle" @click="cancelEdit()">
                 <i data-lucide="x" class="w-3 h-3"></i>
               </button>
+            </div>
+
+            <!-- Pending files preview -->
+            <div x-show="pendingFiles.length > 0" x-cloak class="mb-2 flex flex-wrap gap-2 px-1">
+              <template x-for="(file, idx) in pendingFiles" :key="idx">
+                <div class="relative group/file">
+                  <template x-if="isImageFile(file)">
+                    <div class="w-16 h-16 rounded-lg overflow-hidden border border-base-300 bg-base-200">
+                      <img :src="file._preview" class="w-full h-full object-cover" />
+                    </div>
+                  </template>
+                  <template x-if="!isImageFile(file)">
+                    <div class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-base-300 bg-base-200 text-xs max-w-[10rem]">
+                      <i data-lucide="file" class="w-3.5 h-3.5 flex-shrink-0"></i>
+                      <span class="truncate" x-text="file.name"></span>
+                      <span class="text-base-content/50 flex-shrink-0" x-text="formatFileSize(file.size)"></span>
+                    </div>
+                  </template>
+                  <button
+                    @click="removeFile(idx)"
+                    class="absolute -top-1.5 -right-1.5 btn btn-circle btn-xs bg-base-300 border-base-300 hover:bg-error hover:text-error-content opacity-0 group-hover/file:opacity-100 transition-opacity"
+                  >
+                    <i data-lucide="x" class="w-3 h-3"></i>
+                  </button>
+                </div>
+              </template>
             </div>
 
         <!-- Input container -->
@@ -249,10 +293,11 @@ x-init="init()"
               </div>
             </div>
 
-            <!-- Attach placeholder -->
-            <button class="btn btn-ghost btn-xs btn-square" title="Attach file — Coming soon" disabled>
+            <!-- Attach file -->
+            <button class="btn btn-ghost btn-xs btn-square" title="Attach file" @click="openFileDialog()">
               <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
             </button>
+            <input type="file" multiple x-ref="fileInput" class="hidden" @change="handleFileSelect($event)" />
 
             <div class="w-px self-stretch my-1 bg-base-300"></div>
 
@@ -260,7 +305,7 @@ x-init="init()"
             <button
               class="btn btn-info btn-sm btn-circle"
               @click="sendOrEdit()"
-              :disabled="!messageBody.trim()"
+              :disabled="!messageBody.trim() && pendingFiles.length === 0"
             >
               <i data-lucide="send" class="w-3.5 h-3.5"></i>
             </button>
@@ -272,6 +317,7 @@ x-init="init()"
             x-model="messageBody"
             @keydown="handleInputKeydown($event)"
             @input="autoResize($el)"
+            @paste="handlePaste($event)"
             class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none"
             placeholder="Type a message..."
             rows="1"

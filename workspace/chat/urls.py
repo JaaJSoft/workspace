@@ -86,6 +86,12 @@ urlpatterns = [
         views.ConversationPinView.as_view(),
         name='chat-conversation-pin',
     ),
+    # Attachments
+    path(
+        'api/v1/chat/attachments/<uuid:attachment_id>',
+        views.AttachmentDownloadView.as_view(),
+        name='chat-attachment-download',
+    ),
     # SSE
     path(
         'api/v1/chat/stream',

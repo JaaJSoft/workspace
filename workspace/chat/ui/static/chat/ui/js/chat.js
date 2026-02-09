@@ -38,6 +38,10 @@ function chatApp(currentUserId) {
     searchHighlight: -1,
     // Context menu state
     ctxMenu: { open: false, x: 0, y: 0, uuid: null, kind: null, isPinned: false },
+    // File upload
+    pendingFiles: [],
+    isDraggingOver: false,
+    _dragCounter: 0,
     // Pinned drag & drop
     draggingPinned: null,
     dragOverPinned: null,
@@ -181,6 +185,7 @@ function chatApp(currentUserId) {
       this.hasMoreMessages = false;
       this.editingMessageUuid = null;
       this.messageBody = '';
+      this.pendingFiles = [];
       this.showInfoPanel = false;
       this.conversationStats = null;
       this.showSearchPanel = false;
@@ -323,23 +328,47 @@ function chatApp(currentUserId) {
 
     async sendMessage() {
       const body = this.messageBody.trim();
-      if (!body || !this.activeConversation) return;
+      const files = [...this.pendingFiles];
+      if ((!body && files.length === 0) || !this.activeConversation) return;
 
       this.messageBody = '';
+      // Revoke object URLs before clearing
+      for (const f of this.pendingFiles) {
+        if (f._preview) URL.revokeObjectURL(f._preview);
+      }
+      this.pendingFiles = [];
 
       try {
-        const resp = await fetch(
-          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': this._csrf(),
-            },
-            credentials: 'same-origin',
-            body: JSON.stringify({ body }),
+        let resp;
+        if (files.length > 0) {
+          const formData = new FormData();
+          formData.append('body', body);
+          for (const f of files) {
+            formData.append('files', f);
           }
-        );
+          resp = await fetch(
+            `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
+            {
+              method: 'POST',
+              headers: { 'X-CSRFToken': this._csrf() },
+              credentials: 'same-origin',
+              body: formData,
+            }
+          );
+        } else {
+          resp = await fetch(
+            `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': this._csrf(),
+              },
+              credentials: 'same-origin',
+              body: JSON.stringify({ body }),
+            }
+          );
+        }
 
         if (resp.ok) {
           const msg = await resp.json();
@@ -347,10 +376,15 @@ function chatApp(currentUserId) {
           // Re-fetch messages to get proper server-rendered grouping
           await this._refreshCurrentMessages();
           this.$nextTick(() => this.scrollToBottom());
+        } else {
+          // Restore on error
+          this.messageBody = body;
+          this.pendingFiles = files;
         }
       } catch (e) {
         console.error('Failed to send message', e);
-        this.messageBody = body; // Restore
+        this.messageBody = body;
+        this.pendingFiles = files;
       }
     },
 
@@ -708,6 +742,7 @@ function chatApp(currentUserId) {
           author: msg.author,
           body: msg.body,
           created_at: msg.created_at,
+          has_attachments: msg.has_attachments || (msg.attachments && msg.attachments.length > 0),
         };
         conv.updated_at = msg.created_at;
       }
@@ -1556,6 +1591,94 @@ function chatApp(currentUserId) {
           ta.setSelectionRange(start + 1, start + 5);
           ta.focus();
         });
+      }
+    },
+
+    // ── File upload ──────────────────────────────────────────
+    openFileDialog() {
+      this.$refs.fileInput?.click();
+    },
+
+    handleFileSelect(e) {
+      const files = e.target.files;
+      if (files?.length) this.addFiles(files);
+      e.target.value = '';
+    },
+
+    addFiles(fileList) {
+      const existing = new Set(this.pendingFiles.map(f => f.name + f.size));
+      for (const f of fileList) {
+        if (existing.has(f.name + f.size)) continue;
+        // Generate preview URL for images
+        if (f.type.startsWith('image/')) {
+          f._preview = URL.createObjectURL(f);
+        }
+        this.pendingFiles.push(f);
+      }
+      this.$nextTick(() => {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      });
+    },
+
+    removeFile(idx) {
+      const file = this.pendingFiles[idx];
+      if (file?._preview) URL.revokeObjectURL(file._preview);
+      this.pendingFiles.splice(idx, 1);
+    },
+
+    formatFileSize(bytes) {
+      if (!bytes) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let val = bytes;
+      for (const unit of units) {
+        if (val < 1024) return unit === 'B' ? `${val} B` : `${val.toFixed(1)} ${unit}`;
+        val /= 1024;
+      }
+      return `${val.toFixed(1)} TB`;
+    },
+
+    isImageFile(file) {
+      return file.type?.startsWith('image/');
+    },
+
+    handleDragEnter(e) {
+      if (!e.dataTransfer?.types?.includes('Files')) return;
+      this._dragCounter++;
+      this.isDraggingOver = true;
+    },
+
+    handleDragOver(e) {
+      e.dataTransfer.dropEffect = 'copy';
+    },
+
+    handleDragLeave(e) {
+      this._dragCounter--;
+      if (this._dragCounter <= 0) {
+        this._dragCounter = 0;
+        this.isDraggingOver = false;
+      }
+    },
+
+    handleDrop(e) {
+      this._dragCounter = 0;
+      this.isDraggingOver = false;
+      const files = e.dataTransfer?.files;
+      if (files?.length) this.addFiles(files);
+    },
+
+    handlePaste(e) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const files = [];
+      for (const item of items) {
+        if (item.kind === 'file') {
+          const f = item.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (files.length > 0) {
+        e.preventDefault();
+        this.addFiles(files);
       }
     },
 

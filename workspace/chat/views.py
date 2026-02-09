@@ -5,16 +5,17 @@ from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, inline_serializer
 from rest_framework import serializers, status
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import avatar_service as group_avatar_service
-from .models import Conversation, ConversationMember, Message, PinnedConversation, Reaction
+from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, Reaction
 from .serializers import (
     ConversationCreateSerializer,
     ConversationDetailSerializer,
+    ConversationListSerializer,
     MessageCreateSerializer,
     MessageEditSerializer,
     MessageSerializer,
@@ -243,6 +244,7 @@ class ConversationDetailView(APIView):
 @extend_schema(tags=['Chat'])
 class MessageListView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, JSONParser]
 
     @extend_schema(
         summary="List messages in a conversation",
@@ -269,6 +271,7 @@ class MessageListView(APIView):
                 'reactions',
                 queryset=Reaction.objects.select_related('user'),
             ),
+            'attachments',
         )
 
         if before:
@@ -300,6 +303,8 @@ class MessageListView(APIView):
         request=MessageCreateSerializer,
     )
     def post(self, request, conversation_id):
+        from workspace.files.services.files import FileService
+
         membership = _get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
@@ -310,8 +315,30 @@ class MessageListView(APIView):
         serializer = MessageCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        body = serializer.validated_data['body']
-        body_html = render_message_body(body)
+        body = serializer.validated_data.get('body', '').strip()
+        files = request.FILES.getlist('files')
+
+        if not body and not files:
+            return Response(
+                {'detail': 'Message must have text or at least one file.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(files) > 10:
+            return Response(
+                {'detail': 'Maximum 10 files per message.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        max_file_size = 50 * 1024 * 1024  # 50 MB
+        for f in files:
+            if f.size > max_file_size:
+                return Response(
+                    {'detail': f'File "{f.name}" exceeds the 50 MB limit.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        body_html = render_message_body(body) if body else ''
 
         message = Message.objects.create(
             conversation_id=conversation_id,
@@ -319,6 +346,16 @@ class MessageListView(APIView):
             body=body,
             body_html=body_html,
         )
+
+        for f in files:
+            mime_type = FileService.infer_mime_type(f.name, uploaded=f)
+            MessageAttachment.objects.create(
+                message=message,
+                file=f,
+                original_name=f.name,
+                mime_type=mime_type,
+                size=f.size,
+            )
 
         # Bump conversation updated_at
         Conversation.objects.filter(pk=conversation_id).update(
@@ -338,6 +375,7 @@ class MessageListView(APIView):
                     'reactions',
                     queryset=Reaction.objects.select_related('user'),
                 ),
+                'attachments',
             )
             .first()
         )
@@ -969,3 +1007,40 @@ class ConversationPinReorderView(APIView):
             PinnedConversation.objects.bulk_update(to_update, ['position'])
 
         return Response({'status': 'ok'})
+
+
+@extend_schema(tags=['Chat'])
+class AttachmentDownloadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Download a chat attachment")
+    def get(self, request, attachment_id):
+        try:
+            attachment = (
+                MessageAttachment.objects
+                .select_related('message')
+                .get(uuid=attachment_id)
+            )
+        except MessageAttachment.DoesNotExist:
+            return Response(
+                {'detail': 'Attachment not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        membership = _get_active_membership(
+            request.user, attachment.message.conversation_id,
+        )
+        if not membership:
+            return Response(
+                {'detail': 'Not a member of this conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        response = FileResponse(
+            attachment.file.open('rb'),
+            content_type=attachment.mime_type,
+        )
+        # Sanitize filename for Content-Disposition header
+        safe_name = attachment.original_name.replace('"', '\\"').replace('\n', '').replace('\r', '')
+        response['Content-Disposition'] = f'inline; filename="{safe_name}"'
+        return response

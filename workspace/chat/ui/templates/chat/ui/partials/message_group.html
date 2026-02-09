@@ -1,4 +1,4 @@
-{% load chat_tags avatar_tags %}
+{% load chat_tags avatar_tags ui_filters %}
 {% with author=group.author is_own=group.is_own messages=group.messages first_msg=group.messages.0 %}
 <div class="msg-group {% if is_own %}msg-group-end{% else %}msg-group-start{% endif %} flex gap-2 mb-3 {% if is_own %}flex-row-reverse{% endif %}">
 
@@ -32,7 +32,40 @@
                       {% if is_own %}bg-info text-info-content{% else %}bg-base-200 text-base-content{% endif %}"
                id="msg-{{ msg.uuid }}"
                data-body="{{ msg.body }}">
-            <div class="msg-body break-words">{{ msg.body_html|safe }}</div>
+            {% if msg.body_html %}
+              <div class="msg-body break-words">{{ msg.body_html|safe }}</div>
+            {% endif %}
+
+            {# Attachments #}
+            {% with attachments=msg.attachments.all %}
+              {% if attachments %}
+                {% if msg.body_html %}<div class="border-t {% if is_own %}border-info-content/20{% else %}border-base-300{% endif %} my-1.5"></div>{% endif %}
+                <div class="flex flex-col gap-1.5">
+                  {% for att in attachments %}
+                    {% if att.is_image %}
+                      <a href="/api/v1/chat/attachments/{{ att.uuid }}" target="_blank" class="block">
+                        <img
+                          src="/api/v1/chat/attachments/{{ att.uuid }}"
+                          alt="{{ att.original_name }}"
+                          class="max-h-64 rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                          loading="lazy"
+                        />
+                      </a>
+                    {% else %}
+                      <a href="/api/v1/chat/attachments/{{ att.uuid }}"
+                         target="_blank"
+                         class="flex items-center gap-2 p-2 rounded-lg {% if is_own %}bg-info-content/10 hover:bg-info-content/20{% else %}bg-base-300/50 hover:bg-base-300{% endif %} transition-colors min-w-0">
+                        <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
+                        <span class="truncate text-xs font-medium">{{ att.original_name }}</span>
+                        <span class="text-[0.65rem] opacity-60 flex-shrink-0">{{ att.size|filesize }}</span>
+                        <i data-lucide="download" class="w-3.5 h-3.5 flex-shrink-0 opacity-60"></i>
+                      </a>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% endwith %}
+
             {% if msg.edited_at %}
               <span class="text-[0.65rem] opacity-50 italic ml-1">(edited)</span>
             {% endif %}

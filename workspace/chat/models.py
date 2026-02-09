@@ -147,3 +147,27 @@ class PinnedConversation(models.Model):
 
     def __str__(self):
         return f'{self.owner} pinned {self.conversation}'
+
+
+def attachment_upload_path(instance, filename):
+    return f"chat/{instance.message.conversation_id}/{instance.message_id}/{filename}"
+
+
+class MessageAttachment(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to=attachment_upload_path)
+    original_name = models.CharField(max_length=255)
+    mime_type = models.CharField(max_length=255, default='application/octet-stream')
+    size = models.PositiveBigIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    @property
+    def is_image(self):
+        return self.mime_type.startswith('image/')
+
+    def __str__(self):
+        return f'{self.original_name} ({self.message_id})'

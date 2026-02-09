@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from workspace.users.avatar_service import has_avatar
 
-from .models import Conversation, ConversationMember, Message, Reaction
+from .models import Conversation, ConversationMember, Message, MessageAttachment, Reaction
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -34,9 +34,22 @@ class ReactionSerializer(serializers.ModelSerializer):
         fields = ['uuid', 'emoji', 'user', 'created_at']
 
 
+class MessageAttachmentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+    is_image = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = MessageAttachment
+        fields = ['uuid', 'original_name', 'mime_type', 'size', 'is_image', 'url', 'created_at']
+
+    def get_url(self, obj):
+        return f'/api/v1/chat/attachments/{obj.uuid}'
+
+
 class MessageSerializer(serializers.ModelSerializer):
     author = MemberUserSerializer()
     reactions = ReactionSerializer(many=True, read_only=True)
+    attachments = MessageAttachmentSerializer(many=True, read_only=True)
     conversation_id = serializers.UUIDField()
 
     class Meta:
@@ -44,16 +57,22 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = [
             'uuid', 'conversation_id', 'author', 'body', 'body_html',
             'edited_at', 'created_at', 'deleted_at',
-            'reactions',
+            'reactions', 'attachments',
         ]
 
 
 class LastMessageSerializer(serializers.ModelSerializer):
     author = MemberUserSerializer()
+    has_attachments = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ['uuid', 'author', 'body', 'created_at']
+        fields = ['uuid', 'author', 'body', 'created_at', 'has_attachments']
+
+    def get_has_attachments(self, obj):
+        if hasattr(obj, '_prefetched_objects_cache') and 'attachments' in obj._prefetched_objects_cache:
+            return len(obj._prefetched_objects_cache['attachments']) > 0
+        return obj.attachments.exists()
 
 
 class ConversationListSerializer(serializers.ModelSerializer):
@@ -120,7 +139,7 @@ class ConversationCreateSerializer(serializers.Serializer):
 
 
 class MessageCreateSerializer(serializers.Serializer):
-    body = serializers.CharField()
+    body = serializers.CharField(required=False, default='', allow_blank=True)
 
 
 class MessageEditSerializer(serializers.Serializer):

@@ -125,6 +125,7 @@ def _event_stream(request):
                     .exclude(author_id=user_id)
                     .exclude(uuid__in=seen_message_ids)
                     .select_related('author')
+                    .prefetch_related('attachments')
                     .order_by('created_at')[:50]
                 )
                 for msg in new_messages:

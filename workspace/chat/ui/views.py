@@ -43,7 +43,7 @@ def _build_conversation_context(user):
     last_msg_ids = [c._last_msg_id for c in conv_list if c._last_msg_id]
     last_msgs = {
         m.uuid: m
-        for m in Message.objects.filter(uuid__in=last_msg_ids).select_related('author')
+        for m in Message.objects.filter(uuid__in=last_msg_ids).select_related('author').prefetch_related('attachments')
     }
 
     unread_data = get_unread_counts(user)
@@ -89,9 +89,16 @@ def _build_conversation_context(user):
         # Last message preview & time ago
         if c._last_message:
             body = c._last_message.body
-            if len(body) > 30:
-                body = body[:30] + '\u2026'
-            c.last_message_preview = f'{c._last_message.author.username}: {body}'
+            if body:
+                if len(body) > 30:
+                    body = body[:30] + '\u2026'
+                c.last_message_preview = f'{c._last_message.author.username}: {body}'
+            elif list(c._last_message.attachments.all()):
+                count = len(list(c._last_message.attachments.all()))
+                label = 'sent a file' if count == 1 else f'sent {count} files'
+                c.last_message_preview = f'{c._last_message.author.username}: {label}'
+            else:
+                c.last_message_preview = f'{c._last_message.author.username}: '
             diff = (now - c._last_message.created_at).total_seconds()
             if diff < 60:
                 c.time_ago = 'now'
@@ -215,7 +222,7 @@ def conversation_messages_view(request, conversation_uuid):
         Message.objects
         .filter(conversation_id=conversation_uuid)
         .select_related('author')
-        .prefetch_related('reactions__user')
+        .prefetch_related('reactions__user', 'attachments')
         .order_by('-created_at')
     )
 

@@ -13,8 +13,4 @@ urlpatterns = [
     # Settings
     path('api/v1/settings', views.SettingsListView.as_view(), name='settings-list'),
     path('api/v1/settings/<str:module>/<str:key>', views.SettingDetailView.as_view(), name='setting-detail'),
-    # UI
-    path('profile', views.profile_view, name='user_profile'),
-    path('profile/<str:username>', views.profile_view, name='user_profile_by_username'),
-    path('settings', views.settings_view, name='user_settings'),
 ]

@@ -82,7 +82,7 @@ Context:
       <span>Modified {{ file.updated_at|date:"N j, Y" }}</span>
     </div>
     <div class="flex items-center gap-2 text-base-content/60">
-      <div class="flex-shrink-0 flex items-center">{% include "ui/partials/user_avatar.html" with user=file.owner size="2xs" %}</div>
+      <div class="flex-shrink-0 flex items-center">{% include "ui/partials/user_avatar.html" with user=file.owner size="2xs" show_card=True %}</div>
       <span class="text-sm">{{ file.owner.username }}</span>
     </div>
   </div>
@@ -163,7 +163,7 @@ Context:
       <ul class="space-y-1">
         {% for share in shares %}
         <li class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors">
-          <div class="flex-shrink-0">{% include "ui/partials/user_avatar.html" with user=share.shared_with size="xs" %}</div>
+          <div class="flex-shrink-0">{% include "ui/partials/user_avatar.html" with user=share.shared_with size="xs" show_card=True %}</div>
           <div class="flex-1 min-w-0">
             <span class="text-sm font-medium truncate block">{{ share.shared_with.username }}</span>
           </div>
@@ -207,7 +207,7 @@ Context:
       <template x-for="comment in comments" :key="comment.uuid">
         <div class="flex gap-2">
           <!-- Avatar -->
-          <div class="flex-shrink-0" x-html="userAvatarHtml(comment.author.id, comment.author.username, 'w-7 h-7 text-xs')"></div>
+          <div class="flex-shrink-0" x-html="userAvatarWithCardHtml(comment.author.id, comment.author.username, 'w-7 h-7 text-xs')"></div>
           <div class="flex-1 min-w-0">
             <!-- Header -->
             <div class="flex items-center gap-2 text-xs">

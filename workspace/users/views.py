@@ -1,9 +1,7 @@
 from django.contrib.auth import password_validation, update_session_auth_hash
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
-from django.http import FileResponse, Http404, HttpResponse
-from django.shortcuts import render
+from django.http import FileResponse, HttpResponse
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,
@@ -332,26 +330,6 @@ class UserAvatarUploadView(APIView):
         return Response({"message": "Avatar removed."})
 
 
-@login_required
-def profile_view(request, username=None):
-    if username is None:
-        profile_user = request.user
-    else:
-        try:
-            profile_user = User.objects.get(username=username)
-        except User.DoesNotExist:
-            raise Http404
-    return render(request, 'users/profile/index.html', {
-        'profile_user': profile_user,
-        'is_own_profile': profile_user == request.user,
-    })
-
-
-@login_required
-def settings_view(request):
-    return render(request, 'users/settings/index.html', {
-        'has_avatar': avatar_service.has_avatar(request.user),
-    })
 
 
 # ── Settings API ──────────────────────────────────────────────

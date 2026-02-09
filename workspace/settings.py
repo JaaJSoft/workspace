@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     'workspace.files.ui',
     'workspace.dashboard',
     'workspace.users',
+    'workspace.users.ui',
     'workspace.chat',
     'workspace.chat.ui',
     'workspace.calendar',

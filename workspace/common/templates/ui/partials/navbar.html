@@ -179,11 +179,11 @@
             <div class="divider my-1"></div>
 
             <!-- Profile -->
-            <li class="{% if request.resolver_match.view_name == 'user_profile' %}disabled{% endif %}">
+            <li class="{% if request.resolver_match.view_name == 'users_ui:profile' %}disabled{% endif %}">
               <a
-                href="/profile"
-                class="gap-3 {% if request.resolver_match.view_name != 'user_profile' %}hover:bg-primary/10 hover:text-primary{% endif %} transition-colors"
-                {% if request.resolver_match.view_name == 'user_profile' %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
+                href="{% url 'users_ui:profile' %}"
+                class="gap-3 {% if request.resolver_match.view_name != 'users_ui:profile' %}hover:bg-primary/10 hover:text-primary{% endif %} transition-colors"
+                {% if request.resolver_match.view_name == 'users_ui:profile' %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
               >
                 <i data-lucide="user" class="w-4 h-4"></i>
                 <span class="font-medium">Profile</span>
@@ -191,11 +191,11 @@
             </li>
 
             <!-- Settings -->
-            <li class="{% if request.resolver_match.view_name == 'user_settings' %}disabled{% endif %}">
+            <li class="{% if request.resolver_match.view_name == 'users_ui:settings' %}disabled{% endif %}">
               <a
-                href="/settings"
-                class="gap-3 {% if request.resolver_match.view_name != 'user_settings' %}hover:bg-info/10 hover:text-info{% endif %} transition-colors"
-                {% if request.resolver_match.view_name == 'user_settings' %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
+                href="{% url 'users_ui:settings' %}"
+                class="gap-3 {% if request.resolver_match.view_name != 'users_ui:settings' %}hover:bg-info/10 hover:text-info{% endif %} transition-colors"
+                {% if request.resolver_match.view_name == 'users_ui:settings' %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
               >
                 <i data-lucide="settings" class="w-4 h-4"></i>
                 <span class="font-medium">Settings</span>

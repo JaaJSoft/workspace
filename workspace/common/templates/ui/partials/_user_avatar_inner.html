@@ -1,4 +1,5 @@
 {% load avatar_tags %}
+{% if show_card %}<div x-data="userCard({{ user.id }})" @mouseenter="show($event)" @mouseleave="scheduleHide()" class="inline-flex">{% endif %}
 {% if user|has_avatar %}
 <div class="avatar">
   <div class="{{ size_class }} rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}">
@@ -12,3 +13,4 @@
   </div>
 </div>
 {% endif %}
+{% if show_card %}<div x-ref="cardPopover" x-show="open" x-cloak @mouseenter="cancelHide()" @mouseleave="scheduleHide()" class="fixed z-[9999] bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300" id="user-card-{{ user.id }}" x-merge="update" @ajax:after="$nextTick(() => lucide?.createIcons({nodes: $el.querySelectorAll('[data-lucide]')}))"><div class="p-4 flex justify-center"><span class="loading loading-spinner loading-sm"></span></div></div></div>{% endif %}

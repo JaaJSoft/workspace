@@ -309,7 +309,7 @@
         <div class="border-t border-base-200 pt-3 space-y-3">
           <!-- Organizer -->
           <div class="flex items-center gap-2.5 text-sm">
-            <div class="flex-shrink-0" x-html="eventOwner ? userAvatarHtml(eventOwner.id, eventOwner.username, 'w-7 h-7 text-xs') : ''"></div>
+            <div class="flex-shrink-0" x-html="eventOwner ? userAvatarWithCardHtml(eventOwner.id, eventOwner.username, 'w-7 h-7 text-xs') : ''"></div>
             <div class="flex-1 min-w-0">
               <span class="font-medium block truncate" x-text="eventOwner?.username"></span>
               <span class="text-xs text-base-content/40">Organizer</span>
@@ -326,7 +326,7 @@
               <template x-for="member in eventMembers" :key="member.uuid">
                 <div class="flex items-center justify-between text-sm">
                   <div class="flex items-center gap-2.5">
-                    <div class="flex-shrink-0" x-html="userAvatarHtml(member.user.id, member.user.username, 'w-7 h-7 text-xs')"></div>
+                    <div class="flex-shrink-0" x-html="userAvatarWithCardHtml(member.user.id, member.user.username, 'w-7 h-7 text-xs')"></div>
                     <span class="truncate" x-text="member.user.username"></span>
                   </div>
                   <span class="badge badge-xs"

@@ -749,7 +749,7 @@ function chatApp(currentUserId) {
     conversationAvatar(conv) {
       if (conv.kind === 'dm') {
         const other = conv.members?.find(m => m.user.id !== this.currentUserId);
-        if (other) return this._avatarHtml(other.user, 'w-10 h-10 text-sm', 'bg-neutral text-neutral-content');
+        if (other) return window.userAvatarWithCardHtml(other.user.id, other.user.username, 'w-10 h-10 text-sm');
         return `<div class="w-10 h-10 rounded-full bg-neutral text-neutral-content flex items-center justify-center flex-shrink-0"><span class="text-sm">?</span></div>`;
       }
       // Group with custom avatar

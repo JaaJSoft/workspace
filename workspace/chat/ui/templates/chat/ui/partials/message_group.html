@@ -43,23 +43,41 @@
                 <div class="flex flex-col gap-1.5">
                   {% for att in attachments %}
                     {% if att.is_image %}
-                      <a href="/api/v1/chat/attachments/{{ att.uuid }}" target="_blank" class="block">
-                        <img
-                          src="/api/v1/chat/attachments/{{ att.uuid }}"
-                          alt="{{ att.original_name }}"
-                          class="max-h-64 rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity"
-                          loading="lazy"
-                        />
-                      </a>
+                      <div class="relative group/att inline-block">
+                        <a href="/api/v1/chat/attachments/{{ att.uuid }}" target="_blank" class="block">
+                          <img
+                            src="/api/v1/chat/attachments/{{ att.uuid }}"
+                            alt="{{ att.original_name }}"
+                            class="max-h-64 rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                            loading="lazy"
+                          />
+                        </a>
+                        <button
+                          class="absolute top-1 right-1 btn btn-xs btn-circle bg-base-100/80 hover:bg-base-100 border-base-300 shadow-sm opacity-0 group-hover/att:opacity-100 transition-opacity"
+                          @click="saveAttachmentToFiles('{{ att.uuid }}')"
+                          title="Save to Files"
+                        >
+                          <i data-lucide="folder-down" class="w-3 h-3"></i>
+                        </button>
+                      </div>
                     {% else %}
-                      <a href="/api/v1/chat/attachments/{{ att.uuid }}"
-                         target="_blank"
-                         class="flex items-center gap-2 p-2 rounded-lg {% if is_own %}bg-info-content/10 hover:bg-info-content/20{% else %}bg-base-300/50 hover:bg-base-300{% endif %} transition-colors min-w-0">
-                        <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
-                        <span class="truncate text-xs font-medium">{{ att.original_name }}</span>
-                        <span class="text-[0.65rem] opacity-60 flex-shrink-0">{{ att.size|filesize }}</span>
-                        <i data-lucide="download" class="w-3.5 h-3.5 flex-shrink-0 opacity-60"></i>
-                      </a>
+                      <div class="flex items-center gap-0.5 group/att">
+                        <a href="/api/v1/chat/attachments/{{ att.uuid }}"
+                           target="_blank"
+                           class="flex items-center gap-2 p-2 rounded-lg {% if is_own %}bg-info-content/10 hover:bg-info-content/20{% else %}bg-base-300/50 hover:bg-base-300{% endif %} transition-colors min-w-0 flex-1">
+                          <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
+                          <span class="truncate text-xs font-medium">{{ att.original_name }}</span>
+                          <span class="text-[0.65rem] opacity-60 flex-shrink-0">{{ att.size|filesize }}</span>
+                          <i data-lucide="download" class="w-3.5 h-3.5 flex-shrink-0 opacity-60"></i>
+                        </a>
+                        <button
+                          class="btn btn-ghost btn-xs btn-circle opacity-0 group-hover/att:opacity-100 transition-opacity flex-shrink-0"
+                          @click="saveAttachmentToFiles('{{ att.uuid }}')"
+                          title="Save to Files"
+                        >
+                          <i data-lucide="folder-down" class="w-3.5 h-3.5"></i>
+                        </button>
+                      </div>
                     {% endif %}
                   {% endfor %}
                 </div>

@@ -1666,6 +1666,24 @@ function chatApp(currentUserId) {
       if (files?.length) this.addFiles(files);
     },
 
+    async saveAttachmentToFiles(attachmentUuid) {
+      try {
+        const resp = await fetch(`/api/v1/chat/attachments/${attachmentUuid}/save-to-files`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          AppDialog.message({ title: 'Saved', message: 'File saved to your Files.', icon: 'check-circle', iconClass: 'bg-success/10 text-success' });
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          AppDialog.error({ message: data.detail || 'Failed to save file.' });
+        }
+      } catch (e) {
+        console.error('Failed to save attachment to files', e);
+      }
+    },
+
     handlePaste(e) {
       const items = e.clipboardData?.items;
       if (!items) return;

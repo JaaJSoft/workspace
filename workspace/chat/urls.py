@@ -92,6 +92,11 @@ urlpatterns = [
         views.AttachmentDownloadView.as_view(),
         name='chat-attachment-download',
     ),
+    path(
+        'api/v1/chat/attachments/<uuid:attachment_id>/save-to-files',
+        views.AttachmentSaveToFilesView.as_view(),
+        name='chat-attachment-save-to-files',
+    ),
     # SSE
     path(
         'api/v1/chat/stream',

@@ -1044,3 +1044,47 @@ class AttachmentDownloadView(APIView):
         safe_name = attachment.original_name.replace('"', '\\"').replace('\n', '').replace('\r', '')
         response['Content-Disposition'] = f'inline; filename="{safe_name}"'
         return response
+
+
+@extend_schema(tags=['Chat'])
+class AttachmentSaveToFilesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Save a chat attachment to the user's Files")
+    def post(self, request, attachment_id):
+        from django.core.files.base import ContentFile
+        from workspace.files.services.files import FileService
+
+        try:
+            attachment = (
+                MessageAttachment.objects
+                .select_related('message')
+                .get(uuid=attachment_id)
+            )
+        except MessageAttachment.DoesNotExist:
+            return Response(
+                {'detail': 'Attachment not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        membership = _get_active_membership(
+            request.user, attachment.message.conversation_id,
+        )
+        if not membership:
+            return Response(
+                {'detail': 'Not a member of this conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        content = ContentFile(attachment.file.read(), name=attachment.original_name)
+        file_obj = FileService.create_file(
+            owner=request.user,
+            name=attachment.original_name,
+            content=content,
+            mime_type=attachment.mime_type,
+        )
+
+        return Response(
+            {'detail': 'File saved.', 'file_uuid': str(file_obj.uuid)},
+            status=status.HTTP_201_CREATED,
+        )

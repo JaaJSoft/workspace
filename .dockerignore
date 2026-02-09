@@ -54,4 +54,8 @@ docs/
 *.bak
 *.tmp
 /files/
+/NUL
+.claude/
 /thumbnails/
+/avatars/
+/chat/

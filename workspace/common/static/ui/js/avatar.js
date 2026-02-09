@@ -13,7 +13,7 @@ window.userAvatarHtml = function(userId, username, sizeClass) {
 
   return `<div class="avatar">` +
     `<div class="${sizeClass} rounded-full overflow-hidden">` +
-      `<img src="${imgUrl}" alt="${username}" class="w-full h-full object-cover" ` +
+      `<img src="${imgUrl}" alt="${username}" class="block w-full h-full object-cover" ` +
         `onerror="this.onerror=null;` +
         `var d=this.closest('.avatar');` +
         `d.className='avatar placeholder';` +
@@ -76,7 +76,7 @@ function _applyPopoverTransform(popover, placement, visible) {
  */
 window.userAvatarWithCardHtml = function(userId, username, sizeClass) {
   const avatar = window.userAvatarHtml(userId, username, sizeClass);
-  return `<div class="inline-flex" onmouseenter="window._userCardShow(this,${userId})" onmouseleave="window._userCardScheduleHide(this)">` +
+  return `<div class="flex" onmouseenter="window._userCardShow(this,${userId})" onmouseleave="window._userCardScheduleHide(this)">` +
     avatar +
   `</div>`;
 };

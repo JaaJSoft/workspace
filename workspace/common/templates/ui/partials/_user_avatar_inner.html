@@ -1,9 +1,9 @@
 {% load avatar_tags %}
-{% if show_card %}<div x-data="userCard({{ user.id }})" @mouseenter="show($event)" @mouseleave="scheduleHide()" class="inline-flex">{% endif %}
+{% if show_card %}<div x-data="userCard({{ user.id }})" @mouseenter="show($event)" @mouseleave="scheduleHide()" class="flex">{% endif %}
 {% if user|has_avatar %}
 <div class="avatar">
   <div class="{{ size_class }} rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}">
-    <img src="/api/v1/users/{{ user.id }}/avatar" alt="{{ user.username }}" class="rounded-full object-cover w-full h-full" onerror="this.onerror=null;var d=this.closest('.avatar');d.className='avatar placeholder';d.firstElementChild.className='{{ size_class }} bg-neutral text-neutral-content rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}';this.replaceWith(Object.assign(document.createElement('span'),{textContent:'{{ user.username|slice:":1"|upper }}'}))" />
+    <img src="/api/v1/users/{{ user.id }}/avatar" alt="{{ user.username }}" class="block rounded-full object-cover w-full h-full" onerror="this.onerror=null;var d=this.closest('.avatar');d.className='avatar placeholder';d.firstElementChild.className='{{ size_class }} bg-neutral text-neutral-content rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}';this.replaceWith(Object.assign(document.createElement('span'),{textContent:'{{ user.username|slice:":1"|upper }}'}))" />
   </div>
 </div>
 {% else %}

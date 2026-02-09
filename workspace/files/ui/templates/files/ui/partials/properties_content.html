@@ -82,7 +82,7 @@ Context:
       <span>Modified {{ file.updated_at|date:"N j, Y" }}</span>
     </div>
     <div class="flex items-center gap-2 text-base-content/60">
-      <div class="flex-shrink-0">{% include "ui/partials/user_avatar.html" with user=file.owner size="2xs" %}</div>
+      <div class="flex-shrink-0 flex items-center">{% include "ui/partials/user_avatar.html" with user=file.owner size="2xs" %}</div>
       <span class="text-sm">{{ file.owner.username }}</span>
     </div>
   </div>

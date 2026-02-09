@@ -1,0 +1,28 @@
+<!-- Properties Sidebar Panel -->
+<!-- Header -->
+<div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
+  <h4 class="font-semibold text-sm flex items-center gap-2">
+    <i :data-lucide="propertiesNodeType === 'folder' ? 'folder' : 'file'" class="w-4 h-4"></i>
+    Properties
+  </h4>
+  <button class="btn btn-ghost btn-xs btn-circle" @click="closePropertiesPanel()">
+    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+  </button>
+</div>
+
+<!-- Loading state -->
+<div x-show="propertiesLoading" class="flex items-center justify-center py-8">
+  <span class="loading loading-spinner loading-lg"></span>
+</div>
+
+<!-- Error state -->
+<div x-show="propertiesError && !propertiesLoading" class="p-4" x-cloak>
+  <div class="alert alert-error text-white">
+    <i data-lucide="x-circle" class="w-5 h-5 stroke-current shrink-0"></i>
+    <span x-text="propertiesError"></span>
+  </div>
+</div>
+
+<!-- Content (AJAX loaded) -->
+<div x-ref="propertiesContent" x-show="!propertiesLoading && !propertiesError" class="p-0" x-cloak>
+</div>

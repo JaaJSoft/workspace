@@ -156,17 +156,6 @@
           <i data-lucide="moon" class="w-5 h-5 text-info"></i>
         </div>
       </label>
-      <!-- Chat -->
-      {% if user.is_authenticated %}
-      <a href="/chat" class="btn btn-ghost btn-circle btn-sm hover:bg-info/10 transition-all indicator" title="Chat">
-        <i data-lucide="message-circle" class="w-5 h-5"></i>
-        <span class="indicator-item badge badge-info badge-xs"
-              x-data x-show="$store.chat && $store.chat.totalUnread > 0"
-              x-text="$store.chat.totalUnread > 99 ? '99+' : $store.chat.totalUnread"
-              x-cloak></span>
-      </a>
-      {% endif %}
-
       {% include 'ui/partials/notifications.html' %}
 
       <!-- User menu dropdown -->

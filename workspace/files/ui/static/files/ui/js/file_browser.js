@@ -275,9 +275,52 @@ window.fileClipboard = {
 
 window.fileBrowser = function fileBrowser() {
   return {
+    // Properties panel state
+    showPropertiesPanel: false,
+    propertiesUuid: null,
+    propertiesNodeType: 'file',
+    propertiesLoading: false,
+    propertiesError: null,
+
     get currentFolder() {
       const folderEl = document.getElementById('folder-browser');
       return folderEl?.dataset.folder || '';
+    },
+
+    async openPropertiesPanel(uuid, nodeType) {
+      // If same file and panel is already open, toggle close
+      if (this.showPropertiesPanel && this.propertiesUuid === uuid) {
+        this.closePropertiesPanel();
+        return;
+      }
+
+      this.propertiesUuid = uuid;
+      this.propertiesNodeType = nodeType || 'file';
+      this.propertiesError = null;
+      this.propertiesLoading = true;
+      this.showPropertiesPanel = true;
+      this.$refs.propertiesContent.replaceChildren();
+
+      try {
+        const response = await fetch(`/files/properties/${uuid}`);
+        if (!response.ok) throw new Error('Failed to load properties');
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        this.$refs.propertiesContent.replaceChildren(...doc.body.children);
+        this.$nextTick(() => lucide.createIcons());
+      } catch (err) {
+        this.propertiesError = err.message;
+      } finally {
+        this.propertiesLoading = false;
+      }
+    },
+
+    closePropertiesPanel() {
+      this.showPropertiesPanel = false;
+      this.propertiesUuid = null;
+      this.propertiesError = null;
+      this.$refs.propertiesContent?.replaceChildren();
     },
 
     _initFileActions() {
@@ -316,7 +359,7 @@ window.fileBrowser = function fileBrowser() {
         }
       });
 
-      // Listen for folder icon changes (from properties modal)
+      // Listen for folder icon changes (from properties panel)
       window.addEventListener('folder-icons-changed', () => {
         this.refreshFolderBrowser();
       });
@@ -1240,6 +1283,28 @@ window.fileBrowser = function fileBrowser() {
       window.addEventListener('create-folder', (e) => this.createFolder(e.detail.name));
       window.addEventListener('create-file', (e) => this.createFile(e.detail.name, e.detail.fileType, e.detail.customExt));
       window.addEventListener('rename-item', (e) => this.renameItem(e.detail.uuid, e.detail.name));
+
+      // Properties panel events
+      window.addEventListener('open-properties', (e) => {
+        const { uuid, nodeType } = e.detail;
+        this.openPropertiesPanel(uuid, nodeType);
+      });
+
+      window.addEventListener('shares-changed', () => {
+        if (this.showPropertiesPanel && this.propertiesUuid) {
+          this.openPropertiesPanel(this.propertiesUuid, this.propertiesNodeType);
+        }
+      });
+
+      // Close properties panel on folder navigation (but not on same-folder refresh)
+      this._lastViewUrl = null;
+      window.addEventListener('folder-browser-replaced', (e) => {
+        const newUrl = e.detail?.viewUrl;
+        if (this._lastViewUrl && newUrl && newUrl !== this._lastViewUrl && this.showPropertiesPanel) {
+          this.closePropertiesPanel();
+        }
+        this._lastViewUrl = newUrl;
+      });
     }
   };
 };
@@ -2932,5 +2997,127 @@ window.viewToggle = function viewToggle() {
         detail: { uuid, name, mime_type: mimeType }
       }));
     }
+  };
+};
+
+// ── File Comments ──────────────────────────────────────────
+
+window.fileComments = function fileComments(fileUuid, currentUserId) {
+  return {
+    fileUuid,
+    currentUserId,
+    comments: [],
+    loading: true,
+    newBody: '',
+    sending: false,
+    editingId: null,
+    editBody: '',
+
+    _csrf() {
+      return document.querySelector('[name=csrfmiddlewaretoken]')?.value
+        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
+        || '';
+    },
+
+    async init() {
+      await this.loadComments();
+    },
+
+    async loadComments() {
+      this.loading = true;
+      try {
+        const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments`, {
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          this.comments = await resp.json();
+        }
+      } catch (e) { /* ignore */ }
+      this.loading = false;
+      this.$nextTick(() => {
+        if (this.$refs.commentsList) {
+          lucide.createIcons({ nodes: this.$refs.commentsList.querySelectorAll('[data-lucide]') });
+        }
+      });
+    },
+
+    async addComment() {
+      if (!this.newBody.trim() || this.sending) return;
+      this.sending = true;
+      try {
+        const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+          body: JSON.stringify({ body: this.newBody.trim() }),
+        });
+        if (resp.ok) {
+          this.newBody = '';
+          await this.loadComments();
+        }
+      } catch (e) { /* ignore */ }
+      this.sending = false;
+    },
+
+    _refreshIcons() {
+      this.$nextTick(() => {
+        if (this.$refs.commentsList) {
+          lucide.createIcons({ nodes: this.$refs.commentsList.querySelectorAll('[data-lucide]') });
+        }
+      });
+    },
+
+    startEdit(comment) {
+      this.editingId = comment.uuid;
+      this.editBody = comment.body;
+      this._refreshIcons();
+    },
+
+    cancelEdit() {
+      this.editingId = null;
+      this.editBody = '';
+      this._refreshIcons();
+    },
+
+    async saveEdit(commentUuid) {
+      if (!this.editBody.trim()) return;
+      try {
+        const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments/${commentUuid}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+          body: JSON.stringify({ body: this.editBody.trim() }),
+        });
+        if (resp.ok) {
+          this.editingId = null;
+          this.editBody = '';
+          await this.loadComments();
+        }
+      } catch (e) { /* ignore */ }
+    },
+
+    async deleteComment(commentUuid) {
+      try {
+        const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments/${commentUuid}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          await this.loadComments();
+        }
+      } catch (e) { /* ignore */ }
+    },
+
+    formatDate(iso) {
+      const d = new Date(iso);
+      const now = new Date();
+      const diff = now - d;
+      if (diff < 60000) return 'just now';
+      if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+      if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
+      return d.toLocaleDateString();
+    },
   };
 };

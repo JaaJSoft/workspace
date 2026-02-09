@@ -743,12 +743,7 @@ function chatApp(currentUserId) {
     },
 
     _avatarHtml(user, size, bgClass) {
-      const cls = `${size} rounded-full flex-shrink-0`;
-      if (user.avatar_url) {
-        return `<div class="${cls} overflow-hidden"><img src="${user.avatar_url}" alt="${user.username}" class="w-full h-full object-cover" /></div>`;
-      }
-      const initial = (user.username || '?')[0].toUpperCase();
-      return `<div class="${cls} ${bgClass} flex items-center justify-center"><span>${initial}</span></div>`;
+      return window.userAvatarHtml(user.id, user.username, size);
     },
 
     conversationAvatar(conv) {

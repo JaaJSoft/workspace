@@ -2,7 +2,7 @@ from rest_framework import serializers
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 
-from .models import File, FileFavorite, FileShare, PinnedFolder
+from .models import File, FileComment, FileFavorite, FileShare, PinnedFolder
 from workspace.files.services import FileService
 
 
@@ -235,3 +235,32 @@ class FileSerializer(serializers.ModelSerializer):
                 FileService.move(instance, new_parent)
 
         return super().update(instance, validated_data)
+
+
+class FileCommentAuthorSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source='pk')
+    username = serializers.CharField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    avatar_url = serializers.SerializerMethodField()
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_avatar_url(self, obj):
+        return f'/api/v1/users/{obj.pk}/avatar'
+
+
+class FileCommentSerializer(serializers.ModelSerializer):
+    author = FileCommentAuthorSerializer(read_only=True)
+
+    class Meta:
+        model = FileComment
+        fields = ['uuid', 'file', 'author', 'body', 'edited_at', 'created_at', 'deleted_at']
+        read_only_fields = ['uuid', 'file', 'author', 'edited_at', 'created_at', 'deleted_at']
+
+
+class FileCommentCreateSerializer(serializers.Serializer):
+    body = serializers.CharField()
+
+
+class FileCommentEditSerializer(serializers.Serializer):
+    body = serializers.CharField()

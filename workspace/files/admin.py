@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import FileShare, MimeTypeRule
+from .models import FileComment, FileShare, MimeTypeRule
 
 
 @admin.register(MimeTypeRule)
@@ -10,6 +10,14 @@ class MimeTypeRuleAdmin(admin.ModelAdmin):
     list_filter = ('category', 'is_wildcard')
     search_fields = ('pattern',)
     ordering = ('priority', 'pattern')
+
+
+@admin.register(FileComment)
+class FileCommentAdmin(admin.ModelAdmin):
+    list_display = ('file', 'author', 'body', 'created_at', 'edited_at', 'deleted_at')
+    list_filter = ('created_at', 'deleted_at')
+    search_fields = ('file__name', 'author__username', 'body')
+    raw_id_fields = ('file', 'author')
 
 
 @admin.register(FileShare)

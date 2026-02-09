@@ -344,74 +344,9 @@
   </script>
 
   <!-- Shared components -->
+  <script src="{% static 'ui/js/avatar.js' %}"></script>
   <script src="{% static 'ui/js/user_selector.js' %}"></script>
 
-  {% if user.is_authenticated %}
-  <!-- Chat unread store + SSE -->
-  <script>
-    document.addEventListener('alpine:init', () => {
-      Alpine.store('chat', {
-        totalUnread: 0,
-        conversationUnreads: {},
-        _es: null,
-
-        init() {
-          this.fetchUnreadCounts();
-          this.connect();
-        },
-
-        async fetchUnreadCounts() {
-          try {
-            const resp = await fetch('/api/v1/chat/unread-counts', { credentials: 'same-origin' });
-            if (resp.ok) {
-              const data = await resp.json();
-              this.totalUnread = data.total;
-              this.conversationUnreads = data.conversations;
-            }
-          } catch (e) {}
-        },
-
-        _errorCount: 0,
-
-        connect() {
-          if (this._es) {
-            this._es.close();
-          }
-          this._es = new EventSource('/api/v1/chat/stream');
-          this._errorCount = 0;
-
-          const events = ['unread', 'message', 'message_edited', 'message_deleted', 'reaction'];
-          for (const evt of events) {
-            this._es.addEventListener(evt, (e) => {
-              try {
-                const data = JSON.parse(e.data);
-                if (evt === 'unread') {
-                  this.totalUnread = data.total;
-                  this.conversationUnreads = data.conversations;
-                }
-                window.dispatchEvent(new CustomEvent('chat-' + evt, { detail: data }));
-              } catch (err) {}
-            });
-          }
-
-          this._es.onerror = () => {
-            this._errorCount++;
-            // After repeated failures, back off — stop hammering the server
-            if (this._errorCount > 5) {
-              this._es.close();
-              // Retry after 30s
-              setTimeout(() => this.connect(), 30000);
-            }
-          };
-
-          this._es.onopen = () => {
-            this._errorCount = 0;
-          };
-        },
-      });
-    });
-  </script>
-  {% endif %}
 
   {% block extra_scripts %}{% endblock %}
 </body>

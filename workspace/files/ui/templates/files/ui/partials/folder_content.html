@@ -19,7 +19,7 @@
     <div class="border-b border-base-300 bg-base-100 px-3 py-2">
       <!-- Filter bar (when nothing selected) -->
       <div class="flex flex-wrap items-center gap-2" x-show="selectedUuids.size === 0">
-        <label class="input input-sm input-bordered flex items-center gap-2 w-full sm:w-96">
+        <label class="input input-sm input-bordered flex items-center gap-2 w-full sm:w-48 md:w-64 lg:w-96">
           <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
           <input
             type="search"
@@ -79,7 +79,7 @@
           <div class="dropdown dropdown-end" x-data="{ open: false }" :class="open ? 'dropdown-open' : ''" @click.outside="open = false" x-show="viewMode === 'list'" x-cloak>
             <button type="button" class="btn btn-sm btn-outline gap-2" @click="open = !open" :aria-expanded="open.toString()">
               <i data-lucide="columns-2" class="w-4 h-4"></i>
-              <span class="hidden sm:inline">Columns</span>
+              <span class="hidden md:inline">Columns</span>
             </button>
             <div tabindex="-1" class="dropdown-content z-50 w-72 p-2 shadow-xl bg-base-100 border border-base-300 rounded-lg" @click.stop>
               <div class="text-xs uppercase tracking-wide text-base-content/60 px-2 py-1">Visible</div>

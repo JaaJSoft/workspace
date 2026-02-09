@@ -340,6 +340,34 @@ class FileShare(models.Model):
         return f"{self.shared_by} -> {self.shared_with}: {self.file}"
 
 
+class FileComment(models.Model):
+    """User comment on a file or folder."""
+    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    file = models.ForeignKey(
+        File,
+        on_delete=models.CASCADE,
+        related_name='comments',
+    )
+    author = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='file_comments',
+    )
+    body = models.TextField()
+    edited_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['file', 'created_at'], name='file_comment_file_created'),
+        ]
+
+    def __str__(self):
+        return f"{self.author} on {self.file} ({self.created_at})"
+
+
 class PinnedFolder(models.Model):
     """User-pinned folders for quick sidebar access."""
     uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)

@@ -39,11 +39,7 @@
               class="flex items-center gap-2 p-2 rounded-lg group"
               :class="entry._removed ? 'bg-error/5 opacity-50' : 'hover:bg-base-200'"
             >
-              <div class="avatar placeholder">
-                <div class="bg-neutral text-neutral-content w-8 h-8 rounded-full">
-                  <span class="text-sm" x-text="(entry.username || '?')[0].toUpperCase()"></span>
-                </div>
-              </div>
+              <div class="flex-shrink-0" x-html="userAvatarHtml(entry.id, entry.username, 'w-8 h-8 text-sm')"></div>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-sm truncate" :class="entry._removed ? 'line-through' : ''" x-text="entry.username"></div>
                 <div

@@ -1,0 +1,14 @@
+{% load avatar_tags %}
+{% if user|has_avatar %}
+<div class="avatar">
+  <div class="{{ size_class }} rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}">
+    <img src="/api/v1/users/{{ user.id }}/avatar" alt="{{ user.username }}" class="rounded-full object-cover w-full h-full" onerror="this.onerror=null;var d=this.closest('.avatar');d.className='avatar placeholder';d.firstElementChild.className='{{ size_class }} bg-neutral text-neutral-content rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}';this.replaceWith(Object.assign(document.createElement('span'),{textContent:'{{ user.username|slice:":1"|upper }}'}))" />
+  </div>
+</div>
+{% else %}
+<div class="avatar placeholder">
+  <div class="{{ size_class }} bg-neutral text-neutral-content rounded-full{% if show_ring %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}">
+    <span>{{ user.username|slice:":1"|upper }}</span>
+  </div>
+</div>
+{% endif %}

@@ -45,18 +45,7 @@
             @click="selectUser(user)"
             @mouseenter="highlight = idx"
           >
-            <template x-if="user.avatar_url">
-              <div class="w-7 h-7 rounded-full overflow-hidden flex-shrink-0">
-                <img :src="user.avatar_url" class="w-full h-full object-cover" />
-              </div>
-            </template>
-            <template x-if="!user.avatar_url">
-              <div class="avatar placeholder">
-                <div class="bg-neutral text-neutral-content w-7 h-7 rounded-full">
-                  <span class="text-xs" x-text="(user.username || '?')[0].toUpperCase()"></span>
-                </div>
-              </div>
-            </template>
+            <div class="flex-shrink-0" x-html="userAvatarHtml(user.id, user.username, 'w-7 h-7 text-xs')"></div>
             <div class="flex flex-col items-start">
               <span class="font-medium text-sm" x-text="user.username"></span>
               <span

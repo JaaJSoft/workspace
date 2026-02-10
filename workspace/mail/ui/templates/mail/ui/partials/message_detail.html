@@ -1,0 +1,99 @@
+<!-- Empty state -->
+<div x-show="!selectedMessage" class="flex-1 flex items-center justify-center">
+  <div class="text-center text-base-content/40">
+    <i data-lucide="mail-open" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
+    <p class="text-sm">Select a message to read</p>
+    <p class="text-xs mt-1">Use <kbd class="kbd kbd-xs">j</kbd> / <kbd class="kbd kbd-xs">k</kbd> to navigate</p>
+  </div>
+</div>
+
+<!-- Message view -->
+<template x-if="selectedMessage && messageDetail">
+  <div class="flex flex-col h-full">
+    <!-- Header -->
+    <div class="px-4 py-3 border-b border-base-300 bg-base-100">
+      <div class="flex items-center gap-2 mb-2">
+        <!-- Back button (mobile) -->
+        <button class="btn btn-ghost btn-sm btn-circle lg:hidden" @click="selectedMessage = null; messageDetail = null">
+          <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </button>
+
+        <h2 class="text-base font-semibold flex-1 min-w-0 truncate" x-text="messageDetail.subject || '(no subject)'"></h2>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-0.5 flex-shrink-0">
+          <button class="btn btn-ghost btn-xs btn-square" @click="toggleStar(messageDetail)"
+                  :title="messageDetail.is_starred ? 'Unstar' : 'Star'">
+            <i data-lucide="star" class="w-4 h-4" :class="messageDetail.is_starred ? 'text-warning fill-warning' : ''"></i>
+          </button>
+          <button class="btn btn-ghost btn-xs btn-square" @click="toggleRead(messageDetail)"
+                  :title="messageDetail.is_read ? 'Mark unread' : 'Mark read'">
+            <i :data-lucide="messageDetail.is_read ? 'mail' : 'mail-open'" class="w-4 h-4"></i>
+          </button>
+          <button class="btn btn-ghost btn-xs btn-square" @click="replyTo(messageDetail)" title="Reply (R)">
+            <i data-lucide="reply" class="w-4 h-4"></i>
+          </button>
+          <button class="btn btn-ghost btn-xs btn-square" @click="forwardMessage(messageDetail)" title="Forward (F)">
+            <i data-lucide="forward" class="w-4 h-4"></i>
+          </button>
+          <button class="btn btn-ghost btn-xs btn-square text-error" @click="deleteMessage(messageDetail)" title="Delete">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- From/To details -->
+      <div class="text-sm space-y-1">
+        <div class="flex items-center gap-2">
+          <span class="text-base-content/50 w-10 text-right">From</span>
+          <span class="font-medium" x-text="messageDetail.from_address?.name || messageDetail.from_address?.email"></span>
+          <span class="text-base-content/50" x-show="messageDetail.from_address?.name"
+                x-text="'<' + messageDetail.from_address?.email + '>'"></span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-base-content/50 w-10 text-right">To</span>
+          <span class="flex-1 text-base-content/80"
+                x-text="(messageDetail.to_addresses || []).map(a => a.name || a.email).join(', ')"></span>
+        </div>
+        <template x-if="messageDetail.cc_addresses?.length">
+          <div class="flex items-start gap-2">
+            <span class="text-base-content/50 w-10 text-right">Cc</span>
+            <span class="flex-1 text-base-content/80"
+                  x-text="messageDetail.cc_addresses.map(a => a.name || a.email).join(', ')"></span>
+          </div>
+        </template>
+        <div class="flex items-center gap-2">
+          <span class="text-base-content/50 w-10 text-right">Date</span>
+          <span class="text-base-content/80" x-text="formatFullDate(messageDetail.date)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Attachments bar -->
+    <div x-show="messageDetail.attachments?.length > 0" x-cloak
+         class="px-4 py-2 border-b border-base-300 bg-base-100/50 flex flex-wrap gap-2">
+      <template x-for="att in messageDetail.attachments" :key="att.uuid">
+        <a :href="'/api/v1/mail/attachments/' + att.uuid"
+           class="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-base-300 bg-base-200 text-xs hover:bg-base-300 transition-colors"
+           download>
+          <i data-lucide="paperclip" class="w-3 h-3 flex-shrink-0"></i>
+          <span class="truncate max-w-[10rem]" x-text="att.filename"></span>
+          <span class="text-base-content/50 flex-shrink-0" x-text="formatSize(att.size)"></span>
+        </a>
+      </template>
+    </div>
+
+    <!-- Body -->
+    <div class="flex-1 overflow-y-auto p-4">
+      <div x-show="loadingDetail" class="flex justify-center py-8">
+        <span class="loading loading-spinner loading-md text-warning"></span>
+      </div>
+      <template x-if="messageDetail.body_html">
+        <div class="mail-body prose prose-sm max-w-none" x-html="messageDetail.body_html"></div>
+      </template>
+      <template x-if="!messageDetail.body_html && messageDetail.body_text">
+        <pre class="mail-body-text whitespace-pre-wrap text-sm font-sans" x-text="messageDetail.body_text"></pre>
+      </template>
+    </div>
+  </div>
+</template>

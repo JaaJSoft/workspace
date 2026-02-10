@@ -1,0 +1,53 @@
+<!-- Folder list per account -->
+<template x-for="account in accounts" :key="account.uuid">
+  <div class="mb-2">
+    <!-- Account header -->
+    <div class="flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded-lg hover:bg-base-content/5"
+         @click="toggleAccountExpanded(account.uuid)"
+         x-show="!collapsed">
+      <i :data-lucide="expandedAccounts[account.uuid] ? 'chevron-down' : 'chevron-right'"
+         class="w-3.5 h-3.5 text-base-content/50 flex-shrink-0"></i>
+      <span class="text-sm font-medium truncate flex-1" x-text="account.display_name || account.email"></span>
+      <div class="dropdown dropdown-end" @click.stop>
+        <button class="btn btn-ghost btn-xs btn-circle opacity-50 hover:opacity-100" tabindex="0">
+          <i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i>
+        </button>
+        <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-lg shadow-lg z-50 w-40">
+          <li><a @click="syncAccount(account.uuid)"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Sync</a></li>
+          <li><a @click="testAccount(account.uuid)"><i data-lucide="plug" class="w-3.5 h-3.5"></i> Test</a></li>
+          <li><a @click="removeAccount(account.uuid)" class="text-error"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Folders -->
+    <div x-show="expandedAccounts[account.uuid] && !collapsed" x-collapse>
+      <template x-for="folder in getFolders(account.uuid)" :key="folder.uuid">
+        <button
+          class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
+          :class="selectedFolder?.uuid === folder.uuid
+            ? 'bg-warning/10 text-warning'
+            : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
+          @click="selectFolder(folder)"
+        >
+          <i :data-lucide="folderIcon(folder.folder_type)" class="w-4 h-4 flex-shrink-0"></i>
+          <span class="flex-1 text-left truncate" x-text="folder.display_name"></span>
+          <span
+            x-show="folder.unread_count > 0"
+            class="badge badge-xs badge-warning"
+            x-text="folder.unread_count"
+          ></span>
+        </button>
+      </template>
+    </div>
+  </div>
+</template>
+
+<!-- Add account button -->
+<div class="mt-2 px-1" x-show="!collapsed">
+  <button class="btn btn-ghost btn-sm btn-block justify-start text-base-content/50 hover:text-warning"
+          @click="showAddAccount()">
+    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+    Add account
+  </button>
+</div>

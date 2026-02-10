@@ -1,0 +1,92 @@
+<!-- Compose email dialog -->
+<dialog id="mail-compose-dialog" class="modal">
+  <div class="modal-box max-w-2xl h-[80vh] flex flex-col">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-lg" x-text="compose.subject ? 'Re: ' + compose.subject : 'New Message'"></h3>
+      <button class="btn btn-ghost btn-sm btn-circle" @click="closeCompose()">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Compose form -->
+    <form @submit.prevent="sendEmail()" class="flex flex-col flex-1 min-h-0 gap-2">
+      <!-- Account selector -->
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-base-content/50 w-12">From</span>
+        <select x-model="compose.account_id" class="select select-bordered select-sm flex-1" required>
+          <template x-for="acc in accounts" :key="acc.uuid">
+            <option :value="acc.uuid" x-text="acc.display_name ? acc.display_name + ' <' + acc.email + '>' : acc.email"></option>
+          </template>
+        </select>
+      </div>
+
+      <!-- To -->
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-base-content/50 w-12">To</span>
+        <input type="text" x-model="compose.to" class="input input-bordered input-sm flex-1"
+               placeholder="recipient@example.com" required />
+      </div>
+
+      <!-- Cc (toggle) -->
+      <div x-show="showCcBcc" x-collapse class="flex items-center gap-2">
+        <span class="text-sm text-base-content/50 w-12">Cc</span>
+        <input type="text" x-model="compose.cc" class="input input-bordered input-sm flex-1"
+               placeholder="cc@example.com" />
+      </div>
+
+      <!-- Bcc (toggle) -->
+      <div x-show="showCcBcc" x-collapse class="flex items-center gap-2">
+        <span class="text-sm text-base-content/50 w-12">Bcc</span>
+        <input type="text" x-model="compose.bcc" class="input input-bordered input-sm flex-1"
+               placeholder="bcc@example.com" />
+      </div>
+
+      <div class="flex items-center gap-2" x-show="!showCcBcc">
+        <div class="w-12"></div>
+        <button type="button" class="btn btn-ghost btn-xs" @click="showCcBcc = true">Cc/Bcc</button>
+      </div>
+
+      <!-- Subject -->
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-base-content/50 w-12">Subject</span>
+        <input type="text" x-model="compose.subject" class="input input-bordered input-sm flex-1" placeholder="Subject" />
+      </div>
+
+      <!-- Body -->
+      <textarea
+        x-model="compose.body"
+        class="textarea textarea-bordered flex-1 min-h-0 text-sm leading-relaxed resize-none"
+        placeholder="Write your message..."
+      ></textarea>
+
+      <!-- Error -->
+      <div x-show="compose.error" x-cloak class="alert alert-error text-white text-sm">
+        <i data-lucide="x-circle" class="w-4 h-4"></i>
+        <span x-text="compose.error"></span>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center justify-between pt-2 border-t border-base-300">
+        <div class="flex items-center gap-1">
+          <button type="button" class="btn btn-ghost btn-xs btn-square" @click="$refs.composeFileInput.click()" title="Attach file">
+            <i data-lucide="paperclip" class="w-4 h-4"></i>
+          </button>
+          <input type="file" multiple x-ref="composeFileInput" class="hidden" @change="handleComposeFiles($event)" />
+          <span x-show="compose.attachments.length > 0" class="text-xs text-base-content/50"
+                x-text="compose.attachments.length + ' file(s)'"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" class="btn btn-ghost btn-sm" @click="closeCompose()">Discard</button>
+          <button type="submit" class="btn btn-warning btn-sm" :disabled="compose.sending">
+            <span x-show="!compose.sending">
+              <i data-lucide="send" class="w-4 h-4"></i> Send
+            </span>
+            <span x-show="compose.sending" class="loading loading-spinner loading-xs"></span>
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>

@@ -97,6 +97,8 @@ INSTALLED_APPS = [
     'workspace.chat.ui',
     'workspace.calendar',
     'workspace.calendar.ui',
+    'workspace.mail',
+    'workspace.mail.ui',
 ]
 
 # Add Debug Toolbar only in DEBUG mode and not during tests
@@ -247,6 +249,10 @@ SPECTACULAR_SETTINGS = {
         {
             'name': 'Chat',
             'description': 'Real-time messaging with direct and group conversations.',
+        },
+        {
+            'name': 'Mail',
+            'description': 'Read and send emails from external mail accounts.',
         },
     ],
     'SWAGGER_UI_SETTINGS': {
@@ -505,5 +511,9 @@ CELERY_BEAT_SCHEDULE = {
     'db-maintenance': {
         'task': 'core.db_maintenance',
         'schedule': crontab(hour=3, minute=0),  # Every day at 3:00 AM
+    },
+    'sync-all-mail-accounts': {
+        'task': 'mail.sync_all_accounts',
+        'schedule': 120.0,  # Every 2 minutes
     },
 }

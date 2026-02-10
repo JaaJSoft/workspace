@@ -1,0 +1,422 @@
+import logging
+
+from django.db.models import Count
+from django.http import FileResponse
+from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .models import MailAccount, MailAttachment, MailFolder, MailMessage
+from .serializers import (
+    BatchActionSerializer,
+    MailAccountCreateSerializer,
+    MailAccountSerializer,
+    MailAccountUpdateSerializer,
+    MailFolderSerializer,
+    MailMessageDetailSerializer,
+    MailMessageListSerializer,
+    MailMessageUpdateSerializer,
+    SendEmailSerializer,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@extend_schema(tags=['Mail'])
+class MailAccountListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="List user's mail accounts")
+    def get(self, request):
+        accounts = MailAccount.objects.filter(owner=request.user)
+        return Response(MailAccountSerializer(accounts, many=True).data)
+
+    @extend_schema(summary="Add a mail account", request=MailAccountCreateSerializer)
+    def post(self, request):
+        ser = MailAccountCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        password = d.pop('password')
+        account = MailAccount(owner=request.user, **d)
+        account.set_password(password)
+        account.save()
+
+        return Response(
+            MailAccountSerializer(account).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+@extend_schema(tags=['Mail'])
+class MailAccountDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_account(self, request, uuid):
+        try:
+            return MailAccount.objects.get(uuid=uuid, owner=request.user)
+        except MailAccount.DoesNotExist:
+            return None
+
+    @extend_schema(summary="Get mail account details")
+    def get(self, request, uuid):
+        account = self._get_account(request, uuid)
+        if not account:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(MailAccountSerializer(account).data)
+
+    @extend_schema(summary="Update a mail account", request=MailAccountUpdateSerializer)
+    def patch(self, request, uuid):
+        account = self._get_account(request, uuid)
+        if not account:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        ser = MailAccountUpdateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        password = ser.validated_data.pop('password', None)
+        for key, value in ser.validated_data.items():
+            setattr(account, key, value)
+        if password:
+            account.set_password(password)
+        account.save()
+
+        return Response(MailAccountSerializer(account).data)
+
+    @extend_schema(summary="Delete a mail account")
+    def delete(self, request, uuid):
+        account = self._get_account(request, uuid)
+        if not account:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        account.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=['Mail'])
+class MailAccountTestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Test IMAP and SMTP connections for an account")
+    def post(self, request, uuid):
+        try:
+            account = MailAccount.objects.get(uuid=uuid, owner=request.user)
+        except MailAccount.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        from .services.imap import test_imap_connection
+        from .services.smtp import test_smtp_connection
+
+        imap_ok, imap_error = test_imap_connection(account)
+        smtp_ok, smtp_error = test_smtp_connection(account)
+
+        return Response({
+            'imap': {'success': imap_ok, 'error': imap_error},
+            'smtp': {'success': smtp_ok, 'error': smtp_error},
+        })
+
+
+@extend_schema(tags=['Mail'])
+class MailAccountSyncView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Trigger sync for a mail account")
+    def post(self, request, uuid):
+        try:
+            account = MailAccount.objects.get(uuid=uuid, owner=request.user)
+        except MailAccount.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        from .services.imap import sync_account
+
+        try:
+            sync_account(account)
+            return Response({'status': 'ok', 'last_sync_at': account.last_sync_at})
+        except Exception as e:
+            account.last_sync_error = str(e)
+            account.save(update_fields=['last_sync_error', 'updated_at'])
+            return Response(
+                {'status': 'error', 'error': str(e)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+
+@extend_schema(tags=['Mail'])
+class MailFolderListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="List folders for a mail account",
+        parameters=[OpenApiParameter('account', str, required=True)],
+    )
+    def get(self, request):
+        account_id = request.query_params.get('account')
+        if not account_id:
+            return Response(
+                {'detail': 'account query parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            account = MailAccount.objects.get(uuid=account_id, owner=request.user)
+        except MailAccount.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        folders = MailFolder.objects.filter(account=account)
+        return Response(MailFolderSerializer(folders, many=True).data)
+
+
+@extend_schema(tags=['Mail'])
+class MailMessageListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="List messages in a folder",
+        parameters=[
+            OpenApiParameter('folder', str, required=True),
+            OpenApiParameter('page', int, required=False),
+        ],
+    )
+    def get(self, request):
+        folder_id = request.query_params.get('folder')
+        if not folder_id:
+            return Response(
+                {'detail': 'folder query parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            folder = MailFolder.objects.select_related('account').get(uuid=folder_id)
+        except MailFolder.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if folder.account.owner != request.user:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        page = int(request.query_params.get('page', 1))
+        page_size = 50
+        offset = (page - 1) * page_size
+
+        messages = (
+            MailMessage.objects
+            .filter(folder=folder, deleted_at__isnull=True)
+            .annotate(attachments_count=Count('attachments'))
+            .order_by('-date')[offset:offset + page_size]
+        )
+
+        total = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True).count()
+
+        return Response({
+            'results': MailMessageListSerializer(messages, many=True).data,
+            'count': total,
+            'page': page,
+            'page_size': page_size,
+        })
+
+
+@extend_schema(tags=['Mail'])
+class MailMessageDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_message(self, request, uuid):
+        try:
+            msg = (
+                MailMessage.objects
+                .select_related('account', 'folder')
+                .prefetch_related('attachments')
+                .get(uuid=uuid)
+            )
+        except MailMessage.DoesNotExist:
+            return None
+        if msg.account.owner != request.user:
+            return None
+        return msg
+
+    @extend_schema(summary="Get full message details")
+    def get(self, request, uuid):
+        msg = self._get_message(request, uuid)
+        if not msg:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(MailMessageDetailSerializer(msg).data)
+
+    @extend_schema(summary="Update message flags", request=MailMessageUpdateSerializer)
+    def patch(self, request, uuid):
+        msg = self._get_message(request, uuid)
+        if not msg:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        ser = MailMessageUpdateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        from .services.imap import mark_read, mark_unread, star_message, unstar_message
+
+        if 'is_read' in ser.validated_data:
+            val = ser.validated_data['is_read']
+            msg.is_read = val
+            try:
+                if val:
+                    mark_read(msg.account, msg)
+                else:
+                    mark_unread(msg.account, msg)
+            except Exception:
+                logger.warning("Failed to sync read flag to IMAP for %s", msg.uuid)
+
+        if 'is_starred' in ser.validated_data:
+            val = ser.validated_data['is_starred']
+            msg.is_starred = val
+            try:
+                if val:
+                    star_message(msg.account, msg)
+                else:
+                    unstar_message(msg.account, msg)
+            except Exception:
+                logger.warning("Failed to sync star flag to IMAP for %s", msg.uuid)
+
+        msg.save()
+        return Response(MailMessageDetailSerializer(msg).data)
+
+    @extend_schema(summary="Soft-delete a message")
+    def delete(self, request, uuid):
+        msg = self._get_message(request, uuid)
+        if not msg:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        from .services.imap import delete_message
+
+        msg.deleted_at = timezone.now()
+        msg.save(update_fields=['deleted_at', 'updated_at'])
+
+        try:
+            delete_message(msg.account, msg)
+        except Exception:
+            logger.warning("Failed to delete message on IMAP for %s", msg.uuid)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=['Mail'])
+class MailSendView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Send an email", request=SendEmailSerializer)
+    def post(self, request):
+        ser = SendEmailSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        try:
+            account = MailAccount.objects.get(uuid=d['account_id'], owner=request.user)
+        except MailAccount.DoesNotExist:
+            return Response(
+                {'detail': 'Account not found'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        from .services.smtp import send_email
+
+        attachments = request.FILES.getlist('attachments', [])
+
+        try:
+            send_email(
+                account=account,
+                to=d['to'],
+                subject=d['subject'],
+                body_html=d['body_html'],
+                body_text=d['body_text'],
+                cc=d.get('cc'),
+                bcc=d.get('bcc'),
+                reply_to=d.get('reply_to'),
+                attachments=attachments,
+            )
+            return Response({'status': 'sent'}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.exception("Failed to send email from %s", account.email)
+            return Response(
+                {'status': 'error', 'error': str(e)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+
+@extend_schema(tags=['Mail'])
+class MailBatchActionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Batch action on messages", request=BatchActionSerializer)
+    def post(self, request):
+        ser = BatchActionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        message_ids = ser.validated_data['message_ids']
+        action = ser.validated_data['action']
+
+        messages = MailMessage.objects.filter(
+            uuid__in=message_ids,
+            account__owner=request.user,
+            deleted_at__isnull=True,
+        ).select_related('account', 'folder')
+
+        from .services.imap import (
+            delete_message,
+            mark_read,
+            mark_unread,
+            star_message,
+            unstar_message,
+        )
+
+        action_map = {
+            'mark_read': (mark_read, {'is_read': True}),
+            'mark_unread': (mark_unread, {'is_read': False}),
+            'star': (star_message, {'is_starred': True}),
+            'unstar': (unstar_message, {'is_starred': False}),
+        }
+
+        processed = 0
+        for msg in messages:
+            try:
+                if action == 'delete':
+                    msg.deleted_at = timezone.now()
+                    msg.save(update_fields=['deleted_at', 'updated_at'])
+                    try:
+                        delete_message(msg.account, msg)
+                    except Exception:
+                        pass
+                elif action in action_map:
+                    imap_fn, db_update = action_map[action]
+                    for key, value in db_update.items():
+                        setattr(msg, key, value)
+                    msg.save()
+                    try:
+                        imap_fn(msg.account, msg)
+                    except Exception:
+                        pass
+                processed += 1
+            except Exception:
+                logger.warning("Batch action '%s' failed for message %s", action, msg.uuid)
+
+        return Response({'processed': processed})
+
+
+@extend_schema(tags=['Mail'])
+class MailAttachmentDownloadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Download an attachment")
+    def get(self, request, uuid):
+        try:
+            attachment = MailAttachment.objects.select_related(
+                'message__account',
+            ).get(uuid=uuid)
+        except MailAttachment.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if attachment.message.account.owner != request.user:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        return FileResponse(
+            attachment.content.open('rb'),
+            content_type=attachment.content_type,
+            as_attachment=True,
+            filename=attachment.filename,
+        )

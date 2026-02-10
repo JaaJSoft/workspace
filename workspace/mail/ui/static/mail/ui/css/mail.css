@@ -1,0 +1,91 @@
+/* Mail module styles */
+
+/* Email body container — isolate rendered HTML from the rest of the page */
+.mail-body {
+  line-height: 1.6;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.mail-body img {
+  max-width: 100%;
+  height: auto;
+}
+
+.mail-body table {
+  border-collapse: collapse;
+  max-width: 100%;
+}
+
+.mail-body td,
+.mail-body th {
+  padding: 4px 8px;
+}
+
+.mail-body a {
+  color: oklch(var(--wa));
+  text-decoration: underline;
+}
+
+.mail-body a:hover {
+  opacity: 0.8;
+}
+
+.mail-body blockquote {
+  border-left: 3px solid oklch(var(--wa) / 0.4);
+  padding-left: 1rem;
+  margin-left: 0;
+  color: oklch(var(--bc) / 0.7);
+}
+
+/* Plain text body */
+.mail-body-text {
+  line-height: 1.6;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  color: oklch(var(--bc) / 0.85);
+}
+
+/* Message list - unread indicator */
+.mail-unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: oklch(var(--wa));
+  flex-shrink: 0;
+}
+
+/* Star animation */
+.mail-star-animate {
+  animation: mail-star-pop 0.2s ease-out;
+}
+
+@keyframes mail-star-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+/* Folder list active state */
+.mail-folder-active {
+  background: oklch(var(--wa) / 0.1);
+  color: oklch(var(--wa));
+}
+
+/* Scrollbar styling for message list */
+.mail-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mail-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mail-scrollbar::-webkit-scrollbar-thumb {
+  background: oklch(var(--bc) / 0.15);
+  border-radius: 3px;
+}
+
+.mail-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: oklch(var(--bc) / 0.25);
+}

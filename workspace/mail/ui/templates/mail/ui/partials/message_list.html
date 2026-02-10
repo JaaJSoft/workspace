@@ -1,0 +1,92 @@
+<!-- Message list header -->
+<div class="px-4 py-3 border-b border-base-300 flex items-center gap-2 bg-base-100">
+  <h3 class="font-semibold text-sm flex-1 truncate" x-text="selectedFolder?.display_name || 'Messages'"></h3>
+  <button class="btn btn-ghost btn-xs btn-circle" @click="refreshFolder()" :disabled="loadingMessages" title="Refresh">
+    <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="loadingMessages ? 'animate-spin' : ''"></i>
+  </button>
+</div>
+
+<!-- Batch action bar -->
+<div class="px-3 py-1.5 border-b border-base-300 flex items-center gap-1 bg-base-100/80 text-xs"
+     x-show="selectedMessages.length > 0" x-cloak>
+  <span class="text-base-content/60 mr-1" x-text="selectedMessages.length + ' selected'"></span>
+  <button class="btn btn-ghost btn-xs" @click="batchAction('mark_read')" title="Mark read">
+    <i data-lucide="mail-open" class="w-3.5 h-3.5"></i>
+  </button>
+  <button class="btn btn-ghost btn-xs" @click="batchAction('mark_unread')" title="Mark unread">
+    <i data-lucide="mail" class="w-3.5 h-3.5"></i>
+  </button>
+  <button class="btn btn-ghost btn-xs" @click="batchAction('star')" title="Star">
+    <i data-lucide="star" class="w-3.5 h-3.5"></i>
+  </button>
+  <button class="btn btn-ghost btn-xs text-error" @click="batchAction('delete')" title="Delete">
+    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+  </button>
+  <div class="flex-1"></div>
+  <button class="btn btn-ghost btn-xs" @click="selectedMessages = []">Clear</button>
+</div>
+
+<!-- Loading -->
+<div x-show="loadingMessages" class="flex justify-center py-8">
+  <span class="loading loading-spinner loading-md text-warning"></span>
+</div>
+
+<!-- Message list -->
+<div class="flex-1 overflow-y-auto" x-show="!loadingMessages">
+  <!-- No messages -->
+  <div x-show="messages.length === 0 && !loadingMessages" class="flex items-center justify-center h-full">
+    <div class="text-center text-base-content/40 py-12">
+      <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-30"></i>
+      <p class="text-sm">No messages</p>
+    </div>
+  </div>
+
+  <template x-for="msg in messages" :key="msg.uuid">
+    <div
+      class="flex items-start gap-2 px-3 py-2.5 border-b border-base-200 cursor-pointer transition-colors"
+      :class="{
+        'bg-warning/5': selectedMessage?.uuid === msg.uuid,
+        'hover:bg-base-200/50': selectedMessage?.uuid !== msg.uuid,
+        'font-normal opacity-70': msg.is_read,
+        'font-semibold': !msg.is_read,
+      }"
+      @click="selectMessage(msg)"
+    >
+      <!-- Select checkbox -->
+      <input type="checkbox"
+             class="checkbox checkbox-xs checkbox-warning mt-1"
+             :checked="selectedMessages.includes(msg.uuid)"
+             @click.stop="toggleSelectMessage(msg.uuid)"
+      />
+
+      <div class="flex-1 min-w-0">
+        <!-- From + date row -->
+        <div class="flex items-center gap-1 mb-0.5">
+          <span class="text-sm truncate flex-1"
+                :class="msg.is_read ? 'text-base-content/70' : 'text-base-content'"
+                x-text="msg.from_address?.name || msg.from_address?.email || 'Unknown'"></span>
+          <span class="text-xs text-base-content/50 flex-shrink-0" x-text="formatDate(msg.date)"></span>
+        </div>
+        <!-- Subject -->
+        <div class="text-sm truncate" :class="msg.is_read ? 'text-base-content/60' : ''" x-text="msg.subject || '(no subject)'"></div>
+        <!-- Snippet -->
+        <div class="text-xs text-base-content/50 truncate mt-0.5" x-text="msg.snippet"></div>
+      </div>
+
+      <!-- Indicators -->
+      <div class="flex flex-col items-center gap-1 flex-shrink-0 mt-1">
+        <i data-lucide="star" class="w-3.5 h-3.5" x-show="msg.is_starred"
+           :class="msg.is_starred ? 'text-warning fill-warning' : 'text-base-content/20'"></i>
+        <i data-lucide="paperclip" class="w-3 h-3 text-base-content/30" x-show="msg.has_attachments"></i>
+      </div>
+    </div>
+  </template>
+
+  <!-- Load more -->
+  <div x-show="hasMoreMessages" class="flex justify-center py-3">
+    <button class="btn btn-ghost btn-xs" @click="loadMoreMessages()" :disabled="loadingMoreMessages">
+      <span x-show="!loadingMoreMessages">Load more</span>
+      <span x-show="loadingMoreMessages" class="loading loading-spinner loading-xs"></span>
+    </button>
+  </div>
+</div>

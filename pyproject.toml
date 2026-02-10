@@ -20,6 +20,9 @@ dependencies = [
     # imaging
     "pillow>=11.0",
     "cairosvg>=2.7.0",
+    # mail
+    "cryptography>=44.0.0",
+    "nh3>=0.2.20",
     # utils
     "psutil>=7.2.2",
     "mistune>=3.2.0",

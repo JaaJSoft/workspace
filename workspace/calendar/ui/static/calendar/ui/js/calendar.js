@@ -41,6 +41,9 @@ window.calendarApp = function calendarApp(calendarsData) {
     saving: false,
     deleting: false,
 
+    // Context menu state
+    ctxMenu: { open: false, x: 0, y: 0, event: null, isOwner: false, inviteStatus: null },
+
     csrfToken() {
       return document.querySelector('[name=csrfmiddlewaretoken]')?.value
         || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
@@ -196,6 +199,7 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
     changeView(view) {
       if (this.calendar) {
+        this.ctxMenu.open = false;
         this.calendar.changeView(view);
         this.currentView = view;
         this.calendar.setOption('selectable', view !== 'listWeek');
@@ -379,6 +383,13 @@ window.calendarApp = function calendarApp(calendarsData) {
 
         eventClick: (info) => {
           this.openViewPanel(info.event.extendedProps._raw);
+        },
+
+        eventDidMount: (info) => {
+          info.el.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            this.openContextMenu(e, info.event.extendedProps._raw);
+          });
         },
       });
 
@@ -740,6 +751,79 @@ window.calendarApp = function calendarApp(calendarsData) {
         e.preventDefault();
         const dlg = document.getElementById('calendar-help-dialog');
         if (dlg) { dlg.showModal(); lucide?.createIcons(); }
+      }
+    },
+
+    // --- Context menu ---
+    openContextMenu(nativeEvent, rawEvent) {
+      const currentUserId = String(document.body.dataset.userId);
+      const isOwner = String(rawEvent.owner.id) === currentUserId;
+      const membership = (rawEvent.members || []).find(m => String(m.user.id) === currentUserId);
+      const inviteStatus = (!isOwner && membership) ? membership.status : null;
+
+      // Store event data in form for actions that need it
+      this.ctxMenu.event = rawEvent;
+      this.ctxMenu.isOwner = isOwner;
+      this.ctxMenu.inviteStatus = inviteStatus;
+      this.ctxMenu.open = true;
+
+      // Position with viewport overflow detection
+      this.$nextTick(() => {
+        const menuEl = this.$el.querySelector('[x-show="ctxMenu.open"]');
+        if (!menuEl) return;
+        const menuRect = menuEl.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+
+        let x = nativeEvent.clientX;
+        let y = nativeEvent.clientY;
+
+        if (x + menuRect.width > vw) x = vw - menuRect.width - 10;
+        if (y + menuRect.height > vh) y = vh - menuRect.height - 10;
+
+        this.ctxMenu.x = x;
+        this.ctxMenu.y = y;
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      });
+    },
+
+    ctxMenuAction(action) {
+      const rawEvent = this.ctxMenu.event;
+      this.ctxMenu.open = false;
+      if (!rawEvent) return;
+
+      switch (action) {
+        case 'view':
+          this.openViewPanel(rawEvent);
+          break;
+        case 'copy_link': {
+          const url = new URL(window.location.origin + window.location.pathname);
+          url.searchParams.set('event', rawEvent.uuid);
+          navigator.clipboard.writeText(url.toString()).then(() => {
+            if (window.AppAlert) window.AppAlert.success('Link copied to clipboard', { duration: 2000 });
+          }).catch(() => {
+            if (window.AppAlert) window.AppAlert.error('Failed to copy link');
+          });
+          break;
+        }
+        case 'edit':
+          this.openViewPanel(rawEvent);
+          this.$nextTick(() => this.openEditModal());
+          break;
+        case 'delete':
+          this.openViewPanel(rawEvent);
+          this.$nextTick(() => this.deleteEvent());
+          break;
+        case 'accept':
+          // Load event into form state so respondToInvitation works
+          this.openViewPanel(rawEvent);
+          this.$nextTick(() => this.respondToInvitation('accepted'));
+          break;
+        case 'decline':
+          this.openViewPanel(rawEvent);
+          this.$nextTick(() => this.respondToInvitation('declined'));
+          break;
       }
     },
 

@@ -59,6 +59,30 @@ This approach prioritizes operational simplicity, security, and the freedom to d
 - File copy with conflict resolution
 - Custom folder icons and colors
 - WebDAV access with Django authentication
+- File sharing with read-only / read-write permissions per user
+- Automatic thumbnail generation for images and SVGs
+- Mosaic/grid view with adjustable tile size
+- File comments with edit and soft-delete
+- Extensible file action registry (open, transfer, organize, edit, etc.)
+- File viewer navigation with Previous/Next and keyboard arrows
+
+### Chat & Messaging
+- Direct messages (1:1) and group conversations
+- Real-time updates via Server-Sent Events (SSE)
+- Emoji reactions with grouped display
+- File attachments with upload, download, and "Save to Files" integration
+- Message search with highlight navigation
+- Pinned conversations with drag-and-drop reordering
+- Member management with context menus
+- Markdown message rendering
+- Keyboard shortcuts and help dialog
+
+### Calendar & Scheduling
+- Day, week, and month views (FullCalendar)
+- Events with title, description, location, and participants
+- Invitations and RSVP (pending / accepted / declined)
+- Calendar subscriptions (subscribe to other users' calendars)
+- Keyboard shortcuts and help dialog
 
 ### Dashboard
 - Storage statistics and file/folder counts
@@ -66,14 +90,17 @@ This approach prioritizes operational simplicity, security, and the freedom to d
 - Module registry with quick access
 
 ### Unified Search
-- Cross-module search via command palette
-- Results grouped by type (files, folders, etc.)
+- Cross-module search via command palette (Ctrl+K)
+- Results grouped by type (files, folders, conversations, events, etc.)
 - Extensible search provider system
 
-### User Settings
+### User Settings & Profiles
 - Per-user, per-module key-value settings store
+- Avatar upload with Cropper.js and WebP conversion
+- User mini profile popover on hover
+- Enhanced profile page with stats and activity timeline
 - Password management with configurable validation rules
-- Persistent dark/light theme toggle
+- 12 themes (light, dark, cupcake, emerald, corporate, forest, dracula, night, winter, nord, sunset, autumn)
 
 ## Tech Stack
 
@@ -202,14 +229,17 @@ Kubernetes-ready health endpoints at `/health/` for liveness and readiness probe
 
 ## Roadmap
 
-Workspace is in active development. Planned modules include:
+Workspace is in active development. Shipped and planned modules:
 
+**Shipped:**
+- 💬 **Chat** — Direct messages, group conversations, reactions, file attachments, message search, pinned conversations
+- 📅 **Calendar** — Day/week/month views, events with participants, invitations & RSVP, subscriptions
+
+**Planned:**
 - 📝 **Notes & Wiki** — Rich text editor with backlinks and page hierarchy
 - ✅ **Tasks & Projects** — Kanban boards, sprints, time tracking
 - 📧 **Email Client** — IMAP/SMTP integration with unified inbox
-- 📅 **Calendar** — CalDAV sync, recurring events, availability slots
 - 👥 **Contacts & CRM** — Contact management with interaction history
-- 💬 **Chat** — Real-time messaging with channels and threads
 - 🔗 **Bookmarks** — Save and organize links with automatic previews
 - 🔐 **Password Manager** — Encrypted vault with TOTP support
 

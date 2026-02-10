@@ -22,7 +22,15 @@ Quick improvements with high impact on existing features.
 - [x] **Enhanced toast notifications** - Notification stack with auto-dismiss
 - [x] **Empty states** - Illustrations when a folder/view is empty
 - [x] **Persistent sorting** - Remember user's chosen sort order (cookie/DB)
-- [ ] **Avatar upload** - User profile picture
+- [x] **Avatar upload** - User profile picture with Cropper.js and WebP conversion
+- [x] **Thumbnails** - Automatic thumbnail generation for images and SVGs (WebP, Pillow, cairosvg)
+- [x] **Mosaic/grid view** - Card-based grid layout with adjustable tile size slider
+- [x] **File sharing** - Share files with RO/RW permissions per user
+- [x] **File comments** - Comments on files with edit and soft-delete
+- [x] **File actions registry** - Extensible action system with categories (open, transfer, organize, edit, etc.)
+- [x] **File viewer navigation** - Previous/Next controls with keyboard arrows
+- [x] **User mini profile popover** - Hover-triggered user card with caching
+- [x] **User settings page** - Profile, preferences, and security tabs
 - [ ] **File/Folder versioning** - Track changes to files and folders
 - [ ] **File/Folder history** - View previous versions of files and folders
 
@@ -88,18 +96,20 @@ Integrated email client to centralize communication.
 
 ### 4. Calendar & Scheduling
 
-Calendar and planning.
+Calendar and planning. **Module shipped in v0.4.0.**
 
-- [ ] Day, week, month views
-- [ ] Events with title, description, location, participants
+- [x] Day, week, month views (FullCalendar integration)
+- [x] Events with title, description, location, participants
 - [ ] Recurring events (RRULE)
 - [ ] Sync CalDAV / Google Calendar / Outlook
 - [ ] Reminders (email, in-app notification)
 - [ ] Availability slots (Calendly style)
 - [ ] Link with tasks (deadlines visible in calendar)
 - [ ] Agenda view (chronological list)
-- [ ] Time zones
-- [ ] Invitations and RSVP
+- [ ] Time zones (format preferences only for now)
+- [x] Invitations and RSVP (pending/accepted/declined)
+- [x] Calendar subscriptions (subscribe to other users' calendars)
+- [x] Keyboard shortcuts (M/W/D/T/N/Esc/?) and help dialog
 
 ---
 
@@ -121,19 +131,25 @@ Contact management and customer relationship.
 
 ### 6. Chat & Messaging
 
-Real-time internal communication.
+Real-time internal communication. **Module shipped in v0.4.0.**
 
 - [ ] Public and private channels
-- [ ] Direct messages (1:1 and groups)
+- [x] Direct messages (1:1 and groups)
 - [ ] Discussion threads
-- [ ] File sharing (link with Files)
-- [ ] Emoji reactions
+- [x] File sharing (upload, download, save to Files module)
+- [x] Emoji reactions (toggle, grouped display, real-time SSE)
 - [ ] @user and @channel mentions
-- [ ] Message search
-- [ ] Push notifications (WebSocket)
+- [x] Message search (full-text within conversations, highlight navigation)
+- [x] Real-time updates (SSE-based streaming with unread counts)
 - [ ] Online / away / busy status
-- [ ] Pin important messages
+- [x] Pinned conversations with drag-and-drop reordering
+- [ ] Pin individual messages within a conversation
 - [ ] Integration with Tasks (create task from message)
+- [x] Message attachments with "Save to Files" integration
+- [x] Group conversations with avatar, stats, and info panel
+- [x] Member management and context menus
+- [x] Keyboard shortcuts and help dialog
+- [x] Markdown message rendering
 
 ---
 
@@ -254,9 +270,9 @@ Features shared across all modules.
 - [ ] Push notifications (PWA)
 
 ### Users & Teams
-- [ ] Enhanced user profiles
-- [ ] Teams / groups
-- [ ] Roles and permissions per module
+- [x] Enhanced user profiles (avatar, stats, activity timeline, settings page)
+- [ ] Teams / groups (group conversations exist in Chat, no org-level teams yet)
+- [ ] Roles and permissions per module (file-level RO/RW sharing exists)
 - [ ] Email invitation
 - [ ] SSO (SAML, OAuth2 - Google, GitHub, Microsoft)
 - [ ] 2FA (TOTP)
@@ -285,8 +301,10 @@ Features shared across all modules.
 - [ ] PWA (Progressive Web App) - installable on desktop/mobile
 - [ ] Mobile responsive design
 - [x] Modular sidebar (each module = one section)
-- [x] Customizable themes
+- [x] Customizable themes (12 themes: light, dark, cupcake, emerald, corporate, forest, dracula, night, winter, nord, sunset, autumn)
 - [ ] Onboarding wizard for new users
-- [ ] Focus mode (hide sidebar)
-- [ ] Keyboard shortcuts per module
-- [ ] i18n (FR, EN minimum)
+- [ ] Focus mode (hide sidebar) — per-module sidebar collapse exists (Chat, Calendar)
+- [x] Keyboard shortcuts per module (Files, Calendar, Chat, global Ctrl+K)
+- [ ] i18n (FR, EN minimum) — Django i18n enabled but no translations yet
+- [x] Reusable dialog system (confirm, prompt, message)
+- [x] Enhanced user profiles with avatar, stats, and activity timeline (basic for now)

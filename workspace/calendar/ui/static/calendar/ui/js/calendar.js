@@ -5,8 +5,8 @@ window.calendarApp = function calendarApp(calendarsData) {
     currentTitle: '',
 
     // Preferences
-    _prefsDefaults: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, dayMaxEvents: 3, timeFormat: '24h', defaultAllDay: false },
-    prefs: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, dayMaxEvents: 3, timeFormat: '24h', defaultAllDay: false },
+    _prefsDefaults: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, dayMaxEvents: 3, timeFormat: '24h', defaultAllDay: false, showDeclined: false },
+    prefs: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, dayMaxEvents: 3, timeFormat: '24h', defaultAllDay: false, showDeclined: false },
 
     // Sidebar
     collapsed: localStorage.getItem('calendarSidebarCollapsed') === 'true',
@@ -150,6 +150,8 @@ window.calendarApp = function calendarApp(calendarsData) {
         } else if (key === 'timeFormat') {
           this.calendar.setOption('eventTimeFormat', this._timeFormatFC());
           this.calendar.setOption('slotLabelFormat', this._timeFormatFC());
+        } else if (key === 'showDeclined') {
+          this.calendar.refetchEvents();
         }
       }
     },
@@ -435,11 +437,20 @@ window.calendarApp = function calendarApp(calendarsData) {
       const data = await resp.json();
       const currentUserId = document.body.dataset.userId;
 
-      return data.map(event => {
+      return data.filter(event => {
+        // Hide declined events unless preference is enabled
+        const isOwner = String(event.owner.id) === String(currentUserId);
+        if (!isOwner) {
+          const membership = event.members.find(m => String(m.user.id) === String(currentUserId));
+          if (membership?.status === 'declined' && !this.prefs.showDeclined) return false;
+        }
+        return true;
+      }).map(event => {
         const isOwner = String(event.owner.id) === String(currentUserId);
         const membership = event.members.find(m => String(m.user.id) === String(currentUserId));
         const isInvited = !isOwner && !!membership;
         const isPending = isInvited && membership.status === 'pending';
+        const isDeclined = isInvited && membership.status === 'declined';
 
         // Find calendar color
         const cal = [...this.ownedCalendars, ...this.subscribedCalendars].find(c => c.uuid === event.calendar_id);
@@ -448,6 +459,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const classNames = [`event-color-${color}`];
         if (isInvited) classNames.push('event-invited');
         if (isPending) classNames.push('event-pending');
+        if (isDeclined) classNames.push('event-declined');
 
         return {
           id: event.uuid,

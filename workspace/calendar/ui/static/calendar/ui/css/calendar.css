@@ -127,6 +127,12 @@
   opacity: 0.45;
 }
 
+/* Event: declined invitation (very dimmed + strikethrough) */
+.fc .fc-event.event-declined {
+  opacity: 0.3;
+  text-decoration: line-through;
+}
+
 /* Time grid (week/day views) */
 .fc .fc-timegrid-slot {
   height: 2.5rem;

@@ -52,6 +52,7 @@
                     <option value="dayGridMonth">Month</option>
                     <option value="timeGridWeek">Week</option>
                     <option value="timeGridDay">Day</option>
+                    <option value="listWeek">Agenda</option>
                   </select>
                 </div>
                 <hr class="border-base-300">
@@ -135,6 +136,9 @@
         <button type="button" class="btn btn-xs flex-1"
                 :class="currentView === 'timeGridDay' ? 'btn-primary' : 'btn-ghost'"
                 @click="changeView('timeGridDay')">Day</button>
+        <button type="button" class="btn btn-xs flex-1"
+                :class="currentView === 'listWeek' ? 'btn-primary' : 'btn-ghost'"
+                @click="changeView('listWeek')">Agenda</button>
       </div>
     </div>
 

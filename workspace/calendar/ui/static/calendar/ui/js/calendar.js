@@ -198,6 +198,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (this.calendar) {
         this.calendar.changeView(view);
         this.currentView = view;
+        this.calendar.setOption('selectable', view !== 'listWeek');
         this._syncTitle();
         this._syncUrl();
       }
@@ -341,12 +342,14 @@ window.calendarApp = function calendarApp(calendarsData) {
         weekNumbers: this.prefs.weekNumbers,
         nowIndicator: true,
         editable: false,
-        selectable: true,
+        selectable: urlView !== 'listWeek',
         selectMirror: true,
         dayMaxEvents: this.prefs.dayMaxEvents,
         eventTimeFormat: this._timeFormatFC(),
         slotLabelFormat: this._timeFormatFC(),
         height: '100%',
+        listDayFormat: { weekday: 'long', day: 'numeric', month: 'long' },
+        listDaySideFormat: false,
 
         events: (info) => {
           return this.fetchEvents(info.startStr, info.endStr);
@@ -715,6 +718,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (key === 'm' || key === 'M') { e.preventDefault(); this.changeView('dayGridMonth'); return; }
       if (key === 'w' || key === 'W') { e.preventDefault(); this.changeView('timeGridWeek'); return; }
       if (key === 'd' || key === 'D') { e.preventDefault(); this.changeView('timeGridDay'); return; }
+      if (key === 'a' || key === 'A') { e.preventDefault(); this.changeView('listWeek'); return; }
 
       // New event
       if (key === 'n' || key === 'N') {

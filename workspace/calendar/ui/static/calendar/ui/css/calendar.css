@@ -174,3 +174,71 @@
   font-size: 0.875rem;
   border-radius: var(--rounded-box, 1rem) var(--rounded-box, 1rem) 0 0;
 }
+
+/* List / Agenda view */
+.fc .fc-list {
+  background: oklch(var(--b1));
+  border-color: oklch(var(--b3));
+  border-radius: 0;
+}
+
+.fc .fc-list-day-cushion {
+  background-color: oklch(var(--b2));
+  color: oklch(var(--bc));
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.fc .fc-list-day-cushion a {
+  color: oklch(var(--bc));
+  text-decoration: none;
+}
+
+.fc .fc-list-event {
+  cursor: pointer;
+}
+
+.fc .fc-list-event:hover td {
+  background-color: oklch(var(--bc) / 0.05);
+}
+
+.fc .fc-list-event-time {
+  color: oklch(var(--bc) / 0.6);
+  font-size: 0.8125rem;
+}
+
+.fc .fc-list-event-title {
+  font-size: 0.875rem;
+  color: oklch(var(--bc));
+}
+
+.fc .fc-list-event-dot {
+  border-color: oklch(var(--p));
+}
+
+/* Per-calendar color dots in list view */
+.fc .fc-list-event.event-color-primary .fc-list-event-dot { border-color: oklch(var(--p)); }
+.fc .fc-list-event.event-color-secondary .fc-list-event-dot { border-color: oklch(var(--s)); }
+.fc .fc-list-event.event-color-accent .fc-list-event-dot { border-color: oklch(var(--a)); }
+.fc .fc-list-event.event-color-info .fc-list-event-dot { border-color: oklch(var(--in)); }
+.fc .fc-list-event.event-color-success .fc-list-event-dot { border-color: oklch(var(--su)); }
+.fc .fc-list-event.event-color-warning .fc-list-event-dot { border-color: oklch(var(--wa)); }
+.fc .fc-list-event.event-color-error .fc-list-event-dot { border-color: oklch(var(--er)); }
+
+/* Remove background color override on list events (they use dots instead) */
+.fc .fc-list-event.event-color-primary,
+.fc .fc-list-event.event-color-secondary,
+.fc .fc-list-event.event-color-accent,
+.fc .fc-list-event.event-color-info,
+.fc .fc-list-event.event-color-success,
+.fc .fc-list-event.event-color-warning,
+.fc .fc-list-event.event-color-error {
+  background-color: transparent;
+  color: oklch(var(--bc));
+}
+
+.fc .fc-list-empty {
+  background-color: oklch(var(--b1));
+  color: oklch(var(--bc) / 0.5);
+  font-size: 0.875rem;
+}

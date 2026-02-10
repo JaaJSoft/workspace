@@ -284,6 +284,7 @@ function mailApp() {
         subject,
         body: `\n\n---\nOn ${this.formatFullDate(msg.date)}, ${msg.from_address?.name || from} wrote:\n> ${(msg.body_text || msg.snippet || '').replace(/\n/g, '\n> ')}`,
         account_id: msg.account_id,
+        is_reply: true,
       });
     },
 
@@ -293,6 +294,7 @@ function mailApp() {
         subject,
         body: `\n\n---\nForwarded message from ${msg.from_address?.name || msg.from_address?.email || 'Unknown'}:\n\n${msg.body_text || msg.snippet || ''}`,
         account_id: msg.account_id,
+        is_reply: true,
       });
     },
 
@@ -507,7 +509,7 @@ function _defaultNewAccount() {
 function _defaultCompose() {
   return {
     account_id: '', to: '', cc: '', bcc: '',
-    subject: '', body: '',
+    subject: '', body: '', is_reply: false,
     attachments: [], sending: false, error: '',
   };
 }

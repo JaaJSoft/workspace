@@ -3,7 +3,7 @@
   <div class="modal-box max-w-2xl h-[80vh] flex flex-col">
     <!-- Header -->
     <div class="flex items-center justify-between mb-3">
-      <h3 class="font-bold text-lg" x-text="compose.subject ? 'Re: ' + compose.subject : 'New Message'"></h3>
+      <h3 class="font-bold text-lg" x-text="compose.is_reply ? compose.subject : 'New Message'"></h3>
       <button class="btn btn-ghost btn-sm btn-circle" @click="closeCompose()">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>

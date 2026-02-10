@@ -28,6 +28,7 @@ class SearchResult:
     type_icon: str
     module_slug: str
     module_color: str
+    date: str | None = None
 
 
 @dataclass(frozen=True)

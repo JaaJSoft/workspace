@@ -32,6 +32,22 @@ def search_mail(query, user, limit):
             type_icon='mail',
             module_slug='mail',
             module_color='warning',
+            date=_format_date(m.date),
         )
         for m in messages
     ]
+
+
+def _format_date(dt):
+    if not dt:
+        return None
+    from django.utils import timezone
+    now = timezone.now()
+    diff = now - dt
+    if diff.days == 0 and dt.date() == now.date():
+        return dt.strftime('%H:%M')
+    if diff.days < 7:
+        return dt.strftime('%a')
+    if dt.year == now.year:
+        return dt.strftime('%d %b')
+    return dt.strftime('%d %b %Y')

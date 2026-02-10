@@ -20,16 +20,6 @@ class DashboardConfig(AppConfig):
 
         planned_modules = [
             ModuleInfo(
-                name='Emails',
-                slug='emails',
-                description='Send and receive emails.',
-                icon='mail',
-                color='secondary',
-                url=None,
-                active=False,
-                order=20,
-            ),
-            ModuleInfo(
                 name='Notes',
                 slug='notes',
                 description='Write and collaborate on documents.',

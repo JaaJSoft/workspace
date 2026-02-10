@@ -23,7 +23,10 @@
           </div>
         </div>
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium truncate" x-text="result.name"></div>
+          <div class="flex items-center gap-2">
+            <div class="text-sm font-medium truncate flex-1" x-text="result.name"></div>
+            <span x-show="result.date" class="text-xs text-base-content/50 flex-shrink-0 tabular-nums" x-text="result.date"></span>
+          </div>
           <div class="text-xs text-base-content/60 flex items-center gap-2">
             <i
               :data-lucide="result.type_icon || 'tag'"

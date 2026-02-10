@@ -204,33 +204,31 @@ def sync_folder_messages(account, folder):
         folder.uid_validity = uid_validity
         folder.save(update_fields=['uid_validity', 'updated_at'])
 
-        # Search for new UIDs
+        # Search for new UIDs (always use UID SEARCH to get real UIDs)
         if folder.last_sync_uid > 0:
-            search_criteria = f'UID {folder.last_sync_uid + 1}:*'
-        else:
-            # Initial sync: get last N messages
-            status, count_data = conn.search(None, 'ALL')
+            status, search_data = conn.uid('SEARCH', None, f'UID {folder.last_sync_uid + 1}:*')
             if status != 'OK':
+                _update_folder_counts(folder)
                 return
-            all_uids = count_data[0].split()
+            uid_list = search_data[0].split()
+            uid_list = [u.decode() if isinstance(u, bytes) else u for u in uid_list if u]
+            # Filter out the already-synced UID (server may include it)
+            uid_list = [u for u in uid_list if int(u) > folder.last_sync_uid]
+        else:
+            # Initial sync: get all UIDs then take last N
+            status, search_data = conn.uid('SEARCH', None, 'ALL')
+            if status != 'OK':
+                _update_folder_counts(folder)
+                return
+            all_uids = search_data[0].split()
+            all_uids = [u.decode() if isinstance(u, bytes) else u for u in all_uids if u]
             if not all_uids:
                 _update_folder_counts(folder)
                 return
             # Limit initial sync
             if len(all_uids) > INITIAL_SYNC_LIMIT:
                 all_uids = all_uids[-INITIAL_SYNC_LIMIT:]
-            search_criteria = None
-            uid_list = [uid.decode() for uid in all_uids]
-
-        if search_criteria:
-            status, search_data = conn.uid('SEARCH', None, search_criteria)
-            if status != 'OK':
-                return
-            uid_list = search_data[0].split()
-            uid_list = [uid.decode() if isinstance(uid, bytes) else uid for uid in uid_list]
-            # Filter out the already-synced UID
-            if folder.last_sync_uid > 0:
-                uid_list = [u for u in uid_list if int(u) > folder.last_sync_uid]
+            uid_list = all_uids
 
         if not uid_list:
             _update_folder_counts(folder)
@@ -311,11 +309,13 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
     date_str = msg.get('Date')
     date = None
     if date_str:
-        parsed = email.utils.parsedate_to_datetime(date_str)
-        if parsed:
+        try:
+            parsed = email.utils.parsedate_to_datetime(date_str)
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=timezone.utc)
             date = parsed
+        except Exception:
+            pass
 
     # Body
     body_text = ''

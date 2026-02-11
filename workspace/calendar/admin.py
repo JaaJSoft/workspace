@@ -16,9 +16,10 @@ class EventMemberInline(admin.TabularInline):
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    list_display = ('title', 'calendar', 'owner', 'start', 'end', 'all_day', 'created_at')
-    list_filter = ('all_day', 'calendar')
+    list_display = ('title', 'calendar', 'owner', 'start', 'end', 'all_day', 'recurrence_frequency', 'recurrence_parent', 'is_cancelled', 'created_at')
+    list_filter = ('all_day', 'calendar', 'recurrence_frequency', 'is_cancelled')
     search_fields = ('title', 'description')
+    raw_id_fields = ('recurrence_parent',)
     inlines = [EventMemberInline]
 
 

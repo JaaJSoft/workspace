@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+from dateutil.parser import parse as dateutil_parse
 from django.contrib.auth import get_user_model
 from django.db.models import Q, Prefetch
 from drf_spectacular.utils import extend_schema, OpenApiParameter
@@ -6,7 +9,22 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+
+def _parse_dt(value):
+    """Parse datetime string, handling URL-encoded timezone offsets."""
+    if not value:
+        return None
+    try:
+        from django.utils import timezone
+        dt = dateutil_parse(value)
+        if dt.tzinfo is None:
+            dt = timezone.make_aware(dt)
+        return dt
+    except (ValueError, TypeError):
+        return None
+
 from .models import Calendar, CalendarSubscription, Event, EventMember
+from .recurrence import expand_recurring_events, make_virtual_occurrence
 from .serializers import (
     CalendarCreateSerializer,
     CalendarSerializer,
@@ -33,6 +51,36 @@ def _visible_calendar_ids(user):
     owned = Calendar.objects.filter(owner=user).values_list('uuid', flat=True)
     subscribed = CalendarSubscription.objects.filter(user=user).values_list('calendar_id', flat=True)
     return list(owned) + list(subscribed)
+
+
+def _update_event_fields(event, data, user):
+    """Apply common field updates to an event."""
+    if 'calendar_id' in data:
+        try:
+            cal = Calendar.objects.get(pk=data['calendar_id'], owner=user)
+            event.calendar = cal
+        except Calendar.DoesNotExist:
+            return {'detail': 'Calendar not found.'}
+
+    for field in ['title', 'description', 'start', 'end', 'all_day', 'location',
+                  'recurrence_frequency', 'recurrence_interval', 'recurrence_end']:
+        if field in data:
+            setattr(event, field, data[field])
+    event.save()
+    return None
+
+
+def _sync_members(event, member_ids, owner_id):
+    """Sync event members from a list of user IDs."""
+    current = set(event.members.values_list('user_id', flat=True))
+    new_ids = set(member_ids) - {owner_id}
+    to_remove = current - new_ids
+    if to_remove:
+        EventMember.objects.filter(event=event, user_id__in=to_remove).delete()
+    to_add = new_ids - current
+    if to_add:
+        users = User.objects.filter(id__in=to_add)
+        EventMember.objects.bulk_create([EventMember(event=event, user=u) for u in users])
 
 
 # ---------- Calendar CRUD ----------
@@ -115,6 +163,9 @@ class EventListView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        range_start = _parse_dt(start)
+        range_end = _parse_dt(end)
+
         user = request.user
 
         # Filter by specific calendars or all visible
@@ -124,15 +175,41 @@ class EventListView(APIView):
         else:
             cal_ids = _visible_calendar_ids(user)
 
-        events = Event.objects.filter(
-            Q(calendar_id__in=cal_ids) | Q(members__user=user),
+        cal_or_member = Q(calendar_id__in=cal_ids) | Q(members__user=user)
+
+        # Non-recurring events (exclude exceptions)
+        non_recurring = Event.objects.filter(
+            cal_or_member,
+            recurrence_frequency__isnull=True,
+            recurrence_parent__isnull=True,
+            is_cancelled=False,
             start__lt=end,
         ).filter(
             Q(end__gt=start) | Q(end__isnull=True, start__gte=start),
         ).distinct()
+        non_recurring = _prefetch_event(non_recurring).order_by('start')
 
-        events = _prefetch_event(events).order_by('start')
-        return Response(EventSerializer(events, many=True).data)
+        non_recurring_data = EventSerializer(non_recurring, many=True).data
+
+        # Recurring masters overlapping the range
+        masters = Event.objects.filter(
+            cal_or_member,
+            recurrence_frequency__isnull=False,
+            recurrence_parent__isnull=True,
+            start__lt=end,
+        ).filter(
+            Q(recurrence_end__isnull=True) | Q(recurrence_end__gt=start),
+        ).distinct()
+        masters = _prefetch_event(masters)
+
+        recurring_data = []
+        if range_start and range_end:
+            recurring_data = expand_recurring_events(masters, range_start, range_end)
+
+        # Merge and sort
+        all_events = non_recurring_data + recurring_data
+        all_events.sort(key=lambda e: e.get('start', ''))
+        return Response(all_events)
 
     @extend_schema(summary="Create an event", request=EventCreateSerializer)
     def post(self, request):
@@ -158,6 +235,9 @@ class EventListView(APIView):
             all_day=data['all_day'],
             location=data['location'],
             owner=request.user,
+            recurrence_frequency=data.get('recurrence_frequency'),
+            recurrence_interval=data.get('recurrence_interval', 1),
+            recurrence_end=data.get('recurrence_end'),
         )
 
         member_ids = data.get('member_ids', [])
@@ -190,6 +270,24 @@ class EventDetailView(APIView):
         event, err = self._get_event(event_id, request.user)
         if err:
             return err
+
+        # If original_start is provided, return the specific occurrence
+        original_start_str = request.query_params.get('original_start')
+        if original_start_str and event.is_recurring:
+            original_start = _parse_dt(original_start_str)
+            if original_start:
+                # Check for a materialized exception first
+                exc = Event.objects.filter(
+                    recurrence_parent=event,
+                    original_start=original_start,
+                ).first()
+                if exc:
+                    exc = _prefetch_event(Event.objects.filter(pk=exc.pk)).first()
+                    return Response(EventSerializer(exc).data)
+                # Build virtual occurrence
+                occ = make_virtual_occurrence(event, original_start)
+                return Response(occ)
+
         return Response(EventSerializer(event).data)
 
     @extend_schema(summary="Update an event", request=EventUpdateSerializer)
@@ -204,31 +302,130 @@ class EventDetailView(APIView):
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
 
+        scope = data.pop('scope', 'all')
+        original_start_val = data.pop('original_start', None)
+
+        # Non-recurring event or scope='all': update the event directly
+        if not event.is_recurring or scope == 'all':
+            err = _update_event_fields(event, data, request.user)
+            if err:
+                return Response(err, status=status.HTTP_400_BAD_REQUEST)
+
+            if 'member_ids' in data:
+                _sync_members(event, data['member_ids'], request.user.id)
+
+            event = _prefetch_event(Event.objects.filter(pk=event.pk)).first()
+            return Response(EventSerializer(event).data)
+
+        if scope == 'this':
+            return self._edit_single_occurrence(event, data, original_start_val, request.user)
+
+        if scope == 'future':
+            return self._edit_future_occurrences(event, data, original_start_val, request.user)
+
+        return Response({'detail': 'Invalid scope.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    def _edit_single_occurrence(self, master, data, original_start, user):
+        """Create a materialized exception for a single occurrence."""
+        if not original_start:
+            return Response({'detail': 'original_start is required for scope=this.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if exception already exists
+        exc = Event.objects.filter(
+            recurrence_parent=master, original_start=original_start,
+        ).first()
+
+        if exc:
+            # Update existing exception
+            err = _update_event_fields(exc, data, user)
+            if err:
+                return Response(err, status=status.HTTP_400_BAD_REQUEST)
+            if 'member_ids' in data:
+                _sync_members(exc, data['member_ids'], user.id)
+            exc = _prefetch_event(Event.objects.filter(pk=exc.pk)).first()
+            return Response(EventSerializer(exc).data)
+
+        # Create new exception: inherit fields from master, apply overrides
+        duration = (master.end - master.start) if master.end else None
+        exc = Event.objects.create(
+            calendar=master.calendar,
+            title=data.get('title', master.title),
+            description=data.get('description', master.description),
+            start=data.get('start', original_start),
+            end=data.get('end', (original_start + duration) if duration else None),
+            all_day=data.get('all_day', master.all_day),
+            location=data.get('location', master.location),
+            owner=master.owner,
+            recurrence_parent=master,
+            original_start=original_start,
+        )
+
+        # Copy members from master or from data
+        if 'member_ids' in data:
+            member_ids = set(data['member_ids']) - {user.id}
+            users = User.objects.filter(id__in=member_ids)
+            EventMember.objects.bulk_create([EventMember(event=exc, user=u) for u in users])
+        else:
+            # Copy from master
+            for m in master.members.all():
+                EventMember.objects.create(event=exc, user=m.user, status=m.status)
+
+        exc = _prefetch_event(Event.objects.filter(pk=exc.pk)).first()
+        return Response(EventSerializer(exc).data)
+
+    def _edit_future_occurrences(self, master, data, original_start, user):
+        """Split the series: truncate old master, create new master from original_start."""
+        if not original_start:
+            return Response({'detail': 'original_start is required for scope=future.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Truncate old master
+        master.recurrence_end = original_start - timedelta(seconds=1)
+        master.save(update_fields=['recurrence_end'])
+
+        # Delete exceptions >= original_start
+        Event.objects.filter(
+            recurrence_parent=master,
+            original_start__gte=original_start,
+        ).delete()
+
+        # Create new master
+        duration = (master.end - master.start) if master.end else None
+        new_master = Event.objects.create(
+            calendar=data.get('calendar_id', master.calendar_id) and master.calendar,
+            title=data.get('title', master.title),
+            description=data.get('description', master.description),
+            start=data.get('start', original_start),
+            end=data.get('end', (original_start + duration) if duration else None),
+            all_day=data.get('all_day', master.all_day),
+            location=data.get('location', master.location),
+            owner=master.owner,
+            recurrence_frequency=data.get('recurrence_frequency', master.recurrence_frequency),
+            recurrence_interval=data.get('recurrence_interval', master.recurrence_interval),
+            recurrence_end=data.get('recurrence_end', master.recurrence_end),
+        )
+
+        # Handle calendar_id change
         if 'calendar_id' in data:
             try:
-                cal = Calendar.objects.get(pk=data['calendar_id'], owner=request.user)
-                event.calendar = cal
+                cal = Calendar.objects.get(pk=data['calendar_id'], owner=user)
+                new_master.calendar = cal
+                new_master.save(update_fields=['calendar_id'])
             except Calendar.DoesNotExist:
-                return Response({'detail': 'Calendar not found.'}, status=status.HTTP_400_BAD_REQUEST)
+                pass
 
-        for field in ['title', 'description', 'start', 'end', 'all_day', 'location']:
-            if field in data:
-                setattr(event, field, data[field])
-        event.save()
-
+        # Copy members
         if 'member_ids' in data:
-            current = set(event.members.values_list('user_id', flat=True))
-            new_ids = set(data['member_ids']) - {request.user.id}
-            to_remove = current - new_ids
-            if to_remove:
-                EventMember.objects.filter(event=event, user_id__in=to_remove).delete()
-            to_add = new_ids - current
-            if to_add:
-                users = User.objects.filter(id__in=to_add)
-                EventMember.objects.bulk_create([EventMember(event=event, user=u) for u in users])
+            member_ids = set(data['member_ids']) - {user.id}
+            users = User.objects.filter(id__in=member_ids)
+            EventMember.objects.bulk_create([EventMember(event=new_master, user=u) for u in users])
+        else:
+            for m in master.members.all():
+                EventMember.objects.create(event=new_master, user=m.user, status=m.status)
 
-        event = _prefetch_event(Event.objects.filter(pk=event.pk)).first()
-        return Response(EventSerializer(event).data)
+        new_master = _prefetch_event(Event.objects.filter(pk=new_master.pk)).first()
+        return Response(EventSerializer(new_master).data)
 
     @extend_schema(summary="Delete an event")
     def delete(self, request, event_id):
@@ -237,8 +434,57 @@ class EventDetailView(APIView):
             return err
         if event.owner_id != request.user.id:
             return Response({'detail': 'Only the owner can delete.'}, status=status.HTTP_403_FORBIDDEN)
-        event.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+
+        scope = request.query_params.get('scope', 'all')
+        original_start_str = request.query_params.get('original_start')
+
+        if not event.is_recurring or scope == 'all':
+            event.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        if scope == 'this':
+            if not original_start_str:
+                return Response({'detail': 'original_start is required for scope=this.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            original_start = _parse_dt(original_start_str)
+
+            # Check if there's already an exception
+            exc = Event.objects.filter(
+                recurrence_parent=event, original_start=original_start,
+            ).first()
+            if exc:
+                exc.is_cancelled = True
+                exc.save(update_fields=['is_cancelled'])
+            else:
+                # Create a cancelled exception
+                Event.objects.create(
+                    calendar=event.calendar,
+                    title=event.title,
+                    start=original_start,
+                    owner=event.owner,
+                    recurrence_parent=event,
+                    original_start=original_start,
+                    is_cancelled=True,
+                )
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        if scope == 'future':
+            if not original_start_str:
+                return Response({'detail': 'original_start is required for scope=future.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            original_start = _parse_dt(original_start_str)
+
+            event.recurrence_end = original_start - timedelta(seconds=1)
+            event.save(update_fields=['recurrence_end'])
+
+            # Delete exceptions >= original_start
+            Event.objects.filter(
+                recurrence_parent=event,
+                original_start__gte=original_start,
+            ).delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        return Response({'detail': 'Invalid scope.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @extend_schema(tags=['Calendar'])

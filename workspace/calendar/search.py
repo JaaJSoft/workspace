@@ -15,6 +15,8 @@ def search_events(query, user, limit):
             Q(calendar_id__in=sub_cal_ids) |
             Q(uuid__in=member_event_ids),
             title__icontains=query,
+            recurrence_parent__isnull=True,
+            is_cancelled=False,
         )
         .distinct()
         .order_by('-start')[:limit]

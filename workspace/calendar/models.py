@@ -54,6 +54,12 @@ class CalendarSubscription(models.Model):
 
 
 class Event(models.Model):
+    class RecurrenceFrequency(models.TextChoices):
+        DAILY = 'daily', 'Daily'
+        WEEKLY = 'weekly', 'Weekly'
+        MONTHLY = 'monthly', 'Monthly'
+        YEARLY = 'yearly', 'Yearly'
+
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     calendar = models.ForeignKey(
         Calendar,
@@ -71,6 +77,24 @@ class Event(models.Model):
         on_delete=models.CASCADE,
         related_name='calendar_events',
     )
+
+    # Recurrence fields
+    recurrence_frequency = models.CharField(
+        max_length=7, choices=RecurrenceFrequency.choices,
+        null=True, blank=True, default=None,
+    )
+    recurrence_interval = models.PositiveSmallIntegerField(default=1)
+    recurrence_end = models.DateTimeField(null=True, blank=True, default=None)
+
+    # Exception fields (for modified/cancelled occurrences)
+    recurrence_parent = models.ForeignKey(
+        'self', on_delete=models.CASCADE,
+        null=True, blank=True, default=None,
+        related_name='exceptions',
+    )
+    original_start = models.DateTimeField(null=True, blank=True, default=None)
+    is_cancelled = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -80,7 +104,17 @@ class Event(models.Model):
             models.Index(fields=['start', 'end']),
             models.Index(fields=['owner', 'start']),
             models.Index(fields=['calendar', 'start']),
+            models.Index(fields=['recurrence_parent', 'original_start']),
+            models.Index(fields=['recurrence_frequency', 'start']),
         ]
+
+    @property
+    def is_recurring(self):
+        return self.recurrence_frequency is not None
+
+    @property
+    def is_exception(self):
+        return self.recurrence_parent_id is not None
 
     def __str__(self):
         return self.title

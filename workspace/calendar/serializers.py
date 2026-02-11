@@ -43,12 +43,16 @@ class EventSerializer(serializers.ModelSerializer):
     owner = MemberUserSerializer()
     members = EventMemberSerializer(many=True, read_only=True)
     calendar_id = serializers.UUIDField(source='calendar.uuid', read_only=True)
+    is_recurring = serializers.BooleanField(read_only=True)
+    is_exception = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Event
         fields = [
             'uuid', 'calendar_id', 'title', 'description', 'start', 'end',
             'all_day', 'location', 'owner', 'members',
+            'recurrence_frequency', 'recurrence_interval', 'recurrence_end',
+            'is_recurring', 'is_exception',
             'created_at', 'updated_at',
         ]
 
@@ -66,6 +70,16 @@ class EventCreateSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+    recurrence_frequency = serializers.ChoiceField(
+        choices=Event.RecurrenceFrequency.choices,
+        required=False, allow_null=True, default=None,
+    )
+    recurrence_interval = serializers.IntegerField(
+        required=False, default=1, min_value=1,
+    )
+    recurrence_end = serializers.DateTimeField(
+        required=False, allow_null=True, default=None,
+    )
 
 
 class EventUpdateSerializer(serializers.Serializer):
@@ -80,6 +94,44 @@ class EventUpdateSerializer(serializers.Serializer):
         child=serializers.IntegerField(),
         required=False,
     )
+    recurrence_frequency = serializers.ChoiceField(
+        choices=Event.RecurrenceFrequency.choices,
+        required=False, allow_null=True,
+    )
+    recurrence_interval = serializers.IntegerField(
+        required=False, min_value=1,
+    )
+    recurrence_end = serializers.DateTimeField(
+        required=False, allow_null=True,
+    )
+    scope = serializers.ChoiceField(
+        choices=['this', 'future', 'all'],
+        required=False, default='all',
+    )
+    original_start = serializers.DateTimeField(required=False)
+
+
+class OccurrenceSerializer(serializers.Serializer):
+    """Serializes virtual occurrence dicts (not backed by a model instance)."""
+    uuid = serializers.CharField()
+    calendar_id = serializers.CharField()
+    title = serializers.CharField()
+    description = serializers.CharField()
+    start = serializers.CharField()
+    end = serializers.CharField(allow_null=True)
+    all_day = serializers.BooleanField()
+    location = serializers.CharField()
+    owner = MemberUserSerializer()
+    members = EventMemberSerializer(many=True)
+    created_at = serializers.CharField()
+    updated_at = serializers.CharField()
+    is_recurring = serializers.BooleanField()
+    is_exception = serializers.BooleanField()
+    master_event_id = serializers.CharField()
+    original_start = serializers.CharField(allow_null=True)
+    recurrence_frequency = serializers.CharField(allow_null=True)
+    recurrence_interval = serializers.IntegerField()
+    recurrence_end = serializers.CharField(allow_null=True)
 
 
 class EventRespondSerializer(serializers.Serializer):

@@ -2,11 +2,13 @@ import uuid
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.calendar.models import Calendar, CalendarSubscription, Event, EventMember
+from workspace.calendar.recurrence import expand_recurring_events, _build_rrule
 from workspace.calendar.search import search_events
 
 User = get_user_model()
@@ -540,3 +542,326 @@ class SearchTests(CalendarTestMixin, APITestCase):
             )
         results = search_events('Event', self.owner, limit=3)
         self.assertEqual(len(results), 3)
+
+
+# ---------- Recurrence ----------
+
+
+class RecurrenceCreateTests(CalendarTestMixin, APITestCase):
+    """Tests for creating recurring events."""
+
+    url = '/api/v1/calendar/events'
+
+    def _event_data(self, **overrides):
+        data = {
+            'calendar_id': str(self.calendar.uuid),
+            'title': 'Weekly Standup',
+            'start': (timezone.now() + timedelta(days=1)).isoformat(),
+            'end': (timezone.now() + timedelta(days=1, hours=1)).isoformat(),
+            'recurrence_frequency': 'weekly',
+        }
+        data.update(overrides)
+        return data
+
+    def test_create_recurring_event(self):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(self.url, self._event_data(), format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.data['recurrence_frequency'], 'weekly')
+        self.assertTrue(resp.data['is_recurring'])
+
+    def test_create_non_recurring_unchanged(self):
+        self.client.force_authenticate(self.owner)
+        data = {
+            'calendar_id': str(self.calendar.uuid),
+            'title': 'One-off Event',
+            'start': (timezone.now() + timedelta(days=2)).isoformat(),
+            'end': (timezone.now() + timedelta(days=2, hours=1)).isoformat(),
+        }
+        resp = self.client.post(self.url, data, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(resp.data['recurrence_frequency'])
+        self.assertFalse(resp.data['is_recurring'])
+
+
+class RecurrenceExpansionTests(CalendarTestMixin, APITestCase):
+    """Tests for recurring event expansion in GET list."""
+
+    url = '/api/v1/calendar/events'
+
+    def _create_recurring(self, freq='weekly', interval=1, start_offset=0, end_offset=None, recurrence_end=None):
+        start = timezone.now() + timedelta(days=start_offset)
+        return Event.objects.create(
+            calendar=self.calendar,
+            title='Recurring',
+            start=start,
+            end=start + timedelta(hours=1),
+            owner=self.owner,
+            recurrence_frequency=freq,
+            recurrence_interval=interval,
+            recurrence_end=recurrence_end,
+        )
+
+    def test_weekly_event_expands(self):
+        self._create_recurring(freq='weekly', start_offset=0)
+        self.client.force_authenticate(self.owner)
+        params = {
+            'start': timezone.now().isoformat(),
+            'end': (timezone.now() + timedelta(days=28)).isoformat(),
+        }
+        resp = self.client.get(self.url, params)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        recurring = [e for e in resp.data if e.get('is_recurring')]
+        self.assertGreaterEqual(len(recurring), 4)
+
+    def test_recurring_with_end_date(self):
+        recurrence_end = timezone.now() + timedelta(days=14)
+        self._create_recurring(freq='weekly', start_offset=0, recurrence_end=recurrence_end)
+        self.client.force_authenticate(self.owner)
+        params = {
+            'start': timezone.now().isoformat(),
+            'end': (timezone.now() + timedelta(days=60)).isoformat(),
+        }
+        resp = self.client.get(self.url, params)
+        recurring = [e for e in resp.data if e.get('is_recurring')]
+        self.assertLessEqual(len(recurring), 3)
+
+    def test_daily_with_interval(self):
+        self._create_recurring(freq='daily', interval=2, start_offset=0)
+        self.client.force_authenticate(self.owner)
+        params = {
+            'start': timezone.now().isoformat(),
+            'end': (timezone.now() + timedelta(days=10)).isoformat(),
+        }
+        resp = self.client.get(self.url, params)
+        recurring = [e for e in resp.data if e.get('is_recurring')]
+        # Every 2 days over 10 days = 5 or 6 occurrences
+        self.assertGreaterEqual(len(recurring), 5)
+        self.assertLessEqual(len(recurring), 6)
+
+    def test_virtual_occurrence_has_is_recurring(self):
+        self._create_recurring(freq='weekly', start_offset=0)
+        self.client.force_authenticate(self.owner)
+        params = {
+            'start': timezone.now().isoformat(),
+            'end': (timezone.now() + timedelta(days=14)).isoformat(),
+        }
+        resp = self.client.get(self.url, params)
+        recurring = [e for e in resp.data if e.get('is_recurring')]
+        self.assertTrue(len(recurring) > 0)
+        for occ in recurring:
+            self.assertTrue(occ['is_recurring'])
+            self.assertIn('master_event_id', occ)
+            self.assertIn('original_start', occ)
+
+
+class RecurrenceExceptionTests(CalendarTestMixin, APITestCase):
+    """Tests for scope-aware edit and delete of recurring events."""
+
+    def _create_weekly(self):
+        start = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        return Event.objects.create(
+            calendar=self.calendar,
+            title='Weekly',
+            start=start,
+            end=start + timedelta(hours=1),
+            owner=self.owner,
+            recurrence_frequency='weekly',
+            recurrence_interval=1,
+        )
+
+    def url(self, event_id):
+        return f'/api/v1/calendar/events/{event_id}'
+
+    def test_delete_this_creates_cancelled_exception(self):
+        master = self._create_weekly()
+        occ_start = (master.start + timedelta(weeks=1)).isoformat()
+        self.client.force_authenticate(self.owner)
+        resp = self.client.delete(
+            f'{self.url(master.uuid)}?scope=this&original_start={occ_start}',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        exc = Event.objects.filter(recurrence_parent=master, is_cancelled=True)
+        self.assertEqual(exc.count(), 1)
+
+    def test_delete_future_truncates_master(self):
+        master = self._create_weekly()
+        occ_start = (master.start + timedelta(weeks=2)).isoformat()
+        self.client.force_authenticate(self.owner)
+        resp = self.client.delete(
+            f'{self.url(master.uuid)}?scope=future&original_start={occ_start}',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        master.refresh_from_db()
+        self.assertIsNotNone(master.recurrence_end)
+
+    def test_delete_all_deletes_everything(self):
+        master = self._create_weekly()
+        master_id = master.uuid
+        # Create an exception
+        Event.objects.create(
+            calendar=self.calendar,
+            title='Exception',
+            start=master.start + timedelta(weeks=1),
+            owner=self.owner,
+            recurrence_parent=master,
+            original_start=master.start + timedelta(weeks=1),
+        )
+        self.client.force_authenticate(self.owner)
+        resp = self.client.delete(f'{self.url(master_id)}?scope=all')
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Event.objects.filter(uuid=master_id).exists())
+        self.assertFalse(Event.objects.filter(recurrence_parent_id=master_id).exists())
+
+    def test_edit_this_creates_exception(self):
+        master = self._create_weekly()
+        occ_start = (master.start + timedelta(weeks=1)).isoformat()
+        self.client.force_authenticate(self.owner)
+        resp = self.client.put(
+            self.url(master.uuid),
+            {'scope': 'this', 'original_start': occ_start, 'title': 'Modified'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        exc = Event.objects.filter(recurrence_parent=master)
+        self.assertEqual(exc.count(), 1)
+        self.assertEqual(exc.first().title, 'Modified')
+
+    def test_edit_future_creates_new_master(self):
+        master = self._create_weekly()
+        occ_start = (master.start + timedelta(weeks=2)).isoformat()
+        self.client.force_authenticate(self.owner)
+        resp = self.client.put(
+            self.url(master.uuid),
+            {'scope': 'future', 'original_start': occ_start, 'title': 'Future Series'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        master.refresh_from_db()
+        self.assertIsNotNone(master.recurrence_end)
+        self.assertEqual(resp.data['title'], 'Future Series')
+        self.assertEqual(resp.data['recurrence_frequency'], 'weekly')
+
+    def test_edit_all_updates_master(self):
+        master = self._create_weekly()
+        self.client.force_authenticate(self.owner)
+        resp = self.client.put(
+            self.url(master.uuid),
+            {'scope': 'all', 'title': 'Updated Series'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        master.refresh_from_db()
+        self.assertEqual(master.title, 'Updated Series')
+
+    def test_cancelled_occurrence_not_in_expansion(self):
+        master = self._create_weekly()
+        occ_start = master.start + timedelta(weeks=1)
+        Event.objects.create(
+            calendar=self.calendar,
+            title='Cancelled',
+            start=occ_start,
+            owner=self.owner,
+            recurrence_parent=master,
+            original_start=occ_start,
+            is_cancelled=True,
+        )
+        self.client.force_authenticate(self.owner)
+        params = {
+            'start': timezone.now().isoformat(),
+            'end': (timezone.now() + timedelta(days=21)).isoformat(),
+        }
+        resp = self.client.get('/api/v1/calendar/events', params)
+        recurring = [e for e in resp.data if e.get('is_recurring')]
+        starts = [e['original_start'] for e in recurring if e.get('original_start')]
+        self.assertNotIn(occ_start.isoformat(), starts)
+
+    def test_modified_occurrence_in_expansion(self):
+        master = self._create_weekly()
+        occ_start = master.start + timedelta(weeks=1)
+        Event.objects.create(
+            calendar=self.calendar,
+            title='Special Meeting',
+            start=occ_start,
+            end=occ_start + timedelta(hours=2),
+            owner=self.owner,
+            recurrence_parent=master,
+            original_start=occ_start,
+        )
+        self.client.force_authenticate(self.owner)
+        params = {
+            'start': timezone.now().isoformat(),
+            'end': (timezone.now() + timedelta(days=21)).isoformat(),
+        }
+        resp = self.client.get('/api/v1/calendar/events', params)
+        titles = [e['title'] for e in resp.data if e.get('is_recurring')]
+        self.assertIn('Special Meeting', titles)
+
+
+class RecurrenceServiceTests(CalendarTestMixin, TestCase):
+    """Unit tests for the recurrence expansion service."""
+
+    def _create_weekly(self, **kwargs):
+        start = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        defaults = dict(
+            calendar=self.calendar,
+            title='Weekly',
+            start=start,
+            end=start + timedelta(hours=1),
+            owner=self.owner,
+            recurrence_frequency='weekly',
+            recurrence_interval=1,
+        )
+        defaults.update(kwargs)
+        return Event.objects.create(**defaults)
+
+    def test_build_rrule_weekly(self):
+        master = self._create_weekly()
+        range_start = master.start
+        range_end = master.start + timedelta(days=28)
+        dates = list(_build_rrule(master, range_start, range_end))
+        self.assertEqual(len(dates), 4)
+
+    def test_expand_with_cancelled_exception(self):
+        master = self._create_weekly()
+        occ_start = master.start + timedelta(weeks=1)
+        Event.objects.create(
+            calendar=self.calendar,
+            title='Cancelled',
+            start=occ_start,
+            owner=self.owner,
+            recurrence_parent=master,
+            original_start=occ_start,
+            is_cancelled=True,
+        )
+        range_start = master.start
+        range_end = master.start + timedelta(days=21)
+        from django.db.models import Prefetch
+        masters = Event.objects.filter(pk=master.pk).prefetch_related(
+            Prefetch('members', queryset=EventMember.objects.select_related('user'))
+        ).select_related('owner', 'calendar')
+        result = expand_recurring_events(masters, range_start, range_end)
+        starts = [r['original_start'] for r in result]
+        self.assertNotIn(occ_start.isoformat(), starts)
+
+    def test_expand_with_modified_exception(self):
+        master = self._create_weekly()
+        occ_start = master.start + timedelta(weeks=1)
+        Event.objects.create(
+            calendar=self.calendar,
+            title='Modified Meeting',
+            start=occ_start,
+            end=occ_start + timedelta(hours=2),
+            owner=self.owner,
+            recurrence_parent=master,
+            original_start=occ_start,
+        )
+        range_start = master.start
+        range_end = master.start + timedelta(days=21)
+        from django.db.models import Prefetch
+        masters = Event.objects.filter(pk=master.pk).prefetch_related(
+            Prefetch('members', queryset=EventMember.objects.select_related('user'))
+        ).select_related('owner', 'calendar')
+        result = expand_recurring_events(masters, range_start, range_end)
+        titles = [r['title'] for r in result]
+        self.assertIn('Modified Meeting', titles)

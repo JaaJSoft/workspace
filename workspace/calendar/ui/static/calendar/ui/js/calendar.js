@@ -33,7 +33,11 @@ window.calendarApp = function calendarApp(calendarsData) {
       end: '',
       all_day: false,
       location: '',
+      recurrence_frequency: null,
+      recurrence_interval: 1,
+      recurrence_end: '',
     },
+    _panelRaw: null,
     eventOwner: null,
     eventMembers: [],
     myInviteStatus: null,
@@ -41,6 +45,11 @@ window.calendarApp = function calendarApp(calendarsData) {
     saving: false,
     deleting: false,
     loadingEvent: false,
+
+    // Scope dialog state
+    showScopeDialog: false,
+    scopeAction: null,
+    scopeResolve: null,
 
     // Context menu state
     ctxMenu: { open: false, x: 0, y: 0, event: null, isOwner: false, inviteStatus: null },
@@ -393,6 +402,16 @@ window.calendarApp = function calendarApp(calendarsData) {
             e.preventDefault();
             this.openContextMenu(e, info.event.extendedProps._raw);
           });
+          // Add recurring indicator
+          const raw = info.event.extendedProps._raw;
+          if (raw?.is_recurring) {
+            const titleEl = info.el.querySelector('.fc-event-title') || info.el.querySelector('.fc-list-event-title');
+            if (titleEl) {
+              const icon = document.createElement('span');
+              icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-left:3px;opacity:0.6"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>';
+              titleEl.appendChild(icon);
+            }
+          }
         },
       });
 
@@ -526,7 +545,11 @@ window.calendarApp = function calendarApp(calendarsData) {
         end: endVal,
         all_day: useAllDay,
         location: '',
+        recurrence_frequency: null,
+        recurrence_interval: 1,
+        recurrence_end: '',
       };
+      this._panelRaw = null;
       this.selectedMembers = [];
       this.eventOwner = null;
       this.eventMembers = [];
@@ -537,6 +560,7 @@ window.calendarApp = function calendarApp(calendarsData) {
 
     openViewPanel(event) {
       this.loadingEvent = false;
+      this._panelRaw = event;
       const currentUserId = String(document.body.dataset.userId);
       const isOwner = String(event.owner.id) === currentUserId;
 
@@ -551,6 +575,9 @@ window.calendarApp = function calendarApp(calendarsData) {
         end: event.end ? fmt(event.end) : '',
         all_day: allDay,
         location: event.location || '',
+        recurrence_frequency: event.recurrence_frequency || null,
+        recurrence_interval: event.recurrence_interval || 1,
+        recurrence_end: event.recurrence_end ? this.toLocalDate(event.recurrence_end) : '',
       };
       this.eventOwner = event.owner;
       this.eventMembers = event.members || [];
@@ -595,6 +622,10 @@ window.calendarApp = function calendarApp(calendarsData) {
         this.form.start = this.toLocalDate(this.form.start);
         this.form.end = this.toLocalDate(this.form.end);
       }
+      // Populate recurrence fields from raw data
+      this.form.recurrence_frequency = this._panelRaw?.recurrence_frequency || null;
+      this.form.recurrence_interval = this._panelRaw?.recurrence_interval || 1;
+      this.form.recurrence_end = this._panelRaw?.recurrence_end ? this.toLocalDate(this._panelRaw.recurrence_end) : '';
       this.showModal = true;
       this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
@@ -622,12 +653,33 @@ window.calendarApp = function calendarApp(calendarsData) {
         all_day: this.form.all_day,
         location: this.form.location,
         member_ids: this.selectedMembers.map(u => u.id),
+        recurrence_frequency: this.form.recurrence_frequency || null,
+        recurrence_interval: this.form.recurrence_interval || 1,
+        recurrence_end: this.form.recurrence_end ? new Date(this.form.recurrence_end).toISOString() : null,
       };
 
       try {
-        const [url, method] = this.modalMode === 'create'
-          ? ['/api/v1/calendar/events', 'POST']
-          : [`/api/v1/calendar/events/${this.form.uuid}`, 'PUT'];
+        let url, method;
+        if (this.modalMode === 'create') {
+          url = '/api/v1/calendar/events';
+          method = 'POST';
+        } else {
+          url = `/api/v1/calendar/events/${this.form.uuid}`;
+          method = 'PUT';
+        }
+
+        // For recurring event edits, ask scope
+        if (this.modalMode === 'edit' && this._panelRaw?.is_recurring) {
+          const scope = await this.openScopeDialog('edit');
+          if (!scope) { this.saving = false; return; }
+          payload.scope = scope;
+          if (scope !== 'all') {
+            payload.original_start = this._panelRaw.original_start;
+          }
+          // Use master UUID for API call
+          const targetUuid = this._panelRaw.master_event_id || this.form.uuid;
+          url = `/api/v1/calendar/events/${targetUuid}`;
+        }
 
         const resp = await fetch(url, {
           method,
@@ -640,6 +692,7 @@ window.calendarApp = function calendarApp(calendarsData) {
           this.showModal = false;
           this.calendar.refetchEvents();
           if (this.modalMode === 'edit' && this.showPanel) {
+            this._panelRaw = saved;
             this.form = {
               uuid: saved.uuid,
               calendar_id: saved.calendar_id,
@@ -649,6 +702,9 @@ window.calendarApp = function calendarApp(calendarsData) {
               end: saved.end ? this.toLocalDatetime(saved.end) : '',
               all_day: saved.all_day,
               location: saved.location || '',
+              recurrence_frequency: saved.recurrence_frequency || null,
+              recurrence_interval: saved.recurrence_interval || 1,
+              recurrence_end: saved.recurrence_end ? this.toLocalDate(saved.recurrence_end) : '',
             };
             this.eventOwner = saved.owner;
             this.eventMembers = saved.members;
@@ -663,6 +719,33 @@ window.calendarApp = function calendarApp(calendarsData) {
     // --- Delete event ---
     async deleteEvent() {
       if (!this.form.uuid) return;
+
+      // For recurring events, ask scope instead of confirm dialog
+      if (this._panelRaw?.is_recurring) {
+        const scope = await this.openScopeDialog('delete');
+        if (!scope) return;
+
+        this.deleting = true;
+        try {
+          const targetUuid = this._panelRaw.master_event_id || this.form.uuid;
+          let url = `/api/v1/calendar/events/${targetUuid}?scope=${scope}`;
+          if (scope !== 'all') {
+            url += `&original_start=${encodeURIComponent(this._panelRaw.original_start)}`;
+          }
+          const resp = await fetch(url, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': this.csrfToken() },
+          });
+          if (resp.ok || resp.status === 204) {
+            this.showPanel = false;
+            this.calendar.refetchEvents();
+          }
+        } catch (e) {}
+        this.deleting = false;
+        return;
+      }
+
       const ok = await AppDialog.confirm({
         title: 'Delete event',
         message: `Delete "${this.form.title}"?`,
@@ -937,6 +1020,47 @@ window.calendarApp = function calendarApp(calendarsData) {
 
     eventCalendarColor() {
       return this.eventCalendarObj()?.color || 'primary';
+    },
+
+    // --- Recurrence ---
+    toggleRecurrence() {
+      this.form.recurrence_frequency = this.form.recurrence_frequency ? null : 'weekly';
+      if (!this.form.recurrence_frequency) {
+        this.form.recurrence_interval = 1;
+        this.form.recurrence_end = '';
+      }
+    },
+
+    recurrenceLabel() {
+      const raw = this._panelRaw;
+      if (!raw) return '';
+      const freq = raw.recurrence_frequency;
+      const interval = raw.recurrence_interval || 1;
+      if (!freq) return '';
+      const units = { daily: ['day', 'days'], weekly: ['week', 'weeks'], monthly: ['month', 'months'], yearly: ['year', 'years'] };
+      const [singular, plural] = units[freq] || ['', ''];
+      return interval === 1 ? `Every ${singular}` : `Every ${interval} ${plural}`;
+    },
+
+    isRecurringEvent() {
+      return this._panelRaw?.is_recurring || this._panelRaw?.master_event_id;
+    },
+
+    openScopeDialog(action) {
+      return new Promise((resolve) => {
+        this.scopeAction = action;
+        this.scopeResolve = resolve;
+        this.showScopeDialog = true;
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      });
+    },
+
+    resolveScopeDialog(scope) {
+      this.showScopeDialog = false;
+      if (this.scopeResolve) {
+        this.scopeResolve(scope);
+        this.scopeResolve = null;
+      }
     },
 
     closeModal() { this.showModal = false; },

@@ -834,7 +834,6 @@ dependencies = [
     { name = "django" },
     { name = "django-brotli" },
     { name = "django-daisy" },
-    { name = "django-debug-toolbar" },
     { name = "django-filter" },
     { name = "django-health-check" },
     { name = "django-redis" },
@@ -851,6 +850,11 @@ dependencies = [
     { name = "wsgidav" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "django-debug-toolbar" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "cairosvg", specifier = ">=2.7.0" },
@@ -859,7 +863,6 @@ requires-dist = [
     { name = "django", specifier = ">=6.0.2,<7.0" },
     { name = "django-brotli", specifier = ">=0.4.0" },
     { name = "django-daisy", specifier = ">=2.0.5" },
-    { name = "django-debug-toolbar", specifier = "==6.2.0" },
     { name = "django-filter", specifier = "==25.2" },
     { name = "django-health-check", specifier = ">=3.21" },
     { name = "django-redis", specifier = ">=5.4.0" },
@@ -877,7 +880,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = []
+dev = [{ name = "django-debug-toolbar", specifier = "==6.2.0" }]
 
 [[package]]
 name = "wsgidav"

@@ -36,7 +36,7 @@ COPY --chown=appuser:appuser . .
 
 # Collect static files in the image
 ENV DJANGO_SETTINGS_MODULE=workspace.settings
-RUN SECRET_KEY=build-secret python manage.py collectstatic --noinput
+RUN SECRET_KEY=build-secret DEBUG=0 python manage.py collectstatic --noinput
 
 # Gunicorn workers count and logs configurable (default values)
 ENV GUNICORN_WORKERS=3 \

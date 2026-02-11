@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.5.0
+
+### Calendar
+
+- Agenda view with chronological event listing
+- Event context menu with quick actions (edit, delete, duplicate)
+- Show/hide declined events
+- Skeleton loading state for event detail panel
+- Fix all-day event formatting in form initialization
+
+### Chat
+
+- Message attachments: upload and attach files to messages
+- "Save to Files" action to save chat attachments directly to the file browser
+
+### Files
+
+- File comments system with add, edit, and delete support
+- Enhanced properties panel UI
+
+### Users
+
+- User mini profile popover on avatar hover
+
+### Infrastructure
+
+- CI workflow to build and push Docker images to GHCR on `main` and tags
+- Database indexes added across calendar, chat, and files apps
+- Comprehensive API test suite for calendars and events
+- Dockerfile build and runtime refinements
+- Dependency update: Pillow
+
 ## 0.4.0
 
 ### New module: Chat

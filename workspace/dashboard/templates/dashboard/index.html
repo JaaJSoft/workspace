@@ -30,23 +30,19 @@
     {% include 'dashboard/partials/modules_grid.html' %}
   </section>
 
-  {# ── Files section header + stats ── #}
+  {# ── Overview section header + stats ── #}
   <section class="space-y-4">
     <div class="flex items-center justify-between gap-4 flex-wrap">
       <div class="flex items-center gap-3">
         <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-          <i data-lucide="hard-drive" class="w-4 h-4"></i>
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
         </div>
         <div>
-          <h2 class="text-xl font-semibold text-base-content">Files</h2>
-          <p class="text-sm text-base-content/60">Your files at a glance.</p>
+          <h2 class="text-xl font-semibold text-base-content">Overview</h2>
+          <p class="text-sm text-base-content/60">Your workspace at a glance.</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <a href="/files" class="btn btn-primary btn-sm gap-2">
-          <i data-lucide="folder-open" class="w-4 h-4"></i>
-          Open files
-        </a>
         <a
           href="{% url 'dashboard:stats' %}"
           class="btn btn-ghost btn-sm gap-2"
@@ -73,40 +69,67 @@
                 <i data-lucide="activity" class="w-5 h-5"></i>
                 Insights
               </h2>
-              <p class="text-sm text-base-content/60">Recent updates, starred items, and trash.</p>
+              <p class="text-sm text-base-content/60">Recent activity across your workspace.</p>
             </div>
-            <div class="tabs tabs-boxed">
+            <div class="tabs tabs-boxed flex-wrap">
               <a
                 href="{% url 'dashboard:insights_recent' %}"
-                class="tab"
+                class="tab gap-1.5"
                 :class="insightTab === 'recent' ? 'tab-active' : ''"
                 @click="insightTab = 'recent'"
                 x-target="dashboard-insights"
               >
+                <i data-lucide="clock" class="w-3.5 h-3.5"></i>
                 Recent
               </a>
               <a
+                href="{% url 'dashboard:insights_conversations' %}"
+                class="tab gap-1.5"
+                :class="insightTab === 'conversations' ? 'tab-active' : ''"
+                @click="insightTab = 'conversations'"
+                x-target="dashboard-insights"
+              >
+                <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+                Chat
+              </a>
+              <a
+                href="{% url 'dashboard:insights_events' %}"
+                class="tab gap-1.5"
+                :class="insightTab === 'events' ? 'tab-active' : ''"
+                @click="insightTab = 'events'"
+                x-target="dashboard-insights"
+              >
+                <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                Events
+              </a>
+              <a
                 href="{% url 'dashboard:insights_favorites' %}"
-                class="tab"
+                class="tab gap-1.5"
                 :class="insightTab === 'favorites' ? 'tab-active' : ''"
                 @click="insightTab = 'favorites'"
                 x-target="dashboard-insights"
               >
+                <i data-lucide="star" class="w-3.5 h-3.5"></i>
                 Favorites
               </a>
               <a
                 href="{% url 'dashboard:insights_trash' %}"
-                class="tab"
+                class="tab gap-1.5"
                 :class="insightTab === 'trash' ? 'tab-active' : ''"
                 @click="insightTab = 'trash'"
                 x-target="dashboard-insights"
               >
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                 Trash
               </a>
             </div>
           </div>
 
-          {% if insight_tab == 'favorites' %}
+          {% if insight_tab == 'conversations' %}
+            {% include 'dashboard/partials/insights_conversations.html' %}
+          {% elif insight_tab == 'events' %}
+            {% include 'dashboard/partials/insights_events.html' %}
+          {% elif insight_tab == 'favorites' %}
             {% include 'dashboard/partials/insights_favorites.html' %}
           {% elif insight_tab == 'trash' %}
             {% include 'dashboard/partials/insights_trash.html' %}
@@ -118,46 +141,39 @@
     </div>
 
     <div class="space-y-6">
-      {# ── Storage card ── #}
+      {# ── Quick Access card ── #}
       <div class="card bg-base-100 shadow border border-base-300">
         <div class="card-body">
           <h3 class="card-title text-xl">
-            <i data-lucide="hard-drive" class="w-5 h-5"></i>
-            Storage
+            <i data-lucide="zap" class="w-5 h-5"></i>
+            Quick Access
           </h3>
-          <div class="mt-2 flex items-center justify-between gap-4">
-            <div>
-              <div class="text-sm text-base-content/60">Used</div>
-              <div class="text-2xl font-semibold">{{ stats.total_size|filesize }}</div>
-            </div>
-            <div class="w-12 h-12 rounded-full bg-base-200 flex items-center justify-center text-base-content/60">
-              <i data-lucide="database" class="w-6 h-6"></i>
-            </div>
-          </div>
-          <div class="mt-4 grid grid-cols-2 gap-3 text-sm text-base-content/70">
-            <div class="flex items-center gap-2">
-              <i data-lucide="file" class="w-4 h-4"></i>
-              <span>{{ stats.file_count }} file{{ stats.file_count|pluralize }}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <i data-lucide="folder" class="w-4 h-4"></i>
-              <span>{{ stats.folder_count }} folder{{ stats.folder_count|pluralize }}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <i data-lucide="star" class="w-4 h-4"></i>
-              <span>{{ stats.favorite_count }} favorite{{ stats.favorite_count|pluralize }}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <i data-lucide="trash-2" class="w-4 h-4"></i>
-              <span>{{ stats.trash_count }} item{{ stats.trash_count|pluralize }} in trash</span>
-            </div>
-          </div>
-          <div class="mt-4 text-xs text-base-content/50">
-            {% if stats.last_updated %}
-              Last update {{ stats.last_updated|date:"M j, Y H:i" }}
-            {% else %}
-              No activity yet
-            {% endif %}
+          <div class="space-y-2 mt-2">
+            <a href="/files" class="btn btn-ghost btn-sm w-full justify-between gap-3">
+              <span class="flex items-center gap-3">
+                <i data-lucide="file" class="w-4 h-4"></i>
+                Files
+              </span>
+              <span class="badge badge-sm">{{ stats.file_count }}</span>
+            </a>
+            <a href="/chat" class="btn btn-ghost btn-sm w-full justify-between gap-3">
+              <span class="flex items-center gap-3">
+                <i data-lucide="message-circle" class="w-4 h-4"></i>
+                Chat
+              </span>
+              {% if stats.unread_messages > 0 %}
+                <span class="badge badge-info badge-sm">{{ stats.unread_messages }}</span>
+              {% endif %}
+            </a>
+            <a href="/calendar" class="btn btn-ghost btn-sm w-full justify-between gap-3">
+              <span class="flex items-center gap-3">
+                <i data-lucide="calendar" class="w-4 h-4"></i>
+                Calendar
+              </span>
+              {% if stats.upcoming_events > 0 %}
+                <span class="badge badge-accent badge-sm">{{ stats.upcoming_events }}</span>
+              {% endif %}
+            </a>
           </div>
         </div>
       </div>

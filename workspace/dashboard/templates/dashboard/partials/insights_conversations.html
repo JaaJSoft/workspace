@@ -1,0 +1,39 @@
+<div id="dashboard-insights" class="mt-4 space-y-3" x-init="$nextTick(() => lucide.createIcons())">
+  {% if recent_conversations %}
+    <ul class="divide-y divide-base-200">
+      {% for conv in recent_conversations %}
+        <li class="py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-base-200 flex items-center justify-center flex-shrink-0 font-semibold text-sm">
+            {{ conv.avatar_initial }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <div class="font-medium truncate">{{ conv.display_name }}</div>
+              {% if conv.unread_count > 0 %}
+                <span class="badge badge-info badge-xs">{{ conv.unread_count }}</span>
+              {% endif %}
+              {% if conv.kind == 'group' %}
+                <span class="badge badge-ghost badge-xs">Group</span>
+              {% endif %}
+            </div>
+            <div class="text-xs text-base-content/60 truncate">{{ conv.last_message_preview }}</div>
+          </div>
+          <div class="text-xs text-base-content/50 hidden sm:block">
+            {{ conv.time_ago }}
+          </div>
+          <div class="flex-shrink-0">
+            <a href="/chat/{{ conv.uuid }}" class="btn btn-ghost btn-xs">Open</a>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="flex justify-end pt-3">
+      <a href="/chat" class="btn btn-ghost btn-sm">Open Chat</a>
+    </div>
+  {% else %}
+    {% include "ui/partials/inline_alert.html" with type="info" message="No conversations yet. Start chatting with your team!" %}
+    <div class="pt-3">
+      <a href="/chat" class="btn btn-primary btn-sm">Open Chat</a>
+    </div>
+  {% endif %}
+</div>

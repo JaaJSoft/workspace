@@ -1,0 +1,38 @@
+<div id="dashboard-insights" class="mt-4 space-y-3" x-init="$nextTick(() => lucide.createIcons())">
+  {% if upcoming_events %}
+    <ul class="divide-y divide-base-200">
+      {% for event in upcoming_events %}
+        <li class="py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-{{ event.calendar.color }}/10 flex items-center justify-center flex-shrink-0">
+            <i data-lucide="calendar" class="w-4 h-4 text-{{ event.calendar.color }}"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <div class="font-medium truncate">{{ event.title }}</div>
+              <span class="badge badge-ghost badge-xs">{{ event.calendar.name }}</span>
+            </div>
+            <div class="text-xs text-base-content/60 truncate">
+              {% if event.all_day %}
+                {{ event.start|date:"D, M j" }} &middot; All day
+              {% else %}
+                {{ event.start|date:"D, M j \a\t H:i" }}
+              {% endif %}
+              {% if event.location %} &middot; {{ event.location }}{% endif %}
+            </div>
+          </div>
+          <div class="flex-shrink-0">
+            <a href="/calendar" class="btn btn-ghost btn-xs">View</a>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="flex justify-end pt-3">
+      <a href="/calendar" class="btn btn-ghost btn-sm">Open Calendar</a>
+    </div>
+  {% else %}
+    {% include "ui/partials/inline_alert.html" with type="info" message="No upcoming events in the next 7 days." %}
+    <div class="pt-3">
+      <a href="/calendar" class="btn btn-primary btn-sm">Open Calendar</a>
+    </div>
+  {% endif %}
+</div>

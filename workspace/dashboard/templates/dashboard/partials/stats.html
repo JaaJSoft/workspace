@@ -1,3 +1,4 @@
+{% load ui_filters %}
 <div id="dashboard-stats" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" x-init="$nextTick(() => lucide.createIcons())">
   <div class="stats shadow border border-base-300 bg-base-100">
     <div class="stat">
@@ -12,34 +13,34 @@
 
   <div class="stats shadow border border-base-300 bg-base-100">
     <div class="stat">
-      <div class="stat-figure text-warning">
-        <i data-lucide="folder" class="w-7 h-7"></i>
+      <div class="stat-figure text-info">
+        <i data-lucide="message-circle" class="w-7 h-7"></i>
       </div>
-      <div class="stat-title">Folders</div>
-      <div class="stat-value text-warning">{{ stats.folder_count }}</div>
-      <div class="stat-desc">Organized work</div>
+      <div class="stat-title">Unread</div>
+      <div class="stat-value text-info">{{ stats.unread_messages }}</div>
+      <div class="stat-desc">Unread messages</div>
+    </div>
+  </div>
+
+  <div class="stats shadow border border-base-300 bg-base-100">
+    <div class="stat">
+      <div class="stat-figure text-accent">
+        <i data-lucide="calendar" class="w-7 h-7"></i>
+      </div>
+      <div class="stat-title">Events</div>
+      <div class="stat-value text-accent">{{ stats.upcoming_events }}</div>
+      <div class="stat-desc">Next 7 days</div>
     </div>
   </div>
 
   <div class="stats shadow border border-base-300 bg-base-100">
     <div class="stat">
       <div class="stat-figure text-secondary">
-        <i data-lucide="star" class="w-7 h-7"></i>
+        <i data-lucide="database" class="w-7 h-7"></i>
       </div>
-      <div class="stat-title">Favorites</div>
-      <div class="stat-value text-secondary">{{ stats.favorite_count }}</div>
-      <div class="stat-desc">Pinned items</div>
-    </div>
-  </div>
-
-  <div class="stats shadow border border-base-300 bg-base-100">
-    <div class="stat">
-      <div class="stat-figure text-error">
-        <i data-lucide="trash-2" class="w-7 h-7"></i>
-      </div>
-      <div class="stat-title">Trash</div>
-      <div class="stat-value text-error">{{ stats.trash_count }}</div>
-      <div class="stat-desc">Recently removed</div>
+      <div class="stat-title">Storage</div>
+      <div class="stat-value text-secondary text-2xl">{{ stats.total_size|filesize }}</div>
+      <div class="stat-desc">Total used</div>
     </div>
   </div>
 </div>

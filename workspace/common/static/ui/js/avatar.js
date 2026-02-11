@@ -213,108 +213,25 @@ window._userCardCancelHide = function(wrapper) {
 /**
  * Alpine.js component for user card popover.
  * Used by _user_avatar_inner.html when show_card=True.
- * Uses $ajax (alpine-ajax) to fetch and inject the card HTML.
- * The popover is appended to document.body with position:fixed to avoid overflow clipping.
+ * Delegates to the imperative _userCardShow/_userCardScheduleHide functions
+ * which create and manage their own popover on document.body.
  *
  * @param {number|string} userId
  * @returns {object} Alpine data object
  */
 window.userCard = function(userId) {
   return {
-    open: false,
-    _hideTimeout: null,
-    _fetched: false,
-    _placement: 'bottom',
-
-    init() {
-      // Move the popover to document.body so it escapes overflow:hidden parents
-      var popover = this.$refs.cardPopover;
-      if (popover) {
-        popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
-        document.body.appendChild(popover);
-        this._bodyPopover = popover;
-      }
+    show() {
+      window._userCardShow(this.$el, userId);
     },
-
-    show(event) {
-      this.cancelHide();
-
-      // If already visible, nothing to do
-      if (this.open) return;
-
-      // Cancel any existing show timeout (re-entry)
-      if (this._showTimeout) clearTimeout(this._showTimeout);
-
-      // Delay show by 1 second
-      var self = this;
-      this._showTimeout = setTimeout(function() {
-        self._showTimeout = null;
-
-        // Position using fixed coordinates
-        var pos = _computePopoverPosition(self.$el);
-        var popover = self._bodyPopover;
-        self._placement = pos.placement;
-        if (popover) {
-          popover.style.left = pos.left + 'px';
-          popover.style.top = pos.top + 'px';
-        }
-
-        self.open = true;
-
-        // Slide+fade in — set initial state without transition, then animate
-        self.$nextTick(function() {
-          if (self._bodyPopover) {
-            self._bodyPopover.style.transition = 'none';
-            _applyPopoverTransform(self._bodyPopover, self._placement, false);
-            void self._bodyPopover.offsetHeight;
-            self._bodyPopover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
-            _applyPopoverTransform(self._bodyPopover, self._placement, true);
-          }
-        });
-
-        if (!self._fetched) {
-          self._fetched = true;
-          self.$ajax('/users/' + userId + '/card', {
-            target: 'user-card-' + userId,
-          });
-        }
-      }, 500);
-    },
-
     scheduleHide() {
-      // Cancel pending show if user leaves before the 1s delay
-      if (this._showTimeout) {
-        clearTimeout(this._showTimeout);
-        this._showTimeout = null;
-      }
-
-      var self = this;
-      this._hideTimeout = setTimeout(function() {
-        if (self._bodyPopover) {
-          _applyPopoverTransform(self._bodyPopover, self._placement, false);
-        }
-        self._closeTimeout = setTimeout(function() { self.open = false; }, 150);
-      }, 200);
+      window._userCardScheduleHide(this.$el);
     },
-
-    cancelHide() {
-      if (this._hideTimeout) {
-        clearTimeout(this._hideTimeout);
-        this._hideTimeout = null;
-      }
-      if (this._closeTimeout) {
-        clearTimeout(this._closeTimeout);
-        this._closeTimeout = null;
-      }
-      // Restore visible state if popover was fading out
-      if (this.open && this._bodyPopover) {
-        _applyPopoverTransform(this._bodyPopover, this._placement, true);
-      }
-    },
-
     destroy() {
-      if (this._bodyPopover && this._bodyPopover.parentNode) {
-        this._bodyPopover.parentNode.removeChild(this._bodyPopover);
+      // Clean up the imperative popover when Alpine removes this component
+      var popover = this.$el._userCardPopover;
+      if (popover && popover.parentNode) {
+        popover.parentNode.removeChild(popover);
       }
     }
   };

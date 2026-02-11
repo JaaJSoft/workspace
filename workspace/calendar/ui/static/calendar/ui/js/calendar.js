@@ -540,14 +540,16 @@ window.calendarApp = function calendarApp(calendarsData) {
       const currentUserId = String(document.body.dataset.userId);
       const isOwner = String(event.owner.id) === currentUserId;
 
+      const allDay = !!event.all_day;
+      const fmt = allDay ? (s => this.toLocalDate(s)) : (s => this.toLocalDatetime(s));
       this.form = {
         uuid: event.uuid,
         calendar_id: String(event.calendar_id),
         title: event.title,
         description: event.description || '',
-        start: this.toLocalDatetime(event.start),
-        end: event.end ? this.toLocalDatetime(event.end) : '',
-        all_day: !!event.all_day,
+        start: fmt(event.start),
+        end: event.end ? fmt(event.end) : '',
+        all_day: allDay,
         location: event.location || '',
       };
       this.eventOwner = event.owner;

@@ -36,6 +36,13 @@ function chatApp(currentUserId) {
     searchResults: [],
     searchLoading: false,
     searchHighlight: -1,
+    searchFilterAuthor: '',
+    searchFilterDateRange: '',
+    searchFilterDateFrom: '',
+    searchFilterDateTo: '',
+    searchFilterHasFiles: false,
+    searchFilterHasImages: false,
+    searchFiltersExpanded: false,
     // Context menu state
     ctxMenu: { open: false, x: 0, y: 0, uuid: null, kind: null, isPinned: false },
     // File upload
@@ -193,6 +200,13 @@ function chatApp(currentUserId) {
       this.searchResults = [];
       this.searchLoading = false;
       this.searchHighlight = -1;
+      this.searchFilterAuthor = '';
+      this.searchFilterDateRange = '';
+      this.searchFilterDateFrom = '';
+      this.searchFilterDateTo = '';
+      this.searchFilterHasFiles = false;
+      this.searchFilterHasImages = false;
+      this.searchFiltersExpanded = false;
 
       if (updateUrl) {
         history.pushState({ conversationUuid: conv.uuid }, '', `/chat/${conv.uuid}`);
@@ -857,11 +871,35 @@ function chatApp(currentUserId) {
       this.searchResults = [];
       this.searchLoading = false;
       this.searchHighlight = -1;
+      this.searchFilterAuthor = '';
+      this.searchFilterDateRange = '';
+      this.searchFilterDateFrom = '';
+      this.searchFilterDateTo = '';
+      this.searchFilterHasFiles = false;
+      this.searchFilterHasImages = false;
+      this.searchFiltersExpanded = false;
+    },
+
+    hasActiveSearchFilters() {
+      return !!(this.searchFilterAuthor || this.searchFilterDateRange ||
+        this.searchFilterDateFrom || this.searchFilterDateTo ||
+        this.searchFilterHasFiles || this.searchFilterHasImages);
+    },
+
+    clearSearchFilters() {
+      this.searchFilterAuthor = '';
+      this.searchFilterDateRange = '';
+      this.searchFilterDateFrom = '';
+      this.searchFilterDateTo = '';
+      this.searchFilterHasFiles = false;
+      this.searchFilterHasImages = false;
+      this.searchMessages();
     },
 
     async searchMessages() {
       const q = (this.searchQuery || '').trim();
-      if (q.length < 2) {
+      const filtersActive = this.hasActiveSearchFilters();
+      if (q.length < 2 && !filtersActive) {
         this.searchResults = [];
         return;
       }
@@ -869,8 +907,21 @@ function chatApp(currentUserId) {
 
       this.searchLoading = true;
       try {
+        const params = new URLSearchParams();
+        if (q.length >= 2) params.set('q', q);
+        if (this.searchFilterAuthor) params.set('author', this.searchFilterAuthor);
+        if (this.searchFilterDateRange && this.searchFilterDateRange !== 'custom') {
+          params.set('date_range', this.searchFilterDateRange);
+        }
+        if (this.searchFilterDateRange === 'custom') {
+          if (this.searchFilterDateFrom) params.set('date_from', this.searchFilterDateFrom);
+          if (this.searchFilterDateTo) params.set('date_to', this.searchFilterDateTo);
+        }
+        if (this.searchFilterHasFiles) params.set('has_files', 'true');
+        if (this.searchFilterHasImages) params.set('has_images', 'true');
+
         const resp = await fetch(
-          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/search?q=${encodeURIComponent(q)}`,
+          `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/search?${params}`,
           { credentials: 'same-origin' }
         );
         if (resp.ok) {

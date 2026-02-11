@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
 from django.db.models import Count, F, Max, Min, OuterRef, Prefetch, Subquery
@@ -888,7 +890,13 @@ class ConversationMessageSearchView(APIView):
     @extend_schema(
         summary="Search messages in a conversation",
         parameters=[
-            OpenApiParameter(name='q', type=str, required=True),
+            OpenApiParameter(name='q', type=str, required=False),
+            OpenApiParameter(name='author', type=int, required=False),
+            OpenApiParameter(name='date_range', type=str, required=False, enum=['today', '7d', '30d']),
+            OpenApiParameter(name='date_from', type=str, required=False, description='ISO date (YYYY-MM-DD)'),
+            OpenApiParameter(name='date_to', type=str, required=False, description='ISO date (YYYY-MM-DD)'),
+            OpenApiParameter(name='has_files', type=bool, required=False),
+            OpenApiParameter(name='has_images', type=bool, required=False),
         ],
     )
     def get(self, request, conversation_id):
@@ -899,21 +907,55 @@ class ConversationMessageSearchView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        query = request.query_params.get('q', '').strip()
-        if not query:
+        params = request.query_params
+        query = params.get('q', '').strip()
+        author_id = params.get('author', '').strip()
+        date_range = params.get('date_range', '').strip()
+        date_from = params.get('date_from', '').strip()
+        date_to = params.get('date_to', '').strip()
+        has_files = params.get('has_files', '').lower() == 'true'
+        has_images = params.get('has_images', '').lower() == 'true'
+
+        has_any = query or author_id or date_range or date_from or date_to or has_files or has_images
+        if not has_any:
             return Response(
-                {'detail': 'Query parameter "q" is required.'},
+                {'detail': 'At least one search criterion is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        qs = Message.objects.filter(
+            conversation_id=conversation_id,
+            deleted_at__isnull=True,
+        )
+
+        if query:
+            qs = qs.filter(body__icontains=query)
+
+        if author_id:
+            qs = qs.filter(author_id=author_id)
+
+        now = timezone.now()
+        if date_range == 'today':
+            qs = qs.filter(created_at__date=now.date())
+        elif date_range == '7d':
+            qs = qs.filter(created_at__gte=now - timedelta(days=7))
+        elif date_range == '30d':
+            qs = qs.filter(created_at__gte=now - timedelta(days=30))
+
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+
+        if has_files:
+            qs = qs.filter(attachments__isnull=False)
+        if has_images:
+            qs = qs.filter(attachments__mime_type__startswith='image/')
+
         messages = (
-            Message.objects.filter(
-                conversation_id=conversation_id,
-                body__icontains=query,
-                deleted_at__isnull=True,
-            )
-            .select_related('author')
-            .order_by('-created_at')[:50]
+            qs.select_related('author')
+            .order_by('-created_at')
+            .distinct()[:50]
         )
 
         results = [

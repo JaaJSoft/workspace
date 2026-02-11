@@ -30,8 +30,6 @@ dependencies = [
     # server
     "gunicorn>=24.1.1",
     "django-brotli>=0.4.0",
-    # debug
-    "django-debug-toolbar==6.2.0",
 ]
 
 [build-system]
@@ -39,4 +37,6 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv]
-dev-dependencies = []
+dev-dependencies = [
+    "django-debug-toolbar==6.2.0",
+]

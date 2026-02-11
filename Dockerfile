@@ -14,6 +14,23 @@ RUN uv sync --frozen --no-dev --no-install-project
 # Stage 2: Runtime
 FROM python:3.14-slim
 
+# OCI metadata — static labels
+LABEL org.opencontainers.image.title="workspace" \
+      org.opencontainers.image.description="JaaJSoft workspace project" \
+      org.opencontainers.image.url="https://github.com/JaaJSoft/workspace" \
+      org.opencontainers.image.source="https://github.com/JaaJSoft/workspace" \
+      org.opencontainers.image.vendor="JaaJSoft" \
+      org.opencontainers.image.licenses="BSL" \
+      org.opencontainers.image.base.name="docker.io/library/python:3.14-slim"
+
+# OCI metadata — dynamic labels (overridden at build time by CI)
+ARG VERSION=dev
+ARG REVISION=""
+ARG CREATED=""
+LABEL org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.created="${CREATED}"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/app/.venv/bin:$PATH

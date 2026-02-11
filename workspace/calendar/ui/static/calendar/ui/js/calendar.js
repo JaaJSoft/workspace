@@ -40,6 +40,7 @@ window.calendarApp = function calendarApp(calendarsData) {
     selectedMembers: [],
     saving: false,
     deleting: false,
+    loadingEvent: false,
 
     // Context menu state
     ctxMenu: { open: false, x: 0, y: 0, event: null, isOwner: false, inviteStatus: null },
@@ -535,6 +536,7 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
 
     openViewPanel(event) {
+      this.loadingEvent = false;
       const currentUserId = String(document.body.dataset.userId);
       const isOwner = String(event.owner.id) === currentUserId;
 
@@ -563,6 +565,8 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
 
     async openEventById(eventId) {
+      this.loadingEvent = true;
+      this.showPanel = true;
       try {
         const resp = await fetch(`/api/v1/calendar/events/${eventId}`, { credentials: 'same-origin' });
         if (resp.ok) {
@@ -573,8 +577,13 @@ window.calendarApp = function calendarApp(calendarsData) {
             this._syncTitle();
           }
           this.openViewPanel(event);
+        } else {
+          this.showPanel = false;
         }
-      } catch (e) {}
+      } catch (e) {
+        this.showPanel = false;
+      }
+      this.loadingEvent = false;
     },
 
     openEditModal() {

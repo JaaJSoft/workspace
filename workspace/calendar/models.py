@@ -18,6 +18,9 @@ class Calendar(models.Model):
 
     class Meta:
         ordering = ['name']
+        indexes = [
+            models.Index(fields=['owner', 'name'], name='cal_owner_name'),
+        ]
 
     def __str__(self):
         return self.name
@@ -113,6 +116,10 @@ class EventMember(models.Model):
                 fields=['event', 'user'],
                 name='unique_event_member',
             ),
+        ]
+        indexes = [
+            models.Index(fields=['status'], name='evtmember_status'),
+            models.Index(fields=['user', 'status'], name='evtmember_user_status'),
         ]
 
     def __str__(self):

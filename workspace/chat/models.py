@@ -25,6 +25,7 @@ class Conversation(models.Model):
         ordering = ['-updated_at']
         indexes = [
             models.Index(fields=['-updated_at']),
+            models.Index(fields=['kind'], name='conv_kind'),
         ]
 
     def __str__(self):
@@ -85,6 +86,7 @@ class Message(models.Model):
         indexes = [
             models.Index(fields=['conversation', 'created_at']),
             models.Index(fields=['conversation', '-created_at']),
+            models.Index(fields=['deleted_at'], name='msg_deleted_at'),
         ]
 
     def __str__(self):
@@ -164,6 +166,9 @@ class MessageAttachment(models.Model):
 
     class Meta:
         ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['message', 'created_at'], name='attach_msg_created'),
+        ]
 
     @property
     def is_image(self):

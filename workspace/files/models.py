@@ -57,6 +57,9 @@ class MimeTypeRule(models.Model):
 
     class Meta:
         ordering = ['priority', 'pattern']
+        indexes = [
+            models.Index(fields=['priority', 'pattern'], name='mime_priority_pattern'),
+        ]
 
     def __str__(self):
         return self.pattern
@@ -334,6 +337,7 @@ class FileShare(models.Model):
         ]
         indexes = [
             models.Index(fields=['shared_with', 'created_at'], name='file_share_recv_idx'),
+            models.Index(fields=['shared_by', 'created_at'], name='file_share_sent_idx'),
         ]
 
     def __str__(self):
@@ -362,6 +366,7 @@ class FileComment(models.Model):
         ordering = ['created_at']
         indexes = [
             models.Index(fields=['file', 'created_at'], name='file_comment_file_created'),
+            models.Index(fields=['deleted_at'], name='file_comment_deleted_at'),
         ]
 
     def __str__(self):

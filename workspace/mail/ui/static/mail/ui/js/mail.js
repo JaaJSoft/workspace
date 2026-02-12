@@ -42,6 +42,7 @@ function mailApp() {
       // Auto-expand all accounts and load folders
       for (const acc of this.accounts) {
         this.expandedAccounts[acc.uuid] = true;
+        this.syncingAccounts[acc.uuid] = false;
         this.loadFolders(acc.uuid);
       }
 

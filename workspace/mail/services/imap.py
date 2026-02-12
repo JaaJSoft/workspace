@@ -571,6 +571,81 @@ def append_to_sent(account, raw_message_bytes):
             pass
 
 
+def save_draft(account, raw_message_bytes, old_uid=None):
+    """Save a draft message to the account's Drafts folder via IMAP APPEND.
+
+    If old_uid is provided, deletes the previous draft first.
+    Returns the created MailMessage.
+    """
+    from workspace.mail.models import MailFolder
+    import time
+
+    drafts_folder = (
+        MailFolder.objects
+        .filter(account=account, folder_type=MailFolder.FolderType.DRAFTS)
+        .first()
+    )
+    if not drafts_folder:
+        logger.warning("No Drafts folder found for %s, skipping save_draft", account.email)
+        return None
+
+    conn = connect_imap(account)
+    try:
+        conn.select(drafts_folder.name, readonly=False)
+
+        # Delete old draft if updating
+        if old_uid:
+            conn.uid('STORE', str(old_uid), '+FLAGS', '(\\Deleted)')
+            conn.expunge()
+
+        # Append new draft
+        status, _ = conn.append(
+            drafts_folder.name,
+            '(\\Draft \\Seen)',
+            imaplib.Time2Internaldate(time.time()),
+            raw_message_bytes,
+        )
+        if status != 'OK':
+            logger.warning("IMAP APPEND draft to %s failed for %s", drafts_folder.name, account.email)
+            return None
+
+        logger.info("Saved draft to %s for %s", drafts_folder.name, account.email)
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+    # Sync to pick up the new message locally
+    sync_folder_messages(account, drafts_folder)
+
+    # Return the most recently created MailMessage in drafts
+    from workspace.mail.models import MailMessage
+    return (
+        MailMessage.objects
+        .filter(folder=drafts_folder, deleted_at__isnull=True)
+        .order_by('-created_at')
+        .first()
+    )
+
+
+def delete_draft(account, message):
+    """Delete a draft message from the IMAP server and locally."""
+    conn = connect_imap(account)
+    try:
+        conn.select(message.folder.name, readonly=False)
+        conn.uid('STORE', str(message.imap_uid), '+FLAGS', '(\\Deleted)')
+        conn.expunge()
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+    message.deleted_at = dj_timezone.now()
+    message.save(update_fields=['deleted_at', 'updated_at'])
+
+
 def sync_account(account):
     """Full sync: folders then messages for each folder."""
     from workspace.mail.models import MailFolder

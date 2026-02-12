@@ -277,16 +277,51 @@ function mailApp() {
     },
 
     // ----- Compose -----
-    showCompose(defaults = {}) {
+    async showCompose(defaults = {}) {
       this.compose = { ..._defaultCompose(), ...defaults };
       if (this.accounts.length > 0 && !this.compose.account_id) {
         this.compose.account_id = this.accounts[0].uuid;
       }
       this.showCcBcc = false;
+
+      // If no defaults (fresh compose), check localStorage for a saved draft
+      if (!defaults.to && !defaults.subject && !defaults.body) {
+        const saved = this._getLocalStorageDraft();
+        if (saved && (saved.to || saved.subject || saved.body)) {
+          const restore = await AppDialog.confirm({
+            title: 'Restore draft',
+            message: 'You have an unsaved draft. Would you like to restore it?',
+            okLabel: 'Restore',
+            cancelLabel: 'Discard',
+            icon: 'file-edit',
+            iconClass: 'bg-info/10 text-info',
+          });
+          if (restore) {
+            this.compose.to = saved.to || '';
+            this.compose.cc = saved.cc || '';
+            this.compose.bcc = saved.bcc || '';
+            this.compose.subject = saved.subject || '';
+            this.compose.body = saved.body || '';
+            this.compose.draft_id = saved.draft_id || null;
+            this.compose.is_reply = saved.is_reply || false;
+            if (saved.account_id) this.compose.account_id = saved.account_id;
+            if (saved.cc || saved.bcc) this.showCcBcc = true;
+          } else {
+            this._clearLocalStorageDraft();
+          }
+        }
+      }
+
       document.getElementById('mail-compose-dialog').showModal();
     },
 
-    closeCompose() {
+    async closeCompose() {
+      if (this.compose._saveTimer) clearTimeout(this.compose._saveTimer);
+      if (this._hasComposeContent()) {
+        await this._saveDraft();
+      } else {
+        this._clearLocalStorageDraft();
+      }
       document.getElementById('mail-compose-dialog').close();
       this.compose = _defaultCompose();
     },
@@ -346,12 +381,129 @@ function mailApp() {
       });
 
       if (res.ok) {
-        this.closeCompose();
+        if (this.compose._saveTimer) clearTimeout(this.compose._saveTimer);
+        const draftId = this.compose.draft_id;
+        this._clearLocalStorageDraft();
+        document.getElementById('mail-compose-dialog').close();
+        this.compose = _defaultCompose();
+        // Delete the draft after sending
+        if (draftId) this._deleteDraft(draftId);
       } else {
         const data = await res.json().catch(() => ({}));
         this.compose.error = data.error || 'Failed to send email';
+        this.compose.sending = false;
       }
-      this.compose.sending = false;
+    },
+
+    // ----- Drafts -----
+    _hasComposeContent() {
+      return !!(this.compose.to || this.compose.subject || this.compose.body);
+    },
+
+    _scheduleDraftSave() {
+      if (this.compose._saveTimer) clearTimeout(this.compose._saveTimer);
+      if (!this._hasComposeContent()) return;
+      this.compose._saveTimer = setTimeout(() => this._saveDraft(), 30000);
+    },
+
+    async _saveDraft() {
+      if (this.compose.saving || this.compose.sending) return;
+      if (!this._hasComposeContent()) return;
+
+      this.compose.saving = true;
+
+      const toList = this.compose.to ? this.compose.to.split(',').map(s => s.trim()).filter(Boolean) : [];
+      const ccList = this.compose.cc ? this.compose.cc.split(',').map(s => s.trim()).filter(Boolean) : [];
+      const bccList = this.compose.bcc ? this.compose.bcc.split(',').map(s => s.trim()).filter(Boolean) : [];
+      const htmlBody = this.compose.body.replace(/\n/g, '<br>');
+
+      const payload = {
+        account_id: this.compose.account_id,
+        to: toList,
+        cc: ccList,
+        bcc: bccList,
+        subject: this.compose.subject,
+        body_text: this.compose.body,
+        body_html: htmlBody,
+      };
+      if (this.compose.draft_id) payload.draft_id = this.compose.draft_id;
+
+      try {
+        const res = await this._fetch('/api/v1/mail/drafts', {
+          method: 'POST',
+          body: payload,
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          this.compose.draft_id = data.uuid;
+          this.compose.last_saved = Date.now();
+          // Refresh drafts folder counts
+          this._refreshDraftsFolderCounts();
+        }
+      } catch (e) {
+        // Silent fail — save to localStorage as fallback
+      }
+
+      // Always save to localStorage as fallback
+      this._saveComposeToLocalStorage();
+      this.compose.saving = false;
+    },
+
+    _saveComposeToLocalStorage() {
+      try {
+        const data = {
+          account_id: this.compose.account_id,
+          to: this.compose.to,
+          cc: this.compose.cc,
+          bcc: this.compose.bcc,
+          subject: this.compose.subject,
+          body: this.compose.body,
+          draft_id: this.compose.draft_id,
+          is_reply: this.compose.is_reply,
+          saved_at: Date.now(),
+        };
+        localStorage.setItem('mail_compose_draft', JSON.stringify(data));
+      } catch (e) {}
+    },
+
+    _clearLocalStorageDraft() {
+      try { localStorage.removeItem('mail_compose_draft'); } catch (e) {}
+    },
+
+    _getLocalStorageDraft() {
+      try {
+        const raw = localStorage.getItem('mail_compose_draft');
+        if (!raw) return null;
+        const data = JSON.parse(raw);
+        // Expire after 24h
+        if (Date.now() - data.saved_at > 86400000) {
+          this._clearLocalStorageDraft();
+          return null;
+        }
+        return data;
+      } catch (e) { return null; }
+    },
+
+    async _refreshDraftsFolderCounts() {
+      for (const acc of this.accounts) {
+        const flds = this.folders[acc.uuid] || [];
+        const draftsFolder = flds.find(f => f.folder_type === 'drafts');
+        if (draftsFolder) {
+          await this.loadFolders(acc.uuid);
+          if (this.selectedFolder?.uuid === draftsFolder.uuid) {
+            await this.loadMessages();
+          }
+          break;
+        }
+      }
+    },
+
+    async _deleteDraft(draftId) {
+      try {
+        await this._fetch(`/api/v1/mail/drafts/${draftId}`, { method: 'DELETE' });
+        this._refreshDraftsFolderCounts();
+      } catch (e) {}
     },
 
     // ----- Accounts -----
@@ -531,5 +683,7 @@ function _defaultCompose() {
     account_id: '', to: '', cc: '', bcc: '',
     subject: '', body: '', is_reply: false,
     attachments: [], sending: false, error: '',
+    draft_id: null, saving: false, last_saved: null,
+    _saveTimer: null,
   };
 }

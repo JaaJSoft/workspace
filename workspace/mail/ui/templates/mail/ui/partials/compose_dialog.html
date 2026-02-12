@@ -10,7 +10,8 @@
     </div>
 
     <!-- Compose form -->
-    <form @submit.prevent="sendEmail()" class="flex flex-col flex-1 min-h-0">
+    <form @submit.prevent="sendEmail()" class="flex flex-col flex-1 min-h-0"
+          x-effect="compose.to, compose.subject, compose.body, compose.cc, compose.bcc; _scheduleDraftSave()">
       <!-- Fields -->
       <div class="px-4 pt-3 space-y-0">
         <!-- From -->
@@ -111,6 +112,13 @@
                @change="handleComposeFiles($event)" />
 
         <div class="flex-1"></div>
+
+        <span class="text-xs text-base-content/40" x-cloak>
+          <span x-show="compose.saving" class="inline-flex items-center gap-1">
+            <span class="loading loading-spinner loading-xs"></span> Saving...
+          </span>
+          <span x-show="!compose.saving && compose.last_saved" x-text="'Draft saved'"></span>
+        </span>
 
         <button type="submit" class="btn btn-warning btn-sm gap-2" :disabled="compose.sending">
           <span x-show="compose.sending" class="loading loading-spinner loading-xs" x-cloak></span>

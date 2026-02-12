@@ -101,6 +101,18 @@ class SendEmailSerializer(serializers.Serializer):
     reply_to = serializers.CharField(max_length=255, required=False, default='', allow_blank=True)
 
 
+class DraftSaveSerializer(serializers.Serializer):
+    account_id = serializers.UUIDField()
+    draft_id = serializers.UUIDField(required=False)
+    to = serializers.ListField(child=serializers.EmailField(), required=False, default=list)
+    cc = serializers.ListField(child=serializers.EmailField(), required=False, default=list)
+    bcc = serializers.ListField(child=serializers.EmailField(), required=False, default=list)
+    subject = serializers.CharField(max_length=1000, required=False, default='', allow_blank=True)
+    body_html = serializers.CharField(required=False, default='', allow_blank=True)
+    body_text = serializers.CharField(required=False, default='', allow_blank=True)
+    reply_to = serializers.CharField(max_length=255, required=False, default='', allow_blank=True)
+
+
 class BatchActionSerializer(serializers.Serializer):
     message_ids = serializers.ListField(child=serializers.UUIDField(), min_length=1)
     action = serializers.ChoiceField(choices=['mark_read', 'mark_unread', 'star', 'unstar', 'delete'])

@@ -35,14 +35,15 @@ def test_smtp_connection(account):
         return False, str(e)
 
 
-def send_email(account, to, subject, body_html='', body_text='',
-               cc=None, bcc=None, reply_to=None, attachments=None):
-    """Send an email through the account's SMTP server.
+def build_draft_message(account, to=None, subject='', body_html='',
+                        body_text='', cc=None, bcc=None, reply_to=None,
+                        attachments=None):
+    """Build a MIME message and return the raw bytes.
 
     Parameters
     ----------
     account : MailAccount
-    to : list[str]
+    to : list[str] | None
     subject : str
     body_html : str
     body_text : str
@@ -51,11 +52,11 @@ def send_email(account, to, subject, body_html='', body_text='',
     reply_to : str | None
     attachments : list[UploadedFile] | None
     """
+    to = to or []
     cc = cc or []
     bcc = bcc or []
     attachments = attachments or []
 
-    # Build MIME message with all required headers
     msg = MIMEMultipart('mixed')
     msg['From'] = f'{account.display_name or account.email} <{account.email}>'
     msg['To'] = ', '.join(to)
@@ -74,26 +75,36 @@ def send_email(account, to, subject, body_html='', body_text='',
     if body_html:
         body_part.attach(MIMEText(body_html, 'html', 'utf-8'))
     elif body_text:
-        # If only text was provided, also attach as html (wrapped in <pre>)
         body_part.attach(MIMEText(f'<pre>{body_text}</pre>', 'html', 'utf-8'))
     msg.attach(body_part)
 
-    # Attachments
     for attachment in attachments:
         part = MIMEApplication(attachment.read(), Name=attachment.name)
         part['Content-Disposition'] = f'attachment; filename="{attachment.name}"'
         msg.attach(part)
 
-    # All recipients
-    all_recipients = to + cc + bcc
+    return msg.as_string().encode('utf-8')
 
-    msg_string = msg.as_string()
+
+def send_email(account, to, subject, body_html='', body_text='',
+               cc=None, bcc=None, reply_to=None, attachments=None):
+    """Send an email through the account's SMTP server."""
+    cc = cc or []
+    bcc = bcc or []
+
+    raw_msg = build_draft_message(
+        account, to=to, subject=subject, body_html=body_html,
+        body_text=body_text, cc=cc, bcc=bcc, reply_to=reply_to,
+        attachments=attachments,
+    )
+
+    all_recipients = to + cc + bcc
 
     server = connect_smtp(account)
     try:
-        server.sendmail(account.email, all_recipients, msg_string)
+        server.sendmail(account.email, all_recipients, raw_msg.decode('utf-8'))
     finally:
         server.quit()
 
     logger.info("Email sent from %s to %s: %s", account.email, to, subject)
-    return msg_string.encode('utf-8')
+    return raw_msg

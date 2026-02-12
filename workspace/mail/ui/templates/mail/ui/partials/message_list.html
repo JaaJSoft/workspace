@@ -55,20 +55,21 @@
 <div class="px-3 py-1.5 border-b border-base-300 flex items-center gap-1 bg-base-100/80 text-xs"
      x-show="selectedMessages.length > 0" x-cloak>
   <span class="text-base-content/60 mr-1" x-text="selectedMessages.length + ' selected'"></span>
-  <button class="btn btn-ghost btn-xs" @click="batchAction('mark_read')" title="Mark read">
+  <span class="loading loading-spinner loading-xs text-warning" x-show="batchInProgress" x-cloak></span>
+  <button class="btn btn-ghost btn-xs" @click="batchAction('mark_read')" :disabled="batchInProgress" title="Mark read">
     <i data-lucide="mail-open" class="w-3.5 h-3.5"></i>
   </button>
-  <button class="btn btn-ghost btn-xs" @click="batchAction('mark_unread')" title="Mark unread">
+  <button class="btn btn-ghost btn-xs" @click="batchAction('mark_unread')" :disabled="batchInProgress" title="Mark unread">
     <i data-lucide="mail" class="w-3.5 h-3.5"></i>
   </button>
-  <button class="btn btn-ghost btn-xs" @click="batchAction('star')" title="Star">
+  <button class="btn btn-ghost btn-xs" @click="batchAction('star')" :disabled="batchInProgress" title="Star">
     <i data-lucide="star" class="w-3.5 h-3.5"></i>
   </button>
-  <button class="btn btn-ghost btn-xs text-error" @click="batchAction('delete')" title="Delete">
+  <button class="btn btn-ghost btn-xs text-error" @click="batchAction('delete')" :disabled="batchInProgress" title="Delete">
     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
   </button>
   <div class="flex-1"></div>
-  <button class="btn btn-ghost btn-xs" @click="selectedMessages = []">Clear</button>
+  <button class="btn btn-ghost btn-xs" @click="selectedMessages = []" :disabled="batchInProgress">Clear</button>
 </div>
 
 <!-- Loading -->

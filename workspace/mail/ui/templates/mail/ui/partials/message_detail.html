@@ -22,11 +22,14 @@
 
         <!-- Actions -->
         <div class="flex items-center gap-0.5 flex-shrink-0">
+          <span class="loading loading-spinner loading-xs text-warning mr-1" x-show="actionInProgress" x-cloak></span>
           <button class="btn btn-ghost btn-xs btn-square" @click="toggleStar(messageDetail)"
+                  :disabled="actionInProgress"
                   :title="messageDetail.is_starred ? 'Unstar' : 'Star'">
             <i data-lucide="star" class="w-4 h-4" :class="messageDetail.is_starred ? 'text-warning fill-warning' : ''"></i>
           </button>
           <button class="btn btn-ghost btn-xs btn-square" @click="toggleRead(messageDetail)"
+                  :disabled="actionInProgress"
                   :title="messageDetail.is_read ? 'Mark unread' : 'Mark read'">
             <i :data-lucide="messageDetail.is_read ? 'mail' : 'mail-open'" class="w-4 h-4"></i>
           </button>
@@ -39,7 +42,8 @@
           <button class="btn btn-ghost btn-xs btn-square" @click="forwardMessage(messageDetail)" title="Forward (F)">
             <i data-lucide="forward" class="w-4 h-4"></i>
           </button>
-          <button class="btn btn-ghost btn-xs btn-square text-error" @click="deleteMessage(messageDetail)" title="Delete">
+          <button class="btn btn-ghost btn-xs btn-square text-error" @click="deleteMessage(messageDetail)"
+                  :disabled="actionInProgress" title="Delete">
             <i data-lucide="trash-2" class="w-4 h-4"></i>
           </button>
         </div>

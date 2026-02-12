@@ -188,6 +188,8 @@ function mailApp() {
     loadingMoreMessages: false,
     loadingDetail: false,
     syncingAccounts: {},  // { accountUuid: true }
+    actionInProgress: false,
+    batchInProgress: false,
     hasMoreMessages: false,
     currentPage: 1,
     totalMessages: 0,
@@ -439,6 +441,7 @@ function mailApp() {
 
     // ----- Flags -----
     async toggleRead(msg, forceRead) {
+      this.actionInProgress = true;
       const newVal = forceRead !== undefined ? forceRead : !msg.is_read;
       const wasRead = msg.is_read;
       await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
@@ -446,16 +449,16 @@ function mailApp() {
         body: { is_read: newVal },
       });
       msg.is_read = newVal;
-      // Update in list too
       const listMsg = this.messages.find(m => m.uuid === msg.uuid);
       if (listMsg) listMsg.is_read = newVal;
-      // Update folder unread count
       if (this.selectedFolder && wasRead !== newVal) {
         this.selectedFolder.unread_count += newVal ? -1 : 1;
       }
+      this.actionInProgress = false;
     },
 
     async toggleStar(msg) {
+      this.actionInProgress = true;
       const newVal = !msg.is_starred;
       await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
         method: 'PATCH',
@@ -464,6 +467,7 @@ function mailApp() {
       msg.is_starred = newVal;
       const listMsg = this.messages.find(m => m.uuid === msg.uuid);
       if (listMsg) listMsg.is_starred = newVal;
+      this.actionInProgress = false;
       this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
@@ -478,6 +482,7 @@ function mailApp() {
       });
       if (!ok) return;
 
+      this.actionInProgress = true;
       await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, { method: 'DELETE' });
       this.messages = this.messages.filter(m => m.uuid !== msg.uuid);
       if (this.selectedMessage?.uuid === msg.uuid) {
@@ -485,11 +490,11 @@ function mailApp() {
         this.messageDetail = null;
         this._updateUrl(null);
       }
-      // Update folder counts
       if (this.selectedFolder) {
         this.selectedFolder.message_count--;
         if (!msg.is_read) this.selectedFolder.unread_count--;
       }
+      this.actionInProgress = false;
     },
 
     // ----- Batch actions -----
@@ -501,16 +506,15 @@ function mailApp() {
 
     async batchAction(action) {
       if (this.selectedMessages.length === 0) return;
+      this.batchInProgress = true;
       await this._fetch('/api/v1/mail/messages/batch-action', {
         method: 'POST',
         body: { message_ids: this.selectedMessages, action },
       });
-      // Refresh messages and folder counts
       this.selectedMessages = [];
       await this.loadMessages();
       if (this.selectedFolder) {
         await this.loadFolders(this.selectedFolder.account_id);
-        // Re-select folder to refresh counts in sidebar
         const flds = this.folders[this.selectedFolder.account_id] || [];
         const updated = flds.find(f => f.uuid === this.selectedFolder.uuid);
         if (updated) this.selectedFolder = updated;
@@ -520,6 +524,7 @@ function mailApp() {
         this.messageDetail = null;
         this._updateUrl(null);
       }
+      this.batchInProgress = false;
     },
 
     // ----- Compose -----

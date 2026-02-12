@@ -8,6 +8,49 @@
   </button>
 </div>
 
+<!-- Filter bar -->
+<div class="px-3 py-2 border-b border-base-300 bg-base-100/80 space-y-1.5">
+  <!-- Search input -->
+  <div class="relative">
+    <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-base-content/40"></i>
+    <input type="text"
+           class="input input-xs input-bordered w-full pl-8 pr-7 text-sm"
+           placeholder="Search messages..."
+           x-model="filters.search"
+           @input="onSearchInput()"
+           @keydown.escape.stop="filters.search = ''; applyFilters()"
+    />
+    <button class="absolute right-1.5 top-1/2 -translate-y-1/2 btn btn-ghost btn-circle btn-xs"
+            x-show="filters.search" x-cloak
+            @click="filters.search = ''; applyFilters()">
+      <i data-lucide="x" class="w-3 h-3"></i>
+    </button>
+  </div>
+  <!-- Toggle filters -->
+  <div class="flex items-center gap-1.5 flex-wrap">
+    <button class="btn btn-xs gap-1"
+            :class="filters.unread ? 'btn-warning' : 'btn-ghost'"
+            @click="toggleFilter('unread')">
+      <i data-lucide="mail" class="w-3 h-3"></i> Unread
+    </button>
+    <button class="btn btn-xs gap-1"
+            :class="filters.starred ? 'btn-warning' : 'btn-ghost'"
+            @click="toggleFilter('starred')">
+      <i data-lucide="star" class="w-3 h-3"></i> Starred
+    </button>
+    <button class="btn btn-xs gap-1"
+            :class="filters.attachments ? 'btn-warning' : 'btn-ghost'"
+            @click="toggleFilter('attachments')">
+      <i data-lucide="paperclip" class="w-3 h-3"></i> Attachments
+    </button>
+    <div class="flex-1"></div>
+    <span class="text-xs text-base-content/50" x-show="_hasActiveFilters()" x-text="totalMessages + ' result' + (totalMessages !== 1 ? 's' : '')"></span>
+    <button class="btn btn-ghost btn-xs text-xs" x-show="_hasActiveFilters()" @click="clearFilters()">
+      Clear
+    </button>
+  </div>
+</div>
+
 <!-- Batch action bar -->
 <div class="px-3 py-1.5 border-b border-base-300 flex items-center gap-1 bg-base-100/80 text-xs"
      x-show="selectedMessages.length > 0" x-cloak>
@@ -66,13 +109,13 @@
         <div class="flex items-center gap-1 mb-0.5">
           <span class="text-sm truncate flex-1"
                 :class="msg.is_read ? 'text-base-content/70' : 'text-base-content'"
-                x-text="msg.from_address?.name || msg.from_address?.email || 'Unknown'"></span>
+                x-html="highlightSearch(msg.from_address?.name || msg.from_address?.email || 'Unknown')"></span>
           <span class="text-xs text-base-content/50 flex-shrink-0" x-text="formatDate(msg.date)"></span>
         </div>
         <!-- Subject -->
-        <div class="text-sm truncate" :class="msg.is_read ? 'text-base-content/60' : ''" x-text="msg.subject || '(no subject)'"></div>
+        <div class="text-sm truncate" :class="msg.is_read ? 'text-base-content/60' : ''" x-html="highlightSearch(msg.subject || '(no subject)')"></div>
         <!-- Snippet -->
-        <div class="text-xs text-base-content/50 truncate mt-0.5" x-text="msg.snippet"></div>
+        <div class="text-xs text-base-content/50 truncate mt-0.5" x-html="highlightSearch(msg.snippet)"></div>
       </div>
 
       <!-- Indicators -->

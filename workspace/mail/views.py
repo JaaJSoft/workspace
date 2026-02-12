@@ -1,6 +1,6 @@
 import logging
 
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import FileResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -186,6 +186,10 @@ class MailMessageListView(APIView):
         parameters=[
             OpenApiParameter('folder', str, required=True),
             OpenApiParameter('page', int, required=False),
+            OpenApiParameter('search', str, required=False),
+            OpenApiParameter('unread', bool, required=False),
+            OpenApiParameter('starred', bool, required=False),
+            OpenApiParameter('attachments', bool, required=False),
         ],
     )
     def get(self, request):
@@ -208,14 +212,28 @@ class MailMessageListView(APIView):
         page_size = 50
         offset = (page - 1) * page_size
 
+        qs = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
+
+        # Apply optional filters
+        search = request.query_params.get('search', '').strip()
+        if search:
+            qs = qs.filter(
+                Q(subject__icontains=search)
+                | Q(snippet__icontains=search)
+                | Q(from_address__icontains=search)
+            )
+        if request.query_params.get('unread'):
+            qs = qs.filter(is_read=False)
+        if request.query_params.get('starred'):
+            qs = qs.filter(is_starred=True)
+        if request.query_params.get('attachments'):
+            qs = qs.filter(has_attachments=True)
+
+        total = qs.count()
         messages = (
-            MailMessage.objects
-            .filter(folder=folder, deleted_at__isnull=True)
-            .annotate(attachments_count=Count('attachments'))
+            qs.annotate(attachments_count=Count('attachments'))
             .order_by('-date')[offset:offset + page_size]
         )
-
-        total = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True).count()
 
         return Response({
             'results': MailMessageListSerializer(messages, many=True).data,

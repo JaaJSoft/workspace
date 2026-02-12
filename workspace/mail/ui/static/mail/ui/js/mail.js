@@ -28,6 +28,15 @@ function mailApp() {
     accountError: '',
     addingAccount: false,
 
+    // Filters
+    filters: {
+      search: '',
+      unread: false,
+      starred: false,
+      attachments: false,
+    },
+    _searchTimer: null,
+
     // Compose
     compose: _defaultCompose(),
     showCcBcc: false,
@@ -120,15 +129,23 @@ function mailApp() {
       this._updateUrl(null);
       this.selectedMessages = [];
       this.currentPage = 1;
+      this._resetFilters();
       await this.loadMessages();
+    },
+
+    _buildMessagesUrl() {
+      let url = `/api/v1/mail/messages?folder=${this.selectedFolder.uuid}&page=${this.currentPage}`;
+      if (this.filters.search) url += `&search=${encodeURIComponent(this.filters.search)}`;
+      if (this.filters.unread) url += '&unread=1';
+      if (this.filters.starred) url += '&starred=1';
+      if (this.filters.attachments) url += '&attachments=1';
+      return url;
     },
 
     async loadMessages() {
       if (!this.selectedFolder) return;
       this.loadingMessages = true;
-      const res = await this._fetch(
-        `/api/v1/mail/messages?folder=${this.selectedFolder.uuid}&page=${this.currentPage}`
-      );
+      const res = await this._fetch(this._buildMessagesUrl());
       if (res.ok) {
         const data = await res.json();
         this.messages = data.results;
@@ -142,9 +159,7 @@ function mailApp() {
     async loadMoreMessages() {
       this.loadingMoreMessages = true;
       this.currentPage++;
-      const res = await this._fetch(
-        `/api/v1/mail/messages?folder=${this.selectedFolder.uuid}&page=${this.currentPage}`
-      );
+      const res = await this._fetch(this._buildMessagesUrl());
       if (res.ok) {
         const data = await res.json();
         this.messages = [...this.messages, ...data.results];
@@ -158,6 +173,37 @@ function mailApp() {
       if (!this.selectedFolder) return;
       const accountUuid = this.selectedFolder.account_id;
       await this.syncAccount(accountUuid);
+    },
+
+    // ----- Filters -----
+    _hasActiveFilters() {
+      return !!(this.filters.search || this.filters.unread || this.filters.starred || this.filters.attachments);
+    },
+
+    _resetFilters() {
+      this.filters = { search: '', unread: false, starred: false, attachments: false };
+      if (this._searchTimer) { clearTimeout(this._searchTimer); this._searchTimer = null; }
+    },
+
+    applyFilters() {
+      this.currentPage = 1;
+      this.selectedMessages = [];
+      this.loadMessages();
+    },
+
+    toggleFilter(name) {
+      this.filters[name] = !this.filters[name];
+      this.applyFilters();
+    },
+
+    onSearchInput() {
+      if (this._searchTimer) clearTimeout(this._searchTimer);
+      this._searchTimer = setTimeout(() => this.applyFilters(), 400);
+    },
+
+    clearFilters() {
+      this._resetFilters();
+      this.applyFilters();
     },
 
     // ----- Message detail -----
@@ -647,6 +693,15 @@ function mailApp() {
     },
 
     // ----- UI helpers -----
+    highlightSearch(text) {
+      if (!text) return '';
+      const escaped = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const q = this.filters.search?.trim();
+      if (!q) return escaped;
+      const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      return escaped.replace(re, '<mark class="bg-warning/40 text-inherit rounded-sm px-0.5">$1</mark>');
+    },
+
     toggleCollapse() {
       this.collapsed = !this.collapsed;
     },

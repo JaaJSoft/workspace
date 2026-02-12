@@ -4,7 +4,9 @@
   <button class="btn btn-ghost btn-xs btn-circle" @click="refreshFolder()"
           :disabled="syncingAccounts[selectedFolder?.account_id] === true" title="Refresh">
     <i data-lucide="refresh-cw" class="w-3.5 h-3.5"
-       :class="syncingAccounts[selectedFolder?.account_id] === true ? 'animate-spin' : ''"></i>
+       x-show="syncingAccounts[selectedFolder?.account_id] !== true"></i>
+    <span class="loading loading-spinner loading-xs"
+          x-show="syncingAccounts[selectedFolder?.account_id] === true" x-cloak></span>
   </button>
 </div>
 

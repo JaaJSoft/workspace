@@ -17,7 +17,8 @@
         </button>
         <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-lg shadow-lg z-50 w-40">
           <li><a @click="syncAccount(account.uuid)" :class="syncingAccounts[account.uuid] ? 'pointer-events-none opacity-50' : ''">
-            <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="syncingAccounts[account.uuid] ? 'animate-spin' : ''"></i>
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5" x-show="!syncingAccounts[account.uuid]"></i>
+            <span class="loading loading-spinner loading-xs" x-show="syncingAccounts[account.uuid]" x-cloak></span>
             <span x-text="syncingAccounts[account.uuid] ? 'Syncing...' : 'Sync'"></span>
           </a></li>
           <li><a @click="showEditAccount(account)"><i data-lucide="settings" class="w-3.5 h-3.5"></i> Edit</a></li>

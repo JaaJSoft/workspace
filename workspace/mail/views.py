@@ -17,6 +17,7 @@ from .serializers import (
     MailAccountSerializer,
     MailAccountUpdateSerializer,
     MailFolderSerializer,
+    MailFolderUpdateSerializer,
     MailMessageDetailSerializer,
     MailMessageListSerializer,
     MailMessageUpdateSerializer,
@@ -176,6 +177,29 @@ class MailFolderListView(APIView):
 
         folders = MailFolder.objects.filter(account=account)
         return Response(MailFolderSerializer(folders, many=True).data)
+
+
+@extend_schema(tags=['Mail'])
+class MailFolderUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Update folder icon/color")
+    def patch(self, request, uuid):
+        try:
+            folder = MailFolder.objects.select_related('account').get(uuid=uuid)
+        except MailFolder.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if folder.account.owner != request.user:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        ser = MailFolderUpdateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        for field, value in ser.validated_data.items():
+            setattr(folder, field, value)
+        folder.save(update_fields=['icon', 'color', 'updated_at'])
+
+        return Response(MailFolderSerializer(folder).data)
 
 
 @extend_schema(tags=['Mail'])

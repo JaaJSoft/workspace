@@ -47,8 +47,13 @@ class MailFolderSerializer(serializers.ModelSerializer):
         model = MailFolder
         fields = [
             'uuid', 'account_id', 'name', 'display_name', 'folder_type',
-            'message_count', 'unread_count',
+            'icon', 'color', 'message_count', 'unread_count',
         ]
+
+
+class MailFolderUpdateSerializer(serializers.Serializer):
+    icon = serializers.CharField(max_length=50, required=False, allow_null=True, allow_blank=True)
+    color = serializers.CharField(max_length=30, required=False, allow_null=True, allow_blank=True)
 
 
 class MailAttachmentSerializer(serializers.ModelSerializer):

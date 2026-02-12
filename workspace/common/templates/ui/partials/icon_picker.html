@@ -1,0 +1,56 @@
+{% comment %}
+Icon Picker Partial
+===================
+Renders icon grid + color grid + save indicator.
+Must be placed inside an element with an Alpine x-data context
+that provides: icons, colors, selectedIcon, selectedColor,
+selectIcon(), selectColor(), saving, saved.
+{% endcomment %}
+
+<div class="space-y-3">
+  <!-- Icon Selection -->
+  <div>
+    <label class="text-xs text-base-content/60 mb-1.5 block">Icon</label>
+    <div class="flex flex-wrap gap-1" x-ref="iconGrid" x-init="setTimeout(() => lucide.createIcons({nodes: $refs.iconGrid.querySelectorAll('[data-lucide]')}), 50)">
+      <template x-for="icon in icons" :key="icon">
+        <button
+          type="button"
+          class="btn btn-xs btn-square"
+          :class="selectedIcon === icon ? 'btn-primary' : 'btn-ghost'"
+          @click="selectIcon(icon)"
+          :title="icon"
+        >
+          <i :data-lucide="icon" class="w-3.5 h-3.5 pointer-events-none"></i>
+        </button>
+      </template>
+    </div>
+  </div>
+
+  <!-- Color Selection -->
+  <div>
+    <label class="text-xs text-base-content/60 mb-1.5 block">Color</label>
+    <div class="flex flex-wrap gap-1" x-ref="colorGrid" x-init="setTimeout(() => lucide.createIcons({nodes: $refs.colorGrid.querySelectorAll('[data-lucide]')}), 50)">
+      <template x-for="color in colors" :key="color.class">
+        <button
+          type="button"
+          class="btn btn-xs btn-square btn-ghost"
+          :class="selectedColor === color.class ? 'ring-2 ring-primary ring-offset-1' : ''"
+          @click="selectColor(color.class)"
+          :title="color.name"
+        >
+          <i data-lucide="circle" class="w-3.5 h-3.5 fill-current pointer-events-none" :class="color.class"></i>
+        </button>
+      </template>
+    </div>
+  </div>
+
+  <!-- Save indicator -->
+  <div x-show="saving" class="text-xs text-base-content/60 flex items-center gap-1">
+    <span class="loading loading-spinner loading-xs"></span>
+    Saving...
+  </div>
+  <div x-show="saved" x-transition class="text-xs text-success flex items-center gap-1">
+    <i data-lucide="check" class="w-3 h-3"></i>
+    Saved
+  </div>
+</div>

@@ -106,6 +106,36 @@ x-init="init()"
 <!-- Folder context menu -->
 {% include "mail/ui/partials/folder_context_menu.html" %}
 
+<!-- Folder icon picker dialog -->
+<dialog id="mail-folder-icon-dialog" class="modal">
+  <div class="modal-box max-w-md"
+       x-data="iconPicker(
+         folderIconEdit.uuid,
+         folderIconEdit.icon,
+         folderIconEdit.color,
+         '/api/v1/mail/folders/',
+         function(icon, color) { onFolderIconSaved(icon, color); }
+       )"
+       x-effect="if (folderIconEdit.uuid) { uuid = folderIconEdit.uuid; selectedIcon = folderIconEdit.icon || 'folder'; selectedColor = folderIconEdit.color || 'text-warning'; $nextTick(() => updatePreviewIcon()); }">
+    <h3 class="font-bold text-lg mb-1">Change folder icon</h3>
+    <p class="text-sm text-base-content/50 mb-4" x-text="folderIconEdit.name"></p>
+
+    <!-- Preview -->
+    <div class="flex justify-center mb-4">
+      <div class="w-14 h-14 flex items-center justify-center bg-base-200 rounded-xl" x-ref="previewIcon"
+           x-init="$nextTick(() => updatePreviewIcon())">
+      </div>
+    </div>
+
+    {% include "ui/partials/icon_picker.html" %}
+
+    <div class="modal-action">
+      <button type="button" class="btn btn-ghost btn-sm" @click="document.getElementById('mail-folder-icon-dialog').close()">Close</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 <!-- Compose dialog -->
 {% include "mail/ui/partials/compose_dialog.html" %}
 

@@ -29,7 +29,7 @@
 
     <!-- Folders (expanded) -->
     <div x-show="expandedAccounts[account.uuid] && !collapsed" x-collapse>
-      <template x-for="folder in getFolders(account.uuid)" :key="folder.uuid">
+      <template x-for="folder in getFolders(account.uuid)" :key="folder.uuid + '-' + (folder.icon || '') + '-' + (folder.color || '')">
         <button
           class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
           :class="selectedFolder?.uuid === folder.uuid
@@ -38,7 +38,9 @@
           @click="selectFolder(folder)"
           @contextmenu="openFolderContextMenu($event, folder)"
         >
-          <i :data-lucide="folderIcon(folder.folder_type)" class="w-4 h-4 flex-shrink-0"></i>
+          <span class="flex-shrink-0" :class="folder.color || ''">
+            <i :data-lucide="folder.icon || folderIcon(folder.folder_type)" class="w-4 h-4"></i>
+          </span>
           <span class="flex-1 text-left truncate" x-text="folder.display_name"></span>
           <span
             x-show="folder.unread_count > 0"
@@ -51,7 +53,7 @@
 
     <!-- Folders (collapsed: icons only with tooltip) -->
     <div x-show="collapsed" x-cloak>
-      <template x-for="folder in getFolders(account.uuid)" :key="'c-' + folder.uuid">
+      <template x-for="folder in getFolders(account.uuid)" :key="'c-' + folder.uuid + '-' + (folder.icon || '') + '-' + (folder.color || '')">
         <button
           class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
           :class="selectedFolder?.uuid === folder.uuid
@@ -61,7 +63,9 @@
           @click="selectFolder(folder)"
           @contextmenu="openFolderContextMenu($event, folder)"
         >
-          <i :data-lucide="folderIcon(folder.folder_type)" class="w-5 h-5"></i>
+          <span :class="folder.color || ''">
+            <i :data-lucide="folder.icon || folderIcon(folder.folder_type)" class="w-5 h-5"></i>
+          </span>
         </button>
       </template>
     </div>

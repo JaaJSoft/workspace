@@ -43,6 +43,9 @@ function mailApp() {
     // Folder context menu
     folderCtx: { open: false, x: 0, y: 0, folder: null },
 
+    // Folder icon edit
+    folderIconEdit: { uuid: null, name: '', icon: null, color: null },
+
     // Compose
     compose: _defaultCompose(),
     showCcBcc: false,
@@ -736,6 +739,9 @@ function mailApp() {
         case 'mark_all_read':
           await this._markFolderAllRead(folder);
           break;
+        case 'change_icon':
+          this.showFolderIconPicker(folder);
+          break;
         case 'sync':
           this.syncAccount(folder.account_id);
           break;
@@ -752,6 +758,40 @@ function mailApp() {
         this.messages.forEach(m => { m.is_read = true; });
         if (this.messageDetail) this.messageDetail.is_read = true;
       }
+    },
+
+    // ----- Folder icon picker -----
+    showFolderIconPicker(folder) {
+      this.folderIconEdit = {
+        uuid: folder.uuid,
+        name: folder.display_name,
+        icon: folder.icon || null,
+        color: folder.color || null,
+      };
+      document.getElementById('mail-folder-icon-dialog').showModal();
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    onFolderIconSaved(icon, color) {
+      // Update the folder in local state
+      for (const accountUuid of Object.keys(this.folders)) {
+        const flds = this.folders[accountUuid];
+        if (!flds) continue;
+        const folder = flds.find(f => f.uuid === this.folderIconEdit.uuid);
+        if (folder) {
+          folder.icon = icon;
+          folder.color = color;
+          break;
+        }
+      }
+      if (this.selectedFolder?.uuid === this.folderIconEdit.uuid) {
+        this.selectedFolder.icon = icon;
+        this.selectedFolder.color = color;
+      }
+      // Key change in x-for triggers element recreation; wait for Alpine + DOM before Lucide
+      this.$nextTick(() => {
+        setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50);
+      });
     },
 
     // ----- Keyboard -----

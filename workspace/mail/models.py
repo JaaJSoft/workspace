@@ -94,6 +94,9 @@ class MailFolder(models.Model):
         default=FolderType.OTHER,
     )
 
+    icon = models.CharField(max_length=50, null=True, blank=True)
+    color = models.CharField(max_length=30, null=True, blank=True)
+
     uid_validity = models.BigIntegerField(default=0)
     message_count = models.IntegerField(default=0)
     unread_count = models.IntegerField(default=0)

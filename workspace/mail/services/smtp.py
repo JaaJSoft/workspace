@@ -5,6 +5,7 @@ import smtplib
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +55,13 @@ def send_email(account, to, subject, body_html='', body_text='',
     bcc = bcc or []
     attachments = attachments or []
 
-    # Build MIME message
+    # Build MIME message with all required headers
     msg = MIMEMultipart('mixed')
     msg['From'] = f'{account.display_name or account.email} <{account.email}>'
     msg['To'] = ', '.join(to)
     msg['Subject'] = subject
+    msg['Date'] = formatdate(localtime=True)
+    msg['Message-ID'] = make_msgid(domain=account.email.split('@')[-1])
     if cc:
         msg['Cc'] = ', '.join(cc)
     if reply_to:
@@ -84,10 +87,13 @@ def send_email(account, to, subject, body_html='', body_text='',
     # All recipients
     all_recipients = to + cc + bcc
 
+    msg_string = msg.as_string()
+
     server = connect_smtp(account)
     try:
-        server.sendmail(account.email, all_recipients, msg.as_string())
+        server.sendmail(account.email, all_recipients, msg_string)
     finally:
         server.quit()
 
     logger.info("Email sent from %s to %s: %s", account.email, to, subject)
+    return msg_string.encode('utf-8')

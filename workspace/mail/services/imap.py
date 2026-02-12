@@ -299,9 +299,13 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
     # Headers
     subject = _decode_header(msg.get('Subject', ''))
     from_addr = _parse_address(msg.get('From', ''))
-    to_addrs = [_parse_address(a) for a in (msg.get_all('To') or [])]
-    cc_addrs = [_parse_address(a) for a in (msg.get_all('Cc') or [])]
-    bcc_addrs = [_parse_address(a) for a in (msg.get_all('Bcc') or [])]
+
+    # Fallback for sent folder: server auto-copy may strip the From header
+    if not from_addr.get('email') and folder.folder_type == 'sent':
+        from_addr = {'name': account.display_name, 'email': account.email}
+    to_addrs = _parse_address_list(msg.get_all('To') or [])
+    cc_addrs = _parse_address_list(msg.get_all('Cc') or [])
+    bcc_addrs = _parse_address_list(msg.get_all('Bcc') or [])
     reply_to = msg.get('Reply-To', '')
     message_id = msg.get('Message-ID', '')
 
@@ -316,6 +320,8 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
             date = parsed
         except Exception:
             pass
+    if date is None:
+        date = datetime.now(timezone.utc)
 
     # Body
     body_text = ''
@@ -371,11 +377,6 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
     is_starred = '\\Flagged' in flags_str
     is_draft = '\\Draft' in flags_str
 
-    # Flatten to_addrs (each element may contain multiple addresses)
-    to_flat = _flatten_addresses(to_addrs)
-    cc_flat = _flatten_addresses(cc_addrs)
-    bcc_flat = _flatten_addresses(bcc_addrs)
-
     mail_msg = MailMessage.objects.create(
         account=account,
         folder=folder,
@@ -383,9 +384,9 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
         imap_uid=uid,
         subject=subject[:1000],
         from_address=from_addr,
-        to_addresses=to_flat,
-        cc_addresses=cc_flat,
-        bcc_addresses=bcc_flat,
+        to_addresses=to_addrs,
+        cc_addresses=cc_addrs,
+        bcc_addresses=bcc_addrs,
         reply_to=reply_to[:255],
         date=date,
         snippet=snippet,
@@ -455,15 +456,13 @@ def _parse_address(addr_string):
     return {'name': name, 'email': email_addr}
 
 
-def _flatten_addresses(addr_list):
-    """Flatten a list of parsed addresses (some may have been parsed from combined strings)."""
+def _parse_address_list(header_values):
+    """Parse a list of header values (possibly with multiple addresses each) into [{name, email}, ...]."""
+    decoded_values = [_decode_header(v) for v in header_values if v]
     result = []
-    for addr in addr_list:
-        if isinstance(addr, dict):
-            if addr.get('email'):
-                result.append(addr)
-        elif isinstance(addr, list):
-            result.extend(addr)
+    for name, addr in email.utils.getaddresses(decoded_values):
+        if addr:
+            result.append({'name': name, 'email': addr})
     return result
 
 
@@ -509,6 +508,62 @@ def _set_flag(account, message, flag, add):
         conn.select(message.folder.name)
         op = '+FLAGS' if add else '-FLAGS'
         conn.uid('STORE', str(message.imap_uid), op, f'({flag})')
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+
+def append_to_sent(account, raw_message_bytes):
+    """Append a sent message to the account's Sent folder via IMAP APPEND.
+
+    Checks first whether the server already auto-copied the message
+    (Gmail, Outlook, etc.) by searching for its Message-ID to avoid duplicates.
+    """
+    from workspace.mail.models import MailFolder
+    import imaplib
+    import time
+
+    sent_folder = (
+        MailFolder.objects
+        .filter(account=account, folder_type=MailFolder.FolderType.SENT)
+        .first()
+    )
+    if not sent_folder:
+        logger.warning("No Sent folder found for %s, skipping APPEND", account.email)
+        return
+
+    # Extract Message-ID from raw bytes to check for duplicates
+    msg_id = None
+    for line in raw_message_bytes.split(b'\n'):
+        if line.lower().startswith(b'message-id:'):
+            msg_id = line.split(b':', 1)[1].strip().decode(errors='replace')
+            break
+
+    conn = connect_imap(account)
+    try:
+        conn.select(sent_folder.name, readonly=True)
+
+        # Check if the server already auto-copied it
+        if msg_id:
+            status, data = conn.uid('SEARCH', None, f'HEADER Message-ID "{msg_id}"')
+            if status == 'OK' and data[0] and data[0].strip():
+                logger.info("Message already in Sent for %s (auto-copied by server)", account.email)
+                return
+
+        # Not found — append it ourselves
+        conn.select(sent_folder.name, readonly=False)
+        status, _ = conn.append(
+            sent_folder.name,
+            '(\\Seen)',
+            imaplib.Time2Internaldate(time.time()),
+            raw_message_bytes,
+        )
+        if status == 'OK':
+            logger.info("Appended sent message to %s for %s", sent_folder.name, account.email)
+        else:
+            logger.warning("IMAP APPEND to %s failed for %s", sent_folder.name, account.email)
     finally:
         try:
             conn.logout()

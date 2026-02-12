@@ -319,7 +319,7 @@ class MailSendView(APIView):
         attachments = request.FILES.getlist('attachments', [])
 
         try:
-            send_email(
+            raw_msg = send_email(
                 account=account,
                 to=d['to'],
                 subject=d['subject'],
@@ -330,6 +330,14 @@ class MailSendView(APIView):
                 reply_to=d.get('reply_to'),
                 attachments=attachments,
             )
+
+            # Copy to Sent folder via IMAP APPEND
+            from .services.imap import append_to_sent
+            try:
+                append_to_sent(account, raw_msg)
+            except Exception:
+                logger.warning("Failed to append sent message to IMAP for %s", account.email)
+
             return Response({'status': 'sent'}, status=status.HTTP_201_CREATED)
         except Exception as e:
             logger.exception("Failed to send email from %s", account.email)

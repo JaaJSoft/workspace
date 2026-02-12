@@ -11,7 +11,7 @@
 
     <!-- Compose form -->
     <form @submit.prevent="sendEmail()" class="flex flex-col flex-1 min-h-0"
-          x-effect="compose.to, compose.subject, compose.body, compose.cc, compose.bcc; _scheduleDraftSave()">
+          x-effect="compose.to.length, compose.subject, compose.body, compose.cc.length, compose.bcc.length; _scheduleDraftSave()">
       <!-- Fields -->
       <div class="px-4 pt-3 space-y-0">
         <!-- From -->
@@ -27,34 +27,70 @@
         </div>
 
         <!-- To -->
-        <div class="flex items-center gap-3 py-1.5 border-b border-base-200">
-          <label class="text-xs font-medium text-base-content/40 w-10 shrink-0">To</label>
-          <input type="text" x-model="compose.to"
-                 class="input input-ghost input-sm flex-1 focus:outline-none focus:bg-transparent"
-                 placeholder="recipient@example.com" required />
+        <div class="flex items-start gap-3 py-1.5 border-b border-base-200">
+          <label class="text-xs font-medium text-base-content/40 w-10 shrink-0 mt-1.5">To</label>
+          <div class="flex-1 flex flex-wrap items-center gap-1 min-h-[2rem]">
+            <template x-for="(email, i) in compose.to" :key="'to-'+i">
+              <span class="badge badge-sm gap-1 pr-0.5 bg-warning/10 text-warning border-warning/20">
+                <span x-text="email" class="max-w-40 truncate"></span>
+                <button type="button" class="opacity-60 hover:opacity-100 leading-none text-xs"
+                        @click="removeTag('to', i)">&times;</button>
+              </span>
+            </template>
+            <input type="text" x-model="_tagInput.to"
+                   @keydown="handleTagKeydown($event, 'to')"
+                   @paste="handleTagPaste($event, 'to')"
+                   @blur="addTag('to', _tagInput.to)"
+                   class="input input-ghost input-sm flex-1 min-w-[8rem] focus:outline-none focus:bg-transparent p-0 h-6"
+                   placeholder="recipient@example.com" />
+          </div>
           <button type="button"
-                  class="btn btn-ghost btn-xs text-base-content/40 hover:text-base-content"
+                  class="btn btn-ghost btn-xs text-base-content/40 hover:text-base-content mt-0.5"
                   x-show="!showCcBcc" @click="showCcBcc = true">
             Cc/Bcc
           </button>
         </div>
 
         <!-- Cc -->
-        <div class="flex items-center gap-3 py-1.5 border-b border-base-200"
+        <div class="flex items-start gap-3 py-1.5 border-b border-base-200"
              x-show="showCcBcc" x-collapse>
-          <label class="text-xs font-medium text-base-content/40 w-10 shrink-0">Cc</label>
-          <input type="text" x-model="compose.cc"
-                 class="input input-ghost input-sm flex-1 focus:outline-none focus:bg-transparent"
-                 placeholder="cc@example.com" />
+          <label class="text-xs font-medium text-base-content/40 w-10 shrink-0 mt-1.5">Cc</label>
+          <div class="flex-1 flex flex-wrap items-center gap-1 min-h-[2rem]">
+            <template x-for="(email, i) in compose.cc" :key="'cc-'+i">
+              <span class="badge badge-sm gap-1 pr-0.5 bg-base-200 border-base-300">
+                <span x-text="email" class="max-w-40 truncate"></span>
+                <button type="button" class="opacity-60 hover:opacity-100 leading-none text-xs"
+                        @click="removeTag('cc', i)">&times;</button>
+              </span>
+            </template>
+            <input type="text" x-model="_tagInput.cc"
+                   @keydown="handleTagKeydown($event, 'cc')"
+                   @paste="handleTagPaste($event, 'cc')"
+                   @blur="addTag('cc', _tagInput.cc)"
+                   class="input input-ghost input-sm flex-1 min-w-[8rem] focus:outline-none focus:bg-transparent p-0 h-6"
+                   placeholder="cc@example.com" />
+          </div>
         </div>
 
         <!-- Bcc -->
-        <div class="flex items-center gap-3 py-1.5 border-b border-base-200"
+        <div class="flex items-start gap-3 py-1.5 border-b border-base-200"
              x-show="showCcBcc" x-collapse>
-          <label class="text-xs font-medium text-base-content/40 w-10 shrink-0">Bcc</label>
-          <input type="text" x-model="compose.bcc"
-                 class="input input-ghost input-sm flex-1 focus:outline-none focus:bg-transparent"
-                 placeholder="bcc@example.com" />
+          <label class="text-xs font-medium text-base-content/40 w-10 shrink-0 mt-1.5">Bcc</label>
+          <div class="flex-1 flex flex-wrap items-center gap-1 min-h-[2rem]">
+            <template x-for="(email, i) in compose.bcc" :key="'bcc-'+i">
+              <span class="badge badge-sm gap-1 pr-0.5 bg-base-200 border-base-300">
+                <span x-text="email" class="max-w-40 truncate"></span>
+                <button type="button" class="opacity-60 hover:opacity-100 leading-none text-xs"
+                        @click="removeTag('bcc', i)">&times;</button>
+              </span>
+            </template>
+            <input type="text" x-model="_tagInput.bcc"
+                   @keydown="handleTagKeydown($event, 'bcc')"
+                   @paste="handleTagPaste($event, 'bcc')"
+                   @blur="addTag('bcc', _tagInput.bcc)"
+                   class="input input-ghost input-sm flex-1 min-w-[8rem] focus:outline-none focus:bg-transparent p-0 h-6"
+                   placeholder="bcc@example.com" />
+          </div>
         </div>
 
         <!-- Subject -->

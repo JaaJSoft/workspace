@@ -1,3 +1,172 @@
+/* ── Mail contact card popover ─────────────────────────────── */
+
+/**
+ * Build a mail contact card DOM node (no innerHTML — all safe DOM methods).
+ * @param {string} name - Contact display name (may be empty)
+ * @param {string} email - Contact email address
+ * @returns {HTMLElement}
+ */
+function _cleanName(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  return raw.replace(/^[^a-zA-Z\u00C0-\u024F]+|[^a-zA-Z\u00C0-\u024F]+$/g, '').trim();
+}
+
+function _initial(str) {
+  if (!str) return '?';
+  var m = str.match(/[a-zA-Z\u00C0-\u024F]/);
+  return m ? m[0].toUpperCase() : str[0].toUpperCase();
+}
+
+function _buildMailCard(name, email) {
+  name = _cleanName(name);
+  email = (email && typeof email === 'string') ? email.trim() : '';
+
+  var root = document.createElement('div');
+  root.className = 'p-3 w-64';
+
+  // Avatar + info row
+  var row = document.createElement('div');
+  row.className = 'flex items-center gap-3 mb-2';
+
+  var avatarWrap = document.createElement('div');
+  avatarWrap.className = 'avatar placeholder';
+  var avatarInner = document.createElement('div');
+  avatarInner.className = 'w-10 h-10 bg-warning/15 text-warning rounded-full flex items-center justify-center font-semibold';
+  avatarInner.textContent = _initial(name || email);
+  avatarWrap.appendChild(avatarInner);
+  row.appendChild(avatarWrap);
+
+  var info = document.createElement('div');
+  info.className = 'min-w-0 flex-1';
+  var nameEl = document.createElement('div');
+  nameEl.className = 'font-semibold text-sm truncate';
+  nameEl.textContent = name || email;
+  info.appendChild(nameEl);
+  if (name) {
+    var emailEl = document.createElement('div');
+    emailEl.className = 'text-xs text-base-content/50 truncate';
+    emailEl.textContent = email;
+    info.appendChild(emailEl);
+  }
+  row.appendChild(info);
+  root.appendChild(row);
+
+  // Action buttons
+  var actions = document.createElement('div');
+  actions.className = 'flex gap-1';
+
+  var copyBtn = document.createElement('button');
+  copyBtn.className = 'btn btn-ghost btn-xs flex-1 gap-1';
+  var copyIcon = document.createElement('i');
+  copyIcon.setAttribute('data-lucide', 'copy');
+  copyIcon.className = 'w-3 h-3';
+  copyBtn.appendChild(copyIcon);
+  copyBtn.appendChild(document.createTextNode(' Copy email'));
+  copyBtn.addEventListener('click', function() {
+    navigator.clipboard.writeText(email);
+    copyBtn.textContent = 'Copied!';
+    setTimeout(function() {
+      copyBtn.textContent = '';
+      copyBtn.appendChild(copyIcon);
+      copyBtn.appendChild(document.createTextNode(' Copy email'));
+      lucide?.createIcons({ nodes: [copyIcon] });
+    }, 1500);
+  });
+  actions.appendChild(copyBtn);
+
+  var sendBtn = document.createElement('button');
+  sendBtn.className = 'btn btn-ghost btn-xs flex-1 gap-1';
+  var sendIcon = document.createElement('i');
+  sendIcon.setAttribute('data-lucide', 'send');
+  sendIcon.className = 'w-3 h-3';
+  sendBtn.appendChild(sendIcon);
+  sendBtn.appendChild(document.createTextNode(' Send email'));
+  sendBtn.addEventListener('click', function() {
+    // If already on the mail page, dispatch a custom event to open compose
+    var composeDialog = document.getElementById('mail-compose-dialog');
+    if (composeDialog) {
+      document.dispatchEvent(new CustomEvent('mail:compose', { detail: { to: email } }));
+    } else {
+      // Navigate to mail with compose query param
+      window.location.href = '/mail?compose=' + encodeURIComponent(email);
+    }
+  });
+  actions.appendChild(sendBtn);
+
+  root.appendChild(actions);
+  return root;
+}
+
+/**
+ * @param {HTMLElement} wrapper
+ * @param {string|object} nameOrAddr - display name string, or {name, email} object
+ * @param {string} [email] - email string (if first arg is a name string)
+ */
+window._mailCardShow = function(wrapper, nameOrAddr, email) {
+  // Support both _mailCardShow(el, {name, email}) and _mailCardShow(el, name, email)
+  var name;
+  if (nameOrAddr && typeof nameOrAddr === 'object') {
+    name = nameOrAddr.name;
+    email = nameOrAddr.email;
+  } else {
+    name = nameOrAddr;
+  }
+  window._mailCardCancelHide(wrapper);
+  var existing = wrapper._mailCardPopover;
+  if (existing && existing.style.display !== 'none' && existing.style.opacity === '1') return;
+  if (wrapper._showTimeout) clearTimeout(wrapper._showTimeout);
+
+  wrapper._showTimeout = setTimeout(function() {
+    wrapper._showTimeout = null;
+    var popover = wrapper._mailCardPopover;
+    if (!popover) {
+      popover = document.createElement('div');
+      popover.className = 'fixed z-[9999] bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
+      popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
+      popover.style.opacity = '0';
+      popover.addEventListener('mouseenter', function() { window._mailCardCancelHide(wrapper); });
+      popover.addEventListener('mouseleave', function() { window._mailCardScheduleHide(wrapper); });
+      document.body.appendChild(popover);
+      wrapper._mailCardPopover = popover;
+    }
+    popover.textContent = '';
+    popover.appendChild(_buildMailCard(name, email));
+
+    var pos = _computePopoverPosition(wrapper);
+    popover.style.left = pos.left + 'px';
+    popover.style.top = pos.top + 'px';
+    wrapper._placement = pos.placement;
+
+    popover.style.display = '';
+    popover.style.transition = 'none';
+    _applyPopoverTransform(popover, pos.placement, false);
+    void popover.offsetHeight;
+    popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
+    _applyPopoverTransform(popover, pos.placement, true);
+    lucide?.createIcons({ nodes: popover.querySelectorAll('[data-lucide]') });
+  }, 500);
+};
+
+window._mailCardScheduleHide = function(wrapper) {
+  if (wrapper._showTimeout) { clearTimeout(wrapper._showTimeout); wrapper._showTimeout = null; }
+  wrapper._hideTimeout = setTimeout(function() {
+    var popover = wrapper._mailCardPopover;
+    if (popover) {
+      _applyPopoverTransform(popover, wrapper._placement || 'bottom', false);
+      wrapper._closeTimeout = setTimeout(function() { popover.style.display = 'none'; }, 150);
+    }
+  }, 200);
+};
+
+window._mailCardCancelHide = function(wrapper) {
+  if (wrapper._hideTimeout) { clearTimeout(wrapper._hideTimeout); wrapper._hideTimeout = null; }
+  if (wrapper._closeTimeout) { clearTimeout(wrapper._closeTimeout); wrapper._closeTimeout = null; }
+  var popover = wrapper._mailCardPopover;
+  if (popover && popover.style.display !== 'none') {
+    _applyPopoverTransform(popover, wrapper._placement || 'bottom', true);
+  }
+};
+
 /**
  * Mail application — Alpine.js component
  */
@@ -70,6 +239,21 @@ function mailApp() {
       if (msgId) {
         this._openMessageById(msgId);
       }
+
+      // ?compose=email@example.com — open compose with pre-filled "to"
+      const composeTo = params.get('compose');
+      if (composeTo) {
+        this.$nextTick(() => this.showCompose({ to: composeTo }));
+        // Clean the URL
+        const url = new URL(window.location);
+        url.searchParams.delete('compose');
+        history.replaceState(null, '', url);
+      }
+
+      // Listen for mail:compose events from contact card popovers
+      document.addEventListener('mail:compose', (e) => {
+        this.showCompose(e.detail || {});
+      });
     },
 
     // ----- CSRF -----
@@ -341,15 +525,19 @@ function mailApp() {
     // ----- Compose -----
     async showCompose(defaults = {}) {
       this.compose = { ..._defaultCompose(), ...defaults };
+      // Normalize to/cc/bcc to arrays
+      this.compose.to = _parseEmails(this.compose.to);
+      this.compose.cc = _parseEmails(this.compose.cc);
+      this.compose.bcc = _parseEmails(this.compose.bcc);
       if (this.accounts.length > 0 && !this.compose.account_id) {
         this.compose.account_id = this.accounts[0].uuid;
       }
-      this.showCcBcc = false;
+      this.showCcBcc = !!(this.compose.cc.length || this.compose.bcc.length);
 
       // If no defaults (fresh compose), check localStorage for a saved draft
-      if (!defaults.to && !defaults.subject && !defaults.body) {
+      if ((!defaults.to || (Array.isArray(defaults.to) && !defaults.to.length)) && !defaults.subject && !defaults.body) {
         const saved = this._getLocalStorageDraft();
-        if (saved && (saved.to || saved.subject || saved.body)) {
+        if (saved && ((saved.to && saved.to.length) || saved.subject || saved.body)) {
           const restore = await AppDialog.confirm({
             title: 'Restore draft',
             message: 'You have an unsaved draft. Would you like to restore it?',
@@ -359,15 +547,15 @@ function mailApp() {
             iconClass: 'bg-info/10 text-info',
           });
           if (restore) {
-            this.compose.to = saved.to || '';
-            this.compose.cc = saved.cc || '';
-            this.compose.bcc = saved.bcc || '';
+            this.compose.to = _parseEmails(saved.to);
+            this.compose.cc = _parseEmails(saved.cc);
+            this.compose.bcc = _parseEmails(saved.bcc);
             this.compose.subject = saved.subject || '';
             this.compose.body = saved.body || '';
             this.compose.draft_id = saved.draft_id || null;
             this.compose.is_reply = saved.is_reply || false;
             if (saved.account_id) this.compose.account_id = saved.account_id;
-            if (saved.cc || saved.bcc) this.showCcBcc = true;
+            if (saved.cc?.length || saved.bcc?.length) this.showCcBcc = true;
           } else {
             this._clearLocalStorageDraft();
           }
@@ -400,6 +588,26 @@ function mailApp() {
       });
     },
 
+    replyAll(msg) {
+      const from = msg.from_address?.email || '';
+      const subject = msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject || ''}`;
+      // Collect all "to" addresses except our own account
+      const account = this.accounts.find(a => a.uuid === msg.account_id);
+      const myEmail = account?.email?.toLowerCase() || '';
+      const toAddrs = [from, ...(msg.to_addresses || []).map(a => a.email)]
+        .filter(e => e && e.toLowerCase() !== myEmail);
+      const ccAddrs = (msg.cc_addresses || []).map(a => a.email)
+        .filter(e => e && e.toLowerCase() !== myEmail);
+      this.showCompose({
+        to: [...new Set(toAddrs)],
+        cc: [...new Set(ccAddrs)],
+        subject,
+        body: `\n\n---\nOn ${this.formatFullDate(msg.date)}, ${msg.from_address?.name || from} wrote:\n> ${(msg.body_text || msg.snippet || '').replace(/\n/g, '\n> ')}`,
+        account_id: msg.account_id,
+        is_reply: true,
+      });
+    },
+
     forwardMessage(msg) {
       const subject = msg.subject?.startsWith('Fwd:') ? msg.subject : `Fwd: ${msg.subject || ''}`;
       this.showCompose({
@@ -410,29 +618,66 @@ function mailApp() {
       });
     },
 
+    // ----- Tag input helpers -----
+    _tagInput: { to: '', cc: '', bcc: '' },
+
+    addTag(field, value) {
+      const v = (value || '').trim();
+      if (!v) return;
+      if (!this.compose[field].includes(v)) {
+        this.compose[field].push(v);
+      }
+      this._tagInput[field] = '';
+    },
+
+    removeTag(field, index) {
+      this.compose[field].splice(index, 1);
+    },
+
+    handleTagKeydown(event, field) {
+      const val = this._tagInput[field];
+      if ((event.key === 'Enter' || event.key === ',' || event.key === ';' || event.key === 'Tab') && val.trim()) {
+        event.preventDefault();
+        this.addTag(field, val);
+      } else if (event.key === 'Backspace' && !val && this.compose[field].length) {
+        this.compose[field].pop();
+      }
+    },
+
+    handleTagPaste(event, field) {
+      event.preventDefault();
+      const text = (event.clipboardData || window.clipboardData).getData('text');
+      const emails = _parseEmails(text);
+      for (const e of emails) this.addTag(field, e);
+    },
+
     handleComposeFiles(event) {
       this.compose.attachments = [...this.compose.attachments, ...event.target.files];
     },
 
     async sendEmail() {
+      // Commit any pending input
+      if (this._tagInput.to) this.addTag('to', this._tagInput.to);
+      if (this._tagInput.cc) this.addTag('cc', this._tagInput.cc);
+      if (this._tagInput.bcc) this.addTag('bcc', this._tagInput.bcc);
+
+      if (!this.compose.to.length) {
+        this.compose.error = 'Please add at least one recipient';
+        return;
+      }
+
       this.compose.sending = true;
       this.compose.error = '';
-
-      // Parse comma-separated addresses
-      const toList = this.compose.to.split(',').map(s => s.trim()).filter(Boolean);
-      const ccList = this.compose.cc ? this.compose.cc.split(',').map(s => s.trim()).filter(Boolean) : [];
-      const bccList = this.compose.bcc ? this.compose.bcc.split(',').map(s => s.trim()).filter(Boolean) : [];
 
       const formData = new FormData();
       formData.append('account_id', this.compose.account_id);
       formData.append('subject', this.compose.subject);
       formData.append('body_text', this.compose.body);
-      // Generate simple HTML from text
       const htmlBody = this.compose.body.replace(/\n/g, '<br>');
       formData.append('body_html', htmlBody);
-      for (const addr of toList) formData.append('to', addr);
-      for (const addr of ccList) formData.append('cc', addr);
-      for (const addr of bccList) formData.append('bcc', addr);
+      for (const addr of this.compose.to) formData.append('to', addr);
+      for (const addr of this.compose.cc) formData.append('cc', addr);
+      for (const addr of this.compose.bcc) formData.append('bcc', addr);
       for (const file of this.compose.attachments) formData.append('attachments', file);
 
       const res = await fetch('/api/v1/mail/messages/send', {
@@ -459,7 +704,7 @@ function mailApp() {
 
     // ----- Drafts -----
     _hasComposeContent() {
-      return !!(this.compose.to || this.compose.subject || this.compose.body);
+      return !!(this.compose.to.length || this.compose.subject || this.compose.body);
     },
 
     _scheduleDraftSave() {
@@ -474,16 +719,13 @@ function mailApp() {
 
       this.compose.saving = true;
 
-      const toList = this.compose.to ? this.compose.to.split(',').map(s => s.trim()).filter(Boolean) : [];
-      const ccList = this.compose.cc ? this.compose.cc.split(',').map(s => s.trim()).filter(Boolean) : [];
-      const bccList = this.compose.bcc ? this.compose.bcc.split(',').map(s => s.trim()).filter(Boolean) : [];
       const htmlBody = this.compose.body.replace(/\n/g, '<br>');
 
       const payload = {
         account_id: this.compose.account_id,
-        to: toList,
-        cc: ccList,
-        bcc: bccList,
+        to: this.compose.to,
+        cc: this.compose.cc,
+        bcc: this.compose.bcc,
         subject: this.compose.subject,
         body_text: this.compose.body,
         body_html: htmlBody,
@@ -808,6 +1050,9 @@ function mailApp() {
         case 'r':
           if (this.messageDetail) { e.preventDefault(); this.replyTo(this.messageDetail); }
           break;
+        case 'a':
+          if (this.messageDetail) { e.preventDefault(); this.replyAll(this.messageDetail); }
+          break;
         case 'f':
           if (this.messageDetail) { e.preventDefault(); this.forwardMessage(this.messageDetail); }
           break;
@@ -842,6 +1087,10 @@ function mailApp() {
     },
 
     // ----- UI helpers -----
+    cleanName(raw) {
+      return _cleanName(raw);
+    },
+
     highlightSearch(text) {
       if (!text) return '';
       const escaped = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -904,10 +1153,19 @@ function _defaultNewAccount() {
 
 function _defaultCompose() {
   return {
-    account_id: '', to: '', cc: '', bcc: '',
+    account_id: '', to: [], cc: [], bcc: [],
     subject: '', body: '', is_reply: false,
     attachments: [], sending: false, error: '',
     draft_id: null, saving: false, last_saved: null,
     _saveTimer: null,
   };
+}
+
+/**
+ * Parse a comma/semicolon separated string of emails into an array of trimmed, non-empty strings.
+ */
+function _parseEmails(str) {
+  if (Array.isArray(str)) return str.filter(Boolean);
+  if (!str || typeof str !== 'string') return [];
+  return str.split(/[,;]\s*/).map(s => s.trim()).filter(Boolean);
 }

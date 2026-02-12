@@ -109,7 +109,7 @@
         <div class="flex items-center gap-1 mb-0.5">
           <span class="text-sm truncate flex-1"
                 :class="msg.is_read ? 'text-base-content/70' : 'text-base-content'"
-                x-html="highlightSearch(msg.from_address?.name || msg.from_address?.email || 'Unknown')"></span>
+                x-html="highlightSearch(cleanName(msg.from_address?.name) || msg.from_address?.email || 'Unknown')"></span>
           <span class="text-xs text-base-content/50 flex-shrink-0" x-text="formatDate(msg.date)"></span>
         </div>
         <!-- Subject -->

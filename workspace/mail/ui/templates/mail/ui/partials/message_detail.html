@@ -33,6 +33,9 @@
           <button class="btn btn-ghost btn-xs btn-square" @click="replyTo(messageDetail)" title="Reply (R)">
             <i data-lucide="reply" class="w-4 h-4"></i>
           </button>
+          <button class="btn btn-ghost btn-xs btn-square" @click="replyAll(messageDetail)" title="Reply all (A)">
+            <i data-lucide="reply-all" class="w-4 h-4"></i>
+          </button>
           <button class="btn btn-ghost btn-xs btn-square" @click="forwardMessage(messageDetail)" title="Forward (F)">
             <i data-lucide="forward" class="w-4 h-4"></i>
           </button>
@@ -45,25 +48,45 @@
       <!-- From/To details -->
       <div class="text-sm space-y-1">
         <div class="flex items-center gap-2">
-          <span class="text-base-content/50 w-10 text-right">From</span>
-          <span class="font-medium" x-text="messageDetail.from_address?.name || messageDetail.from_address?.email"></span>
-          <span class="text-base-content/50" x-show="messageDetail.from_address?.name"
-                x-text="'<' + messageDetail.from_address?.email + '>'"></span>
+          <span class="text-base-content/50 w-10 text-right flex-shrink-0">From</span>
+          <span class="inline-flex cursor-pointer hover:text-warning transition-colors"
+                @mouseenter="window._mailCardShow($el, messageDetail.from_address)"
+                @mouseleave="window._mailCardScheduleHide($el)">
+            <span class="font-medium" x-text="cleanName(messageDetail.from_address?.name) || messageDetail.from_address?.email"></span>
+            <span class="text-base-content/50 ml-1" x-show="messageDetail.from_address?.name"
+                  x-text="'<' + messageDetail.from_address?.email + '>'"></span>
+          </span>
         </div>
         <div class="flex items-start gap-2">
-          <span class="text-base-content/50 w-10 text-right">To</span>
-          <span class="flex-1 text-base-content/80"
-                x-text="(messageDetail.to_addresses || []).map(a => a.name || a.email).join(', ')"></span>
+          <span class="text-base-content/50 w-10 text-right flex-shrink-0">To</span>
+          <span class="flex-1 flex flex-wrap gap-x-1 text-base-content/80">
+            <template x-for="(addr, i) in (messageDetail.to_addresses || [])" :key="i">
+              <span>
+                <span class="cursor-pointer hover:text-warning transition-colors"
+                      @mouseenter="window._mailCardShow($el, addr)"
+                      @mouseleave="window._mailCardScheduleHide($el)"
+                      x-text="cleanName(addr.name) || addr.email"></span><span x-show="i < (messageDetail.to_addresses || []).length - 1">,</span>
+              </span>
+            </template>
+          </span>
         </div>
         <template x-if="messageDetail.cc_addresses?.length">
           <div class="flex items-start gap-2">
-            <span class="text-base-content/50 w-10 text-right">Cc</span>
-            <span class="flex-1 text-base-content/80"
-                  x-text="messageDetail.cc_addresses.map(a => a.name || a.email).join(', ')"></span>
+            <span class="text-base-content/50 w-10 text-right flex-shrink-0">Cc</span>
+            <span class="flex-1 flex flex-wrap gap-x-1 text-base-content/80">
+              <template x-for="(addr, i) in messageDetail.cc_addresses" :key="i">
+                <span>
+                  <span class="cursor-pointer hover:text-warning transition-colors"
+                        @mouseenter="window._mailCardShow($el, addr)"
+                        @mouseleave="window._mailCardScheduleHide($el)"
+                        x-text="cleanName(addr.name) || addr.email"></span><span x-show="i < messageDetail.cc_addresses.length - 1">,</span>
+                </span>
+              </template>
+            </span>
           </div>
         </template>
         <div class="flex items-center gap-2">
-          <span class="text-base-content/50 w-10 text-right">Date</span>
+          <span class="text-base-content/50 w-10 text-right flex-shrink-0">Date</span>
           <span class="text-base-content/80" x-text="formatFullDate(messageDetail.date)"></span>
         </div>
       </div>

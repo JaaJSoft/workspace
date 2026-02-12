@@ -1243,12 +1243,26 @@ function mailApp() {
         case 'f':
           if (this.messageDetail) { e.preventDefault(); this.forwardMessage(this.messageDetail); }
           break;
+        case 's':
+          if (this.messageDetail) { e.preventDefault(); this.toggleStar(this.messageDetail); }
+          break;
+        case 'u':
+          if (this.messageDetail) { e.preventDefault(); this.toggleRead(this.messageDetail); }
+          break;
+        case '#':
+          if (this.messageDetail) { e.preventDefault(); this.deleteMessage(this.messageDetail); }
+          break;
         case 'Escape':
           if (this.selectedMessage) {
             this.selectedMessage = null;
             this.messageDetail = null;
             this._updateUrl(null);
           }
+          break;
+        case '?':
+          e.preventDefault();
+          const dlg = document.getElementById('mail-help-dialog');
+          if (dlg) { dlg.showModal(); lucide?.createIcons(); }
           break;
       }
     },

@@ -1,0 +1,98 @@
+<dialog id="mail-help-dialog" class="modal">
+  <div class="modal-box max-w-3xl">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </form>
+    <h3 class="font-bold text-xl mb-6 flex items-center gap-2">
+      <i data-lucide="circle-help" class="w-6 h-6 text-warning"></i>
+      Help
+    </h3>
+
+    <div class="space-y-2">
+      <!-- Keyboard Shortcuts -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="mail-help-accordion" checked="checked" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="keyboard" class="w-4 h-4 text-warning"></i>
+          Keyboard Shortcuts
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <h4 class="font-semibold mt-0 mb-2">Navigation</h4>
+            <table class="table table-sm">
+              <tbody>
+                <tr><td><kbd class="kbd kbd-sm">J</kbd></td><td>Next message</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">K</kbd></td><td>Previous message</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">Esc</kbd></td><td>Close message / panel</td></tr>
+              </tbody>
+            </table>
+            <h4 class="font-semibold mt-3 mb-2">Compose</h4>
+            <table class="table table-sm">
+              <tbody>
+                <tr><td><kbd class="kbd kbd-sm">C</kbd></td><td>New message</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">R</kbd></td><td>Reply</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">A</kbd></td><td>Reply all</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">F</kbd></td><td>Forward</td></tr>
+              </tbody>
+            </table>
+            <h4 class="font-semibold mt-3 mb-2">Actions</h4>
+            <table class="table table-sm">
+              <tbody>
+                <tr><td><kbd class="kbd kbd-sm">S</kbd></td><td>Star / unstar message</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">U</kbd></td><td>Mark read / unread</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">#</kbd></td><td>Delete message</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">K</kbd></td><td>Command palette</td></tr>
+                <tr><td><kbd class="kbd kbd-sm">?</kbd></td><td>Show this help</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mail Features -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="mail-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="mail" class="w-4 h-4 text-warning"></i>
+          Mail Features
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <ul>
+              <li><strong>Multiple accounts</strong> &mdash; Add and manage several mail accounts from one place.</li>
+              <li><strong>Compose</strong> &mdash; Write new messages with To, Cc, and Bcc fields. Contact autocomplete suggests addresses from your history.</li>
+              <li><strong>Drafts</strong> &mdash; Drafts are saved automatically and can be restored when reopening compose.</li>
+              <li><strong>Attachments</strong> &mdash; Attach files when composing and download attachments from received messages.</li>
+              <li><strong>Search &amp; filters</strong> &mdash; Search messages by subject, snippet or sender. Filter by unread, starred, or with attachments.</li>
+              <li><strong>Batch actions</strong> &mdash; Select multiple messages to mark read/unread, star, or delete in bulk.</li>
+              <li><strong>Folders</strong> &mdash; Right-click a folder for options: refresh, mark all read, change icon, or sync.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Access -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="mail-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="code" class="w-4 h-4 text-warning"></i>
+          API Access
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <ul>
+              <li><strong>Base URL:</strong> <code>/api/v1/mail</code></li>
+              <li><strong>Authentication:</strong> Use your session cookie or API token.</li>
+              <li><strong>Documentation:</strong> Full API docs are available at <a href="/schema/swagger-ui/" class="link link-warning">/schema/swagger-ui/</a>.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

@@ -59,6 +59,13 @@ x-init="init()"
       </ul>
     </div>
 
+    <!-- Help button -->
+    <div class="px-3 pb-2">
+      <ul class="menu p-0">
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="warning" onclick="document.getElementById('mail-help-dialog').showModal(); lucide?.createIcons()" tooltip="Help (?)" %}
+      </ul>
+    </div>
+
     <!-- Collapse toggle -->
     <div class="border-t border-base-300 py-4 px-3">
       <ul class="menu p-0" x-show="!isMobile()">
@@ -135,6 +142,9 @@ x-init="init()"
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
+
+<!-- Help dialog -->
+{% include "mail/ui/partials/help_dialog.html" %}
 
 <!-- Compose dialog -->
 {% include "mail/ui/partials/compose_dialog.html" %}

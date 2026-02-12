@@ -110,6 +110,7 @@ function mailApp() {
 
     toggleAccountExpanded(uuid) {
       this.expandedAccounts[uuid] = !this.expandedAccounts[uuid];
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     folderIcon(type) {
@@ -775,7 +776,9 @@ function mailApp() {
       if (diff < 604800000) {
         return d.toLocaleDateString([], { weekday: 'short' });
       }
-      return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const opts = { month: 'short', day: 'numeric' };
+      if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
+      return d.toLocaleDateString([], opts);
     },
 
     formatFullDate(dateStr) {

@@ -1,0 +1,20 @@
+<!-- Autocomplete dropdown for {{ field }} -->
+<div x-show="_acIsOpen('{{ field }}')" x-cloak
+     class="absolute left-0 right-0 top-full mt-1 z-50 bg-base-100 rounded-lg shadow-lg ring-1 ring-base-300 max-h-60 overflow-y-auto">
+  <template x-for="(contact, idx) in _autocomplete.results" :key="contact.email">
+    <button type="button"
+            class="flex items-center gap-3 w-full px-3 py-2 text-left transition-colors"
+            :class="idx === _autocomplete.highlight ? 'bg-base-200' : 'hover:bg-base-200/50'"
+            @mousedown.prevent="_acSelect(contact, '{{ field }}')"
+            @mouseenter="_autocomplete.highlight = idx">
+      <div class="avatar placeholder shrink-0">
+        <div class="w-7 h-7 bg-warning/15 text-warning rounded-full flex items-center justify-center text-xs font-semibold"
+             x-text="(contact.name || contact.email).charAt(0).toUpperCase()"></div>
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="text-sm font-medium truncate" x-show="contact.name" x-text="contact.name"></div>
+        <div class="text-xs truncate" :class="contact.name ? 'text-base-content/50' : 'text-sm'" x-text="contact.email"></div>
+      </div>
+    </button>
+  </template>
+</div>

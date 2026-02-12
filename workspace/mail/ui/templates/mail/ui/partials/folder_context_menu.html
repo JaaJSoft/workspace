@@ -1,0 +1,32 @@
+<!-- Folder Context Menu -->
+<div
+  x-show="folderCtx.open"
+  x-cloak
+  @click.outside="folderCtx.open = false"
+  @keydown.escape.window="folderCtx.open = false"
+  class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-52 p-1"
+  :style="`top: ${folderCtx.y}px; left: ${folderCtx.x}px;`"
+  id="folder-context-menu"
+>
+  <ul class="menu menu-sm p-0">
+    <li>
+      <button type="button" class="gap-3 rounded" @click="folderCtxAction('refresh')">
+        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+        <span>Refresh</span>
+      </button>
+    </li>
+    <li>
+      <button type="button" class="gap-3 rounded" @click="folderCtxAction('mark_all_read')">
+        <i data-lucide="mail-check" class="w-4 h-4"></i>
+        <span>Mark all as read</span>
+      </button>
+    </li>
+    <hr class="my-1 border-base-300" />
+    <li>
+      <button type="button" class="gap-3 rounded" @click="folderCtxAction('sync')">
+        <i data-lucide="cloud-download" class="w-4 h-4"></i>
+        <span>Sync account</span>
+      </button>
+    </li>
+  </ul>
+</div>

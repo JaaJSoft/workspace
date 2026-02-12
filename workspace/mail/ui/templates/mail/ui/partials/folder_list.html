@@ -36,6 +36,7 @@
             ? 'bg-warning/10 text-warning'
             : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
           @click="selectFolder(folder)"
+          @contextmenu="openFolderContextMenu($event, folder)"
         >
           <i :data-lucide="folderIcon(folder.folder_type)" class="w-4 h-4 flex-shrink-0"></i>
           <span class="flex-1 text-left truncate" x-text="folder.display_name"></span>
@@ -58,6 +59,7 @@
             : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
           :title="folder.display_name"
           @click="selectFolder(folder)"
+          @contextmenu="openFolderContextMenu($event, folder)"
         >
           <i :data-lucide="folderIcon(folder.folder_type)" class="w-5 h-5"></i>
         </button>

@@ -8,6 +8,7 @@ urlpatterns = [
     path('api/v1/mail/accounts/<uuid:uuid>/test', views.MailAccountTestView.as_view(), name='mail-account-test'),
     path('api/v1/mail/accounts/<uuid:uuid>/sync', views.MailAccountSyncView.as_view(), name='mail-account-sync'),
     path('api/v1/mail/folders', views.MailFolderListView.as_view(), name='mail-folder-list'),
+    path('api/v1/mail/folders/<uuid:uuid>/mark-read', views.MailFolderMarkReadView.as_view(), name='mail-folder-mark-read'),
     path('api/v1/mail/messages', views.MailMessageListView.as_view(), name='mail-message-list'),
     path('api/v1/mail/drafts', views.MailDraftView.as_view(), name='mail-draft'),
     path('api/v1/mail/drafts/<uuid:uuid>', views.MailDraftView.as_view(), name='mail-draft-detail'),

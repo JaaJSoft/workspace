@@ -178,6 +178,30 @@ class MailFolderListView(APIView):
 
 
 @extend_schema(tags=['Mail'])
+class MailFolderMarkReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Mark all messages in a folder as read")
+    def post(self, request, uuid):
+        try:
+            folder = MailFolder.objects.select_related('account').get(uuid=uuid)
+        except MailFolder.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if folder.account.owner != request.user:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        updated = MailMessage.objects.filter(
+            folder=folder, is_read=False, deleted_at__isnull=True,
+        ).update(is_read=True)
+
+        folder.unread_count = 0
+        folder.save(update_fields=['unread_count', 'updated_at'])
+
+        return Response({'updated': updated})
+
+
+@extend_schema(tags=['Mail'])
 class MailMessageListView(APIView):
     permission_classes = [IsAuthenticated]
 

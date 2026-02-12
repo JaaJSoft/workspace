@@ -40,6 +40,9 @@ function mailApp() {
     },
     _searchTimer: null,
 
+    // Folder context menu
+    folderCtx: { open: false, x: 0, y: 0, folder: null },
+
     // Compose
     compose: _defaultCompose(),
     showCcBcc: false,
@@ -698,6 +701,57 @@ function mailApp() {
         this.editAccountError = data.detail || JSON.stringify(data) || 'Failed to save account';
       }
       this.savingAccount = false;
+    },
+
+    // ----- Folder context menu -----
+    openFolderContextMenu(event, folder) {
+      event.preventDefault();
+      const menu = document.getElementById('folder-context-menu');
+      if (!menu) return;
+
+      this.folderCtx.folder = folder;
+      this.folderCtx.open = true;
+
+      this.$nextTick(() => {
+        const rect = menu.getBoundingClientRect();
+        let x = event.clientX;
+        let y = event.clientY;
+        if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 10;
+        if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
+        this.folderCtx.x = x;
+        this.folderCtx.y = y;
+        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+      });
+    },
+
+    async folderCtxAction(action) {
+      const folder = this.folderCtx.folder;
+      this.folderCtx.open = false;
+      if (!folder) return;
+
+      switch (action) {
+        case 'refresh':
+          this.selectFolder(folder);
+          break;
+        case 'mark_all_read':
+          await this._markFolderAllRead(folder);
+          break;
+        case 'sync':
+          this.syncAccount(folder.account_id);
+          break;
+      }
+    },
+
+    async _markFolderAllRead(folder) {
+      const res = await this._fetch(`/api/v1/mail/folders/${folder.uuid}/mark-read`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        // Update local state
+        folder.unread_count = 0;
+        this.messages.forEach(m => { m.is_read = true; });
+        if (this.messageDetail) this.messageDetail.is_read = true;
+      }
     },
 
     // ----- Keyboard -----

@@ -116,6 +116,7 @@ function mailApp() {
       this.selectedFolder = folder;
       this.selectedMessage = null;
       this.messageDetail = null;
+      this._updateUrl(null);
       this.selectedMessages = [];
       this.currentPage = 1;
       await this.loadMessages();
@@ -162,6 +163,7 @@ function mailApp() {
     async selectMessage(msg) {
       this.selectedMessage = msg;
       this.loadingDetail = true;
+      this._updateUrl(msg.uuid);
       const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`);
       if (res.ok) {
         this.messageDetail = await res.json();
@@ -239,6 +241,7 @@ function mailApp() {
       if (this.selectedMessage?.uuid === msg.uuid) {
         this.selectedMessage = null;
         this.messageDetail = null;
+        this._updateUrl(null);
       }
       // Update folder counts
       if (this.selectedFolder) {
@@ -273,6 +276,7 @@ function mailApp() {
       if (this.messageDetail && action === 'delete') {
         this.selectedMessage = null;
         this.messageDetail = null;
+        this._updateUrl(null);
       }
     },
 
@@ -590,6 +594,7 @@ function mailApp() {
         this.messages = [];
         this.selectedMessage = null;
         this.messageDetail = null;
+        this._updateUrl(null);
       }
     },
 
@@ -614,6 +619,7 @@ function mailApp() {
           if (this.selectedMessage) {
             this.selectedMessage = null;
             this.messageDetail = null;
+            this._updateUrl(null);
           }
           break;
       }
@@ -626,6 +632,17 @@ function mailApp() {
       if (nextIdx < 0) nextIdx = 0;
       if (nextIdx >= this.messages.length) nextIdx = this.messages.length - 1;
       this.selectMessage(this.messages[nextIdx]);
+    },
+
+    // ----- URL -----
+    _updateUrl(messageUuid) {
+      const url = new URL(window.location);
+      if (messageUuid) {
+        url.searchParams.set('message', messageUuid);
+      } else {
+        url.searchParams.delete('message');
+      }
+      history.replaceState(null, '', url);
     },
 
     // ----- UI helpers -----

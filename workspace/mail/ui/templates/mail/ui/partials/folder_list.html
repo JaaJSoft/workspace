@@ -1,7 +1,7 @@
 <!-- Folder list per account -->
 <template x-for="account in accounts" :key="account.uuid">
   <div class="mb-2">
-    <!-- Account header -->
+    <!-- Account header (expanded) -->
     <div class="flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded-lg hover:bg-base-content/5"
          @click="toggleAccountExpanded(account.uuid)"
          x-show="!collapsed">
@@ -20,13 +20,14 @@
             <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="syncingAccounts[account.uuid] ? 'animate-spin' : ''"></i>
             <span x-text="syncingAccounts[account.uuid] ? 'Syncing...' : 'Sync'"></span>
           </a></li>
+          <li><a @click="showEditAccount(account)"><i data-lucide="settings" class="w-3.5 h-3.5"></i> Edit</a></li>
           <li><a @click="testAccount(account.uuid)"><i data-lucide="plug" class="w-3.5 h-3.5"></i> Test</a></li>
           <li><a @click="removeAccount(account.uuid)" class="text-error"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove</a></li>
         </ul>
       </div>
     </div>
 
-    <!-- Folders -->
+    <!-- Folders (expanded) -->
     <div x-show="expandedAccounts[account.uuid] && !collapsed" x-collapse>
       <template x-for="folder in getFolders(account.uuid)" :key="folder.uuid">
         <button
@@ -46,10 +47,26 @@
         </button>
       </template>
     </div>
+
+    <!-- Folders (collapsed: icons only with tooltip) -->
+    <div x-show="collapsed" x-cloak>
+      <template x-for="folder in getFolders(account.uuid)" :key="'c-' + folder.uuid">
+        <button
+          class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
+          :class="selectedFolder?.uuid === folder.uuid
+            ? 'bg-warning/10 text-warning'
+            : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
+          :title="folder.display_name"
+          @click="selectFolder(folder)"
+        >
+          <i :data-lucide="folderIcon(folder.folder_type)" class="w-5 h-5"></i>
+        </button>
+      </template>
+    </div>
   </div>
 </template>
 
-<!-- Add account button -->
+<!-- Add account button (expanded) -->
 <div class="mt-2 px-1" x-show="!collapsed">
   <button class="btn btn-ghost btn-sm btn-block justify-start text-base-content/50 hover:text-warning"
           @click="showAddAccount()">

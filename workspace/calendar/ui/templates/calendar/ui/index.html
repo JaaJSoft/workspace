@@ -234,11 +234,15 @@
       </template>
     </div>
 
-    <!-- Bottom actions -->
-    <div class="border-t border-base-300 py-4 px-3">
+    <!-- Help button -->
+    <div class="px-3 pb-2">
       <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="info" onclick="document.getElementById('calendar-help-dialog').showModal(); lucide?.createIcons()" tooltip="Help" %}
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="accent" onclick="document.getElementById('calendar-help-dialog').showModal(); lucide?.createIcons()" tooltip="Help (?)" %}
       </ul>
+    </div>
+
+    <!-- Collapse toggle -->
+    <div class="border-t border-base-300 py-4 px-3">
       <ul class="menu p-0" x-show="!isMobile()">
         {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" color="accent" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
       </ul>

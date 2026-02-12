@@ -646,6 +646,66 @@ def delete_draft(account, message):
     message.save(update_fields=['deleted_at', 'updated_at'])
 
 
+def create_folder(account, folder_name):
+    """Create an IMAP folder. Returns the created MailFolder."""
+    from workspace.mail.models import MailFolder
+
+    conn = connect_imap(account)
+    try:
+        status, data = conn.create(folder_name)
+        if status != 'OK':
+            raise Exception(f'IMAP CREATE failed: {data}')
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+    folder = MailFolder.objects.create(
+        account=account,
+        name=folder_name,
+        display_name=_display_name(folder_name),
+        folder_type='other',
+    )
+    return folder
+
+
+def delete_folder(account, folder):
+    """Delete an IMAP folder and its local messages."""
+    conn = connect_imap(account)
+    try:
+        # Close the folder first if selected, then delete
+        status, data = conn.delete(folder.name)
+        if status != 'OK':
+            raise Exception(f'IMAP DELETE failed: {data}')
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+    folder.delete()
+
+
+def rename_folder(account, folder, new_name):
+    """Rename an IMAP folder."""
+    conn = connect_imap(account)
+    try:
+        status, data = conn.rename(folder.name, new_name)
+        if status != 'OK':
+            raise Exception(f'IMAP RENAME failed: {data}')
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+    folder.name = new_name
+    folder.display_name = _display_name(new_name)
+    folder.save(update_fields=['name', 'display_name', 'updated_at'])
+    return folder
+
+
 def sync_account(account):
     """Full sync: folders then messages for each folder."""
     from workspace.mail.models import MailFolder

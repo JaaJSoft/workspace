@@ -29,6 +29,27 @@
     </li>
     <hr class="my-1 border-base-300" />
     <li>
+      <button type="button" class="gap-3 rounded" @click="folderCtxAction('create')">
+        <i data-lucide="folder-plus" class="w-4 h-4"></i>
+        <span>New folder</span>
+      </button>
+    </li>
+    <li>
+      <button type="button" class="gap-3 rounded" @click="folderCtxAction('rename')"
+              :class="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''">
+        <i data-lucide="pencil" class="w-4 h-4"></i>
+        <span>Rename</span>
+      </button>
+    </li>
+    <li>
+      <button type="button" class="gap-3 rounded text-error" @click="folderCtxAction('delete')"
+              :class="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+        <span>Delete</span>
+      </button>
+    </li>
+    <hr class="my-1 border-base-300" />
+    <li>
       <button type="button" class="gap-3 rounded" @click="folderCtxAction('sync')">
         <i data-lucide="cloud-download" class="w-4 h-4"></i>
         <span>Sync account</span>

@@ -10,6 +10,7 @@ urlpatterns = [
     path('api/v1/mail/folders', views.MailFolderListView.as_view(), name='mail-folder-list'),
     path('api/v1/mail/folders/<uuid:uuid>', views.MailFolderUpdateView.as_view(), name='mail-folder-update'),
     path('api/v1/mail/folders/<uuid:uuid>/mark-read', views.MailFolderMarkReadView.as_view(), name='mail-folder-mark-read'),
+    path('api/v1/mail/contacts/autocomplete', views.ContactAutocompleteView.as_view(), name='mail-contact-autocomplete'),
     path('api/v1/mail/messages', views.MailMessageListView.as_view(), name='mail-message-list'),
     path('api/v1/mail/drafts', views.MailDraftView.as_view(), name='mail-draft'),
     path('api/v1/mail/drafts/<uuid:uuid>', views.MailDraftView.as_view(), name='mail-draft-detail'),

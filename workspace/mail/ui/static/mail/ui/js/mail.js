@@ -221,6 +221,9 @@ function mailApp() {
     compose: _defaultCompose(),
     showCcBcc: false,
 
+    // Autocomplete
+    _autocomplete: { results: [], highlight: -1, show: false, loading: false, field: null, _timer: null },
+
     init() {
       // Load accounts from embedded data
       try {
@@ -633,6 +636,7 @@ function mailApp() {
         this.compose[field].push(v);
       }
       this._tagInput[field] = '';
+      this._acClose();
     },
 
     removeTag(field, index) {
@@ -641,6 +645,32 @@ function mailApp() {
 
     handleTagKeydown(event, field) {
       const val = this._tagInput[field];
+
+      // Autocomplete navigation
+      if (this._acIsOpen(field)) {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          this._autocomplete.highlight = Math.min(this._autocomplete.highlight + 1, this._autocomplete.results.length - 1);
+          return;
+        }
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          this._autocomplete.highlight = Math.max(this._autocomplete.highlight - 1, -1);
+          return;
+        }
+        if (event.key === 'Enter' && this._autocomplete.highlight >= 0) {
+          event.preventDefault();
+          this._acSelect(this._autocomplete.results[this._autocomplete.highlight], field);
+          return;
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          this._acClose();
+          return;
+        }
+      }
+
       if ((event.key === 'Enter' || event.key === ',' || event.key === ';' || event.key === 'Tab') && val.trim()) {
         event.preventDefault();
         this.addTag(field, val);
@@ -658,6 +688,52 @@ function mailApp() {
 
     handleComposeFiles(event) {
       this.compose.attachments = [...this.compose.attachments, ...event.target.files];
+    },
+
+    // ----- Autocomplete -----
+    _acSearch(field) {
+      if (this._autocomplete._timer) clearTimeout(this._autocomplete._timer);
+      const q = (this._tagInput[field] || '').trim();
+      if (q.length < 2) {
+        this._acClose();
+        return;
+      }
+      this._autocomplete.field = field;
+      this._autocomplete._timer = setTimeout(async () => {
+        this._autocomplete.loading = true;
+        try {
+          let url = `/api/v1/mail/contacts/autocomplete?q=${encodeURIComponent(q)}`;
+          if (this.compose.account_id) url += `&account_id=${this.compose.account_id}`;
+          const res = await this._fetch(url);
+          if (res.ok) {
+            const data = await res.json();
+            // Filter out emails already added in any field
+            const existing = new Set([
+              ...this.compose.to, ...this.compose.cc, ...this.compose.bcc,
+            ].map(e => e.toLowerCase()));
+            this._autocomplete.results = data.filter(c => !existing.has(c.email.toLowerCase()));
+            this._autocomplete.highlight = -1;
+            this._autocomplete.show = this._autocomplete.results.length > 0;
+          }
+        } catch (e) {
+          this._autocomplete.show = false;
+        }
+        this._autocomplete.loading = false;
+      }, 300);
+    },
+
+    _acClose() {
+      if (this._autocomplete._timer) clearTimeout(this._autocomplete._timer);
+      this._autocomplete = { results: [], highlight: -1, show: false, loading: false, field: null, _timer: null };
+    },
+
+    _acSelect(contact, field) {
+      const f = field || this._autocomplete.field;
+      if (f) this.addTag(f, contact.email);
+    },
+
+    _acIsOpen(field) {
+      return this._autocomplete.show && this._autocomplete.field === field;
     },
 
     async sendEmail() {
@@ -989,6 +1065,15 @@ function mailApp() {
         case 'change_icon':
           this.showFolderIconPicker(folder);
           break;
+        case 'create':
+          await this._createFolder(folder.account_id);
+          break;
+        case 'rename':
+          await this._renameFolder(folder);
+          break;
+        case 'delete':
+          await this._deleteFolder(folder);
+          break;
         case 'sync':
           this.syncAccount(folder.account_id);
           break;
@@ -1004,6 +1089,103 @@ function mailApp() {
         folder.unread_count = 0;
         this.messages.forEach(m => { m.is_read = true; });
         if (this.messageDetail) this.messageDetail.is_read = true;
+      }
+    },
+
+    async _createFolder(accountUuid) {
+      const name = await AppDialog.prompt({
+        title: 'New folder',
+        message: 'Enter a name for the new folder.',
+        placeholder: 'Folder name',
+        okLabel: 'Create',
+        okClass: 'btn-warning',
+        icon: 'folder-plus',
+        iconClass: 'bg-warning/10 text-warning',
+      });
+      if (!name) return;
+
+      const res = await this._fetch('/api/v1/mail/folders', {
+        method: 'POST',
+        body: { account_id: accountUuid, name },
+      });
+
+      if (res.ok) {
+        await this.loadFolders(accountUuid);
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await AppDialog.error({ message: data.detail || 'Failed to create folder' });
+      }
+    },
+
+    async _renameFolder(folder) {
+      if (folder.folder_type !== 'other') return;
+
+      const name = await AppDialog.prompt({
+        title: 'Rename folder',
+        value: folder.display_name,
+        okLabel: 'Rename',
+        okClass: 'btn-warning',
+        icon: 'pencil',
+        iconClass: 'bg-warning/10 text-warning',
+      });
+      if (!name || name === folder.display_name) return;
+
+      const res = await this._fetch(`/api/v1/mail/folders/${folder.uuid}`, {
+        method: 'PATCH',
+        body: { display_name: name },
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        // Update local state
+        const flds = this.folders[folder.account_id] || [];
+        const idx = flds.findIndex(f => f.uuid === folder.uuid);
+        if (idx !== -1) flds[idx] = { ...flds[idx], ...updated };
+        if (this.selectedFolder?.uuid === folder.uuid) {
+          Object.assign(this.selectedFolder, updated);
+        }
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await AppDialog.error({ message: data.detail || 'Failed to rename folder' });
+      }
+    },
+
+    async _deleteFolder(folder) {
+      if (folder.folder_type !== 'other') return;
+
+      const ok = await AppDialog.confirm({
+        title: 'Delete folder',
+        message: `Delete "${folder.display_name}" and all its messages? This cannot be undone.`,
+        okLabel: 'Delete',
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!ok) return;
+
+      const res = await this._fetch(`/api/v1/mail/folders/${folder.uuid}`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        // Remove from local state
+        const flds = this.folders[folder.account_id];
+        if (flds) {
+          this.folders[folder.account_id] = flds.filter(f => f.uuid !== folder.uuid);
+        }
+        if (this.selectedFolder?.uuid === folder.uuid) {
+          this.selectedFolder = null;
+          this.messages = [];
+          this.selectedMessage = null;
+          this.messageDetail = null;
+          this._updateUrl(null);
+        }
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await AppDialog.error({ message: data.detail || 'Failed to delete folder' });
       }
     },
 

@@ -1,4 +1,5 @@
 import logging
+from collections import Counter, defaultdict
 
 from django.db.models import Count, Q
 from django.http import FileResponse
@@ -16,6 +17,7 @@ from .serializers import (
     MailAccountCreateSerializer,
     MailAccountSerializer,
     MailAccountUpdateSerializer,
+    MailFolderCreateSerializer,
     MailFolderSerializer,
     MailFolderUpdateSerializer,
     MailMessageDetailSerializer,
@@ -183,28 +185,107 @@ class MailFolderListView(APIView):
         folders = MailFolder.objects.filter(account=account)
         return Response(MailFolderSerializer(folders, many=True).data)
 
+    @extend_schema(summary="Create a folder", request=MailFolderCreateSerializer)
+    def post(self, request):
+        ser = MailFolderCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        try:
+            account = MailAccount.objects.get(
+                uuid=ser.validated_data['account_id'], owner=request.user,
+            )
+        except MailAccount.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        from .services.imap import create_folder
+
+        try:
+            folder = create_folder(account, ser.validated_data['name'])
+            return Response(
+                MailFolderSerializer(folder).data,
+                status=status.HTTP_201_CREATED,
+            )
+        except Exception as e:
+            logger.warning("Failed to create folder for %s: %s", account.email, e)
+            return Response(
+                {'detail': 'Failed to create folder'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
 
 @extend_schema(tags=['Mail'])
 class MailFolderUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Update folder icon/color")
-    def patch(self, request, uuid):
+    def _get_folder(self, request, uuid):
         try:
             folder = MailFolder.objects.select_related('account').get(uuid=uuid)
         except MailFolder.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
+            return None
         if folder.account.owner != request.user:
+            return None
+        return folder
+
+    @extend_schema(summary="Update folder (icon, color, rename)")
+    def patch(self, request, uuid):
+        folder = self._get_folder(request, uuid)
+        if not folder:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         ser = MailFolderUpdateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        for field, value in ser.validated_data.items():
-            setattr(folder, field, value)
-        folder.save(update_fields=['icon', 'color', 'updated_at'])
+
+        # Rename on IMAP if display_name changed
+        new_display_name = ser.validated_data.pop('display_name', None)
+        if new_display_name and new_display_name != folder.display_name:
+            from .services.imap import rename_folder
+
+            try:
+                rename_folder(folder.account, folder, new_display_name)
+            except Exception as e:
+                logger.warning("Failed to rename folder for %s: %s", folder.account.email, e)
+                return Response(
+                    {'detail': 'Failed to rename folder'},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+        # Update icon/color locally
+        update_fields = ['updated_at']
+        for field in ('icon', 'color'):
+            if field in ser.validated_data:
+                setattr(folder, field, ser.validated_data[field])
+                update_fields.append(field)
+        if len(update_fields) > 1:
+            folder.save(update_fields=update_fields)
 
         return Response(MailFolderSerializer(folder).data)
+
+    @extend_schema(summary="Delete a folder")
+    def delete(self, request, uuid):
+        folder = self._get_folder(request, uuid)
+        if not folder:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Prevent deletion of special folders
+        if folder.folder_type != 'other':
+            return Response(
+                {'detail': 'Cannot delete a special folder'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .services.imap import delete_folder
+
+        try:
+            delete_folder(folder.account, folder)
+        except Exception as e:
+            logger.warning("Failed to delete folder for %s: %s", folder.account.email, e)
+            return Response(
+                {'detail': 'Failed to delete folder'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Clear selection if this folder was selected
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(tags=['Mail'])
@@ -613,3 +694,73 @@ class MailAttachmentDownloadView(APIView):
             as_attachment=True,
             filename=attachment.filename,
         )
+
+
+@extend_schema(tags=['Mail'])
+class ContactAutocompleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Autocomplete contacts from message history",
+        parameters=[
+            OpenApiParameter('q', str, required=True, description='Search query (min 2 chars)'),
+            OpenApiParameter('account_id', str, required=False, description='Filter by account'),
+        ],
+    )
+    def get(self, request):
+        q = (request.query_params.get('q') or '').strip()
+        if len(q) < 2:
+            return Response([])
+
+        account_filter = Q(account__owner=request.user)
+        account_id = request.query_params.get('account_id')
+        if account_id:
+            account_filter &= Q(account__uuid=account_id)
+
+        q_lower = q.lower()
+
+        messages = (
+            MailMessage.objects
+            .filter(account_filter, deleted_at__isnull=True)
+            .filter(
+                Q(from_address__icontains=q)
+                | Q(to_addresses__icontains=q)
+                | Q(cc_addresses__icontains=q)
+            )
+            .order_by('-date')
+            .only('from_address', 'to_addresses', 'cc_addresses')[:500]
+        )
+
+        # Extract all addresses and count frequency
+        email_count = Counter()
+        email_names = defaultdict(Counter)
+
+        for msg in messages:
+            addresses = []
+            fa = msg.from_address
+            if isinstance(fa, dict) and fa.get('email'):
+                addresses.append(fa)
+            for field in (msg.to_addresses, msg.cc_addresses):
+                if isinstance(field, list):
+                    addresses.extend(
+                        a for a in field if isinstance(a, dict) and a.get('email')
+                    )
+
+            for addr in addresses:
+                email = addr['email'].strip().lower()
+                name = (addr.get('name') or '').strip()
+                # Post-filter: check that the query actually matches this contact
+                if q_lower not in email and q_lower not in name.lower():
+                    continue
+                email_count[email] += 1
+                if name:
+                    email_names[email][name] += 1
+
+        # Build results sorted by frequency
+        results = []
+        for email, count in email_count.most_common(15):
+            name_counter = email_names.get(email)
+            name = name_counter.most_common(1)[0][0] if name_counter else ''
+            results.append({'name': name, 'email': email, 'count': count})
+
+        return Response(results)

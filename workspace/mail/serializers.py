@@ -51,9 +51,15 @@ class MailFolderSerializer(serializers.ModelSerializer):
         ]
 
 
+class MailFolderCreateSerializer(serializers.Serializer):
+    account_id = serializers.UUIDField()
+    name = serializers.CharField(max_length=255)
+
+
 class MailFolderUpdateSerializer(serializers.Serializer):
     icon = serializers.CharField(max_length=50, required=False, allow_null=True, allow_blank=True)
     color = serializers.CharField(max_length=30, required=False, allow_null=True, allow_blank=True)
+    display_name = serializers.CharField(max_length=255, required=False)
 
 
 class MailAttachmentSerializer(serializers.ModelSerializer):

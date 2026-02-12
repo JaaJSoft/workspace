@@ -25,6 +25,14 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
+def _refresh_folder_counts(folder):
+    """Recompute message_count and unread_count for a folder."""
+    qs = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
+    folder.message_count = qs.count()
+    folder.unread_count = qs.filter(is_read=False).count()
+    folder.save(update_fields=['message_count', 'unread_count', 'updated_at'])
+
+
 @extend_schema(tags=['Mail'])
 class MailAccountListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -275,6 +283,7 @@ class MailMessageDetailView(APIView):
                 logger.warning("Failed to sync star flag to IMAP for %s", msg.uuid)
 
         msg.save()
+        _refresh_folder_counts(msg.folder)
         return Response(MailMessageDetailSerializer(msg).data)
 
     @extend_schema(summary="Soft-delete a message")
@@ -293,6 +302,7 @@ class MailMessageDetailView(APIView):
         except Exception:
             logger.warning("Failed to delete message on IMAP for %s", msg.uuid)
 
+        _refresh_folder_counts(msg.folder)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -331,12 +341,21 @@ class MailSendView(APIView):
                 attachments=attachments,
             )
 
-            # Copy to Sent folder via IMAP APPEND
-            from .services.imap import append_to_sent
+            # Copy to Sent folder via IMAP APPEND, then sync the Sent folder
+            from .services.imap import append_to_sent, sync_folder_messages
             try:
                 append_to_sent(account, raw_msg)
             except Exception:
                 logger.warning("Failed to append sent message to IMAP for %s", account.email)
+
+            try:
+                sent_folder = MailFolder.objects.filter(
+                    account=account, folder_type='sent',
+                ).first()
+                if sent_folder:
+                    sync_folder_messages(account, sent_folder)
+            except Exception:
+                logger.warning("Failed to sync sent folder after send for %s", account.email)
 
             return Response({'status': 'sent'}, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -402,6 +421,11 @@ class MailBatchActionView(APIView):
                 processed += 1
             except Exception:
                 logger.warning("Batch action '%s' failed for message %s", action, msg.uuid)
+
+        # Refresh counts for all affected folders
+        affected_folders = {msg.folder_id for msg in messages}
+        for folder in MailFolder.objects.filter(uuid__in=affected_folders):
+            _refresh_folder_counts(folder)
 
         return Response({'processed': processed})
 

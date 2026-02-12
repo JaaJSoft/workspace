@@ -1,8 +1,10 @@
 <!-- Message list header -->
 <div class="px-4 py-3 border-b border-base-300 flex items-center gap-2 bg-base-100">
   <h3 class="font-semibold text-sm flex-1 truncate" x-text="selectedFolder?.display_name || 'Messages'"></h3>
-  <button class="btn btn-ghost btn-xs btn-circle" @click="refreshFolder()" :disabled="loadingMessages" title="Refresh">
-    <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="loadingMessages ? 'animate-spin' : ''"></i>
+  <button class="btn btn-ghost btn-xs btn-circle" @click="refreshFolder()"
+          :disabled="syncingAccounts[selectedFolder?.account_id]" title="Refresh">
+    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"
+       :class="syncingAccounts[selectedFolder?.account_id] ? 'animate-spin' : ''"></i>
   </button>
 </div>
 

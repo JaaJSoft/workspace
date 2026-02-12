@@ -18,6 +18,7 @@ function mailApp() {
     loadingMessages: false,
     loadingMoreMessages: false,
     loadingDetail: false,
+    syncingAccounts: {},  // { accountUuid: true }
     hasMoreMessages: false,
     currentPage: 1,
     totalMessages: 0,
@@ -153,11 +154,8 @@ function mailApp() {
 
     async refreshFolder() {
       if (!this.selectedFolder) return;
-      // Sync account first
       const accountUuid = this.selectedFolder.account_id;
-      await this._fetch(`/api/v1/mail/accounts/${accountUuid}/sync`, { method: 'POST' });
-      await this.loadFolders(accountUuid);
-      await this.loadMessages();
+      await this.syncAccount(accountUuid);
     },
 
     // ----- Message detail -----
@@ -198,6 +196,7 @@ function mailApp() {
     // ----- Flags -----
     async toggleRead(msg, forceRead) {
       const newVal = forceRead !== undefined ? forceRead : !msg.is_read;
+      const wasRead = msg.is_read;
       await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
         method: 'PATCH',
         body: { is_read: newVal },
@@ -206,6 +205,10 @@ function mailApp() {
       // Update in list too
       const listMsg = this.messages.find(m => m.uuid === msg.uuid);
       if (listMsg) listMsg.is_read = newVal;
+      // Update folder unread count
+      if (this.selectedFolder && wasRead !== newVal) {
+        this.selectedFolder.unread_count += newVal ? -1 : 1;
+      }
     },
 
     async toggleStar(msg) {
@@ -237,6 +240,11 @@ function mailApp() {
         this.selectedMessage = null;
         this.messageDetail = null;
       }
+      // Update folder counts
+      if (this.selectedFolder) {
+        this.selectedFolder.message_count--;
+        if (!msg.is_read) this.selectedFolder.unread_count--;
+      }
     },
 
     // ----- Batch actions -----
@@ -252,9 +260,16 @@ function mailApp() {
         method: 'POST',
         body: { message_ids: this.selectedMessages, action },
       });
-      // Refresh
+      // Refresh messages and folder counts
       this.selectedMessages = [];
       await this.loadMessages();
+      if (this.selectedFolder) {
+        await this.loadFolders(this.selectedFolder.account_id);
+        // Re-select folder to refresh counts in sidebar
+        const flds = this.folders[this.selectedFolder.account_id] || [];
+        const updated = flds.find(f => f.uuid === this.selectedFolder.uuid);
+        if (updated) this.selectedFolder = updated;
+      }
       if (this.messageDetail && action === 'delete') {
         this.selectedMessage = null;
         this.messageDetail = null;
@@ -376,10 +391,15 @@ function mailApp() {
     },
 
     async syncAccount(uuid) {
-      await this._fetch(`/api/v1/mail/accounts/${uuid}/sync`, { method: 'POST' });
-      await this.loadFolders(uuid);
-      if (this.selectedFolder?.account_id === uuid) {
-        await this.loadMessages();
+      this.syncingAccounts[uuid] = true;
+      try {
+        await this._fetch(`/api/v1/mail/accounts/${uuid}/sync`, { method: 'POST' });
+        await this.loadFolders(uuid);
+        if (this.selectedFolder?.account_id === uuid) {
+          await this.loadMessages();
+        }
+      } finally {
+        this.syncingAccounts[uuid] = false;
       }
       this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },

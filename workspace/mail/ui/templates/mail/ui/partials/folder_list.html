@@ -6,14 +6,20 @@
          @click="toggleAccountExpanded(account.uuid)"
          x-show="!collapsed">
       <i :data-lucide="expandedAccounts[account.uuid] ? 'chevron-down' : 'chevron-right'"
-         class="w-3.5 h-3.5 text-base-content/50 flex-shrink-0"></i>
+         class="w-3.5 h-3.5 text-base-content/50 flex-shrink-0"
+         x-show="!syncingAccounts[account.uuid]"></i>
+      <span class="loading loading-spinner loading-xs text-warning flex-shrink-0"
+            x-show="syncingAccounts[account.uuid]" x-cloak></span>
       <span class="text-sm font-medium truncate flex-1" x-text="account.display_name || account.email"></span>
       <div class="dropdown dropdown-end" @click.stop>
         <button class="btn btn-ghost btn-xs btn-circle opacity-50 hover:opacity-100" tabindex="0">
           <i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i>
         </button>
         <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-lg shadow-lg z-50 w-40">
-          <li><a @click="syncAccount(account.uuid)"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Sync</a></li>
+          <li><a @click="syncAccount(account.uuid)" :class="syncingAccounts[account.uuid] ? 'pointer-events-none opacity-50' : ''">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="syncingAccounts[account.uuid] ? 'animate-spin' : ''"></i>
+            <span x-text="syncingAccounts[account.uuid] ? 'Syncing...' : 'Sync'"></span>
+          </a></li>
           <li><a @click="testAccount(account.uuid)"><i data-lucide="plug" class="w-3.5 h-3.5"></i> Test</a></li>
           <li><a @click="removeAccount(account.uuid)" class="text-error"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove</a></li>
         </ul>

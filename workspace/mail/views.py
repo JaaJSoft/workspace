@@ -122,9 +122,14 @@ class MailAccountTestView(APIView):
         imap_ok, imap_error = test_imap_connection(account)
         smtp_ok, smtp_error = test_smtp_connection(account)
 
+        if imap_error:
+            logger.warning("IMAP test failed for %s: %s", account.email, imap_error)
+        if smtp_error:
+            logger.warning("SMTP test failed for %s: %s", account.email, smtp_error)
+
         return Response({
-            'imap': {'success': imap_ok, 'error': imap_error},
-            'smtp': {'success': smtp_ok, 'error': smtp_error},
+            'imap': {'success': imap_ok, 'error': 'Connection failed' if imap_error else None},
+            'smtp': {'success': smtp_ok, 'error': 'Connection failed' if smtp_error else None},
         })
 
 

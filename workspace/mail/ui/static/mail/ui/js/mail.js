@@ -23,10 +23,13 @@ function mailApp() {
     currentPage: 1,
     totalMessages: 0,
 
-    // Add account
+    // Add / Edit account
     newAccount: _defaultNewAccount(),
     accountError: '',
     addingAccount: false,
+    editAccount: null,
+    editAccountError: '',
+    savingAccount: false,
 
     // Filters
     filters: {
@@ -90,6 +93,7 @@ function mailApp() {
         const data = await res.json();
         this.folders[accountUuid] = data;
       }
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     getFolders(accountUuid) {
@@ -643,6 +647,56 @@ function mailApp() {
         this.messageDetail = null;
         this._updateUrl(null);
       }
+    },
+
+    showEditAccount(account) {
+      this.editAccount = {
+        uuid: account.uuid,
+        email: account.email,
+        display_name: account.display_name || '',
+        imap_host: account.imap_host,
+        imap_port: account.imap_port,
+        imap_use_ssl: account.imap_use_ssl,
+        smtp_host: account.smtp_host,
+        smtp_port: account.smtp_port,
+        smtp_use_tls: account.smtp_use_tls,
+        username: account.username,
+        password: '',
+      };
+      this.editAccountError = '';
+      document.getElementById('mail-edit-account-dialog').showModal();
+    },
+
+    closeEditAccount() {
+      document.getElementById('mail-edit-account-dialog').close();
+      this.editAccount = null;
+    },
+
+    async saveAccount() {
+      this.savingAccount = true;
+      this.editAccountError = '';
+
+      const payload = { ...this.editAccount };
+      const uuid = payload.uuid;
+      delete payload.uuid;
+      delete payload.email;
+      if (!payload.password) delete payload.password;
+
+      const res = await this._fetch(`/api/v1/mail/accounts/${uuid}`, {
+        method: 'PATCH',
+        body: payload,
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        const idx = this.accounts.findIndex(a => a.uuid === uuid);
+        if (idx !== -1) this.accounts[idx] = updated;
+        this.closeEditAccount();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        this.editAccountError = data.detail || JSON.stringify(data) || 'Failed to save account';
+      }
+      this.savingAccount = false;
     },
 
     // ----- Keyboard -----

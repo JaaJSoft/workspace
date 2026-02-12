@@ -178,6 +178,77 @@ x-init="init()"
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
+<!-- Edit account dialog -->
+<dialog id="mail-edit-account-dialog" class="modal">
+  <template x-if="editAccount">
+  <div class="modal-box max-w-lg">
+    <h3 class="font-bold text-lg mb-1">Edit Account</h3>
+    <p class="text-sm text-base-content/50 mb-4" x-text="editAccount?.email"></p>
+    <form @submit.prevent="saveAccount()">
+      <div class="grid grid-cols-1 gap-3">
+        <label class="form-control w-full">
+          <div class="label"><span class="label-text">Display name</span></div>
+          <input type="text" x-model="editAccount.display_name" class="input input-bordered w-full input-sm" />
+        </label>
+        <div class="divider text-xs my-1">IMAP (Incoming)</div>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="form-control col-span-2">
+            <div class="label"><span class="label-text">Host</span></div>
+            <input type="text" x-model="editAccount.imap_host" class="input input-bordered w-full input-sm" required />
+          </label>
+          <label class="form-control">
+            <div class="label"><span class="label-text">Port</span></div>
+            <input type="number" x-model.number="editAccount.imap_port" class="input input-bordered w-full input-sm" />
+          </label>
+        </div>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" x-model="editAccount.imap_use_ssl" class="toggle toggle-sm toggle-warning" />
+          <span class="label-text">Use SSL</span>
+        </label>
+        <div class="divider text-xs my-1">SMTP (Outgoing)</div>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="form-control col-span-2">
+            <div class="label"><span class="label-text">Host</span></div>
+            <input type="text" x-model="editAccount.smtp_host" class="input input-bordered w-full input-sm" required />
+          </label>
+          <label class="form-control">
+            <div class="label"><span class="label-text">Port</span></div>
+            <input type="number" x-model.number="editAccount.smtp_port" class="input input-bordered w-full input-sm" />
+          </label>
+        </div>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" x-model="editAccount.smtp_use_tls" class="toggle toggle-sm toggle-warning" />
+          <span class="label-text">Use STARTTLS</span>
+        </label>
+        <div class="divider text-xs my-1">Authentication</div>
+        <label class="form-control w-full">
+          <div class="label"><span class="label-text">Username</span></div>
+          <input type="text" x-model="editAccount.username" class="input input-bordered w-full input-sm" required />
+        </label>
+        <label class="form-control w-full">
+          <div class="label"><span class="label-text">Password</span><span class="label-text-alt text-base-content/40">Leave empty to keep current</span></div>
+          <input type="password" x-model="editAccount.password" class="input input-bordered w-full input-sm" placeholder="••••••••" />
+        </label>
+      </div>
+      <div class="mt-3" x-show="editAccountError" x-cloak>
+        <div class="alert alert-error text-white text-sm">
+          <i data-lucide="x-circle" class="w-4 h-4"></i>
+          <span x-text="editAccountError"></span>
+        </div>
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost btn-sm" @click="closeEditAccount()">Cancel</button>
+        <button type="submit" class="btn btn-warning btn-sm" :disabled="savingAccount">
+          <span x-show="!savingAccount">Save</span>
+          <span x-show="savingAccount" class="loading loading-spinner loading-xs"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+  </template>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 <!-- Embedded data -->
 <script id="accounts-data" type="application/json">{{ accounts_json|safe }}</script>
 {% endblock %}

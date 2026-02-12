@@ -62,7 +62,7 @@ x-init="init()"
     <!-- Collapse toggle -->
     <div class="border-t border-base-300 py-4 px-3">
       <ul class="menu p-0" x-show="!isMobile()">
-        {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+        {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" color="warning" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
       </ul>
     </div>
   </aside>
@@ -102,6 +102,9 @@ x-init="init()"
     </div>
   </div>
 </div>
+
+<!-- Folder context menu -->
+{% include "mail/ui/partials/folder_context_menu.html" %}
 
 <!-- Compose dialog -->
 {% include "mail/ui/partials/compose_dialog.html" %}

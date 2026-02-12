@@ -146,8 +146,9 @@ class MailAccountSyncView(APIView):
         except Exception as e:
             account.last_sync_error = str(e)
             account.save(update_fields=['last_sync_error', 'updated_at'])
+            logger.exception("Failed to sync account %s", account.email)
             return Response(
-                {'status': 'error', 'error': str(e)},
+                {'status': 'error', 'error': 'Sync failed'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -404,7 +405,7 @@ class MailSendView(APIView):
         except Exception as e:
             logger.exception("Failed to send email from %s", account.email)
             return Response(
-                {'status': 'error', 'error': str(e)},
+                {'status': 'error', 'error': 'Failed to send email'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -531,7 +532,7 @@ class MailDraftView(APIView):
         except Exception as e:
             logger.exception("Failed to save draft for %s", account.email)
             return Response(
-                {'detail': str(e)},
+                {'detail': 'Failed to save draft'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 

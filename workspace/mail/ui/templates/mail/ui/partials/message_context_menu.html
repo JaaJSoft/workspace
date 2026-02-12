@@ -1,0 +1,52 @@
+<!-- Message Context Menu -->
+<div
+  x-show="msgCtx.open"
+  x-cloak
+  @click.outside="msgCtx.open = false"
+  @keydown.escape.window="msgCtx.open = false"
+  class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-52 p-1"
+  :style="`top: ${msgCtx.y}px; left: ${msgCtx.x}px;`"
+  id="message-context-menu"
+>
+  <ul class="menu menu-sm p-0">
+    <li>
+      <button type="button" class="gap-3 rounded" @click="msgCtxAction('reply')">
+        <i data-lucide="reply" class="w-4 h-4"></i>
+        <span>Reply</span>
+      </button>
+    </li>
+    <li>
+      <button type="button" class="gap-3 rounded" @click="msgCtxAction('reply_all')">
+        <i data-lucide="reply-all" class="w-4 h-4"></i>
+        <span>Reply all</span>
+      </button>
+    </li>
+    <li>
+      <button type="button" class="gap-3 rounded" @click="msgCtxAction('forward')">
+        <i data-lucide="forward" class="w-4 h-4"></i>
+        <span>Forward</span>
+      </button>
+    </li>
+    <hr class="my-1 border-base-300" />
+    <li>
+      <button type="button" class="gap-3 rounded" @click="msgCtxAction('toggle_star')">
+        <i data-lucide="star" class="w-4 h-4"></i>
+        <span x-text="msgCtx.msg?.is_starred ? 'Unstar' : 'Star'"></span>
+      </button>
+    </li>
+    <li>
+      <button type="button" class="gap-3 rounded" @click="msgCtxAction('toggle_read')">
+        <i data-lucide="mail" class="w-4 h-4" x-show="msgCtx.msg?.is_read"></i>
+        <i data-lucide="mail-open" class="w-4 h-4" x-show="!msgCtx.msg?.is_read"></i>
+        <span x-text="msgCtx.msg?.is_read ? 'Mark unread' : 'Mark read'"></span>
+      </button>
+    </li>
+    <hr class="my-1 border-base-300" />
+    <li>
+      <button type="button" class="gap-3 rounded text-error" @click="msgCtxAction('delete')">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+        <span>Delete</span>
+      </button>
+    </li>
+  </ul>
+</div>

@@ -99,6 +99,7 @@
         'font-semibold': !msg.is_read,
       }"
       @click="selectMessage(msg)"
+      @contextmenu="openMessageContextMenu($event, msg)"
     >
       <!-- Select checkbox -->
       <input type="checkbox"

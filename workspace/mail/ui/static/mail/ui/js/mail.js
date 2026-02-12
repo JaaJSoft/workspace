@@ -214,6 +214,9 @@ function mailApp() {
     // Folder context menu
     folderCtx: { open: false, x: 0, y: 0, folder: null },
 
+    // Message context menu
+    msgCtx: { open: false, x: 0, y: 0, msg: null },
+
     // Folder icon edit
     folderIconEdit: { uuid: null, name: '', icon: null, color: null },
 
@@ -1076,6 +1079,53 @@ function mailApp() {
           break;
         case 'sync':
           this.syncAccount(folder.account_id);
+          break;
+      }
+    },
+
+    openMessageContextMenu(event, msg) {
+      event.preventDefault();
+      const menu = document.getElementById('message-context-menu');
+      if (!menu) return;
+
+      this.msgCtx.msg = msg;
+      this.msgCtx.open = true;
+
+      this.$nextTick(() => {
+        const rect = menu.getBoundingClientRect();
+        let x = event.clientX;
+        let y = event.clientY;
+        if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 10;
+        if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
+        this.msgCtx.x = x;
+        this.msgCtx.y = y;
+        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+      });
+    },
+
+    async msgCtxAction(action) {
+      const msg = this.msgCtx.msg;
+      this.msgCtx.open = false;
+      if (!msg) return;
+
+      switch (action) {
+        case 'reply':
+          this.replyTo(msg);
+          break;
+        case 'reply_all':
+          this.replyAll(msg);
+          break;
+        case 'forward':
+          this.forwardMessage(msg);
+          break;
+        case 'toggle_read':
+          await this.toggleRead(msg);
+          break;
+        case 'toggle_star':
+          await this.toggleStar(msg);
+          break;
+        case 'delete':
+          await this.deleteMessage(msg);
           break;
       }
     },

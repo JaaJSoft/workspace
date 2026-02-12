@@ -1,90 +1,122 @@
 <!-- Compose email dialog -->
 <dialog id="mail-compose-dialog" class="modal">
-  <div class="modal-box max-w-2xl h-[80vh] flex flex-col">
+  <div class="modal-box max-w-2xl h-[80vh] flex flex-col p-0">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-3">
-      <h3 class="font-bold text-lg" x-text="compose.is_reply ? compose.subject : 'New Message'"></h3>
-      <button class="btn btn-ghost btn-sm btn-circle" @click="closeCompose()">
+    <div class="flex items-center justify-between p-4 border-b border-base-300">
+      <h3 class="font-semibold" x-text="compose.is_reply ? compose.subject : 'New Message'"></h3>
+      <button type="button" class="btn btn-ghost btn-sm btn-circle" @click="closeCompose()">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
 
     <!-- Compose form -->
-    <form @submit.prevent="sendEmail()" class="flex flex-col flex-1 min-h-0 gap-2">
-      <!-- Account selector -->
-      <div class="flex items-center gap-2">
-        <span class="text-sm text-base-content/50 w-12">From</span>
-        <select x-model="compose.account_id" class="select select-bordered select-sm flex-1" required>
-          <template x-for="acc in accounts" :key="acc.uuid">
-            <option :value="acc.uuid" x-text="acc.display_name ? acc.display_name + ' <' + acc.email + '>' : acc.email"></option>
-          </template>
-        </select>
-      </div>
+    <form @submit.prevent="sendEmail()" class="flex flex-col flex-1 min-h-0">
+      <!-- Fields -->
+      <div class="px-4 pt-3 space-y-0">
+        <!-- From -->
+        <div class="flex items-center gap-3 py-1.5 border-b border-base-200">
+          <label class="text-xs font-medium text-base-content/40 w-10 shrink-0">From</label>
+          <select x-model="compose.account_id"
+                  class="select select-ghost select-sm flex-1 focus:outline-none focus:bg-transparent" required>
+            <template x-for="acc in accounts" :key="acc.uuid">
+              <option :value="acc.uuid"
+                      x-text="acc.display_name ? acc.display_name + ' <' + acc.email + '>' : acc.email"></option>
+            </template>
+          </select>
+        </div>
 
-      <!-- To -->
-      <div class="flex items-center gap-2">
-        <span class="text-sm text-base-content/50 w-12">To</span>
-        <input type="text" x-model="compose.to" class="input input-bordered input-sm flex-1"
-               placeholder="recipient@example.com" required />
-      </div>
+        <!-- To -->
+        <div class="flex items-center gap-3 py-1.5 border-b border-base-200">
+          <label class="text-xs font-medium text-base-content/40 w-10 shrink-0">To</label>
+          <input type="text" x-model="compose.to"
+                 class="input input-ghost input-sm flex-1 focus:outline-none focus:bg-transparent"
+                 placeholder="recipient@example.com" required />
+          <button type="button"
+                  class="btn btn-ghost btn-xs text-base-content/40 hover:text-base-content"
+                  x-show="!showCcBcc" @click="showCcBcc = true">
+            Cc/Bcc
+          </button>
+        </div>
 
-      <!-- Cc (toggle) -->
-      <div x-show="showCcBcc" x-collapse class="flex items-center gap-2">
-        <span class="text-sm text-base-content/50 w-12">Cc</span>
-        <input type="text" x-model="compose.cc" class="input input-bordered input-sm flex-1"
-               placeholder="cc@example.com" />
-      </div>
+        <!-- Cc -->
+        <div class="flex items-center gap-3 py-1.5 border-b border-base-200"
+             x-show="showCcBcc" x-collapse>
+          <label class="text-xs font-medium text-base-content/40 w-10 shrink-0">Cc</label>
+          <input type="text" x-model="compose.cc"
+                 class="input input-ghost input-sm flex-1 focus:outline-none focus:bg-transparent"
+                 placeholder="cc@example.com" />
+        </div>
 
-      <!-- Bcc (toggle) -->
-      <div x-show="showCcBcc" x-collapse class="flex items-center gap-2">
-        <span class="text-sm text-base-content/50 w-12">Bcc</span>
-        <input type="text" x-model="compose.bcc" class="input input-bordered input-sm flex-1"
-               placeholder="bcc@example.com" />
-      </div>
+        <!-- Bcc -->
+        <div class="flex items-center gap-3 py-1.5 border-b border-base-200"
+             x-show="showCcBcc" x-collapse>
+          <label class="text-xs font-medium text-base-content/40 w-10 shrink-0">Bcc</label>
+          <input type="text" x-model="compose.bcc"
+                 class="input input-ghost input-sm flex-1 focus:outline-none focus:bg-transparent"
+                 placeholder="bcc@example.com" />
+        </div>
 
-      <div class="flex items-center gap-2" x-show="!showCcBcc">
-        <div class="w-12"></div>
-        <button type="button" class="btn btn-ghost btn-xs" @click="showCcBcc = true">Cc/Bcc</button>
-      </div>
-
-      <!-- Subject -->
-      <div class="flex items-center gap-2">
-        <span class="text-sm text-base-content/50 w-12">Subject</span>
-        <input type="text" x-model="compose.subject" class="input input-bordered input-sm flex-1" placeholder="Subject" />
+        <!-- Subject -->
+        <div class="flex items-center gap-3 py-1.5 border-b border-base-200">
+          <label class="text-xs font-medium text-base-content/40 w-10 shrink-0">Subject</label>
+          <input type="text" x-model="compose.subject"
+                 class="input input-ghost input-sm flex-1 focus:outline-none focus:bg-transparent"
+                 placeholder="Subject" />
+        </div>
       </div>
 
       <!-- Body -->
-      <textarea
-        x-model="compose.body"
-        class="textarea textarea-bordered flex-1 min-h-0 text-sm leading-relaxed resize-none"
-        placeholder="Write your message..."
-      ></textarea>
-
-      <!-- Error -->
-      <div x-show="compose.error" x-cloak class="alert alert-error text-white text-sm">
-        <i data-lucide="x-circle" class="w-4 h-4"></i>
-        <span x-text="compose.error"></span>
+      <div class="flex-1 min-h-0 px-4 py-3">
+        <textarea
+          x-model="compose.body"
+          class="w-full h-full text-sm leading-relaxed resize-none bg-transparent focus:outline-none"
+          placeholder="Write your message..."
+        ></textarea>
       </div>
 
-      <!-- Actions -->
-      <div class="flex items-center justify-between pt-2 border-t border-base-300">
-        <div class="flex items-center gap-1">
-          <button type="button" class="btn btn-ghost btn-xs btn-square" @click="$refs.composeFileInput.click()" title="Attach file">
-            <i data-lucide="paperclip" class="w-4 h-4"></i>
-          </button>
-          <input type="file" multiple x-ref="composeFileInput" class="hidden" @change="handleComposeFiles($event)" />
-          <span x-show="compose.attachments.length > 0" class="text-xs text-base-content/50"
-                x-text="compose.attachments.length + ' file(s)'"></span>
+      <!-- Attachments preview -->
+      <div class="px-4 flex flex-wrap gap-2" x-show="compose.attachments.length > 0" x-cloak>
+        <template x-for="(file, idx) in compose.attachments" :key="idx">
+          <span class="badge badge-sm gap-1.5 pr-1">
+            <i data-lucide="file" class="w-3 h-3"></i>
+            <span class="max-w-32 truncate" x-text="file.name"></span>
+            <button type="button" class="btn btn-ghost btn-circle" style="width:16px;height:16px;min-height:0"
+                    @click="compose.attachments.splice(idx, 1)">
+              <i data-lucide="x" class="w-3 h-3"></i>
+            </button>
+          </span>
+        </template>
+      </div>
+
+      <!-- Error -->
+      <div x-show="compose.error" x-cloak class="px-4">
+        <div class="alert alert-error text-sm py-2">
+          <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
+          <span x-text="compose.error"></span>
         </div>
-        <div class="flex items-center gap-2">
-          <button type="button" class="btn btn-ghost btn-sm" @click="closeCompose()">Discard</button>
-          <button type="submit" class="btn btn-warning btn-sm" :disabled="compose.sending">
-            <span x-show="!compose.sending">
-              <i data-lucide="send" class="w-4 h-4"></i> Send
-            </span>
-            <span x-show="compose.sending" class="loading loading-spinner loading-xs"></span>
-          </button>
-        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="flex items-center gap-2 p-4 border-t border-base-300">
+        <button type="button" class="btn btn-ghost btn-sm btn-square text-error/60 hover:text-error"
+                @click="closeCompose()" title="Discard">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+
+        <button type="button" class="btn btn-ghost btn-sm btn-square"
+                @click="$refs.composeFileInput.click()" title="Attach files">
+          <i data-lucide="paperclip" class="w-4 h-4"></i>
+        </button>
+        <input type="file" multiple x-ref="composeFileInput" class="hidden"
+               @change="handleComposeFiles($event)" />
+
+        <div class="flex-1"></div>
+
+        <button type="submit" class="btn btn-warning btn-sm gap-2" :disabled="compose.sending">
+          <span x-show="compose.sending" class="loading loading-spinner loading-xs" x-cloak></span>
+          Send
+          <i data-lucide="send" class="w-4 h-4" x-show="!compose.sending"></i>
+        </button>
       </div>
     </form>
   </div>

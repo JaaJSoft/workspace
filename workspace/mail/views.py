@@ -588,9 +588,24 @@ class MailBatchActionView(APIView):
             delete_message,
             mark_read,
             mark_unread,
+            move_message,
             star_message,
             unstar_message,
         )
+
+        # Resolve target folder for move action
+        target_folder = None
+        if action == 'move':
+            target_folder_id = ser.validated_data.get('target_folder_id')
+            try:
+                target_folder = MailFolder.objects.select_related('account').get(uuid=target_folder_id)
+            except MailFolder.DoesNotExist:
+                return Response(
+                    {'detail': 'Target folder not found'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if target_folder.account.owner != request.user:
+                return Response(status=status.HTTP_404_NOT_FOUND)
 
         action_map = {
             'mark_read': (mark_read, {'is_read': True}),
@@ -600,7 +615,9 @@ class MailBatchActionView(APIView):
         }
 
         processed = 0
+        affected_folders = set()
         for msg in messages:
+            affected_folders.add(msg.folder_id)
             try:
                 if action == 'delete':
                     msg.deleted_at = timezone.now()
@@ -609,6 +626,16 @@ class MailBatchActionView(APIView):
                         delete_message(msg.account, msg)
                     except Exception:
                         pass
+                elif action == 'move' and target_folder:
+                    if target_folder.account_id != msg.account_id:
+                        continue
+                    try:
+                        move_message(msg.account, msg, target_folder)
+                    except Exception:
+                        logger.warning("IMAP move failed for message %s", msg.uuid)
+                    msg.folder = target_folder
+                    msg.save(update_fields=['folder', 'updated_at'])
+                    affected_folders.add(target_folder.uuid)
                 elif action in action_map:
                     imap_fn, db_update = action_map[action]
                     for key, value in db_update.items():
@@ -623,7 +650,6 @@ class MailBatchActionView(APIView):
                 logger.warning("Batch action '%s' failed for message %s", action, msg.uuid)
 
         # Refresh counts for all affected folders
-        affected_folders = {msg.folder_id for msg in messages}
         for folder in MailFolder.objects.filter(uuid__in=affected_folders):
             _refresh_folder_counts(folder)
 

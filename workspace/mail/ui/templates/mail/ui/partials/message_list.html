@@ -67,6 +67,21 @@
   <button class="btn btn-ghost btn-xs" @click="batchAction('star')" :disabled="batchInProgress" title="Star">
     <i data-lucide="star" class="w-3.5 h-3.5"></i>
   </button>
+  <div class="dropdown dropdown-bottom">
+    <button class="btn btn-ghost btn-xs" tabindex="0" :disabled="batchInProgress" title="Move to">
+      <i data-lucide="folder-input" class="w-3.5 h-3.5"></i>
+    </button>
+    <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-lg shadow-xl z-50 w-44 p-1">
+      <template x-for="folder in getMoveTargetFolders(messages[0])" :key="'batch-' + folder.uuid">
+        <li>
+          <button type="button" class="gap-2 rounded" @click="moveMessages([...selectedMessages], folder)">
+            <i :data-lucide="folder.icon || folderIcon(folder.folder_type)" class="w-3.5 h-3.5"></i>
+            <span x-text="folder.display_name" class="text-xs"></span>
+          </button>
+        </li>
+      </template>
+    </ul>
+  </div>
   <button class="btn btn-ghost btn-xs text-error" @click="batchAction('delete')" :disabled="batchInProgress" title="Delete">
     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
   </button>
@@ -97,9 +112,13 @@
         'hover:bg-base-200/50': selectedMessage?.uuid !== msg.uuid,
         'font-normal opacity-70': msg.is_read,
         'font-semibold': !msg.is_read,
+        'opacity-40': _draggingMsgIds?.includes(msg.uuid),
       }"
       @click="selectMessage(msg)"
       @contextmenu="openMessageContextMenu($event, msg)"
+      draggable="true"
+      @dragstart="onMsgDragStart($event, msg)"
+      @dragend="onMsgDragEnd($event)"
     >
       <!-- Select checkbox -->
       <input type="checkbox"

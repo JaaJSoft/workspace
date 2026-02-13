@@ -89,3 +89,12 @@
 .mail-scrollbar::-webkit-scrollbar-thumb:hover {
   background: oklch(var(--bc) / 0.25);
 }
+
+/* Drag & drop */
+[draggable="true"] {
+  -webkit-user-drag: element;
+}
+
+[draggable="true"]:active {
+  cursor: grabbing;
+}

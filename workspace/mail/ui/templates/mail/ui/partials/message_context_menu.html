@@ -2,8 +2,8 @@
 <div
   x-show="msgCtx.open"
   x-cloak
-  @click.outside="msgCtx.open = false"
-  @keydown.escape.window="msgCtx.open = false"
+  @click.outside="if (!moveMenuOpen) msgCtx.open = false"
+  @keydown.escape.window="msgCtx.open = false; moveMenuOpen = false"
   class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-52 p-1"
   :style="`top: ${msgCtx.y}px; left: ${msgCtx.x}px;`"
   id="message-context-menu"
@@ -42,11 +42,46 @@
       </button>
     </li>
     <hr class="my-1 border-base-300" />
+    <li @mouseenter="showMoveMenu($el)" @mouseleave="scheduleMoveMenuClose()">
+      <button type="button" class="gap-3 rounded justify-between">
+        <span class="flex items-center gap-3">
+          <i data-lucide="folder-input" class="w-4 h-4"></i>
+          <span>Move to</span>
+        </span>
+        <i data-lucide="chevron-right" class="w-3 h-3 opacity-50"></i>
+      </button>
+    </li>
+    <hr class="my-1 border-base-300" />
     <li>
       <button type="button" class="gap-3 rounded text-error" @click="msgCtxAction('delete')">
         <i data-lucide="trash-2" class="w-4 h-4"></i>
         <span>Delete</span>
       </button>
+    </li>
+  </ul>
+</div>
+
+<!-- Move to submenu (fixed, positioned via JS) -->
+<div
+  x-show="moveMenuOpen"
+  x-cloak
+  @mouseenter="cancelMoveMenuClose()"
+  @mouseleave="scheduleMoveMenuClose()"
+  class="fixed z-[101] shadow-xl bg-base-100 border border-base-300 rounded-lg w-48 p-1"
+  :style="`top: ${moveMenu.y}px; left: ${moveMenu.x}px;`"
+  id="move-submenu"
+>
+  <ul class="menu menu-sm p-0">
+    <template x-for="folder in getMoveTargetFolders(msgCtx.msg)" :key="folder.uuid">
+      <li>
+        <button type="button" class="gap-3 rounded" @click="moveMessages(selectedMessages.length > 0 && selectedMessages.includes(msgCtx.msg?.uuid) ? [...selectedMessages] : [msgCtx.msg?.uuid], folder); msgCtx.open = false; moveMenuOpen = false;">
+          <i :data-lucide="folder.icon || folderIcon(folder.folder_type)" class="w-4 h-4"></i>
+          <span x-text="folder.display_name"></span>
+        </button>
+      </li>
+    </template>
+    <li x-show="getMoveTargetFolders(msgCtx.msg).length === 0">
+      <span class="text-base-content/40 text-xs px-3 py-1">No folders available</span>
     </li>
   </ul>
 </div>

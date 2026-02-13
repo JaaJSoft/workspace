@@ -501,6 +501,21 @@ def delete_message(account, message):
             pass
 
 
+def move_message(account, message, target_folder):
+    """Move a message to another folder via IMAP COPY + DELETE."""
+    conn = connect_imap(account)
+    try:
+        conn.select(message.folder.name)
+        conn.uid('COPY', str(message.imap_uid), target_folder.name)
+        conn.uid('STORE', str(message.imap_uid), '+FLAGS', '(\\Deleted)')
+        conn.expunge()
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+
 def _set_flag(account, message, flag, add):
     """Add or remove an IMAP flag on a message."""
     conn = connect_imap(account)

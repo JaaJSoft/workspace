@@ -126,4 +126,10 @@ class DraftSaveSerializer(serializers.Serializer):
 
 class BatchActionSerializer(serializers.Serializer):
     message_ids = serializers.ListField(child=serializers.UUIDField(), min_length=1)
-    action = serializers.ChoiceField(choices=['mark_read', 'mark_unread', 'star', 'unstar', 'delete'])
+    action = serializers.ChoiceField(choices=['mark_read', 'mark_unread', 'star', 'unstar', 'delete', 'move'])
+    target_folder_id = serializers.UUIDField(required=False)
+
+    def validate(self, attrs):
+        if attrs['action'] == 'move' and not attrs.get('target_folder_id'):
+            raise serializers.ValidationError({'target_folder_id': 'This field is required for move action.'})
+        return attrs

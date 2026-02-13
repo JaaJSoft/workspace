@@ -217,6 +217,13 @@ function mailApp() {
 
     // Message context menu
     msgCtx: { open: false, x: 0, y: 0, msg: null },
+    moveMenuOpen: false,
+    moveMenu: { x: 0, y: 0 },
+    _moveMenuTimer: null,
+
+    // Drag & drop
+    dragOverFolder: null,
+    _draggingMsgIds: null,
 
     // Folder icon edit
     folderIconEdit: { uuid: null, name: '', icon: null, color: null },
@@ -511,12 +518,16 @@ function mailApp() {
       else this.selectedMessages.splice(idx, 1);
     },
 
-    async batchAction(action) {
+    async batchAction(action, targetFolderId) {
       if (this.selectedMessages.length === 0) return;
       this.batchInProgress = true;
+      const body = { message_ids: this.selectedMessages, action };
+      if (action === 'move' && targetFolderId) {
+        body.target_folder_id = targetFolderId;
+      }
       await this._fetch('/api/v1/mail/messages/batch-action', {
         method: 'POST',
-        body: { message_ids: this.selectedMessages, action },
+        body,
       });
       this.selectedMessages = [];
       await this.loadMessages();
@@ -526,7 +537,7 @@ function mailApp() {
         const updated = flds.find(f => f.uuid === this.selectedFolder.uuid);
         if (updated) this.selectedFolder = updated;
       }
-      if (this.messageDetail && action === 'delete') {
+      if (this.messageDetail && (action === 'delete' || action === 'move')) {
         this.selectedMessage = null;
         this.messageDetail = null;
         this._updateUrl(null);
@@ -1126,6 +1137,7 @@ function mailApp() {
 
       this.msgCtx.msg = msg;
       this.msgCtx.open = true;
+      this.moveMenuOpen = false;
 
       this.$nextTick(() => {
         const rect = menu.getBoundingClientRect();
@@ -1142,6 +1154,8 @@ function mailApp() {
     async msgCtxAction(action) {
       const msg = this.msgCtx.msg;
       this.msgCtx.open = false;
+      this.moveMenuOpen = false;
+      this.cancelMoveMenuClose();
       if (!msg) return;
 
       switch (action) {
@@ -1164,6 +1178,142 @@ function mailApp() {
           await this.deleteMessage(msg);
           break;
       }
+    },
+
+    // ----- Move messages -----
+    getMoveTargetFolders(msg) {
+      if (!msg) return [];
+      const accountId = msg.account_id || this.selectedFolder?.account_id;
+      if (!accountId) return [];
+      const flds = this.folders[accountId] || [];
+      const currentFolderId = msg.folder_id || this.selectedFolder?.uuid;
+      return this.getFolders(accountId).filter(f => f.uuid !== currentFolderId);
+    },
+
+    async moveMessages(msgUuids, targetFolder) {
+      if (!msgUuids || !msgUuids.length || !targetFolder) return;
+      this.batchInProgress = true;
+      await this._fetch('/api/v1/mail/messages/batch-action', {
+        method: 'POST',
+        body: {
+          message_ids: msgUuids,
+          action: 'move',
+          target_folder_id: targetFolder.uuid,
+        },
+      });
+      // Remove moved messages from the current list
+      this.messages = this.messages.filter(m => !msgUuids.includes(m.uuid));
+      this.selectedMessages = this.selectedMessages.filter(id => !msgUuids.includes(id));
+      // Clear detail if the viewed message was moved
+      if (this.messageDetail && msgUuids.includes(this.messageDetail.uuid)) {
+        this.selectedMessage = null;
+        this.messageDetail = null;
+        this._updateUrl(null);
+      }
+      // Refresh folder counts
+      if (this.selectedFolder) {
+        await this.loadFolders(this.selectedFolder.account_id);
+        const flds = this.folders[this.selectedFolder.account_id] || [];
+        const updated = flds.find(f => f.uuid === this.selectedFolder.uuid);
+        if (updated) this.selectedFolder = updated;
+      }
+      this.batchInProgress = false;
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    // ----- Drag & drop -----
+    onMsgDragStart(event, msg) {
+      // If the dragged message is in the selection, drag all selected; otherwise just this one
+      let ids;
+      if (this.selectedMessages.length > 0 && this.selectedMessages.includes(msg.uuid)) {
+        ids = [...this.selectedMessages];
+      } else {
+        ids = [msg.uuid];
+      }
+      this._draggingMsgIds = ids;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', JSON.stringify(ids));
+      // Custom drag image label
+      const count = ids.length;
+      const label = document.createElement('div');
+      label.textContent = count === 1 ? '1 message' : `${count} messages`;
+      label.className = 'badge badge-warning badge-sm';
+      label.style.position = 'absolute';
+      label.style.top = '-9999px';
+      document.body.appendChild(label);
+      event.dataTransfer.setDragImage(label, 0, 0);
+      setTimeout(() => label.remove(), 0);
+    },
+
+    onMsgDragEnd(event) {
+      this._draggingMsgIds = null;
+      this.dragOverFolder = null;
+    },
+
+    onFolderDragOver(event, folder) {
+      // Only highlight if it's not the current folder
+      if (folder.uuid !== this.selectedFolder?.uuid) {
+        event.dataTransfer.dropEffect = 'move';
+        this.dragOverFolder = folder;
+      } else {
+        event.dataTransfer.dropEffect = 'none';
+      }
+    },
+
+    onFolderDragLeave(event, folder) {
+      if (this.dragOverFolder?.uuid === folder.uuid) {
+        this.dragOverFolder = null;
+      }
+    },
+
+    onFolderDrop(event, folder) {
+      this.dragOverFolder = null;
+      if (folder.uuid === this.selectedFolder?.uuid) return;
+      try {
+        const raw = event.dataTransfer.getData('text/plain');
+        const ids = JSON.parse(raw);
+        if (Array.isArray(ids) && ids.length > 0) {
+          this.moveMessages(ids, folder);
+        }
+      } catch (e) {}
+      this._draggingMsgIds = null;
+    },
+
+    // ----- Move submenu positioning -----
+    showMoveMenu(triggerEl) {
+      this.cancelMoveMenuClose();
+      const ctxMenu = document.getElementById('message-context-menu');
+      const ctxRect = ctxMenu.getBoundingClientRect();
+      const triggerRect = triggerEl.getBoundingClientRect();
+      let x = ctxRect.right + 2;
+      let y = triggerRect.top;
+      // Prevent overflow right
+      const subWidth = 192 + 10; // w-48 = 12rem = 192px + margin
+      if (x + subWidth > window.innerWidth) {
+        x = ctxRect.left - subWidth;
+      }
+      // Prevent overflow bottom
+      this.moveMenu.x = x;
+      this.moveMenu.y = y;
+      this.moveMenuOpen = true;
+      this.$nextTick(() => {
+        const sub = document.getElementById('move-submenu');
+        if (sub) {
+          const subRect = sub.getBoundingClientRect();
+          if (subRect.bottom > window.innerHeight) {
+            this.moveMenu.y = window.innerHeight - subRect.height - 10;
+          }
+        }
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      });
+    },
+
+    scheduleMoveMenuClose() {
+      this._moveMenuTimer = setTimeout(() => { this.moveMenuOpen = false; }, 100);
+    },
+
+    cancelMoveMenuClose() {
+      if (this._moveMenuTimer) { clearTimeout(this._moveMenuTimer); this._moveMenuTimer = null; }
     },
 
     async _markFolderAllRead(folder) {

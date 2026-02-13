@@ -33,11 +33,16 @@
       <template x-for="folder in getFolders(account.uuid)" :key="folder.uuid + '-' + (folder.icon || '') + '-' + (folder.color || '')">
         <button
           class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
-          :class="selectedFolder?.uuid === folder.uuid
-            ? 'bg-warning/10 text-warning'
-            : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
+          :class="{
+            'bg-warning/10 text-warning': selectedFolder?.uuid === folder.uuid && dragOverFolder?.uuid !== folder.uuid,
+            'text-base-content/70 hover:bg-base-content/5 hover:text-warning': selectedFolder?.uuid !== folder.uuid && dragOverFolder?.uuid !== folder.uuid,
+            'ring-2 ring-warning/50 ring-offset-1 bg-warning/10': dragOverFolder?.uuid === folder.uuid,
+          }"
           @click="selectFolder(folder)"
           @contextmenu="openFolderContextMenu($event, folder)"
+          @dragover.prevent="onFolderDragOver($event, folder)"
+          @dragleave="onFolderDragLeave($event, folder)"
+          @drop.prevent="onFolderDrop($event, folder)"
         >
           <span class="flex-shrink-0" :class="folder.color || ''">
             <i :data-lucide="folder.icon || folderIcon(folder.folder_type)" class="w-4 h-4"></i>
@@ -57,12 +62,17 @@
       <template x-for="folder in getFolders(account.uuid)" :key="'c-' + folder.uuid + '-' + (folder.icon || '') + '-' + (folder.color || '')">
         <button
           class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
-          :class="selectedFolder?.uuid === folder.uuid
-            ? 'bg-warning/10 text-warning'
-            : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
+          :class="{
+            'bg-warning/10 text-warning': selectedFolder?.uuid === folder.uuid && dragOverFolder?.uuid !== folder.uuid,
+            'text-base-content/70 hover:bg-base-content/5 hover:text-warning': selectedFolder?.uuid !== folder.uuid && dragOverFolder?.uuid !== folder.uuid,
+            'ring-2 ring-warning/50 ring-offset-1 bg-warning/10': dragOverFolder?.uuid === folder.uuid,
+          }"
           :title="folder.display_name"
           @click="selectFolder(folder)"
           @contextmenu="openFolderContextMenu($event, folder)"
+          @dragover.prevent="onFolderDragOver($event, folder)"
+          @dragleave="onFolderDragLeave($event, folder)"
+          @drop.prevent="onFolderDrop($event, folder)"
         >
           <span :class="folder.color || ''">
             <i :data-lucide="folder.icon || folderIcon(folder.folder_type)" class="w-5 h-5"></i>

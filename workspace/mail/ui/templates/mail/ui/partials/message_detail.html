@@ -1,5 +1,36 @@
-<!-- Empty state -->
-<div x-show="!selectedMessage" class="flex-1 flex items-center justify-center">
+<!-- Empty state: folder info -->
+<div x-show="!selectedMessage && selectedFolder" class="flex-1 flex items-center justify-center">
+  <div class="text-center max-w-xs">
+    <!-- Folder icon -->
+    <div class="mb-4">
+      <span :class="selectedFolder?.color || 'text-warning'" class="opacity-60">
+        <i :data-lucide="selectedFolder?.icon || folderIcon(selectedFolder?.folder_type)" class="w-16 h-16 mx-auto"></i>
+      </span>
+    </div>
+    <!-- Folder name -->
+    <h3 class="text-lg font-semibold mb-1" x-text="selectedFolder?.display_name"></h3>
+    <!-- Account -->
+    <p class="text-sm text-base-content/50 mb-4"
+       x-text="accounts.find(a => a.uuid === selectedFolder?.account_id)?.display_name || accounts.find(a => a.uuid === selectedFolder?.account_id)?.email || ''"></p>
+    <!-- Stats -->
+    <div class="flex items-center justify-center gap-4 text-sm text-base-content/60">
+      <span class="flex items-center gap-1.5">
+        <i data-lucide="mail" class="w-4 h-4"></i>
+        <span x-text="(selectedFolder?.message_count ?? 0) + ' message' + ((selectedFolder?.message_count ?? 0) !== 1 ? 's' : '')"></span>
+      </span>
+      <span class="flex items-center gap-1.5" x-show="selectedFolder?.unread_count > 0">
+        <i data-lucide="circle-dot" class="w-4 h-4 text-warning"></i>
+        <span class="text-warning" x-text="(selectedFolder?.unread_count ?? 0) + ' unread'"></span>
+      </span>
+    </div>
+    <!-- Hint -->
+    <p class="text-xs text-base-content/30 mt-6">Select a message to read</p>
+    <p class="text-xs text-base-content/30 mt-1">Use <kbd class="kbd kbd-xs">j</kbd> / <kbd class="kbd kbd-xs">k</kbd> to navigate</p>
+  </div>
+</div>
+
+<!-- Empty state: no folder -->
+<div x-show="!selectedMessage && !selectedFolder" class="flex-1 flex items-center justify-center">
   <div class="text-center text-base-content/40">
     <i data-lucide="mail-open" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
     <p class="text-sm">Select a message to read</p>

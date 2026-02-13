@@ -38,6 +38,52 @@ def _refresh_folder_counts(folder):
 
 
 @extend_schema(tags=['Mail'])
+class MailAutodiscoverView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Auto-discover IMAP/SMTP settings for an email address")
+    def post(self, request):
+        email = (request.data.get('email') or '').strip()
+        if not email or '@' not in email:
+            return Response(
+                {'detail': 'A valid email address is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        domain = email.split('@', 1)[1]
+
+        from myldiscovery import autodiscover
+
+        try:
+            settings = autodiscover(domain)
+        except Exception:
+            logger.info("Autodiscover failed for domain %s", domain)
+            settings = None
+
+        if not settings or not settings.get('imap') or not settings.get('smtp'):
+            return Response(
+                {'detail': 'Could not auto-detect settings for this domain'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        imap = settings['imap']
+        smtp = settings['smtp']
+
+        # Map starttls to use_ssl / use_tls
+        imap_use_ssl = not imap.get('starttls', False)
+        smtp_use_tls = smtp.get('starttls', True)
+
+        return Response({
+            'imap_host': imap.get('server', ''),
+            'imap_port': imap.get('port', 993),
+            'imap_use_ssl': imap_use_ssl,
+            'smtp_host': smtp.get('server', ''),
+            'smtp_port': smtp.get('port', 587),
+            'smtp_use_tls': smtp_use_tls,
+        })
+
+
+@extend_schema(tags=['Mail'])
 class MailAccountListView(APIView):
     permission_classes = [IsAuthenticated]
 

@@ -198,6 +198,7 @@ function mailApp() {
     newAccount: _defaultNewAccount(),
     accountError: '',
     addingAccount: false,
+    autoDiscovering: false,
     editAccount: null,
     editAccountError: '',
     savingAccount: false,
@@ -899,6 +900,41 @@ function mailApp() {
       this.newAccount = _defaultNewAccount();
       this.accountError = '';
       document.getElementById('mail-add-account-dialog').showModal();
+    },
+
+    async autodiscoverSettings() {
+      const email = (this.newAccount.email || '').trim();
+      if (!email) return;
+
+      this.autoDiscovering = true;
+      this.accountError = '';
+
+      try {
+        const res = await this._fetch('/api/v1/mail/autodiscover', {
+          method: 'POST',
+          body: { email },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          this.newAccount.imap_host = data.imap_host;
+          this.newAccount.imap_port = data.imap_port;
+          this.newAccount.imap_use_ssl = data.imap_use_ssl;
+          this.newAccount.smtp_host = data.smtp_host;
+          this.newAccount.smtp_port = data.smtp_port;
+          this.newAccount.smtp_use_tls = data.smtp_use_tls;
+          if (!this.newAccount.username) {
+            this.newAccount.username = email;
+          }
+        } else {
+          this.accountError = 'Could not auto-detect settings for this email. Please fill in manually.';
+        }
+      } catch (e) {
+        this.accountError = 'Auto-detection failed. Please fill in settings manually.';
+      }
+
+      this.autoDiscovering = false;
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     closeAddAccount() {

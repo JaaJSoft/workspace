@@ -3,6 +3,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path('api/v1/mail/autodiscover', views.MailAutodiscoverView.as_view(), name='mail-autodiscover'),
     path('api/v1/mail/accounts', views.MailAccountListView.as_view(), name='mail-account-list'),
     path('api/v1/mail/accounts/<uuid:uuid>', views.MailAccountDetailView.as_view(), name='mail-account-detail'),
     path('api/v1/mail/accounts/<uuid:uuid>/test', views.MailAccountTestView.as_view(), name='mail-account-test'),

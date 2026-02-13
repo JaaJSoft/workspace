@@ -160,7 +160,18 @@ x-init="init()"
       <div class="grid grid-cols-1 gap-3">
         <label class="form-control w-full">
           <div class="label"><span class="label-text">Email address</span></div>
-          <input type="email" x-model="newAccount.email" class="input input-bordered w-full input-sm" required />
+          <div class="flex gap-2">
+            <input type="email" x-model="newAccount.email" class="input input-bordered w-full input-sm" required />
+            <button type="button" class="btn btn-outline btn-warning btn-sm whitespace-nowrap"
+                    :disabled="!newAccount.email || autoDiscovering"
+                    @click="autodiscoverSettings()">
+              <span x-show="!autoDiscovering" class="flex items-center gap-1">
+                <i data-lucide="radar" class="w-3.5 h-3.5"></i>
+                Detect
+              </span>
+              <span x-show="autoDiscovering" class="loading loading-spinner loading-xs"></span>
+            </button>
+          </div>
         </label>
         <label class="form-control w-full">
           <div class="label"><span class="label-text">Display name</span></div>

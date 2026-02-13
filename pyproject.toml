@@ -23,6 +23,7 @@ dependencies = [
     # mail
     "cryptography>=44.0.0",
     "nh3>=0.2.20",
+    "myl-discovery>=0.6.4",
     # utils
     "psutil>=7.2.2",
     "mistune>=3.2.0",

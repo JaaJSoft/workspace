@@ -78,36 +78,46 @@ x-init="init()"
 
 {% block content %}
 <div class="h-full flex min-w-0 bg-base-100">
-  <!-- Message list panel -->
-  <div class="w-96 border-r border-base-300 flex flex-col min-h-0"
-       :class="selectedMessage && isMobile() ? 'hidden' : ''"
-       x-show="selectedFolder">
-    {% include "mail/ui/partials/message_list.html" %}
-  </div>
-
-  <!-- Message detail panel -->
-  <div class="flex-1 flex flex-col min-h-0 min-w-0"
-       :class="!selectedMessage && isMobile() ? 'hidden' : ''">
-    {% include "mail/ui/partials/message_detail.html" %}
-  </div>
-
-  <!-- Empty state (no folder selected) -->
-  <div class="flex-1 flex items-center justify-center" x-show="!selectedFolder">
-    <div class="text-center text-base-content/40">
-      <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
-      <p class="text-lg font-medium" x-show="accounts.length > 0">Select a folder to view messages</p>
-      <template x-if="accounts.length === 0">
-        <div>
-          <p class="text-lg font-medium mb-2">No mail accounts configured</p>
-          <p class="text-sm mb-4">Add a mail account to get started</p>
-          <button class="btn btn-warning btn-sm" @click="showAddAccount()">
-            <i data-lucide="plus" class="w-4 h-4"></i>
-            Add Account
-          </button>
-        </div>
-      </template>
+  <!-- No accounts: centered empty state -->
+  <template x-if="accounts.length === 0 && !selectedFolder">
+    <div class="flex-1 flex items-center justify-center">
+      <div class="text-center text-base-content/40">
+        <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
+        <p class="text-lg font-medium mb-2">No mail accounts configured</p>
+        <p class="text-sm mb-4">Add a mail account to get started</p>
+        <button class="btn btn-warning btn-sm" @click="showAddAccount()">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          Add Account
+        </button>
+      </div>
     </div>
-  </div>
+  </template>
+
+  <!-- Normal layout: has accounts or folder selected -->
+  <template x-if="accounts.length > 0 || selectedFolder">
+    <div class="flex h-full min-w-0 w-full">
+      <!-- Message list panel -->
+      <div class="w-96 border-r border-base-300 flex flex-col min-h-0"
+           :class="selectedMessage && isMobile() ? 'hidden' : ''"
+           x-show="selectedFolder">
+        {% include "mail/ui/partials/message_list.html" %}
+      </div>
+
+      <!-- Message detail panel -->
+      <div class="flex-1 flex flex-col min-h-0 min-w-0"
+           :class="!selectedMessage && isMobile() ? 'hidden' : ''">
+        {% include "mail/ui/partials/message_detail.html" %}
+      </div>
+
+      <!-- Empty state: has accounts but no folder selected -->
+      <div class="flex-1 flex items-center justify-center" x-show="!selectedFolder">
+        <div class="text-center text-base-content/40">
+          <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
+          <p class="text-lg font-medium">Select a folder to view messages</p>
+        </div>
+      </div>
+    </div>
+  </template>
 </div>
 
 <!-- Folder context menu -->

@@ -29,8 +29,8 @@
   </div>
 </div>
 
-<!-- Empty state: no folder -->
-<div x-show="!selectedMessage && !selectedFolder" class="flex-1 flex items-center justify-center">
+<!-- Empty state: no folder, but has accounts -->
+<div x-show="!selectedMessage && !selectedFolder && accounts.length > 0" class="flex-1 flex items-center justify-center">
   <div class="text-center text-base-content/40">
     <i data-lucide="mail-open" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
     <p class="text-sm">Select a message to read</p>

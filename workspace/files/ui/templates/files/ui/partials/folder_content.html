@@ -211,8 +211,8 @@
         <tbody>
           {% for node in nodes %}
           <tr
-            class="hover group {% if node.node_type == 'folder' %}cursor-pointer{% endif %}"
-            :class="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-primary/10' : ''"
+            class="hover group {% if node.node_type == 'folder' %}cursor-pointer{% endif %} transition-opacity"
+            :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-primary/10' : '')"
             @mouseenter="hoveredUuid = '{{ node.uuid }}'"
             @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
             data-uuid="{{ node.uuid }}"
@@ -272,8 +272,10 @@
             </td>
             {% if not is_trash_view %}
             <td class="text-center text-base-content/60" data-stop-row-click data-col="favorite">
+              <span x-show="isActionLoading('{{ node.uuid }}')" class="loading loading-spinner loading-xs"></span>
               {% if node.is_favorite %}
                 <button
+                  x-show="!isActionLoading('{{ node.uuid }}')"
                   type="button"
                   class="btn btn-ghost btn-xs btn-circle"
                   aria-label="Remove from favorites"
@@ -283,6 +285,7 @@
                 </button>
               {% else %}
                 <button
+                  x-show="!isActionLoading('{{ node.uuid }}')"
                   type="button"
                   class="btn btn-ghost btn-xs btn-circle"
                   aria-label="Add to favorites"
@@ -312,7 +315,9 @@
             </td>
             {% if show_actions != False %}
             <td data-stop-row-click data-col="actions">
+              <span x-show="isActionLoading('{{ node.uuid }}')" class="loading loading-spinner loading-xs"></span>
               <button
+                x-show="!isActionLoading('{{ node.uuid }}')"
                 type="button"
                 class="btn btn-ghost btn-xs btn-circle opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
                 @click="openContextMenu($event, {
@@ -338,7 +343,7 @@
           {% for node in nodes %}
           <div
             class="bg-base-100 border border-base-300 rounded-lg hover:border-primary hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
-            :class="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'ring-2 ring-primary border-primary' : ''"
+            :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'ring-2 ring-primary border-primary' : '')"
             x-show="shouldShowCard('{{ node.name|lower }}', '{{ node.node_type }}', '{{ node.is_favorite|yesno:'1,0' }}')"
             data-uuid="{{ node.uuid }}"
             data-name="{{ node.name|lower }}"
@@ -382,8 +387,12 @@
             <!-- Favorite button (top-right) -->
             {% if not is_trash_view %}
             <div class="absolute top-2 right-2 z-10" @click.stop>
+              <span x-show="isActionLoading('{{ node.uuid }}')" class="btn btn-ghost btn-xs btn-circle bg-base-100/80 backdrop-blur-sm pointer-events-none">
+                <span class="loading loading-spinner loading-xs"></span>
+              </span>
               {% if node.is_favorite %}
               <button
+                x-show="!isActionLoading('{{ node.uuid }}')"
                 type="button"
                 class="btn btn-ghost btn-xs btn-circle bg-base-100/80 backdrop-blur-sm"
                 aria-label="Remove from favorites"
@@ -393,6 +402,7 @@
               </button>
               {% else %}
               <button
+                x-show="!isActionLoading('{{ node.uuid }}')"
                 type="button"
                 class="btn btn-ghost btn-xs btn-circle bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100"
                 aria-label="Add to favorites"

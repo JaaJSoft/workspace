@@ -275,6 +275,22 @@ window.fileClipboard = {
 
 window.fileBrowser = function fileBrowser() {
   return {
+    // Per-item action loading state (keyed by UUID)
+    actionLoadingUuids: {},
+    cleaningTrash: false,
+
+    _startLoading(...uuids) {
+      for (const uuid of uuids) this.actionLoadingUuids[uuid] = true;
+    },
+
+    _stopLoading(...uuids) {
+      for (const uuid of uuids) delete this.actionLoadingUuids[uuid];
+    },
+
+    isActionLoading(uuid) {
+      return !!this.actionLoadingUuids[uuid];
+    },
+
     // Properties panel state
     showPropertiesPanel: false,
     propertiesUuid: null,
@@ -686,6 +702,7 @@ window.fileBrowser = function fileBrowser() {
     },
 
     async renameItem(uuid, newName) {
+      this._startLoading(uuid);
       try {
         const response = await fetch(`/api/v1/files/${uuid}`, {
           method: 'PATCH',
@@ -705,10 +722,13 @@ window.fileBrowser = function fileBrowser() {
         }
       } catch (error) {
         this.showAlert('error', 'Failed to rename');
+      } finally {
+        this._stopLoading(uuid);
       }
     },
 
     async deleteItem(uuid) {
+      this._startLoading(uuid);
       try {
         const response = await fetch(`/api/v1/files/${uuid}`, {
           method: 'DELETE',
@@ -724,6 +744,8 @@ window.fileBrowser = function fileBrowser() {
         }
       } catch (error) {
         this.showAlert('error', 'Failed to delete');
+      } finally {
+        this._stopLoading(uuid);
       }
     },
 
@@ -740,6 +762,7 @@ window.fileBrowser = function fileBrowser() {
     },
 
     async restoreItem(uuid) {
+      this._startLoading(uuid);
       try {
         const response = await fetch(`/api/v1/files/${uuid}/restore`, {
           method: 'POST',
@@ -755,6 +778,8 @@ window.fileBrowser = function fileBrowser() {
         }
       } catch (error) {
         this.showAlert('error', 'Failed to restore');
+      } finally {
+        this._stopLoading(uuid);
       }
     },
 
@@ -771,6 +796,7 @@ window.fileBrowser = function fileBrowser() {
     },
 
     async purgeItem(uuid) {
+      this._startLoading(uuid);
       try {
         const response = await fetch(`/api/v1/files/${uuid}/purge`, {
           method: 'DELETE',
@@ -786,6 +812,8 @@ window.fileBrowser = function fileBrowser() {
         }
       } catch (error) {
         this.showAlert('error', 'Failed to delete permanently');
+      } finally {
+        this._stopLoading(uuid);
       }
     },
 
@@ -802,6 +830,7 @@ window.fileBrowser = function fileBrowser() {
     },
 
     async cleanTrash(force = false) {
+      this.cleaningTrash = true;
       const url = force ? '/api/v1/files/trash/clean?force=1' : '/api/v1/files/trash/clean';
       try {
         const response = await fetch(url, {
@@ -818,11 +847,14 @@ window.fileBrowser = function fileBrowser() {
         }
       } catch (error) {
         this.showAlert('error', 'Failed to clean trash');
+      } finally {
+        this.cleaningTrash = false;
       }
     },
 
     async toggleFavorite(uuid, isFavorite) {
       if (!uuid) return;
+      this._startLoading(uuid);
       try {
         const response = await fetch(`/api/v1/files/${uuid}/favorite`, {
           method: isFavorite ? 'DELETE' : 'POST',
@@ -843,11 +875,14 @@ window.fileBrowser = function fileBrowser() {
         this.showAlert('error', data.detail || 'Failed to update favorites');
       } catch (error) {
         this.showAlert('error', 'Failed to update favorites');
+      } finally {
+        this._stopLoading(uuid);
       }
     },
 
     async togglePin(uuid, isPinned) {
       if (!uuid) return;
+      this._startLoading(uuid);
       try {
         const response = await fetch(`/api/v1/files/${uuid}/pin`, {
           method: isPinned ? 'DELETE' : 'POST',
@@ -869,6 +904,8 @@ window.fileBrowser = function fileBrowser() {
         this.showAlert('error', data.detail || 'Failed to update pin');
       } catch (error) {
         this.showAlert('error', 'Failed to update pin');
+      } finally {
+        this._stopLoading(uuid);
       }
     },
 
@@ -887,6 +924,7 @@ window.fileBrowser = function fileBrowser() {
         if (!confirmed) return;
       }
 
+      this._startLoading(...uuids);
       let successCount = 0;
       let errorCount = 0;
 
@@ -915,11 +953,13 @@ window.fileBrowser = function fileBrowser() {
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
       this.refreshFolderBrowser();
+      this._stopLoading(...uuids);
     },
 
     async bulkToggleFavorite(uuids, add) {
       if (!uuids || uuids.length === 0) return;
 
+      this._startLoading(...uuids);
       let successCount = 0;
       let errorCount = 0;
 
@@ -948,6 +988,7 @@ window.fileBrowser = function fileBrowser() {
 
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
       this.refreshFolderBrowser();
+      this._stopLoading(...uuids);
     },
 
     async bulkRestoreItems(uuids) {
@@ -962,6 +1003,7 @@ window.fileBrowser = function fileBrowser() {
       });
       if (!confirmed) return;
 
+      this._startLoading(...uuids);
       let successCount = 0;
       let errorCount = 0;
 
@@ -990,6 +1032,7 @@ window.fileBrowser = function fileBrowser() {
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
       this.refreshFolderBrowser();
+      this._stopLoading(...uuids);
     },
 
     async bulkPurgeItems(uuids) {
@@ -1004,6 +1047,7 @@ window.fileBrowser = function fileBrowser() {
       });
       if (!confirmed) return;
 
+      this._startLoading(...uuids);
       let successCount = 0;
       let errorCount = 0;
 
@@ -1032,11 +1076,13 @@ window.fileBrowser = function fileBrowser() {
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
       this.refreshFolderBrowser();
+      this._stopLoading(...uuids);
     },
 
     async bulkTogglePin(uuids, add) {
       if (!uuids || uuids.length === 0) return;
 
+      this._startLoading(...uuids);
       let successCount = 0;
       let errorCount = 0;
 
@@ -1066,6 +1112,7 @@ window.fileBrowser = function fileBrowser() {
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
       this.refreshFolderBrowser();
+      this._stopLoading(...uuids);
     },
 
     // Clipboard operations
@@ -1115,6 +1162,8 @@ window.fileBrowser = function fileBrowser() {
         return;
       }
 
+      const itemUuids = items.map(i => i.uuid);
+      this._startLoading(...itemUuids);
       const isCopy = window.fileClipboard.isCopy();
       const targetFolderId = this.currentFolder || null;
       let successCount = 0;
@@ -1167,10 +1216,12 @@ window.fileBrowser = function fileBrowser() {
       }
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
       this.refreshFolderBrowser();
+      this._stopLoading(...itemUuids);
     },
 
     async pinFolder(uuid) {
       if (!uuid) return;
+      this._startLoading(uuid);
       try {
         const response = await fetch(`/api/v1/files/${uuid}/pin`, {
           method: 'POST',
@@ -1192,6 +1243,8 @@ window.fileBrowser = function fileBrowser() {
         this.showAlert('error', data.detail || 'Failed to pin folder');
       } catch (error) {
         this.showAlert('error', 'Failed to pin folder');
+      } finally {
+        this._stopLoading(uuid);
       }
     },
 

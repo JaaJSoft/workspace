@@ -240,8 +240,9 @@
 
                 {% if is_trash_view %}
                 <div class="flex-shrink-0">
-                  <button type="button" class="btn btn-error btn-sm gap-2" @click="confirmCleanTrash()">
-                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                  <button type="button" class="btn btn-error btn-sm gap-2" @click="confirmCleanTrash()" :disabled="cleaningTrash">
+                    <span x-show="cleaningTrash" class="loading loading-spinner loading-xs"></span>
+                    <i x-show="!cleaningTrash" data-lucide="trash-2" class="w-4 h-4"></i>
                     <span class="hidden sm:inline">Empty trash</span>
                   </button>
                 </div>

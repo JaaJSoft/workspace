@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>System Health</title>
   <meta name="robots" content="noindex"/>
+  <link rel="alternate" type="application/json" title="JSON" href="?format=json">
+  <link rel="alternate" type="application/atom+xml" title="Atom Feed" href="?format=atom">
+  <link rel="alternate" type="application/rss+xml" title="RSS Feed" href="?format=rss">
 
   <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');</script>
   <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
@@ -42,23 +45,23 @@
         </div>
 
         <ul class="divide-y divide-base-300">
-          {% for plugin in plugins %}
+          {% for result in results %}
             <li class="flex items-center justify-between gap-4 px-5 py-3">
               <div class="flex items-center gap-3 min-w-0">
-                {% if plugin.status %}
-                  <i data-lucide="check-circle" class="w-4 h-4 text-success shrink-0"></i>
-                {% else %}
+                {% if result.error %}
                   <i data-lucide="x-circle" class="w-4 h-4 text-error shrink-0"></i>
+                {% else %}
+                  <i data-lucide="check-circle" class="w-4 h-4 text-success shrink-0"></i>
                 {% endif %}
-                <span class="font-medium truncate">{{ plugin }}</span>
+                <span class="font-medium truncate">{{ result.check }}</span>
               </div>
               <div class="flex items-center gap-3 shrink-0">
-                {% if not plugin.status %}
-                  <span class="badge badge-error badge-sm">Error</span>
+                {% if result.error %}
+                  <span class="badge badge-error badge-sm">{{ result.error }}</span>
                 {% else %}
                   <span class="badge badge-success badge-sm">OK</span>
                 {% endif %}
-                <span class="text-xs text-base-content/40 font-mono w-16 text-right">{{ plugin.time_taken|floatformat:3 }}s</span>
+                <span class="text-xs text-base-content/40 font-mono w-16 text-right">{{ result.time_taken|floatformat:3 }}s</span>
               </div>
             </li>
           {% endfor %}

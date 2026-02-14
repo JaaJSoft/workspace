@@ -80,11 +80,6 @@ INSTALLED_APPS = [
     'django_filters',
     'simple_history',
     'health_check',
-    'health_check.db',
-    'health_check.storage',
-    'health_check.contrib.migrations',
-    'health_check.contrib.psutil',
-    'health_check.contrib.db_heartbeat',
     # Workspace apps
     'workspace.core',
     'workspace.common',
@@ -329,12 +324,7 @@ LOGGING = {
     },
 }
 
-HEALTH_CHECK = {
-    "SUBSETS": {
-        "startup-probe": ["MigrationsHealthCheck", "DatabaseBackend"],
-        "liveness-probe": ["DatabaseBackend"],
-    },
-}
+
 
 WSGI_APPLICATION = 'workspace.wsgi.application'
 

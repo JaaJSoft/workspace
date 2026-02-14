@@ -19,6 +19,7 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+from health_check.views import HealthCheckView
 
 api_urlpatterns = [
     # OpenAPI schema and documentation
@@ -50,7 +51,12 @@ urlpatterns = [
     path('login', auth_views.LoginView.as_view(template_name='users/auth/login.html'), name='login'),
     path('logout', auth_views.LogoutView.as_view(), name='logout'),
     # Health check
-    path('health/', include('health_check.urls')),
+    path('health/', HealthCheckView.as_view(checks=[
+        "health_check.checks.Database",
+        "health_check.checks.Cache",
+        "health_check.checks.Storage",
+        "health_check.contrib.celery.Ping",
+    ])),
 ]
 
 urlpatterns += api_urlpatterns

@@ -5,7 +5,7 @@ metadata:
   namespace: workspace
 data:
   DEBUG: "0"
-  ALLOWED_HOSTS: "workspace.example.com"
+  ALLOWED_HOSTS: "workspace.example.com,localhost"
   CSRF_TRUSTED_ORIGINS: "https://workspace.example.com"
   GUNICORN_WORKERS: "3"
   GUNICORN_LOG_LEVEL: "info"

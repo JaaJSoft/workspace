@@ -5,10 +5,11 @@ metadata:
   name: workspace-data
   namespace: workspace
 spec:
+  storageClassName: xxxx
   accessModes: [ReadWriteOnce]
   resources:
     requests:
-      storage: 10Gi
+      storage: 50Gi
 
 ---
 apiVersion: apps/v1
@@ -28,9 +29,15 @@ spec:
       labels:
         app: workspace
     spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
       initContainers:
         - name: migrate
           image: ghcr.io/jaajsoft/workspace:main
+          imagePullPolicy: Always
           command: ["python", "manage.py", "migrate", "--noinput"]
           envFrom:
             - configMapRef:
@@ -44,6 +51,7 @@ spec:
       containers:
         - name: web
           image: ghcr.io/jaajsoft/workspace:main
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
           envFrom:
@@ -64,21 +72,31 @@ spec:
             httpGet:
               path: /health/
               port: 8000
+              httpHeaders:
+                - name: Host
+                  value: localhost
             failureThreshold: 30
             periodSeconds: 2
           livenessProbe:
             httpGet:
               path: /health/
               port: 8000
+              httpHeaders:
+                - name: Host
+                  value: localhost
             periodSeconds: 15
           readinessProbe:
             httpGet:
               path: /health/
               port: 8000
+              httpHeaders:
+                - name: Host
+                  value: localhost
             periodSeconds: 5
 
         - name: worker
           image: ghcr.io/jaajsoft/workspace:main
+          imagePullPolicy: Always
           command: ["celery", "-A", "workspace", "worker", "--loglevel=info"]
           envFrom:
             - configMapRef:
@@ -91,35 +109,40 @@ spec:
           resources:
             requests:
               cpu: 100m
-              memory: 256Mi
+              memory: 1024Mi
             limits:
-              memory: 512Mi
+              memory: 2048Mi
 
         - name: beat
           image: ghcr.io/jaajsoft/workspace:main
-          command: ["celery", "-A", "workspace", "beat", "--loglevel=info"]
+          imagePullPolicy: Always
+          command: ["celery", "-A", "workspace", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
           envFrom:
             - configMapRef:
                 name: workspace-config
             - secretRef:
                 name: workspace-secrets
+          volumeMounts:
+            - name: beat-tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: 50m
-              memory: 64Mi
+              memory: 512Mi
             limits:
-              memory: 128Mi
+              memory: 1024Mi
 
         - name: redis
           image: redis:7-alpine
+          command: ["redis-server", "--save", "", "--appendonly", "no"]
           ports:
             - containerPort: 6379
           resources:
             requests:
               cpu: 50m
-              memory: 64Mi
+              memory: 512Mi
             limits:
-              memory: 128Mi
+              memory: 1024Mi
           readinessProbe:
             exec:
               command: ["redis-cli", "ping"]
@@ -129,6 +152,8 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: workspace-data
+        - name: beat-tmp
+          emptyDir: {}
 
 ---
 apiVersion: v1

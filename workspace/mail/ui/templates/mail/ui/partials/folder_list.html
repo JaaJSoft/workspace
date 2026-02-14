@@ -28,31 +28,39 @@
       </div>
     </div>
 
-    <!-- Folders (expanded) -->
+    <!-- Folders (expanded — hierarchical tree) -->
     <div x-show="expandedAccounts[account.uuid] && !collapsed" x-collapse>
-      <template x-for="folder in getFolders(account.uuid)" :key="folder.uuid + '-' + (folder.icon || '') + '-' + (folder.color || '')">
+      <template x-for="node in getFlatFolderTree(account.uuid)" :key="node.folder.uuid + '-' + (node.folder.icon || '') + '-' + (node.folder.color || '')">
         <button
           class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
+          :style="node.depth > 0 ? `padding-left: ${0.75 + node.depth * 1}rem` : ''"
           :class="{
-            'bg-warning/10 text-warning': selectedFolder?.uuid === folder.uuid && dragOverFolder?.uuid !== folder.uuid,
-            'text-base-content/70 hover:bg-base-content/5 hover:text-warning': selectedFolder?.uuid !== folder.uuid && dragOverFolder?.uuid !== folder.uuid,
-            'ring-2 ring-warning/50 ring-offset-1 bg-warning/10': dragOverFolder?.uuid === folder.uuid,
+            'bg-warning/10 text-warning': selectedFolder?.uuid === node.folder.uuid && dragOverFolder?.uuid !== node.folder.uuid,
+            'text-base-content/70 hover:bg-base-content/5 hover:text-warning': selectedFolder?.uuid !== node.folder.uuid && dragOverFolder?.uuid !== node.folder.uuid,
+            'ring-2 ring-warning/50 ring-offset-1 bg-warning/10': dragOverFolder?.uuid === node.folder.uuid,
           }"
-          @click="selectFolder(folder)"
-          @contextmenu="openFolderContextMenu($event, folder)"
-          @dragover.prevent="onFolderDragOver($event, folder)"
-          @dragleave="onFolderDragLeave($event, folder)"
-          @drop.prevent="onFolderDrop($event, folder)"
+          @click="selectFolder(node.folder)"
+          @contextmenu="openFolderContextMenu($event, node.folder)"
+          @dragover.prevent="onFolderDragOver($event, node.folder)"
+          @dragleave="onFolderDragLeave($event, node.folder)"
+          @drop.prevent="onFolderDrop($event, node.folder)"
         >
-          <span class="flex-shrink-0" :class="folder.color || ''">
-            <i :data-lucide="folder.icon || folderIcon(folder.folder_type)" class="w-4 h-4"></i>
+          <span class="flex-shrink-0" :class="node.folder.color || ''">
+            <i :data-lucide="node.folder.icon || folderIcon(node.folder.folder_type)" class="w-4 h-4"></i>
           </span>
-          <span class="flex-1 text-left truncate" x-text="folder.display_name"></span>
+          <span class="flex-1 text-left truncate" x-text="node.folder.display_name"></span>
           <span
-            x-show="folder.unread_count > 0"
+            x-show="getSubtreeUnreadCount(node) > 0"
             class="badge badge-xs badge-warning"
-            x-text="folder.unread_count"
+            x-text="getSubtreeUnreadCount(node)"
           ></span>
+          <!-- Expand/collapse toggle for parents -->
+          <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center"
+                x-show="node.children.length > 0"
+                @click.stop="toggleFolderExpanded(node.folder.name)">
+            <i :data-lucide="(expandedFolders[node.folder.name] === undefined || expandedFolders[node.folder.name]) ? 'chevron-down' : 'chevron-right'"
+               class="w-3 h-3 opacity-50 hover:opacity-100"></i>
+          </span>
         </button>
       </template>
     </div>

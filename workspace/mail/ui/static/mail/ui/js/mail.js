@@ -225,6 +225,9 @@ function mailApp() {
     dragOverFolder: null,
     _draggingMsgIds: null,
 
+    // Folder tree
+    expandedFolders: {},
+
     // Folder icon edit
     folderIconEdit: { uuid: null, name: '', icon: null, color: null },
 
@@ -330,6 +333,98 @@ function mailApp() {
         other: 'folder',
       };
       return map[type] || 'folder';
+    },
+
+    // ----- Folder tree -----
+    getFolderTree(accountUuid) {
+      const flds = this.folders[accountUuid] || [];
+      const specialTypes = new Set(['inbox', 'sent', 'drafts', 'trash', 'spam', 'archive']);
+      const typeOrder = ['inbox', 'drafts', 'sent', 'archive', 'spam', 'trash', 'other'];
+
+      // Separate special vs other folders
+      const special = [];
+      const other = [];
+      for (const f of flds) {
+        if (specialTypes.has(f.folder_type)) special.push(f);
+        else other.push(f);
+      }
+
+      // Sort special by type order
+      special.sort((a, b) => typeOrder.indexOf(a.folder_type) - typeOrder.indexOf(b.folder_type));
+
+      // Sort "other" by full IMAP name so parents always come before children
+      other.sort((a, b) => a.name.localeCompare(b.name));
+
+      const tree = [];
+      const nodeMap = {};
+
+      // Add special folders at root
+      for (const folder of special) {
+        const node = { folder, children: [], depth: 0 };
+        tree.push(node);
+        nodeMap[folder.name] = node;
+      }
+
+      // Build hierarchy for "other" folders
+      for (const folder of other) {
+        const sep = folder.name.includes('/') ? '/' : (folder.name.includes('.') ? '.' : null);
+        let parentNode = null;
+        let depth = 0;
+        if (sep) {
+          const lastSep = folder.name.lastIndexOf(sep);
+          if (lastSep > 0) {
+            const parentName = folder.name.substring(0, lastSep);
+            parentNode = nodeMap[parentName];
+            if (parentNode) {
+              depth = parentNode.depth + 1;
+            }
+          }
+        }
+
+        const node = { folder, children: [], depth };
+        nodeMap[folder.name] = node;
+
+        if (parentNode) {
+          parentNode.children.push(node);
+        } else {
+          tree.push(node);
+        }
+      }
+
+      return tree;
+    },
+
+    _flattenTree(nodes) {
+      const result = [];
+      for (const node of nodes) {
+        result.push(node);
+        // Default to expanded for parent folders (unless explicitly collapsed)
+        const expanded = node.children.length > 0 &&
+          (this.expandedFolders[node.folder.name] === undefined || this.expandedFolders[node.folder.name]);
+        if (expanded) {
+          result.push(...this._flattenTree(node.children));
+        }
+      }
+      return result;
+    },
+
+    getFlatFolderTree(accountUuid) {
+      return this._flattenTree(this.getFolderTree(accountUuid));
+    },
+
+    toggleFolderExpanded(folderName) {
+      // Default is expanded (true), so toggling undefined -> false
+      const current = this.expandedFolders[folderName] === undefined ? true : this.expandedFolders[folderName];
+      this.expandedFolders[folderName] = !current;
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    getSubtreeUnreadCount(node) {
+      let count = node.folder.unread_count || 0;
+      for (const child of node.children) {
+        count += this.getSubtreeUnreadCount(child);
+      }
+      return count;
     },
 
     // ----- Messages -----
@@ -1116,7 +1211,7 @@ function mailApp() {
           this.showFolderIconPicker(folder);
           break;
         case 'create':
-          await this._createFolder(folder.account_id);
+          await this._createFolder(folder.account_id, folder);
           break;
         case 'rename':
           await this._renameFolder(folder);
@@ -1185,9 +1280,19 @@ function mailApp() {
       if (!msg) return [];
       const accountId = msg.account_id || this.selectedFolder?.account_id;
       if (!accountId) return [];
-      const flds = this.folders[accountId] || [];
       const currentFolderId = msg.folder_id || this.selectedFolder?.uuid;
-      return this.getFolders(accountId).filter(f => f.uuid !== currentFolderId);
+      const tree = this.getFolderTree(accountId);
+      const result = [];
+      const flatten = (nodes, depth) => {
+        for (const node of nodes) {
+          if (node.folder.uuid !== currentFolderId) {
+            result.push({ ...node.folder, _depth: depth });
+          }
+          flatten(node.children, depth + 1);
+        }
+      };
+      flatten(tree, 0);
+      return result;
     },
 
     async moveMessages(msgUuids, targetFolder) {
@@ -1328,10 +1433,16 @@ function mailApp() {
       }
     },
 
-    async _createFolder(accountUuid) {
+    async _createFolder(accountUuid, parentFolder) {
+      const isSubfolder = parentFolder && parentFolder.folder_type === 'other';
+      const title = isSubfolder ? 'New subfolder' : 'New folder';
+      const message = isSubfolder
+        ? `Create a subfolder in "${parentFolder.display_name}".`
+        : 'Enter a name for the new folder.';
+
       const name = await AppDialog.prompt({
-        title: 'New folder',
-        message: 'Enter a name for the new folder.',
+        title,
+        message,
         placeholder: 'Folder name',
         okLabel: 'Create',
         okClass: 'btn-warning',
@@ -1340,12 +1451,21 @@ function mailApp() {
       });
       if (!name) return;
 
+      const body = { account_id: accountUuid, name };
+      if (isSubfolder) {
+        body.parent_name = parentFolder.name;
+      }
+
       const res = await this._fetch('/api/v1/mail/folders', {
         method: 'POST',
-        body: { account_id: accountUuid, name },
+        body,
       });
 
       if (res.ok) {
+        // Auto-expand parent so the new subfolder is visible
+        if (isSubfolder) {
+          this.expandedFolders[parentFolder.name] = true;
+        }
         await this.loadFolders(accountUuid);
         this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
       } else {

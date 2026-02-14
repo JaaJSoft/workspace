@@ -161,7 +161,7 @@ class MailFolderCreateTests(MailTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data['name'], 'NewFolder')
         self.assertEqual(resp.data['display_name'], 'NewFolder')
-        mock_create.assert_called_once_with(self.account, 'NewFolder')
+        mock_create.assert_called_once_with(self.account, 'NewFolder', parent_name='')
 
     def test_create_folder_missing_name(self):
         self.client.force_authenticate(self.user)

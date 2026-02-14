@@ -43,6 +43,9 @@ class MailAccount(models.Model):
     oauth2_provider = models.CharField(max_length=50, blank=True, default='')
     oauth2_data_encrypted = models.BinaryField(null=True, blank=True)
 
+    # IMAP folder hierarchy
+    imap_delimiter = models.CharField(max_length=5, default='/')
+
     # Sync state
     is_active = models.BooleanField(default=True)
     last_sync_at = models.DateTimeField(null=True, blank=True)

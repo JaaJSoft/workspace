@@ -246,7 +246,11 @@ class MailFolderListView(APIView):
         from .services.imap import create_folder
 
         try:
-            folder = create_folder(account, ser.validated_data['name'])
+            folder = create_folder(
+                account,
+                ser.validated_data['name'],
+                parent_name=ser.validated_data.get('parent_name', ''),
+            )
             return Response(
                 MailFolderSerializer(folder).data,
                 status=status.HTTP_201_CREATED,

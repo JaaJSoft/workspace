@@ -31,7 +31,7 @@
     <li>
       <button type="button" class="gap-3 rounded" @click="folderCtxAction('create')">
         <i data-lucide="folder-plus" class="w-4 h-4"></i>
-        <span>New folder</span>
+        <span x-text="folderCtx.folder?.folder_type === 'other' ? 'New subfolder' : 'New folder'"></span>
       </button>
     </li>
     <li>

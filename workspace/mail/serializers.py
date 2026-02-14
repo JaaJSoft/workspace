@@ -54,6 +54,7 @@ class MailFolderSerializer(serializers.ModelSerializer):
 class MailFolderCreateSerializer(serializers.Serializer):
     account_id = serializers.UUIDField()
     name = serializers.CharField(max_length=255)
+    parent_name = serializers.CharField(max_length=255, required=False, default='', allow_blank=True)
 
 
 class MailFolderUpdateSerializer(serializers.Serializer):

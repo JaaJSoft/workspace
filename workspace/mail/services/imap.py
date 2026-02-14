@@ -149,6 +149,13 @@ def sync_folders(account):
         except Exception:
             pass
 
+    # Detect and store the IMAP hierarchy delimiter
+    if remote_folders:
+        _flags, delim, _name = remote_folders[0]
+        if delim and delim != account.imap_delimiter:
+            account.imap_delimiter = delim
+            account.save(update_fields=['imap_delimiter', 'updated_at'])
+
     existing = {f.name: f for f in MailFolder.objects.filter(account=account)}
     remote_names = set()
 
@@ -661,13 +668,22 @@ def delete_draft(account, message):
     message.save(update_fields=['deleted_at', 'updated_at'])
 
 
-def create_folder(account, folder_name):
-    """Create an IMAP folder. Returns the created MailFolder."""
+def create_folder(account, folder_name, parent_name=''):
+    """Create an IMAP folder. Returns the created MailFolder.
+
+    If parent_name is provided, the folder is created as a subfolder:
+    ``parent_name + delimiter + folder_name``.
+    """
     from workspace.mail.models import MailFolder
+
+    if parent_name:
+        full_name = f'{parent_name}{account.imap_delimiter}{folder_name}'
+    else:
+        full_name = folder_name
 
     conn = connect_imap(account)
     try:
-        status, data = conn.create(folder_name)
+        status, data = conn.create(full_name)
         if status != 'OK':
             raise Exception(f'IMAP CREATE failed: {data}')
     finally:
@@ -678,8 +694,8 @@ def create_folder(account, folder_name):
 
     folder = MailFolder.objects.create(
         account=account,
-        name=folder_name,
-        display_name=_display_name(folder_name),
+        name=full_name,
+        display_name=_display_name(full_name),
         folder_type='other',
     )
     return folder

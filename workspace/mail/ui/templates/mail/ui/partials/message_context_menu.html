@@ -74,7 +74,7 @@
   <ul class="menu menu-sm p-0">
     <template x-for="folder in getMoveTargetFolders(msgCtx.msg)" :key="folder.uuid">
       <li>
-        <button type="button" class="gap-3 rounded" @click="moveMessages(selectedMessages.length > 0 && selectedMessages.includes(msgCtx.msg?.uuid) ? [...selectedMessages] : [msgCtx.msg?.uuid], folder); msgCtx.open = false; moveMenuOpen = false;">
+        <button type="button" class="gap-3 rounded" :style="`padding-left: ${0.5 + (folder._depth || 0) * 0.75}rem`" @click="moveMessages(selectedMessages.length > 0 && selectedMessages.includes(msgCtx.msg?.uuid) ? [...selectedMessages] : [msgCtx.msg?.uuid], folder); msgCtx.open = false; moveMenuOpen = false;">
           <i :data-lucide="folder.icon || folderIcon(folder.folder_type)" class="w-4 h-4"></i>
           <span x-text="folder.display_name"></span>
         </button>

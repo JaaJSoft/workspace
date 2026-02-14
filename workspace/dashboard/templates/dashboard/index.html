@@ -31,7 +31,7 @@
   </section>
 
   {# ── Overview section header + stats ── #}
-  <section class="space-y-4">
+  <section class="space-y-4" x-data="{ loading: false }" @ajax:before="loading = true" @ajax:after="loading = false; $nextTick(() => lucide.createIcons())">
     <div class="flex items-center justify-between gap-4 flex-wrap">
       <div class="flex items-center gap-3">
         <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
@@ -55,13 +55,28 @@
         </a>
       </div>
     </div>
-    {% include 'dashboard/partials/stats.html' %}
+    {# ── Stats skeleton ── #}
+    <div x-show="loading" x-cloak class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 animate-pulse">
+      {% for _ in "1234" %}
+      <div class="stats shadow border border-base-300 bg-base-100">
+        <div class="stat">
+          <div class="stat-figure"><div class="w-7 h-7 rounded bg-base-300"></div></div>
+          <div class="stat-title"><div class="h-3 bg-base-300 rounded w-16"></div></div>
+          <div class="stat-value"><div class="h-8 bg-base-300 rounded w-12 mt-1"></div></div>
+          <div class="stat-desc"><div class="h-3 bg-base-300 rounded w-20 mt-1"></div></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div x-show="!loading">
+      {% include 'dashboard/partials/stats.html' %}
+    </div>
   </section>
 
   {# ── Insights + sidebar ── #}
   <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
     <div class="xl:col-span-2">
-      <div class="card bg-base-100 shadow border border-base-300" x-data="{ insightTab: '{{ insight_tab|default:"recent" }}' }">
+      <div class="card bg-base-100 shadow border border-base-300" x-data="{ insightTab: '{{ insight_tab|default:"recent" }}', loading: false }" @ajax:before="loading = true" @ajax:after="loading = false; $nextTick(() => lucide.createIcons())">
         <div class="card-body">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div class="space-y-1">
@@ -125,17 +140,35 @@
             </div>
           </div>
 
-          {% if insight_tab == 'conversations' %}
-            {% include 'dashboard/partials/insights_conversations.html' %}
-          {% elif insight_tab == 'events' %}
-            {% include 'dashboard/partials/insights_events.html' %}
-          {% elif insight_tab == 'favorites' %}
-            {% include 'dashboard/partials/insights_favorites.html' %}
-          {% elif insight_tab == 'trash' %}
-            {% include 'dashboard/partials/insights_trash.html' %}
-          {% else %}
-            {% include 'dashboard/partials/insights_recent.html' %}
-          {% endif %}
+          {# ── Insights skeleton ── #}
+          <div x-show="loading" x-cloak class="mt-4 animate-pulse">
+            <ul class="divide-y divide-base-200">
+              {% for _ in "123456" %}
+              <li class="py-3 flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-base-300 flex-shrink-0"></div>
+                <div class="flex-1 min-w-0 space-y-2">
+                  <div class="h-4 bg-base-300 rounded w-3/4"></div>
+                  <div class="h-3 bg-base-300 rounded w-1/2"></div>
+                </div>
+                <div class="h-6 w-12 bg-base-300 rounded hidden sm:block"></div>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          <div x-show="!loading">
+            {% if insight_tab == 'conversations' %}
+              {% include 'dashboard/partials/insights_conversations.html' %}
+            {% elif insight_tab == 'events' %}
+              {% include 'dashboard/partials/insights_events.html' %}
+            {% elif insight_tab == 'favorites' %}
+              {% include 'dashboard/partials/insights_favorites.html' %}
+            {% elif insight_tab == 'trash' %}
+              {% include 'dashboard/partials/insights_trash.html' %}
+            {% else %}
+              {% include 'dashboard/partials/insights_recent.html' %}
+            {% endif %}
+          </div>
         </div>
       </div>
     </div>

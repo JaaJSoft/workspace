@@ -66,11 +66,10 @@ urlpatterns = [
     path('health/live', HealthCheckView.as_view(checks=[
         "health_check.checks.Database",
     ])),
-    # Readiness probe: all dependencies available
+    # Readiness probe: core dependencies available
     path('health/ready', HealthCheckView.as_view(checks=[
         "health_check.checks.Database",
         "health_check.checks.Cache",
-        "health_check.contrib.celery.Ping",
     ])),
 ]
 

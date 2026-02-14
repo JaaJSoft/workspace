@@ -50,11 +50,26 @@ urlpatterns = [
     # Authentication
     path('login', auth_views.LoginView.as_view(template_name='users/auth/login.html'), name='login'),
     path('logout', auth_views.LogoutView.as_view(), name='logout'),
-    # Health check
+    # Health checks
+    # Full status page (all checks)
     path('health/', HealthCheckView.as_view(checks=[
         "health_check.checks.Database",
         "health_check.checks.Cache",
         "health_check.checks.Storage",
+        "health_check.contrib.celery.Ping",
+    ])),
+    # Startup probe: DB ready + migrations applied
+    path('health/startup', HealthCheckView.as_view(checks=[
+        "health_check.checks.Database",
+    ])),
+    # Liveness probe: lightweight, app is not deadlocked
+    path('health/live', HealthCheckView.as_view(checks=[
+        "health_check.checks.Database",
+    ])),
+    # Readiness probe: all dependencies available
+    path('health/ready', HealthCheckView.as_view(checks=[
+        "health_check.checks.Database",
+        "health_check.checks.Cache",
         "health_check.contrib.celery.Ping",
     ])),
 ]

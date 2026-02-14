@@ -62,6 +62,8 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: 200m
@@ -70,7 +72,7 @@ spec:
               memory: 512Mi
           startupProbe:
             httpGet:
-              path: /health/
+              path: /health/startup
               port: 8000
               httpHeaders:
                 - name: Host
@@ -79,7 +81,7 @@ spec:
             periodSeconds: 2
           livenessProbe:
             httpGet:
-              path: /health/
+              path: /health/live
               port: 8000
               httpHeaders:
                 - name: Host
@@ -87,7 +89,7 @@ spec:
             periodSeconds: 15
           readinessProbe:
             httpGet:
-              path: /health/
+              path: /health/ready
               port: 8000
               httpHeaders:
                 - name: Host
@@ -123,7 +125,7 @@ spec:
             - secretRef:
                 name: workspace-secrets
           volumeMounts:
-            - name: beat-tmp
+            - name: tmp
               mountPath: /tmp
           resources:
             requests:
@@ -152,7 +154,7 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: workspace-data
-        - name: beat-tmp
+        - name: tmp
           emptyDir: {}
 
 ---

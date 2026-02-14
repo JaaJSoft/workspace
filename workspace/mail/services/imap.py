@@ -737,6 +737,52 @@ def rename_folder(account, folder, new_name):
     return folder
 
 
+def move_folder(account, folder, new_parent_name):
+    """Move an IMAP folder under a new parent (or to root).
+
+    Uses IMAP RENAME to change the folder's full path. Also updates all
+    child folders in the DB whose ``name`` starts with the old prefix.
+    """
+    from workspace.mail.models import MailFolder
+
+    delimiter = account.imap_delimiter or '/'
+    old_name = folder.name
+
+    if new_parent_name:
+        new_name = f'{new_parent_name}{delimiter}{folder.display_name}'
+    else:
+        new_name = folder.display_name
+
+    if new_name == old_name:
+        return folder
+
+    conn = connect_imap(account)
+    try:
+        st, data = conn.rename(old_name, new_name)
+        if st != 'OK':
+            raise Exception(f'IMAP RENAME failed: {data}')
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+    # Update this folder in DB
+    folder.name = new_name
+    folder.display_name = _display_name(new_name)
+    folder.save(update_fields=['name', 'display_name', 'updated_at'])
+
+    # Update child folders: any folder whose name starts with old_name + delimiter
+    old_prefix = old_name + delimiter
+    children = MailFolder.objects.filter(account=account, name__startswith=old_prefix)
+    for child in children:
+        child.name = new_name + delimiter + child.name[len(old_prefix):]
+        child.display_name = _display_name(child.name)
+        child.save(update_fields=['name', 'display_name', 'updated_at'])
+
+    return folder
+
+
 def sync_account(account):
     """Full sync: folders then messages for each folder."""
     from workspace.mail.models import MailFolder

@@ -217,9 +217,6 @@ function mailApp() {
 
     // Message context menu
     msgCtx: { open: false, x: 0, y: 0, msg: null },
-    moveMenuOpen: false,
-    moveMenu: { x: 0, y: 0 },
-    _moveMenuTimer: null,
 
     // Drag & drop
     dragOverFolder: null,
@@ -1216,6 +1213,9 @@ function mailApp() {
         case 'rename':
           await this._renameFolder(folder);
           break;
+        case 'move':
+          await this._moveFolder(folder);
+          break;
         case 'delete':
           await this._deleteFolder(folder);
           break;
@@ -1232,7 +1232,6 @@ function mailApp() {
 
       this.msgCtx.msg = msg;
       this.msgCtx.open = true;
-      this.moveMenuOpen = false;
 
       this.$nextTick(() => {
         const rect = menu.getBoundingClientRect();
@@ -1249,8 +1248,6 @@ function mailApp() {
     async msgCtxAction(action) {
       const msg = this.msgCtx.msg;
       this.msgCtx.open = false;
-      this.moveMenuOpen = false;
-      this.cancelMoveMenuClose();
       if (!msg) return;
 
       switch (action) {
@@ -1268,6 +1265,12 @@ function mailApp() {
           break;
         case 'toggle_star':
           await this.toggleStar(msg);
+          break;
+        case 'move':
+          await this._showMoveDialog(
+            this.selectedMessages.length > 0 && this.selectedMessages.includes(msg.uuid)
+              ? [...this.selectedMessages] : [msg.uuid]
+          );
           break;
         case 'delete':
           await this.deleteMessage(msg);
@@ -1384,41 +1387,33 @@ function mailApp() {
       this._draggingMsgIds = null;
     },
 
-    // ----- Move submenu positioning -----
-    showMoveMenu(triggerEl) {
-      this.cancelMoveMenuClose();
-      const ctxMenu = document.getElementById('message-context-menu');
-      const ctxRect = ctxMenu.getBoundingClientRect();
-      const triggerRect = triggerEl.getBoundingClientRect();
-      let x = ctxRect.right + 2;
-      let y = triggerRect.top;
-      // Prevent overflow right
-      const subWidth = 192 + 10; // w-48 = 12rem = 192px + margin
-      if (x + subWidth > window.innerWidth) {
-        x = ctxRect.left - subWidth;
-      }
-      // Prevent overflow bottom
-      this.moveMenu.x = x;
-      this.moveMenu.y = y;
-      this.moveMenuOpen = true;
-      this.$nextTick(() => {
-        const sub = document.getElementById('move-submenu');
-        if (sub) {
-          const subRect = sub.getBoundingClientRect();
-          if (subRect.bottom > window.innerHeight) {
-            this.moveMenu.y = window.innerHeight - subRect.height - 10;
-          }
-        }
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+    async _showMoveDialog(msgUuids) {
+      if (!msgUuids || !msgUuids.length) return;
+      const refMsg = this.messages.find(m => msgUuids.includes(m.uuid)) || msgUuids[0];
+      const targets = this.getMoveTargetFolders(refMsg);
+      if (!targets.length) return;
+
+      const options = targets.map(f => ({
+        label: '\u00A0\u00A0'.repeat(f._depth || 0) + f.display_name,
+        value: f.uuid,
+      }));
+
+      const count = msgUuids.length;
+      const selected = await AppDialog.select({
+        title: 'Move to',
+        message: count === 1 ? 'Select a destination folder.' : `Move ${count} messages to:`,
+        options,
+        okLabel: 'Move',
+        okClass: 'btn-warning',
+        icon: 'folder-input',
+        iconClass: 'bg-warning/10 text-warning',
       });
-    },
+      if (!selected) return;
 
-    scheduleMoveMenuClose() {
-      this._moveMenuTimer = setTimeout(() => { this.moveMenuOpen = false; }, 100);
-    },
-
-    cancelMoveMenuClose() {
-      if (this._moveMenuTimer) { clearTimeout(this._moveMenuTimer); this._moveMenuTimer = null; }
+      const targetFolder = targets.find(f => f.uuid === selected);
+      if (targetFolder) {
+        await this.moveMessages(msgUuids, targetFolder);
+      }
     },
 
     async _markFolderAllRead(folder) {
@@ -1542,6 +1537,73 @@ function mailApp() {
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to delete folder' });
+      }
+    },
+
+    async _moveFolder(folder) {
+      if (folder.folder_type !== 'other') return;
+
+      const accountUuid = folder.account_id;
+      const allFolders = this.folders[accountUuid] || [];
+
+      // Collect own descendants (cannot move into self or own children)
+      const delimiter = folder.name.includes('/') ? '/' : '.';
+      const ownPrefix = folder.name + delimiter;
+      const excluded = new Set([folder.uuid]);
+      for (const f of allFolders) {
+        if (f.name.startsWith(ownPrefix)) excluded.add(f.uuid);
+      }
+
+      // Build target options: root + eligible folders
+      const options = [{ label: '/ (Root)', value: '' }];
+      const tree = this.getFolderTree(accountUuid);
+      const flatten = (nodes, depth) => {
+        for (const node of nodes) {
+          if (!excluded.has(node.folder.uuid)) {
+            const indent = '\u00A0\u00A0'.repeat(depth);
+            options.push({
+              label: indent + node.folder.display_name,
+              value: node.folder.name,
+            });
+          }
+          flatten(node.children, depth + 1);
+        }
+      };
+      flatten(tree, 0);
+
+      // Determine current parent for pre-selection
+      const lastSep = folder.name.lastIndexOf(delimiter);
+      const currentParent = lastSep > 0 ? folder.name.substring(0, lastSep) : '';
+
+      const selected = await AppDialog.select({
+        title: 'Move folder',
+        message: `Move "${folder.display_name}" to:`,
+        options,
+        value: currentParent,
+        okLabel: 'Move',
+        okClass: 'btn-warning',
+        icon: 'folder-input',
+        iconClass: 'bg-warning/10 text-warning',
+      });
+      if (selected === null || selected === undefined) return;
+
+      const res = await this._fetch(`/api/v1/mail/folders/${folder.uuid}`, {
+        method: 'PATCH',
+        body: { parent_name: selected },
+      });
+
+      if (res.ok) {
+        await this.loadFolders(accountUuid);
+        // If the moved folder was selected, update reference
+        if (this.selectedFolder?.uuid === folder.uuid) {
+          const flds = this.folders[accountUuid] || [];
+          const updated = flds.find(f => f.uuid === folder.uuid);
+          if (updated) this.selectedFolder = updated;
+        }
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await AppDialog.error({ message: data.detail || 'Failed to move folder' });
       }
     },
 

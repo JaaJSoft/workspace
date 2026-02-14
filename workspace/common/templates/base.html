@@ -285,6 +285,58 @@
 
       error({ title = 'Error', message = 'An error occurred.', okLabel = 'OK' } = {}) {
         return this.message({ title, message, okLabel, icon: 'circle-alert', iconClass: 'bg-error/10 text-error' });
+      },
+
+      select({ title = 'Select', message = '', options = [], value = '', okLabel = 'OK', cancelLabel = 'Cancel', okClass = 'btn-primary', icon = '', iconClass = '' } = {}) {
+        return new Promise((resolve) => {
+          const dialog = document.getElementById('app-dialog-select');
+          const iconEl = document.getElementById('app-dialog-select-icon');
+          const titleEl = document.getElementById('app-dialog-select-title');
+          const messageEl = document.getElementById('app-dialog-select-message');
+          const select = document.getElementById('app-dialog-select-input');
+          const okBtn = document.getElementById('app-dialog-select-ok');
+          const cancelBtn = document.getElementById('app-dialog-select-cancel');
+
+          this._setIcon(iconEl, icon, iconClass);
+          titleEl.textContent = title;
+          messageEl.textContent = message;
+          messageEl.style.display = message ? '' : 'none';
+
+          while (select.firstChild) select.removeChild(select.firstChild);
+          for (const opt of options) {
+            const o = document.createElement('option');
+            o.value = opt.value !== undefined ? opt.value : opt.label;
+            o.textContent = opt.label || opt.value;
+            if (o.value === value) o.selected = true;
+            select.appendChild(o);
+          }
+
+          okBtn.textContent = okLabel;
+          cancelBtn.textContent = cancelLabel;
+          okBtn.className = `btn btn-sm ${okClass}`;
+
+          const cleanup = () => {
+            okBtn.removeEventListener('click', onOk);
+            dialog.removeEventListener('close', onClose);
+          };
+
+          const onOk = () => {
+            cleanup();
+            const val = select.value;
+            dialog.close();
+            resolve(val);
+          };
+
+          const onClose = () => {
+            cleanup();
+            resolve(null);
+          };
+
+          okBtn.addEventListener('click', onOk);
+          dialog.addEventListener('close', onClose);
+          dialog.showModal();
+          select.focus();
+        });
       }
     };
 

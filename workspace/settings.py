@@ -414,6 +414,10 @@ else:
 
 STATIC_ROOT = _static_root
 
+# Media files (user uploads)
+MEDIA_ROOT = os.getenv('MEDIA_ROOT', BASE_DIR)
+MEDIA_URL = '/media/'
+
 # Storage backends (Django 5 style)
 STORAGES = {
     "default": {

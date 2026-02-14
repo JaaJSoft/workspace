@@ -276,7 +276,7 @@ class MailFolderUpdateView(APIView):
             return None
         return folder
 
-    @extend_schema(summary="Update folder (icon, color, rename)")
+    @extend_schema(summary="Update folder (icon, color, rename, move)")
     def patch(self, request, uuid):
         folder = self._get_folder(request, uuid)
         if not folder:
@@ -285,19 +285,38 @@ class MailFolderUpdateView(APIView):
         ser = MailFolderUpdateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        # Rename on IMAP if display_name changed
-        new_display_name = ser.validated_data.pop('display_name', None)
-        if new_display_name and new_display_name != folder.display_name:
-            from .services.imap import rename_folder
+        # Move folder if parent_name is provided
+        parent_name = ser.validated_data.pop('parent_name', None)
+        if parent_name is not None:
+            if folder.folder_type != 'other':
+                return Response(
+                    {'detail': 'Cannot move a special folder'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            from .services.imap import move_folder
 
             try:
-                rename_folder(folder.account, folder, new_display_name)
+                move_folder(folder.account, folder, parent_name)
             except Exception as e:
-                logger.warning("Failed to rename folder for %s: %s", folder.account.email, e)
+                logger.warning("Failed to move folder for %s: %s", folder.account.email, e)
                 return Response(
-                    {'detail': 'Failed to rename folder'},
+                    {'detail': 'Failed to move folder'},
                     status=status.HTTP_502_BAD_GATEWAY,
                 )
+        else:
+            # Rename on IMAP if display_name changed (only when not moving)
+            new_display_name = ser.validated_data.pop('display_name', None)
+            if new_display_name and new_display_name != folder.display_name:
+                from .services.imap import rename_folder
+
+                try:
+                    rename_folder(folder.account, folder, new_display_name)
+                except Exception as e:
+                    logger.warning("Failed to rename folder for %s: %s", folder.account.email, e)
+                    return Response(
+                        {'detail': 'Failed to rename folder'},
+                        status=status.HTTP_502_BAD_GATEWAY,
+                    )
 
         # Update icon/color locally
         update_fields = ['updated_at']

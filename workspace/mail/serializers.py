@@ -61,6 +61,7 @@ class MailFolderUpdateSerializer(serializers.Serializer):
     icon = serializers.CharField(max_length=50, required=False, allow_null=True, allow_blank=True)
     color = serializers.CharField(max_length=30, required=False, allow_null=True, allow_blank=True)
     display_name = serializers.CharField(max_length=255, required=False)
+    parent_name = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
 
 
 class MailAttachmentSerializer(serializers.ModelSerializer):

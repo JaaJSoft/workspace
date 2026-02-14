@@ -343,6 +343,84 @@ class MailFolderRenameTests(MailTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
 
+# ---------- Folder Move ----------
+
+
+class MailFolderMoveTests(MailTestMixin, APITestCase):
+    """Tests for PATCH /api/v1/mail/folders/<uuid> (move via parent_name)"""
+
+    def _url(self, folder):
+        return f'/api/v1/mail/folders/{folder.uuid}'
+
+    @patch('workspace.mail.services.imap.move_folder')
+    def test_move_folder_to_parent(self, mock_move):
+        """Move a root folder under another folder."""
+        parent = MailFolder.objects.create(
+            account=self.account, name='Work', display_name='Work', folder_type='other',
+        )
+
+        def side_effect(account, folder, new_parent_name):
+            folder.name = f'{new_parent_name}/{folder.display_name}'
+            folder.display_name = folder.display_name
+            folder.save(update_fields=['name', 'display_name', 'updated_at'])
+            return folder
+        mock_move.side_effect = side_effect
+
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(self._url(self.custom), {
+            'parent_name': 'Work',
+        }, format='json')
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_move.assert_called_once_with(self.account, self.custom, 'Work')
+
+    @patch('workspace.mail.services.imap.move_folder')
+    def test_move_folder_to_root(self, mock_move):
+        """Move a subfolder to root using empty parent_name."""
+        subfolder = MailFolder.objects.create(
+            account=self.account, name='Work/Projects',
+            display_name='Projects', folder_type='other',
+        )
+
+        def side_effect(account, folder, new_parent_name):
+            folder.name = folder.display_name
+            folder.save(update_fields=['name', 'display_name', 'updated_at'])
+            return folder
+        mock_move.side_effect = side_effect
+
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(self._url(subfolder), {
+            'parent_name': '',
+        }, format='json')
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_move.assert_called_once_with(self.account, subfolder, '')
+
+    def test_cannot_move_special_folder(self):
+        """Special folders (inbox, sent, etc.) cannot be moved."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(self._url(self.inbox), {
+            'parent_name': 'SomeParent',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('special folder', resp.data['detail'].lower())
+
+    @patch('workspace.mail.services.imap.move_folder', side_effect=Exception('IMAP error'))
+    def test_move_imap_failure(self, mock_move):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(self._url(self.custom), {
+            'parent_name': 'Destination',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_502_BAD_GATEWAY)
+
+    def test_cannot_move_other_user_folder(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(self._url(self.other_folder), {
+            'parent_name': 'Hacked',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
 # ---------- Folder Delete ----------
 
 

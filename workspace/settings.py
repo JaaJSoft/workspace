@@ -472,6 +472,8 @@ if DEBUG:
 # Celery Configuration
 # Use Redis as broker if available, otherwise fall back to in-memory (not recommended for production)
 CELERY_BROKER_URL = _REDIS_URL or 'memory://'
+import kombu
+CELERY_TASK_QUEUES = [kombu.Queue('celery')]
 CELERY_RESULT_BACKEND = _REDIS_URL or 'cache+memory://'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'

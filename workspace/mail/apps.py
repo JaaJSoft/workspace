@@ -8,7 +8,7 @@ class MailConfig(AppConfig):
 
     def ready(self):
         from workspace.core.module_registry import ModuleInfo, SearchProviderInfo, registry
-        from workspace.mail.search import search_mail
+        from workspace.mail.search import search_contacts, search_mail
 
         registry.register(ModuleInfo(
             name='Mail',
@@ -24,4 +24,10 @@ class MailConfig(AppConfig):
             slug='mail',
             module_slug='mail',
             search_fn=search_mail,
+        ))
+
+        registry.register_search_provider(SearchProviderInfo(
+            slug='mail-contacts',
+            module_slug='mail',
+            search_fn=search_contacts,
         ))

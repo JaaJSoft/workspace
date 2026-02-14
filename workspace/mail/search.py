@@ -1,3 +1,6 @@
+import hashlib
+from collections import Counter, defaultdict
+
 from django.db.models import Q
 
 from workspace.core.module_registry import SearchResult
@@ -51,3 +54,62 @@ def _format_date(dt):
     if dt.year == now.year:
         return dt.strftime('%d %b')
     return dt.strftime('%d %b %Y')
+
+
+def search_contacts(query, user, limit):
+    account_ids = MailAccount.objects.filter(owner=user).values_list('uuid', flat=True)
+
+    messages = (
+        MailMessage.objects
+        .filter(account_id__in=account_ids, deleted_at__isnull=True)
+        .filter(
+            Q(from_address__icontains=query)
+            | Q(to_addresses__icontains=query)
+            | Q(cc_addresses__icontains=query)
+        )
+        .order_by('-date')
+        .only('from_address', 'to_addresses', 'cc_addresses')[:500]
+    )
+
+    q_lower = query.lower()
+    email_count = Counter()
+    email_names = defaultdict(Counter)
+
+    for msg in messages:
+        addresses = []
+        fa = msg.from_address
+        if isinstance(fa, dict) and fa.get('email'):
+            addresses.append(fa)
+        for field in (msg.to_addresses, msg.cc_addresses):
+            if isinstance(field, list):
+                addresses.extend(
+                    a for a in field if isinstance(a, dict) and a.get('email')
+                )
+
+        for addr in addresses:
+            email = addr['email'].strip().lower()
+            name = (addr.get('name') or '').strip()
+            if q_lower not in email and q_lower not in name.lower():
+                continue
+            email_count[email] += 1
+            if name:
+                email_names[email][name] += 1
+
+    results = []
+    for email, _count in email_count.most_common(limit):
+        name_counter = email_names.get(email)
+        name = name_counter.most_common(1)[0][0] if name_counter else ''
+        display = f'{name} <{email}>' if name else email
+        uid = hashlib.md5(email.encode()).hexdigest()
+        results.append(SearchResult(
+            uuid=uid,
+            name=name or email,
+            url=f'/mail?compose={email}',
+            matched_value=display,
+            match_type='contact',
+            type_icon='user',
+            module_slug='mail',
+            module_color='warning',
+        ))
+
+    return results

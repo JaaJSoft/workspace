@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workspace-config
+  namespace: workspace
+data:
+  DEBUG: "0"
+  ALLOWED_HOSTS: "workspace.example.com"
+  CSRF_TRUSTED_ORIGINS: "https://workspace.example.com"
+  GUNICORN_WORKERS: "3"
+  GUNICORN_LOG_LEVEL: "info"
+  DJANGO_LOG_LEVEL: "INFO"
+  TRASH_RETENTION_DAYS: "30"
+  MEDIA_ROOT: "/app/data"

@@ -1,0 +1,144 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: workspace-data
+  namespace: workspace
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace
+  namespace: workspace
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: workspace
+  template:
+    metadata:
+      labels:
+        app: workspace
+    spec:
+      initContainers:
+        - name: migrate
+          image: ghcr.io/jaajsoft/workspace:main
+          command: ["python", "manage.py", "migrate", "--noinput"]
+          envFrom:
+            - configMapRef:
+                name: workspace-config
+            - secretRef:
+                name: workspace-secrets
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+
+      containers:
+        - name: web
+          image: ghcr.io/jaajsoft/workspace:main
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: workspace-config
+            - secretRef:
+                name: workspace-secrets
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /health/
+              port: 8000
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /health/
+              port: 8000
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health/
+              port: 8000
+            periodSeconds: 5
+
+        - name: worker
+          image: ghcr.io/jaajsoft/workspace:main
+          command: ["celery", "-A", "workspace", "worker", "--loglevel=info"]
+          envFrom:
+            - configMapRef:
+                name: workspace-config
+            - secretRef:
+                name: workspace-secrets
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+
+        - name: beat
+          image: ghcr.io/jaajsoft/workspace:main
+          command: ["celery", "-A", "workspace", "beat", "--loglevel=info"]
+          envFrom:
+            - configMapRef:
+                name: workspace-config
+            - secretRef:
+                name: workspace-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: workspace-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workspace
+  namespace: workspace
+spec:
+  selector:
+    app: workspace
+  ports:
+    - port: 80
+      targetPort: 8000

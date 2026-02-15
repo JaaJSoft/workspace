@@ -1718,11 +1718,27 @@ function chatApp(currentUserId) {
     },
 
     async saveAttachmentToFiles(attachmentUuid) {
+      const folder = await AppDialog.folderPicker({
+        title: 'Save to Files',
+        message: 'Choose a destination folder.',
+        okLabel: 'Save',
+        okClass: 'btn-warning',
+        icon: 'folder-down',
+        iconClass: 'bg-warning/10 text-warning',
+      });
+      if (!folder) return;
+
       try {
+        const body = {};
+        if (folder.uuid) body.folder_id = folder.uuid;
         const resp = await fetch(`/api/v1/chat/attachments/${attachmentUuid}/save-to-files`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this._csrf(),
+          },
           credentials: 'same-origin',
+          body: JSON.stringify(body),
         });
         if (resp.ok) {
           AppDialog.message({ title: 'Saved', message: 'File saved to your Files.', icon: 'check-circle', iconClass: 'bg-success/10 text-success' });

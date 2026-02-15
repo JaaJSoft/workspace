@@ -78,6 +78,8 @@
 
   <!-- Generic Dialogs -->
   {% include "ui/partials/dialogs.html" %}
+  <!-- Folder Picker -->
+  {% include "ui/partials/folder_picker.html" %}
   <!-- Toast notifications -->
   {% include 'ui/partials/toasts.html' %}
   <!-- Initialize Lucide Icons -->
@@ -336,6 +338,17 @@
           dialog.addEventListener('close', onClose);
           dialog.showModal();
           select.focus();
+        });
+      },
+
+      folderPicker({ title, message, okLabel, cancelLabel, okClass, icon, iconClass } = {}) {
+        return new Promise((resolve) => {
+          window.dispatchEvent(new CustomEvent('folder-picker:open', {
+            detail: {
+              options: { title, message, okLabel, cancelLabel, okClass, icon, iconClass },
+              resolve,
+            },
+          }));
         });
       }
     };

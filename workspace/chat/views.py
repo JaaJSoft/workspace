@@ -1118,10 +1118,29 @@ class AttachmentSaveToFilesView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        from workspace.files.models import File
+
+        parent = None
+        folder_id = request.data.get('folder_id')
+        if folder_id:
+            try:
+                parent = File.objects.get(
+                    uuid=folder_id,
+                    owner=request.user,
+                    node_type=File.NodeType.FOLDER,
+                    deleted_at__isnull=True,
+                )
+            except File.DoesNotExist:
+                return Response(
+                    {'detail': 'Folder not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
         content = ContentFile(attachment.file.read(), name=attachment.original_name)
         file_obj = FileService.create_file(
             owner=request.user,
             name=attachment.original_name,
+            parent=parent,
             content=content,
             mime_type=attachment.mime_type,
         )

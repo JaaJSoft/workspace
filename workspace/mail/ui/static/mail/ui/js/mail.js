@@ -1744,34 +1744,18 @@ function mailApp() {
     },
 
     async saveAttachmentToFiles(attachmentUuid) {
-      // Fetch root-level folders for the picker
-      let folders = [];
-      try {
-        const res = await this._fetch('/api/v1/files?node_type=folder');
-        if (res.ok) {
-          const data = await res.json();
-          folders = (data.results || data).filter(f => !f.parent);
-        }
-      } catch (e) { /* ignore */ }
-
-      const options = [
-        { label: '/ (Root)', value: '' },
-        ...folders.map(f => ({ label: f.name, value: f.uuid })),
-      ];
-
-      const selected = await AppDialog.select({
+      const folder = await AppDialog.folderPicker({
         title: 'Save to Files',
         message: 'Choose a destination folder.',
-        options,
         okLabel: 'Save',
         okClass: 'btn-warning',
         icon: 'folder-down',
         iconClass: 'bg-warning/10 text-warning',
       });
-      if (selected === null || selected === undefined) return;
+      if (!folder) return;
 
       const body = {};
-      if (selected) body.folder_id = selected;
+      if (folder.uuid) body.folder_id = folder.uuid;
 
       try {
         const res = await this._fetch(`/api/v1/mail/attachments/${attachmentUuid}/save-to-files`, {

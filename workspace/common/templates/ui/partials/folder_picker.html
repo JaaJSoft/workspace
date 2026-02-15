@@ -1,0 +1,258 @@
+<!-- Folder Picker Dialog — include once in base.html -->
+<dialog id="app-dialog-folder-picker" class="modal"
+  x-data="{
+    open: false,
+    currentFolder: null,
+    folders: [],
+    breadcrumbs: [],
+    loading: false,
+    newFolderName: '',
+    creatingFolder: false,
+    showNewFolder: false,
+    _resolve: null,
+    options: {},
+
+    init() {
+      window.addEventListener('folder-picker:open', (e) => {
+        this.options = e.detail.options || {};
+        this._resolve = e.detail.resolve;
+        this.currentFolder = null;
+        this.folders = [];
+        this.breadcrumbs = [];
+        this.newFolderName = '';
+        this.creatingFolder = false;
+        this.showNewFolder = false;
+        this.fetchFolders(null);
+        this.$refs.dialog.showModal();
+        this.open = true;
+      });
+    },
+
+    _csrf() {
+      return document.cookie.split('; ')
+        .find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+    },
+
+    async fetchFolders(parentUuid) {
+      this.loading = true;
+      try {
+        let url = '/api/v1/files?node_type=folder';
+        if (parentUuid) url += '&parent=' + parentUuid;
+        const res = await fetch(url, { credentials: 'same-origin' });
+        if (res.ok) {
+          const data = await res.json();
+          this.folders = (data.results || data).sort((a, b) => a.name.localeCompare(b.name));
+        }
+      } catch (e) { /* ignore */ }
+      this.loading = false;
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    navigateToFolder(folder) {
+      this.breadcrumbs.push({ uuid: folder.uuid, name: folder.name });
+      this.currentFolder = { uuid: folder.uuid, name: folder.name };
+      this.showNewFolder = false;
+      this.newFolderName = '';
+      this.fetchFolders(folder.uuid);
+    },
+
+    navigateToBreadcrumb(index) {
+      if (index < 0) {
+        this.breadcrumbs = [];
+        this.currentFolder = null;
+        this.showNewFolder = false;
+        this.newFolderName = '';
+        this.fetchFolders(null);
+      } else {
+        const target = this.breadcrumbs[index];
+        this.breadcrumbs = this.breadcrumbs.slice(0, index + 1);
+        this.currentFolder = { uuid: target.uuid, name: target.name };
+        this.showNewFolder = false;
+        this.newFolderName = '';
+        this.fetchFolders(target.uuid);
+      }
+    },
+
+    async createFolder() {
+      const name = this.newFolderName.trim();
+      if (!name) return;
+      this.creatingFolder = true;
+      try {
+        const body = { name, node_type: 'folder' };
+        if (this.currentFolder) body.parent = this.currentFolder.uuid;
+        const res = await fetch('/api/v1/files', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this._csrf(),
+          },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          this.newFolderName = '';
+          this.showNewFolder = false;
+          await this.fetchFolders(this.currentFolder?.uuid || null);
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert(err.detail || err.name?.[0] || 'Failed to create folder');
+        }
+      } catch (e) { /* ignore */ }
+      this.creatingFolder = false;
+    },
+
+    select() {
+      const result = this.currentFolder
+        ? { uuid: this.currentFolder.uuid, name: this.currentFolder.name }
+        : { uuid: null, name: 'Root' };
+      this._close(result);
+    },
+
+    cancel() {
+      this._close(null);
+    },
+
+    _close(result) {
+      this.$refs.dialog.close();
+      this.open = false;
+      if (this._resolve) {
+        this._resolve(result);
+        this._resolve = null;
+      }
+    },
+
+    currentLocationLabel() {
+      return this.currentFolder ? this.currentFolder.name : 'Root';
+    }
+  }"
+  x-ref="dialog"
+  @close.prevent="cancel()"
+>
+  <div class="modal-box flex flex-col max-h-[70vh]">
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-4">
+      <div :class="options.iconClass || 'bg-warning/10 text-warning'" class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center">
+        <i :data-lucide="options.icon || 'folder-open'" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 class="font-bold text-lg" x-text="options.title || 'Choose Folder'"></h3>
+        <p class="text-sm text-base-content/60" x-text="options.message || 'Select a destination folder.'"></p>
+      </div>
+    </div>
+
+    <!-- Breadcrumbs -->
+    <div class="flex items-center gap-1 text-sm mb-3 px-1 flex-wrap min-h-[28px]">
+      <button
+        class="btn btn-ghost btn-xs gap-1"
+        :class="{ 'font-bold': !currentFolder }"
+        @click="navigateToBreadcrumb(-1)"
+      >
+        <i data-lucide="home" class="w-3 h-3"></i>
+        Root
+      </button>
+      <template x-for="(crumb, i) in breadcrumbs" :key="crumb.uuid">
+        <div class="flex items-center gap-1">
+          <span class="text-base-content/40">/</span>
+          <button
+            class="btn btn-ghost btn-xs"
+            :class="{ 'font-bold': i === breadcrumbs.length - 1 }"
+            @click="navigateToBreadcrumb(i)"
+            x-text="crumb.name"
+          ></button>
+        </div>
+      </template>
+    </div>
+
+    <!-- Folder list -->
+    <div class="border border-base-300 rounded-lg flex-1 overflow-y-auto min-h-[200px] max-h-[300px]">
+      <!-- Loading spinner -->
+      <template x-if="loading">
+        <div class="flex items-center justify-center h-full py-8">
+          <span class="loading loading-spinner loading-md text-base-content/40"></span>
+        </div>
+      </template>
+
+      <!-- Folder entries -->
+      <template x-if="!loading">
+        <div>
+          <template x-if="folders.length === 0">
+            <div class="flex flex-col items-center justify-center py-8 text-base-content/40">
+              <i data-lucide="folder-x" class="w-8 h-8 mb-2"></i>
+              <span class="text-sm">No subfolders</span>
+            </div>
+          </template>
+          <template x-for="folder in folders" :key="folder.uuid">
+            <button
+              class="w-full flex items-center gap-3 px-3 py-2 hover:bg-base-200 transition-colors text-left"
+              @click="navigateToFolder(folder)"
+            >
+              <i data-lucide="folder" class="w-4 h-4 text-warning flex-shrink-0"></i>
+              <span class="text-sm truncate" x-text="folder.name"></span>
+              <i data-lucide="chevron-right" class="w-4 h-4 text-base-content/30 ml-auto flex-shrink-0"></i>
+            </button>
+          </template>
+        </div>
+      </template>
+    </div>
+
+    <!-- New folder row -->
+    <div class="mt-3">
+      <template x-if="!showNewFolder">
+        <button class="btn btn-ghost btn-xs gap-1 text-base-content/60" @click="showNewFolder = true; $nextTick(() => $refs.newFolderInput?.focus())">
+          <i data-lucide="folder-plus" class="w-3.5 h-3.5"></i>
+          New folder
+        </button>
+      </template>
+      <template x-if="showNewFolder">
+        <div class="flex items-center gap-2">
+          <input
+            x-ref="newFolderInput"
+            type="text"
+            class="input input-bordered input-sm flex-1"
+            placeholder="Folder name"
+            x-model="newFolderName"
+            @keydown.enter.prevent="createFolder()"
+            @keydown.escape.prevent="showNewFolder = false; newFolderName = ''"
+            :disabled="creatingFolder"
+          />
+          <button
+            class="btn btn-warning btn-sm"
+            @click="createFolder()"
+            :disabled="!newFolderName.trim() || creatingFolder"
+          >
+            <template x-if="creatingFolder">
+              <span class="loading loading-spinner loading-xs"></span>
+            </template>
+            <template x-if="!creatingFolder">
+              <span>Create</span>
+            </template>
+          </button>
+          <button class="btn btn-ghost btn-sm" @click="showNewFolder = false; newFolderName = ''" :disabled="creatingFolder">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </template>
+    </div>
+
+    <!-- Footer -->
+    <div class="modal-action">
+      <div class="flex items-center gap-2 text-xs text-base-content/50 mr-auto">
+        <i data-lucide="info" class="w-3.5 h-3.5"></i>
+        <span>Saving to: <strong x-text="currentLocationLabel()"></strong></span>
+      </div>
+      <button class="btn btn-ghost btn-sm" @click="cancel()">
+        <span x-text="options.cancelLabel || 'Cancel'"></span>
+      </button>
+      <button
+        :class="options.okClass || 'btn-warning'"
+        class="btn btn-sm"
+        @click="select()"
+      >
+        <span x-text="options.okLabel || 'Select'"></span>
+      </button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button @click.prevent="cancel()">close</button>
+  </form>
+</dialog>

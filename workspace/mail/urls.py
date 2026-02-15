@@ -19,4 +19,5 @@ urlpatterns = [
     path('api/v1/mail/messages/batch-action', views.MailBatchActionView.as_view(), name='mail-batch-action'),
     path('api/v1/mail/messages/<uuid:uuid>', views.MailMessageDetailView.as_view(), name='mail-message-detail'),
     path('api/v1/mail/attachments/<uuid:uuid>', views.MailAttachmentDownloadView.as_view(), name='mail-attachment-download'),
+    path('api/v1/mail/attachments/<uuid:uuid>/save-to-files', views.MailAttachmentSaveToFilesView.as_view(), name='mail-attachment-save-to-files'),
 ]

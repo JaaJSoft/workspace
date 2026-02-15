@@ -1743,6 +1743,52 @@ function mailApp() {
       return d.toLocaleDateString([], opts);
     },
 
+    async saveAttachmentToFiles(attachmentUuid) {
+      // Fetch root-level folders for the picker
+      let folders = [];
+      try {
+        const res = await this._fetch('/api/v1/files?node_type=folder');
+        if (res.ok) {
+          const data = await res.json();
+          folders = (data.results || data).filter(f => !f.parent);
+        }
+      } catch (e) { /* ignore */ }
+
+      const options = [
+        { label: '/ (Root)', value: '' },
+        ...folders.map(f => ({ label: f.name, value: f.uuid })),
+      ];
+
+      const selected = await AppDialog.select({
+        title: 'Save to Files',
+        message: 'Choose a destination folder.',
+        options,
+        okLabel: 'Save',
+        okClass: 'btn-warning',
+        icon: 'folder-down',
+        iconClass: 'bg-warning/10 text-warning',
+      });
+      if (selected === null || selected === undefined) return;
+
+      const body = {};
+      if (selected) body.folder_id = selected;
+
+      try {
+        const res = await this._fetch(`/api/v1/mail/attachments/${attachmentUuid}/save-to-files`, {
+          method: 'POST',
+          body,
+        });
+        if (res.ok) {
+          AppDialog.message({ title: 'Saved', message: 'Attachment saved to Files.', icon: 'check-circle', iconClass: 'bg-success/10 text-success' });
+        } else {
+          const err = await res.json().catch(() => ({}));
+          AppDialog.error({ message: err.detail || 'Failed to save attachment.' });
+        }
+      } catch (e) {
+        AppDialog.error({ message: 'Failed to save attachment.' });
+      }
+    },
+
     formatFullDate(dateStr) {
       if (!dateStr) return '';
       return new Date(dateStr).toLocaleString([], {

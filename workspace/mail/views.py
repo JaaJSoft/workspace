@@ -792,6 +792,61 @@ class MailAttachmentDownloadView(APIView):
 
 
 @extend_schema(tags=['Mail'])
+class MailAttachmentSaveToFilesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Save a mail attachment to the user's Files")
+    def post(self, request, uuid):
+        from django.core.files.base import ContentFile
+        from workspace.files.models import File
+        from workspace.files.services.files import FileService
+
+        try:
+            attachment = MailAttachment.objects.select_related(
+                'message__account',
+            ).get(uuid=uuid)
+        except MailAttachment.DoesNotExist:
+            return Response(
+                {'detail': 'Attachment not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if attachment.message.account.owner != request.user:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Resolve target folder
+        parent = None
+        folder_id = request.data.get('folder_id')
+        if folder_id:
+            try:
+                parent = File.objects.get(
+                    uuid=folder_id,
+                    owner=request.user,
+                    node_type=File.NodeType.FOLDER,
+                    deleted_at__isnull=True,
+                )
+            except File.DoesNotExist:
+                return Response(
+                    {'detail': 'Folder not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        content = ContentFile(attachment.content.read(), name=attachment.filename)
+        file_obj = FileService.create_file(
+            owner=request.user,
+            name=attachment.filename,
+            parent=parent,
+            content=content,
+            mime_type=attachment.content_type,
+        )
+
+        return Response(
+            {'detail': 'File saved.', 'file_uuid': str(file_obj.uuid)},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+@extend_schema(tags=['Mail'])
 class ContactAutocompleteView(APIView):
     permission_classes = [IsAuthenticated]
 

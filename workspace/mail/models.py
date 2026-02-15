@@ -178,6 +178,11 @@ class MailMessage(models.Model):
         return self.subject or '(no subject)'
 
 
+def mail_attachment_path(instance, filename):
+    account = instance.message.account
+    return f'mail/attachments/{account.owner_id}/{account.pk}/{filename}'
+
+
 class MailAttachment(models.Model):
     """Attachment linked to a mail message."""
 
@@ -190,7 +195,7 @@ class MailAttachment(models.Model):
     filename = models.CharField(max_length=255)
     content_type = models.CharField(max_length=255, default='application/octet-stream')
     size = models.BigIntegerField(default=0)
-    content = models.FileField(upload_to='mail/attachments/')
+    content = models.FileField(upload_to=mail_attachment_path)
     content_id = models.CharField(max_length=255, blank=True, default='')
     is_inline = models.BooleanField(default=False)
 

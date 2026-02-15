@@ -86,6 +86,17 @@ urlpatterns = [
         views.ConversationPinView.as_view(),
         name='chat-conversation-pin',
     ),
+    # Message pinning
+    path(
+        'api/v1/chat/messages/<uuid:message_id>/pin',
+        views.MessagePinToggleView.as_view(),
+        name='chat-message-pin-toggle',
+    ),
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/pinned-messages',
+        views.ConversationPinnedMessagesView.as_view(),
+        name='chat-conversation-pinned-messages',
+    ),
     # Attachments
     path(
         'api/v1/chat/attachments/<uuid:attachment_id>',

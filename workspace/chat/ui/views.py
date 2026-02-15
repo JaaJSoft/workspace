@@ -8,7 +8,7 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.chat.models import Conversation, ConversationMember, Message, PinnedConversation
+from workspace.chat.models import Conversation, ConversationMember, Message, PinnedConversation, PinnedMessage
 from workspace.chat.serializers import ConversationListSerializer
 from workspace.chat.services import get_unread_counts
 
@@ -244,9 +244,14 @@ def conversation_messages_view(request, conversation_uuid):
 
     first_uuid = str(messages_page[0].uuid) if messages_page else ''
 
+    pinned_message_ids = set(
+        PinnedMessage.objects.filter(conversation_id=conversation_uuid).values_list('message_id', flat=True)
+    )
+
     return render(request, 'chat/ui/partials/message_list.html', {
         'groups': groups,
         'has_more': has_more,
         'first_uuid': first_uuid,
         'current_user': request.user,
+        'pinned_message_ids': pinned_message_ids,
     })

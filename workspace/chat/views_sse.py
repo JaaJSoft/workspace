@@ -8,7 +8,7 @@ from django.core.cache import cache
 from django.http import StreamingHttpResponse
 from django.utils import timezone
 
-from .models import ConversationMember, Message, Reaction
+from .models import ConversationMember, Message, PinnedMessage, Reaction
 from .serializers import MessageSerializer
 from .services import get_unread_counts
 
@@ -67,6 +67,7 @@ def _event_stream(request):
     seen_edit_keys = set()
     seen_delete_keys = set()
     seen_reaction_ids = set()
+    seen_pin_ids = set()
 
     # Send initial unread counts immediately
     try:
@@ -214,6 +215,31 @@ def _event_stream(request):
                         'action': 'added',
                     }
                     yield _format_sse('reaction', data)
+
+                # Pinned messages
+                new_pins = (
+                    PinnedMessage.objects.filter(
+                        conversation_id__in=member_conv_ids,
+                        created_at__gt=since - timedelta(seconds=5),
+                    )
+                    .exclude(pinned_by_id=user_id)
+                    .exclude(uuid__in=seen_pin_ids)
+                    .select_related('pinned_by')
+                    .order_by('created_at')[:50]
+                )
+
+                for pin in new_pins:
+                    seen_pin_ids.add(pin.uuid)
+                    data = {
+                        'type': 'message_pinned',
+                        'conversation_id': str(pin.conversation_id),
+                        'message_id': str(pin.message_id),
+                        'pinned_by': {
+                            'id': pin.pinned_by.id,
+                            'username': pin.pinned_by.username,
+                        },
+                    }
+                    yield _format_sse('message_pinned', data)
 
         time.sleep(1)
 

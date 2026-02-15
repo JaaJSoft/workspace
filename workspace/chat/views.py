@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import avatar_service as group_avatar_service
-from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, Reaction
+from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage, Reaction
 from .serializers import (
     ConversationCreateSerializer,
     ConversationDetailSerializer,
@@ -21,6 +21,7 @@ from .serializers import (
     MessageCreateSerializer,
     MessageEditSerializer,
     MessageSerializer,
+    PinnedMessageSerializer,
     ReactionToggleSerializer,
 )
 from .services import (
@@ -462,6 +463,8 @@ class MessageDetailView(APIView):
 
         message.deleted_at = timezone.now()
         message.save(update_fields=['deleted_at'])
+
+        PinnedMessage.objects.filter(message=message).delete()
 
         notify_conversation_members(
             message.conversation, exclude_user=request.user,
@@ -1049,6 +1052,80 @@ class ConversationPinReorderView(APIView):
             PinnedConversation.objects.bulk_update(to_update, ['position'])
 
         return Response({'status': 'ok'})
+
+
+@extend_schema(tags=['Chat'])
+class MessagePinToggleView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Pin a message")
+    def post(self, request, message_id):
+        try:
+            message = Message.objects.select_related('conversation').get(uuid=message_id)
+        except Message.DoesNotExist:
+            return Response({'detail': 'Message not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        membership = _get_active_membership(request.user, message.conversation_id)
+        if not membership:
+            return Response({'detail': 'Not a member of this conversation.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if message.deleted_at:
+            return Response({'detail': 'Cannot pin a deleted message.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        pin, created = PinnedMessage.objects.get_or_create(
+            conversation=message.conversation,
+            message=message,
+            defaults={'pinned_by': request.user},
+        )
+
+        notify_conversation_members(message.conversation, exclude_user=request.user)
+
+        pin = PinnedMessage.objects.select_related('message__author', 'pinned_by').get(pk=pin.pk)
+        return Response(
+            PinnedMessageSerializer(pin).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    @extend_schema(summary="Unpin a message")
+    def delete(self, request, message_id):
+        try:
+            message = Message.objects.select_related('conversation').get(uuid=message_id)
+        except Message.DoesNotExist:
+            return Response({'detail': 'Message not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        membership = _get_active_membership(request.user, message.conversation_id)
+        if not membership:
+            return Response({'detail': 'Not a member of this conversation.'}, status=status.HTTP_403_FORBIDDEN)
+
+        deleted, _ = PinnedMessage.objects.filter(
+            conversation=message.conversation,
+            message=message,
+        ).delete()
+        if not deleted:
+            return Response({'detail': 'Message is not pinned.'}, status=status.HTTP_404_NOT_FOUND)
+
+        notify_conversation_members(message.conversation, exclude_user=request.user)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=['Chat'])
+class ConversationPinnedMessagesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="List pinned messages in a conversation")
+    def get(self, request, conversation_id):
+        membership = _get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response({'detail': 'Not a member of this conversation.'}, status=status.HTTP_403_FORBIDDEN)
+
+        pins = (
+            PinnedMessage.objects
+            .filter(conversation_id=conversation_id)
+            .select_related('message__author', 'pinned_by')
+            .order_by('-created_at')
+        )
+        return Response(PinnedMessageSerializer(pins, many=True).data)
 
 
 @extend_schema(tags=['Chat'])

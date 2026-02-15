@@ -25,6 +25,7 @@ x-init="init()"
 @chat-message_deleted.window="handleSSEMessageDeleted($event.detail)"
 @chat-reaction.window="handleSSEReaction($event.detail)"
 @chat-unread.window="handleSSEUnread($event.detail)"
+@chat-message_pinned.window="handleSSEMessagePinned($event.detail)"
 @keydown.window="
   if ($event.altKey && $event.key === 'n') { $event.preventDefault(); showNewConversationDialog(); }
   if (($event.ctrlKey || $event.metaKey) && $event.key === 'f' && activeConversation) { $event.preventDefault(); toggleSearchPanel(); }
@@ -143,6 +144,16 @@ x-init="init()"
       <div class="flex-1 flex min-h-0">
         <!-- Messages column -->
         <div class="flex-1 flex flex-col min-w-0 relative">
+          <!-- Pinned messages banner -->
+          <div x-show="pinnedMessages.length > 0" x-cloak
+               class="px-4 py-2 bg-warning/10 border-b border-warning/20 flex items-center gap-2 cursor-pointer hover:bg-warning/15 transition-colors"
+               @click="showInfoPanel = true; closeSearchPanel(); $nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); if (activeConversation) loadConversationStats(activeConversation.uuid); document.getElementById('pinned-messages-section')?.scrollIntoView({ behavior: 'smooth' }); })">
+            <i data-lucide="pin" class="w-4 h-4 text-warning flex-shrink-0"></i>
+            <span class="text-sm truncate flex-1" x-text="pinnedMessages[0]?.message_body || 'Pinned message'"></span>
+            <span x-show="pinnedMessages.length > 1" class="badge badge-warning badge-sm" x-text="pinnedMessages.length + ' pins'"></span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-base-content/40 flex-shrink-0"></i>
+          </div>
+
           <!-- Messages -->
           <div
             class="flex-1 overflow-y-auto p-4"
@@ -390,7 +401,7 @@ x-init="init()"
     es = new EventSource('/api/v1/chat/stream');
     errorCount = 0;
 
-    const events = ['unread', 'message', 'message_edited', 'message_deleted', 'reaction'];
+    const events = ['unread', 'message', 'message_edited', 'message_deleted', 'reaction', 'message_pinned'];
     for (const evt of events) {
       es.addEventListener(evt, (e) => {
         try {

@@ -49,6 +49,8 @@ function chatApp(currentUserId) {
     pendingFiles: [],
     isDraggingOver: false,
     _dragCounter: 0,
+    // Pinned messages
+    pinnedMessages: [],
     // Pinned drag & drop
     draggingPinned: null,
     dragOverPinned: null,
@@ -193,6 +195,7 @@ function chatApp(currentUserId) {
       this.editingMessageUuid = null;
       this.messageBody = '';
       this.pendingFiles = [];
+      this.pinnedMessages = [];
       this.showInfoPanel = false;
       this.conversationStats = null;
       this.showSearchPanel = false;
@@ -218,6 +221,7 @@ function chatApp(currentUserId) {
 
       await this.loadMessages(conv.uuid);
       await this.markAsRead(conv.uuid);
+      await this.loadPinnedMessages(conv.uuid);
 
       conv.unread_count = 0;
 
@@ -722,6 +726,7 @@ function chatApp(currentUserId) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
         // Re-fetch to get proper grouping after deletion
         this._refreshCurrentMessages();
+        this.loadPinnedMessages(this.activeConversation.uuid);
       }
     },
 
@@ -831,6 +836,7 @@ function chatApp(currentUserId) {
         });
         if (this.activeConversation) {
           this.loadConversationStats(this.activeConversation.uuid);
+          this.loadPinnedMessages(this.activeConversation.uuid);
         }
       }
     },
@@ -1358,6 +1364,64 @@ function chatApp(currentUserId) {
         }
       } catch (e) {
         console.error('Failed to unpin conversation', e);
+      }
+    },
+
+    // ── Message pinning ──────────────────────────────────────
+    async loadPinnedMessages(conversationId) {
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${conversationId}/pinned-messages`, {
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          this.pinnedMessages = await resp.json();
+          this.$nextTick(() => {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+          });
+        }
+      } catch (e) {
+        console.error('Failed to load pinned messages', e);
+      }
+    },
+
+    async pinMessage(messageId) {
+      if (!this.activeConversation) return;
+      try {
+        const resp = await fetch(`/api/v1/chat/messages/${messageId}/pin`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          await this.loadPinnedMessages(this.activeConversation.uuid);
+          await this._refreshCurrentMessages();
+        }
+      } catch (e) {
+        console.error('Failed to pin message', e);
+      }
+    },
+
+    async unpinMessage(messageId) {
+      if (!this.activeConversation) return;
+      try {
+        const resp = await fetch(`/api/v1/chat/messages/${messageId}/pin`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+        });
+        if (resp.ok || resp.status === 204) {
+          await this.loadPinnedMessages(this.activeConversation.uuid);
+          await this._refreshCurrentMessages();
+        }
+      } catch (e) {
+        console.error('Failed to unpin message', e);
+      }
+    },
+
+    handleSSEMessagePinned(detail) {
+      if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
+        this.loadPinnedMessages(this.activeConversation.uuid);
+        this._refreshCurrentMessages();
       }
     },
 

@@ -7,7 +7,7 @@
     {% if group.type == 'date' %}
       <div class="divider text-xs text-base-content/50 my-3">{{ group.date|date_label }}</div>
     {% elif group.type == 'messages' %}
-      {% include "chat/ui/partials/message_group.html" with group=group current_user=current_user %}
+      {% include "chat/ui/partials/message_group.html" with group=group current_user=current_user pinned_message_ids=pinned_message_ids %}
     {% endif %}
   {% endfor %}
 

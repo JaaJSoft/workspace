@@ -119,6 +119,24 @@ class Reaction(models.Model):
         return f'{self.user} reacted {self.emoji}'
 
 
+class PinnedMessage(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='pinned_messages')
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='pinned_in')
+    pinned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['conversation', 'message'], name='unique_pinned_message'),
+        ]
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['conversation', '-created_at'])]
+
+    def __str__(self):
+        return f'Pin {self.message_id} in {self.conversation_id}'
+
+
 class PinnedConversation(models.Model):
     """User-pinned conversations for quick sidebar access."""
     uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)

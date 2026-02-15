@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from workspace.users.avatar_service import has_avatar
 
-from .models import Conversation, ConversationMember, Message, MessageAttachment, Reaction
+from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedMessage, Reaction
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -32,6 +32,23 @@ class ReactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reaction
         fields = ['uuid', 'emoji', 'user', 'created_at']
+
+
+class PinnedMessageSerializer(serializers.ModelSerializer):
+    message_uuid = serializers.UUIDField(source='message.uuid')
+    message_body = serializers.SerializerMethodField()
+    message_author = MemberUserSerializer(source='message.author')
+    message_created_at = serializers.DateTimeField(source='message.created_at')
+    pinned_by = MemberUserSerializer()
+    pinned_at = serializers.DateTimeField(source='created_at')
+
+    class Meta:
+        model = PinnedMessage
+        fields = ['uuid', 'message_uuid', 'message_body', 'message_author', 'message_created_at', 'pinned_by', 'pinned_at']
+
+    def get_message_body(self, obj):
+        body = obj.message.body or ''
+        return body[:100] + '\u2026' if len(body) > 100 else body
 
 
 class MessageAttachmentSerializer(serializers.ModelSerializer):

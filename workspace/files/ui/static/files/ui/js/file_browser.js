@@ -743,49 +743,68 @@ window.fileBrowser = function fileBrowser() {
     _updateUploadToast() {
       if (!this._uploadToastEl) return;
 
+      // Build a standalone toast element instead of fighting .alert layout
       const el = this._uploadToastEl;
-      el.replaceChildren();
-      el.style.overflow = 'hidden';
+      el.className = 'shadow-lg rounded-xl text-white';
+      el.style.cssText = 'width:22rem; max-width:calc(100vw - 2rem); padding:0; overflow:hidden; background:oklch(var(--in));';
 
-      // Upload icon (SVG)
+      el.replaceChildren();
+
+      // Inner padding container
+      const inner = document.createElement('div');
+      inner.style.cssText = 'display:flex; align-items:start; gap:0.75rem; padding:0.875rem 1rem;';
+
+      // Upload icon
       const iconNS = 'http://www.w3.org/2000/svg';
       const svg = document.createElementNS(iconNS, 'svg');
-      svg.setAttribute('class', 'stroke-current shrink-0 h-6 w-6');
+      svg.setAttribute('class', 'shrink-0');
+      svg.setAttribute('width', '20');
+      svg.setAttribute('height', '20');
       svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
       svg.setAttribute('viewBox', '0 0 24 24');
       const path = document.createElementNS(iconNS, 'path');
-      path.setAttribute('stroke-linecap', 'round');
-      path.setAttribute('stroke-linejoin', 'round');
-      path.setAttribute('stroke-width', '2');
       path.setAttribute('d', 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12');
       svg.appendChild(path);
-      el.appendChild(svg);
+      svg.style.marginTop = '1px';
+      inner.appendChild(svg);
 
-      // Content wrapper
-      const wrapper = document.createElement('div');
-      wrapper.className = 'flex-1 min-w-0 overflow-hidden';
+      // Text block
+      const text = document.createElement('div');
+      text.style.cssText = 'flex:1; min-width:0; overflow:hidden;';
 
-      // Title: "Uploading X / Y"
-      const title = document.createElement('div');
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex; justify-content:space-between; align-items:baseline;';
+      const title = document.createElement('span');
       title.className = 'font-semibold text-sm';
       title.textContent = `Uploading ${this.uploadCompleted + 1} / ${this.uploadTotal}`;
-      wrapper.appendChild(title);
+      const pct = document.createElement('span');
+      pct.className = 'text-xs tabular-nums';
+      pct.style.opacity = '0.8';
+      pct.textContent = `${this.uploadBytePercent}%`;
+      header.appendChild(title);
+      header.appendChild(pct);
+      text.appendChild(header);
 
-      // Current file name
       const nameEl = document.createElement('div');
-      nameEl.className = 'text-xs opacity-80 truncate';
+      nameEl.className = 'text-xs truncate';
+      nameEl.style.opacity = '0.7';
       nameEl.textContent = this.uploadCurrentFile;
-      wrapper.appendChild(nameEl);
+      text.appendChild(nameEl);
 
-      // Progress bar
-      const progress = document.createElement('progress');
-      progress.className = 'progress w-full mt-1';
-      progress.style.height = '6px';
-      progress.value = this.uploadBytePercent;
-      progress.max = 100;
-      wrapper.appendChild(progress);
+      inner.appendChild(text);
+      el.appendChild(inner);
 
-      el.appendChild(wrapper);
+      // Full-width progress bar pinned to the bottom, no side padding
+      const track = document.createElement('div');
+      track.style.cssText = 'height:5px; background:rgba(255,255,255,0.15);';
+      const fill = document.createElement('div');
+      fill.style.cssText = `height:100%; width:${this.uploadBytePercent}%; background:rgba(255,255,255,0.85); transition:width 0.15s ease;`;
+      track.appendChild(fill);
+      el.appendChild(track);
     },
 
     // --- Drag & drop upload ---

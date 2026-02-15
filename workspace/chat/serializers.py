@@ -103,7 +103,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Conversation
         fields = [
-            'uuid', 'kind', 'title', 'created_by_id',
+            'uuid', 'kind', 'title', 'description', 'created_by_id',
             'created_at', 'updated_at',
             'members', 'last_message', 'unread_count',
             'avatar_url', 'is_pinned', 'pin_position',
@@ -136,7 +136,7 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Conversation
         fields = [
-            'uuid', 'kind', 'title', 'created_by_id',
+            'uuid', 'kind', 'title', 'description', 'created_by_id',
             'created_at', 'updated_at', 'members',
             'avatar_url',
         ]
@@ -153,6 +153,7 @@ class ConversationCreateSerializer(serializers.Serializer):
         min_length=1,
     )
     title = serializers.CharField(max_length=255, required=False, default='')
+    description = serializers.CharField(required=False, default='', allow_blank=True)
 
 
 class MessageCreateSerializer(serializers.Serializer):

@@ -67,6 +67,26 @@
       <i data-lucide="tag" class="w-3.5 h-3.5 flex-shrink-0"></i>
       <span x-text="activeConversation.title" class="truncate"></span>
     </div>
+    <!-- Description -->
+    <div x-show="activeConversation.description" class="flex items-start gap-2 text-base-content/60">
+      <i data-lucide="align-left" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+      <span x-text="activeConversation.description" class="whitespace-pre-line break-words flex-1"></span>
+      <button
+        class="btn btn-ghost btn-xs btn-circle opacity-50 hover:opacity-100 flex-shrink-0"
+        @click="editDescription()"
+        title="Edit description"
+      >
+        <i data-lucide="pencil" class="w-3 h-3"></i>
+      </button>
+    </div>
+    <button
+      x-show="!activeConversation.description"
+      class="btn btn-ghost btn-xs gap-1 text-base-content/50"
+      @click="editDescription()"
+    >
+      <i data-lucide="align-left" class="w-3 h-3"></i>
+      Add description
+    </button>
   </div>
 
   <!-- Actions -->

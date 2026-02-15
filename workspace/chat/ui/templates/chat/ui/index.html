@@ -113,7 +113,31 @@ x-init="init()"
 
         <div class="flex-1 min-w-0">
           <h3 class="font-semibold text-sm truncate" x-text="conversationName(activeConversation)"></h3>
-          <p class="text-xs text-base-content/60" x-text="membersList(activeConversation)"></p>
+          <p class="text-xs text-base-content/60 truncate">
+            <span x-text="membersList(activeConversation)"></span>
+            <template x-if="activeConversation.description">
+              <span>
+                -
+                <button
+                  class="inline-flex align-middle opacity-50 hover:opacity-100"
+                  @click="editDescription()"
+                  :title="'Edit description'"
+                >
+                  <i data-lucide="align-left" class="w-2.5 h-2.5"></i>
+                </button>
+                <span x-text="activeConversation.description"></span>
+              </span>
+            </template>
+            <template x-if="!activeConversation.description">
+              <button
+                class="inline-flex align-middle opacity-50 hover:opacity-100 ml-1"
+                @click="editDescription()"
+                title="Add description"
+              >
+                <i data-lucide="align-left" class="w-2.5 h-2.5"></i>
+              </button>
+            </template>
+          </p>
         </div>
 
         <!-- Header actions -->

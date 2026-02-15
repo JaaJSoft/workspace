@@ -13,7 +13,7 @@ class ConversationMemberInline(admin.TabularInline):
 class ConversationAdmin(admin.ModelAdmin):
     list_display = ('uuid', 'kind', 'title', 'created_by', 'created_at', 'updated_at')
     list_filter = ('kind',)
-    search_fields = ('title', 'created_by__username')
+    search_fields = ('title', 'description', 'created_by__username')
     inlines = [ConversationMemberInline]
 
 

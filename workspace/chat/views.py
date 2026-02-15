@@ -203,7 +203,7 @@ class ConversationDetailView(APIView):
         )
         return Response(ConversationDetailSerializer(conversation).data)
 
-    @extend_schema(summary="Rename group conversation")
+    @extend_schema(summary="Update conversation details")
     def patch(self, request, conversation_id):
         membership = _get_active_membership(request.user, conversation_id)
         if not membership:
@@ -213,22 +213,41 @@ class ConversationDetailView(APIView):
             )
 
         conversation = Conversation.objects.get(pk=conversation_id)
-        if conversation.kind != Conversation.Kind.GROUP:
+        update_fields = []
+
+        # Title update (groups only)
+        if 'title' in request.data:
+            if conversation.kind != Conversation.Kind.GROUP:
+                return Response(
+                    {'detail': 'Only group conversations can be renamed.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            title = request.data['title'].strip() if request.data['title'] else ''
+            if not title:
+                return Response(
+                    {'detail': 'Title cannot be empty.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            conversation.title = title
+            update_fields.append('title')
+
+        # Description update (all conversation types)
+        if 'description' in request.data:
+            conversation.description = (request.data['description'] or '').strip()
+            update_fields.append('description')
+
+        if not update_fields:
             return Response(
-                {'detail': 'Only group conversations can be renamed.'},
+                {'detail': 'No fields to update. Provide title or description.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        title = request.data.get('title', '').strip()
-        if not title:
-            return Response(
-                {'detail': 'Title is required.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        conversation.title = title
-        conversation.save(update_fields=['title'])
-        return Response({'uuid': str(conversation.uuid), 'title': conversation.title})
+        conversation.save(update_fields=update_fields)
+        return Response({
+            'uuid': str(conversation.uuid),
+            'title': conversation.title,
+            'description': conversation.description,
+        })
 
     @extend_schema(summary="Leave conversation")
     def delete(self, request, conversation_id):

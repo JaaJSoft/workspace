@@ -1040,6 +1040,39 @@ function chatApp(currentUserId) {
       }
     },
 
+    async editDescription() {
+      if (!this.activeConversation) return;
+      const current = this.activeConversation.description || '';
+      const description = await AppDialog.prompt({
+        title: 'Edit description',
+        message: 'Enter a description for this conversation:',
+        value: current,
+        placeholder: 'Add a description...',
+        okLabel: 'Save',
+        inputSize: 'textarea',
+      });
+      if (description === null) return;
+      const trimmed = description.trim();
+      if (trimmed === current) return;
+
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+          body: JSON.stringify({ description: trimmed }),
+        });
+        if (resp.ok) {
+          this.activeConversation.description = trimmed;
+          const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
+          if (conv) conv.description = trimmed;
+          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+        }
+      } catch (e) {
+        console.error('Failed to update description', e);
+      }
+    },
+
     async leaveConversation() {
       if (!this.activeConversation) return;
       const ok = await AppDialog.confirm({

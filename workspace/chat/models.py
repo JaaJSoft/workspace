@@ -12,6 +12,7 @@ class Conversation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     kind = models.CharField(max_length=5, choices=Kind.choices)
     title = models.CharField(max_length=255, blank=True, default='')
+    description = models.TextField(blank=True, default='')
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

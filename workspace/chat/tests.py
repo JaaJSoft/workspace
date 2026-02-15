@@ -239,6 +239,63 @@ class RenameConversationTests(ChatTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class ConversationDescriptionTests(ChatTestMixin, APITestCase):
+    """Tests for PATCH /api/v1/chat/conversations/<id> (description)"""
+
+    def url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}'
+
+    def test_member_can_set_description_on_group(self):
+        self.client.force_authenticate(self.member)
+        resp = self.client.patch(self.url(self.group.uuid), {'description': 'A test description'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.description, 'A test description')
+
+    def test_member_can_set_description_on_dm(self):
+        self.client.force_authenticate(self.creator)
+        resp = self.client.patch(self.url(self.dm.uuid), {'description': 'DM description'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.dm.refresh_from_db()
+        self.assertEqual(self.dm.description, 'DM description')
+
+    def test_description_can_be_cleared(self):
+        self.group.description = 'Existing description'
+        self.group.save(update_fields=['description'])
+        self.client.force_authenticate(self.member)
+        resp = self.client.patch(self.url(self.group.uuid), {'description': ''}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.description, '')
+
+    def test_outsider_cannot_update_description(self):
+        self.client.force_authenticate(self.outsider)
+        resp = self.client.patch(self.url(self.group.uuid), {'description': 'Nope'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_title_and_description_together(self):
+        self.client.force_authenticate(self.member)
+        resp = self.client.patch(self.url(self.group.uuid), {
+            'title': 'New Title',
+            'description': 'New Desc',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.title, 'New Title')
+        self.assertEqual(self.group.description, 'New Desc')
+
+    def test_no_fields_returns_400(self):
+        self.client.force_authenticate(self.member)
+        resp = self.client.patch(self.url(self.group.uuid), {}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_title_on_dm_rejected(self):
+        """Title changes are still group-only."""
+        self.client.force_authenticate(self.creator)
+        resp = self.client.patch(self.url(self.dm.uuid), {'title': 'New'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+
 class LeaveConversationTests(ChatTestMixin, APITestCase):
     """Tests for DELETE /api/v1/chat/conversations/<id> (leave)"""
 

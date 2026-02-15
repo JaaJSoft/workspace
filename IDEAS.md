@@ -80,9 +80,9 @@ Project management and task tracking.
 
 Integrated email client to centralize communication.
 
-- [ ] IMAP/SMTP connection (multi-account)
-- [ ] Unified inbox
-- [ ] Compose, reply, forward
+- [x] IMAP/SMTP connection (multi-account)
+- [x] Unified inbox
+- [x] Compose, reply, forward
 - [ ] Attachments -> direct save to Files
 - [ ] Custom labels / tags
 - [ ] Full-text search in emails
@@ -100,12 +100,12 @@ Calendar and planning. **Module shipped in v0.4.0.**
 
 - [x] Day, week, month views (FullCalendar integration)
 - [x] Events with title, description, location, participants
-- [ ] Recurring events (RRULE)
+- [x] Recurring events
 - [ ] Sync CalDAV / Google Calendar / Outlook
 - [ ] Reminders (email, in-app notification)
 - [ ] Availability slots (Calendly style)
 - [ ] Link with tasks (deadlines visible in calendar)
-- [ ] Agenda view (chronological list)
+- [x] Agenda view (chronological list)
 - [ ] Time zones (format preferences only for now)
 - [x] Invitations and RSVP (pending/accepted/declined)
 - [x] Calendar subscriptions (subscribe to other users' calendars)

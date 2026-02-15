@@ -279,6 +279,15 @@ window.fileBrowser = function fileBrowser() {
     actionLoadingUuids: {},
     cleaningTrash: false,
 
+    // Upload progress state
+    uploading: false,
+    uploadTotal: 0,
+    uploadCompleted: 0,
+    uploadCurrentFile: '',
+    uploadBytePercent: 0,
+    _uploadToastEl: null,
+    _uploadToastTimer: null,
+
     _startLoading(...uuids) {
       for (const uuid of uuids) this.actionLoadingUuids[uuid] = true;
     },
@@ -629,8 +638,72 @@ window.fileBrowser = function fileBrowser() {
     },
 
     async uploadFiles(files) {
+      this.uploading = true;
+      this.uploadTotal = files.length;
+      this.uploadCompleted = 0;
+      this.uploadBytePercent = 0;
+
+      // Delay showing the progress toast so fast uploads don't flash it
+      this._uploadToastTimer = setTimeout(() => {
+        this._uploadToastEl = window.AppAlert.show({
+          message: 'Preparing upload...',
+          type: 'info',
+          duration: 0,
+          dismissible: false,
+        });
+        this._updateUploadToast();
+      }, 1000);
+
       let uploaded = 0;
+
       for (const file of files) {
+        this.uploadCurrentFile = file.name;
+        this.uploadBytePercent = 0;
+        this._updateUploadToast();
+
+        try {
+          await this._uploadFile(file);
+          uploaded++;
+        } catch (err) {
+          this.showAlert('error', `Failed to upload ${file.name}${err.message ? ': ' + err.message : ''}`);
+        }
+
+        this.uploadCompleted++;
+      }
+
+      // Cancel pending toast timer if upload finished before it fired
+      clearTimeout(this._uploadToastTimer);
+      this._uploadToastTimer = null;
+
+      // Dismiss progress toast
+      if (this._uploadToastEl) {
+        window.AppAlert.dismiss(this._uploadToastEl);
+        this._uploadToastEl = null;
+      }
+
+      // Refresh first, then show success toast after a short delay
+      // so the Alpine AJAX refresh doesn't interfere with the toast
+      if (uploaded > 0) {
+        this.refreshFolderBrowser();
+        const msg = `Uploaded ${uploaded} file${uploaded > 1 ? 's' : ''}`;
+        setTimeout(() => this.showAlert('success', msg), 600);
+      }
+
+      // Reset state
+      this.uploading = false;
+      this.uploadTotal = 0;
+      this.uploadCompleted = 0;
+      this.uploadCurrentFile = '';
+      this.uploadBytePercent = 0;
+
+      // Reset file input so re-selecting same files triggers change
+      const input = document.getElementById('file-upload-input');
+      if (input) input.value = '';
+    },
+
+    _uploadFile(file) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
         const formData = new FormData();
         formData.append('name', file.name);
         formData.append('node_type', 'file');
@@ -639,28 +712,80 @@ window.fileBrowser = function fileBrowser() {
           formData.append('parent', this.currentFolder);
         }
 
-        try {
-          const response = await fetch('/api/v1/files', {
-            method: 'POST',
-            headers: {
-              'X-CSRFToken': this.getCsrfToken()
-            },
-            body: formData
-          });
-          if (response.ok) {
-            uploaded++;
-          } else {
-            const data = await response.json();
-            this.showAlert('error', `Failed to upload ${file.name}: ${data.detail || 'Unknown error'}`);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            this.uploadBytePercent = Math.round((e.loaded / e.total) * 100);
+            this._updateUploadToast();
           }
-        } catch (error) {
-          this.showAlert('error', `Failed to upload ${file.name}`);
-        }
-      }
-      if (uploaded > 0) {
-        this.showAlert('success', `Uploaded ${uploaded} file${uploaded > 1 ? 's' : ''}`);
-        this.refreshFolderBrowser();
-      }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            let detail = 'Unknown error';
+            try {
+              const data = JSON.parse(xhr.responseText);
+              detail = data.detail || detail;
+            } catch (_) {}
+            reject(new Error(detail));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('Network error'));
+
+        xhr.open('POST', '/api/v1/files');
+        xhr.setRequestHeader('X-CSRFToken', this.getCsrfToken());
+        xhr.send(formData);
+      });
+    },
+
+    _updateUploadToast() {
+      if (!this._uploadToastEl) return;
+
+      const el = this._uploadToastEl;
+      el.replaceChildren();
+      el.style.overflow = 'hidden';
+
+      // Upload icon (SVG)
+      const iconNS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(iconNS, 'svg');
+      svg.setAttribute('class', 'stroke-current shrink-0 h-6 w-6');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      const path = document.createElementNS(iconNS, 'path');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('d', 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12');
+      svg.appendChild(path);
+      el.appendChild(svg);
+
+      // Content wrapper
+      const wrapper = document.createElement('div');
+      wrapper.className = 'flex-1 min-w-0 overflow-hidden';
+
+      // Title: "Uploading X / Y"
+      const title = document.createElement('div');
+      title.className = 'font-semibold text-sm';
+      title.textContent = `Uploading ${this.uploadCompleted + 1} / ${this.uploadTotal}`;
+      wrapper.appendChild(title);
+
+      // Current file name
+      const nameEl = document.createElement('div');
+      nameEl.className = 'text-xs opacity-80 truncate';
+      nameEl.textContent = this.uploadCurrentFile;
+      wrapper.appendChild(nameEl);
+
+      // Progress bar
+      const progress = document.createElement('progress');
+      progress.className = 'progress w-full mt-1';
+      progress.style.height = '6px';
+      progress.value = this.uploadBytePercent;
+      progress.max = 100;
+      wrapper.appendChild(progress);
+
+      el.appendChild(wrapper);
     },
 
     // --- Drag & drop upload ---

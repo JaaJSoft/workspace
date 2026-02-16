@@ -56,8 +56,7 @@ ENV DJANGO_SETTINGS_MODULE=workspace.settings
 RUN SECRET_KEY=build-secret DEBUG=0 python manage.py collectstatic --noinput
 
 # Gunicorn workers count and logs configurable (default values)
-ENV DJANGO_ALLOW_ASYNC_UNSAFE=true \
-    GUNICORN_WORKERS=3 \
+ENV GUNICORN_WORKERS=3 \
     GUNICORN_LOG_LEVEL=info \
     GUNICORN_ACCESS_LOGFORMAT="%(h)s %(l)s %(u)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\" %(D)s"
 

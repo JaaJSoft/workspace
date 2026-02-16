@@ -79,7 +79,6 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'django_filters',
     'simple_history',
-    'health_check',
     # Workspace apps
     'workspace.core',
     'workspace.common',

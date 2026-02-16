@@ -393,19 +393,6 @@ wheels = [
 ]
 
 [[package]]
-name = "django-health-check"
-version = "4.0.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "django" },
-    { name = "dnspython" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/db/e0/d0e9cf78f4aaea9f0f8cc9e6e2daeac41604960c04c8fdf66277e4f8a84a/django_health_check-4.0.0.tar.gz", hash = "sha256:1b49c36cb1ae90edd8c2667c889b4b9c6aa8317d8444a8bc884061c5cf9ad706", size = 19963, upload-time = "2026-02-12T14:45:58.554Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d8/36/f8950eaf079600d9877490baaae49d52d919e5b576ef694e6b42709c628c/django_health_check-4.0.0-py3-none-any.whl", hash = "sha256:1d90a8fdd7625ea2fd84e46225d7e435440bf4cad564a382bc6282c78c77cdbe", size = 24848, upload-time = "2026-02-12T14:45:57.355Z" },
-]
-
-[[package]]
 name = "django-redis"
 version = "6.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1252,7 +1239,6 @@ dependencies = [
     { name = "django-brotli" },
     { name = "django-daisy" },
     { name = "django-filter" },
-    { name = "django-health-check" },
     { name = "django-redis" },
     { name = "django-simple-history" },
     { name = "djangorestframework" },
@@ -1285,7 +1271,6 @@ requires-dist = [
     { name = "django-brotli", specifier = ">=0.4.0" },
     { name = "django-daisy", specifier = ">=2.0.5" },
     { name = "django-filter", specifier = "==25.2" },
-    { name = "django-health-check", specifier = ">=4" },
     { name = "django-redis", specifier = ">=5.4.0" },
     { name = "django-simple-history", specifier = ">=3.8.0" },
     { name = "djangorestframework", specifier = "==3.16.1" },

@@ -9,7 +9,6 @@ dependencies = [
     "djangorestframework==3.16.1",
     "django-filter==25.2",
     "drf-spectacular==0.29.0",
-    "django-health-check>=4",
     "whitenoise>=6.11.0",
     "django-redis>=5.4.0",
     "django-simple-history>=3.8.0",

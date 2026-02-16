@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.6.0
+
+### New module: Mail
+
+IMAP/SMTP mail client integrated into the workspace.
+
+- Account management with auto-discovery of IMAP/SMTP settings
+- Compose dialog with reply/forward detection, draft management, and attachments
+- Hierarchical folder tree with subfolder creation, move, and drag-and-drop
+- Folder icon and color customization via context menu
+- Message filters: search, unread, starred, and attachments
+- Drag-and-drop and menu-based message move between folders
+- Contact autocomplete with search and contact card popovers
+- "Save to Files" action to save mail attachments directly to the file browser
+- Sent mail handling with IMAP APPEND support
+- Syncing indicators, loading spinners, and empty states throughout
+- Message context menu with action shortcuts
+- URL state management: selected message reflected in URL
+- Help dialog with shortcuts, features, and API access
+- Edit account dialog for updating mail account settings
+
+### Calendar
+
+- Recurring event support with scope-aware edit and delete (single, this and future, all)
+
+### Chat
+
+- Message pinning functionality
+- Conversation descriptions
+- Filters for message search with expanded UI and backend support
+
+### Dashboard
+
+- Conversation and event insights widgets
+
+### Files
+
+- File upload progress tracking with redesigned toast notifications
+- Folder Picker component for file selection
+- Loading states for file actions and empty trash
+
+### UI
+
+- Loading skeletons for dashboard content
+- Search results enhanced with date display
+- Fix text overflow in dialog messages
+
+### Infrastructure
+
+- Kubernetes deployment manifests with health probes and volume configurations
+- Custom health check views for Kubernetes liveness, readiness, and startup probes (replaces `django-health-check`)
+- Celery task queue configuration with Redis fallback
+- Gevent async worker support for Gunicorn
+- Dependency updates: redis 7.1.1, gunicorn 25.0.3
+
 ## 0.5.0
 
 ### Calendar

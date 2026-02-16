@@ -337,6 +337,13 @@ DATABASES = {
     'default': dj_database_url.config(default=f'sqlite:///{BASE_DIR / "db.sqlite3"}', conn_max_age=60),
 }
 
+# PostgreSQL connection pooling (psycopg pool)
+if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
+    DATABASES['default']['OPTIONS'] = {
+        **DATABASES['default'].get('OPTIONS', {}),
+        'pool': True,
+    }
+
 # SQLite-specific optimizations (WAL mode, PRAGMAs)
 if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
     try:

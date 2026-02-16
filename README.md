@@ -52,11 +52,12 @@ This approach prioritizes operational simplicity, security, and the freedom to d
 
 ### File Management
 - Hierarchical folder tree with unlimited nesting
-- Drag & drop file upload with visual overlay
+- Drag & drop file upload with visual overlay and progress tracking
 - Built-in viewers for PDF, Markdown, images, video, audio, and code (with syntax highlighting)
 - Favorites, pinned folders, and persistent sort preferences
 - Soft-delete with trash and configurable retention (30 days)
 - File copy with conflict resolution
+- Folder download as ZIP archive
 - Custom folder icons and colors
 - WebDAV access with Django authentication
 - File sharing with read-only / read-write permissions per user
@@ -65,33 +66,52 @@ This approach prioritizes operational simplicity, security, and the freedom to d
 - File comments with edit and soft-delete
 - Extensible file action registry (open, transfer, organize, edit, etc.)
 - File viewer navigation with Previous/Next and keyboard arrows
+- Folder picker component for file selection
 
 ### Chat & Messaging
 - Direct messages (1:1) and group conversations
 - Real-time updates via Server-Sent Events (SSE)
 - Emoji reactions with grouped display
 - File attachments with upload, download, and "Save to Files" integration
-- Message search with highlight navigation
+- Message search with filters, highlight navigation
+- Message pinning
+- Conversation descriptions
 - Pinned conversations with drag-and-drop reordering
 - Member management with context menus
 - Markdown message rendering
 - Keyboard shortcuts and help dialog
 
 ### Calendar & Scheduling
-- Day, week, and month views (FullCalendar)
+- Day, week, month, and agenda views (FullCalendar)
 - Events with title, description, location, and participants
+- Recurring events with scope-aware edit and delete (single, this and future, all)
 - Invitations and RSVP (pending / accepted / declined)
 - Calendar subscriptions (subscribe to other users' calendars)
+- Event context menu with quick actions (edit, delete, duplicate)
+- Show/hide declined events
 - Keyboard shortcuts and help dialog
+
+### Mail
+- IMAP/SMTP integration with auto-discovery of server settings
+- Compose dialog with reply/forward detection, draft management, and attachments
+- Hierarchical folder tree with subfolder creation, move, and drag-and-drop
+- Folder icon and color customization
+- Message filters: search, unread, starred, and attachments
+- Drag-and-drop message move between folders
+- Contact autocomplete with search and contact card popovers
+- "Save to Files" action to save mail attachments to the file browser
+- Sent mail handling with IMAP APPEND support
+- Help dialog with shortcuts, features, and API access
 
 ### Dashboard
 - Storage statistics and file/folder counts
 - Recent files, favorites, and trash overview
+- Conversation and event insights widgets
 - Module registry with quick access
 
 ### Unified Search
 - Cross-module search via command palette (Ctrl+K)
-- Results grouped by type (files, folders, conversations, events, etc.)
+- Results grouped by type with date display (files, folders, conversations, events, messages, etc.)
 - Extensible search provider system
 
 ### User Settings & Profiles
@@ -106,14 +126,16 @@ This approach prioritizes operational simplicity, security, and the freedom to d
 
 Built with boring, reliable technology:
 
-| Layer              | Technology                                     |
-|--------------------|------------------------------------------------|
-| **Backend**        | Django 6.0, Django REST Framework              |
-| **Frontend**       | Alpine.js, Tailwind CSS, DaisyUI, Lucide Icons |
-| **Database**       | SQLite (WAL mode)                              |
-| **Cache / Broker** | Redis (optional, for Celery tasks)             |
-| **Server**         | Gunicorn, WhiteNoise, Brotli compression       |
-| **Tooling**        | uv, Docker, drf-spectacular (OpenAPI)          |
+| Layer              | Technology                                                  |
+|--------------------|-------------------------------------------------------------|
+| **Backend**        | Django 6.0, Django REST Framework                           |
+| **Frontend**       | Alpine.js, Tailwind CSS, DaisyUI, Lucide Icons              |
+| **Database**       | SQLite (WAL mode) or PostgreSQL                             |
+| **Cache / Broker** | Redis (optional, for caching, sessions, and Celery tasks)   |
+| **Task Queue**     | Celery with Redis broker, Celery Beat for periodic tasks    |
+| **Server**         | Gunicorn with gevent workers, WhiteNoise, Brotli compression|
+| **Imaging**        | Pillow, CairoSVG (thumbnail generation)                    |
+| **Tooling**        | uv, Docker, drf-spectacular (OpenAPI)                       |
 
 No build steps, no frontend framework complexity, no microservices. Just Python and templates.
 
@@ -176,6 +198,12 @@ docker run -d -p 8000:8000 \
 | `TRASH_RETENTION_DAYS` | Days before trashed items are permanently deleted                                   | `30`                         |
 | `GUNICORN_WORKERS`     | Gunicorn worker count (Docker)                                                      | `3`                          |
 
+## CI/CD
+
+- **Tests** — GitHub Actions runs the test suite on every push and pull request (Python 3.14 + uv)
+- **Docker** — Automatic multi-arch image builds pushed to GitHub Container Registry on `main` and version tags
+- **Dependabot** — Automated dependency updates for the uv ecosystem
+
 ## API
 
 All endpoints are prefixed with `/api/v1/` and use no trailing slashes.
@@ -225,20 +253,24 @@ Every feature is accessible via REST API. Build mobile apps, CLI tools, or integ
 
 ### Health Checks
 
-Kubernetes-ready health endpoints at `/health/` for liveness and readiness probes.
+Kubernetes-ready health endpoints for liveness, readiness, and startup probes:
+
+- `/health/live` — Liveness probe
+- `/health/ready` — Readiness probe (checks database connectivity)
+- `/health/startup` — Startup probe
 
 ## Roadmap
 
 Workspace is in active development. Shipped and planned modules:
 
 **Shipped:**
-- 💬 **Chat** — Direct messages, group conversations, reactions, file attachments, message search, pinned conversations
-- 📅 **Calendar** — Day/week/month views, events with participants, invitations & RSVP, subscriptions
+- 💬 **Chat** — Direct messages, group conversations, reactions, file attachments, message pinning, message search, pinned conversations
+- 📅 **Calendar** — Day/week/month/agenda views, recurring events, participants, invitations & RSVP, subscriptions
+- 📧 **Mail** — Basic IMAP/SMTP client with auto-discovery, compose, folders, filters, contact autocomplete
 
 **Planned:**
 - 📝 **Notes & Wiki** — Rich text editor with backlinks and page hierarchy
 - ✅ **Tasks & Projects** — Kanban boards, sprints, time tracking
-- 📧 **Email Client** — IMAP/SMTP integration with unified inbox
 - 👥 **Contacts & CRM** — Contact management with interaction history
 - 🔗 **Bookmarks** — Save and organize links with automatic previews
 - 🔐 **Password Manager** — Encrypted vault with TOTP support

@@ -9,7 +9,7 @@ Quick improvements with high impact on existing features.
 - [x] **Preview Markdown** - Markdown rendering in the file viewer
 - [x] **Preview code** - Syntax highlighting (highlight.js / Shiki)
 - [x] **Global keyboard shortcuts** - Ctrl+K command palette, Ctrl+N new, Delete, Ctrl+C/V
-- [ ] **Folder sizes** - Recursive size calculation displayed in properties
+- [x] **Folder sizes** - Recursive size calculation displayed in properties
 - [ ] **Clickable breadcrumb in properties** - Navigate to parent from modal
 - [x] **Multi-select with Shift+Click** - Range selection in the file browser
 - [x] **Download file/folder** - Download a file or folder (zip)
@@ -33,6 +33,10 @@ Quick improvements with high impact on existing features.
 - [x] **User settings page** - Profile, preferences, and security tabs
 - [ ] **File/Folder versioning** - Track changes to files and folders
 - [ ] **File/Folder history** - View previous versions of files and folders
+- [ ] **Duplicate detection** - SHA-256 hash on upload, warn on duplicate files
+- [ ] **Recent files widget** - Dashboard widget showing last 10 opened/modified files
+- [ ] **Image annotation** - Draw/comment on images directly (canvas overlay)
+- [ ] **Office document preview** - Preview DOCX/XLSX/PPTX (LibreOffice headless or Collabora)
 
 ---
 
@@ -83,7 +87,7 @@ Integrated email client to centralize communication.
 - [x] IMAP/SMTP connection (multi-account)
 - [x] Unified inbox
 - [x] Compose, reply, forward
-- [ ] Attachments -> direct save to Files
+- [x] Attachments -> direct save to Files
 - [ ] Custom labels / tags
 - [ ] Full-text search in emails
 - [ ] HTML signatures per account
@@ -91,6 +95,8 @@ Integrated email client to centralize communication.
 - [ ] Convert email to task (link with Tasks)
 - [ ] Email templates
 - [ ] Filters and automatic rules
+- [ ] Scheduled send — compose now, send later via Celery delayed task
+- [ ] Undo send — 10s grace period before actually sending (queue + cancel)
 
 ---
 
@@ -103,6 +109,9 @@ Calendar and planning. **Module shipped in v0.4.0.**
 - [x] Recurring events
 - [ ] Sync CalDAV / Google Calendar / Outlook
 - [ ] Reminders (email, in-app notification)
+- [ ] Quick event creation — click a time slot, type title, expand for details
+- [ ] Drag to resize events — resize duration by dragging bottom edge
+- [ ] Multi-calendar overlay — see multiple users' calendars side by side
 - [ ] Availability slots (Calendly style)
 - [ ] Link with tasks (deadlines visible in calendar)
 - [x] Agenda view (chronological list)
@@ -138,18 +147,24 @@ Real-time internal communication. **Module shipped in v0.4.0.**
 - [ ] Discussion threads
 - [x] File sharing (upload, download, save to Files module)
 - [x] Emoji reactions (toggle, grouped display, real-time SSE)
-- [ ] @user and @channel mentions
+- [ ] @user and @channel mentions (unified across chat, file comments, calendar notes)
 - [x] Message search (full-text within conversations, highlight navigation)
 - [x] Real-time updates (SSE-based streaming with unread counts)
 - [ ] Online / away / busy status
 - [x] Pinned conversations with drag-and-drop reordering
-- [ ] Pin individual messages within a conversation
+- [x] Pin individual messages within a conversation
 - [ ] Integration with Tasks (create task from message)
 - [x] Message attachments with "Save to Files" integration
 - [x] Group conversations with avatar, stats, and info panel
 - [x] Member management and context menus
 - [x] Keyboard shortcuts and help dialog
 - [x] Markdown message rendering
+- [ ] Typing indicators — "X is typing..." via SSE (cache key + short TTL)
+- [ ] Message replies — quote a specific message when replying (parent_id FK)
+- [ ] Link previews — auto-unfurl URLs with OpenGraph metadata (title, image, description)
+- [ ] Read receipts — show who has read messages in group conversations
+- [ ] Voice messages — record and send audio clips (MediaRecorder API + file upload)
+- [ ] Message formatting toolbar — WYSIWYG for bold/italic/code/lists (current: raw Markdown)
 
 ---
 
@@ -213,9 +228,10 @@ Customizable dashboards.
 - [ ] Drag & drop to organize widgets
 - [ ] Custom KPIs
 - [ ] Charts (Chart.js / Apache ECharts)
-- [ ] Global activity dashboard (feed)
+- [ ] Global activity dashboard (cross-module feed: file uploaded, message sent, event created)
 - [ ] Report export
 - [ ] Shared dashboards between users
+- [ ] Starred/favorites unification — single "favorites" system across files, conversations, events
 
 ---
 
@@ -258,13 +274,13 @@ Features shared across all modules.
 
 ### Global Search
 - [x] Unified search across all modules (Ctrl+K)
-- [ ] Full-text indexing (PostgreSQL FTS or Meilisearch)
+- [ ] Full-text indexing — PostgreSQL FTS (tsvector/tsquery) across files, mail, chat, contacts
 - [x] Results grouped by type (file, task, note, contact...)
 - [ ] Recent searches and suggestions
 
 ### Notifications
 - [ ] In-app notification center
-- [ ] WebSocket for real-time
+- [ ] SSE for real-time notifications (same pattern as chat)
 - [ ] Notification preferences per module
 - [ ] Email digest (daily/weekly)
 - [ ] Push notifications (PWA)
@@ -296,6 +312,13 @@ Features shared across all modules.
 - [x] **Trash auto-purge** — Tâche Celery (daily 2h30) pour hard-delete les fichiers en corbeille depuis > `TRASH_RETENTION_DAYS`. Commande `manage.py purge_trash` avec `--days` et `--dry-run`.
 - [ ] **Session cleanup** — Tâche Celery pour `clearsessions` (purge des sessions DB expirées quand Redis n'est pas utilisé)
 - [ ] **Admin enrichi** — Enregistrer File, FileFavorite, PinnedFolder dans l'admin Django avec filtres et recherche
+- [ ] **Background file processing** — Celery pipeline for thumbnails, virus scan, metadata extraction on upload
+- [ ] **CDN / S3 storage backend** — django-storages for scalable file storage (MinIO for self-hosted)
+- [ ] **Rate limiting** — django-ratelimit on API endpoints (login, file upload, chat send)
+- [ ] **Metrics endpoint** — Prometheus /metrics (request latency, DB pool, cache hit rate, active SSE connections)
+- [ ] **Structured logging** — JSON logs with request_id tracing (django-structlog)
+- [ ] **Database connection pooling** — PgBouncer or psycopg pool for high-concurrency scenarios
+- [ ] **E2E tests** — Playwright test suite for critical flows (login, file upload, chat send, mail compose)
 
 ### UI/UX
 - [ ] PWA (Progressive Web App) - installable on desktop/mobile

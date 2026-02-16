@@ -317,7 +317,7 @@ Features shared across all modules.
 - [ ] **Rate limiting** — django-ratelimit on API endpoints (login, file upload, chat send)
 - [ ] **Metrics endpoint** — Prometheus /metrics (request latency, DB pool, cache hit rate, active SSE connections)
 - [ ] **Structured logging** — JSON logs with request_id tracing (django-structlog)
-- [ ] **Database connection pooling** — PgBouncer or psycopg pool for high-concurrency scenarios
+- [x] **Database connection pooling** — PgBouncer or psycopg pool for high-concurrency scenarios
 - [ ] **E2E tests** — Playwright test suite for critical flows (login, file upload, chat send, mail compose)
 
 ### UI/UX

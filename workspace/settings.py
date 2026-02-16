@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'django_filters',
     'simple_history',
+    'django_prometheus',
     # Workspace apps
     'workspace.core',
     'workspace.common',
@@ -134,6 +135,7 @@ else:
 
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -152,6 +154,7 @@ MIDDLEWARE = [
     'simple_history.middleware.HistoryRequestMiddleware',
     # Mesure du temps de traitement pour affichage dans le footer UI et header HTTP
     # 'Workspace.common.middleware.RequestTimingMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 # Add Debug Toolbar middleware only in DEBUG mode and not during tests
@@ -337,8 +340,9 @@ DATABASES = {
     'default': dj_database_url.config(default=f'sqlite:///{BASE_DIR / "db.sqlite3"}', conn_max_age=60),
 }
 
-# PostgreSQL connection pooling (psycopg pool)
+# PostgreSQL: connection pooling + Prometheus DB metrics
 if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
+    DATABASES['default']['ENGINE'] = 'django_prometheus.db.backends.postgresql'
     DATABASES['default']['OPTIONS'] = {
         **DATABASES['default'].get('OPTIONS', {}),
         'pool': True,

@@ -7,6 +7,7 @@ import logging
 from django.core.cache import cache
 from django.http import StreamingHttpResponse
 from django.utils import timezone
+from prometheus_client import Gauge
 
 from .models import ConversationMember, Message, PinnedMessage, Reaction
 from .serializers import MessageSerializer
@@ -14,6 +15,11 @@ from .services import get_unread_counts
 
 
 logger = logging.getLogger(__name__)
+
+SSE_CONNECTIONS = Gauge(
+    'chat_sse_active_connections',
+    'Number of active SSE connections',
+)
 
 
 def chat_stream(request):
@@ -77,171 +83,175 @@ def _event_stream(request):
     except Exception:
         logger.exception("Failed to send initial unread counts for user %s", user_id)
 
-    while True:
-        elapsed = time.time() - start_time
-        if elapsed > 60:
-            # Timeout — client EventSource will reconnect
-            return
+    SSE_CONNECTIONS.inc()
+    try:
+        while True:
+            elapsed = time.time() - start_time
+            if elapsed > 60:
+                # Timeout — client EventSource will reconnect
+                return
 
-        now = time.time()
+            now = time.time()
 
-        # Keepalive every 15 seconds
-        if now - last_keepalive >= 15:
-            yield ':keepalive\n\n'
-            last_keepalive = now
+            # Keepalive every 15 seconds
+            if now - last_keepalive >= 15:
+                yield ':keepalive\n\n'
+                last_keepalive = now
 
-        # Unread counts every 10 seconds
-        if now - last_unread_push >= 10:
-            try:
-                unread = get_unread_counts(user)
-                yield _format_sse('unread', unread)
-            except Exception:
-                logger.exception("Failed to send periodic unread counts for user %s", user_id)
-            last_unread_push = now
+            # Unread counts every 10 seconds
+            if now - last_unread_push >= 10:
+                try:
+                    unread = get_unread_counts(user)
+                    yield _format_sse('unread', unread)
+                except Exception:
+                    logger.exception("Failed to send periodic unread counts for user %s", user_id)
+                last_unread_push = now
 
-        # Check cache to see if there are new events
-        if now - last_check >= 2:
-            last_check = now
-            cache_key = f'chat:last_event:{user_id}'
-            cache_value = cache.get(cache_key)
+            # Check cache to see if there are new events
+            if now - last_check >= 2:
+                last_check = now
+                cache_key = f'chat:last_event:{user_id}'
+                cache_value = cache.get(cache_key)
 
-            if cache_value and cache_value != last_cache_value:
-                last_cache_value = cache_value
+                if cache_value and cache_value != last_cache_value:
+                    last_cache_value = cache_value
 
-                # Refresh member conversation IDs
-                member_conv_ids = set(
-                    ConversationMember.objects.filter(
-                        user_id=user_id,
-                        left_at__isnull=True,
-                    ).values_list('conversation_id', flat=True)
-                )
-
-                # New messages
-                new_messages = list(
-                    Message.objects.filter(
-                        conversation_id__in=member_conv_ids,
-                        created_at__gt=since,
-                        deleted_at__isnull=True,
+                    # Refresh member conversation IDs
+                    member_conv_ids = set(
+                        ConversationMember.objects.filter(
+                            user_id=user_id,
+                            left_at__isnull=True,
+                        ).values_list('conversation_id', flat=True)
                     )
-                    .exclude(author_id=user_id)
-                    .exclude(uuid__in=seen_message_ids)
-                    .select_related('author')
-                    .prefetch_related('attachments')
-                    .order_by('created_at')[:50]
-                )
-                for msg in new_messages:
-                    seen_message_ids.add(msg.uuid)
-                    data = {
-                        'type': 'message',
-                        'conversation_id': str(msg.conversation_id),
-                        'message': MessageSerializer(msg).data,
-                    }
-                    yield _format_sse('message', data, event_id=str(msg.uuid))
-                    since = max(since, msg.created_at)
 
-                # Edited messages
-                edited_messages = (
-                    Message.objects.filter(
-                        conversation_id__in=member_conv_ids,
-                        edited_at__isnull=False,
-                        edited_at__gt=since - timedelta(seconds=5),
+                    # New messages
+                    new_messages = list(
+                        Message.objects.filter(
+                            conversation_id__in=member_conv_ids,
+                            created_at__gt=since,
+                            deleted_at__isnull=True,
+                        )
+                        .exclude(author_id=user_id)
+                        .exclude(uuid__in=seen_message_ids)
+                        .select_related('author')
+                        .prefetch_related('attachments')
+                        .order_by('created_at')[:50]
                     )
-                    .exclude(author_id=user_id)
-                    .select_related('author')
-                    .order_by('edited_at')[:50]
-                )
+                    for msg in new_messages:
+                        seen_message_ids.add(msg.uuid)
+                        data = {
+                            'type': 'message',
+                            'conversation_id': str(msg.conversation_id),
+                            'message': MessageSerializer(msg).data,
+                        }
+                        yield _format_sse('message', data, event_id=str(msg.uuid))
+                        since = max(since, msg.created_at)
 
-                for msg in edited_messages:
-                    edit_key = f'{msg.uuid}:{msg.edited_at.isoformat()}'
-                    if edit_key in seen_edit_keys:
-                        continue
-                    seen_edit_keys.add(edit_key)
-                    data = {
-                        'type': 'message_edited',
-                        'conversation_id': str(msg.conversation_id),
-                        'message_id': str(msg.uuid),
-                        'body': msg.body,
-                        'body_html': msg.body_html,
-                        'edited_at': msg.edited_at.isoformat(),
-                    }
-                    yield _format_sse('message_edited', data)
-
-                # Deleted messages
-                deleted_messages = (
-                    Message.objects.filter(
-                        conversation_id__in=member_conv_ids,
-                        deleted_at__isnull=False,
-                        deleted_at__gt=since - timedelta(seconds=5),
+                    # Edited messages
+                    edited_messages = (
+                        Message.objects.filter(
+                            conversation_id__in=member_conv_ids,
+                            edited_at__isnull=False,
+                            edited_at__gt=since - timedelta(seconds=5),
+                        )
+                        .exclude(author_id=user_id)
+                        .select_related('author')
+                        .order_by('edited_at')[:50]
                     )
-                    .exclude(author_id=user_id)
-                    .order_by('deleted_at')[:50]
-                )
 
-                for msg in deleted_messages:
-                    del_key = str(msg.uuid)
-                    if del_key in seen_delete_keys:
-                        continue
-                    seen_delete_keys.add(del_key)
-                    data = {
-                        'type': 'message_deleted',
-                        'conversation_id': str(msg.conversation_id),
-                        'message_id': str(msg.uuid),
-                    }
-                    yield _format_sse('message_deleted', data)
+                    for msg in edited_messages:
+                        edit_key = f'{msg.uuid}:{msg.edited_at.isoformat()}'
+                        if edit_key in seen_edit_keys:
+                            continue
+                        seen_edit_keys.add(edit_key)
+                        data = {
+                            'type': 'message_edited',
+                            'conversation_id': str(msg.conversation_id),
+                            'message_id': str(msg.uuid),
+                            'body': msg.body,
+                            'body_html': msg.body_html,
+                            'edited_at': msg.edited_at.isoformat(),
+                        }
+                        yield _format_sse('message_edited', data)
 
-                # Reactions
-                new_reactions = (
-                    Reaction.objects.filter(
-                        message__conversation_id__in=member_conv_ids,
-                        created_at__gt=since - timedelta(seconds=5),
+                    # Deleted messages
+                    deleted_messages = (
+                        Message.objects.filter(
+                            conversation_id__in=member_conv_ids,
+                            deleted_at__isnull=False,
+                            deleted_at__gt=since - timedelta(seconds=5),
+                        )
+                        .exclude(author_id=user_id)
+                        .order_by('deleted_at')[:50]
                     )
-                    .exclude(user_id=user_id)
-                    .exclude(uuid__in=seen_reaction_ids)
-                    .select_related('user', 'message')
-                    .order_by('created_at')[:50]
-                )
 
-                for reaction in new_reactions:
-                    seen_reaction_ids.add(reaction.uuid)
-                    data = {
-                        'type': 'reaction',
-                        'conversation_id': str(reaction.message.conversation_id),
-                        'message_id': str(reaction.message.uuid),
-                        'emoji': reaction.emoji,
-                        'user': {
-                            'id': reaction.user.id,
-                            'username': reaction.user.username,
-                        },
-                        'action': 'added',
-                    }
-                    yield _format_sse('reaction', data)
+                    for msg in deleted_messages:
+                        del_key = str(msg.uuid)
+                        if del_key in seen_delete_keys:
+                            continue
+                        seen_delete_keys.add(del_key)
+                        data = {
+                            'type': 'message_deleted',
+                            'conversation_id': str(msg.conversation_id),
+                            'message_id': str(msg.uuid),
+                        }
+                        yield _format_sse('message_deleted', data)
 
-                # Pinned messages
-                new_pins = (
-                    PinnedMessage.objects.filter(
-                        conversation_id__in=member_conv_ids,
-                        created_at__gt=since - timedelta(seconds=5),
+                    # Reactions
+                    new_reactions = (
+                        Reaction.objects.filter(
+                            message__conversation_id__in=member_conv_ids,
+                            created_at__gt=since - timedelta(seconds=5),
+                        )
+                        .exclude(user_id=user_id)
+                        .exclude(uuid__in=seen_reaction_ids)
+                        .select_related('user', 'message')
+                        .order_by('created_at')[:50]
                     )
-                    .exclude(pinned_by_id=user_id)
-                    .exclude(uuid__in=seen_pin_ids)
-                    .select_related('pinned_by')
-                    .order_by('created_at')[:50]
-                )
 
-                for pin in new_pins:
-                    seen_pin_ids.add(pin.uuid)
-                    data = {
-                        'type': 'message_pinned',
-                        'conversation_id': str(pin.conversation_id),
-                        'message_id': str(pin.message_id),
-                        'pinned_by': {
-                            'id': pin.pinned_by.id,
-                            'username': pin.pinned_by.username,
-                        },
-                    }
-                    yield _format_sse('message_pinned', data)
+                    for reaction in new_reactions:
+                        seen_reaction_ids.add(reaction.uuid)
+                        data = {
+                            'type': 'reaction',
+                            'conversation_id': str(reaction.message.conversation_id),
+                            'message_id': str(reaction.message.uuid),
+                            'emoji': reaction.emoji,
+                            'user': {
+                                'id': reaction.user.id,
+                                'username': reaction.user.username,
+                            },
+                            'action': 'added',
+                        }
+                        yield _format_sse('reaction', data)
 
-        time.sleep(1)
+                    # Pinned messages
+                    new_pins = (
+                        PinnedMessage.objects.filter(
+                            conversation_id__in=member_conv_ids,
+                            created_at__gt=since - timedelta(seconds=5),
+                        )
+                        .exclude(pinned_by_id=user_id)
+                        .exclude(uuid__in=seen_pin_ids)
+                        .select_related('pinned_by')
+                        .order_by('created_at')[:50]
+                    )
+
+                    for pin in new_pins:
+                        seen_pin_ids.add(pin.uuid)
+                        data = {
+                            'type': 'message_pinned',
+                            'conversation_id': str(pin.conversation_id),
+                            'message_id': str(pin.message_id),
+                            'pinned_by': {
+                                'id': pin.pinned_by.id,
+                                'username': pin.pinned_by.username,
+                            },
+                        }
+                        yield _format_sse('message_pinned', data)
+
+            time.sleep(1)
+    finally:
+        SSE_CONNECTIONS.dec()
 
 
 class _SSEEncoder(json.JSONEncoder):

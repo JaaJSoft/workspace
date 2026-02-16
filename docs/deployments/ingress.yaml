@@ -5,6 +5,12 @@ metadata:
   namespace: workspace
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    # Block /metrics from public access (Prometheus scrapes via ClusterIP)
+    nginx.ingress.kubernetes.io/server-snippet: |
+      location /metrics {
+        deny all;
+        return 403;
+      }
 spec:
   ingressClassName: nginx
   tls:

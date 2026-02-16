@@ -1,6 +1,9 @@
 from django.contrib import admin
 
-from .models import Conversation, ConversationMember, Message, MessageAttachment, Reaction
+from .models import (
+    Conversation, ConversationMember, Message, MessageAttachment,
+    PinnedConversation, PinnedMessage, Reaction,
+)
 
 
 class ConversationMemberInline(admin.TabularInline):
@@ -41,3 +44,25 @@ class MessageAttachmentAdmin(admin.ModelAdmin):
 class ReactionAdmin(admin.ModelAdmin):
     list_display = ('uuid', 'message', 'user', 'emoji', 'created_at')
     search_fields = ('emoji', 'user__username')
+
+
+@admin.register(ConversationMember)
+class ConversationMemberAdmin(admin.ModelAdmin):
+    list_display = ('uuid', 'conversation', 'user', 'joined_at', 'left_at', 'last_read_at')
+    list_filter = ('left_at',)
+    search_fields = ('user__username', 'conversation__title')
+    raw_id_fields = ('conversation', 'user')
+
+
+@admin.register(PinnedMessage)
+class PinnedMessageAdmin(admin.ModelAdmin):
+    list_display = ('uuid', 'conversation', 'message', 'pinned_by', 'created_at')
+    search_fields = ('pinned_by__username', 'conversation__title')
+    raw_id_fields = ('conversation', 'message', 'pinned_by')
+
+
+@admin.register(PinnedConversation)
+class PinnedConversationAdmin(admin.ModelAdmin):
+    list_display = ('uuid', 'owner', 'conversation', 'position', 'created_at')
+    search_fields = ('owner__username', 'conversation__title')
+    raw_id_fields = ('owner', 'conversation')

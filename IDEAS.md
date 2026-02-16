@@ -311,7 +311,7 @@ Features shared across all modules.
 - [x] **SQLite maintenance job** — Celery Beat task (daily 3h) : PRAGMA optimize, WAL checkpoint, VACUUM, integrity check. Commande `manage.py db_maintenance` pour exécution manuelle.
 - [x] **Trash auto-purge** — Tâche Celery (daily 2h30) pour hard-delete les fichiers en corbeille depuis > `TRASH_RETENTION_DAYS`. Commande `manage.py purge_trash` avec `--days` et `--dry-run`.
 - [ ] **Session cleanup** — Tâche Celery pour `clearsessions` (purge des sessions DB expirées quand Redis n'est pas utilisé)
-- [ ] **Admin enrichi** — Enregistrer File, FileFavorite, PinnedFolder dans l'admin Django avec filtres et recherche
+- [x] **Admin enrichi** — File, FileFavorite, PinnedFolder, ConversationMember, PinnedMessage, PinnedConversation dans l'admin avec filtres et recherche
 - [ ] **Background file processing** — Celery pipeline for thumbnails, virus scan, metadata extraction on upload
 - [ ] **CDN / S3 storage backend** — django-storages for scalable file storage (MinIO for self-hosted)
 - [ ] **Rate limiting** — django-ratelimit on API endpoints (login, file upload, chat send)

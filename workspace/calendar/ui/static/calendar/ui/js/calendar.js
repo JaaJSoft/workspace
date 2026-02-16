@@ -823,6 +823,8 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       // Skip when a modal is open
       if (this.showModal || this.showCalendarModal) return;
+      // Don't intercept browser shortcuts (Ctrl/Cmd+key)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const key = e.key;
 

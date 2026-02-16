@@ -1647,6 +1647,8 @@ function mailApp() {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
       // Don't handle if a dialog is open
       if (document.querySelector('dialog[open]')) return;
+      // Don't intercept browser shortcuts (Ctrl/Cmd+key)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       switch (e.key) {
         case 'j': this._navigateMessages(1); break;

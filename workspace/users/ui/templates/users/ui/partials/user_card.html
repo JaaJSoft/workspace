@@ -16,9 +16,11 @@
   </div>
 
   <div class="space-y-1 text-xs text-base-content/60 mb-3">
-    <div class="flex items-center gap-1.5">
-      <span class="w-2 h-2 rounded-full flex-shrink-0 {% if card_user_status == 'online' %}bg-success{% elif card_user_status == 'away' %}bg-warning{% else %}bg-base-300{% endif %}"></span>
-      <span class="{% if card_user_status == 'online' %}text-success{% elif card_user_status == 'away' %}text-warning{% else %}text-base-content/40{% endif %} font-medium capitalize">{{ card_user_status }}</span>
+    <div class="flex items-center gap-1.5" data-user-card-status data-user-id="{{ card_user.id }}"
+         {% if card_user_last_seen %}data-last-seen="{{ card_user_last_seen|date:'c' }}"{% endif %}>
+      <span class="w-2 h-2 rounded-full flex-shrink-0" data-status-dot></span>
+      <span class="font-medium capitalize" data-status-label></span>
+      <span class="text-base-content/40" data-status-ago></span>
     </div>
     {% if card_user.email %}
     <div class="flex items-center gap-1.5 truncate">

@@ -36,7 +36,11 @@ def user_card_view(request, user_id):
         card_user = User.objects.get(pk=user_id, is_active=True)
     except User.DoesNotExist:
         raise Http404
-    return render(request, 'users/ui/partials/user_card.html', {
+    card_status = presence_service.get_status(card_user.id)
+    ctx = {
         'card_user': card_user,
-        'card_user_status': presence_service.get_status(card_user.id),
-    })
+        'card_user_status': card_status,
+    }
+    if card_status != 'online':
+        ctx['card_user_last_seen'] = presence_service.get_last_seen(card_user.id)
+    return render(request, 'users/ui/partials/user_card.html', ctx)

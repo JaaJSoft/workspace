@@ -25,6 +25,53 @@ window.userAvatarHtml = function(userId, username, sizeClass) {
   `</div>`;
 };
 
+/* ── Patch user card status from Alpine presence store ────────── */
+
+var _statusConfig = {
+  online:  { dot: 'bg-success',  label: 'text-success',  showAgo: false },
+  away:    { dot: 'bg-warning',  label: 'text-warning',  showAgo: true  },
+  offline: { dot: 'bg-base-300', label: 'text-base-content/40', showAgo: true  },
+};
+
+function _patchCardStatus(container) {
+  var el = container.querySelector('[data-user-card-status]');
+  if (!el) return;
+  var userId = parseInt(el.dataset.userId, 10);
+  if (!userId || typeof Alpine === 'undefined') return;
+
+  var status = Alpine.store('presence').statusOf(userId);
+  var cfg = _statusConfig[status] || _statusConfig.offline;
+
+  var dot = el.querySelector('[data-status-dot]');
+  var label = el.querySelector('[data-status-label]');
+  var ago = el.querySelector('[data-status-ago]');
+
+  if (dot) {
+    dot.className = 'w-2 h-2 rounded-full flex-shrink-0 ' + cfg.dot;
+  }
+  if (label) {
+    label.className = 'font-medium capitalize ' + cfg.label;
+    label.textContent = status;
+  }
+  if (ago) {
+    var lastSeen = el.dataset.lastSeen;
+    if (cfg.showAgo && lastSeen) {
+      var diff = (Date.now() - new Date(lastSeen).getTime()) / 1000;
+      ago.textContent = '\u00b7 ' + _formatTimeAgo(diff) + ' ago';
+    } else {
+      ago.textContent = '';
+    }
+  }
+}
+
+function _formatTimeAgo(seconds) {
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) { var m = Math.floor(seconds / 60); return m + ' minute' + (m > 1 ? 's' : ''); }
+  if (seconds < 86400) { var h = Math.floor(seconds / 3600); return h + ' hour' + (h > 1 ? 's' : ''); }
+  var d = Math.floor(seconds / 86400);
+  return d + ' day' + (d > 1 ? 's' : '');
+}
+
 /* ── User card popover (global cache with 30s TTL) ────────────── */
 const _userCardCache = {};
 const _userCardCacheTimes = {};
@@ -158,6 +205,7 @@ window._userCardShow = function(wrapper, userId) {
     if (cacheValid) {
       _setPopoverContent(popover, cached);
       lucide?.createIcons({ nodes: popover.querySelectorAll('[data-lucide]') });
+      _patchCardStatus(popover);
     } else if (!wrapper._fetching) {
       wrapper._fetching = true;
       fetch('/users/' + userId + '/card', { credentials: 'same-origin' })
@@ -169,6 +217,7 @@ window._userCardShow = function(wrapper, userId) {
           if (wrapper._userCardPopover) {
             _setPopoverContent(wrapper._userCardPopover, html);
             lucide?.createIcons({ nodes: wrapper._userCardPopover.querySelectorAll('[data-lucide]') });
+            _patchCardStatus(wrapper._userCardPopover);
           }
         })
         .catch(function() { wrapper._fetching = false; });

@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 
 from django.db.models import Q
 
+from workspace.users import avatar_service
 from workspace.users.models import UserSetting
 
 

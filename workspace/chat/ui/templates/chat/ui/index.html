@@ -165,7 +165,7 @@ x-init="init()"
       </div>
 
       <!-- Content area: messages + optional info panel -->
-      <div class="flex-1 flex min-h-0">
+      <div class="flex-1 flex min-h-0 min-w-0">
         <!-- Messages column -->
         <div class="flex-1 flex flex-col min-w-0 relative">
           <!-- Pinned messages banner -->
@@ -180,7 +180,7 @@ x-init="init()"
 
           <!-- Messages -->
           <div
-            class="flex-1 overflow-y-auto p-4"
+            class="flex-1 overflow-y-auto overflow-x-hidden p-4"
             x-ref="messagesContainer"
             @scroll="handleScroll()"
             @dragenter.prevent="handleDragEnter($event)"

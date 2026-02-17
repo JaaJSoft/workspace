@@ -24,6 +24,18 @@
   transition: box-shadow 0.3s ease, outline 0.3s ease;
 }
 
+/* Prevent code blocks and pre from causing horizontal overflow in bubbles */
+.msg-body pre,
+.msg-body code {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.msg-body pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 /* Chat input: remove inner textarea focus ring — outer container handles it */
 .textarea-ghost:focus {
   outline: none !important;

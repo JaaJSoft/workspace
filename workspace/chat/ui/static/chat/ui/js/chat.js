@@ -91,18 +91,26 @@ function chatApp(currentUserId) {
         }
       });
 
+      // Auto-open DM from query param (e.g. /chat?dm=42)
+      const dmParam = new URLSearchParams(window.location.search).get('dm');
+      if (dmParam) {
+        await this._openDmByUserId(parseInt(dmParam, 10));
+      }
+
       // Auto-select conversation from URL (e.g. /chat/<uuid>)
-      const initialEl = document.getElementById('initial-conversation');
-      if (initialEl) {
-        try {
-          const uuid = JSON.parse(initialEl.textContent);
-          if (uuid) {
-            // Replace current history entry so back goes to /chat
-            history.replaceState({ conversationUuid: uuid }, '', `/chat/${uuid}`);
-            await this.selectConversationById(uuid, false);
+      if (!dmParam) {
+        const initialEl = document.getElementById('initial-conversation');
+        if (initialEl) {
+          try {
+            const uuid = JSON.parse(initialEl.textContent);
+            if (uuid) {
+              // Replace current history entry so back goes to /chat
+              history.replaceState({ conversationUuid: uuid }, '', `/chat/${uuid}`);
+              await this.selectConversationById(uuid, false);
+            }
+          } catch (e) {
+            console.error('Failed to parse initial conversation', e);
           }
-        } catch (e) {
-          console.error('Failed to parse initial conversation', e);
         }
       }
 
@@ -687,6 +695,31 @@ function chatApp(currentUserId) {
         console.error('Failed to create conversation', e);
       }
       this.creatingConversation = false;
+    },
+
+    async _openDmByUserId(userId) {
+      try {
+        const resp = await fetch('/api/v1/chat/conversations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this._csrf(),
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({ member_ids: [userId] }),
+        });
+        if (resp.ok) {
+          const conv = await resp.json();
+          if (!this.conversations.find(c => c.uuid === conv.uuid)) {
+            this.conversations.unshift(conv);
+            this.refreshConversationList();
+          }
+          history.replaceState({ conversationUuid: conv.uuid }, '', `/chat/${conv.uuid}`);
+          await this.selectConversationById(conv.uuid, false);
+        }
+      } catch (e) {
+        console.error('Failed to open DM', e);
+      }
     },
 
     // ── SSE event handlers ─────────────────────────────────

@@ -43,9 +43,17 @@
     {% endif %}
   </div>
 
-  <a href="{% url 'users_ui:profile_by_username' card_user.username %}" class="btn btn-ghost btn-xs btn-block gap-1">
-    <i data-lucide="user" class="w-3 h-3"></i>
-    View profile
-  </a>
+  <div class="flex gap-1">
+    <a href="{% url 'users_ui:profile_by_username' card_user.username %}" class="btn btn-ghost btn-xs flex-1 gap-1">
+      <i data-lucide="user" class="w-3 h-3"></i>
+      Profile
+    </a>
+    {% if card_user.id != request.user.id %}
+    <a href="/chat?dm={{ card_user.id }}" class="btn btn-outline btn-info btn-xs flex-1 gap-1">
+      <i data-lucide="message-circle" class="w-3 h-3"></i>
+      Message
+    </a>
+    {% endif %}
+  </div>
 </div>
 </div>

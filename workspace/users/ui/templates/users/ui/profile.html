@@ -41,6 +41,11 @@
           <i data-lucide="settings" class="w-4 h-4"></i>
           Settings
         </a>
+        {% else %}
+        <a href="/chat?dm={{ profile_user.id }}" class="btn btn-sm btn-outline btn-info gap-2 mt-3">
+          <i data-lucide="message-circle" class="w-4 h-4"></i>
+          Send message
+        </a>
         {% endif %}
       </div>
 

@@ -415,38 +415,4 @@ x-init="init()"
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
 <script src="{% static 'chat/ui/js/chat.js' %}"></script>
-<script>
-(function() {
-  let es = null;
-  let errorCount = 0;
-
-  function connect() {
-    if (es) es.close();
-    es = new EventSource('/api/v1/chat/stream');
-    errorCount = 0;
-
-    const events = ['unread', 'message', 'message_edited', 'message_deleted', 'reaction', 'message_pinned'];
-    for (const evt of events) {
-      es.addEventListener(evt, (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          window.dispatchEvent(new CustomEvent('chat-' + evt, { detail: data }));
-        } catch (err) {}
-      });
-    }
-
-    es.onerror = () => {
-      errorCount++;
-      if (errorCount > 5) {
-        es.close();
-        setTimeout(connect, 30000);
-      }
-    };
-
-    es.onopen = () => { errorCount = 0; };
-  }
-
-  connect();
-})();
-</script>
 {% endblock %}

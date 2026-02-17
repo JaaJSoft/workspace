@@ -7,7 +7,9 @@ class ChatConfig(AppConfig):
 
     def ready(self):
         from workspace.core.module_registry import ModuleInfo, SearchProviderInfo, registry
+        from workspace.core.sse_registry import SSEProviderInfo, sse_registry
         from workspace.chat.search import search_conversations
+        from workspace.chat.sse_provider import ChatSSEProvider
 
         registry.register(ModuleInfo(
             name='Chat',
@@ -23,4 +25,9 @@ class ChatConfig(AppConfig):
             slug='chat',
             module_slug='chat',
             search_fn=search_conversations,
+        ))
+
+        sse_registry.register(SSEProviderInfo(
+            slug='chat',
+            provider_cls=ChatSSEProvider,
         ))

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_sse
+from . import views
 
 urlpatterns = [
     # Conversations
@@ -107,11 +107,5 @@ urlpatterns = [
         'api/v1/chat/attachments/<uuid:attachment_id>/save-to-files',
         views.AttachmentSaveToFilesView.as_view(),
         name='chat-attachment-save-to-files',
-    ),
-    # SSE
-    path(
-        'api/v1/chat/stream',
-        views_sse.chat_stream,
-        name='chat-stream',
     ),
 ]

@@ -415,6 +415,31 @@
   <script src="{% static 'ui/js/icon_picker.js' %}"></script>
 
 
+  {% if user.is_authenticated %}
+  <script>
+  (function() {
+    let es = null, errorCount = 0;
+    function connect() {
+      if (es) es.close();
+      es = new EventSource('/api/v1/stream');
+      errorCount = 0;
+      es.addEventListener('sse', function(e) {
+        const payload = JSON.parse(e.data);
+        window.dispatchEvent(new CustomEvent('sse:' + payload.event, { detail: payload.data }));
+        if (payload.event.startsWith('chat.')) {
+          window.dispatchEvent(new CustomEvent('chat-' + payload.event.substring(5), { detail: payload.data }));
+        }
+      });
+      es.onerror = function() {
+        if (++errorCount > 5) { es.close(); setTimeout(connect, 30000); }
+      };
+      es.onopen = function() { errorCount = 0; };
+    }
+    connect();
+  })();
+  </script>
+  {% endif %}
+
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>

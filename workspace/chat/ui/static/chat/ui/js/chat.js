@@ -233,9 +233,12 @@ function chatApp(currentUserId) {
 
       conv.unread_count = 0;
 
+      // Double $nextTick: first lets Alpine render, second lets the browser layout
       this.$nextTick(() => {
-        this.scrollToBottom();
-        this.$refs.messageInput?.focus();
+        this.$nextTick(() => {
+          this.scrollToBottom();
+          this.$refs.messageInput?.focus();
+        });
       });
     },
 

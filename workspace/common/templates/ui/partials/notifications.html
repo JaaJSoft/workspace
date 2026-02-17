@@ -1,12 +1,78 @@
 <!-- Notifications dropdown -->
-<div class="dropdown dropdown-end" x-data="{ notificationsOpen: false }">
+<div class="dropdown dropdown-end" x-data="{
+  notificationsOpen: false,
+  filter: 'all',
+  searchOpen: false,
+  search: '',
+  origins: [],
+
+  mod(slug) { return window.__modules?.[slug] || null; },
+
+  toggle() {
+    this.notificationsOpen = !this.notificationsOpen;
+    if (this.notificationsOpen && !$store.notifications.loaded) {
+      $store.notifications.fetchList().then(() => {
+        this._refreshOrigins();
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      });
+    }
+  },
+
+  _refreshOrigins() {
+    const set = new Set();
+    $store.notifications.items.forEach(n => { if (n.origin) set.add(n.origin); });
+    set.forEach(o => { if (!this.origins.includes(o)) this.origins.push(o); });
+  },
+
+  applyFilter(f) {
+    this.filter = f;
+    $store.notifications.fetchList({ filter: f, search: this.search }).then(() => {
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    });
+  },
+
+  applySearch() {
+    $store.notifications.fetchList({ filter: this.filter, search: this.search }).then(() => {
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    });
+  },
+
+  clearSearch() {
+    this.searchOpen = false;
+    if (this.search) {
+      this.search = '';
+      this.applySearch();
+    }
+  },
+
+  timeAgo(dateStr) {
+    const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return minutes + 'm ago';
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours + 'h ago';
+    const days = Math.floor(hours / 24);
+    if (days < 7) return days + 'd ago';
+    return new Date(dateStr).toLocaleDateString();
+  },
+
+  clickItem(item) {
+    if (!item.is_read) $store.notifications.markRead(item.uuid);
+    if (item.url) window.location.href = item.url;
+  }
+}">
   <button
-    @click="notificationsOpen = !notificationsOpen"
+    @click="toggle()"
     class="btn btn-ghost btn-circle btn-sm hover:bg-primary/10 transition-all indicator"
     title="Notifications"
   >
     <i data-lucide="bell" class="w-5 h-5"></i>
-    <span class="indicator-item badge badge-primary badge-xs">3</span>
+    <span
+      x-show="$store.notifications.unread > 0"
+      x-text="$store.notifications.unread > 99 ? '99+' : $store.notifications.unread"
+      class="indicator-item badge badge-primary badge-xs"
+    ></span>
   </button>
   <div
     x-show="notificationsOpen"
@@ -21,102 +87,141 @@
     class="dropdown-content mt-3 z-[1] shadow-xl bg-base-100 border border-base-300 rounded-box w-80"
   >
     <!-- Header -->
-    <div class="px-4 py-3 border-b border-base-300 flex items-center justify-between">
+    <div class="px-3 py-2.5 border-b border-base-300 flex items-center justify-between">
       <h3 class="font-semibold text-base-content">Notifications</h3>
-      <button class="btn btn-ghost btn-xs text-primary hover:bg-primary/10">Mark all read</button>
+      <div class="flex items-center gap-1">
+        <button
+          @click="searchOpen ? clearSearch() : (searchOpen = true, $nextTick(() => $refs.searchInput.focus()))"
+          class="btn btn-ghost btn-xs btn-circle"
+          :class="searchOpen ? 'text-primary' : 'text-base-content/50'"
+          title="Search"
+        >
+          <i data-lucide="search" class="w-3.5 h-3.5"></i>
+        </button>
+        <button
+          x-show="$store.notifications.unread > 0"
+          @click="$store.notifications.markAllRead()"
+          class="btn btn-ghost btn-xs text-primary hover:bg-primary/10"
+        >Mark all read</button>
+      </div>
+    </div>
+
+    <!-- Search bar -->
+    <div x-show="searchOpen" x-cloak x-collapse class="px-2 pt-2">
+      <input
+        x-ref="searchInput"
+        x-model.debounce.300ms="search"
+        x-effect="if (searchOpen) applySearch()"
+        type="text"
+        class="input input-bordered input-xs w-full"
+        placeholder="Search notifications..."
+        @keydown.escape="clearSearch()"
+      />
+    </div>
+
+    <!-- Quick filters -->
+    <div x-show="$store.notifications.loaded" class="px-2 pt-2 pb-1 flex gap-1 flex-wrap justify-center">
+      <button
+        @click="applyFilter('all')"
+        class="badge badge-sm gap-1 cursor-pointer transition-colors"
+        :class="filter === 'all' ? 'badge-neutral' : 'badge-ghost hover:bg-base-200'"
+      >
+        <i data-lucide="layers" class="w-3 h-3"></i>
+        All
+      </button>
+      <button
+        @click="applyFilter('unread')"
+        class="badge badge-sm gap-1 cursor-pointer transition-colors"
+        :class="filter === 'unread' ? 'badge-neutral' : 'badge-ghost hover:bg-base-200'"
+      >
+        <i data-lucide="circle-dot" class="w-3 h-3"></i>
+        Unread
+      </button>
+      <template x-for="o in origins" :key="o">
+        <button
+          @click="applyFilter(o)"
+          class="badge badge-sm gap-1 cursor-pointer capitalize transition-colors"
+          :class="filter === o
+            ? 'bg-' + (mod(o)?.color || 'neutral') + ' text-' + (mod(o)?.color || 'neutral') + '-content border-transparent'
+            : 'badge-ghost hover:bg-base-200'"
+        >
+          <i :data-lucide="mod(o)?.icon || 'box'" class="w-3 h-3"></i>
+          <span x-text="mod(o)?.name || o"></span>
+        </button>
+      </template>
     </div>
 
     <!-- Notification items -->
-    <ul class="menu menu-sm p-2 max-h-80 overflow-y-auto overflow-x-hidden">
-      <!-- Unread notification -->
-      <li>
-        <a href="#" class="gap-3 hover:bg-primary/10 transition-colors py-3 bg-primary/5 w-full min-w-0">
-          <div class="avatar placeholder flex-shrink-0">
-            <div class="bg-success text-success-content rounded-full w-9">
-              <i data-lucide="check-circle" class="w-4 h-4"></i>
-            </div>
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium truncate">Task completed</p>
-            <p class="text-xs text-base-content/60 truncate">Design review has been approved</p>
-            <p class="text-xs text-primary mt-1">2 minutes ago</p>
-          </div>
-          <span class="badge badge-primary badge-xs"></span>
-        </a>
-      </li>
+    <div class="flex flex-col p-2 max-h-80 overflow-y-auto overflow-x-hidden">
+      <!-- Loading state -->
+      <div x-cloak x-show="$store.notifications.loading" class="flex items-center justify-center py-6">
+        <span class="loading loading-spinner loading-sm"></span>
+      </div>
 
-      <!-- Unread notification -->
-      <li>
-        <a href="#" class="gap-3 hover:bg-primary/10 transition-colors py-3 bg-primary/5 w-full min-w-0">
-          <div class="avatar placeholder flex-shrink-0">
-            <div class="bg-info text-info-content rounded-full w-9">
-              <i data-lucide="message-square" class="w-4 h-4"></i>
-            </div>
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium truncate">New comment</p>
-            <p class="text-xs text-base-content/60 truncate">Sarah mentioned you in "API Integration"</p>
-            <p class="text-xs text-primary mt-1">15 minutes ago</p>
-          </div>
-          <span class="badge badge-primary badge-xs"></span>
-        </a>
-      </li>
+      <!-- Empty state -->
+      <div x-cloak x-show="!$store.notifications.loading && $store.notifications.loaded && $store.notifications.items.length === 0" class="flex flex-col items-center justify-center py-6 text-base-content/50">
+        <i :data-lucide="(filter !== 'all' || search) ? 'filter-x' : 'bell-off'" class="w-7 h-7 mb-2"></i>
+        <p class="text-sm" x-text="(filter !== 'all' || search) ? 'No matching notifications' : 'No notifications'"></p>
+      </div>
 
-      <!-- Unread notification -->
-      <li>
-        <a href="#" class="gap-3 hover:bg-primary/10 transition-colors py-3 bg-primary/5 w-full min-w-0">
+      <!-- Notification list -->
+      <template x-for="item in $store.notifications.items" :key="item.uuid">
+        <a
+          href="#"
+          @click.prevent="clickItem(item)"
+          class="flex items-center gap-3 transition-colors py-2.5 px-2 rounded-lg w-full min-w-0"
+          :class="{
+            'bg-primary/5 hover:bg-primary/10': !item.is_read,
+            'hover:bg-base-200': item.is_read,
+            'opacity-60': item.priority === 'low'
+          }"
+        >
           <div class="avatar placeholder flex-shrink-0">
-            <div class="bg-warning text-warning-content rounded-full w-9">
-              <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+            <div class="rounded-full w-9 flex items-center justify-center"
+              :class="item.color
+                ? 'bg-' + item.color + ' text-' + item.color + '-content'
+                : {
+                    'bg-error text-error-content': item.priority === 'urgent' || item.priority === 'high',
+                    'bg-primary text-primary-content': item.priority === 'normal' && !item.is_read,
+                    'bg-base-300 text-base-content': item.is_read || item.priority === 'low'
+                  }"
+            >
+              <i :data-lucide="item.icon" class="w-4 h-4"></i>
             </div>
           </div>
           <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium truncate">Due date reminder</p>
-            <p class="text-xs text-base-content/60 truncate">"Homepage redesign" is due tomorrow</p>
-            <p class="text-xs text-primary mt-1">1 hour ago</p>
+            <p class="text-sm truncate" :class="item.is_read ? 'text-base-content/70' : 'font-medium'" x-text="item.title"></p>
+            <p x-show="item.body" class="text-xs truncate" :class="item.is_read ? 'text-base-content/50' : 'text-base-content/60'" x-text="item.body"></p>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="text-xs" :class="item.is_read ? 'text-base-content/40' : 'text-primary'" x-text="timeAgo(item.created_at)"></span>
+              <span x-show="item.priority === 'urgent' || item.priority === 'high'" class="badge badge-error badge-xs" x-text="item.priority"></span>
+            </div>
           </div>
-          <span class="badge badge-primary badge-xs"></span>
+          <span x-show="!item.is_read" class="badge badge-primary badge-xs flex-shrink-0"></span>
         </a>
-      </li>
+      </template>
 
-      <!-- Read notification -->
-      <li>
-        <a href="#" class="gap-3 hover:bg-base-200 transition-colors py-3 w-full min-w-0">
-          <div class="avatar placeholder flex-shrink-0">
-            <div class="bg-base-300 text-base-content rounded-full w-9">
-              <i data-lucide="user-plus" class="w-4 h-4"></i>
-            </div>
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm text-base-content/70 truncate">Team member added</p>
-            <p class="text-xs text-base-content/50 truncate">John joined the project</p>
-            <p class="text-xs text-base-content/40 mt-1">Yesterday</p>
-          </div>
-        </a>
-      </li>
-
-      <!-- Read notification -->
-      <li>
-        <a href="#" class="gap-3 hover:bg-base-200 transition-colors py-3 w-full min-w-0">
-          <div class="avatar placeholder flex-shrink-0">
-            <div class="bg-base-300 text-base-content rounded-full w-9">
-              <i data-lucide="folder" class="w-4 h-4"></i>
-            </div>
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm text-base-content/70 truncate">Project archived</p>
-            <p class="text-xs text-base-content/50 truncate">"Q3 Marketing" was archived</p>
-            <p class="text-xs text-base-content/40 mt-1">2 days ago</p>
-          </div>
-        </a>
-      </li>
-    </ul>
+      <!-- Load more -->
+      <button
+        x-cloak
+        x-show="$store.notifications.hasMore"
+        @click="$store.notifications.loadMore().then(() => $nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }))"
+        class="btn btn-ghost btn-xs btn-block mt-1 text-base-content/50"
+        :disabled="$store.notifications.loadingMore"
+      >
+        <span x-show="$store.notifications.loadingMore" class="loading loading-spinner loading-xs"></span>
+        <span x-show="!$store.notifications.loadingMore">Load more</span>
+      </button>
+    </div>
 
     <!-- Footer -->
-    <div class="px-4 py-3 border-t border-base-300">
-      <a href="#" class="btn btn-ghost btn-sm btn-block text-primary hover:bg-primary/10">
-        View all notifications
-      </a>
+    <div x-show="$store.notifications.items.length > 0" class="p-2 border-t border-base-300">
+      <button
+        @click="$store.notifications.items.forEach(n => { if (!n.is_read) $store.notifications.markRead(n.uuid); }); notificationsOpen = false;"
+        class="btn btn-ghost btn-sm btn-block text-primary hover:bg-primary/10"
+      >
+        Dismiss all
+      </button>
     </div>
   </div>
 </div>

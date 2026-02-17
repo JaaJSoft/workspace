@@ -73,6 +73,9 @@ class ModuleRegistry:
                 logger.exception("Search provider '%s' failed", provider.slug)
         return results
 
+    def get(self, slug: str) -> ModuleInfo | None:
+        return self._modules.get(slug)
+
     def get_all(self) -> list[ModuleInfo]:
         return sorted(self._modules.values(), key=lambda m: m.order)
 

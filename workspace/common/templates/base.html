@@ -417,6 +417,12 @@
 
   {% if user.is_authenticated %}
   <script>
+  // Module registry for notifications (slug -> {name, icon, color})
+  window.__modules = {};
+  {% for m in workspace_active_modules %}
+  window.__modules['{{ m.slug }}'] = { name: '{{ m.name }}', icon: '{{ m.icon }}', color: '{{ m.color }}' };
+  {% endfor %}
+
   (function() {
     let es = null, errorCount = 0;
     function connect() {
@@ -473,6 +479,101 @@
 
     window.addEventListener('sse:presence.presence_snapshot', function(e) {
       Alpine.store('presence').handleSnapshot(e.detail);
+    });
+
+    // Notifications store
+    Alpine.store('notifications', {
+      unread: 0,
+      items: [],
+      loaded: false,
+      loading: false,
+      hasMore: false,
+      loadingMore: false,
+      _filter: 'all',
+      _search: '',
+
+      setCount(n) {
+        this.unread = n;
+      },
+
+      _buildUrl(extra) {
+        const p = new URLSearchParams({ limit: '20' });
+        if (this._filter === 'unread') p.set('filter', 'unread');
+        else if (this._filter !== 'all') p.set('origin', this._filter);
+        if (this._search) p.set('search', this._search);
+        if (extra) Object.entries(extra).forEach(([k, v]) => p.set(k, v));
+        return '/api/v1/notifications?' + p.toString();
+      },
+
+      async fetchList(opts) {
+        const filter = opts?.filter ?? this._filter;
+        const search = opts?.search ?? this._search;
+        this._filter = filter;
+        this._search = search;
+        this.loading = true;
+        try {
+          const r = await fetch(this._buildUrl(), { credentials: 'same-origin' });
+          if (r.ok) {
+            const data = await r.json();
+            this.items = data.notifications;
+            this.unread = data.unread_count;
+            this.hasMore = data.has_more;
+            this.loaded = true;
+          }
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      async loadMore() {
+        if (this.loadingMore || !this.hasMore || this.items.length === 0) return;
+        this.loadingMore = true;
+        try {
+          const last = this.items[this.items.length - 1].uuid;
+          const r = await fetch(this._buildUrl({ before: last }), { credentials: 'same-origin' });
+          if (r.ok) {
+            const data = await r.json();
+            this.items = this.items.concat(data.notifications);
+            this.hasMore = data.has_more;
+          }
+        } finally {
+          this.loadingMore = false;
+        }
+      },
+
+      async markRead(uuid) {
+        await fetch('/api/v1/notifications/' + uuid, {
+          method: 'PATCH',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '' },
+        });
+        var item = this.items.find(n => n.uuid === uuid);
+        if (item) item.is_read = true;
+        this.unread = Math.max(0, this.unread - 1);
+      },
+
+      async markAllRead() {
+        await fetch('/api/v1/notifications/read-all', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '' },
+        });
+        this.items.forEach(n => n.is_read = true);
+        this.unread = 0;
+      },
+
+      async deleteNotif(uuid) {
+        await fetch('/api/v1/notifications/' + uuid, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '' },
+        });
+        this.items = this.items.filter(n => n.uuid !== uuid);
+      }
+    });
+
+    window.addEventListener('sse:notifications.count', function(e) {
+      Alpine.store('notifications').setCount(e.detail.unread);
     });
   });
   </script>

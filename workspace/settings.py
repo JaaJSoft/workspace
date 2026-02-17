@@ -94,6 +94,7 @@ INSTALLED_APPS = [
     'workspace.calendar.ui',
     'workspace.mail',
     'workspace.mail.ui',
+    'workspace.notifications',
 ]
 
 # Add Debug Toolbar only in DEBUG mode and not during tests

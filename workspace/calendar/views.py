@@ -23,6 +23,7 @@ def _parse_dt(value):
     except (ValueError, TypeError):
         return None
 
+from workspace.notifications.services import notify_many
 from .models import Calendar, CalendarSubscription, Event, EventMember
 from .recurrence import expand_recurring_events, make_virtual_occurrence
 from .serializers import (
@@ -79,8 +80,16 @@ def _sync_members(event, member_ids, owner_id):
         EventMember.objects.filter(event=event, user_id__in=to_remove).delete()
     to_add = new_ids - current
     if to_add:
-        users = User.objects.filter(id__in=to_add)
+        users = list(User.objects.filter(id__in=to_add))
         EventMember.objects.bulk_create([EventMember(event=event, user=u) for u in users])
+        notify_many(
+            recipients=users,
+            origin='calendar',
+            title=f'Invited to "{event.title}"',
+            body=f'{event.owner.username} invited you to an event.',
+            url=f'/calendar?event={event.pk}',
+            actor=event.owner,
+        )
 
 
 # ---------- Calendar CRUD ----------
@@ -242,10 +251,18 @@ class EventListView(APIView):
 
         member_ids = data.get('member_ids', [])
         if member_ids:
-            users = User.objects.filter(id__in=member_ids).exclude(id=request.user.id)
+            users = list(User.objects.filter(id__in=member_ids).exclude(id=request.user.id))
             EventMember.objects.bulk_create([
                 EventMember(event=event, user=u) for u in users
             ])
+            notify_many(
+                recipients=users,
+                origin='calendar',
+                title=f'Invited to "{event.title}"',
+                body=f'{request.user.username} invited you to an event.',
+                url=f'/calendar?event={event.pk}',
+                actor=request.user,
+            )
 
         event = _prefetch_event(Event.objects.filter(pk=event.pk)).first()
         return Response(EventSerializer(event).data, status=status.HTTP_201_CREATED)
@@ -364,8 +381,19 @@ class EventDetailView(APIView):
         # Copy members from master or from data
         if 'member_ids' in data:
             member_ids = set(data['member_ids']) - {user.id}
-            users = User.objects.filter(id__in=member_ids)
+            existing_ids = set(master.members.values_list('user_id', flat=True))
+            users = list(User.objects.filter(id__in=member_ids))
             EventMember.objects.bulk_create([EventMember(event=exc, user=u) for u in users])
+            new_users = [u for u in users if u.id not in existing_ids]
+            if new_users:
+                notify_many(
+                    recipients=new_users,
+                    origin='calendar',
+                    title=f'Invited to "{exc.title}"',
+                    body=f'{user.username} invited you to an event.',
+                    url=f'/calendar?event={exc.pk}',
+                    actor=user,
+                )
         else:
             # Copy from master
             EventMember.objects.bulk_create([
@@ -420,8 +448,19 @@ class EventDetailView(APIView):
         # Copy members
         if 'member_ids' in data:
             member_ids = set(data['member_ids']) - {user.id}
-            users = User.objects.filter(id__in=member_ids)
+            existing_ids = set(master.members.values_list('user_id', flat=True))
+            users = list(User.objects.filter(id__in=member_ids))
             EventMember.objects.bulk_create([EventMember(event=new_master, user=u) for u in users])
+            new_users = [u for u in users if u.id not in existing_ids]
+            if new_users:
+                notify_many(
+                    recipients=new_users,
+                    origin='calendar',
+                    title=f'Invited to "{new_master.title}"',
+                    body=f'{user.username} invited you to an event.',
+                    url=f'/calendar?event={new_master.pk}',
+                    actor=user,
+                )
         else:
             EventMember.objects.bulk_create([
                 EventMember(event=new_master, user=m.user, status=m.status)

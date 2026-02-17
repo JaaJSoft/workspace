@@ -92,7 +92,7 @@ class ConversationListView(APIView):
         last_msg_ids = [c._last_msg_id for c in conv_list if c._last_msg_id]
         last_msgs = {
             m.uuid: m
-            for m in Message.objects.filter(uuid__in=last_msg_ids).select_related('author')
+            for m in Message.objects.filter(uuid__in=last_msg_ids).select_related('author').prefetch_related('attachments')
         }
 
         # Build pin map

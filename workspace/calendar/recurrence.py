@@ -2,8 +2,6 @@ from datetime import timedelta
 
 from dateutil.rrule import rrule, DAILY, WEEKLY, MONTHLY, YEARLY
 
-from workspace.users.avatar_service import has_avatar
-
 FREQ_MAP = {
     'daily': DAILY,
     'weekly': WEEKLY,
@@ -49,13 +47,11 @@ def _build_rrule(master, range_start, range_end):
 
 
 def _user_dict(user):
-    avatar_url = f'/api/v1/users/{user.id}/avatar' if has_avatar(user) else None
     return {
         'id': user.id,
         'username': user.username,
         'first_name': user.first_name,
         'last_name': user.last_name,
-        'avatar_url': avatar_url,
     }
 
 

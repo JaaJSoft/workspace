@@ -31,9 +31,15 @@ logger = logging.getLogger(__name__)
 
 def _refresh_folder_counts(folder):
     """Recompute message_count and unread_count for a folder."""
-    qs = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
-    folder.message_count = qs.count()
-    folder.unread_count = qs.filter(is_read=False).count()
+    from django.db.models import Count, Q
+    counts = MailMessage.objects.filter(
+        folder=folder, deleted_at__isnull=True,
+    ).aggregate(
+        message_count=Count('pk'),
+        unread_count=Count('pk', filter=Q(is_read=False)),
+    )
+    folder.message_count = counts['message_count']
+    folder.unread_count = counts['unread_count']
     folder.save(update_fields=['message_count', 'unread_count', 'updated_at'])
 
 
@@ -639,6 +645,8 @@ class MailBatchActionView(APIView):
 
         processed = 0
         affected_folders = set()
+        to_bulk_update = []
+        bulk_update_fields = set()
         for msg in messages:
             affected_folders.add(msg.folder_id)
             try:
@@ -663,7 +671,8 @@ class MailBatchActionView(APIView):
                     imap_fn, db_update = action_map[action]
                     for key, value in db_update.items():
                         setattr(msg, key, value)
-                    msg.save()
+                    bulk_update_fields.update(db_update.keys())
+                    to_bulk_update.append(msg)
                     try:
                         imap_fn(msg.account, msg)
                     except Exception:
@@ -671,6 +680,9 @@ class MailBatchActionView(APIView):
                 processed += 1
             except Exception:
                 logger.warning("Batch action '%s' failed for message %s", action, msg.uuid)
+
+        if to_bulk_update:
+            MailMessage.objects.bulk_update(to_bulk_update, list(bulk_update_fields))
 
         # Refresh counts for all affected folders
         for folder in MailFolder.objects.filter(uuid__in=affected_folders):

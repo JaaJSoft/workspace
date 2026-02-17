@@ -285,11 +285,17 @@ def sync_folder_messages(account, folder):
 
 def _update_folder_counts(folder):
     """Update message_count and unread_count from database."""
+    from django.db.models import Count, Q
     from workspace.mail.models import MailMessage
 
-    qs = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
-    folder.message_count = qs.count()
-    folder.unread_count = qs.filter(is_read=False).count()
+    counts = MailMessage.objects.filter(
+        folder=folder, deleted_at__isnull=True,
+    ).aggregate(
+        message_count=Count('pk'),
+        unread_count=Count('pk', filter=Q(is_read=False)),
+    )
+    folder.message_count = counts['message_count']
+    folder.unread_count = counts['unread_count']
     folder.save(update_fields=['message_count', 'unread_count', 'last_sync_uid', 'updated_at'])
 
 

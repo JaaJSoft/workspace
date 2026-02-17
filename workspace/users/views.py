@@ -16,7 +16,6 @@ from rest_framework.views import APIView
 
 from django.db.models import Q
 
-from workspace.users import avatar_service
 from workspace.users.models import UserSetting
 
 
@@ -68,16 +67,15 @@ class UserSearchView(APIView):
             is_active=True,
         ).exclude(pk=request.user.pk)[:limit]
 
-        results = []
-        for u in users:
-            entry = {
+        results = [
+            {
                 'id': u.id,
                 'username': u.username,
                 'first_name': u.first_name,
                 'last_name': u.last_name,
-                'avatar_url': f'/api/v1/users/{u.id}/avatar' if avatar_service.has_avatar(u) else None,
             }
-            results.append(entry)
+            for u in users
+        ]
 
         return Response({'results': results})
 

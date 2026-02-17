@@ -14,14 +14,15 @@ from workspace.files.models import File, FileFavorite
 INSIGHTS_LIMIT = 6
 
 
-def _get_stats(user):
+def _get_stats(user, unread=None):
     base_qs = File.objects.filter(owner=user, deleted_at__isnull=True)
     aggregates = base_qs.aggregate(
         file_count=Count('pk', filter=Q(node_type=File.NodeType.FILE)),
         total_size=Sum('size', filter=Q(node_type=File.NodeType.FILE)),
     )
 
-    unread = get_unread_counts(user)
+    if unread is None:
+        unread = get_unread_counts(user)
 
     now = timezone.now()
     upcoming_events = Event.objects.filter(
@@ -62,7 +63,7 @@ def _get_trash_nodes(user, limit=INSIGHTS_LIMIT):
     ).select_related('parent').order_by('-deleted_at')[:limit]
 
 
-def _get_recent_conversations(user, limit=INSIGHTS_LIMIT):
+def _get_recent_conversations(user, limit=INSIGHTS_LIMIT, unread=None):
     member_convos = ConversationMember.objects.filter(
         user=user, left_at__isnull=True,
     ).values_list('conversation_id', flat=True)
@@ -94,7 +95,9 @@ def _get_recent_conversations(user, limit=INSIGHTS_LIMIT):
         for m in Message.objects.filter(uuid__in=last_msg_ids).select_related('author')
     }
 
-    unread_map = get_unread_counts(user).get('conversations', {})
+    if unread is None:
+        unread = get_unread_counts(user)
+    unread_map = unread.get('conversations', {})
 
     now = timezone.now()
     for c in conv_list:
@@ -167,8 +170,12 @@ def _build_dashboard_context(
     context = {
         'modules': [m for m in registry.get_for_template() if m['slug'] != 'dashboard'],
     }
+    # Fetch unread counts once, share between stats and conversations
+    unread = None
+    if include_stats or include_conversations:
+        unread = get_unread_counts(user)
     if include_stats:
-        context['stats'] = _get_stats(user)
+        context['stats'] = _get_stats(user, unread=unread)
     if include_recent:
         context['recent_nodes'] = _get_recent_nodes(user)
     if include_favorites:
@@ -176,7 +183,7 @@ def _build_dashboard_context(
     if include_trash:
         context['trash_nodes'] = _get_trash_nodes(user)
     if include_conversations:
-        context['recent_conversations'] = _get_recent_conversations(user)
+        context['recent_conversations'] = _get_recent_conversations(user, unread=unread)
     if include_events:
         context['upcoming_events'] = _get_upcoming_events(user)
     return context

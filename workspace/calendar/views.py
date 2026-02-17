@@ -368,8 +368,10 @@ class EventDetailView(APIView):
             EventMember.objects.bulk_create([EventMember(event=exc, user=u) for u in users])
         else:
             # Copy from master
-            for m in master.members.all():
-                EventMember.objects.create(event=exc, user=m.user, status=m.status)
+            EventMember.objects.bulk_create([
+                EventMember(event=exc, user=m.user, status=m.status)
+                for m in master.members.all()
+            ])
 
         exc = _prefetch_event(Event.objects.filter(pk=exc.pk)).first()
         return Response(EventSerializer(exc).data)
@@ -421,8 +423,10 @@ class EventDetailView(APIView):
             users = User.objects.filter(id__in=member_ids)
             EventMember.objects.bulk_create([EventMember(event=new_master, user=u) for u in users])
         else:
-            for m in master.members.all():
-                EventMember.objects.create(event=new_master, user=m.user, status=m.status)
+            EventMember.objects.bulk_create([
+                EventMember(event=new_master, user=m.user, status=m.status)
+                for m in master.members.all()
+            ])
 
         new_master = _prefetch_event(Event.objects.filter(pk=new_master.pk)).first()
         return Response(EventSerializer(new_master).data)

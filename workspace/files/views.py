@@ -443,12 +443,16 @@ class FileViewSet(viewsets.ModelViewSet):
         }
 
         # Update positions based on new order
+        to_update = []
         for position, uuid in enumerate(order):
             if uuid in pinned_map:
                 pin = pinned_map[uuid]
                 if pin.position != position:
                     pin.position = position
-                    pin.save(update_fields=['position'])
+                    to_update.append(pin)
+
+        if to_update:
+            PinnedFolder.objects.bulk_update(to_update, ['position'])
 
         return Response({'success': True}, status=status.HTTP_200_OK)
 

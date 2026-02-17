@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from django.http import Http404
 from django.shortcuts import render
 
-from workspace.users import avatar_service
+from workspace.users import avatar_service, presence_service
 
 
 @login_required
@@ -18,6 +18,8 @@ def profile_view(request, username=None):
     return render(request, 'users/ui/profile.html', {
         'profile_user': profile_user,
         'is_own_profile': profile_user == request.user,
+        'user_status': presence_service.get_status(profile_user.id),
+        'last_seen': presence_service.get_last_seen(profile_user.id),
     })
 
 
@@ -34,4 +36,7 @@ def user_card_view(request, user_id):
         card_user = User.objects.get(pk=user_id, is_active=True)
     except User.DoesNotExist:
         raise Http404
-    return render(request, 'users/ui/partials/user_card.html', {'card_user': card_user})
+    return render(request, 'users/ui/partials/user_card.html', {
+        'card_user': card_user,
+        'card_user_status': presence_service.get_status(card_user.id),
+    })

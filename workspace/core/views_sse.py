@@ -47,6 +47,8 @@ def global_stream(request):
     if not request.user.is_authenticated:
         return StreamingHttpResponse('', status=403)
 
+    request._is_sse_stream = True
+
     response = StreamingHttpResponse(
         _event_stream(request),
         content_type='text/event-stream',

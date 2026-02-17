@@ -437,6 +437,44 @@
     }
     connect();
   })();
+
+  // Presence store — reacts to SSE presence snapshots
+  document.addEventListener('alpine:init', function() {
+    Alpine.store('presence', {
+      online: new Set(),
+      away: new Set(),
+
+      handleSnapshot(data) {
+        this.online = new Set(data.online || []);
+        this.away = new Set(data.away || []);
+      },
+
+      statusOf(userId) {
+        var uid = Number(userId);
+        if (this.online.has(uid)) return 'online';
+        if (this.away.has(uid)) return 'away';
+        return 'offline';
+      },
+
+      ringClass(userId) {
+        var s = this.statusOf(userId);
+        if (s === 'online') return 'ring-success';
+        if (s === 'away') return 'ring-warning';
+        return 'ring-base-300';
+      },
+
+      dotClass(userId) {
+        var s = this.statusOf(userId);
+        if (s === 'online') return 'bg-success';
+        if (s === 'away') return 'bg-warning';
+        return 'bg-base-300';
+      }
+    });
+
+    window.addEventListener('sse:presence.presence_snapshot', function(e) {
+      Alpine.store('presence').handleSnapshot(e.detail);
+    });
+  });
   </script>
   {% endif %}
 

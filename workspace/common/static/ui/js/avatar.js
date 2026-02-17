@@ -11,20 +11,24 @@ window.userAvatarHtml = function(userId, username, sizeClass) {
   const initial = (username || '?')[0].toUpperCase();
   const imgUrl = `/api/v1/users/${userId}/avatar`;
 
-  return `<div class="avatar">` +
-    `<div class="${sizeClass} rounded-full overflow-hidden">` +
+  return `<div class="avatar relative" data-user-id="${userId}">` +
+    `<div class="${sizeClass} rounded-full overflow-hidden" ` +
+      `:class="'ring-2 ring-offset-base-100 ring-offset-1 ' + $store.presence.ringClass(${userId})">` +
       `<img src="${imgUrl}" alt="${username}" class="block w-full h-full object-cover" ` +
         `onerror="this.onerror=null;` +
         `var d=this.closest('.avatar');` +
-        `d.className='avatar placeholder';` +
+        `d.className='avatar placeholder relative';` +
         `d.firstElementChild.className='${sizeClass} bg-neutral text-neutral-content rounded-full flex items-center justify-center';` +
         `this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${initial}'}));" />` +
     `</div>` +
+    `<span class="absolute bottom-0 right-0 block w-2.5 h-2.5 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass(${userId})"></span>` +
   `</div>`;
 };
 
-/* ── User card popover (global cache) ────────────────────────── */
+/* ── User card popover (global cache with 30s TTL) ────────────── */
 const _userCardCache = {};
+const _userCardCacheTimes = {};
+const _USER_CARD_CACHE_TTL = 30000; // 30 seconds
 
 /**
  * Compute fixed position for a popover relative to a trigger element.
@@ -148,9 +152,11 @@ window._userCardShow = function(wrapper, userId) {
     popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
     _applyPopoverTransform(popover, pos.placement, true);
 
-    // Fetch content if not cached
-    if (_userCardCache[userId]) {
-      _setPopoverContent(popover, _userCardCache[userId]);
+    // Fetch content if not cached (or cache expired)
+    var cached = _userCardCache[userId];
+    var cacheValid = cached && (_userCardCacheTimes[userId] || 0) + _USER_CARD_CACHE_TTL > Date.now();
+    if (cacheValid) {
+      _setPopoverContent(popover, cached);
       lucide?.createIcons({ nodes: popover.querySelectorAll('[data-lucide]') });
     } else if (!wrapper._fetching) {
       wrapper._fetching = true;
@@ -158,6 +164,7 @@ window._userCardShow = function(wrapper, userId) {
         .then(function(r) { return r.ok ? r.text() : ''; })
         .then(function(html) {
           _userCardCache[userId] = html;
+          _userCardCacheTimes[userId] = Date.now();
           wrapper._fetching = false;
           if (wrapper._userCardPopover) {
             _setPopoverContent(wrapper._userCardPopover, html);

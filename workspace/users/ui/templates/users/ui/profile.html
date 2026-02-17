@@ -22,16 +22,18 @@
       <!-- Avatar row -->
       <div class="flex items-start justify-between">
         {% if profile_user|has_avatar %}
-        <div class="avatar -mt-14">
-          <div class="w-24 h-24 rounded-full ring-4 ring-base-100 shadow-lg">
+        <div class="avatar relative -mt-14">
+          <div class="w-24 h-24 rounded-full ring-4 ring-base-100 shadow-lg" :class="'ring-4 ring-offset-base-100 ring-offset-2 ' + $store.presence.ringClass({{ profile_user.id }})">
             <img src="/api/v1/users/{{ profile_user.id }}/avatar" alt="{{ profile_user.username }}" class="rounded-full object-cover" />
           </div>
+          <span class="absolute bottom-1 right-1 block w-4 h-4 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass({{ profile_user.id }})"></span>
         </div>
         {% else %}
-        <div class="avatar placeholder -mt-14">
-          <div class="w-24 h-24 text-3xl bg-neutral text-neutral-content rounded-full ring-4 ring-base-100 shadow-lg">
+        <div class="avatar placeholder relative -mt-14">
+          <div class="w-24 h-24 text-3xl bg-neutral text-neutral-content rounded-full ring-4 ring-base-100 shadow-lg" :class="'ring-4 ring-offset-base-100 ring-offset-2 ' + $store.presence.ringClass({{ profile_user.id }})">
             <span>{{ profile_user.username|slice:":1"|upper }}</span>
           </div>
+          <span class="absolute bottom-1 right-1 block w-4 h-4 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass({{ profile_user.id }})"></span>
         </div>
         {% endif %}
         {% if is_own_profile %}
@@ -94,17 +96,17 @@
       </div>
     </div>
 
-    <!-- Last login -->
+    <!-- Last seen -->
     <div class="card bg-base-100 border border-base-300 shadow-sm">
       <div class="card-body p-4 flex-row items-center gap-4">
-        <div class="rounded-lg bg-success/10 p-2.5">
-          <i data-lucide="log-in" class="w-5 h-5 text-success"></i>
+        <div class="rounded-lg {% if user_status == 'online' %}bg-success/10{% elif user_status == 'away' %}bg-warning/10{% else %}bg-base-200{% endif %} p-2.5">
+          <i data-lucide="{% if user_status == 'online' %}circle-check{% elif user_status == 'away' %}clock{% else %}circle-off{% endif %}" class="w-5 h-5 {% if user_status == 'online' %}text-success{% elif user_status == 'away' %}text-warning{% else %}text-base-content/40{% endif %}"></i>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Last login</div>
+          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Last seen</div>
           <div class="font-semibold mt-0.5">
-            {% if profile_user.last_login %}
-              <span x-text="timeAgo('{{ profile_user.last_login|date:'c' }}')"></span>
+            {% if last_seen %}
+              <span x-text="timeAgo('{{ last_seen|date:'c' }}')"></span>
             {% else %}
               Never
             {% endif %}
@@ -173,8 +175,8 @@
               <div class="mt-1 font-medium">{{ profile_user.date_joined|date:'N j, Y' }}</div>
             </div>
             <div>
-              <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Last login</div>
-              <div class="mt-1 font-medium">{{ profile_user.last_login|date:'N j, Y, P'|default:"Never" }}</div>
+              <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Last seen</div>
+              <div class="mt-1 font-medium">{{ last_seen|date:'N j, Y, P'|default:"Never" }}</div>
             </div>
           </div>
         </div>
@@ -191,17 +193,17 @@
 
         <!-- Timeline -->
         <div>
-          <!-- Event: Last login -->
-          {% if profile_user.last_login %}
+          <!-- Event: Last seen -->
+          {% if last_seen %}
           <div class="flex gap-4">
             <div class="flex flex-col items-center">
-              <div class="w-4 h-4 rounded-full bg-success/20 border-2 border-success flex-shrink-0 mt-0.5"></div>
+              <div class="w-4 h-4 rounded-full {% if user_status == 'online' %}bg-success/20 border-2 border-success{% elif user_status == 'away' %}bg-warning/20 border-2 border-warning{% else %}bg-base-300/20 border-2 border-base-300{% endif %} flex-shrink-0 mt-0.5"></div>
               <div class="flex-1 w-px bg-base-300 my-1"></div>
             </div>
             <div class="pb-5">
               <div class="font-medium text-sm">Last seen</div>
-              <div class="text-xs text-base-content/50 mt-0.5">{{ profile_user.last_login|date:'N j, Y · g:i A' }}</div>
-              <div class="text-xs text-base-content/40 mt-0.5" x-text="timeAgo('{{ profile_user.last_login|date:'c' }}')"></div>
+              <div class="text-xs text-base-content/50 mt-0.5">{{ last_seen|date:'N j, Y · g:i A' }}</div>
+              <div class="text-xs text-base-content/40 mt-0.5" x-text="timeAgo('{{ last_seen|date:'c' }}')"></div>
             </div>
           </div>
           {% endif %}

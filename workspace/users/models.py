@@ -4,6 +4,25 @@ from django.db import models
 from workspace.common.uuids import uuid_v7_or_v4
 
 
+class UserPresence(models.Model):
+    """Tracks the last activity timestamp for each user (presence system)."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='presence',
+    )
+    last_seen = models.DateTimeField(db_index=True)
+
+    class Meta:
+        verbose_name = 'User presence'
+        verbose_name_plural = 'User presences'
+
+    def __str__(self):
+        return f'{self.user} — last seen {self.last_seen}'
+
+
 class UserSetting(models.Model):
     """Key-value store for per-user, per-module settings.
 

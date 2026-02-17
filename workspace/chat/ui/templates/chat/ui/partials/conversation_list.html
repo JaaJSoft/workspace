@@ -80,8 +80,8 @@ Alpine bindings reference the parent chatApp() x-data scope.
                 {{ conv.display_name }}
                 <i data-lucide="pin" class="w-3 h-3 text-base-content/30 flex-shrink-0"></i>
               </span>
-              <span class="flex-shrink-0 w-8 h-5 inline-flex items-center justify-end">
-                <span class="text-xs text-base-content/50 group-hover/conv:hidden">{{ conv.time_ago }}</span>
+              <span class="flex-shrink-0 w-12 h-5 inline-flex items-center justify-end">
+                <span class="text-xs text-base-content/50 whitespace-nowrap group-hover/conv:hidden">{{ conv.time_ago }}</span>
                 <span class="hidden group-hover/conv:inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-base-content/10"
                       @click.stop="openConvContextMenu($event, '{{ conv.uuid }}', '{{ conv.kind }}', true)"
                       title="More options">
@@ -148,8 +148,8 @@ Alpine bindings reference the parent chatApp() x-data scope.
             <div class="flex items-center justify-between gap-1">
               <span class="font-medium text-sm truncate">{{ conv.display_name }}</span>
               {# time_ago and more btn occupy the same slot — swap on hover #}
-              <span class="flex-shrink-0 w-8 h-5 inline-flex items-center justify-end">
-                <span class="text-xs text-base-content/50 group-hover/conv:hidden">{{ conv.time_ago }}</span>
+              <span class="flex-shrink-0 w-12 h-5 inline-flex items-center justify-end">
+                <span class="text-xs text-base-content/50 whitespace-nowrap group-hover/conv:hidden">{{ conv.time_ago }}</span>
                 <span class="hidden group-hover/conv:inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-base-content/10"
                       @click.stop="openConvContextMenu($event, '{{ conv.uuid }}', 'dm')"
                       title="More options">
@@ -219,8 +219,8 @@ Alpine bindings reference the parent chatApp() x-data scope.
             <div class="flex items-center justify-between gap-1">
               <span class="font-medium text-sm truncate">{{ conv.display_name }}</span>
               {# time_ago and more btn occupy the same slot — swap on hover #}
-              <span class="flex-shrink-0 w-8 h-5 inline-flex items-center justify-end">
-                <span class="text-xs text-base-content/50 group-hover/conv:hidden">{{ conv.time_ago }}</span>
+              <span class="flex-shrink-0 w-12 h-5 inline-flex items-center justify-end">
+                <span class="text-xs text-base-content/50 whitespace-nowrap group-hover/conv:hidden">{{ conv.time_ago }}</span>
                 <span class="hidden group-hover/conv:inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-base-content/10"
                       @click.stop="openConvContextMenu($event, '{{ conv.uuid }}', 'group')"
                       title="More options">

@@ -107,8 +107,10 @@ def _build_conversation_context(user):
                 c.time_ago = f'{int(diff // 3600)}h'
             elif diff < 604800:
                 c.time_ago = f'{int(diff // 86400)}d'
-            else:
+            elif diff < 31536000:
                 c.time_ago = c._last_message.created_at.strftime('%b %d')
+            else:
+                c.time_ago = c._last_message.created_at.strftime("%b '%y")
         else:
             c.last_message_preview = 'No messages yet'
             c.time_ago = ''

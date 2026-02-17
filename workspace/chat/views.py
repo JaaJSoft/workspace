@@ -384,9 +384,10 @@ class MessageListView(APIView):
             updated_at=timezone.now(),
         )
 
-        # Notify other members via SSE cache
+        # Notify other members via SSE cache (use conversation_id directly to avoid lazy load)
+        conversation = Conversation(pk=conversation_id)
         notify_conversation_members(
-            message.conversation, exclude_user=request.user,
+            conversation, exclude_user=request.user,
         )
 
         msg = (
@@ -424,7 +425,9 @@ class MessageDetailView(APIView):
             )
 
         try:
-            message = Message.objects.get(
+            message = Message.objects.select_related(
+                'conversation',
+            ).get(
                 uuid=message_id,
                 conversation_id=conversation_id,
             )
@@ -452,6 +455,19 @@ class MessageDetailView(APIView):
             message.conversation, exclude_user=request.user,
         )
 
+        # Refetch with prefetches for serialization
+        message = (
+            Message.objects.filter(pk=message.pk)
+            .select_related('author')
+            .prefetch_related(
+                Prefetch(
+                    'reactions',
+                    queryset=Reaction.objects.select_related('user'),
+                ),
+                'attachments',
+            )
+            .first()
+        )
         return Response(MessageSerializer(message).data)
 
     @extend_schema(summary="Delete a message (soft)")
@@ -464,7 +480,9 @@ class MessageDetailView(APIView):
             )
 
         try:
-            message = Message.objects.get(
+            message = Message.objects.select_related(
+                'conversation',
+            ).get(
                 uuid=message_id,
                 conversation_id=conversation_id,
             )
@@ -592,12 +610,18 @@ class ConversationMembersView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Batch-fetch existing memberships (1 query instead of N)
+        existing_members = {
+            m.user_id: m
+            for m in ConversationMember.objects.filter(
+                conversation=conversation, user__in=users,
+            )
+        }
+
         added = []
+        to_create = []
         for u in users:
-            # Re-activate if they previously left, otherwise create
-            existing = ConversationMember.objects.filter(
-                conversation=conversation, user=u,
-            ).first()
+            existing = existing_members.get(u.id)
             if existing:
                 if existing.left_at is not None:
                     existing.left_at = None
@@ -605,10 +629,13 @@ class ConversationMembersView(APIView):
                     added.append(u.id)
                 # Already active member — skip silently
             else:
-                ConversationMember.objects.create(
-                    conversation=conversation, user=u,
+                to_create.append(
+                    ConversationMember(conversation=conversation, user=u)
                 )
                 added.append(u.id)
+
+        if to_create:
+            ConversationMember.objects.bulk_create(to_create)
 
         # Refetch conversation with members
         conversation = (

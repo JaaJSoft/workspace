@@ -159,9 +159,9 @@ function chatApp(currentUserId) {
             target.innerHTML = newList.innerHTML;
             // Bust browser memory cache for avatar images that were updated this session
             for (const conv of this.conversations) {
-              if (conv.avatar_url && conv.avatar_url.includes('?t=')) {
+              if (conv._avatar_bust) {
                 const img = target.querySelector(`img[src*="/conversations/${conv.uuid}/avatar/"]`);
-                if (img) img.src = conv.avatar_url;
+                if (img) img.src = `/api/v1/chat/conversations/${conv.uuid}/avatar/image?t=${conv._avatar_bust}`;
               }
             }
             this.$nextTick(() => {
@@ -807,8 +807,9 @@ function chatApp(currentUserId) {
         return `<div class="w-10 h-10 rounded-full bg-neutral text-neutral-content flex items-center justify-center flex-shrink-0"><span class="text-sm">?</span></div>`;
       }
       // Group with custom avatar
-      if (conv.avatar_url) {
-        return `<div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0"><img src="${conv.avatar_url}" alt="Group avatar" class="w-full h-full object-cover" /></div>`;
+      if (conv.has_avatar) {
+        const bust = conv._avatar_bust ? `?t=${conv._avatar_bust}` : '';
+        return `<div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0"><img src="/api/v1/chat/conversations/${conv.uuid}/avatar/image${bust}" alt="Group avatar" class="w-full h-full object-cover" /></div>`;
       }
       const initials = (conv.members || [])
         .filter(m => m.user.id !== this.currentUserId)
@@ -1298,11 +1299,11 @@ function chatApp(currentUserId) {
           body: formData,
         });
         if (resp.ok) {
-          const avatarUrl = `/api/v1/chat/conversations/${this.activeConversation.uuid}/avatar/image`;
-          const bustUrl = `${avatarUrl}?t=${Date.now()}`;
-          this.activeConversation.avatar_url = bustUrl;
+          const bust = String(Date.now());
+          this.activeConversation.has_avatar = true;
+          this.activeConversation._avatar_bust = bust;
           const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
-          if (conv) conv.avatar_url = bustUrl;
+          if (conv) { conv.has_avatar = true; conv._avatar_bust = bust; }
           this.refreshConversationList();
         }
       } catch (e) {
@@ -1345,9 +1346,10 @@ function chatApp(currentUserId) {
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 200) {
-          this.activeConversation.avatar_url = null;
+          this.activeConversation.has_avatar = false;
+          this.activeConversation._avatar_bust = null;
           const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
-          if (conv) conv.avatar_url = null;
+          if (conv) { conv.has_avatar = false; conv._avatar_bust = null; }
           this.refreshConversationList();
         }
       } catch (e) {

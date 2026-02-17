@@ -2,6 +2,7 @@ import time
 import logging
 from datetime import timedelta
 
+from django.db.models import Prefetch
 from django.utils import timezone
 
 from workspace.core.sse_registry import SSEProvider
@@ -93,7 +94,13 @@ class ChatSSEProvider(SSEProvider):
             .exclude(author_id=user_id)
             .exclude(uuid__in=self._seen_message_ids)
             .select_related('author')
-            .prefetch_related('attachments')
+            .prefetch_related(
+                Prefetch(
+                    'reactions',
+                    queryset=Reaction.objects.select_related('user'),
+                ),
+                'attachments',
+            )
             .order_by('created_at')[:50]
         )
         for msg in new_messages:

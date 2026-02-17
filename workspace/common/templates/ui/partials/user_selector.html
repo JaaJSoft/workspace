@@ -9,7 +9,7 @@
   Usage:
     {% include "ui/partials/user_selector.html" with on_select_event="user-selected" placeholder="Add a user..." %}
 
-  The dispatched event contains { detail: { user: { id, username, first_name, last_name, avatar_url } } }
+  The dispatched event contains { detail: { user: { id, username, first_name, last_name } } }
 {% endcomment %}
 
 <div x-data="userSelector('{{ on_select_event }}')" class="relative">

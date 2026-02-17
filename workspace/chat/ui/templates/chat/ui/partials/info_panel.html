@@ -32,7 +32,7 @@
     </div>
     <!-- Remove avatar button -->
     <button
-      x-show="activeConversation.kind === 'group' && activeConversation.avatar_url"
+      x-show="activeConversation.kind === 'group' && activeConversation.has_avatar"
       class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
       @click="removeGroupAvatar()"
     >

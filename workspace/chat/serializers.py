@@ -1,7 +1,5 @@
 from rest_framework import serializers
 
-from workspace.users.avatar_service import has_avatar
-
 from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedMessage, Reaction
 
 
@@ -10,12 +8,6 @@ class MemberUserSerializer(serializers.Serializer):
     username = serializers.CharField()
     first_name = serializers.CharField()
     last_name = serializers.CharField()
-    avatar_url = serializers.SerializerMethodField()
-
-    def get_avatar_url(self, user):
-        if has_avatar(user):
-            return f'/api/v1/users/{user.id}/avatar'
-        return None
 
 
 class ConversationMemberSerializer(serializers.ModelSerializer):
@@ -96,7 +88,6 @@ class ConversationListSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.IntegerField(read_only=True, default=0)
-    avatar_url = serializers.SerializerMethodField()
     is_pinned = serializers.BooleanField(read_only=True, default=False)
     pin_position = serializers.IntegerField(read_only=True, default=None)
 
@@ -104,9 +95,9 @@ class ConversationListSerializer(serializers.ModelSerializer):
         model = Conversation
         fields = [
             'uuid', 'kind', 'title', 'description', 'created_by_id',
-            'created_at', 'updated_at',
+            'created_at', 'updated_at', 'has_avatar',
             'members', 'last_message', 'unread_count',
-            'avatar_url', 'is_pinned', 'pin_position',
+            'is_pinned', 'pin_position',
         ]
 
     def get_last_message(self, obj):
@@ -120,31 +111,19 @@ class ConversationListSerializer(serializers.ModelSerializer):
                 .first()
             )
         if msg:
-            return LastMessageSerializer(msg).data
-        return None
-
-    def get_avatar_url(self, obj):
-        if obj.has_avatar:
-            return f'/api/v1/chat/conversations/{obj.uuid}/avatar/image'
+            return LastMessageSerializer(msg, context=self.context).data
         return None
 
 
 class ConversationDetailSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
-    avatar_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
         fields = [
             'uuid', 'kind', 'title', 'description', 'created_by_id',
-            'created_at', 'updated_at', 'members',
-            'avatar_url',
+            'created_at', 'updated_at', 'has_avatar', 'members',
         ]
-
-    def get_avatar_url(self, obj):
-        if obj.has_avatar:
-            return f'/api/v1/chat/conversations/{obj.uuid}/avatar/image'
-        return None
 
 
 class ConversationCreateSerializer(serializers.Serializer):

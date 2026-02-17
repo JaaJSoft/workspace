@@ -93,9 +93,8 @@ def _build_conversation_context(user):
                 if len(body) > 30:
                     body = body[:30] + '\u2026'
                 c.last_message_preview = f'{c._last_message.author.username}: {body}'
-            elif list(c._last_message.attachments.all()):
-                count = len(list(c._last_message.attachments.all()))
-                label = 'sent a file' if count == 1 else f'sent {count} files'
+            elif (att := list(c._last_message.attachments.all())):
+                label = 'sent a file' if len(att) == 1 else f'sent {len(att)} files'
                 c.last_message_preview = f'{c._last_message.author.username}: {label}'
             else:
                 c.last_message_preview = f'{c._last_message.author.username}: '

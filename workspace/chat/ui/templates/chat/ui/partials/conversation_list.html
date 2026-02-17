@@ -11,7 +11,6 @@ Expects in context:
 
 Alpine bindings reference the parent chatApp() x-data scope.
 {% endcomment %}
-{% load avatar_tags %}
 
 <div id="conversation-list">
 
@@ -60,9 +59,12 @@ Alpine bindings reference the parent chatApp() x-data scope.
           :title="collapsed ? '{{ conv.display_name|escapejs }}' : ''"
         >
           <div class="relative flex-shrink-0">
-            {% if conv.other_user and conv.other_user|has_avatar %}
-              <div class="w-8 h-8 rounded-full overflow-hidden">
-                <img src="/api/v1/users/{{ conv.other_user.id }}/avatar" alt="{{ conv.other_user.username }}" class="w-full h-full object-cover" />
+            {% if conv.other_user %}
+              <div class="avatar">
+                <div class="w-8 h-8 rounded-full overflow-hidden">
+                  <img src="/api/v1/users/{{ conv.other_user.id }}/avatar" alt="{{ conv.other_user.username }}" class="w-full h-full object-cover"
+                       onerror="this.onerror=null;var d=this.closest('.avatar');d.className='avatar placeholder';d.firstElementChild.className='w-8 h-8 bg-neutral text-neutral-content rounded-full flex items-center justify-center';this.replaceWith(Object.assign(document.createElement('span'),{className:'text-xs font-medium',textContent:'{{ conv.avatar_initial }}'}));" />
+                </div>
               </div>
             {% elif conv.has_avatar %}
               <div class="w-8 h-8 rounded-full overflow-hidden">
@@ -137,9 +139,12 @@ Alpine bindings reference the parent chatApp() x-data scope.
           :title="collapsed ? '{{ conv.display_name|escapejs }}' : ''"
         >
           <div class="relative flex-shrink-0">
-            {% if conv.other_user and conv.other_user|has_avatar %}
-              <div class="w-8 h-8 rounded-full overflow-hidden">
-                <img src="/api/v1/users/{{ conv.other_user.id }}/avatar" alt="{{ conv.other_user.username }}" class="w-full h-full object-cover" />
+            {% if conv.other_user %}
+              <div class="avatar">
+                <div class="w-8 h-8 rounded-full overflow-hidden">
+                  <img src="/api/v1/users/{{ conv.other_user.id }}/avatar" alt="{{ conv.other_user.username }}" class="w-full h-full object-cover"
+                       onerror="this.onerror=null;var d=this.closest('.avatar');d.className='avatar placeholder';d.firstElementChild.className='w-8 h-8 bg-neutral text-neutral-content rounded-full flex items-center justify-center';this.replaceWith(Object.assign(document.createElement('span'),{className:'text-xs font-medium',textContent:'{{ conv.avatar_initial }}'}));" />
+                </div>
               </div>
             {% else %}
               <div class="w-8 h-8 rounded-full bg-neutral text-neutral-content flex items-center justify-center">

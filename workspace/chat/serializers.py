@@ -101,8 +101,10 @@ class ConversationListSerializer(serializers.ModelSerializer):
         ]
 
     def get_last_message(self, obj):
-        msg = getattr(obj, '_last_message', None)
-        if msg is None:
+        # _last_message is set by the view; use sentinel to avoid fallback query
+        if hasattr(obj, '_last_message'):
+            msg = obj._last_message
+        else:
             msg = (
                 obj.messages
                 .filter(deleted_at__isnull=True)

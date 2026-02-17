@@ -5,8 +5,6 @@ Parameters:
   - size: '2xs', 'xs', 'sm', 'md', 'lg' (default: 'md')
   - show_ring: Boolean to show ring around avatar (default: False)
 {% endcomment %}
-{% load avatar_tags %}
-
 {% if size == '2xs' %}
   {% with size_class='w-5 h-5 text-[10px]' %}{% include "ui/partials/_user_avatar_inner.html" %}{% endwith %}
 {% elif size == 'xs' %}

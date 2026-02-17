@@ -1,4 +1,4 @@
-{% load chat_tags avatar_tags ui_filters %}
+{% load chat_tags ui_filters %}
 {% with author=group.author is_own=group.is_own messages=group.messages first_msg=group.messages.0 %}
 <div class="msg-group {% if is_own %}msg-group-end{% else %}msg-group-start{% endif %} flex gap-2 mb-3 {% if is_own %}flex-row-reverse{% endif %}">
 

@@ -869,3 +869,290 @@ class ConversationMessageSearchTests(ChatTestMixin, APITestCase):
         resp = self.client.get(self.url(self.group.uuid), {'author': self.creator.id})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data['count'], 1)
+
+
+# ── Unread count denormalization tests ─────────────────────────
+
+
+class UnreadCountModelTests(ChatTestMixin, APITestCase):
+    """Tests for the denormalized unread_count field on ConversationMember."""
+
+    def _get_unread(self, user, conversation):
+        return ConversationMember.objects.get(
+            user=user, conversation=conversation,
+        ).unread_count
+
+    def _msg_url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}/messages'
+
+    def _read_url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}/read'
+
+    def _detail_url(self, conv_id, msg_id):
+        return f'/api/v1/chat/conversations/{conv_id}/messages/{msg_id}'
+
+    # ── Send message increments ────────────────────────────────
+
+    def test_send_message_increments_other_members(self):
+        """Sending a message increments unread_count for all other active members."""
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'hello'}, format='json')
+
+        self.assertEqual(self._get_unread(self.member, self.group), 1)
+        self.assertEqual(self._get_unread(self.creator, self.group), 0)
+
+    def test_send_message_does_not_increment_author(self):
+        """The author's own unread_count stays at 0."""
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'msg1'}, format='json')
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'msg2'}, format='json')
+
+        self.assertEqual(self._get_unread(self.creator, self.group), 0)
+        self.assertEqual(self._get_unread(self.member, self.group), 2)
+
+    def test_send_message_increments_cumulatively(self):
+        """Multiple messages stack up the unread_count."""
+        self.client.force_authenticate(self.creator)
+        for i in range(5):
+            self.client.post(self._msg_url(self.group.uuid), {'body': f'msg {i}'}, format='json')
+
+        self.assertEqual(self._get_unread(self.member, self.group), 5)
+
+    def test_send_message_does_not_increment_left_member(self):
+        """A member who left should not get their unread_count incremented."""
+        cm = ConversationMember.objects.get(conversation=self.group, user=self.member)
+        cm.left_at = timezone.now()
+        cm.save(update_fields=['left_at'])
+
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'hello'}, format='json')
+
+        self.assertEqual(self._get_unread(self.member, self.group), 0)
+
+    def test_send_message_in_dm(self):
+        """DMs also track unread_count correctly."""
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.dm.uuid), {'body': 'dm msg'}, format='json')
+
+        self.assertEqual(self._get_unread(self.member, self.dm), 1)
+        self.assertEqual(self._get_unread(self.creator, self.dm), 0)
+
+    # ── Mark as read resets ────────────────────────────────────
+
+    def test_mark_read_resets_unread_count(self):
+        """POST /read resets unread_count to 0."""
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'msg1'}, format='json')
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'msg2'}, format='json')
+
+        self.assertEqual(self._get_unread(self.member, self.group), 2)
+
+        self.client.force_authenticate(self.member)
+        resp = self.client.post(self._read_url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        self.assertEqual(self._get_unread(self.member, self.group), 0)
+
+    def test_mark_read_does_not_affect_other_members(self):
+        """Marking read for one user doesn't affect another's count."""
+        # Add extra_user to the group
+        ConversationMember.objects.create(conversation=self.group, user=self.extra_user)
+
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'hello'}, format='json')
+
+        self.assertEqual(self._get_unread(self.member, self.group), 1)
+        self.assertEqual(self._get_unread(self.extra_user, self.group), 1)
+
+        # Only member marks read
+        self.client.force_authenticate(self.member)
+        self.client.post(self._read_url(self.group.uuid))
+
+        self.assertEqual(self._get_unread(self.member, self.group), 0)
+        self.assertEqual(self._get_unread(self.extra_user, self.group), 1)
+
+    # ── Delete message decrements ──────────────────────────────
+
+    def test_delete_message_decrements_unread(self):
+        """Deleting an unread message decrements unread_count for members who hadn't read it."""
+        self.client.force_authenticate(self.creator)
+        resp = self.client.post(self._msg_url(self.group.uuid), {'body': 'to delete'}, format='json')
+        msg_id = resp.data['uuid']
+
+        self.assertEqual(self._get_unread(self.member, self.group), 1)
+
+        # Creator deletes the message
+        resp = self.client.delete(self._detail_url(self.group.uuid, msg_id))
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+        self.assertEqual(self._get_unread(self.member, self.group), 0)
+
+    def test_delete_message_does_not_decrement_below_zero(self):
+        """unread_count should never go negative (Greatest(..., 0))."""
+        # Manually set unread_count to 0 for safety
+        cm = ConversationMember.objects.get(conversation=self.group, user=self.member)
+        cm.unread_count = 0
+        cm.save(update_fields=['unread_count'])
+
+        # Create a message directly (bypassing the view increment)
+        msg = Message.objects.create(
+            conversation=self.group, author=self.creator, body='direct',
+        )
+
+        # Delete via API
+        self.client.force_authenticate(self.creator)
+        self.client.delete(self._detail_url(self.group.uuid, msg.uuid))
+
+        self.assertEqual(self._get_unread(self.member, self.group), 0)
+
+    def test_delete_already_read_message_does_not_decrement(self):
+        """If a member has already read the message, deleting it doesn't decrement their count."""
+        self.client.force_authenticate(self.creator)
+        resp = self.client.post(self._msg_url(self.group.uuid), {'body': 'msg1'}, format='json')
+        msg_id = resp.data['uuid']
+
+        # Member reads the conversation
+        self.client.force_authenticate(self.member)
+        self.client.post(self._read_url(self.group.uuid))
+        self.assertEqual(self._get_unread(self.member, self.group), 0)
+
+        # Creator deletes the message that member already read
+        self.client.force_authenticate(self.creator)
+        self.client.delete(self._detail_url(self.group.uuid, msg_id))
+
+        # Should stay at 0
+        self.assertEqual(self._get_unread(self.member, self.group), 0)
+
+    def test_delete_one_of_multiple_unread(self):
+        """Deleting one unread message out of several decrements by exactly 1."""
+        self.client.force_authenticate(self.creator)
+        resp1 = self.client.post(self._msg_url(self.group.uuid), {'body': 'msg1'}, format='json')
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'msg2'}, format='json')
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'msg3'}, format='json')
+
+        self.assertEqual(self._get_unread(self.member, self.group), 3)
+
+        self.client.delete(self._detail_url(self.group.uuid, resp1.data['uuid']))
+        self.assertEqual(self._get_unread(self.member, self.group), 2)
+
+    # ── Member re-join resets ──────────────────────────────────
+
+    def test_rejoin_resets_unread_count(self):
+        """When a member who left is re-added, their unread_count resets to 0."""
+        # Creator sends a message
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'hello'}, format='json')
+        self.assertEqual(self._get_unread(self.member, self.group), 1)
+
+        # Member leaves
+        cm = ConversationMember.objects.get(conversation=self.group, user=self.member)
+        cm.left_at = timezone.now()
+        cm.save(update_fields=['left_at'])
+
+        # Re-add member
+        resp = self.client.post(
+            f'/api/v1/chat/conversations/{self.group.uuid}/members',
+            {'user_ids': [self.member.id]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        self.assertEqual(self._get_unread(self.member, self.group), 0)
+
+    # ── get_unread_counts service ──────────────────────────────
+
+    def test_get_unread_counts_api(self):
+        """GET /api/v1/chat/unread-counts returns correct totals."""
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'g1'}, format='json')
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'g2'}, format='json')
+        self.client.post(self._msg_url(self.dm.uuid), {'body': 'd1'}, format='json')
+
+        self.client.force_authenticate(self.member)
+        resp = self.client.get('/api/v1/chat/unread-counts')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['total'], 3)
+        self.assertEqual(resp.data['conversations'][str(self.group.uuid)], 2)
+        self.assertEqual(resp.data['conversations'][str(self.dm.uuid)], 1)
+
+    def test_get_unread_counts_excludes_zero(self):
+        """Conversations with 0 unread should not appear in the response."""
+        self.client.force_authenticate(self.member)
+        resp = self.client.get('/api/v1/chat/unread-counts')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['total'], 0)
+        self.assertEqual(resp.data['conversations'], {})
+
+    def test_get_unread_counts_after_mark_read(self):
+        """After marking a conversation read, it disappears from unread counts."""
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'hi'}, format='json')
+
+        self.client.force_authenticate(self.member)
+        resp = self.client.get('/api/v1/chat/unread-counts')
+        self.assertEqual(resp.data['total'], 1)
+
+        self.client.post(self._read_url(self.group.uuid))
+
+        resp = self.client.get('/api/v1/chat/unread-counts')
+        self.assertEqual(resp.data['total'], 0)
+        self.assertNotIn(str(self.group.uuid), resp.data['conversations'])
+
+    def test_get_unread_counts_excludes_left_conversations(self):
+        """Left conversations should not appear in unread counts."""
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'hi'}, format='json')
+
+        # Member leaves
+        cm = ConversationMember.objects.get(conversation=self.group, user=self.member)
+        cm.left_at = timezone.now()
+        cm.save(update_fields=['left_at'])
+
+        self.client.force_authenticate(self.member)
+        resp = self.client.get('/api/v1/chat/unread-counts')
+        self.assertEqual(resp.data['total'], 0)
+
+    # ── Conversation list integration ──────────────────────────
+
+    def test_conversation_list_shows_unread_count(self):
+        """GET /api/v1/chat/conversations includes correct unread_count per conversation."""
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'g1'}, format='json')
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'g2'}, format='json')
+
+        self.client.force_authenticate(self.member)
+        resp = self.client.get('/api/v1/chat/conversations')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        conv_map = {c['uuid']: c for c in resp.data}
+        self.assertEqual(conv_map[str(self.group.uuid)]['unread_count'], 2)
+        self.assertEqual(conv_map[str(self.dm.uuid)]['unread_count'], 0)
+
+    # ── Multi-member group scenarios ───────────────────────────
+
+    def test_three_members_independent_counts(self):
+        """Each member in a group tracks their own independent unread_count."""
+        ConversationMember.objects.create(conversation=self.group, user=self.extra_user)
+
+        # Creator sends 2 messages
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'msg1'}, format='json')
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'msg2'}, format='json')
+
+        self.assertEqual(self._get_unread(self.member, self.group), 2)
+        self.assertEqual(self._get_unread(self.extra_user, self.group), 2)
+        self.assertEqual(self._get_unread(self.creator, self.group), 0)
+
+        # Member reads
+        self.client.force_authenticate(self.member)
+        self.client.post(self._read_url(self.group.uuid))
+
+        self.assertEqual(self._get_unread(self.member, self.group), 0)
+        self.assertEqual(self._get_unread(self.extra_user, self.group), 2)
+
+        # Member sends a message — increments extra_user and creator, not member
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'reply'}, format='json')
+
+        self.assertEqual(self._get_unread(self.member, self.group), 0)
+        self.assertEqual(self._get_unread(self.extra_user, self.group), 3)
+        self.assertEqual(self._get_unread(self.creator, self.group), 1)

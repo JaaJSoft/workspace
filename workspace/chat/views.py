@@ -2,7 +2,8 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
-from django.db.models import Count, F, Max, Min, OuterRef, Prefetch, Subquery
+from django.db.models import Count, F, Max, Min, OuterRef, Prefetch, Q, Subquery
+from django.db.models.functions import Greatest
 from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, inline_serializer
@@ -379,6 +380,14 @@ class MessageListView(APIView):
                 size=f.size,
             )
 
+        # Increment unread_count for other active members
+        ConversationMember.objects.filter(
+            conversation_id=conversation_id,
+            left_at__isnull=True,
+        ).exclude(user=request.user).update(
+            unread_count=F('unread_count') + 1,
+        )
+
         # Bump conversation updated_at
         Conversation.objects.filter(pk=conversation_id).update(
             updated_at=timezone.now(),
@@ -500,6 +509,17 @@ class MessageDetailView(APIView):
 
         message.deleted_at = timezone.now()
         message.save(update_fields=['deleted_at'])
+
+        # Decrement unread_count for members who hadn't read this message
+        ConversationMember.objects.filter(
+            conversation_id=message.conversation_id,
+            left_at__isnull=True,
+            unread_count__gt=0,
+        ).filter(
+            Q(last_read_at__isnull=True) | Q(last_read_at__lt=message.created_at),
+        ).exclude(user=message.author).update(
+            unread_count=Greatest(F('unread_count') - 1, 0),
+        )
 
         PinnedMessage.objects.filter(message=message).delete()
 
@@ -625,7 +645,8 @@ class ConversationMembersView(APIView):
             if existing:
                 if existing.left_at is not None:
                     existing.left_at = None
-                    existing.save(update_fields=['left_at'])
+                    existing.unread_count = 0
+                    existing.save(update_fields=['left_at', 'unread_count'])
                     added.append(u.id)
                 # Already active member — skip silently
             else:
@@ -718,7 +739,8 @@ class MarkReadView(APIView):
             )
 
         membership.last_read_at = timezone.now()
-        membership.save(update_fields=['last_read_at'])
+        membership.unread_count = 0
+        membership.save(update_fields=['last_read_at', 'unread_count'])
         return Response({'status': 'ok'})
 
 

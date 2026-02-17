@@ -48,6 +48,7 @@ class ConversationMember(models.Model):
     last_read_at = models.DateTimeField(null=True, blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     left_at = models.DateTimeField(null=True, blank=True)
+    unread_count = models.IntegerField(default=0)
 
     class Meta:
         constraints = [

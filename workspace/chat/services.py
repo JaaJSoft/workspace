@@ -1,5 +1,4 @@
 from django.core.cache import cache
-from django.db.models import Count, F, Q
 from django.utils import timezone
 
 import mistune
@@ -52,53 +51,17 @@ def get_unread_counts(user):
     """Return unread message counts for each conversation the user is in."""
     from .models import ConversationMember
 
-    memberships = (
-        ConversationMember.objects.filter(
-            user=user,
-            left_at__isnull=True,
-        )
-        .annotate(
-            unread_count=Count(
-                'conversation__messages',
-                filter=Q(
-                    conversation__messages__deleted_at__isnull=True,
-                    conversation__messages__created_at__gt=F('last_read_at'),
-                ) & ~Q(conversation__messages__author=user),
-            )
-        )
-        .filter(unread_count__gt=0)
-    )
-
-    # Also count messages where last_read_at is NULL (never read)
-    null_memberships = (
-        ConversationMember.objects.filter(
-            user=user,
-            left_at__isnull=True,
-            last_read_at__isnull=True,
-        )
-        .annotate(
-            unread_count=Count(
-                'conversation__messages',
-                filter=Q(
-                    conversation__messages__deleted_at__isnull=True,
-                ) & ~Q(conversation__messages__author=user),
-            )
-        )
-        .filter(unread_count__gt=0)
-    )
+    memberships = ConversationMember.objects.filter(
+        user=user,
+        left_at__isnull=True,
+        unread_count__gt=0,
+    ).values_list('conversation_id', 'unread_count')
 
     conversations = {}
     total = 0
-
-    for m in memberships:
-        conversations[str(m.conversation_id)] = m.unread_count
-        total += m.unread_count
-
-    for m in null_memberships:
-        conv_id = str(m.conversation_id)
-        if conv_id not in conversations:
-            conversations[conv_id] = m.unread_count
-            total += m.unread_count
+    for conv_id, count in memberships:
+        conversations[str(conv_id)] = count
+        total += count
 
     return {'total': total, 'conversations': conversations}
 

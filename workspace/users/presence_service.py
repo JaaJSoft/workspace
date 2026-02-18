@@ -7,7 +7,8 @@ Thresholds:
   - offline: last activity >= 10 min ago
 
 Cache keys:
-  - ``presence:{user_id}``           — ISO timestamp, TTL 600 s
+  - ``presence:{user_id}``           — public ISO timestamp, TTL 600 s
+  - ``presence:activity:{user_id}``  — real activity ISO timestamp (internal), TTL 600 s
   - ``presence:dbsync:{user_id}``    — throttle flag, TTL 30 s
   - ``presence:manual:{user_id}``    — manual status override, TTL 600 s
 """
@@ -28,6 +29,10 @@ DB_SYNC_TTL = 30  # seconds
 
 def _cache_key(user_id: int) -> str:
     return f'presence:{user_id}'
+
+
+def _activity_key(user_id: int) -> str:
+    return f'presence:activity:{user_id}'
 
 
 def _dbsync_key(user_id: int) -> str:
@@ -68,24 +73,32 @@ def get_manual_status(user_id: int) -> str:
 
 def touch(user_id: int) -> None:
     """Record activity for *user_id* (called by middleware on every request)."""
-    if get_manual_status(user_id) in ('invisible', 'away'):
-        return
     now = timezone.now()
     iso = now.isoformat()
-    cache.set(_cache_key(user_id), iso, CACHE_TTL)
+
+    # Always track real activity (internal only, never exposed)
+    cache.set(_activity_key(user_id), iso, CACHE_TTL)
+
+    # Public last_seen: skip update when user forces away/invisible
+    update_public = get_manual_status(user_id) not in ('invisible', 'away')
+    if update_public:
+        cache.set(_cache_key(user_id), iso, CACHE_TTL)
 
     # Throttled DB sync — at most once per DB_SYNC_TTL seconds
     if cache.get(_dbsync_key(user_id)) is None:
         cache.set(_dbsync_key(user_id), '1', DB_SYNC_TTL)
-        _sync_db(user_id, now)
+        _sync_db(user_id, now, update_public=update_public)
 
 
-def _sync_db(user_id: int, now: datetime) -> None:
+def _sync_db(user_id: int, now: datetime, *, update_public: bool = True) -> None:
     from workspace.users.models import UserPresence
 
+    defaults = {'last_activity': now}
+    if update_public:
+        defaults['last_seen'] = now
     UserPresence.objects.update_or_create(
         user_id=user_id,
-        defaults={'last_seen': now},
+        defaults=defaults,
     )
 
 
@@ -200,6 +213,7 @@ def get_online_user_ids() -> list[int]:
 def clear(user_id: int) -> None:
     """Remove presence data from cache so the user appears offline immediately."""
     cache.delete(_cache_key(user_id))
+    cache.delete(_activity_key(user_id))
     cache.delete(_dbsync_key(user_id))
     cache.delete(_manual_key(user_id))
 

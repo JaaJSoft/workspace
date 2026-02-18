@@ -58,7 +58,8 @@ function _patchCardStatus(container) {
     var lastSeen = el.dataset.lastSeen;
     if (cfg.showAgo && lastSeen) {
       var diff = (Date.now() - new Date(lastSeen).getTime()) / 1000;
-      ago.textContent = '\u00b7 ' + _formatTimeAgo(diff);
+      // Skip "just now" — contradictory with away/offline status
+      ago.textContent = diff >= 60 ? '\u00b7 ' + _formatTimeAgo(diff) : '';
     } else {
       ago.textContent = '';
     }

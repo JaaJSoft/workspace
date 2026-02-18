@@ -22,6 +22,7 @@ class UserPresence(models.Model):
         related_name='presence',
     )
     last_seen = models.DateTimeField(db_index=True)
+    last_activity = models.DateTimeField(db_index=True, null=True, blank=True)
     manual_status = models.CharField(
         max_length=16,
         choices=MANUAL_STATUS_CHOICES,

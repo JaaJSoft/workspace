@@ -169,6 +169,79 @@
             </li>
             <div class="divider my-1"></div>
 
+            <!-- Status selector (accordion) -->
+            <div
+              x-data="{
+                open: false,
+                current: 'auto',
+                statuses: [
+                  { value: 'online', label: 'Online', dot: 'bg-success' },
+                  { value: 'away', label: 'Away', dot: 'bg-warning' },
+                  { value: 'busy', label: 'Busy', dot: 'bg-error' },
+                  { value: 'invisible', label: 'Invisible', dot: 'bg-base-300' },
+                ],
+                async init() {
+                  try {
+                    const r = await fetch('/api/v1/users/me/status', { credentials: 'same-origin' });
+                    if (r.ok) { const d = await r.json(); this.current = d.status || 'auto'; }
+                  } catch {}
+                },
+                async setStatus(s) {
+                  this.current = s;
+                  this.open = false;
+                  const uid = {{ user.id }};
+                  const p = $store.presence;
+                  p.online.delete(uid); p.away.delete(uid); p.busy.delete(uid);
+                  if (s === 'online') p.online.add(uid);
+                  else if (s === 'away') p.away.add(uid);
+                  else if (s === 'busy') p.busy.add(uid);
+                  const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                    || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+                  await fetch('/api/v1/users/me/status', {
+                    method: 'PUT',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+                    body: JSON.stringify({ status: s === 'online' ? 'auto' : s }),
+                  });
+                },
+                isActive(s) {
+                  if (s === 'online') return this.current === 'auto' || this.current === 'online';
+                  return this.current === s;
+                },
+                currentDot() {
+                  const s = this.statuses.find(s => this.isActive(s.value));
+                  return s ? s.dot : 'bg-success';
+                },
+                currentLabel() {
+                  const s = this.statuses.find(s => this.isActive(s.value));
+                  return s ? s.label : 'Online';
+                }
+              }"
+            >
+              <li>
+                <button type="button" class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors" @click="open = !open">
+                  <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="currentDot()"></span>
+                  <span class="font-medium" x-text="currentLabel()">Online</span>
+                  <i data-lucide="chevron-down" class="w-3.5 h-3.5 ml-auto transition-transform duration-200" :class="open && 'rotate-180'"></i>
+                </button>
+              </li>
+              <div x-show="open" x-collapse class="px-2 pb-1 space-y-0.5">
+                <template x-for="s in statuses" :key="s.value">
+                  <button
+                    type="button"
+                    class="flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-sm transition-colors"
+                    :class="isActive(s.value) ? 'bg-base-200 font-semibold' : 'hover:bg-base-200/60 opacity-70 hover:opacity-100'"
+                    @click="setStatus(s.value)"
+                  >
+                    <span class="w-2 h-2 rounded-full flex-shrink-0" :class="s.dot"></span>
+                    <span x-text="s.label"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <div class="divider my-1"></div>
+
             <!-- Profile -->
             <li class="{% if request.resolver_match.view_name == 'users_ui:profile' %}disabled{% endif %}">
               <a

@@ -449,14 +449,17 @@
     Alpine.store('presence', {
       online: new Set(),
       away: new Set(),
+      busy: new Set(),
 
       handleSnapshot(data) {
         this.online = new Set(data.online || []);
         this.away = new Set(data.away || []);
+        this.busy = new Set(data.busy || []);
       },
 
       statusOf(userId) {
         var uid = Number(userId);
+        if (this.busy.has(uid)) return 'busy';
         if (this.online.has(uid)) return 'online';
         if (this.away.has(uid)) return 'away';
         return 'offline';
@@ -464,6 +467,7 @@
 
       ringClass(userId) {
         var s = this.statusOf(userId);
+        if (s === 'busy') return 'ring-error';
         if (s === 'online') return 'ring-success';
         if (s === 'away') return 'ring-warning';
         return 'ring-base-300';
@@ -471,6 +475,7 @@
 
       dotClass(userId) {
         var s = this.statusOf(userId);
+        if (s === 'busy') return 'bg-error';
         if (s === 'online') return 'bg-success';
         if (s === 'away') return 'bg-warning';
         return 'bg-base-300';

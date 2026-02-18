@@ -20,7 +20,8 @@ class PresenceSSEProvider(SSEProvider):
         statuses = presence_service.get_statuses(active_ids)
         online = [uid for uid, s in statuses.items() if s == 'online']
         away = [uid for uid, s in statuses.items() if s == 'away']
-        return {'online': online, 'away': away}
+        busy = [uid for uid, s in statuses.items() if s == 'busy']
+        return {'online': online, 'away': away, 'busy': busy}
 
     def get_initial_events(self):
         snapshot = self._build_snapshot()

@@ -30,6 +30,7 @@ window.userAvatarHtml = function(userId, username, sizeClass) {
 var _statusConfig = {
   online:  { dot: 'bg-success',  label: 'text-success',  showAgo: false },
   away:    { dot: 'bg-warning',  label: 'text-warning',  showAgo: true  },
+  busy:    { dot: 'bg-error',    label: 'text-error',    showAgo: false },
   offline: { dot: 'bg-base-300', label: 'text-base-content/40', showAgo: true  },
 };
 
@@ -57,7 +58,7 @@ function _patchCardStatus(container) {
     var lastSeen = el.dataset.lastSeen;
     if (cfg.showAgo && lastSeen) {
       var diff = (Date.now() - new Date(lastSeen).getTime()) / 1000;
-      ago.textContent = '\u00b7 ' + _formatTimeAgo(diff) + ' ago';
+      ago.textContent = '\u00b7 ' + _formatTimeAgo(diff);
     } else {
       ago.textContent = '';
     }
@@ -66,10 +67,10 @@ function _patchCardStatus(container) {
 
 function _formatTimeAgo(seconds) {
   if (seconds < 60) return 'just now';
-  if (seconds < 3600) { var m = Math.floor(seconds / 60); return m + ' minute' + (m > 1 ? 's' : ''); }
-  if (seconds < 86400) { var h = Math.floor(seconds / 3600); return h + ' hour' + (h > 1 ? 's' : ''); }
+  if (seconds < 3600) { var m = Math.floor(seconds / 60); return m + ' minute' + (m > 1 ? 's' : '') + ' ago'; }
+  if (seconds < 86400) { var h = Math.floor(seconds / 3600); return h + ' hour' + (h > 1 ? 's' : '') + ' ago'; }
   var d = Math.floor(seconds / 86400);
-  return d + ' day' + (d > 1 ? 's' : '');
+  return d + ' day' + (d > 1 ? 's' : '') + ' ago';
 }
 
 /* ── User card popover (global cache with 30s TTL) ────────────── */

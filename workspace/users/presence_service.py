@@ -9,6 +9,7 @@ Thresholds:
 Cache keys:
   - ``presence:{user_id}``           — ISO timestamp, TTL 600 s
   - ``presence:dbsync:{user_id}``    — throttle flag, TTL 30 s
+  - ``presence:manual:{user_id}``    — manual status override, TTL 600 s
 """
 
 import logging
@@ -33,8 +34,42 @@ def _dbsync_key(user_id: int) -> str:
     return f'presence:dbsync:{user_id}'
 
 
+def _manual_key(user_id: int) -> str:
+    return f'presence:manual:{user_id}'
+
+
+# Statuses that override automatic detection ('auto' and 'online' do not)
+MANUAL_OVERRIDES = {'away', 'busy', 'invisible'}
+VALID_MANUAL_STATUSES = {'auto', 'online', 'away', 'busy', 'invisible'}
+
+
+def set_manual_status(user_id: int, status: str) -> None:
+    """Set a manual presence status for *user_id*."""
+    from workspace.users.models import UserPresence
+
+    cache.set(_manual_key(user_id), status, CACHE_TTL)
+    UserPresence.objects.filter(user_id=user_id).update(manual_status=status)
+
+
+def get_manual_status(user_id: int) -> str:
+    """Return the manual status for *user_id* (from cache, fallback to DB)."""
+    cached = cache.get(_manual_key(user_id))
+    if cached is not None:
+        return cached
+    from workspace.users.models import UserPresence
+
+    try:
+        ms = UserPresence.objects.values_list('manual_status', flat=True).get(user_id=user_id)
+    except UserPresence.DoesNotExist:
+        ms = 'auto'
+    cache.set(_manual_key(user_id), ms, CACHE_TTL)
+    return ms
+
+
 def touch(user_id: int) -> None:
     """Record activity for *user_id* (called by middleware on every request)."""
+    if get_manual_status(user_id) in ('invisible', 'away'):
+        return
     now = timezone.now()
     iso = now.isoformat()
     cache.set(_cache_key(user_id), iso, CACHE_TTL)
@@ -55,7 +90,13 @@ def _sync_db(user_id: int, now: datetime) -> None:
 
 
 def get_status(user_id: int) -> str:
-    """Return ``"online"``, ``"away"`` or ``"offline"`` for a single user."""
+    """Return ``"online"``, ``"away"``, ``"busy"`` or ``"offline"`` for a single user."""
+    manual = get_manual_status(user_id)
+    if manual in MANUAL_OVERRIDES:
+        # invisible appears as 'offline' to others
+        return 'offline' if manual == 'invisible' else manual
+
+    # 'auto' and 'online' — use automatic detection
     raw = cache.get(_cache_key(user_id))
     if raw is None:
         return 'offline'
@@ -75,11 +116,46 @@ def get_statuses(user_ids: list[int]) -> dict[int, str]:
     """Bulk status lookup via ``cache.get_many``."""
     if not user_ids:
         return {}
+
+    # Bulk-load manual statuses from cache
+    manual_keys = {_manual_key(uid): uid for uid in user_ids}
+    manual_cached = cache.get_many(list(manual_keys.keys()))
+    manual_map: dict[int, str] = {}
+    missing_manual: list[int] = []
+    for key, uid in manual_keys.items():
+        val = manual_cached.get(key)
+        if val is not None:
+            manual_map[uid] = val
+        else:
+            missing_manual.append(uid)
+
+    # DB fallback for missing manual statuses
+    if missing_manual:
+        from workspace.users.models import UserPresence
+
+        db_vals = dict(
+            UserPresence.objects.filter(user_id__in=missing_manual)
+            .values_list('user_id', 'manual_status')
+        )
+        to_cache = {}
+        for uid in missing_manual:
+            ms = db_vals.get(uid, 'auto')
+            manual_map[uid] = ms
+            to_cache[_manual_key(uid)] = ms
+        if to_cache:
+            cache.set_many(to_cache, CACHE_TTL)
+
+    # Bulk-load activity timestamps
     keys = {_cache_key(uid): uid for uid in user_ids}
     cached = cache.get_many(list(keys.keys()))
     now = timezone.now()
     result = {}
     for key, uid in keys.items():
+        ms = manual_map.get(uid, 'auto')
+        if ms in MANUAL_OVERRIDES:
+            result[uid] = 'offline' if ms == 'invisible' else ms
+            continue
+
         raw = cached.get(key)
         if raw is None:
             result[uid] = 'offline'
@@ -99,14 +175,26 @@ def get_statuses(user_ids: list[int]) -> dict[int, str]:
 
 
 def get_online_user_ids() -> list[int]:
-    """Return user IDs seen within the away threshold (online + away)."""
+    """Return user IDs that should appear in presence lists.
+
+    Includes: auto-detected active users + busy users.
+    Excludes: invisible users (they appear offline to others).
+    """
     from workspace.users.models import UserPresence
 
     cutoff = timezone.now() - AWAY_THRESHOLD
-    return list(
+    # Active users (excluding invisible)
+    active = set(
         UserPresence.objects.filter(last_seen__gte=cutoff)
+        .exclude(manual_status='invisible')
         .values_list('user_id', flat=True)
     )
+    # Busy users who may be past the activity threshold but still want to show as busy
+    busy = set(
+        UserPresence.objects.filter(manual_status='busy')
+        .values_list('user_id', flat=True)
+    )
+    return list(active | busy)
 
 
 def get_last_seen(user_id: int) -> datetime | None:

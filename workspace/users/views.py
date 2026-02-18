@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 
 from django.db.models import Q
 
-from workspace.users import avatar_service
+from workspace.users import avatar_service, presence_service
 from workspace.users.models import UserSetting
 
 
@@ -329,6 +329,50 @@ class UserAvatarUploadView(APIView):
         return Response({"message": "Avatar removed."})
 
 
+
+@extend_schema(tags=['Users'])
+class UserStatusView(APIView):
+    """Get or set the authenticated user's manual presence status."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Get manual status",
+        description="Return the user's current manual presence status.",
+        responses={
+            200: inline_serializer(
+                name='UserStatusGetResponse',
+                fields={'status': serializers.CharField()},
+            ),
+        },
+    )
+    def get(self, request):
+        current = presence_service.get_manual_status(request.user.pk)
+        return Response({'status': current})
+
+    @extend_schema(
+        summary="Set manual status",
+        description="Set the user's manual presence status (auto, online, away, busy, invisible).",
+        request=inline_serializer(
+            name='UserStatusRequest',
+            fields={'status': serializers.ChoiceField(choices=['auto', 'online', 'away', 'busy', 'invisible'])},
+        ),
+        responses={
+            200: inline_serializer(
+                name='UserStatusResponse',
+                fields={'status': serializers.CharField()},
+            ),
+        },
+    )
+    def put(self, request):
+        new_status = request.data.get('status', '')
+        if new_status not in presence_service.VALID_MANUAL_STATUSES:
+            return Response(
+                {'errors': [f'Invalid status. Choose from: {", ".join(sorted(presence_service.VALID_MANUAL_STATUSES))}']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        presence_service.set_manual_status(request.user.pk, new_status)
+        return Response({'status': new_status})
 
 
 # ── Settings API ──────────────────────────────────────────────

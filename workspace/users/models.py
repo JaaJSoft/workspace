@@ -7,6 +7,14 @@ from workspace.common.uuids import uuid_v7_or_v4
 class UserPresence(models.Model):
     """Tracks the last activity timestamp for each user (presence system)."""
 
+    MANUAL_STATUS_CHOICES = [
+        ('auto', 'Auto'),
+        ('online', 'Online'),
+        ('away', 'Away'),
+        ('busy', 'Busy'),
+        ('invisible', 'Invisible'),
+    ]
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -14,6 +22,11 @@ class UserPresence(models.Model):
         related_name='presence',
     )
     last_seen = models.DateTimeField(db_index=True)
+    manual_status = models.CharField(
+        max_length=16,
+        choices=MANUAL_STATUS_CHOICES,
+        default='auto',
+    )
 
     class Meta:
         verbose_name = 'User presence'

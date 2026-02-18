@@ -8,6 +8,7 @@ function chatApp(currentUserId) {
     loadingMoreMessages: false,
     hasMoreMessages: false,
     editingMessageUuid: null,
+    replyingTo: null,
     selectedUsers: [],
     newConvTitle: '',
     creatingConversation: false,
@@ -201,6 +202,7 @@ function chatApp(currentUserId) {
       this.activeConversation = conv;
       this.hasMoreMessages = false;
       this.editingMessageUuid = null;
+      this.replyingTo = null;
       this.messageBody = '';
       this.pendingFiles = [];
       this.pinnedMessages = [];
@@ -360,18 +362,22 @@ function chatApp(currentUserId) {
       const files = [...this.pendingFiles];
       if ((!body && files.length === 0) || !this.activeConversation) return;
 
+      const replyToUuid = this.replyingTo?.uuid || null;
+
       this.messageBody = '';
       // Revoke object URLs before clearing
       for (const f of this.pendingFiles) {
         if (f._preview) URL.revokeObjectURL(f._preview);
       }
       this.pendingFiles = [];
+      this.cancelReply();
 
       try {
         let resp;
         if (files.length > 0) {
           const formData = new FormData();
           formData.append('body', body);
+          if (replyToUuid) formData.append('reply_to_uuid', replyToUuid);
           for (const f of files) {
             formData.append('files', f);
           }
@@ -385,6 +391,8 @@ function chatApp(currentUserId) {
             }
           );
         } else {
+          const payload = { body };
+          if (replyToUuid) payload.reply_to_uuid = replyToUuid;
           resp = await fetch(
             `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
             {
@@ -394,7 +402,7 @@ function chatApp(currentUserId) {
                 'X-CSRFToken': this._csrf(),
               },
               credentials: 'same-origin',
-              body: JSON.stringify({ body }),
+              body: JSON.stringify(payload),
             }
           );
         }
@@ -437,6 +445,17 @@ function chatApp(currentUserId) {
       } catch (e) {
         console.error('Failed to refresh messages', e);
       }
+    },
+
+    // ── Replying ───────────────────────────────────────────
+    startReply(uuid, author, body) {
+      this.editingMessageUuid = null;
+      this.replyingTo = { uuid, author, body };
+      this.$nextTick(() => this.$refs.messageInput?.focus());
+    },
+
+    cancelReply() {
+      this.replyingTo = null;
     },
 
     // ── Editing ────────────────────────────────────────────
@@ -1671,9 +1690,11 @@ function chatApp(currentUserId) {
         return;
       }
 
-      // Escape → cancel edit or blur
+      // Escape → cancel reply, cancel edit, or blur
       if (e.key === 'Escape') {
-        if (this.editingMessageUuid) {
+        if (this.replyingTo) {
+          this.cancelReply();
+        } else if (this.editingMessageUuid) {
           this.cancelEdit();
         } else {
           ta?.blur();

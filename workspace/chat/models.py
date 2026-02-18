@@ -77,6 +77,13 @@ class Message(models.Model):
         on_delete=models.CASCADE,
         related_name='chat_messages',
     )
+    reply_to = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='replies',
+    )
     body = models.TextField()
     body_html = models.TextField(blank=True, default='')
     edited_at = models.DateTimeField(null=True, blank=True)

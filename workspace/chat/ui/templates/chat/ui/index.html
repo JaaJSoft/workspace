@@ -225,6 +225,19 @@ x-init="init()"
                @dragleave.prevent="handleDragLeave($event)"
                @drop.prevent="handleDrop($event)">
 
+            <!-- Reply preview banner -->
+            <div x-show="replyingTo" x-cloak x-transition
+                 class="flex items-center gap-2 mb-2 px-3 py-1.5 bg-info/10 rounded-lg text-sm">
+              <i data-lucide="reply" class="w-4 h-4 text-info flex-shrink-0"></i>
+              <div class="flex-1 min-w-0">
+                <span class="text-info font-semibold text-xs" x-text="'Replying to ' + (replyingTo?.author || '')"></span>
+                <p class="text-xs text-base-content/60 truncate" x-text="replyingTo?.body || ''"></p>
+              </div>
+              <button class="btn btn-ghost btn-xs btn-circle flex-shrink-0" @click="cancelReply()" title="Cancel reply (Esc)">
+                <i data-lucide="x" class="w-3 h-3"></i>
+              </button>
+            </div>
+
             <!-- Edit mode banner -->
             <div x-show="editingMessageUuid" x-cloak class="flex items-center gap-2 mb-2 px-3 py-1.5 bg-info/10 rounded-lg text-sm">
               <i data-lucide="pencil" class="w-4 h-4 text-info"></i>

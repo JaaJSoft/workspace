@@ -289,7 +289,7 @@ class MessageListView(APIView):
 
         messages = Message.objects.filter(
             conversation_id=conversation_id,
-        ).select_related('author').prefetch_related(
+        ).select_related('author', 'reply_to', 'reply_to__author').prefetch_related(
             Prefetch(
                 'reactions',
                 queryset=Reaction.objects.select_related('user'),
@@ -363,11 +363,27 @@ class MessageListView(APIView):
 
         body_html = render_message_body(body) if body else ''
 
+        reply_to = None
+        reply_to_uuid = serializer.validated_data.get('reply_to_uuid')
+        if reply_to_uuid:
+            try:
+                reply_to = Message.objects.get(
+                    uuid=reply_to_uuid,
+                    conversation_id=conversation_id,
+                    deleted_at__isnull=True,
+                )
+            except Message.DoesNotExist:
+                return Response(
+                    {'detail': 'Reply target message not found in this conversation.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         message = Message.objects.create(
             conversation_id=conversation_id,
             author=request.user,
             body=body,
             body_html=body_html,
+            reply_to=reply_to,
         )
 
         for f in files:
@@ -401,7 +417,7 @@ class MessageListView(APIView):
 
         msg = (
             Message.objects.filter(pk=message.pk)
-            .select_related('author')
+            .select_related('author', 'reply_to', 'reply_to__author')
             .prefetch_related(
                 Prefetch(
                     'reactions',
@@ -467,7 +483,7 @@ class MessageDetailView(APIView):
         # Refetch with prefetches for serialization
         message = (
             Message.objects.filter(pk=message.pk)
-            .select_related('author')
+            .select_related('author', 'reply_to', 'reply_to__author')
             .prefetch_related(
                 Prefetch(
                     'reactions',

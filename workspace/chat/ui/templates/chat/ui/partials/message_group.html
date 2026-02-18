@@ -29,9 +29,25 @@
         <div class="relative group/msg">
           {# Bubble #}
           <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm
-                      {% if is_own %}bg-info text-info-content{% else %}bg-base-200 text-base-content{% endif %}"
+                      {% if is_own %}bg-info/15 text-base-content{% else %}bg-base-200 text-base-content{% endif %}"
                id="msg-{{ msg.uuid }}"
                data-body="{{ msg.body }}">
+            {% if msg.reply_to %}
+              <a href="#msg-{{ msg.reply_to.uuid }}"
+                 @click.prevent="scrollToMessage('{{ msg.reply_to.uuid }}')"
+                 class="flex gap-2 mb-1.5 rounded-lg px-2 py-1 cursor-pointer transition-colors no-underline
+                        {% if is_own %}bg-info/15 hover:bg-info/25{% else %}bg-base-300/50 hover:bg-base-300{% endif %}">
+                <div class="w-0.5 flex-shrink-0 rounded-full bg-info"></div>
+                <div class="min-w-0 flex-1">
+                  {% if msg.reply_to.deleted_at %}
+                    <span class="text-xs italic opacity-50">Message deleted</span>
+                  {% else %}
+                    <span class="text-xs font-semibold text-info">{{ msg.reply_to.author.username }}</span>
+                    <p class="text-xs text-base-content/70 truncate">{{ msg.reply_to.body|truncatechars:100 }}</p>
+                  {% endif %}
+                </div>
+              </a>
+            {% endif %}
             {% if msg.body_html %}
               <div class="msg-body break-words">{{ msg.body_html|safe }}</div>
             {% endif %}
@@ -39,7 +55,7 @@
             {# Attachments #}
             {% with attachments=msg.attachments.all %}
               {% if attachments %}
-                {% if msg.body_html %}<div class="border-t {% if is_own %}border-info-content/20{% else %}border-base-300{% endif %} my-1.5"></div>{% endif %}
+                {% if msg.body_html %}<div class="border-t {% if is_own %}border-info/30{% else %}border-base-300{% endif %} my-1.5"></div>{% endif %}
                 <div class="flex flex-col gap-1.5">
                   {% for att in attachments %}
                     {% if att.is_image %}
@@ -64,7 +80,7 @@
                       <div class="flex items-center gap-0.5 group/att">
                         <a href="/api/v1/chat/attachments/{{ att.uuid }}"
                            target="_blank"
-                           class="flex items-center gap-2 p-2 rounded-lg {% if is_own %}bg-info-content/10 hover:bg-info-content/20{% else %}bg-base-300/50 hover:bg-base-300{% endif %} transition-colors min-w-0 flex-1">
+                           class="flex items-center gap-2 p-2 rounded-lg {% if is_own %}bg-info/15 hover:bg-info/25{% else %}bg-base-300/50 hover:bg-base-300{% endif %} transition-colors min-w-0 flex-1">
                           <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
                           <span class="truncate text-xs font-medium">{{ att.original_name }}</span>
                           <span class="text-[0.65rem] opacity-60 flex-shrink-0">{{ att.size|filesize }}</span>
@@ -114,6 +130,12 @@
                   </template>
                 </div>
               </div>
+              {# Reply #}
+              <button class="btn btn-ghost btn-xs btn-circle"
+                      @click="startReply('{{ msg.uuid }}', '{{ msg.author.username|escapejs }}', '{{ msg.body|truncatechars:100|escapejs }}')"
+                      title="Reply">
+                <i data-lucide="reply" class="w-3.5 h-3.5"></i>
+              </button>
               {% if msg.uuid in pinned_message_ids %}
                 <button class="btn btn-ghost btn-xs btn-circle"
                         @click="unpinMessage('{{ msg.uuid }}')"

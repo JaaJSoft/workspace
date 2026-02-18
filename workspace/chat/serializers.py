@@ -55,18 +55,33 @@ class MessageAttachmentSerializer(serializers.ModelSerializer):
         return f'/api/v1/chat/attachments/{obj.uuid}'
 
 
+class ReplyToSerializer(serializers.ModelSerializer):
+    author = MemberUserSerializer()
+    body = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Message
+        fields = ['uuid', 'author', 'body', 'deleted_at']
+        read_only_fields = fields
+
+    def get_body(self, obj):
+        body = obj.body or ''
+        return body[:200] + '\u2026' if len(body) > 200 else body
+
+
 class MessageSerializer(serializers.ModelSerializer):
     author = MemberUserSerializer()
     reactions = ReactionSerializer(many=True, read_only=True)
     attachments = MessageAttachmentSerializer(many=True, read_only=True)
     conversation_id = serializers.UUIDField()
+    reply_to = ReplyToSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = Message
         fields = [
             'uuid', 'conversation_id', 'author', 'body', 'body_html',
             'edited_at', 'created_at', 'deleted_at',
-            'reactions', 'attachments',
+            'reactions', 'attachments', 'reply_to',
         ]
 
 
@@ -139,6 +154,7 @@ class ConversationCreateSerializer(serializers.Serializer):
 
 class MessageCreateSerializer(serializers.Serializer):
     body = serializers.CharField(required=False, default='', allow_blank=True)
+    reply_to_uuid = serializers.UUIDField(required=False, allow_null=True)
 
 
 class MessageEditSerializer(serializers.Serializer):

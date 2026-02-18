@@ -197,6 +197,13 @@ def get_online_user_ids() -> list[int]:
     return list(active | manual)
 
 
+def clear(user_id: int) -> None:
+    """Remove presence data from cache so the user appears offline immediately."""
+    cache.delete(_cache_key(user_id))
+    cache.delete(_dbsync_key(user_id))
+    cache.delete(_manual_key(user_id))
+
+
 def get_last_seen(user_id: int) -> datetime | None:
     """Return the last-seen datetime, from cache first then DB fallback."""
     raw = cache.get(_cache_key(user_id))

@@ -1,5 +1,9 @@
 import time
 import logging
+from datetime import timedelta
+
+from django.db.models import Q
+from django.utils import timezone
 
 from workspace.core.sse_registry import SSEProvider
 from workspace.users import presence_service
@@ -16,11 +20,36 @@ class PresenceSSEProvider(SSEProvider):
         self._last_push = 0
 
     def _build_snapshot(self):
-        active_ids = presence_service.get_online_user_ids()
-        statuses = presence_service.get_statuses(active_ids)
-        online = [uid for uid, s in statuses.items() if s == 'online']
-        away = [uid for uid, s in statuses.items() if s == 'away']
-        busy = [uid for uid, s in statuses.items() if s == 'busy']
+        """Build presence snapshot with a single DB query."""
+        from workspace.users.models import UserPresence
+
+        now = timezone.now()
+        cutoff = now - presence_service.AWAY_THRESHOLD
+        online_cutoff = now - presence_service.ONLINE_THRESHOLD
+
+        # Single query: all users who should appear in presence lists
+        rows = list(
+            UserPresence.objects.filter(
+                Q(last_seen__gte=cutoff) & ~Q(manual_status='invisible')
+                | Q(manual_status__in=('busy', 'away'))
+            ).values_list('user_id', 'last_seen', 'manual_status')
+        )
+
+        online, away, busy = [], [], []
+        for uid, last_seen, manual in rows:
+            if manual == 'invisible':
+                continue
+            if manual == 'busy':
+                busy.append(uid)
+            elif manual == 'away':
+                away.append(uid)
+            elif manual in ('auto', 'online'):
+                if last_seen >= online_cutoff:
+                    online.append(uid)
+                elif last_seen >= cutoff:
+                    away.append(uid)
+                # else: offline, skip
+
         return {'online': online, 'away': away, 'busy': busy}
 
     def get_initial_events(self):

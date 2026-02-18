@@ -190,24 +190,21 @@ def get_statuses(user_ids: list[int]) -> dict[int, str]:
 def get_online_user_ids() -> list[int]:
     """Return user IDs that should appear in presence lists.
 
-    Includes: auto-detected active users + busy users.
+    Includes: auto-detected active users + busy/away manual users.
     Excludes: invisible users (they appear offline to others).
+    Single query using Q objects.
     """
+    from django.db.models import Q
     from workspace.users.models import UserPresence
 
     cutoff = timezone.now() - AWAY_THRESHOLD
-    # Active users (excluding invisible)
-    active = set(
-        UserPresence.objects.filter(last_seen__gte=cutoff)
-        .exclude(manual_status='invisible')
+    return list(
+        UserPresence.objects.filter(
+            Q(last_seen__gte=cutoff, manual_status__in=('auto', 'online', 'busy', 'away'))
+            | Q(manual_status__in=('busy', 'away'))
+        )
         .values_list('user_id', flat=True)
     )
-    # Manual override users (busy/away) who may be past the activity threshold
-    manual = set(
-        UserPresence.objects.filter(manual_status__in=('busy', 'away'))
-        .values_list('user_id', flat=True)
-    )
-    return list(active | manual)
 
 
 def clear(user_id: int) -> None:

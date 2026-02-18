@@ -189,12 +189,12 @@ def get_online_user_ids() -> list[int]:
         .exclude(manual_status='invisible')
         .values_list('user_id', flat=True)
     )
-    # Busy users who may be past the activity threshold but still want to show as busy
-    busy = set(
-        UserPresence.objects.filter(manual_status='busy')
+    # Manual override users (busy/away) who may be past the activity threshold
+    manual = set(
+        UserPresence.objects.filter(manual_status__in=('busy', 'away'))
         .values_list('user_id', flat=True)
     )
-    return list(active | busy)
+    return list(active | manual)
 
 
 def get_last_seen(user_id: int) -> datetime | None:

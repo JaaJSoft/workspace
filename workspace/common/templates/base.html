@@ -504,6 +504,17 @@
     connect();
   })();
 
+  // Shared stores
+  document.addEventListener('alpine:init', function() {
+    // Action loading store — tracks per-item loading state across components
+    Alpine.store('actionLoading', {
+      uuids: {},
+      is(uuid) { return !!this.uuids[uuid]; },
+      start(...uuids) { for (const u of uuids) this.uuids[u] = true; },
+      stop(...uuids) { for (const u of uuids) delete this.uuids[u]; },
+    });
+  });
+
   // Presence store — reacts to SSE presence snapshots
   document.addEventListener('alpine:init', function() {
     Alpine.store('presence', {

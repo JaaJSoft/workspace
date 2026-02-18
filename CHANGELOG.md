@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.7.0
+
+### Notifications
+
+- Notification system with UI panel, SSE real-time delivery, and API
+
+### Users
+
+- Presence tracking system with online, away, and offline detection
+- Manual status selection: online, away, busy, invisible
+- Internal `last_activity` field to track real activity regardless of status
+- User card popover with real-time status updates
+- DM shortcut from user profile and user card
+- Clear presence on logout so user appears offline immediately
+
+### Chat
+
+- Denormalized unread counts for faster conversation list rendering
+- Global SSE provider architecture replacing per-component connections
+- Year format for older messages in time display
+
+### UI
+
+- `localtime_tag` template filter for client-side timezone formatting (time, date, datetime, relative, full)
+- Folder content timestamps use `localtime_tag`
+- Fix horizontal overflow in message container
+- Fix keyboard shortcuts overriding browser/system shortcuts
+- Navbar cleanup: remove unused "Health Check" and "Add item" entries
+
+### Infrastructure
+
+- Prometheus metrics integration
+- PostgreSQL connection pooling support with `psycopg`
+- Enhanced admin site with additional models, filters, and search
+
 ## 0.6.0
 
 ### New module: Mail

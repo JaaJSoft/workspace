@@ -178,7 +178,7 @@ def group_messages(messages, current_user):
             if current_group:
                 groups.append(current_group)
                 current_group = None
-            groups.append({'type': 'date', 'date': msg_date})
+            groups.append({'type': 'date', 'date': msg_date, 'datetime': msg.created_at})
             current_date = msg_date
 
         # Check if this message continues the current group

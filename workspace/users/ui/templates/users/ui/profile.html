@@ -1,5 +1,5 @@
 {% extends 'base_with_navbar.html' %}
-{% load avatar_tags %}
+{% load avatar_tags ui_filters %}
 
 {% block title %}{{ profile_user.username }} · Workspace{% endblock %}
 
@@ -96,7 +96,7 @@
         </div>
         <div>
           <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Member since</div>
-          <div class="font-semibold mt-0.5">{{ profile_user.date_joined|date:'M j, Y' }}</div>
+          <div class="font-semibold mt-0.5">{{ profile_user.date_joined|localtime_tag:"date" }}</div>
         </div>
       </div>
     </div>
@@ -111,7 +111,7 @@
           <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Last seen</div>
           <div class="font-semibold mt-0.5">
             {% if last_seen %}
-              <span x-text="timeAgo('{{ last_seen|date:'c' }}')"></span>
+              {{ last_seen|localtime_tag:"relative" }}
             {% else %}
               Never
             {% endif %}
@@ -177,11 +177,11 @@
           <div class="grid grid-cols-2 gap-4">
             <div>
               <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Joined</div>
-              <div class="mt-1 font-medium">{{ profile_user.date_joined|date:'N j, Y' }}</div>
+              <div class="mt-1 font-medium">{{ profile_user.date_joined|localtime_tag:"date" }}</div>
             </div>
             <div>
               <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Last seen</div>
-              <div class="mt-1 font-medium">{{ last_seen|date:'N j, Y, P'|default:"Never" }}</div>
+              <div class="mt-1 font-medium">{% if last_seen %}{{ last_seen|localtime_tag:"datetime" }}{% else %}Never{% endif %}</div>
             </div>
           </div>
         </div>
@@ -207,8 +207,8 @@
             </div>
             <div class="pb-5">
               <div class="font-medium text-sm">Last seen</div>
-              <div class="text-xs text-base-content/50 mt-0.5">{{ last_seen|date:'N j, Y · g:i A' }}</div>
-              <div class="text-xs text-base-content/40 mt-0.5" x-text="timeAgo('{{ last_seen|date:'c' }}')"></div>
+              <div class="text-xs text-base-content/50 mt-0.5">{{ last_seen|localtime_tag:"full" }}</div>
+              <div class="text-xs text-base-content/40 mt-0.5">{{ last_seen|localtime_tag:"relative" }}</div>
             </div>
           </div>
           {% endif %}
@@ -220,8 +220,8 @@
             </div>
             <div>
               <div class="font-medium text-sm">Account created</div>
-              <div class="text-xs text-base-content/50 mt-0.5">{{ profile_user.date_joined|date:'N j, Y · g:i A' }}</div>
-              <div class="text-xs text-base-content/40 mt-0.5" x-text="timeAgo('{{ profile_user.date_joined|date:'c' }}')"></div>
+              <div class="text-xs text-base-content/50 mt-0.5">{{ profile_user.date_joined|localtime_tag:"full" }}</div>
+              <div class="text-xs text-base-content/40 mt-0.5">{{ profile_user.date_joined|localtime_tag:"relative" }}</div>
             </div>
           </div>
         </div>
@@ -232,23 +232,3 @@
 </div>
 {% endblock %}
 
-{% block extra_scripts %}
-<script>
-  function timeAgo(dateStr) {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const seconds = Math.floor((now - date) / 1000);
-    if (seconds < 60) return 'just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return minutes + (minutes === 1 ? ' minute ago' : ' minutes ago');
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return hours + (hours === 1 ? ' hour ago' : ' hours ago');
-    const days = Math.floor(hours / 24);
-    if (days < 30) return days + (days === 1 ? ' day ago' : ' days ago');
-    const months = Math.floor(days / 30);
-    if (months < 12) return months + (months === 1 ? ' month ago' : ' months ago');
-    const years = Math.floor(months / 12);
-    return years + (years === 1 ? ' year ago' : ' years ago');
-  }
-</script>
-{% endblock %}

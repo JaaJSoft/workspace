@@ -14,7 +14,7 @@
       {% if not is_own %}
         <span class="font-semibold text-base-content">{{ author.username }}</span>
       {% endif %}
-      <time class="text-base-content/50">{{ first_msg.created_at|format_time }}</time>
+      <span class="text-base-content/50">{{ first_msg.created_at|localtime_tag }}</span>
     </div>
 
     {# Bubbles #}
@@ -152,7 +152,7 @@
     {% if messages|length > 1 %}
       {% with last_msg=messages|last %}
         {% if not last_msg.deleted_at %}
-          <time class="text-[0.65rem] text-base-content/40 px-1">{{ last_msg.created_at|format_time }}</time>
+          <span class="text-[0.65rem] text-base-content/40 px-1">{{ last_msg.created_at|localtime_tag }}</span>
         {% endif %}
       {% endwith %}
     {% endif %}

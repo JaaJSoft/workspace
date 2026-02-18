@@ -1,11 +1,11 @@
-{% load chat_tags %}
+{% load chat_tags ui_filters %}
 <div id="message-list"
      data-has-more="{{ has_more|yesno:'true,false' }}"
      {% if first_uuid %}data-first-uuid="{{ first_uuid }}"{% endif %}>
 
   {% for group in groups %}
     {% if group.type == 'date' %}
-      <div class="divider text-xs text-base-content/50 my-3">{{ group.date|date_label }}</div>
+      <div class="divider text-xs text-base-content/50 my-3">{{ group.datetime|localtime_tag:"date" }}</div>
     {% elif group.type == 'messages' %}
       {% include "chat/ui/partials/message_group.html" with group=group current_user=current_user pinned_message_ids=pinned_message_ids %}
     {% endif %}

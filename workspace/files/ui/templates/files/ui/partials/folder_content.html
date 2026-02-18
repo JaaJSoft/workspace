@@ -304,13 +304,13 @@
               {% endif %}
             </td>
             <td class="hidden md:table-cell text-sm text-base-content/70" data-col="created">
-              {{ node.created_at|date:"M j, Y" }}
+              {{ node.created_at|localtime_tag:"date" }}
             </td>
             <td class="hidden md:table-cell text-sm text-base-content/70" data-col="modified">
               {% if is_trash_view %}
-                {{ node.deleted_at|date:"M j, Y" }}
+                {{ node.deleted_at|localtime_tag:"date" }}
               {% else %}
-                {{ node.updated_at|date:"M j, Y" }}
+                {{ node.updated_at|localtime_tag:"date" }}
               {% endif %}
             </td>
             {% if show_actions != False %}

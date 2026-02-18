@@ -290,10 +290,12 @@ window.fileBrowser = function fileBrowser() {
 
     _startLoading(...uuids) {
       for (const uuid of uuids) this.actionLoadingUuids[uuid] = true;
+      window.dispatchEvent(new CustomEvent('action-loading-changed', { detail: { uuids, loading: true } }));
     },
 
     _stopLoading(...uuids) {
       for (const uuid of uuids) delete this.actionLoadingUuids[uuid];
+      window.dispatchEvent(new CustomEvent('action-loading-changed', { detail: { uuids, loading: false } }));
     },
 
     isActionLoading(uuid) {
@@ -1508,6 +1510,13 @@ window.fileBrowser = function fileBrowser() {
 
 window.fileTableControls = function fileTableControls() {
   return {
+    // Per-item action loading state (synced from parent fileBrowser via events)
+    actionLoadingUuids: {},
+
+    isActionLoading(uuid) {
+      return !!this.actionLoadingUuids[uuid];
+    },
+
     storageKey: 'fileTableControls:v4',
     searchQuery: '',
     typeFilter: 'all',
@@ -1605,6 +1614,15 @@ window.fileTableControls = function fileTableControls() {
       this.$watch('sortField', () => this.applyRows());
       this.$watch('sortDir', () => this.applyRows());
       this.$watch('showHiddenFiles', () => this.applyRows());
+
+      // Sync action loading state from parent fileBrowser component
+      window.addEventListener('action-loading-changed', (e) => {
+        const { uuids, loading } = e.detail;
+        for (const uuid of uuids) {
+          if (loading) this.actionLoadingUuids[uuid] = true;
+          else delete this.actionLoadingUuids[uuid];
+        }
+      });
 
       // Sync showHiddenFiles when preferences change
       window.addEventListener('preferences-changed', (e) => {

@@ -7,13 +7,20 @@
  * @param {string} sizeClass - Tailwind size classes, e.g. 'w-7 h-7 text-xs'
  * @returns {string} HTML string
  */
-window.userAvatarHtml = function(userId, username, sizeClass) {
+window.userAvatarHtml = function(userId, username, sizeClass, options) {
+  var showPresence = !options || options.presence !== false;
   const initial = (username || '?')[0].toUpperCase();
   const imgUrl = `/api/v1/users/${userId}/avatar`;
 
+  var ringAttr = showPresence
+    ? ` :class="'ring-2 ring-offset-base-100 ring-offset-1 ' + $store.presence.ringClass(${userId})"`
+    : '';
+  var dotHtml = showPresence
+    ? `<span class="absolute bottom-0 right-0 block w-2.5 h-2.5 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass(${userId})"></span>`
+    : '';
+
   return `<div class="avatar relative" data-user-id="${userId}">` +
-    `<div class="${sizeClass} rounded-full overflow-hidden" ` +
-      `:class="'ring-2 ring-offset-base-100 ring-offset-1 ' + $store.presence.ringClass(${userId})">` +
+    `<div class="${sizeClass} rounded-full overflow-hidden"${ringAttr}>` +
       `<img src="${imgUrl}" alt="${username}" class="block w-full h-full object-cover" ` +
         `onerror="this.onerror=null;` +
         `var d=this.closest('.avatar');` +
@@ -21,7 +28,7 @@ window.userAvatarHtml = function(userId, username, sizeClass) {
         `d.firstElementChild.className='${sizeClass} bg-neutral text-neutral-content rounded-full flex items-center justify-center';` +
         `this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${initial}'}));" />` +
     `</div>` +
-    `<span class="absolute bottom-0 right-0 block w-2.5 h-2.5 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass(${userId})"></span>` +
+    dotHtml +
   `</div>`;
 };
 

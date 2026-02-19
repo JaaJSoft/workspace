@@ -295,6 +295,6 @@ Workspace is source-available under the Business Source License 1.1 (BSL 1.1).
 
 - Free to use, modify, and self-host for personal or internal business use.
 - You may not offer Workspace as a hosted or managed service to third parties without a commercial license.
-- This version will become available under the MIT License on 2029-02-18.
+- This version will become available under the MIT License on 2029-02-19.
 
 See `LICENSE` for full terms and `CHANGELOG.md` for the version timeline.

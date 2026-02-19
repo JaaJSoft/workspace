@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.8.0
+
+### Chat
+
+- Message reply feature with quoted preview, click-to-scroll, and SSE support
+- Read receipts with double-check indicator, per-group read count, and detail popover
+- Message timestamps moved to group footer alongside read receipt indicators
+
+### Notifications
+
+- File action notifications: edits, shares, permission changes, deletions, and comments
+- Calendar event notifications: invites, updates, cancellations, and RSVP responses
+- Fix URL generation and click handling in notification items
+
+### UI
+
+- Centralized action loading state with Alpine.js store replacing per-component `actionLoading`
+- `show_presence` parameter on user avatar component for optional presence indicator
+- Optimized presence queries with Django Q objects
+
 ## 0.7.0
 
 ### Notifications

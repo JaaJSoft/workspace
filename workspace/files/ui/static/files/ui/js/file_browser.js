@@ -80,6 +80,15 @@ window.navButtons = function navButtons() {
   };
 };
 
+// --- Action loading state ---
+// Global function + Alpine.reactive backing so it works regardless of
+// nested x-data proxy resolution (Chrome V8 bug with Proxy + with()).
+// Alpine.reactive() is initialised in fileBrowser().init().
+window._actionLoadingState = null;
+window.isActionLoading = function (uuid) {
+  return !!window._actionLoadingState?.[uuid];
+};
+
 // --- File browser preferences ---
 window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list', mosaicTileSize: 3 };
 window._filePrefsCache = { ...window._filePrefsDefaults };
@@ -287,15 +296,15 @@ window.fileBrowser = function fileBrowser() {
     _uploadToastTimer: null,
 
     _startLoading(...uuids) {
-      Alpine.store('actionLoading').start(...uuids);
+      if (window._actionLoadingState) {
+        for (const uuid of uuids) window._actionLoadingState[uuid] = true;
+      }
     },
 
     _stopLoading(...uuids) {
-      Alpine.store('actionLoading').stop(...uuids);
-    },
-
-    isActionLoading(uuid) {
-      return Alpine.store('actionLoading').is(uuid);
+      if (window._actionLoadingState) {
+        for (const uuid of uuids) delete window._actionLoadingState[uuid];
+      }
     },
 
     // Properties panel state
@@ -1473,6 +1482,13 @@ window.fileBrowser = function fileBrowser() {
     },
 
     init() {
+      // Create reactive backing for the global isActionLoading() function.
+      // Must happen here (not at top-level) because Alpine.reactive is only
+      // available once Alpine has started.
+      if (!window._actionLoadingState) {
+        window._actionLoadingState = Alpine.reactive({});
+      }
+
       this._initFileActions();
       // Listen for form submissions from dialogs
       window.addEventListener('create-folder', (e) => this.createFolder(e.detail.name));

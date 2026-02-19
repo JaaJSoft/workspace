@@ -31,6 +31,23 @@ def format_time(value):
     return local.strftime('%H:%M')
 
 
+@register.inclusion_tag('chat/ui/partials/_read_receipt.html')
+def render_read_receipt(message, conversation_kind):
+    """Render read receipt indicator for own messages."""
+    read_count = getattr(message, 'read_count', None)
+    if read_count is None:
+        return {'show': False}
+
+    return {
+        'show': True,
+        'read_count': read_count,
+        'total_recipients': message.total_recipients,
+        'all_read': message.all_read,
+        'is_dm': conversation_kind == 'dm',
+        'message_uuid': message.uuid,
+    }
+
+
 @register.inclusion_tag('chat/ui/partials/_reactions.html')
 def render_reactions(message, current_user):
     """Group reactions by emoji and check if current user reacted."""

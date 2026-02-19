@@ -111,7 +111,7 @@
           </div>
 
           {# Hover toolbar — floats below the bubble #}
-          <div class="absolute top-full mt-0.5 {% if is_own %}left-0{% else %}right-0{% endif %} opacity-0 group-hover/msg:opacity-100 transition-opacity z-10"
+          <div class="absolute top-full mt-0.5 {% if is_own %}left-0{% else %}right-0{% endif %} opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto transition-opacity z-10"
                x-data="{ emojiOpen: false }">
             <div class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-sm px-0.5 py-0.5">
               {# Reaction picker #}
@@ -170,14 +170,19 @@
       {% endif %}
     {% endfor %}
 
-    {# Trailing time for multi-message groups #}
-    {% if messages|length > 1 %}
-      {% with last_msg=messages|last %}
-        {% if not last_msg.deleted_at %}
-          <span class="text-[0.65rem] text-base-content/40 px-1">{{ last_msg.created_at|localtime_tag }}</span>
-        {% endif %}
-      {% endwith %}
-    {% endif %}
+    {# Trailing time + read receipt #}
+    {% with last_msg=messages|last %}
+      {% if messages|length > 1 and not last_msg.deleted_at %}
+        <div class="flex items-center gap-1 px-1">
+          <span class="text-[0.65rem] text-base-content/40">{{ last_msg.created_at|localtime_tag }}</span>
+          {% if is_own %}{% render_read_receipt last_msg conversation_kind %}{% endif %}
+        </div>
+      {% elif is_own %}
+        <div class="flex items-center gap-1 px-1">
+          {% render_read_receipt last_msg conversation_kind %}
+        </div>
+      {% endif %}
+    {% endwith %}
   </div>
 </div>
 {% endwith %}

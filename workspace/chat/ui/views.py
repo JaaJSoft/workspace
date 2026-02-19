@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import OuterRef, Prefetch, Subquery
+from django.db.models import Q
 from django.http import HttpResponseForbidden
 from django.shortcuts import render
 from django.utils import timezone
@@ -241,6 +242,33 @@ def conversation_messages_view(request, conversation_uuid):
     messages_page = messages_page[:limit]
     messages_page.reverse()  # Back to chronological order
 
+    # Read receipt data: for own messages, compute read counts in bulk
+    own_msgs = [
+        m for m in messages_page
+        if m.author_id == request.user.id and not m.deleted_at
+    ]
+    if own_msgs:
+        active_members = ConversationMember.objects.filter(
+            conversation_id=conversation_uuid,
+            left_at__isnull=True,
+        ).exclude(user=request.user)
+        total_recipients = active_members.count()
+        member_read_ats = list(
+            active_members.values_list('last_read_at', flat=True)
+        )
+        for msg in own_msgs:
+            read_count = sum(
+                1 for ra in member_read_ats
+                if ra and ra >= msg.created_at
+            )
+            msg.read_count = read_count
+            msg.total_recipients = total_recipients
+            msg.all_read = read_count == total_recipients and total_recipients > 0
+
+    conversation_kind = Conversation.objects.filter(
+        pk=conversation_uuid,
+    ).values_list('kind', flat=True).first() or 'dm'
+
     groups = group_messages(messages_page, request.user)
 
     first_uuid = str(messages_page[0].uuid) if messages_page else ''
@@ -255,4 +283,45 @@ def conversation_messages_view(request, conversation_uuid):
         'first_uuid': first_uuid,
         'current_user': request.user,
         'pinned_message_ids': pinned_message_ids,
+        'conversation_kind': conversation_kind,
+        'conversation_uuid': str(conversation_uuid),
+    })
+
+
+@login_required
+def message_readers_view(request, conversation_uuid, message_uuid):
+    """Partial: server-rendered popover content showing who read a message."""
+    membership = ConversationMember.objects.filter(
+        conversation_id=conversation_uuid,
+        user=request.user,
+        left_at__isnull=True,
+    ).first()
+    if not membership:
+        return HttpResponseForbidden()
+
+    try:
+        message = Message.objects.get(
+            uuid=message_uuid,
+            conversation_id=conversation_uuid,
+            deleted_at__isnull=True,
+        )
+    except Message.DoesNotExist:
+        return HttpResponseForbidden()
+
+    members = ConversationMember.objects.filter(
+        conversation_id=conversation_uuid,
+        left_at__isnull=True,
+    ).exclude(user=message.author).select_related('user')
+
+    readers = []
+    not_read = []
+    for m in members:
+        if m.last_read_at and m.last_read_at >= message.created_at:
+            readers.append({'user': m.user, 'read_at': m.last_read_at})
+        else:
+            not_read.append({'user': m.user})
+
+    return render(request, 'chat/ui/partials/_read_receipt_popover.html', {
+        'readers': readers,
+        'not_read': not_read,
     })

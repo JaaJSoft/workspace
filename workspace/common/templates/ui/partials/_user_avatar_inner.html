@@ -1,8 +1,8 @@
 {% if show_card %}<div x-data="userCard({{ user.id }})" @mouseenter="show()" @mouseleave="scheduleHide()" class="flex">{% endif %}
 <div class="avatar relative" {% if user.id %}x-data data-user-id="{{ user.id }}"{% endif %}>
-  <div class="{{ size_class }} rounded-full{% if show_ring and not user.id %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}" {% if user.id %}:class="'ring-2 ring-offset-base-100 ring-offset-1 ' + $store.presence.ringClass({{ user.id }})"{% endif %}>
+  <div class="{{ size_class }} rounded-full{% if show_ring and not user.id %} ring-1 ring-primary/40 ring-offset-base-100 ring-offset-1{% endif %}" {% if user.id and show_presence != False %}:class="'ring-2 ring-offset-base-100 ring-offset-1 ' + $store.presence.ringClass({{ user.id }})"{% endif %}>
     <img src="/api/v1/users/{{ user.id }}/avatar" alt="{{ user.username }}" class="block rounded-full object-cover w-full h-full" onerror="this.onerror=null;var d=this.closest('.avatar');d.className='avatar placeholder relative';d.firstElementChild.className='{{ size_class }} bg-neutral text-neutral-content rounded-full';this.replaceWith(Object.assign(document.createElement('span'),{textContent:'{{ user.username|slice:":1"|upper }}'}))" />
   </div>
-  {% if user.id %}<span class="absolute bottom-0 right-0 block w-2.5 h-2.5 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass({{ user.id }})"></span>{% endif %}
+  {% if user.id and show_presence != False %}<span class="absolute bottom-0 right-0 block w-2.5 h-2.5 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass({{ user.id }})"></span>{% endif %}
 </div>
 {% if show_card %}</div>{% endif %}

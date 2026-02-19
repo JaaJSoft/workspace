@@ -1515,6 +1515,12 @@ function chatApp(currentUserId) {
       }
     },
 
+    handleSSERead(detail) {
+      if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
+        this._refreshCurrentMessages();
+      }
+    },
+
     onPinnedDragStart(event, uuid) {
       this.draggingPinned = uuid;
       event.dataTransfer.effectAllowed = 'move';

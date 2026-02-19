@@ -26,6 +26,7 @@ x-init="init()"
 @chat-reaction.window="handleSSEReaction($event.detail)"
 @chat-unread.window="handleSSEUnread($event.detail)"
 @chat-message_pinned.window="handleSSEMessagePinned($event.detail)"
+@chat-read.window="handleSSERead($event.detail)"
 @keydown.window="
   if ($event.altKey && $event.key === 'n') { $event.preventDefault(); showNewConversationDialog(); }
   if (($event.ctrlKey || $event.metaKey) && $event.key === 'f' && activeConversation) { $event.preventDefault(); toggleSearchPanel(); }

@@ -1,0 +1,26 @@
+{% if show %}
+<span class="inline-flex items-center gap-0.5 cursor-pointer relative"
+      x-data="{ open: false, loaded: false, loading: false }"
+      @click.stop="open = !open; if (open && !loaded) { loading = true; fetch('/chat/' + document.getElementById('message-list').dataset.conversationId + '/messages/{{ message_uuid }}/readers', { credentials: 'same-origin' }).then(r => r.text()).then(html => { $refs.popContent.innerHTML = html; loaded = true; loading = false; }).catch(() => { loading = false; }); }"
+      @click.outside="open = false">
+  <svg class="w-3.5 h-3.5 {% if all_read %}text-info{% else %}text-base-content/30{% endif %}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 12l5 5L17 6" />
+    <path d="M7 12l5 5L23 6" />
+  </svg>
+  {% if not is_dm and total_recipients > 1 %}
+    <span class="text-[0.6rem] {% if all_read %}text-info{% else %}text-base-content/40{% endif %}">{{ read_count }}/{{ total_recipients }}</span>
+  {% endif %}
+
+  <div x-show="open" x-cloak x-transition
+       class="absolute bottom-full mb-1 right-0 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg p-2 min-w-48 max-w-64"
+       @click.stop>
+    <div x-ref="popContent">
+      <template x-if="loading">
+        <div class="flex justify-center py-2">
+          <span class="loading loading-spinner loading-xs"></span>
+        </div>
+      </template>
+    </div>
+  </div>
+</span>
+{% endif %}

@@ -41,6 +41,11 @@ urlpatterns = [
         views.MessageDetailView.as_view(),
         name='chat-message-detail',
     ),
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/messages/<uuid:message_id>/readers',
+        views.MessageReadersView.as_view(),
+        name='chat-message-readers',
+    ),
     # Reactions
     path(
         'api/v1/chat/messages/<uuid:message_id>/reactions',

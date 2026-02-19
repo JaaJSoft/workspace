@@ -43,6 +43,7 @@ class ChatSSEProvider(SSEProvider):
         self._seen_reaction_ids = set()
         self._seen_pin_ids = set()
         self._last_unread_push = 0
+        self._last_read_check = timezone.now()
 
     def get_initial_events(self):
         events = []
@@ -210,5 +211,26 @@ class ChatSSEProvider(SSEProvider):
                 },
             }
             events.append(('message_pinned', data, None))
+
+        # Read receipts: detect members who read conversations since last poll
+        recent_reads = (
+            ConversationMember.objects.filter(
+                conversation_id__in=self._member_conv_ids,
+                last_read_at__gt=self._last_read_check,
+                left_at__isnull=True,
+            )
+            .exclude(user_id=user_id)
+            .values_list('conversation_id', flat=True)
+            .distinct()
+        )
+        read_conv_ids = set(recent_reads)
+        if read_conv_ids:
+            self._last_read_check = timezone.now()
+            for conv_id in read_conv_ids:
+                data = {
+                    'type': 'read',
+                    'conversation_id': str(conv_id),
+                }
+                events.append(('read', data, None))
 
         return events

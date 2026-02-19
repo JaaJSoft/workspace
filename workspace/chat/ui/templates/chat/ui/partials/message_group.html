@@ -9,13 +9,12 @@
 
   {# Message column #}
   <div class="flex flex-col {% if is_own %}items-end{% else %}items-start{% endif %} gap-0.5 min-w-0 max-w-[75%]">
-    {# Header: username + time #}
-    <div class="flex items-baseline gap-1.5 px-1 text-xs">
-      {% if not is_own %}
+    {# Header: username #}
+    {% if not is_own %}
+      <div class="flex items-baseline gap-1.5 px-1 text-xs">
         <span class="font-semibold text-base-content">{{ author.username }}</span>
-      {% endif %}
-      <span class="text-base-content/50">{{ first_msg.created_at|localtime_tag }}</span>
-    </div>
+      </div>
+    {% endif %}
 
     {# Bubbles #}
     {% for msg in messages %}
@@ -170,18 +169,12 @@
       {% endif %}
     {% endfor %}
 
-    {# Trailing time + read receipt #}
+    {# Footer: time + read receipt #}
     {% with last_msg=messages|last %}
-      {% if messages|length > 1 and not last_msg.deleted_at %}
-        <div class="flex items-center gap-1 px-1">
-          <span class="text-[0.65rem] text-base-content/40">{{ last_msg.created_at|localtime_tag }}</span>
-          {% if is_own %}{% render_read_receipt last_msg conversation_kind %}{% endif %}
-        </div>
-      {% elif is_own %}
-        <div class="flex items-center gap-1 px-1">
-          {% render_read_receipt last_msg conversation_kind %}
-        </div>
-      {% endif %}
+      <div class="flex items-center gap-1 px-1">
+        <span class="text-[0.65rem] text-base-content/40">{{ last_msg.created_at|localtime_tag }}</span>
+        {% if is_own %}{% render_read_receipt last_msg conversation_kind %}{% endif %}
+      </div>
     {% endwith %}
   </div>
 </div>

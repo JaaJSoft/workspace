@@ -72,7 +72,9 @@ def _update_event_fields(event, data, user):
 
 
 def _sync_members(event, member_ids, owner_id):
-    """Sync event members from a list of user IDs."""
+    """Sync event members from a list of user IDs.
+    Returns a set of user IDs that were added or removed (already notified separately).
+    """
     current = set(event.members.values_list('user_id', flat=True))
     new_ids = set(member_ids) - {owner_id}
     to_remove = current - new_ids
@@ -100,6 +102,7 @@ def _sync_members(event, member_ids, owner_id):
             url=f'/calendar?event={event.pk}',
             actor=event.owner,
         )
+    return to_add | to_remove
 
 
 # ---------- Calendar CRUD ----------
@@ -338,13 +341,16 @@ class EventDetailView(APIView):
             if err:
                 return Response(err, status=status.HTTP_400_BAD_REQUEST)
 
+            changed_ids = set()
             if 'member_ids' in data:
-                _sync_members(event, data['member_ids'], request.user.id)
+                changed_ids = _sync_members(event, data['member_ids'], request.user.id)
 
-            # Notify existing members about the update
+            # Notify remaining members about the update, excluding the owner
+            # and users already notified by _sync_members (added/removed)
+            exclude_ids = changed_ids | {request.user.id}
             member_users = list(User.objects.filter(
                 calendar_invitations__event=event,
-            ).exclude(id=request.user.id))
+            ).exclude(id__in=exclude_ids))
             if member_users:
                 notify_many(
                     recipients=member_users,

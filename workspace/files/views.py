@@ -32,6 +32,7 @@ from .serializers import (
     FileSerializer,
 )
 from workspace.files.services import FileService
+from workspace.notifications.services import notify, notify_many
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
 RECENT_FILES_MAX_LIMIT = getattr(settings, 'RECENT_FILES_MAX_LIMIT', 200)
@@ -1007,7 +1008,28 @@ class FileViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(file_obj, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
+            notify(
+                recipient=file_obj.owner,
+                origin='files',
+                title=f'{request.user.username} edited "{file_obj.name}"',
+                url=f'/files/{file_obj.uuid}',
+                actor=request.user,
+            )
             return Response(serializer.data)
+
+    def perform_destroy(self, instance):
+        shared_users = User.objects.filter(
+            received_shares__file=instance,
+        )
+        if shared_users.exists():
+            recipients = list(shared_users)
+            notify_many(
+                recipients=recipients,
+                origin='files',
+                title=f'{self.request.user.username} deleted "{instance.name}"',
+                actor=self.request.user,
+            )
+        instance.delete()
 
     # ── Sharing ────────────────────────────────────────────────
 
@@ -1101,9 +1123,25 @@ class FileViewSet(viewsets.ModelViewSet):
                 shared_with=target_user,
                 defaults={'shared_by': request.user, 'permission': permission},
             )
+            if created:
+                notify(
+                    recipient=target_user,
+                    origin='files',
+                    title=f'{request.user.username} shared "{file_obj.name}" with you',
+                    url=f'/files/{file_obj.uuid}',
+                    actor=request.user,
+                )
             if not created and share.permission != permission:
                 share.permission = permission
                 share.save(update_fields=['permission'])
+                perm_label = 'read & write' if permission == FileShare.Permission.READ_WRITE else 'read only'
+                notify(
+                    recipient=target_user,
+                    origin='files',
+                    title=f'Permission updated to {perm_label} on "{file_obj.name}"',
+                    url=f'/files/{file_obj.uuid}',
+                    actor=request.user,
+                )
             return Response(
                 {'shared': True, 'permission': share.permission},
                 status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
@@ -1114,6 +1152,13 @@ class FileViewSet(viewsets.ModelViewSet):
             file=file_obj,
             shared_with=target_user,
         ).delete()
+        if deleted:
+            notify(
+                recipient=target_user,
+                origin='files',
+                title=f'{request.user.username} revoked your access to "{file_obj.name}"',
+                actor=request.user,
+            )
         if not deleted:
             return Response(
                 {'detail': 'Share not found.'},
@@ -1308,6 +1353,21 @@ class FileViewSet(viewsets.ModelViewSet):
             author=request.user,
             body=create_ser.validated_data['body'],
         )
+        recipients = set()
+        if file_obj.owner != request.user:
+            recipients.add(file_obj.owner)
+        commenter_ids = FileComment.objects.filter(
+            file=file_obj, deleted_at__isnull=True,
+        ).exclude(author=request.user).values_list('author', flat=True).distinct()
+        recipients.update(User.objects.filter(pk__in=commenter_ids))
+        if recipients:
+            notify_many(
+                recipients=list(recipients),
+                origin='files',
+                title=f'{request.user.username} commented on "{file_obj.name}"',
+                url=f'/files/{file_obj.uuid}',
+                actor=request.user,
+            )
         serializer = FileCommentSerializer(comment)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 

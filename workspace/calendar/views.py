@@ -23,7 +23,7 @@ def _parse_dt(value):
     except (ValueError, TypeError):
         return None
 
-from workspace.notifications.services import notify_many
+from workspace.notifications.services import notify, notify_many
 from .models import Calendar, CalendarSubscription, Event, EventMember
 from .recurrence import expand_recurring_events, make_virtual_occurrence
 from .serializers import (
@@ -77,7 +77,17 @@ def _sync_members(event, member_ids, owner_id):
     new_ids = set(member_ids) - {owner_id}
     to_remove = current - new_ids
     if to_remove:
+        removed_users = list(User.objects.filter(id__in=to_remove))
         EventMember.objects.filter(event=event, user_id__in=to_remove).delete()
+        if removed_users:
+            notify_many(
+                recipients=removed_users,
+                origin='calendar',
+                title=f'Removed from "{event.title}"',
+                body=f'{event.owner.username} removed you from an event.',
+                url=f'/calendar?event={event.pk}',
+                actor=event.owner,
+            )
     to_add = new_ids - current
     if to_add:
         users = list(User.objects.filter(id__in=to_add))
@@ -331,6 +341,20 @@ class EventDetailView(APIView):
             if 'member_ids' in data:
                 _sync_members(event, data['member_ids'], request.user.id)
 
+            # Notify existing members about the update
+            member_users = list(User.objects.filter(
+                calendar_invitations__event=event,
+            ).exclude(id=request.user.id))
+            if member_users:
+                notify_many(
+                    recipients=member_users,
+                    origin='calendar',
+                    title=f'"{event.title}" was updated',
+                    body=f'{request.user.username} updated an event you are part of.',
+                    url=f'/calendar?event={event.pk}',
+                    actor=request.user,
+                )
+
             event = _prefetch_event(Event.objects.filter(pk=event.pk)).first()
             return Response(EventSerializer(event).data)
 
@@ -482,6 +506,17 @@ class EventDetailView(APIView):
         original_start_str = request.query_params.get('original_start')
 
         if not event.is_recurring or scope == 'all':
+            member_users = list(User.objects.filter(
+                calendar_invitations__event=event,
+            ).exclude(id=request.user.id))
+            if member_users:
+                notify_many(
+                    recipients=member_users,
+                    origin='calendar',
+                    title=f'"{event.title}" was cancelled',
+                    body=f'{request.user.username} cancelled an event you were part of.',
+                    actor=request.user,
+                )
             event.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -543,4 +578,14 @@ class EventRespondView(APIView):
             return Response({'detail': 'Not invited.'}, status=status.HTTP_403_FORBIDDEN)
         membership.status = ser.validated_data['status']
         membership.save(update_fields=['status'])
+        event = Event.objects.select_related('owner').get(pk=event_id)
+        if event.owner_id != request.user.id:
+            status_label = membership.status  # 'accepted' or 'declined'
+            notify(
+                recipient=event.owner,
+                origin='calendar',
+                title=f'{request.user.username} {status_label} "{event.title}"',
+                url=f'/calendar?event={event.pk}',
+                actor=request.user,
+            )
         return Response({'status': membership.status})

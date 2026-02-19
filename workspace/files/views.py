@@ -1012,7 +1012,7 @@ class FileViewSet(viewsets.ModelViewSet):
                 recipient=file_obj.owner,
                 origin='files',
                 title=f'{request.user.username} edited "{file_obj.name}"',
-                url=f'/files/{file_obj.uuid}',
+                url=f'/files/{file_obj.parent_id}' if file_obj.parent_id else '/files',
                 actor=request.user,
             )
             return Response(serializer.data)
@@ -1128,7 +1128,7 @@ class FileViewSet(viewsets.ModelViewSet):
                     recipient=target_user,
                     origin='files',
                     title=f'{request.user.username} shared "{file_obj.name}" with you',
-                    url=f'/files/{file_obj.uuid}',
+                    url=f'/files/{file_obj.parent_id}' if file_obj.parent_id else '/files',
                     actor=request.user,
                 )
             if not created and share.permission != permission:
@@ -1139,7 +1139,7 @@ class FileViewSet(viewsets.ModelViewSet):
                     recipient=target_user,
                     origin='files',
                     title=f'Permission updated to {perm_label} on "{file_obj.name}"',
-                    url=f'/files/{file_obj.uuid}',
+                    url=f'/files/{file_obj.parent_id}' if file_obj.parent_id else '/files',
                     actor=request.user,
                 )
             return Response(
@@ -1365,7 +1365,7 @@ class FileViewSet(viewsets.ModelViewSet):
                 recipients=list(recipients),
                 origin='files',
                 title=f'{request.user.username} commented on "{file_obj.name}"',
-                url=f'/files/{file_obj.uuid}',
+                url=f'/files/{file_obj.parent_id}' if file_obj.parent_id else '/files',
                 actor=request.user,
             )
         serializer = FileCommentSerializer(comment)

@@ -57,8 +57,8 @@
     return new Date(dateStr).toLocaleDateString();
   },
 
-  clickItem(item) {
-    if (!item.is_read) $store.notifications.markRead(item.uuid);
+  async clickItem(item) {
+    if (!item.is_read) await $store.notifications.markRead(item.uuid);
     if (item.url) window.location.href = item.url;
   }
 }">

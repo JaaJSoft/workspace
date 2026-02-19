@@ -48,7 +48,7 @@ class ShareNotificationTests(FileNotificationTestBase):
         n = notifs.first()
         self.assertIn('shared', n.title)
         self.assertIn('doc.txt', n.title)
-        self.assertEqual(n.url, f'/files/{self.file.uuid}')
+        self.assertEqual(n.url, '/files')
         self.assertEqual(n.actor, self.owner)
 
     def test_share_duplicate_no_extra_notification(self):

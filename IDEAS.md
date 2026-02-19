@@ -150,7 +150,7 @@ Real-time internal communication. **Module shipped in v0.4.0.**
 - [ ] @user and @channel mentions (unified across chat, file comments, calendar notes)
 - [x] Message search (full-text within conversations, highlight navigation)
 - [x] Real-time updates (SSE-based streaming with unread counts)
-- [ ] Online / away / busy status
+- [x] Online / away / busy status
 - [x] Pinned conversations with drag-and-drop reordering
 - [x] Pin individual messages within a conversation
 - [ ] Integration with Tasks (create task from message)
@@ -160,7 +160,7 @@ Real-time internal communication. **Module shipped in v0.4.0.**
 - [x] Keyboard shortcuts and help dialog
 - [x] Markdown message rendering
 - [ ] Typing indicators — "X is typing..." via SSE (cache key + short TTL)
-- [ ] Message replies — quote a specific message when replying (parent_id FK)
+- [x] Message replies — quote a specific message when replying (parent_id FK)
 - [ ] Link previews — auto-unfurl URLs with OpenGraph metadata (title, image, description)
 - [ ] Read receipts — show who has read messages in group conversations
 - [ ] Voice messages — record and send audio clips (MediaRecorder API + file upload)
@@ -279,8 +279,8 @@ Features shared across all modules.
 - [ ] Recent searches and suggestions
 
 ### Notifications
-- [ ] In-app notification center
-- [ ] SSE for real-time notifications (same pattern as chat)
+- [x] In-app notification center
+- [x] SSE for real-time notifications (same pattern as chat)
 - [ ] Notification preferences per module
 - [ ] Email digest (daily/weekly)
 - [ ] Push notifications (PWA)
@@ -315,7 +315,7 @@ Features shared across all modules.
 - [ ] **Background file processing** — Celery pipeline for thumbnails, virus scan, metadata extraction on upload
 - [ ] **CDN / S3 storage backend** — django-storages for scalable file storage (MinIO for self-hosted)
 - [ ] **Rate limiting** — django-ratelimit on API endpoints (login, file upload, chat send)
-- [ ] **Metrics endpoint** — Prometheus /metrics (request latency, DB pool, cache hit rate, active SSE connections)
+- [x] **Metrics endpoint** — Prometheus /metrics (request latency, DB pool, cache hit rate, active SSE connections)
 - [ ] **Structured logging** — JSON logs with request_id tracing (django-structlog)
 - [x] **Database connection pooling** — PgBouncer or psycopg pool for high-concurrency scenarios
 - [ ] **E2E tests** — Playwright test suite for critical flows (login, file upload, chat send, mail compose)

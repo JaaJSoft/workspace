@@ -498,7 +498,7 @@ function chatApp(currentUserId) {
               ${filesHtml}
             </div>
             <div class="flex items-center gap-1 px-1">
-              <span class="loading loading-dots loading-xs text-base-content/40"></span>
+              <i data-lucide="clock" class="w-3 h-3 text-base-content/40"></i>
             </div>
           </div>
         </div>`;

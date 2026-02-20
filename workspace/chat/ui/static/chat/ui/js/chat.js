@@ -498,7 +498,7 @@ function chatApp(currentUserId) {
               ${filesHtml}
             </div>
             <div class="flex items-center gap-1 px-1">
-              <span class="loading loading-spinner loading-xs text-base-content/40"></span>
+              <span class="loading loading-dots loading-xs text-base-content/40"></span>
             </div>
           </div>
         </div>`;

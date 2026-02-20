@@ -363,18 +363,26 @@ function chatApp(currentUserId) {
       if ((!body && files.length === 0) || !this.activeConversation) return;
 
       const replyToUuid = this.replyingTo?.uuid || null;
+      const replyInfo = this.replyingTo ? { ...this.replyingTo } : null;
 
       this.messageBody = '';
-      // Revoke object URLs before clearing
-      for (const f of this.pendingFiles) {
-        if (f._preview) URL.revokeObjectURL(f._preview);
-      }
       this.pendingFiles = [];
       this.cancelReply();
 
+      // ── Optimistic UI: inject temporary message immediately ──
+      const tempId = '_optimistic_' + Date.now();
+      const hasFiles = files.length > 0;
+      this._injectOptimisticMessage(tempId, body, replyInfo, hasFiles ? files : null);
+      this.$nextTick(() => this.scrollToBottom());
+
+      // Revoke object URLs after optimistic bubble is injected
+      for (const f of files) {
+        if (f._preview) URL.revokeObjectURL(f._preview);
+      }
+
       try {
         let resp;
-        if (files.length > 0) {
+        if (hasFiles) {
           const formData = new FormData();
           formData.append('body', body);
           if (replyToUuid) formData.append('reply_to_uuid', replyToUuid);
@@ -410,19 +418,98 @@ function chatApp(currentUserId) {
         if (resp.ok) {
           const msg = await resp.json();
           this._updateConversationLastMessage(this.activeConversation.uuid, msg);
-          // Re-fetch messages to get proper server-rendered grouping
+          // Re-fetch messages — replaces optimistic bubble with real server-rendered one
           await this._refreshCurrentMessages();
           this.$nextTick(() => this.scrollToBottom());
         } else {
-          // Restore on error
+          // Remove optimistic message and restore input on error
+          this._removeOptimisticMessage(tempId);
           this.messageBody = body;
           this.pendingFiles = files;
         }
       } catch (e) {
         console.error('Failed to send message', e);
+        this._removeOptimisticMessage(tempId);
         this.messageBody = body;
         this.pendingFiles = files;
       }
+    },
+
+    _getCurrentUser() {
+      if (!this.activeConversation?.members) return null;
+      return this.activeConversation.members.find(m => m.user.id === this.currentUserId)?.user;
+    },
+
+    _escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    },
+
+    _injectOptimisticMessage(tempId, body, replyInfo, files) {
+      const container = document.getElementById('messages-container');
+      if (!container) return;
+
+      const user = this._getCurrentUser();
+      const avatarHtml = user
+        ? window.userAvatarHtml(user.id, user.username, 'w-8 h-8 text-xs', { presence: false })
+        : '';
+
+      // Build body HTML with basic line breaks
+      const bodyHtml = body ? this._escapeHtml(body).replace(/\n/g, '<br>') : '';
+
+      // Build reply context HTML
+      let replyHtml = '';
+      if (replyInfo) {
+        replyHtml = `
+          <div class="flex gap-2 mb-1.5 rounded-lg px-2 py-1 bg-info/15">
+            <div class="w-0.5 flex-shrink-0 rounded-full bg-info"></div>
+            <div class="min-w-0 flex-1">
+              <span class="text-xs font-semibold text-info">${this._escapeHtml(replyInfo.author)}</span>
+              <p class="text-xs text-base-content/70 truncate">${this._escapeHtml(replyInfo.body || '')}</p>
+            </div>
+          </div>`;
+      }
+
+      // Build file previews
+      let filesHtml = '';
+      if (files && files.length > 0) {
+        const items = files.map(f => {
+          const name = this._escapeHtml(f.name);
+          if (f.type && f.type.startsWith('image/') && f._preview) {
+            return `<img src="${f._preview}" alt="${name}" class="max-h-64 max-w-full rounded-lg object-contain opacity-60" />`;
+          }
+          return `<div class="flex items-center gap-2 p-2 rounded-lg bg-info/15">
+            <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
+            <span class="truncate text-xs font-medium">${name}</span>
+          </div>`;
+        }).join('');
+        const separator = bodyHtml ? '<div class="border-t border-info/30 my-1.5"></div>' : '';
+        filesHtml = `${separator}<div class="flex flex-col gap-1.5">${items}</div>`;
+      }
+
+      const html = `
+        <div class="msg-group msg-group-end flex gap-2 mb-3 flex-row-reverse" id="${tempId}">
+          <div class="flex-shrink-0 w-8 mt-auto">${avatarHtml}</div>
+          <div class="flex flex-col items-end gap-0.5 min-w-0 max-w-[75%]">
+            <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm bg-info/15 text-base-content opacity-70">
+              ${replyHtml}
+              ${bodyHtml ? `<div class="msg-body break-words">${bodyHtml}</div>` : ''}
+              ${filesHtml}
+            </div>
+            <div class="flex items-center gap-1 px-1">
+              <span class="loading loading-dots loading-xs text-base-content/40"></span>
+            </div>
+          </div>
+        </div>`;
+
+      container.insertAdjacentHTML('beforeend', html);
+      if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [container.lastElementChild] });
+    },
+
+    _removeOptimisticMessage(tempId) {
+      const el = document.getElementById(tempId);
+      if (el) el.remove();
     },
 
     async _refreshCurrentMessages() {

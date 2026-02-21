@@ -1014,7 +1014,13 @@ class FileViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            return super().partial_update(request, *args, **kwargs)
+            response = super().partial_update(request, *args, **kwargs)
+            if response.status_code == 200 and ('content' in request.data or 'content' in request.FILES):
+                from workspace.files.sse_provider import push_file_event
+                updated_file = File.objects.filter(uuid=uuid).first()
+                if updated_file:
+                    push_file_event(updated_file, 'file_updated', request.user.username, exclude_user_id=request.user.pk)
+            return response
         except Http404:
             # Check rw shared access
             uuid = kwargs.get('uuid')
@@ -1035,6 +1041,8 @@ class FileViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(file_obj, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
+            from workspace.files.sse_provider import push_file_event
+            push_file_event(file_obj, 'file_updated', request.user.username, exclude_user_id=request.user.pk)
             notify(
                 recipient=file_obj.owner,
                 origin='files',
@@ -1079,6 +1087,8 @@ class FileViewSet(viewsets.ModelViewSet):
             File.objects.filter(pk=file_obj.pk).update(
                 locked_by=None, locked_at=None, lock_expires_at=None,
             )
+            from workspace.files.sse_provider import push_file_event
+            push_file_event(file_obj, 'lock_released', request.user.username, exclude_user_id=request.user.pk)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         # POST — acquire or renew

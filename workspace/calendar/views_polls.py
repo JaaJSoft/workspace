@@ -3,7 +3,7 @@ import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -26,6 +26,28 @@ from .serializers_polls import (
 )
 
 User = get_user_model()
+
+
+def _poll_detail_queryset():
+    """Base queryset for poll detail views with all prefetches to avoid N+1."""
+    return Poll.objects.select_related('created_by').prefetch_related(
+        Prefetch(
+            'slots',
+            queryset=PollSlot.objects.annotate(
+                yes_count=Count('votes', filter=Q(votes__choice='yes')),
+                maybe_count=Count('votes', filter=Q(votes__choice='maybe')),
+            ).order_by('position', 'start'),
+        ),
+        'invitees__user',
+    )
+
+
+def _prefetch_poll_votes(poll):
+    """Prefetch all votes for a poll and attach them to the poll object."""
+    poll._prefetched_poll_votes = list(
+        PollVote.objects.filter(slot__poll=poll).select_related('user')
+    )
+    return poll
 
 
 @extend_schema(tags=['Calendar - Polls'])
@@ -65,6 +87,10 @@ class PollListView(APIView):
         if status_by != 'all':
             polls = polls.filter(status=status_by)
 
+        polls = polls.select_related('created_by').annotate(
+            _participant_count=Count('slots__votes', distinct=True),
+        )
+
         return Response(PollListSerializer(polls, many=True).data)
 
     @extend_schema(summary="Create a poll", request=PollCreateSerializer, responses=PollSerializer)
@@ -87,6 +113,8 @@ class PollListView(APIView):
                 position=i,
             )
 
+        poll = _poll_detail_queryset().get(uuid=poll.uuid)
+        _prefetch_poll_votes(poll)
         return Response(
             PollSerializer(poll, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
@@ -98,11 +126,12 @@ class PollDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_poll(self, poll_id, user):
-        return get_object_or_404(Poll, uuid=poll_id, created_by=user)
+        return get_object_or_404(_poll_detail_queryset(), uuid=poll_id, created_by=user)
 
     @extend_schema(summary="Get poll detail", responses=PollSerializer)
     def get(self, request, poll_id):
-        poll = get_object_or_404(Poll, uuid=poll_id)
+        poll = get_object_or_404(_poll_detail_queryset(), uuid=poll_id)
+        _prefetch_poll_votes(poll)
         return Response(PollSerializer(poll, context={'request': request}).data)
 
     @extend_schema(summary="Update poll", request=PollUpdateSerializer, responses=PollSerializer)
@@ -167,6 +196,8 @@ class PollDetailView(APIView):
                         actor=request.user,
                     )
 
+        poll = _poll_detail_queryset().get(uuid=poll.uuid)
+        _prefetch_poll_votes(poll)
         return Response(PollSerializer(poll, context={'request': request}).data)
 
     @extend_schema(summary="Delete poll")
@@ -200,6 +231,8 @@ class PollVoteView(APIView):
                 defaults={'choice': vote_data['choice']},
             )
 
+        poll = _poll_detail_queryset().get(uuid=poll.uuid)
+        _prefetch_poll_votes(poll)
         return Response(PollSerializer(poll, context={'request': request}).data)
 
 
@@ -212,6 +245,8 @@ class PollFinalizeView(APIView):
         poll = get_object_or_404(
             Poll, uuid=poll_id, created_by=request.user, status=Poll.Status.OPEN,
         )
+        # Note: we don't use _poll_detail_queryset() here because we modify the poll
+        # and re-fetch at the end
         ser = PollFinalizeSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -268,6 +303,8 @@ class PollFinalizeView(APIView):
                 actor=request.user,
             )
 
+        poll = _poll_detail_queryset().get(uuid=poll.uuid)
+        _prefetch_poll_votes(poll)
         return Response(PollSerializer(poll, context={'request': request}).data)
 
 
@@ -304,6 +341,8 @@ class PollInviteView(APIView):
                 actor=request.user,
             )
 
+        poll = _poll_detail_queryset().get(uuid=poll.uuid)
+        _prefetch_poll_votes(poll)
         return Response(PollSerializer(poll, context={'request': request}).data)
 
     @extend_schema(summary="Remove invited users from a poll", request=PollInviteSerializer, responses=PollSerializer)
@@ -319,6 +358,8 @@ class PollInviteView(APIView):
         PollInvitee.objects.filter(poll=poll, user_id__in=user_ids).delete()
         PollVote.objects.filter(slot__poll=poll, user_id__in=user_ids).delete()
 
+        poll = _poll_detail_queryset().get(uuid=poll.uuid)
+        _prefetch_poll_votes(poll)
         return Response(PollSerializer(poll, context={'request': request}).data)
 
 
@@ -331,7 +372,8 @@ class SharedPollView(APIView):
 
     @extend_schema(summary="Get poll via share link", responses=PollSerializer)
     def get(self, request, token):
-        poll = get_object_or_404(Poll, share_token=token)
+        poll = get_object_or_404(_poll_detail_queryset(), share_token=token)
+        _prefetch_poll_votes(poll)
         data = PollSerializer(poll, context={'request': request}).data
 
         # Restore guest's previous votes via voter_token
@@ -340,18 +382,14 @@ class SharedPollView(APIView):
             or request.COOKIES.get(f'poll_voter_{poll.share_token}', '')
         )
         if voter_token:
-            my_votes = PollVote.objects.filter(
-                slot__poll=poll,
-                voter_token=voter_token,
-            ).values('slot_id', 'choice')
-            guest_info = PollVote.objects.filter(
-                slot__poll=poll,
-                voter_token=voter_token,
-            ).values('guest_name', 'guest_email').first()
-            data['my_votes'] = {str(v['slot_id']): v['choice'] for v in my_votes}
-            if guest_info:
-                data['my_guest_name'] = guest_info['guest_name']
-                data['my_guest_email'] = guest_info['guest_email']
+            my_votes = [
+                v for v in poll._prefetched_poll_votes
+                if v.voter_token == voter_token
+            ]
+            data['my_votes'] = {str(v.slot_id): v.choice for v in my_votes}
+            if my_votes:
+                data['my_guest_name'] = my_votes[0].guest_name
+                data['my_guest_email'] = my_votes[0].guest_email
 
         return Response(data)
 
@@ -411,6 +449,8 @@ class SharedPollVoteView(APIView):
                 },
             )
 
+        poll = _poll_detail_queryset().get(uuid=poll.uuid)
+        _prefetch_poll_votes(poll)
         resp_data = PollSerializer(poll, context={'request': request}).data
         resp_data['voter_token'] = voter_token
         response = Response(resp_data)

@@ -5,18 +5,12 @@ from .serializers import MemberUserSerializer
 
 
 class PollSlotSerializer(serializers.ModelSerializer):
-    yes_count = serializers.SerializerMethodField()
-    maybe_count = serializers.SerializerMethodField()
+    yes_count = serializers.IntegerField(read_only=True, default=0)
+    maybe_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = PollSlot
         fields = ['uuid', 'start', 'end', 'position', 'yes_count', 'maybe_count']
-
-    def get_yes_count(self, obj):
-        return obj.votes.filter(choice='yes').count()
-
-    def get_maybe_count(self, obj):
-        return obj.votes.filter(choice='maybe').count()
 
 
 class PollVoteSerializer(serializers.ModelSerializer):
@@ -52,6 +46,9 @@ class PollSerializer(serializers.ModelSerializer):
         ]
 
     def get_votes(self, obj):
+        # Use prefetched votes if available (via _prefetched_poll_votes)
+        if hasattr(obj, '_prefetched_poll_votes'):
+            return PollVoteSerializer(obj._prefetched_poll_votes, many=True).data
         votes = PollVote.objects.filter(
             slot__poll=obj,
         ).select_related('user')
@@ -74,6 +71,9 @@ class PollListSerializer(serializers.ModelSerializer):
         fields = ['uuid', 'title', 'status', 'created_by', 'participant_count', 'created_at']
 
     def get_participant_count(self, obj):
+        # Use annotation if available (via _participant_count)
+        if hasattr(obj, '_participant_count'):
+            return obj._participant_count
         return (
             PollVote.objects
             .filter(slot__poll=obj)

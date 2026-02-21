@@ -211,6 +211,7 @@ class Poll(models.Model):
         indexes = [
             models.Index(fields=['created_by', 'status']),
             models.Index(fields=['share_token']),
+            models.Index(fields=['status']),
         ]
 
     def __str__(self):
@@ -278,6 +279,8 @@ class PollVote(models.Model):
         ]
         indexes = [
             models.Index(fields=['voter_token']),
+            models.Index(fields=['slot', 'choice']),
+            models.Index(fields=['slot', 'voter_token']),
         ]
 
     def __str__(self):
@@ -298,6 +301,9 @@ class PollInvitee(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['poll', 'user'], name='unique_poll_invitee'),
+        ]
+        indexes = [
+            models.Index(fields=['user', 'poll']),
         ]
 
     def __str__(self):

@@ -5,8 +5,8 @@ window.calendarApp = function calendarApp(calendarsData) {
     currentTitle: '',
 
     // Preferences
-    _prefsDefaults: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, dayMaxEvents: 3, timeFormat: '24h', defaultAllDay: false, showDeclined: false },
-    prefs: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, dayMaxEvents: 3, timeFormat: '24h', defaultAllDay: false, showDeclined: false },
+    _prefsDefaults: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, dayMaxEvents: 3, timeFormat: '24h', defaultAllDay: false, showDeclined: false, notifyPollVotes: true },
+    prefs: { defaultView: 'dayGridMonth', firstDay: 1, weekNumbers: false, dayMaxEvents: 3, timeFormat: '24h', defaultAllDay: false, showDeclined: false, notifyPollVotes: true },
 
     // Sidebar
     collapsed: localStorage.getItem('calendarSidebarCollapsed') === 'true',

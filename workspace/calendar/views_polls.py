@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.notifications.services import notify_many
+from workspace.users.settings_service import get_setting
 
 from .models import Calendar, Event, EventMember, Poll, PollInvitee, PollSlot, PollVote
 from .serializers_polls import (
@@ -230,6 +231,19 @@ class PollVoteView(APIView):
                 user=request.user,
                 defaults={'choice': vote_data['choice']},
             )
+
+        # Notify poll creator about the vote
+        if poll.created_by_id != request.user.id:
+            creator_prefs = get_setting(poll.created_by, 'calendar', 'preferences', default={})
+            if creator_prefs.get('notifyPollVotes', True):
+                notify_many(
+                    recipients=[poll.created_by],
+                    origin='calendar',
+                    title=f'New vote on "{poll.title}"',
+                    body=f'{request.user.username} voted on your poll.',
+                    url=f'/calendar?poll={poll.pk}',
+                    actor=request.user,
+                )
 
         poll = _poll_detail_queryset().get(uuid=poll.uuid)
         _prefetch_poll_votes(poll)

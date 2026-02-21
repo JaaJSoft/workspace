@@ -101,6 +101,13 @@
                     :checked="prefs.showDeclined"
                     @change="updatePref('showDeclined', $event.target.checked)">
                 </label>
+                <!-- Poll vote notifications -->
+                <label class="flex items-center justify-between gap-2 cursor-pointer">
+                  <span class="text-sm">Poll vote notifications</span>
+                  <input type="checkbox" class="toggle toggle-sm toggle-accent"
+                    :checked="prefs.notifyPollVotes"
+                    @change="updatePref('notifyPollVotes', $event.target.checked)">
+                </label>
                 <hr class="border-base-300">
                 <!-- Max events per day -->
                 <div>

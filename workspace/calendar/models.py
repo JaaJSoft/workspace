@@ -259,6 +259,7 @@ class PollVote(models.Model):
     )
     guest_name = models.CharField(max_length=100, blank=True, default='')
     guest_email = models.EmailField(blank=True, default='')
+    voter_token = models.CharField(max_length=36, blank=True, default='')
     choice = models.CharField(max_length=5, choices=Choice.choices)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -270,12 +271,34 @@ class PollVote(models.Model):
                 name='unique_vote_per_user',
             ),
             models.UniqueConstraint(
-                fields=['slot', 'guest_name'],
-                condition=models.Q(user__isnull=True) & ~models.Q(guest_name=''),
-                name='unique_vote_per_guest',
+                fields=['slot', 'voter_token'],
+                condition=models.Q(user__isnull=True) & ~models.Q(voter_token=''),
+                name='unique_vote_per_guest_token',
             ),
+        ]
+        indexes = [
+            models.Index(fields=['voter_token']),
         ]
 
     def __str__(self):
         who = self.user.username if self.user else self.guest_name
         return f'{who} — {self.choice} — {self.slot}'
+
+
+class PollInvitee(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    poll = models.ForeignKey(Poll, on_delete=models.CASCADE, related_name='invitees')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='poll_invitations',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['poll', 'user'], name='unique_poll_invitee'),
+        ]
+
+    def __str__(self):
+        return f'{self.user} — {self.poll}'

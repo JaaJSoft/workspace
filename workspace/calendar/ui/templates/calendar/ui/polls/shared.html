@@ -83,6 +83,26 @@
               </div>
             </template>
 
+            <!-- Already voted banner -->
+            <template x-if="votesRestored && poll.status === 'open'">
+              <div class="alert mb-2 bg-base-200 border-base-300">
+                <i data-lucide="info" class="w-5 h-5 text-info"></i>
+                <span>Your previous votes have been restored. You can update them below.</span>
+              </div>
+            </template>
+
+            <!-- Vote submitted confirmation -->
+            <template x-if="voteSubmitted && poll.status === 'open'">
+              <div class="alert mb-2 bg-base-200 border-base-300">
+                <i data-lucide="check-circle-2" class="w-5 h-5 text-success"></i>
+                <div>
+                  <span>Your votes have been saved!</span>
+                  <p class="text-sm opacity-60 mt-0.5" x-show="guestEmail.trim()">You'll receive an email once a final slot is chosen.</p>
+                  <p class="text-sm opacity-60 mt-0.5" x-show="!guestEmail.trim()">Bookmark this page to come back and see the final result.</p>
+                </div>
+              </div>
+            </template>
+
             <!-- Doodle grid -->
             <div class="overflow-x-auto mt-2">
               <table class="table poll-grid">
@@ -161,7 +181,7 @@
                     </td>
                     <template x-for="slot in poll.slots" :key="slot.uuid">
                       <td class="text-center">
-                        <span class="badge badge-success badge-sm" x-text="slotYesCount(slot.uuid)"></span>
+                        <span class="text-sm font-semibold text-success" x-text="slotYesCount(slot.uuid)"></span>
                       </td>
                     </template>
                   </tr>
@@ -232,11 +252,27 @@
       guestName: '',
       guestEmail: '',
       myVotes: {},
+      voterToken: '',
+      votesRestored: false,
+      voteSubmitted: false,
 
       async init() {
+        this.voterToken = localStorage.getItem('poll_voter_' + token) || '';
         try {
-          const resp = await fetch('/api/v1/calendar/polls/shared/' + token);
-          if (resp.ok) this.poll = await resp.json();
+          const url = '/api/v1/calendar/polls/shared/' + token
+            + (this.voterToken ? '?voter_token=' + encodeURIComponent(this.voterToken) : '');
+          const resp = await fetch(url);
+          if (resp.ok) {
+            const data = await resp.json();
+            this.poll = data;
+            // Restore previous votes if any
+            if (data.my_votes && Object.keys(data.my_votes).length > 0) {
+              this.myVotes = data.my_votes;
+              this.votesRestored = true;
+            }
+            if (data.my_guest_name) this.guestName = data.my_guest_name;
+            if (data.my_guest_email) this.guestEmail = data.my_guest_email;
+          }
         } catch (e) {
           console.error('Failed to load poll', e);
         }
@@ -319,12 +355,20 @@
             body: JSON.stringify({
               guest_name: this.guestName,
               guest_email: this.guestEmail,
+              voter_token: this.voterToken,
               votes,
             }),
           });
           if (resp.ok) {
-            this.poll = await resp.json();
-            this.myVotes = {};
+            const data = await resp.json();
+            this.poll = data;
+            // Store voter token for future visits
+            if (data.voter_token) {
+              this.voterToken = data.voter_token;
+              localStorage.setItem('poll_voter_' + token, data.voter_token);
+            }
+            this.votesRestored = false;
+            this.voteSubmitted = true;
           }
         } catch (e) {
           console.error('Failed to submit votes', e);

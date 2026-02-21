@@ -5,7 +5,7 @@ from django.http import Http404
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.calendar.models import Calendar, CalendarSubscription, Poll
+from workspace.calendar.models import Calendar, CalendarSubscription, Poll, PollInvitee, PollVote
 from workspace.calendar.serializers import CalendarSerializer
 
 
@@ -30,7 +30,16 @@ def index(request):
     ).values_list('calendar_id', flat=True)
     subscribed = Calendar.objects.filter(uuid__in=sub_ids).select_related('owner')
 
-    poll_count = Poll.objects.filter(created_by=request.user, status='open').count()
+    # Count open polls where user is invited but hasn't voted
+    invited_poll_ids = PollInvitee.objects.filter(
+        user=request.user,
+        poll__status='open',
+    ).values_list('poll_id', flat=True)
+    voted_poll_ids = PollVote.objects.filter(
+        user=request.user,
+        slot__poll_id__in=invited_poll_ids,
+    ).values_list('slot__poll_id', flat=True).distinct()
+    poll_count = invited_poll_ids.exclude(poll_id__in=voted_poll_ids).count()
 
     return render(request, 'calendar/ui/index.html', {
         'owned_calendars': owned,

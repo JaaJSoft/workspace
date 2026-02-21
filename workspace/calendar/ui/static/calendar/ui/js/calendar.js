@@ -1359,6 +1359,41 @@ window.calendarApp = function calendarApp(calendarsData) {
       return `${startTime} – ${endTime}`;
     },
 
+    async addPollInvitee(event) {
+      const user = event.detail.user;
+      if (!this.currentPoll) return;
+      // Skip if already invited
+      if ((this.currentPoll.invitees || []).find(i => i.user.id === user.id)) return;
+      try {
+        const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/invite`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          body: JSON.stringify({ user_ids: [user.id] }),
+        });
+        if (resp.ok) {
+          this.currentPoll = await resp.json();
+          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+        }
+      } catch (e) {}
+    },
+
+    async removePollInvitee(userId) {
+      if (!this.currentPoll) return;
+      try {
+        const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/invite`, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          body: JSON.stringify({ user_ids: [userId] }),
+        });
+        if (resp.ok) {
+          this.currentPoll = await resp.json();
+          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+        }
+      } catch (e) {}
+    },
+
     isPollCreator() {
       if (!this.currentPoll) return false;
       return String(this.currentPoll.created_by?.id) === String(document.body.dataset.userId);

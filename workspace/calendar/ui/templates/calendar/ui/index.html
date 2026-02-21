@@ -14,7 +14,7 @@
 
 {% block drawer_class %}drawer-open{% endblock %}
 {% block drawer_id %}calendar-drawer{% endblock %}
-{% block drawer_attrs %}x-data="calendarApp({{ calendars_json }})" @calendar-member-selected.window="addMember($event)" @keydown.window="handleKeydown($event)"{% endblock %}
+{% block drawer_attrs %}x-data="calendarApp({{ calendars_json }})" @calendar-member-selected.window="addMember($event)" @poll-invitee-selected.window="addPollInvitee($event)" @keydown.window="handleKeydown($event)"{% endblock %}
 
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
@@ -716,7 +716,7 @@
         <template x-if="pollFilter === 'shared'">
           <div>
             <p>No polls shared with you</p>
-            <p class="text-sm mt-1">Polls you vote on via a share link will appear here</p>
+            <p class="text-sm mt-1">Polls you're invited to or vote on will appear here</p>
           </div>
         </template>
       </div>
@@ -906,19 +906,63 @@
         <p class="text-sm text-base-content/70 mb-4" x-text="currentPoll.description"></p>
       </template>
 
-      <!-- Closed banner -->
-      <template x-if="currentPoll?.status === 'closed'">
-        <div class="alert alert-success mb-4">
-          <i data-lucide="check-circle" class="w-5 h-5"></i>
-          <div>
-            <span class="font-medium">Poll finalized!</span>
-            <template x-if="currentPoll?.event_id">
-              <span class="ml-1">
-                An event has been created.
-                <button type="button" class="link link-primary" @click="closePollDetail(); openEventById(currentPoll.event_id)">View event</button>
+      <!-- Invite section (creator only, open poll) -->
+      <template x-if="isPollCreator() && currentPoll?.status === 'open'">
+        <div class="mb-4">
+          <div class="text-xs font-medium text-base-content/40 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <i data-lucide="user-plus" class="w-3 h-3"></i>
+            Invite members
+          </div>
+          {% include "ui/partials/user_selector.html" with on_select_event="poll-invitee-selected" placeholder="Search users to invite..." %}
+          <div class="flex flex-wrap gap-1 mt-2" x-show="(currentPoll?.invitees || []).length > 0">
+            <template x-for="invitee in (currentPoll?.invitees || [])" :key="invitee.uuid">
+              <span class="badge badge-outline gap-1 pr-0.5">
+                <div class="w-4 h-4 flex-shrink-0" x-html="userAvatarHtml(invitee.user.id, invitee.user.username, 'w-4 h-4 text-[0.5rem]', {presence: false})"></div>
+                <span x-text="invitee.user.username"></span>
+                <button type="button" class="btn btn-ghost btn-circle btn-xs" @click="removePollInvitee(invitee.user.id)">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
               </span>
             </template>
           </div>
+        </div>
+      </template>
+
+      <!-- Invitees display (non-creator or closed poll) -->
+      <template x-if="!isPollCreator() && (currentPoll?.invitees || []).length > 0">
+        <div class="mb-4">
+          <div class="text-xs font-medium text-base-content/40 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <i data-lucide="users" class="w-3 h-3"></i>
+            Invited
+            <span class="badge badge-xs badge-ghost" x-text="currentPoll.invitees.length"></span>
+          </div>
+          <div class="flex flex-wrap gap-1">
+            <template x-for="invitee in (currentPoll?.invitees || [])" :key="invitee.uuid">
+              <span class="badge badge-outline gap-1">
+                <div class="w-4 h-4 flex-shrink-0" x-html="userAvatarHtml(invitee.user.id, invitee.user.username, 'w-4 h-4 text-[0.5rem]', {presence: false})"></div>
+                <span x-text="invitee.user.username"></span>
+              </span>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- Closed banner -->
+      <template x-if="currentPoll?.status === 'closed'">
+        <div class="alert mb-4 bg-base-200 border-base-300">
+          <i data-lucide="check-circle-2" class="w-5 h-5 text-success flex-shrink-0"></i>
+          <div class="flex-1">
+            <span class="font-medium">Poll finalized!</span>
+            <template x-if="currentPoll?.event_id">
+              <span class="ml-1">An event has been created.</span>
+            </template>
+          </div>
+          <template x-if="currentPoll?.event_id">
+            <button type="button" class="btn btn-sm btn-primary gap-1.5 flex-shrink-0" @click="closePollDetail(); openEventById(currentPoll.event_id)">
+              <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+              View event
+            </button>
+          </template>
         </div>
       </template>
 

@@ -16,5 +16,6 @@ urlpatterns = [
     path('api/v1/calendar/polls/shared/<str:token>/vote', views_polls.SharedPollVoteView.as_view(), name='poll-shared-vote'),
     path('api/v1/calendar/polls/<uuid:poll_id>', views_polls.PollDetailView.as_view(), name='poll-detail'),
     path('api/v1/calendar/polls/<uuid:poll_id>/vote', views_polls.PollVoteView.as_view(), name='poll-vote'),
+    path('api/v1/calendar/polls/<uuid:poll_id>/invite', views_polls.PollInviteView.as_view(), name='poll-invite'),
     path('api/v1/calendar/polls/<uuid:poll_id>/finalize', views_polls.PollFinalizeView.as_view(), name='poll-finalize'),
 ]

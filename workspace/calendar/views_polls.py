@@ -1,3 +1,8 @@
+import uuid
+
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -5,16 +10,21 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Calendar, Event, EventMember, Poll, PollSlot, PollVote
+from workspace.notifications.services import notify_many
+
+from .models import Calendar, Event, EventMember, Poll, PollInvitee, PollSlot, PollVote
 from .serializers_polls import (
     GuestVoteSubmitSerializer,
     PollCreateSerializer,
     PollFinalizeSerializer,
+    PollInviteSerializer,
     PollListSerializer,
     PollSerializer,
     PollUpdateSerializer,
     VoteSubmitSerializer,
 )
+
+User = get_user_model()
 
 
 @extend_schema(tags=['Calendar - Polls'])
@@ -34,14 +44,20 @@ class PollListView(APIView):
         status_by = request.query_params.get('status', 'open')
 
         if filter_by == 'shared':
-            # Polls where user voted but didn't create
             voted_poll_ids = (
                 PollVote.objects
                 .filter(user=request.user)
                 .values_list('slot__poll_id', flat=True)
                 .distinct()
             )
-            polls = Poll.objects.filter(uuid__in=voted_poll_ids).exclude(created_by=request.user)
+            invited_poll_ids = (
+                PollInvitee.objects
+                .filter(user=request.user)
+                .values_list('poll_id', flat=True)
+            )
+            polls = Poll.objects.filter(
+                Q(uuid__in=voted_poll_ids) | Q(uuid__in=invited_poll_ids)
+            ).exclude(created_by=request.user)
         else:
             polls = Poll.objects.filter(created_by=request.user)
 
@@ -182,6 +198,72 @@ class PollFinalizeView(APIView):
         poll.event = event
         poll.save()
 
+        # Notify invitees about finalization
+        invitee_users = list(
+            User.objects.filter(poll_invitations__poll=poll)
+            .exclude(id=request.user.id)
+        )
+        if invitee_users:
+            notify_many(
+                recipients=invitee_users,
+                origin='calendar',
+                title=f'Poll finalized: "{poll.title}"',
+                body='A date has been chosen.',
+                url=f'/calendar?event={event.pk}',
+                actor=request.user,
+            )
+
+        return Response(PollSerializer(poll, context={'request': request}).data)
+
+
+@extend_schema(tags=['Calendar - Polls'])
+class PollInviteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Invite users to a poll", request=PollInviteSerializer, responses=PollSerializer)
+    def post(self, request, poll_id):
+        poll = get_object_or_404(
+            Poll, uuid=poll_id, created_by=request.user, status=Poll.Status.OPEN,
+        )
+        ser = PollInviteSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        user_ids = ser.validated_data['user_ids']
+        # Exclude creator and already-invited users
+        users = User.objects.filter(id__in=user_ids).exclude(id=request.user.id)
+        invitees = [
+            PollInvitee(poll=poll, user=user)
+            for user in users
+        ]
+        PollInvitee.objects.bulk_create(invitees, ignore_conflicts=True)
+
+        # Notify newly invited users
+        newly_invited = list(users)
+        if newly_invited:
+            notify_many(
+                recipients=newly_invited,
+                origin='calendar',
+                title=f'Poll invitation: "{poll.title}"',
+                body=f'{request.user.username} invited you to vote on a poll.',
+                url=f'/calendar?poll={poll.pk}',
+                actor=request.user,
+            )
+
+        return Response(PollSerializer(poll, context={'request': request}).data)
+
+    @extend_schema(summary="Remove invited users from a poll", request=PollInviteSerializer, responses=PollSerializer)
+    def delete(self, request, poll_id):
+        poll = get_object_or_404(
+            Poll, uuid=poll_id, created_by=request.user, status=Poll.Status.OPEN,
+        )
+        ser = PollInviteSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        PollInvitee.objects.filter(
+            poll=poll,
+            user_id__in=ser.validated_data['user_ids'],
+        ).delete()
+
         return Response(PollSerializer(poll, context={'request': request}).data)
 
 
@@ -195,7 +277,28 @@ class SharedPollView(APIView):
     @extend_schema(summary="Get poll via share link", responses=PollSerializer)
     def get(self, request, token):
         poll = get_object_or_404(Poll, share_token=token)
-        return Response(PollSerializer(poll, context={'request': request}).data)
+        data = PollSerializer(poll, context={'request': request}).data
+
+        # Restore guest's previous votes via voter_token
+        voter_token = (
+            request.query_params.get('voter_token', '')
+            or request.COOKIES.get(f'poll_voter_{token}', '')
+        )
+        if voter_token:
+            my_votes = PollVote.objects.filter(
+                slot__poll=poll,
+                voter_token=voter_token,
+            ).values('slot_id', 'choice')
+            guest_info = PollVote.objects.filter(
+                slot__poll=poll,
+                voter_token=voter_token,
+            ).values('guest_name', 'guest_email').first()
+            data['my_votes'] = {str(v['slot_id']): v['choice'] for v in my_votes}
+            if guest_info:
+                data['my_guest_name'] = guest_info['guest_name']
+                data['my_guest_email'] = guest_info['guest_email']
+
+        return Response(data)
 
 
 @extend_schema(tags=['Calendar - Polls (Public)'])
@@ -203,12 +306,34 @@ class SharedPollVoteView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    def _get_client_ip(self, request):
+        xff = request.META.get('HTTP_X_FORWARDED_FOR')
+        if xff:
+            return xff.split(',')[0].strip()
+        return request.META.get('REMOTE_ADDR', '')
+
     @extend_schema(summary="Submit guest votes", request=GuestVoteSubmitSerializer, responses=PollSerializer)
     def post(self, request, token):
         poll = get_object_or_404(Poll, share_token=token, status=Poll.Status.OPEN)
+
+        # Rate limit: max 10 vote submissions per IP per hour
+        ip = self._get_client_ip(request)
+        rate_key = f'poll_vote_rate:{token}:{ip}'
+        attempts = cache.get(rate_key, 0)
+        if attempts >= 10:
+            return Response(
+                {'detail': 'Too many vote submissions. Please try again later.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        cache.set(rate_key, attempts + 1, 3600)
+
         ser = GuestVoteSubmitSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
+
+        voter_token = d.get('voter_token', '').strip()
+        if not voter_token:
+            voter_token = str(uuid.uuid4())
 
         slot_ids = {v['slot_id'] for v in d['votes']}
         valid_slots = set(
@@ -221,11 +346,22 @@ class SharedPollVoteView(APIView):
             PollVote.objects.update_or_create(
                 slot_id=vote_data['slot_id'],
                 user=None,
-                guest_name=d['guest_name'],
+                voter_token=voter_token,
                 defaults={
                     'choice': vote_data['choice'],
+                    'guest_name': d['guest_name'],
                     'guest_email': d.get('guest_email', ''),
                 },
             )
 
-        return Response(PollSerializer(poll, context={'request': request}).data)
+        resp_data = PollSerializer(poll, context={'request': request}).data
+        resp_data['voter_token'] = voter_token
+        response = Response(resp_data)
+        response.set_cookie(
+            f'poll_voter_{token}',
+            voter_token,
+            max_age=365 * 24 * 3600,
+            httponly=True,
+            samesite='Lax',
+        )
+        return response

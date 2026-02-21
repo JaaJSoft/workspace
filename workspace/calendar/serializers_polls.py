@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Poll, PollSlot, PollVote
+from .models import Poll, PollInvitee, PollSlot, PollVote
 from .serializers import MemberUserSerializer
 
 
@@ -24,13 +24,22 @@ class PollVoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PollVote
-        fields = ['uuid', 'slot_id', 'user', 'guest_name', 'choice']
+        fields = ['uuid', 'slot_id', 'user', 'guest_name', 'voter_token', 'choice']
+
+
+class PollInviteeSerializer(serializers.ModelSerializer):
+    user = MemberUserSerializer(read_only=True)
+
+    class Meta:
+        model = PollInvitee
+        fields = ['uuid', 'user', 'created_at']
 
 
 class PollSerializer(serializers.ModelSerializer):
     created_by = MemberUserSerializer(read_only=True)
     slots = PollSlotSerializer(many=True, read_only=True)
     votes = serializers.SerializerMethodField()
+    invitees = PollInviteeSerializer(many=True, read_only=True)
     share_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -38,7 +47,7 @@ class PollSerializer(serializers.ModelSerializer):
         fields = [
             'uuid', 'title', 'description', 'created_by', 'status',
             'share_token', 'chosen_slot_id', 'event_id',
-            'slots', 'votes', 'share_url',
+            'slots', 'votes', 'invitees', 'share_url',
             'created_at', 'updated_at',
         ]
 
@@ -106,7 +115,12 @@ class VoteSubmitSerializer(serializers.Serializer):
 class GuestVoteSubmitSerializer(serializers.Serializer):
     guest_name = serializers.CharField(max_length=100)
     guest_email = serializers.EmailField(required=False, default='', allow_blank=True)
+    voter_token = serializers.CharField(max_length=36, required=False, default='', allow_blank=True)
     votes = VoteItemSerializer(many=True, min_length=1)
+
+
+class PollInviteSerializer(serializers.Serializer):
+    user_ids = serializers.ListField(child=serializers.IntegerField(), min_length=1)
 
 
 class PollFinalizeSerializer(serializers.Serializer):

@@ -34,7 +34,7 @@ class CalendarSubscriptionAdmin(admin.ModelAdmin):
     list_display = ('user', 'calendar', 'created_at')
 
 
-from .models import Poll, PollSlot, PollVote
+from .models import Poll, PollInvitee, PollSlot, PollVote
 
 
 class PollSlotInline(admin.TabularInline):
@@ -48,13 +48,19 @@ class PollVoteInline(admin.TabularInline):
     raw_id_fields = ['user']
 
 
+class PollInviteeInline(admin.TabularInline):
+    model = PollInvitee
+    extra = 0
+    raw_id_fields = ['user']
+
+
 @admin.register(Poll)
 class PollAdmin(admin.ModelAdmin):
     list_display = ['title', 'created_by', 'status', 'created_at']
     list_filter = ['status']
     search_fields = ['title']
     raw_id_fields = ['created_by', 'chosen_slot', 'event']
-    inlines = [PollSlotInline]
+    inlines = [PollSlotInline, PollInviteeInline]
 
 
 @admin.register(PollVote)
@@ -62,3 +68,9 @@ class PollVoteAdmin(admin.ModelAdmin):
     list_display = ['slot', 'user', 'guest_name', 'choice', 'created_at']
     list_filter = ['choice']
     raw_id_fields = ['user', 'slot']
+
+
+@admin.register(PollInvitee)
+class PollInviteeAdmin(admin.ModelAdmin):
+    list_display = ['poll', 'user', 'created_at']
+    raw_id_fields = ['user', 'poll']

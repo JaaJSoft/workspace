@@ -360,7 +360,7 @@ class GuestVoteTests(PollTestMixin, APITestCase):
 
     def test_guest_vote_reuses_token(self):
         """Same voter_token updates existing votes instead of creating new ones."""
-        token = 'test-token-12345'
+        token = '12345678-1234-1234-1234-123456789abc'
         self.client.post(
             f'/api/v1/calendar/polls/shared/{self.poll.share_token}/vote',
             {
@@ -387,7 +387,7 @@ class GuestVoteTests(PollTestMixin, APITestCase):
 
     def test_guest_vote_restores_on_get(self):
         """GET shared link with voter_token returns previous votes."""
-        token = 'restore-token-123'
+        token = 'abcdef01-2345-6789-abcd-ef0123456789'
         self.client.post(
             f'/api/v1/calendar/polls/shared/{self.poll.share_token}/vote',
             {

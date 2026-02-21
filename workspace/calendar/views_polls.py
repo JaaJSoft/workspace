@@ -1,3 +1,4 @@
+import re
 import uuid
 
 from django.contrib.auth import get_user_model
@@ -336,7 +337,7 @@ class SharedPollView(APIView):
         # Restore guest's previous votes via voter_token
         voter_token = (
             request.query_params.get('voter_token', '')
-            or request.COOKIES.get(f'poll_voter_{token}', '')
+            or request.COOKIES.get(f'poll_voter_{poll.share_token}', '')
         )
         if voter_token:
             my_votes = PollVote.objects.filter(
@@ -385,8 +386,10 @@ class SharedPollVoteView(APIView):
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
 
+        # Sanitize voter_token: must be a valid UUID or we generate one
+        _uuid_re = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
         voter_token = d.get('voter_token', '').strip()
-        if not voter_token:
+        if not voter_token or not _uuid_re.match(voter_token):
             voter_token = str(uuid.uuid4())
 
         slot_ids = {v['slot_id'] for v in d['votes']}
@@ -411,8 +414,10 @@ class SharedPollVoteView(APIView):
         resp_data = PollSerializer(poll, context={'request': request}).data
         resp_data['voter_token'] = voter_token
         response = Response(resp_data)
+        # Use poll.share_token (DB-validated) instead of raw URL param
+        cookie_name = f'poll_voter_{poll.share_token}'
         response.set_cookie(
-            f'poll_voter_{token}',
+            cookie_name,
             voter_token,
             max_age=365 * 24 * 3600,
             httponly=True,

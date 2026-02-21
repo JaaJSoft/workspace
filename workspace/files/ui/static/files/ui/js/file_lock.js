@@ -15,6 +15,8 @@
 window.fileLock = function(fileUuid, getCSRFToken) {
   var _heartbeatTimer = null;
   var _beforeUnloadHandler = null;
+  var _sseHandlers = [];
+  var _hasLock = false;
   var _lockUrl = '/api/v1/files/' + fileUuid + '/lock';
 
   function _fetch(method) {
@@ -24,6 +26,18 @@ window.fileLock = function(fileUuid, getCSRFToken) {
       credentials: 'same-origin',
       keepalive: method === 'DELETE',
     });
+  }
+
+  function _addSSEListener(event, handler) {
+    window.addEventListener(event, handler);
+    _sseHandlers.push({ event: event, handler: handler });
+  }
+
+  function _removeSSEListeners() {
+    _sseHandlers.forEach(function(h) {
+      window.removeEventListener(h.event, h.handler);
+    });
+    _sseHandlers = [];
   }
 
   function startHeartbeat(self, onConflict) {
@@ -62,12 +76,24 @@ window.fileLock = function(fileUuid, getCSRFToken) {
      * @param {function} callbacks.onAcquired - called when lock is acquired successfully
      */
     acquire: function(self, callbacks) {
+      var _this = this;
+      _removeSSEListeners();
+
+      _addSSEListener('sse:files.lock_released', function(e) {
+        if (e.detail && e.detail.file_uuid === fileUuid) {
+          self.lockOwner = null;
+          _this.acquire(self, callbacks);
+        }
+      });
+
       _fetch('POST').then(function(resp) {
         if (resp.ok) {
+          _hasLock = true;
           self.lockOwner = null;
           if (callbacks && callbacks.onAcquired) callbacks.onAcquired();
           startHeartbeat(self, callbacks && callbacks.onLocked);
         } else if (resp.status === 409) {
+          _hasLock = false;
           resp.json().then(function(data) {
             self.lockOwner = data.locked_by ? data.locked_by.username : 'Another user';
             if (callbacks && callbacks.onLocked) callbacks.onLocked();
@@ -87,9 +113,11 @@ window.fileLock = function(fileUuid, getCSRFToken) {
      */
     forceUnlock: function(self, callbacks) {
       _fetch('DELETE').then(function() {
+        _hasLock = false;
         return _fetch('POST');
       }).then(function(resp) {
         if (resp.ok) {
+          _hasLock = true;
           self.lockOwner = null;
           if (callbacks && callbacks.onAcquired) callbacks.onAcquired();
           startHeartbeat(self, callbacks && callbacks.onLocked);
@@ -108,8 +136,12 @@ window.fileLock = function(fileUuid, getCSRFToken) {
      * Release the lock and stop heartbeat. Call in dispose().
      */
     dispose: function() {
+      _removeSSEListeners();
       stopHeartbeat();
-      _fetch('DELETE').catch(function() {});
+      if (_hasLock) {
+        _fetch('DELETE').catch(function() {});
+        _hasLock = false;
+      }
     },
   };
 };

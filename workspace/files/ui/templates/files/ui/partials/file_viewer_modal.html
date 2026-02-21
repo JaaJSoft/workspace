@@ -337,8 +337,22 @@
             this.openFile(uuid, name, mime_type);
           };
 
+          this._fileUpdatedHandler = (e) => {
+            if (this.open && this.fileUuid && e.detail && e.detail.file_uuid === this.fileUuid) {
+              this.openFile(this.fileUuid, this.fileName, this.mimeType, false);
+            }
+          };
+
+          this._lockReleasedHandler = (e) => {
+            if (this.open && this.fileUuid && e.detail && e.detail.file_uuid === this.fileUuid) {
+              this.openFile(this.fileUuid, this.fileName, this.mimeType, false);
+            }
+          };
+
           window.addEventListener('keydown', this._keydownHandler);
           window.addEventListener('open-file-viewer', this._openFileHandler);
+          window.addEventListener('sse:files.file_updated', this._fileUpdatedHandler);
+          window.addEventListener('sse:files.lock_released', this._lockReleasedHandler);
 
           // Handle browser back/forward navigation
           this._popStateHandler = async (event) => {

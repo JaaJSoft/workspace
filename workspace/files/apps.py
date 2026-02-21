@@ -8,7 +8,9 @@ class FilesConfig(AppConfig):
     def ready(self):
         from django.db.models.signals import post_save, post_delete
         from workspace.core.module_registry import ModuleInfo, SearchProviderInfo, registry
+        from workspace.core.sse_registry import SSEProviderInfo, sse_registry
         from workspace.files.search import search_files
+        from workspace.files.sse_provider import FilesSSEProvider
 
         registry.register(ModuleInfo(
             name='Files',
@@ -24,6 +26,11 @@ class FilesConfig(AppConfig):
             slug='files',
             module_slug='files',
             search_fn=search_files,
+        ))
+
+        sse_registry.register(SSEProviderInfo(
+            slug='files',
+            provider_cls=FilesSSEProvider,
         ))
 
         from .models import MimeTypeRule

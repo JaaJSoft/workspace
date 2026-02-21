@@ -271,10 +271,16 @@ window.textViewerMonaco = function() {
           attributeFilter: ['data-theme']
         });
 
-        // Acquire lock after editor is ready
-        if (self.canEdit && !self.lockOwner) {
+        // Acquire lock (or listen for release) after editor is ready
+        if (self.canEdit) {
           _lock.acquire(self, {
             onLocked: function() { if (_editor) _editor.updateOptions({ readOnly: true }); },
+            onAcquired: function() {
+              if (_editor) {
+                _editor.updateOptions({ readOnly: false });
+                _attachEditHandlers(self);
+              }
+            },
           });
         }
       });

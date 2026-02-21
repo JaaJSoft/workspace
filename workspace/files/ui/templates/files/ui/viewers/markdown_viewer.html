@@ -126,9 +126,15 @@ window.markdownViewerCrepe = function() {
 
         self.loading = false;
 
-        if (self.canEdit && !self.lockOwner) {
+        if (self.canEdit) {
           _lock.acquire(self, {
             onLocked: function() { if (_crepe) _crepe.setReadonly(true); },
+            onAcquired: function() {
+              if (_crepe) {
+                _crepe.setReadonly(false);
+                _attachEditHandlers(self, container);
+              }
+            },
           });
         }
       } catch (err) {

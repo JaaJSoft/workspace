@@ -163,6 +163,63 @@ class PollCRUDTests(PollTestMixin, APITestCase):
         poll.refresh_from_db()
         self.assertEqual(poll.title, 'New title')
 
+    def test_update_poll_add_slot_preserves_votes(self):
+        """Adding a new slot keeps existing slots and their votes."""
+        self.client.force_authenticate(user=self.owner)
+        poll, slot1, slot2 = self._make_poll_with_slots()
+        # Voter votes on both slots
+        PollVote.objects.create(slot=slot1, user=self.voter, choice='yes')
+        PollVote.objects.create(slot=slot2, user=self.voter, choice='maybe')
+
+        new_start = (timezone.now() + timedelta(days=3)).isoformat()
+        resp = self.client.patch(
+            f'/api/v1/calendar/polls/{poll.uuid}',
+            {
+                'slots': [
+                    {'uuid': str(slot1.uuid), 'start': slot1.start.isoformat()},
+                    {'uuid': str(slot2.uuid), 'start': slot2.start.isoformat()},
+                    {'start': new_start},  # new slot, no uuid
+                ],
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Existing votes preserved
+        self.assertEqual(PollVote.objects.filter(slot=slot1, user=self.voter).count(), 1)
+        self.assertEqual(PollVote.objects.filter(slot=slot2, user=self.voter).count(), 1)
+        # New slot was created
+        self.assertEqual(poll.slots.count(), 3)
+
+    def test_update_poll_remove_slot_deletes_its_votes(self):
+        """Removing a slot deletes votes on that slot but keeps others."""
+        self.client.force_authenticate(user=self.owner)
+        poll, slot1, slot2 = self._make_poll_with_slots()
+        slot3 = PollSlot.objects.create(
+            poll=poll, start=timezone.now() + timedelta(days=3), position=2,
+        )
+        PollVote.objects.create(slot=slot1, user=self.voter, choice='yes')
+        PollVote.objects.create(slot=slot2, user=self.voter, choice='maybe')
+        PollVote.objects.create(slot=slot3, user=self.voter, choice='no')
+
+        # Remove slot3, keep slot1 and slot2
+        resp = self.client.patch(
+            f'/api/v1/calendar/polls/{poll.uuid}',
+            {
+                'slots': [
+                    {'uuid': str(slot1.uuid), 'start': slot1.start.isoformat()},
+                    {'uuid': str(slot2.uuid), 'start': slot2.start.isoformat()},
+                ],
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Votes on kept slots preserved
+        self.assertEqual(PollVote.objects.filter(slot=slot1, user=self.voter).count(), 1)
+        self.assertEqual(PollVote.objects.filter(slot=slot2, user=self.voter).count(), 1)
+        # Vote on removed slot gone
+        self.assertFalse(PollVote.objects.filter(slot=slot3).exists())
+        self.assertEqual(poll.slots.count(), 2)
+
     def test_cannot_update_others_poll(self):
         self.client.force_authenticate(user=self.voter)
         poll = Poll.objects.create(title='Not yours', created_by=self.owner)

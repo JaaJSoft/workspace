@@ -1309,8 +1309,10 @@ window.calendarApp = function calendarApp(calendarsData) {
 
     pollParticipants() {
       if (!this.currentPoll?.votes) return [];
+      const currentUserId = String(document.body.dataset.userId);
       const map = new Map();
       for (const vote of this.currentPoll.votes) {
+        if (vote.user && String(vote.user.id) === currentUserId) continue;
         const key = vote.user ? `u-${vote.user.id}` : `g-${vote.guest_name}`;
         if (!map.has(key)) {
           map.set(key, {
@@ -1409,6 +1411,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         title: this.currentPoll.title,
         description: this.currentPoll.description || '',
         slots: (this.currentPoll.slots || []).map(s => ({
+          uuid: s.uuid || null,
           start: this.toLocalDatetime(s.start),
           end: s.end ? this.toLocalDatetime(s.end) : '',
           showEnd: !!s.end,
@@ -1441,6 +1444,7 @@ window.calendarApp = function calendarApp(calendarsData) {
             title: this.pollForm.title.trim(),
             description: this.pollForm.description,
             slots: validSlots.map(s => ({
+              ...(s.uuid ? { uuid: s.uuid } : {}),
               start: new Date(s.start).toISOString(),
               end: s.end ? new Date(s.end).toISOString() : null,
             })),

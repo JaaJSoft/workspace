@@ -111,6 +111,12 @@ class PollUpdateSerializer(serializers.Serializer):
         for i, slot in enumerate(value):
             if 'start' not in slot:
                 raise serializers.ValidationError(f'Slot {i}: "start" is required.')
+            if 'uuid' in slot and slot['uuid']:
+                try:
+                    import uuid as _uuid
+                    _uuid.UUID(str(slot['uuid']))
+                except ValueError:
+                    raise serializers.ValidationError(f'Slot {i}: invalid uuid.')
         return value
 
 

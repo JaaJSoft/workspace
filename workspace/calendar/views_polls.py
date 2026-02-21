@@ -117,34 +117,54 @@ class PollDetailView(APIView):
         poll.save()
 
         if 'slots' in d:
-            # Collect voters before deleting slots
-            voter_ids = (
-                PollVote.objects
-                .filter(slot__poll=poll, user__isnull=False)
-                .exclude(user=request.user)
-                .values_list('user_id', flat=True)
-                .distinct()
-            )
-            voters = list(User.objects.filter(id__in=voter_ids))
+            submitted_uuids = {
+                slot_data['uuid']
+                for slot_data in d['slots']
+                if slot_data.get('uuid')
+            }
+            existing = {str(s.uuid): s for s in poll.slots.all()}
 
-            poll.slots.all().delete()
+            # Delete removed slots (cascade deletes their votes)
+            removed_uuids = set(existing.keys()) - submitted_uuids
+            if removed_uuids:
+                PollSlot.objects.filter(uuid__in=removed_uuids).delete()
+
+            # Update kept slots + create new ones
             for i, slot_data in enumerate(d['slots']):
-                PollSlot.objects.create(
-                    poll=poll,
-                    start=slot_data['start'],
-                    end=slot_data.get('end'),
-                    position=i,
-                )
+                slot_uuid = slot_data.get('uuid')
+                if slot_uuid and slot_uuid in existing:
+                    slot = existing[slot_uuid]
+                    slot.start = slot_data['start']
+                    slot.end = slot_data.get('end')
+                    slot.position = i
+                    slot.save()
+                else:
+                    PollSlot.objects.create(
+                        poll=poll,
+                        start=slot_data['start'],
+                        end=slot_data.get('end'),
+                        position=i,
+                    )
 
-            if voters:
-                notify_many(
-                    recipients=voters,
-                    origin='calendar',
-                    title=f'Poll updated: "{poll.title}"',
-                    body='Time slots have been updated. Please review your votes.',
-                    url=f'/calendar?poll={poll.pk}',
-                    actor=request.user,
+            # Notify voters who had voted on removed slots
+            if removed_uuids:
+                voter_ids = (
+                    PollVote.objects
+                    .filter(slot__poll=poll, user__isnull=False)
+                    .exclude(user=request.user)
+                    .values_list('user_id', flat=True)
+                    .distinct()
                 )
+                voters = list(User.objects.filter(id__in=voter_ids))
+                if voters:
+                    notify_many(
+                        recipients=voters,
+                        origin='calendar',
+                        title=f'Poll updated: "{poll.title}"',
+                        body='Time slots have been updated. Please review your votes.',
+                        url=f'/calendar?poll={poll.pk}',
+                        actor=request.user,
+                    )
 
         return Response(PollSerializer(poll, context={'request': request}).data)
 

@@ -11,114 +11,214 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="{% static 'calendar/ui/css/polls.css' %}" />
 </head>
-<body class="min-h-screen bg-base-200">
-  <div class="max-w-4xl mx-auto p-6" x-data="sharedPoll('{{ share_token }}')">
+<body class="min-h-screen bg-base-200 flex flex-col">
+  <div class="flex-1 max-w-4xl mx-auto w-full p-4 sm:p-6" x-data="sharedPoll('{{ share_token }}')">
 
     <template x-if="loading">
       <div class="flex justify-center py-12">
-        <span class="loading loading-spinner loading-lg"></span>
+        <span class="loading loading-spinner loading-lg text-primary"></span>
       </div>
     </template>
 
     <template x-if="!loading && poll">
-      <div class="card bg-base-100 shadow-lg">
-        <div class="card-body">
-          <h1 class="card-title text-2xl" x-text="poll.title"></h1>
-          <p class="opacity-70" x-show="poll.description" x-text="poll.description"></p>
-
-          <!-- Guest identity -->
-          <template x-if="poll.status === 'open'">
-            <div class="flex gap-4 mt-4 mb-2">
-              <div class="form-control flex-1">
-                <label class="label"><span class="label-text">Your name *</span></label>
-                <input type="text" class="input input-bordered input-sm" x-model="guestName"
-                       placeholder="Your name" maxlength="100" />
+      <div>
+        <!-- Header card -->
+        <div class="card bg-base-100 shadow-lg overflow-hidden">
+          <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                <i data-lucide="bar-chart-3" class="w-5 h-5 text-white"></i>
               </div>
-              <div class="form-control flex-1">
-                <label class="label"><span class="label-text">Email (optional)</span></label>
-                <input type="email" class="input input-bordered input-sm" x-model="guestEmail"
-                       placeholder="your@email.com" />
+              <div>
+                <h1 class="text-xl sm:text-2xl font-bold text-white" x-text="poll.title"></h1>
+                <p class="text-white/70 text-sm" x-show="poll.description" x-text="poll.description"></p>
               </div>
             </div>
-          </template>
-
-          <!-- Doodle grid -->
-          <div class="overflow-x-auto mt-4">
-            <table class="table poll-grid">
-              <thead>
-                <tr>
-                  <th class="min-w-[120px]">Participant</th>
-                  <template x-for="slot in poll.slots" :key="slot.uuid">
-                    <th class="text-center min-w-[100px]">
-                      <div class="text-xs font-medium" x-text="formatSlotDate(slot)"></div>
-                      <div class="text-xs opacity-60" x-text="formatSlotTime(slot)"></div>
-                    </th>
-                  </template>
-                </tr>
-              </thead>
-              <tbody>
-                <template x-for="p in participants" :key="p.key">
-                  <tr>
-                    <td class="font-medium text-sm" x-text="p.name"></td>
-                    <template x-for="slot in poll.slots" :key="slot.uuid">
-                      <td class="text-center">
-                        <div class="w-8 h-8 rounded-lg flex items-center justify-center mx-auto"
-                             :class="voteClass(p.votes[slot.uuid])">
-                          <i :data-lucide="voteIcon(p.votes[slot.uuid])" class="w-4 h-4"></i>
-                        </div>
-                      </td>
-                    </template>
-                  </tr>
-                </template>
-
-                <!-- Guest vote row -->
-                <template x-if="poll.status === 'open'">
-                  <tr class="bg-base-200/50">
-                    <td class="font-medium text-sm text-primary" x-text="guestName || 'You'"></td>
-                    <template x-for="slot in poll.slots" :key="slot.uuid">
-                      <td class="text-center">
-                        <button class="w-8 h-8 rounded-lg flex items-center justify-center mx-auto cursor-pointer transition-colors"
-                                :class="voteClass(myVotes[slot.uuid])"
-                                @click="cycleVote(slot.uuid)">
-                          <i :data-lucide="voteIcon(myVotes[slot.uuid])" class="w-4 h-4"></i>
-                        </button>
-                      </td>
-                    </template>
-                  </tr>
-                </template>
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td class="text-sm font-medium opacity-70">Yes votes</td>
-                  <template x-for="slot in poll.slots" :key="slot.uuid">
-                    <td class="text-center">
-                      <span class="badge badge-success badge-sm" x-text="slotYesCount(slot.uuid)"></span>
-                    </td>
-                  </template>
-                </tr>
-              </tfoot>
-            </table>
           </div>
 
-          <!-- Submit -->
-          <template x-if="poll.status === 'open'">
-            <div class="mt-4 flex justify-end">
-              <button class="btn btn-primary btn-sm" @click="submitVotes()"
-                      :disabled="!guestName.trim() || submitting || Object.keys(myVotes).length === 0">
-                <span x-show="submitting" class="loading loading-spinner loading-sm"></span>
-                Save my votes
-              </button>
+          <div class="card-body pt-5">
+            <!-- Info badges -->
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <div class="badge badge-ghost gap-1.5">
+                <i data-lucide="calendar-days" class="w-3 h-3"></i>
+                <span x-text="poll.slots.length + ' slot' + (poll.slots.length > 1 ? 's' : '')"></span>
+              </div>
+              <div class="badge badge-ghost gap-1.5">
+                <i data-lucide="users" class="w-3 h-3"></i>
+                <span x-text="participants.length + ' participant' + (participants.length !== 1 ? 's' : '')"></span>
+              </div>
+              <template x-if="poll.status === 'open'">
+                <div class="badge badge-success gap-1.5">
+                  <i data-lucide="circle-dot" class="w-3 h-3"></i>
+                  Open
+                </div>
+              </template>
+              <template x-if="poll.status === 'closed'">
+                <div class="badge badge-neutral gap-1.5">
+                  <i data-lucide="lock" class="w-3 h-3"></i>
+                  Finalized
+                </div>
+              </template>
             </div>
-          </template>
 
-          <!-- Closed banner -->
-          <template x-if="poll.status === 'closed'">
-            <div class="alert alert-info mt-4">
-              <i data-lucide="info" class="w-5 h-5"></i>
-              This poll has been finalized.
+            <!-- Guest identity -->
+            <template x-if="poll.status === 'open'">
+              <div class="bg-base-200/50 rounded-xl p-4 mb-2">
+                <div class="flex items-center gap-2 mb-3">
+                  <i data-lucide="user-round" class="w-4 h-4 text-primary"></i>
+                  <span class="text-sm font-medium">Your identity</span>
+                </div>
+                <div class="flex gap-4">
+                  <div class="form-control flex-1">
+                    <label class="label py-0.5"><span class="label-text text-xs">Name *</span></label>
+                    <input type="text" class="input input-bordered input-sm" x-model="guestName"
+                           placeholder="Your name" maxlength="100" />
+                  </div>
+                  <div class="form-control flex-1">
+                    <label class="label py-0.5"><span class="label-text text-xs">Email (optional)</span></label>
+                    <input type="email" class="input input-bordered input-sm" x-model="guestEmail"
+                           placeholder="your@email.com" />
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Doodle grid -->
+            <div class="overflow-x-auto mt-2">
+              <table class="table poll-grid">
+                <thead>
+                  <tr>
+                    <th class="min-w-[120px]">
+                      <div class="flex items-center gap-1.5 text-base-content/60">
+                        <i data-lucide="user" class="w-3.5 h-3.5"></i>
+                        Participant
+                      </div>
+                    </th>
+                    <template x-for="slot in poll.slots" :key="slot.uuid">
+                      <th class="text-center min-w-[100px]">
+                        <div class="flex flex-col items-center gap-0.5">
+                          <div class="text-xs font-semibold text-primary" x-text="formatSlotDate(slot)"></div>
+                          <div class="text-xs opacity-50 flex items-center gap-1">
+                            <i data-lucide="clock" class="w-3 h-3"></i>
+                            <span x-text="formatSlotTime(slot)"></span>
+                          </div>
+                        </div>
+                      </th>
+                    </template>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="p in participants" :key="p.key">
+                    <tr class="hover">
+                      <td class="font-medium text-sm">
+                        <div class="flex items-center gap-2">
+                          <div class="w-6 h-6 rounded-full bg-base-300 flex items-center justify-center text-xs font-bold uppercase"
+                               x-text="p.name.charAt(0)"></div>
+                          <span x-text="p.name"></span>
+                        </div>
+                      </td>
+                      <template x-for="slot in poll.slots" :key="slot.uuid">
+                        <td class="text-center">
+                          <div class="w-8 h-8 rounded-lg flex items-center justify-center mx-auto transition-colors"
+                               :class="voteClass(p.votes[slot.uuid])">
+                            <i :data-lucide="voteIcon(p.votes[slot.uuid])" class="w-4 h-4"></i>
+                          </div>
+                        </td>
+                      </template>
+                    </tr>
+                  </template>
+
+                  <!-- Guest vote row -->
+                  <template x-if="poll.status === 'open'">
+                    <tr class="bg-primary/5 border-t-2 border-primary/20">
+                      <td class="font-medium text-sm">
+                        <div class="flex items-center gap-2 text-primary">
+                          <div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+                            <i data-lucide="pencil" class="w-3 h-3"></i>
+                          </div>
+                          <span x-text="guestName || 'You'"></span>
+                        </div>
+                      </td>
+                      <template x-for="slot in poll.slots" :key="slot.uuid">
+                        <td class="text-center">
+                          <button class="w-8 h-8 rounded-lg flex items-center justify-center mx-auto cursor-pointer transition-all hover:scale-110 active:scale-95"
+                                  :class="voteClass(myVotes[slot.uuid])"
+                                  @click="cycleVote(slot.uuid)">
+                            <i :data-lucide="voteIcon(myVotes[slot.uuid])" class="w-4 h-4"></i>
+                          </button>
+                        </td>
+                      </template>
+                    </tr>
+                  </template>
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td class="text-sm font-medium opacity-70">
+                      <div class="flex items-center gap-1.5">
+                        <i data-lucide="thumbs-up" class="w-3.5 h-3.5 text-success"></i>
+                        Yes votes
+                      </div>
+                    </td>
+                    <template x-for="slot in poll.slots" :key="slot.uuid">
+                      <td class="text-center">
+                        <span class="badge badge-success badge-sm" x-text="slotYesCount(slot.uuid)"></span>
+                      </td>
+                    </template>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
-          </template>
+
+            <!-- Legend -->
+            <div class="flex flex-wrap gap-4 mt-3 text-xs text-base-content/50">
+              <div class="flex items-center gap-1.5">
+                <div class="w-5 h-5 rounded bg-success/20 flex items-center justify-center"><i data-lucide="check" class="w-3 h-3 text-success"></i></div>
+                Yes
+              </div>
+              <div class="flex items-center gap-1.5">
+                <div class="w-5 h-5 rounded bg-warning/20 flex items-center justify-center"><i data-lucide="help-circle" class="w-3 h-3 text-warning"></i></div>
+                Maybe
+              </div>
+              <div class="flex items-center gap-1.5">
+                <div class="w-5 h-5 rounded bg-error/20 flex items-center justify-center"><i data-lucide="x" class="w-3 h-3 text-error"></i></div>
+                No
+              </div>
+            </div>
+
+            <!-- Submit -->
+            <template x-if="poll.status === 'open'">
+              <div class="mt-4 flex justify-end">
+                <button class="btn btn-primary btn-sm gap-2" @click="submitVotes()"
+                        :disabled="!guestName.trim() || submitting || Object.keys(myVotes).length === 0">
+                  <span x-show="submitting" class="loading loading-spinner loading-sm"></span>
+                  <i x-show="!submitting" data-lucide="send" class="w-4 h-4"></i>
+                  Save my votes
+                </button>
+              </div>
+            </template>
+
+            <!-- Closed banner -->
+            <template x-if="poll.status === 'closed'">
+              <div class="alert mt-4 bg-base-200 border-base-300">
+                <i data-lucide="check-circle-2" class="w-5 h-5 text-success"></i>
+                <span>This poll has been finalized.</span>
+              </div>
+            </template>
+          </div>
         </div>
+
+        <!-- Footer -->
+        <footer class="mt-6 mb-4 text-center">
+          <div class="flex items-center justify-center gap-2 text-base-content/40 text-sm">
+            <div class="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+              <i data-lucide="users" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <span>Poll created with</span>
+            <a href="/" class="font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent hover:underline">
+              Workspace
+            </a>
+          </div>
+        </footer>
       </div>
     </template>
   </div>
@@ -157,7 +257,7 @@
         if (choice === 'yes') return 'bg-success/20 text-success';
         if (choice === 'maybe') return 'bg-warning/20 text-warning';
         if (choice === 'no') return 'bg-error/20 text-error';
-        return 'bg-base-200';
+        return 'bg-base-200 text-base-content/20';
       },
 
       voteIcon(choice) {

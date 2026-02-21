@@ -117,6 +117,16 @@ class PollDetailView(APIView):
         poll.save()
 
         if 'slots' in d:
+            # Collect voters before deleting slots
+            voter_ids = (
+                PollVote.objects
+                .filter(slot__poll=poll, user__isnull=False)
+                .exclude(user=request.user)
+                .values_list('user_id', flat=True)
+                .distinct()
+            )
+            voters = list(User.objects.filter(id__in=voter_ids))
+
             poll.slots.all().delete()
             for i, slot_data in enumerate(d['slots']):
                 PollSlot.objects.create(
@@ -124,6 +134,16 @@ class PollDetailView(APIView):
                     start=slot_data['start'],
                     end=slot_data.get('end'),
                     position=i,
+                )
+
+            if voters:
+                notify_many(
+                    recipients=voters,
+                    origin='calendar',
+                    title=f'Poll updated: "{poll.title}"',
+                    body='Time slots have been updated. Please review your votes.',
+                    url=f'/calendar?poll={poll.pk}',
+                    actor=request.user,
                 )
 
         return Response(PollSerializer(poll, context={'request': request}).data)

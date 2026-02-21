@@ -238,7 +238,7 @@ function chatApp(currentUserId) {
       // Double $nextTick: first lets Alpine render, second lets the browser layout
       this.$nextTick(() => {
         this.$nextTick(() => {
-          this.scrollToBottom();
+          this.scrollToBottom(true);
           this.$refs.messageInput?.focus();
         });
       });
@@ -267,6 +267,8 @@ function chatApp(currentUserId) {
             container.innerHTML = html;
             this._initMessagesDom(container);
             this._readPaginationState();
+            // Scroll immediately after HTML injection, before images load
+            this.scrollToBottom();
           }
         }
       } catch (e) {
@@ -341,10 +343,20 @@ function chatApp(currentUserId) {
       }
     },
 
-    scrollToBottom() {
+    scrollToBottom(waitForImages = false) {
       const container = this.$refs.messagesContainer;
-      if (container) {
-        container.scrollTop = container.scrollHeight;
+      if (!container) return;
+      container.scrollTop = container.scrollHeight;
+
+      if (waitForImages) {
+        const images = container.querySelectorAll('img:not([complete])');
+        images.forEach(img => {
+          if (!img.complete) {
+            img.addEventListener('load', () => {
+              container.scrollTop = container.scrollHeight;
+            }, { once: true });
+          }
+        });
       }
     },
 

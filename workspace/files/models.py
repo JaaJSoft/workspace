@@ -126,12 +126,24 @@ class File(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
+    # Locking
+    locked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='locked_files',
+    )
+    locked_at = models.DateTimeField(null=True, blank=True)
+    lock_expires_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ['node_type', 'name']
         indexes = [
             models.Index(fields=['parent', 'node_type']),
             models.Index(fields=['owner', 'created_at']),
             models.Index(fields=['owner', 'deleted_at'], name='file_owner_del_idx'),
+            models.Index(fields=['locked_by', 'lock_expires_at'], name='file_lock_idx'),
         ]
         constraints = [
             models.CheckConstraint(
@@ -216,6 +228,18 @@ class File(models.Model):
 
     def is_deleted(self):
         return self.deleted_at is not None
+
+    def is_locked(self):
+        """Return True if this file has an active (non-expired) lock."""
+        if self.locked_by_id is None:
+            return False
+        return self.lock_expires_at and self.lock_expires_at > timezone.now()
+
+    def lock_holder_username(self):
+        """Return the username of the lock holder, or None."""
+        if self.is_locked() and self.locked_by:
+            return self.locked_by.username
+        return None
 
     def _descendant_filter(self):
         if self.node_type != self.NodeType.FOLDER:

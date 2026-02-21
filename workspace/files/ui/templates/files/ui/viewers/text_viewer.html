@@ -117,6 +117,14 @@
     </div>
   </div>
 
+  <!-- Lock banner -->
+  <div x-show="lockOwner" x-cloak
+       class="flex items-center gap-2 px-3 py-2 bg-warning/10 border-b border-warning/30 text-warning-content text-sm">
+    <i data-lucide="lock" class="w-4 h-4 text-warning shrink-0"></i>
+    <span class="flex-1"><strong x-text="lockOwner"></strong> is editing this file</span>
+    <button type="button" class="btn btn-warning btn-xs" @click="forceUnlock()">Force unlock</button>
+  </div>
+
   <!-- Monaco Container -->
   <div x-ref="monacoContainer" class="flex-1 min-h-0"></div>
 </div>
@@ -127,6 +135,7 @@ window.textViewerMonaco = function() {
   let _editor = null;
   let _themeObserver = null;
   let _prefsSaveTimer = null;
+  let _lock = null;
 
   var PREFS_URL = '/api/v1/settings/files/editor';
   var PREFS_DEFAULTS = {
@@ -160,6 +169,15 @@ window.textViewerMonaco = function() {
     return dark.some(function(t) { return dt.includes(t); }) ? 'vs-dark' : 'vs';
   }
 
+  function _attachEditHandlers(self) {
+    _editor.onDidChangeModelContent(function() {
+      self.isDirty = _editor.getValue() !== self.originalContent;
+    });
+    _editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+      self.save();
+    });
+  }
+
   return {
     isDirty: false,
     saving: false,
@@ -174,12 +192,14 @@ window.textViewerMonaco = function() {
     fileUuid: '{{ file.uuid }}',
     fileName: '{{ file.name }}',
     language: '{{ language }}',
+    lockOwner: {% if lock_info %}'{{ lock_info.locked_by_username|escapejs }}'{% else %}null{% endif %},
 
     initEditor() {
       var container = this.$refs.monacoContainer;
       var content = this.originalContent;
       var language = this.language;
       var self = this;
+      _lock = window.fileLock(this.fileUuid, getCSRFToken);
 
       fetch(PREFS_URL, { credentials: 'same-origin' })
         .then(function(r) { return r.ok ? r.json() : null; })
@@ -224,7 +244,7 @@ window.textViewerMonaco = function() {
           value: content,
           language: language,
           theme: _detectTheme(),
-          readOnly: !self.canEdit,
+          readOnly: !self.canEdit || !!self.lockOwner,
           minimap: { enabled: self.minimapEnabled },
           wordWrap: self.wordWrap ? 'on' : 'off',
           fontSize: self.fontSize,
@@ -239,14 +259,8 @@ window.textViewerMonaco = function() {
           padding: { top: 8, bottom: 8 },
         });
 
-        if (self.canEdit) {
-          _editor.onDidChangeModelContent(function() {
-            self.isDirty = _editor.getValue() !== self.originalContent;
-          });
-
-          _editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
-            self.save();
-          });
+        if (self.canEdit && !self.lockOwner) {
+          _attachEditHandlers(self);
         }
 
         _themeObserver = new MutationObserver(function() {
@@ -256,6 +270,25 @@ window.textViewerMonaco = function() {
           attributes: true,
           attributeFilter: ['data-theme']
         });
+
+        // Acquire lock after editor is ready
+        if (self.canEdit && !self.lockOwner) {
+          _lock.acquire(self, {
+            onLocked: function() { if (_editor) _editor.updateOptions({ readOnly: true }); },
+          });
+        }
+      });
+    },
+
+    forceUnlock() {
+      var self = this;
+      _lock.forceUnlock(self, {
+        onAcquired: function() {
+          if (_editor) {
+            _editor.updateOptions({ readOnly: false });
+            _attachEditHandlers(self);
+          }
+        },
       });
     },
 
@@ -363,6 +396,7 @@ window.textViewerMonaco = function() {
     },
 
     dispose() {
+      if (_lock) _lock.dispose();
       clearTimeout(_prefsSaveTimer);
       if (_themeObserver) {
         _themeObserver.disconnect();

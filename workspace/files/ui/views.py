@@ -365,7 +365,7 @@ def view_file(request, uuid):
     Used by the file viewer modal to load content via Alpine AJAX.
     """
     # Get file — allow owner or shared-with user
-    file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
+    file_obj = File.objects.select_related('locked_by').filter(uuid=uuid, deleted_at__isnull=True).first()
     if not file_obj:
         from django.http import Http404
         raise Http404
@@ -402,9 +402,18 @@ def view_file(request, uuid):
             status=400
         )
 
+    # Lock info for viewers
+    lock_info = None
+    if user_can_edit and file_obj.is_locked() and file_obj.locked_by_id != request.user.pk:
+        lock_info = {
+            'locked_by_username': file_obj.locked_by.username,
+            'locked_by_id': file_obj.locked_by.pk,
+        }
+
     # Render viewer with user_can_edit override
     viewer = ViewerClass(file_obj)
     viewer._user_can_edit = user_can_edit
+    viewer._lock_info = lock_info
     html = viewer.render(request)
 
     return HttpResponse(html)

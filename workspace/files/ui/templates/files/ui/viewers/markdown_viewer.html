@@ -31,6 +31,14 @@
     {% endif %}
   </div>
 
+  <!-- Lock banner -->
+  <div x-show="lockOwner" x-cloak
+       class="flex items-center gap-2 px-3 py-2 bg-warning/10 border-b border-warning/30 text-warning-content text-sm">
+    <i data-lucide="lock" class="w-4 h-4 text-warning shrink-0"></i>
+    <span class="flex-1"><strong x-text="lockOwner"></strong> is editing this file</span>
+    <button type="button" class="btn btn-warning btn-xs" @click="forceUnlock()">Force unlock</button>
+  </div>
+
   <!-- Loading State -->
   <div x-show="loading" class="flex-1 flex items-center justify-center" x-cloak>
     <span class="loading loading-spinner loading-lg"></span>
@@ -58,10 +66,28 @@ window.markdownViewerCrepe = function() {
   let _crepe = null;
   let _keydownHandler = null;
   let _container = null;
+  let _lock = null;
 
   function getCSRFToken() {
     var match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
     return match ? match.split('=')[1] : '';
+  }
+
+  function _attachEditHandlers(self, container) {
+    _crepe.on(function(listener) {
+      listener.markdownUpdated(function(md) {
+        self.isDirty = md !== self.originalContent;
+      });
+    });
+    if (!_keydownHandler) {
+      _keydownHandler = function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+          e.preventDefault();
+          self.save();
+        }
+      };
+      container.addEventListener('keydown', _keydownHandler, true);
+    }
   }
 
   return {
@@ -73,57 +99,55 @@ window.markdownViewerCrepe = function() {
     originalContent: '{{ content|escapejs }}',
     fileUuid: '{{ file.uuid }}',
     fileName: '{{ file.name }}',
+    lockOwner: {% if lock_info %}'{{ lock_info.locked_by_username|escapejs }}'{% else %}null{% endif %},
 
     async initEditor() {
       var container = this.$refs.crepeContainer;
       var self = this;
       _container = container;
+      _lock = window.fileLock(this.fileUuid, getCSRFToken);
 
       try {
         var mod = await import('https://esm.sh/@milkdown/crepe@7.17.3?bundle');
         var Crepe = mod.Crepe;
 
-        var crepeOptions = {
-          root: container,
-          defaultValue: self.originalContent,
-        };
-
-        _crepe = new Crepe(crepeOptions);
-
+        _crepe = new Crepe({ root: container, defaultValue: self.originalContent });
         await _crepe.create();
 
-        // Set readonly if user cannot edit
-        if (!self.canEdit) {
+        if (!self.canEdit || self.lockOwner) {
           _crepe.setReadonly(true);
         }
 
-        // Use normalized markdown as baseline (Milkdown may reformat slightly)
         self.originalContent = _crepe.getMarkdown();
 
-        if (self.canEdit) {
-          // Track dirty state
-          _crepe.on(function(listener) {
-            listener.markdownUpdated(function(md) {
-              self.isDirty = md !== self.originalContent;
-            });
-          });
-
-          // Ctrl+S to save (capture phase to get it before ProseMirror)
-          _keydownHandler = function(e) {
-            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-              e.preventDefault();
-              self.save();
-            }
-          };
-          container.addEventListener('keydown', _keydownHandler, true);
+        if (self.canEdit && !self.lockOwner) {
+          _attachEditHandlers(self, container);
         }
 
         self.loading = false;
+
+        if (self.canEdit && !self.lockOwner) {
+          _lock.acquire(self, {
+            onLocked: function() { if (_crepe) _crepe.setReadonly(true); },
+          });
+        }
       } catch (err) {
         console.error('Failed to load Milkdown:', err);
         self.error = err.message || 'Failed to load editor';
         self.loading = false;
       }
+    },
+
+    forceUnlock() {
+      var self = this;
+      _lock.forceUnlock(self, {
+        onAcquired: function() {
+          if (_crepe) {
+            _crepe.setReadonly(false);
+            _attachEditHandlers(self, _container);
+          }
+        },
+      });
     },
 
     async save() {
@@ -161,6 +185,7 @@ window.markdownViewerCrepe = function() {
     },
 
     dispose() {
+      if (_lock) _lock.dispose();
       if (_keydownHandler && _container) {
         _container.removeEventListener('keydown', _keydownHandler, true);
         _keydownHandler = null;

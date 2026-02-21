@@ -985,7 +985,34 @@ class FileViewSet(viewsets.ModelViewSet):
             'error_count': len(result.errors),
         })
 
+    LOCK_TTL = timedelta(minutes=5)
+
     def partial_update(self, request, *args, **kwargs):
+        # Lock protection
+        uuid = kwargs.get('uuid')
+        locked_file = File.objects.filter(
+            uuid=uuid, deleted_at__isnull=True,
+        ).select_related('locked_by').only(
+            'locked_by', 'lock_expires_at',
+        ).first()
+        if (
+            locked_file
+            and locked_file.locked_by_id is not None
+            and locked_file.locked_by_id != request.user.pk
+            and locked_file.lock_expires_at
+            and locked_file.lock_expires_at > timezone.now()
+        ):
+            return Response(
+                {
+                    'detail': 'File is locked by another user.',
+                    'locked_by': {
+                        'id': locked_file.locked_by.pk,
+                        'username': locked_file.locked_by.username,
+                    },
+                },
+                status=423,
+            )
+
         try:
             return super().partial_update(request, *args, **kwargs)
         except Http404:
@@ -1016,6 +1043,68 @@ class FileViewSet(viewsets.ModelViewSet):
                 actor=request.user,
             )
             return Response(serializer.data)
+
+    @action(detail=True, methods=['get', 'post', 'delete'], url_path='lock')
+    def lock(self, request, uuid=None):
+        file_obj = File.objects.filter(
+            uuid=uuid, deleted_at__isnull=True,
+        ).select_related('locked_by').first()
+        if not file_obj:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        now = timezone.now()
+
+        def _lock_response(f):
+            if f.locked_by_id is None:
+                return Response({
+                    'locked_by': None,
+                    'locked_at': None,
+                    'lock_expires_at': None,
+                    'is_expired': True,
+                })
+            return Response({
+                'locked_by': {
+                    'id': f.locked_by.pk,
+                    'username': f.locked_by.username,
+                },
+                'locked_at': f.locked_at,
+                'lock_expires_at': f.lock_expires_at,
+                'is_expired': f.lock_expires_at is not None and f.lock_expires_at < now,
+            })
+
+        if request.method == 'GET':
+            return _lock_response(file_obj)
+
+        if request.method == 'DELETE':
+            File.objects.filter(pk=file_obj.pk).update(
+                locked_by=None, locked_at=None, lock_expires_at=None,
+            )
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        # POST — acquire or renew
+        if file_obj.locked_by_id == request.user.pk:
+            # Renew
+            File.objects.filter(pk=file_obj.pk).update(
+                lock_expires_at=now + self.LOCK_TTL,
+            )
+            file_obj.refresh_from_db()
+            return _lock_response(file_obj)
+
+        if file_obj.locked_by_id is not None and file_obj.lock_expires_at and file_obj.lock_expires_at > now:
+            # Conflict — locked by someone else
+            return Response(
+                _lock_response(file_obj).data,
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Acquire (unlocked or expired)
+        File.objects.filter(pk=file_obj.pk).update(
+            locked_by=request.user,
+            locked_at=now,
+            lock_expires_at=now + self.LOCK_TTL,
+        )
+        file_obj.refresh_from_db()
+        return _lock_response(file_obj)
 
     def perform_destroy(self, instance):
         shared_users = User.objects.filter(

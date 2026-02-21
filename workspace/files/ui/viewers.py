@@ -73,9 +73,13 @@ class BaseViewer(ABC):
     def get_context(self, request) -> dict:
         """Get context data for template rendering."""
         can_edit = self.can_edit() and getattr(self, '_user_can_edit', True)
+        lock_info = getattr(self, '_lock_info', None)
+        if lock_info:
+            can_edit = False  # Force read-only when locked by another user
         return {
             'file': self.file,
             'can_edit': can_edit,
+            'lock_info': lock_info,
         }
 
 

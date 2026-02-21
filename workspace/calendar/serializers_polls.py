@@ -101,6 +101,17 @@ class PollCreateSerializer(serializers.Serializer):
 class PollUpdateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
+    slots = serializers.ListField(
+        child=serializers.DictField(),
+        min_length=2,
+        required=False,
+    )
+
+    def validate_slots(self, value):
+        for i, slot in enumerate(value):
+            if 'start' not in slot:
+                raise serializers.ValidationError(f'Slot {i}: "start" is required.')
+        return value
 
 
 class VoteItemSerializer(serializers.Serializer):

@@ -58,6 +58,7 @@ window.calendarApp = function calendarApp(calendarsData) {
     showPollListModal: false,
     showPollCreateModal: false,
     showPollDetailModal: false,
+    showPollEditModal: false,
     pollFilter: 'mine',    // 'mine' | 'shared'
     pollShowClosed: false,
     polls: [],
@@ -842,7 +843,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       const tag = e.target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       // Skip when a modal is open
-      if (this.showModal || this.showCalendarModal || this.showPollListModal || this.showPollCreateModal || this.showPollDetailModal) return;
+      if (this.showModal || this.showCalendarModal || this.showPollListModal || this.showPollCreateModal || this.showPollDetailModal || this.showPollEditModal) return;
       // Don't intercept browser shortcuts (Ctrl/Cmd+key)
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
@@ -1326,16 +1327,16 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
 
     pollVoteClass(choice) {
-      if (choice === 'yes') return 'text-success';
-      if (choice === 'maybe') return 'text-warning';
-      if (choice === 'no') return 'text-error opacity-40';
-      return 'text-base-content/20';
+      if (choice === 'yes') return 'bg-success/20 text-success';
+      if (choice === 'maybe') return 'bg-warning/20 text-warning';
+      if (choice === 'no') return 'bg-error/20 text-error';
+      return 'bg-base-200 text-base-content/20';
     },
 
     pollVoteIcon(choice) {
-      if (choice === 'yes') return 'check-circle';
+      if (choice === 'yes') return 'check';
       if (choice === 'maybe') return 'help-circle';
-      if (choice === 'no') return 'x-circle';
+      if (choice === 'no') return 'x';
       return 'circle';
     },
 
@@ -1373,6 +1374,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         });
         if (resp.ok) {
           this.currentPoll = await resp.json();
+          if (window.AppAlert) window.AppAlert.success(`${user.username} invited!`, { duration: 2000 });
           this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
         }
       } catch (e) {}
@@ -1389,6 +1391,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         });
         if (resp.ok) {
           this.currentPoll = await resp.json();
+          if (window.AppAlert) window.AppAlert.success('Invitation removed', { duration: 2000 });
           this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
         }
       } catch (e) {}
@@ -1397,6 +1400,75 @@ window.calendarApp = function calendarApp(calendarsData) {
     isPollCreator() {
       if (!this.currentPoll) return false;
       return String(this.currentPoll.created_by?.id) === String(document.body.dataset.userId);
+    },
+
+    openPollEdit() {
+      if (!this.currentPoll) return;
+      this.showPollDetailModal = false;
+      this.pollForm = {
+        title: this.currentPoll.title,
+        description: this.currentPoll.description || '',
+        slots: (this.currentPoll.slots || []).map(s => ({
+          start: this.toLocalDatetime(s.start),
+          end: s.end ? this.toLocalDatetime(s.end) : '',
+          showEnd: !!s.end,
+        })),
+      };
+      // Ensure at least 2 slots
+      while (this.pollForm.slots.length < 2) {
+        this.pollForm.slots.push({ start: '', end: '', showEnd: false });
+      }
+      this.pollFormError = null;
+      this.showPollEditModal = true;
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    async savePollEdit() {
+      if (!this.currentPoll || !this.pollForm.title.trim()) return;
+      const validSlots = this.pollForm.slots.filter(s => s.start);
+      if (validSlots.length < 2) {
+        this.pollFormError = 'At least 2 time slots with a start time are required.';
+        return;
+      }
+      this.pollFormSubmitting = true;
+      this.pollFormError = null;
+      try {
+        const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}`, {
+          method: 'PATCH',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          body: JSON.stringify({
+            title: this.pollForm.title.trim(),
+            description: this.pollForm.description,
+            slots: validSlots.map(s => ({
+              start: new Date(s.start).toISOString(),
+              end: s.end ? new Date(s.end).toISOString() : null,
+            })),
+          }),
+        });
+        if (resp.ok) {
+          this.currentPoll = await resp.json();
+          this.showPollEditModal = false;
+          this.showPollDetailModal = true;
+          // Re-populate my votes (slots changed, old votes are gone)
+          const userId = String(document.body.dataset.userId);
+          const myVotes = {};
+          for (const vote of (this.currentPoll.votes || [])) {
+            if (vote.user && String(vote.user.id) === userId) {
+              myVotes[vote.slot_id] = vote.choice;
+            }
+          }
+          this.pollMyVotes = myVotes;
+          if (window.AppAlert) window.AppAlert.success('Poll updated!', { duration: 2000 });
+          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+        } else {
+          const data = await resp.json().catch(() => null);
+          this.pollFormError = data?.detail || data?.slots?.[0] || 'Failed to update poll.';
+        }
+      } catch (e) {
+        this.pollFormError = 'Network error. Please try again.';
+      }
+      this.pollFormSubmitting = false;
     },
   };
 };

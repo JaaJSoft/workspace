@@ -109,9 +109,23 @@ class PollDetailView(APIView):
         poll = self._get_poll(poll_id, request.user)
         ser = PollUpdateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        for field, value in ser.validated_data.items():
-            setattr(poll, field, value)
+
+        d = ser.validated_data
+        for field in ('title', 'description'):
+            if field in d:
+                setattr(poll, field, d[field])
         poll.save()
+
+        if 'slots' in d:
+            poll.slots.all().delete()
+            for i, slot_data in enumerate(d['slots']):
+                PollSlot.objects.create(
+                    poll=poll,
+                    start=slot_data['start'],
+                    end=slot_data.get('end'),
+                    position=i,
+                )
+
         return Response(PollSerializer(poll, context={'request': request}).data)
 
     @extend_schema(summary="Delete poll")
@@ -259,10 +273,10 @@ class PollInviteView(APIView):
         ser = PollInviteSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        PollInvitee.objects.filter(
-            poll=poll,
-            user_id__in=ser.validated_data['user_ids'],
-        ).delete()
+        user_ids = ser.validated_data['user_ids']
+
+        PollInvitee.objects.filter(poll=poll, user_id__in=user_ids).delete()
+        PollVote.objects.filter(slot__poll=poll, user_id__in=user_ids).delete()
 
         return Response(PollSerializer(poll, context={'request': request}).data)
 

@@ -9,6 +9,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="{% static 'calendar/ui/js/polls.js' %}"></script>
   <link rel="stylesheet" href="{% static 'calendar/ui/css/polls.css' %}" />
 </head>
 <body class="min-h-screen bg-base-200 flex flex-col">
@@ -115,13 +116,22 @@
                       </div>
                     </th>
                     <template x-for="slot in poll.slots" :key="slot.uuid">
-                      <th class="text-center min-w-[100px]">
+                      <th class="text-center min-w-[100px]"
+                          :class="poll.status === 'closed' && poll.chosen_slot_id === slot.uuid ? 'bg-success/10 slot-chosen' : ''">
                         <div class="flex flex-col items-center gap-0.5">
-                          <div class="text-xs font-semibold text-primary" x-text="formatSlotDate(slot)"></div>
+                          <div class="text-xs font-semibold"
+                               :class="poll.status === 'closed' && poll.chosen_slot_id === slot.uuid ? 'text-success' : 'text-primary'"
+                               x-text="formatSlotDate(slot)"></div>
                           <div class="text-xs opacity-50 flex items-center gap-1">
                             <i data-lucide="clock" class="w-3 h-3"></i>
                             <span x-text="formatSlotTime(slot)"></span>
                           </div>
+                          <template x-if="poll.status === 'closed' && poll.chosen_slot_id === slot.uuid">
+                            <div class="badge badge-success badge-xs gap-0.5 mt-0.5">
+                              <i data-lucide="trophy" class="w-2.5 h-2.5"></i>
+                              chosen
+                            </div>
+                          </template>
                         </div>
                       </th>
                     </template>
@@ -138,7 +148,8 @@
                         </div>
                       </td>
                       <template x-for="slot in poll.slots" :key="slot.uuid">
-                        <td class="text-center">
+                        <td class="text-center"
+                            :class="poll.status === 'closed' && poll.chosen_slot_id === slot.uuid ? 'bg-success/10 slot-chosen' : ''">
                           <div class="w-8 h-8 rounded-lg flex items-center justify-center mx-auto transition-colors"
                                :class="voteClass(p.votes[slot.uuid])">
                             <i :data-lucide="voteIcon(p.votes[slot.uuid])" class="w-4 h-4"></i>
@@ -180,7 +191,8 @@
                       </div>
                     </td>
                     <template x-for="slot in poll.slots" :key="slot.uuid">
-                      <td class="text-center">
+                      <td class="text-center"
+                          :class="poll.status === 'closed' && poll.chosen_slot_id === slot.uuid ? 'bg-success/10 slot-chosen' : ''">
                         <span class="text-sm font-semibold text-success" x-text="slotYesCount(slot.uuid)"></span>
                       </td>
                     </template>
@@ -220,8 +232,15 @@
             <!-- Closed banner -->
             <template x-if="poll.status === 'closed'">
               <div class="alert mt-4 bg-base-200 border-base-300">
-                <i data-lucide="check-circle-2" class="w-5 h-5 text-success"></i>
-                <span>This poll has been finalized.</span>
+                <i data-lucide="trophy" class="w-5 h-5 text-success flex-shrink-0"></i>
+                <div>
+                  <span class="font-medium">This poll has been finalized.</span>
+                  <template x-if="chosenSlot()">
+                    <p class="text-sm opacity-60 mt-0.5">
+                      Chosen date: <span class="font-medium text-base-content" x-text="formatSlotDate(chosenSlot()) + ' ' + formatSlotTime(chosenSlot())"></span>
+                    </p>
+                  </template>
+                </div>
               </div>
             </template>
           </div>
@@ -289,24 +308,15 @@
         this.$nextTick(() => lucide.createIcons());
       },
 
-      voteClass(choice) {
-        if (choice === 'yes') return 'bg-success/20 text-success';
-        if (choice === 'maybe') return 'bg-warning/20 text-warning';
-        if (choice === 'no') return 'bg-error/20 text-error';
-        return 'bg-base-200 text-base-content/20';
-      },
-
-      voteIcon(choice) {
-        if (choice === 'yes') return 'check';
-        if (choice === 'maybe') return 'help-circle';
-        if (choice === 'no') return 'x';
-        return 'circle';
-      },
+      voteClass(choice) { return pollUtils.voteClass(choice); },
+      voteIcon(choice) { return pollUtils.voteIcon(choice); },
 
       get participants() {
         if (!this.poll) return [];
         const map = new Map();
         for (const vote of (this.poll.votes || [])) {
+          // Skip current guest's votes (shown in editable "Your vote" row)
+          if (this.voterToken && !vote.user && vote.voter_token === this.voterToken) continue;
           const key = vote.user ? 'user:' + vote.user.id : 'guest:' + vote.guest_name;
           if (!map.has(key)) {
             map.set(key, {
@@ -322,25 +332,15 @@
         return Array.from(map.values());
       },
 
+      chosenSlot() { return pollUtils.chosenSlot(this.poll); },
+
       slotYesCount(slotId) {
         const slot = this.poll?.slots?.find(s => s.uuid === slotId);
         return slot?.yes_count || 0;
       },
 
-      formatSlotDate(slot) {
-        const d = new Date(slot.start);
-        return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-      },
-
-      formatSlotTime(slot) {
-        const start = new Date(slot.start);
-        const parts = [start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })];
-        if (slot.end) {
-          const end = new Date(slot.end);
-          parts.push(end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }));
-        }
-        return parts.join(' - ');
-      },
+      formatSlotDate(slot) { return pollUtils.formatSlotDate(slot); },
+      formatSlotTime(slot) { return pollUtils.formatSlotTime(slot); },
 
       async submitVotes() {
         this.submitting = true;

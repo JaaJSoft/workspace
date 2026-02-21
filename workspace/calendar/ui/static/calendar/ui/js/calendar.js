@@ -1328,39 +1328,12 @@ window.calendarApp = function calendarApp(calendarsData) {
       return Array.from(map.values());
     },
 
-    pollVoteClass(choice) {
-      if (choice === 'yes') return 'bg-success/20 text-success';
-      if (choice === 'maybe') return 'bg-warning/20 text-warning';
-      if (choice === 'no') return 'bg-error/20 text-error';
-      return 'bg-base-200 text-base-content/20';
-    },
-
-    pollVoteIcon(choice) {
-      if (choice === 'yes') return 'check';
-      if (choice === 'maybe') return 'help-circle';
-      if (choice === 'no') return 'x';
-      return 'circle';
-    },
-
-    formatPollSlotDate(slot) {
-      if (!slot?.start) return '';
-      const d = new Date(slot.start);
-      return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    },
-
-    formatPollSlotTime(slot) {
-      if (!slot?.start) return '';
-      const d = new Date(slot.start);
-      const startTime = this.prefs.timeFormat === '12h'
-        ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-        : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-      if (!slot.end) return startTime;
-      const e = new Date(slot.end);
-      const endTime = this.prefs.timeFormat === '12h'
-        ? e.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-        : e.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-      return `${startTime} – ${endTime}`;
-    },
+    pollVoteClass(choice) { return pollUtils.voteClass(choice); },
+    pollVoteIcon(choice) { return pollUtils.voteIcon(choice); },
+    pollChosenSlot() { return pollUtils.chosenSlot(this.currentPoll); },
+    isPollChosenSlot(slotUuid) { return pollUtils.isChosenSlot(this.currentPoll, slotUuid); },
+    formatPollSlotDate(slot) { return pollUtils.formatSlotDate(slot); },
+    formatPollSlotTime(slot) { return pollUtils.formatSlotTime(slot); },
 
     async addPollInvitee(event) {
       const user = event.detail.user;

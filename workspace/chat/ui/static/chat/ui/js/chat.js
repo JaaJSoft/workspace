@@ -56,6 +56,13 @@ function chatApp(currentUserId) {
     draggingPinned: null,
     dragOverPinned: null,
 
+    // Emoji picker
+    emojiPickerVisible: false,
+    emojiPickerMode: null,       // 'input' | 'reaction'
+    emojiPickerTargetMsg: null,  // message UUID for reaction mode
+    emojiPickerX: 0,
+    emojiPickerY: 0,
+
     // Sidebar
     collapsed: JSON.parse(localStorage.getItem('chatSidebarCollapsed') || 'false'),
 
@@ -117,6 +124,22 @@ function chatApp(currentUserId) {
 
       this.$nextTick(() => {
         if (typeof lucide !== 'undefined') lucide.createIcons();
+      });
+
+      // Emoji picker event listener
+      this.$nextTick(() => {
+        const picker = this.$refs.emojiPicker;
+        if (picker) {
+          picker.addEventListener('emoji-click', (e) => {
+            const unicode = e.detail.unicode;
+            if (this.emojiPickerMode === 'input') {
+              this.insertEmoji(unicode);
+            } else if (this.emojiPickerMode === 'reaction' && this.emojiPickerTargetMsg) {
+              this.toggleReaction(this.emojiPickerTargetMsg, unicode);
+            }
+            this.closeEmojiPicker();
+          });
+        }
       });
     },
 
@@ -1784,6 +1807,56 @@ function chatApp(currentUserId) {
       });
     },
 
+    // ── Emoji picker ──────────────────────────────────────
+    openEmojiPicker(mode, event, msgUuid) {
+      if (this.emojiPickerVisible && this.emojiPickerMode === mode && this.emojiPickerTargetMsg === msgUuid) {
+        this.closeEmojiPicker();
+        return;
+      }
+
+      this.emojiPickerMode = mode;
+      this.emojiPickerTargetMsg = msgUuid || null;
+
+      // Position relative to the trigger button
+      const btn = event.currentTarget;
+      const rect = btn.getBoundingClientRect();
+      const pickerWidth = 320;
+      const pickerHeight = 340;
+
+      let x = rect.left;
+      let y;
+
+      if (mode === 'input') {
+        // Open above the button
+        y = rect.top - pickerHeight - 8;
+      } else {
+        // Open below the hover toolbar
+        y = rect.bottom + 8;
+      }
+
+      // Keep within viewport
+      if (x + pickerWidth > window.innerWidth) {
+        x = window.innerWidth - pickerWidth - 8;
+      }
+      if (x < 8) x = 8;
+      if (y < 8) {
+        y = rect.bottom + 8;
+      }
+      if (y + pickerHeight > window.innerHeight) {
+        y = rect.top - pickerHeight - 8;
+      }
+
+      this.emojiPickerX = x;
+      this.emojiPickerY = y;
+      this.emojiPickerVisible = true;
+    },
+
+    closeEmojiPicker() {
+      this.emojiPickerVisible = false;
+      this.emojiPickerMode = null;
+      this.emojiPickerTargetMsg = null;
+    },
+
     // ── Input keyboard shortcuts ────────────────────────────
     handleInputKeydown(e) {
       const ta = this.$refs.messageInput;
@@ -1792,6 +1865,12 @@ function chatApp(currentUserId) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         this.sendOrEdit();
+        return;
+      }
+
+      // Escape → close emoji picker first
+      if (e.key === 'Escape' && this.emojiPickerVisible) {
+        this.closeEmojiPicker();
         return;
       }
 

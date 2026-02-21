@@ -1,7 +1,7 @@
 {% if groups %}
-<div class="flex flex-wrap gap-1 items-center px-1 mt-1">
+<div class="flex flex-wrap gap-1 items-center px-1 my-1">
   {% for g in groups %}
-    <button class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-sm cursor-pointer transition-colors border
+    <button class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-sm leading-none cursor-pointer transition-colors border
                    {% if g.has_mine %}bg-info/15 border-info/30 hover:bg-info/25{% else %}bg-base-200 border-base-300 hover:bg-base-300{% endif %}"
             @click="toggleReaction('{{ message_uuid }}', '{{ g.emoji }}')"
             title="{{ g.users|join:', ' }}">

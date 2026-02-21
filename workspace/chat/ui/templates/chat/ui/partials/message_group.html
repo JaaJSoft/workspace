@@ -25,7 +25,7 @@
           Message deleted
         </div>
       {% else %}
-        <div class="relative group/msg">
+        <div class="relative group/msg hover:z-20">
           {# Bubble #}
           <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm
                       {% if is_own %}bg-info/15 text-base-content{% else %}bg-base-200 text-base-content{% endif %}"
@@ -110,25 +110,22 @@
           </div>
 
           {# Hover toolbar — floats below the bubble #}
-          <div class="absolute top-full mt-0.5 {% if is_own %}left-0{% else %}right-0{% endif %} opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto transition-opacity z-10"
-               x-data="{ emojiOpen: false }">
+          <div class="absolute top-full mt-0.5 {% if is_own %}right-0{% else %}left-0{% endif %} opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto transition-opacity z-50"
+               >
             <div class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-sm px-0.5 py-0.5">
-              {# Reaction picker #}
-              <div class="dropdown dropdown-bottom {% if is_own %}dropdown-end{% endif %}">
-                <button class="btn btn-ghost btn-xs btn-circle"
-                        @click="emojiOpen = !emojiOpen"
-                        title="React">
-                  <i data-lucide="smile-plus" class="w-3.5 h-3.5"></i>
-                </button>
-                <div x-show="emojiOpen" x-cloak @click.outside="emojiOpen = false"
-                     class="dropdown-content mt-1 p-1.5 bg-base-100 border border-base-300 rounded-lg shadow-lg flex gap-0.5 z-20">
-                  <template x-for="emoji in quickEmojis" :key="emoji">
-                    <button class="btn btn-ghost btn-sm"
-                            @click="toggleReaction('{{ msg.uuid }}', emoji); emojiOpen = false"
-                            x-text="emoji"></button>
-                  </template>
-                </div>
-              </div>
+              {# Quick reactions #}
+              <template x-for="emoji in quickEmojis" :key="emoji">
+                <button class="btn btn-ghost btn-xs btn-circle text-base leading-none"
+                        @click="toggleReaction('{{ msg.uuid }}', emoji)"
+                        x-text="emoji"></button>
+              </template>
+              <div class="w-px self-stretch my-0.5 bg-base-300"></div>
+              {# Full emoji picker #}
+              <button class="btn btn-ghost btn-xs btn-circle"
+                      @click="openEmojiPicker('reaction', $event, '{{ msg.uuid }}')"
+                      title="More reactions">
+                <i data-lucide="smile-plus" class="w-3.5 h-3.5"></i>
+              </button>
               {# Reply #}
               <button class="btn btn-ghost btn-xs btn-circle"
                       @click="startReply('{{ msg.uuid }}', '{{ msg.author.username|escapejs }}', '{{ msg.body|truncatechars:100|escapejs }}')"

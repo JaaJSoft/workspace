@@ -134,8 +134,8 @@ function _applyPopoverTransform(popover, placement, visible) {
  * @param {string} sizeClass - Tailwind size classes, e.g. 'w-7 h-7 text-xs'
  * @returns {string} HTML string
  */
-window.userAvatarWithCardHtml = function(userId, username, sizeClass) {
-  const avatar = window.userAvatarHtml(userId, username, sizeClass);
+window.userAvatarWithCardHtml = function(userId, username, sizeClass, options) {
+  const avatar = window.userAvatarHtml(userId, username, sizeClass, options);
   return `<div class="flex" onmouseenter="window._userCardShow(this,${userId})" onmouseleave="window._userCardScheduleHide(this)">` +
     avatar +
   `</div>`;

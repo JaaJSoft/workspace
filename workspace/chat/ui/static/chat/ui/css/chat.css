@@ -42,3 +42,22 @@
   box-shadow: none !important;
   border-color: transparent !important;
 }
+
+/* ── Emoji picker: DaisyUI theme integration ────────────── */
+emoji-picker {
+  --background: oklch(var(--b1));
+  --border-color: oklch(var(--b3));
+  --border-radius: 0.75rem;
+  --button-active-background: oklch(var(--b3));
+  --button-hover-background: oklch(var(--b2));
+  --indicator-color: oklch(var(--in));
+  --input-border-color: oklch(var(--b3));
+  --input-font-color: oklch(var(--bc));
+  --input-placeholder-color: oklch(var(--bc) / 0.4);
+  --outline-color: oklch(var(--in));
+  --category-font-color: oklch(var(--bc) / 0.6);
+  --num-columns: 8;
+  --emoji-padding: 0.4rem;
+  --emoji-size: 1.4rem;
+  height: 20rem;
+}

@@ -6,6 +6,7 @@
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" integrity="sha384-6LFfkTKLRlzFtgx8xsWyBdKGpcMMQTkv+dB7rAbugeJAu1Ym2q1Aji1cjHBG12Xh" crossorigin="anonymous" />
+<script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
 {% endblock %}
 
 {% block navbar %}
@@ -324,23 +325,9 @@ x-init="init()"
             <div class="flex-1"></div>
 
             <!-- Emoji picker -->
-            <div class="dropdown dropdown-top dropdown-end">
-              <button class="btn btn-ghost btn-xs btn-square" tabindex="0" title="Emoji">
-                <i data-lucide="smile" class="w-3.5 h-3.5"></i>
-              </button>
-              <div
-                tabindex="0"
-                class="dropdown-content mb-2 p-2 bg-base-100 border border-base-300 rounded-lg shadow-lg flex gap-1"
-              >
-                <template x-for="emoji in quickEmojis" :key="emoji">
-                  <button
-                    class="btn btn-ghost btn-sm"
-                    @click="insertEmoji(emoji)"
-                    x-text="emoji"
-                  ></button>
-                </template>
-              </div>
-            </div>
+            <button class="btn btn-ghost btn-xs btn-square" title="Emoji" @click="openEmojiPicker('input', $event)">
+              <i data-lucide="smile" class="w-3.5 h-3.5"></i>
+            </button>
 
             <!-- Attach file -->
             <button class="btn btn-ghost btn-xs btn-square" title="Attach file" @click="openFileDialog()">
@@ -409,6 +396,14 @@ x-init="init()"
       </div><!-- /content area -->
     </div>
   </template>
+</div>
+
+<!-- Singleton emoji picker -->
+<div x-show="emojiPickerVisible" x-cloak
+     class="fixed z-[100]"
+     :style="`left:${emojiPickerX}px; top:${emojiPickerY}px`"
+     @click.outside="closeEmojiPicker()">
+  <emoji-picker x-ref="emojiPicker"></emoji-picker>
 </div>
 
 <!-- Context menu -->

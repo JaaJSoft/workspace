@@ -1,0 +1,9 @@
+.poll-grid th,
+.poll-grid td {
+  padding: 0.5rem;
+  vertical-align: middle;
+}
+
+.poll-grid tfoot td {
+  border-top: 2px solid oklch(var(--bc) / 0.1);
+}

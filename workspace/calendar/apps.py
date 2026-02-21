@@ -25,3 +25,11 @@ class CalendarConfig(AppConfig):
             module_slug='calendar',
             search_fn=search_events,
         ))
+
+        from workspace.calendar.search import search_polls
+
+        registry.register_search_provider(SearchProviderInfo(
+            slug='calendar_polls',
+            module_slug='calendar',
+            search_fn=search_polls,
+        ))

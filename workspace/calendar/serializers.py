@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Calendar, Event, EventMember
+from .models import Calendar, Event, EventMember, Poll
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -37,6 +37,7 @@ class EventSerializer(serializers.ModelSerializer):
     calendar_id = serializers.UUIDField(source='calendar.uuid', read_only=True)
     is_recurring = serializers.BooleanField(read_only=True)
     is_exception = serializers.BooleanField(read_only=True)
+    poll_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -44,9 +45,13 @@ class EventSerializer(serializers.ModelSerializer):
             'uuid', 'calendar_id', 'title', 'description', 'start', 'end',
             'all_day', 'location', 'owner', 'members',
             'recurrence_frequency', 'recurrence_interval', 'recurrence_end',
-            'is_recurring', 'is_exception',
+            'is_recurring', 'is_exception', 'poll_id',
             'created_at', 'updated_at',
         ]
+
+    def get_poll_id(self, obj):
+        poll = Poll.objects.filter(event=obj).values_list('uuid', flat=True).first()
+        return str(poll) if poll else None
 
 
 class EventCreateSerializer(serializers.Serializer):

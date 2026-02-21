@@ -39,16 +39,6 @@ class DashboardConfig(AppConfig):
                 active=False,
                 order=50,
             ),
-            ModuleInfo(
-                name='Polls',
-                slug='polls',
-                description='Create surveys and collect responses.',
-                icon='bar-chart-3',
-                color='error',
-                url=None,
-                active=False,
-                order=60,
-            ),
         ]
         for module in planned_modules:
             registry.register(module)

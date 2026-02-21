@@ -54,6 +54,23 @@ window.calendarApp = function calendarApp(calendarsData) {
     // Context menu state
     ctxMenu: { open: false, x: 0, y: 0, event: null, isOwner: false, inviteStatus: null },
 
+    // Poll state
+    showPollListModal: false,
+    showPollCreateModal: false,
+    showPollDetailModal: false,
+    pollFilter: 'mine',    // 'mine' | 'shared'
+    pollShowClosed: false,
+    polls: [],
+    pollsLoading: false,
+    pollForm: { title: '', description: '', slots: [{ start: '', end: '', showEnd: false }, { start: '', end: '', showEnd: false }] },
+    pollFormSubmitting: false,
+    pollFormError: null,
+    currentPoll: null,
+    currentPollLoading: false,
+    pollMyVotes: {},
+    pollSubmitting: false,
+    pollFinalizeSlotId: null,
+
     csrfToken() {
       return document.querySelector('[name=csrfmiddlewaretoken]')?.value
         || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
@@ -420,6 +437,9 @@ window.calendarApp = function calendarApp(calendarsData) {
 
       const eventId = params.get('event');
       if (eventId) this.openEventById(eventId);
+
+      const pollId = params.get('poll');
+      if (pollId) this.openPollDetail(pollId);
 
       // Browser back/forward
       window.addEventListener('popstate', () => {
@@ -822,7 +842,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       const tag = e.target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       // Skip when a modal is open
-      if (this.showModal || this.showCalendarModal) return;
+      if (this.showModal || this.showCalendarModal || this.showPollListModal || this.showPollCreateModal || this.showPollDetailModal) return;
       // Don't intercept browser shortcuts (Ctrl/Cmd+key)
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
@@ -1066,5 +1086,282 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
 
     closeModal() { this.showModal = false; },
+
+    // --- Polls ---
+    openPollList() {
+      this.showPollListModal = true;
+      this.loadPolls();
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    async loadPolls() {
+      this.pollsLoading = true;
+      try {
+        const status = this.pollShowClosed ? 'all' : 'open';
+        const resp = await fetch(`/api/v1/calendar/polls?filter=${this.pollFilter}&status=${status}`, { credentials: 'same-origin' });
+        if (resp.ok) this.polls = await resp.json();
+      } catch (e) {}
+      this.pollsLoading = false;
+    },
+
+    setPollFilter(filter) {
+      this.pollFilter = filter;
+      this.loadPolls();
+    },
+
+    togglePollShowClosed() {
+      this.pollShowClosed = !this.pollShowClosed;
+      this.loadPolls();
+    },
+
+    openPollCreate() {
+      this.showPollListModal = false;
+      this.showPollCreateModal = true;
+      this.pollForm = { title: '', description: '', slots: [{ start: '', end: '', showEnd: false }, { start: '', end: '', showEnd: false }] };
+      this.pollFormError = null;
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    addPollSlot() {
+      this.pollForm.slots.push({ start: '', end: '', showEnd: false });
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    removePollSlot(i) {
+      if (this.pollForm.slots.length > 2) {
+        this.pollForm.slots.splice(i, 1);
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      }
+    },
+
+    async submitPoll() {
+      if (!this.pollForm.title.trim()) return;
+      const validSlots = this.pollForm.slots.filter(s => s.start);
+      if (validSlots.length < 2) {
+        this.pollFormError = 'At least 2 time slots with a start time are required.';
+        return;
+      }
+      this.pollFormSubmitting = true;
+      this.pollFormError = null;
+      try {
+        const resp = await fetch('/api/v1/calendar/polls', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          body: JSON.stringify({
+            title: this.pollForm.title.trim(),
+            description: this.pollForm.description,
+            slots: validSlots.map(s => ({
+              start: new Date(s.start).toISOString(),
+              end: s.end ? new Date(s.end).toISOString() : null,
+            })),
+          }),
+        });
+        if (resp.ok) {
+          const created = await resp.json();
+          this.showPollCreateModal = false;
+          this.openPollDetail(created.uuid);
+        } else {
+          const data = await resp.json().catch(() => null);
+          this.pollFormError = data?.detail || data?.slots?.[0] || 'Failed to create poll.';
+        }
+      } catch (e) {
+        this.pollFormError = 'Network error. Please try again.';
+      }
+      this.pollFormSubmitting = false;
+    },
+
+    async openPollDetail(uuid) {
+      this.showPollListModal = false;
+      this.showPollDetailModal = true;
+      this.currentPoll = null;
+      this.currentPollLoading = true;
+      this.pollMyVotes = {};
+      this.pollFinalizeSlotId = null;
+      this._setPollUrl(uuid);
+      await this.loadPoll(uuid);
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    closePollDetail() {
+      this.showPollDetailModal = false;
+      this._setPollUrl(null);
+    },
+
+    _setPollUrl(pollId) {
+      const params = new URLSearchParams(window.location.search);
+      if (pollId) {
+        params.set('poll', pollId);
+      } else {
+        params.delete('poll');
+      }
+      const qs = params.toString();
+      const url = window.location.pathname + (qs ? '?' + qs : '');
+      history.replaceState(null, '', url);
+    },
+
+    async loadPoll(uuid) {
+      this.currentPollLoading = true;
+      try {
+        const resp = await fetch(`/api/v1/calendar/polls/${uuid}`, { credentials: 'same-origin' });
+        if (resp.ok) {
+          this.currentPoll = await resp.json();
+          // Pre-populate my votes
+          const userId = String(document.body.dataset.userId);
+          const myVotes = {};
+          for (const vote of (this.currentPoll.votes || [])) {
+            if (vote.user && String(vote.user.id) === userId) {
+              myVotes[vote.slot_id] = vote.choice;
+            }
+          }
+          this.pollMyVotes = myVotes;
+          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+        }
+      } catch (e) {}
+      this.currentPollLoading = false;
+    },
+
+    pollCycleVote(slotId) {
+      const cycle = ['yes', 'maybe', 'no'];
+      const current = this.pollMyVotes[slotId];
+      const idx = cycle.indexOf(current);
+      const next = cycle[(idx + 1) % cycle.length];
+      this.pollMyVotes = { ...this.pollMyVotes, [slotId]: next };
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    async submitPollVotes() {
+      if (!this.currentPoll) return;
+      const votes = Object.entries(this.pollMyVotes).map(([slot_id, choice]) => ({ slot_id, choice }));
+      if (votes.length === 0) return;
+      this.pollSubmitting = true;
+      try {
+        const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/vote`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          body: JSON.stringify({ votes }),
+        });
+        if (resp.ok) {
+          this.currentPoll = await resp.json();
+          if (window.AppAlert) window.AppAlert.success('Votes saved!', { duration: 2000 });
+          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+        }
+      } catch (e) {}
+      this.pollSubmitting = false;
+    },
+
+    async finalizePoll() {
+      if (!this.currentPoll || !this.pollFinalizeSlotId) return;
+      this.pollSubmitting = true;
+      try {
+        const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/finalize`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          body: JSON.stringify({ slot_id: this.pollFinalizeSlotId }),
+        });
+        if (resp.ok) {
+          this.currentPoll = await resp.json();
+          if (this.calendar) this.calendar.refetchEvents();
+          if (window.AppAlert) window.AppAlert.success('Poll finalized! Event created.', { duration: 3000 });
+        }
+      } catch (e) {}
+      this.pollSubmitting = false;
+    },
+
+    async deletePoll(uuid) {
+      const ok = await AppDialog.confirm({
+        title: 'Delete poll',
+        message: 'Delete this poll and all its votes?',
+        okLabel: 'Delete',
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!ok) return;
+      try {
+        const resp = await fetch(`/api/v1/calendar/polls/${uuid}`, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': this.csrfToken() },
+        });
+        if (resp.ok || resp.status === 204) {
+          if (this.showPollDetailModal) {
+            this.closePollDetail();
+            this.openPollList();
+          } else {
+            this.loadPolls();
+          }
+        }
+      } catch (e) {}
+    },
+
+    copyPollShareLink() {
+      if (!this.currentPoll?.share_url) return;
+      navigator.clipboard.writeText(this.currentPoll.share_url).then(() => {
+        if (window.AppAlert) window.AppAlert.success('Share link copied!', { duration: 2000 });
+      }).catch(() => {
+        if (window.AppAlert) window.AppAlert.error('Failed to copy link');
+      });
+    },
+
+    pollParticipants() {
+      if (!this.currentPoll?.votes) return [];
+      const map = new Map();
+      for (const vote of this.currentPoll.votes) {
+        const key = vote.user ? `u-${vote.user.id}` : `g-${vote.guest_name}`;
+        if (!map.has(key)) {
+          map.set(key, {
+            key,
+            name: vote.user ? vote.user.username : vote.guest_name,
+            isUser: !!vote.user,
+            userId: vote.user?.id,
+            votes: {},
+          });
+        }
+        map.get(key).votes[vote.slot_id] = vote.choice;
+      }
+      return Array.from(map.values());
+    },
+
+    pollVoteClass(choice) {
+      if (choice === 'yes') return 'text-success';
+      if (choice === 'maybe') return 'text-warning';
+      if (choice === 'no') return 'text-error opacity-40';
+      return 'text-base-content/20';
+    },
+
+    pollVoteIcon(choice) {
+      if (choice === 'yes') return 'check-circle';
+      if (choice === 'maybe') return 'help-circle';
+      if (choice === 'no') return 'x-circle';
+      return 'circle';
+    },
+
+    formatPollSlotDate(slot) {
+      if (!slot?.start) return '';
+      const d = new Date(slot.start);
+      return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    },
+
+    formatPollSlotTime(slot) {
+      if (!slot?.start) return '';
+      const d = new Date(slot.start);
+      const startTime = this.prefs.timeFormat === '12h'
+        ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      if (!slot.end) return startTime;
+      const e = new Date(slot.end);
+      const endTime = this.prefs.timeFormat === '12h'
+        ? e.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        : e.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      return `${startTime} – ${endTime}`;
+    },
+
+    isPollCreator() {
+      if (!this.currentPoll) return false;
+      return String(this.currentPoll.created_by?.id) === String(document.body.dataset.userId);
+    },
   };
 };

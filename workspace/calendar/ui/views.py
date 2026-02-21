@@ -1,10 +1,11 @@
 import json
 
 from django.contrib.auth.decorators import login_required
+from django.http import Http404
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.calendar.models import Calendar, CalendarSubscription
+from workspace.calendar.models import Calendar, CalendarSubscription, Poll
 from workspace.calendar.serializers import CalendarSerializer
 
 
@@ -29,6 +30,8 @@ def index(request):
     ).values_list('calendar_id', flat=True)
     subscribed = Calendar.objects.filter(uuid__in=sub_ids).select_related('owner')
 
+    poll_count = Poll.objects.filter(created_by=request.user, status='open').count()
+
     return render(request, 'calendar/ui/index.html', {
         'owned_calendars': owned,
         'subscribed_calendars': subscribed,
@@ -36,4 +39,15 @@ def index(request):
             'owned': CalendarSerializer(owned, many=True).data,
             'subscribed': CalendarSerializer(subscribed, many=True).data,
         }),
+        'poll_count': poll_count,
+    })
+
+
+@ensure_csrf_cookie
+def polls_shared(request, token):
+    poll = Poll.objects.filter(share_token=token).first()
+    if not poll:
+        raise Http404
+    return render(request, 'calendar/ui/polls/shared.html', {
+        'share_token': token,
     })

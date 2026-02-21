@@ -1,3 +1,5 @@
+import secrets
+
 from django.conf import settings
 from django.db import models
 
@@ -158,3 +160,122 @@ class EventMember(models.Model):
 
     def __str__(self):
         return f'{self.user} — {self.event} ({self.status})'
+
+
+def _generate_share_token():
+    return secrets.token_urlsafe(24)
+
+
+class Poll(models.Model):
+    class Status(models.TextChoices):
+        OPEN = 'open', 'Open'
+        CLOSED = 'closed', 'Closed'
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='polls',
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+    share_token = models.CharField(
+        max_length=32,
+        unique=True,
+        default=_generate_share_token,
+    )
+    chosen_slot = models.ForeignKey(
+        'PollSlot',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['created_by', 'status']),
+            models.Index(fields=['share_token']),
+        ]
+
+    def __str__(self):
+        return self.title
+
+
+class PollSlot(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    poll = models.ForeignKey(
+        Poll,
+        on_delete=models.CASCADE,
+        related_name='slots',
+    )
+    start = models.DateTimeField()
+    end = models.DateTimeField(null=True, blank=True)
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['position', 'start']
+        indexes = [
+            models.Index(fields=['poll', 'position']),
+        ]
+
+    def __str__(self):
+        return f'{self.poll.title} — {self.start}'
+
+
+class PollVote(models.Model):
+    class Choice(models.TextChoices):
+        YES = 'yes', 'Yes'
+        NO = 'no', 'No'
+        MAYBE = 'maybe', 'Maybe'
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    slot = models.ForeignKey(
+        PollSlot,
+        on_delete=models.CASCADE,
+        related_name='votes',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='poll_votes',
+    )
+    guest_name = models.CharField(max_length=100, blank=True, default='')
+    guest_email = models.EmailField(blank=True, default='')
+    choice = models.CharField(max_length=5, choices=Choice.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['slot', 'user'],
+                condition=models.Q(user__isnull=False),
+                name='unique_vote_per_user',
+            ),
+            models.UniqueConstraint(
+                fields=['slot', 'guest_name'],
+                condition=models.Q(user__isnull=True) & ~models.Q(guest_name=''),
+                name='unique_vote_per_guest',
+            ),
+        ]
+
+    def __str__(self):
+        who = self.user.username if self.user else self.guest_name
+        return f'{who} — {self.choice} — {self.slot}'

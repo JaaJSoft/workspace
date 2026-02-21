@@ -1,7 +1,7 @@
 from django.db.models import Q
 
 from workspace.core.module_registry import SearchResult
-from .models import Calendar, CalendarSubscription, Event, EventMember
+from .models import Calendar, CalendarSubscription, Event, EventMember, Poll
 
 
 def search_events(query, user, limit):
@@ -34,4 +34,26 @@ def search_events(query, user, limit):
             module_color='accent',
         )
         for e in events
+    ]
+
+
+def search_polls(query, user, limit):
+    polls = (
+        Poll.objects
+        .filter(created_by=user, title__icontains=query)
+        .order_by('-created_at')[:limit]
+    )
+
+    return [
+        SearchResult(
+            uuid=str(p.uuid),
+            name=p.title,
+            url=f'/calendar?poll={p.uuid}',
+            matched_value=p.title,
+            match_type='title',
+            type_icon='bar-chart-3',
+            module_slug='calendar',
+            module_color='accent',
+        )
+        for p in polls
     ]

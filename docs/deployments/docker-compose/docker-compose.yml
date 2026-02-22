@@ -1,0 +1,47 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=0
+      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-real-secret-key}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-}
+      - DATABASE_URL=sqlite:////app/data/db.sqlite3
+      - MEDIA_ROOT=/app/data
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-6}
+    volumes:
+      - workspace-data:/app/data
+    restart: unless-stopped
+
+  celery-worker:
+    build: .
+    command: celery -A workspace worker -l info
+    environment:
+      - DEBUG=0
+      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-real-secret-key}
+      - DATABASE_URL=sqlite:////app/data/db.sqlite3
+      - MEDIA_ROOT=/app/data
+    volumes:
+      - workspace-data:/app/data
+    restart: unless-stopped
+    depends_on:
+      - web
+
+  celery-beat:
+    build: .
+    command: celery -A workspace beat -l info --schedule=/app/data/celerybeat-schedule
+    environment:
+      - DEBUG=0
+      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-real-secret-key}
+      - DATABASE_URL=sqlite:////app/data/db.sqlite3
+      - MEDIA_ROOT=/app/data
+    volumes:
+      - workspace-data:/app/data
+    restart: unless-stopped
+    depends_on:
+      - web
+
+volumes:
+  workspace-data:

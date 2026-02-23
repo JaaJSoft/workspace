@@ -463,6 +463,18 @@ class SharedPollVoteView(APIView):
                 },
             )
 
+        # Notify poll creator about the guest vote
+        creator_prefs = get_setting(poll.created_by, 'calendar', 'preferences', default={})
+        if creator_prefs.get('notifyPollVotes', True):
+            guest_label = d['guest_name'] or 'A guest'
+            notify_many(
+                recipients=[poll.created_by],
+                origin='calendar',
+                title=f'New vote on "{poll.title}"',
+                body=f'{guest_label} voted on your poll.',
+                url=f'/calendar?poll={poll.pk}',
+            )
+
         poll = _poll_detail_queryset().get(uuid=poll.uuid)
         _prefetch_poll_votes(poll)
         resp_data = PollSerializer(poll, context={'request': request}).data

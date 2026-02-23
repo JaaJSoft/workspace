@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from dateutil.parser import parse as dateutil_parse
@@ -36,6 +37,7 @@ from .serializers import (
 )
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 def _prefetch_event(qs):
@@ -571,6 +573,47 @@ class EventDetailView(APIView):
         return Response({'detail': 'Invalid scope.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+def send_ics_reply(event, user, response_status):
+    """Send an iCalendar REPLY email to the event organizer."""
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.utils import formatdate, make_msgid
+
+    from workspace.calendar.services.ics_builder import build_reply
+    from workspace.mail.services.smtp import connect_smtp
+
+    calendar = event.calendar
+    account = calendar.mail_account
+    if not account:
+        return
+
+    ics_data = build_reply(event, user, response_status)
+    status_label = 'Accepted' if response_status == 'accepted' else 'Declined'
+
+    msg = MIMEMultipart('mixed')
+    msg['From'] = f'{user.get_full_name() or user.username} <{account.email}>'
+    msg['To'] = event.organizer_email
+    msg['Subject'] = f'{status_label}: {event.title}'
+    msg['Date'] = formatdate(localtime=True)
+    msg['Message-ID'] = make_msgid(domain=account.email.split('@')[-1])
+
+    body = MIMEText(
+        f'{user.get_full_name() or user.username} has {response_status} "{event.title}".',
+        'plain', 'utf-8',
+    )
+    msg.attach(body)
+
+    cal_part = MIMEText(ics_data.decode('utf-8'), 'calendar', 'utf-8')
+    cal_part.set_param('method', 'REPLY')
+    msg.attach(cal_part)
+
+    server = connect_smtp(account)
+    try:
+        server.sendmail(account.email, [event.organizer_email], msg.as_string())
+    finally:
+        server.quit()
+
+
 @extend_schema(tags=['Calendar'])
 class EventRespondView(APIView):
     permission_classes = [IsAuthenticated]
@@ -584,7 +627,15 @@ class EventRespondView(APIView):
             return Response({'detail': 'Not invited.'}, status=status.HTTP_403_FORBIDDEN)
         membership.status = ser.validated_data['status']
         membership.save(update_fields=['status'])
-        event = Event.objects.select_related('owner').get(pk=event_id)
+        event = Event.objects.select_related('owner', 'calendar').get(pk=event_id)
+
+        # Send iCalendar REPLY to external organizer if applicable
+        if event.organizer_email and event.source_message_id:
+            try:
+                send_ics_reply(event, request.user, membership.status)
+            except Exception:
+                logger.exception("Failed to send iCal REPLY for event %s", event_id)
+
         if event.owner_id != request.user.id:
             status_label = membership.status  # 'accepted' or 'declined'
             notify(

@@ -276,6 +276,16 @@ def sync_folder_messages(account, folder):
             folder.last_sync_uid = max_uid
         _update_folder_counts(folder)
 
+        # Process any new calendar invitations
+        from workspace.mail.models import MailMessage as _MailMsg
+        cal_messages = _MailMsg.objects.filter(
+            folder=folder,
+            has_calendar_event=True,
+        )
+        if cal_messages.exists():
+            from workspace.calendar.services.ics_processor import process_calendar_emails
+            process_calendar_emails(cal_messages)
+
     finally:
         try:
             conn.logout()
@@ -341,6 +351,8 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
     body_html = ''
     attachments_data = []
 
+    has_calendar_event = False
+
     if msg.is_multipart():
         for part in msg.walk():
             content_type = part.get_content_type()
@@ -348,6 +360,17 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
 
             if 'attachment' in content_disposition:
                 _collect_attachment(part, attachments_data)
+            elif content_type == 'text/calendar':
+                payload = part.get_payload(decode=True)
+                if payload:
+                    charset = part.get_content_charset() or 'utf-8'
+                    ics_content = payload.decode(charset, errors='replace')
+                    attachments_data.append({
+                        'filename': 'invite.ics',
+                        'content_type': 'text/calendar',
+                        'data': ics_content.encode('utf-8'),
+                    })
+                    has_calendar_event = True
             elif content_type == 'text/plain' and not body_text:
                 payload = part.get_payload(decode=True)
                 if payload:
@@ -409,6 +432,7 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
         is_starred=is_starred,
         is_draft=is_draft,
         has_attachments=bool(attachments_data),
+        has_calendar_event=has_calendar_event,
     )
 
     # Save attachments

@@ -79,7 +79,7 @@ class MailMessageListSerializer(serializers.ModelSerializer):
             'uuid', 'folder_id', 'message_id', 'subject',
             'from_address', 'to_addresses', 'date', 'snippet',
             'is_read', 'is_starred', 'is_draft', 'has_attachments',
-            'attachments_count',
+            'has_calendar_event', 'attachments_count',
         ]
 
 
@@ -94,7 +94,7 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
             'bcc_addresses', 'reply_to', 'date', 'snippet',
             'body_text', 'body_html',
             'is_read', 'is_starred', 'is_draft', 'has_attachments',
-            'attachments', 'created_at',
+            'has_calendar_event', 'attachments', 'created_at',
         ]
 
 

@@ -154,6 +154,7 @@ class MailMessage(models.Model):
     is_starred = models.BooleanField(default=False)
     is_draft = models.BooleanField(default=False)
     has_attachments = models.BooleanField(default=False)
+    has_calendar_event = models.BooleanField(default=False)
 
     deleted_at = models.DateTimeField(null=True, blank=True)
 

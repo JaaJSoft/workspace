@@ -38,6 +38,8 @@ class EventSerializer(serializers.ModelSerializer):
     is_recurring = serializers.BooleanField(read_only=True)
     is_exception = serializers.BooleanField(read_only=True)
     poll_id = serializers.SerializerMethodField()
+    ical_uid = serializers.CharField(read_only=True)
+    organizer_email = serializers.EmailField(read_only=True)
 
     class Meta:
         model = Event
@@ -46,6 +48,7 @@ class EventSerializer(serializers.ModelSerializer):
             'all_day', 'location', 'owner', 'members',
             'recurrence_frequency', 'recurrence_interval', 'recurrence_end',
             'is_recurring', 'is_exception', 'poll_id',
+            'ical_uid', 'organizer_email',
             'created_at', 'updated_at',
         ]
 

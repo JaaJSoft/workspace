@@ -15,6 +15,14 @@ class Calendar(models.Model):
         on_delete=models.CASCADE,
         related_name='calendars',
     )
+    mail_account = models.ForeignKey(
+        'mail.MailAccount',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        related_name='invitation_calendars',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -97,6 +105,19 @@ class Event(models.Model):
     original_start = models.DateTimeField(null=True, blank=True, default=None)
     is_cancelled = models.BooleanField(default=False)
 
+    # iCalendar integration (RFC 5545 / iTIP)
+    ical_uid = models.CharField(max_length=512, null=True, blank=True, default=None)
+    ical_sequence = models.IntegerField(default=0)
+    organizer_email = models.EmailField(null=True, blank=True, default=None)
+    source_message = models.ForeignKey(
+        'mail.MailMessage',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        related_name='+',
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -108,6 +129,7 @@ class Event(models.Model):
             models.Index(fields=['calendar', 'start']),
             models.Index(fields=['recurrence_parent', 'original_start']),
             models.Index(fields=['recurrence_frequency', 'start']),
+            models.Index(fields=['ical_uid'], name='event_ical_uid'),
         ]
 
     @property

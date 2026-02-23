@@ -61,6 +61,7 @@ window.calendarApp = function calendarApp(calendarsData) {
     showPollEditModal: false,
     pollFilter: 'mine',    // 'mine' | 'shared'
     pollShowClosed: false,
+    pollSearch: '',
     polls: [],
     pollsLoading: false,
     pollForm: { title: '', description: '', slots: [{ start: '', end: '', showEnd: false }, { start: '', end: '', showEnd: false }] },
@@ -1089,8 +1090,15 @@ window.calendarApp = function calendarApp(calendarsData) {
     closeModal() { this.showModal = false; },
 
     // --- Polls ---
+    get filteredPolls() {
+      if (!this.pollSearch.trim()) return this.polls;
+      const q = this.pollSearch.toLowerCase();
+      return this.polls.filter(p => p.title.toLowerCase().includes(q));
+    },
+
     openPollList() {
       this.showPollListModal = true;
+      this.pollSearch = '';
       this.loadPolls();
       this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },

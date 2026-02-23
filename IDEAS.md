@@ -88,6 +88,7 @@ Integrated email client to centralize communication.
 - [x] Unified inbox
 - [x] Compose, reply, forward
 - [x] Attachments -> direct save to Files
+- [x] iCalendar integration — parse incoming .ics invitations (REQUEST/CANCEL), auto-create calendar events, send METHOD:REPLY on accept/decline
 - [ ] Custom labels / tags
 - [ ] Full-text search in emails
 - [ ] HTML signatures per account

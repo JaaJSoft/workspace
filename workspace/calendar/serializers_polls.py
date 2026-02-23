@@ -74,13 +74,19 @@ class PollListSerializer(serializers.ModelSerializer):
         # Use annotation if available (via _participant_count)
         if hasattr(obj, '_participant_count'):
             return obj._participant_count
-        return (
+        # Fallback: distinct authenticated users + distinct guest tokens
+        auth_count = (
             PollVote.objects
-            .filter(slot__poll=obj)
-            .values('user', 'guest_name')
-            .distinct()
-            .count()
+            .filter(slot__poll=obj, user__isnull=False)
+            .values('user').distinct().count()
         )
+        guest_count = (
+            PollVote.objects
+            .filter(slot__poll=obj, user__isnull=True)
+            .exclude(voter_token='')
+            .values('voter_token').distinct().count()
+        )
+        return auth_count + guest_count
 
 
 class PollCreateSerializer(serializers.Serializer):

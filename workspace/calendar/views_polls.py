@@ -89,7 +89,12 @@ class PollListView(APIView):
             polls = polls.filter(status=status_by)
 
         polls = polls.select_related('created_by').annotate(
-            _participant_count=Count('slots__votes', distinct=True),
+            _participant_count=Count(
+                'slots__votes__user', distinct=True,
+            ) + Count(
+                'slots__votes__voter_token', distinct=True,
+                filter=Q(slots__votes__user__isnull=True) & ~Q(slots__votes__voter_token=''),
+            ),
         )
 
         return Response(PollListSerializer(polls, many=True).data)
@@ -106,7 +111,8 @@ class PollListView(APIView):
             created_by=request.user,
         )
 
-        for i, slot_data in enumerate(d['slots']):
+        sorted_slots = sorted(d['slots'], key=lambda s: s['start'])
+        for i, slot_data in enumerate(sorted_slots):
             PollSlot.objects.create(
                 poll=poll,
                 start=slot_data['start'],
@@ -160,8 +166,9 @@ class PollDetailView(APIView):
             if removed_uuids:
                 PollSlot.objects.filter(uuid__in=removed_uuids).delete()
 
-            # Update kept slots + create new ones
-            for i, slot_data in enumerate(d['slots']):
+            # Update kept slots + create new ones (sorted by date)
+            sorted_slots = sorted(d['slots'], key=lambda s: s['start'])
+            for i, slot_data in enumerate(sorted_slots):
                 slot_uuid = slot_data.get('uuid')
                 if slot_uuid and slot_uuid in existing:
                     slot = existing[slot_uuid]

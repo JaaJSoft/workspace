@@ -550,16 +550,17 @@ function mailApp() {
       this.actionInProgress = true;
       const newVal = forceRead !== undefined ? forceRead : !msg.is_read;
       const wasRead = msg.is_read;
-      await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
-        method: 'PATCH',
-        body: { is_read: newVal },
-      });
+      // Optimistic UI update — apply locally before awaiting the server
       msg.is_read = newVal;
       const listMsg = this.messages.find(m => m.uuid === msg.uuid);
       if (listMsg) listMsg.is_read = newVal;
       if (this.selectedFolder && wasRead !== newVal) {
-        this.selectedFolder.unread_count += newVal ? -1 : 1;
+        this.selectedFolder.unread_count = Math.max(0, (this.selectedFolder.unread_count || 0) + (newVal ? -1 : 1));
       }
+      await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
+        method: 'PATCH',
+        body: { is_read: newVal },
+      });
       this.actionInProgress = false;
     },
 

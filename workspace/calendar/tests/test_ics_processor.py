@@ -144,11 +144,13 @@ class ProcessRequestTest(ICSProcessorMixin, TestCase):
         mail_msg = self._create_mail_with_ics(ICS_REQUEST)
         process_calendar_email(mail_msg)
 
+        event = Event.objects.get(ical_uid='evt-abc-123@example.com')
         mock_notify.assert_called_once_with(
             recipient=self.user,
             origin='calendar',
             title='Invitation: Sprint Review',
             body='From alice@example.com',
+            url=f'/calendar?event={event.pk}',
         )
 
     def test_duplicate_ics_ignored(self, mock_notify):
@@ -191,6 +193,7 @@ class ProcessUpdateTest(ICSProcessorMixin, TestCase):
             origin='calendar',
             title='Updated: Sprint Review (Updated)',
             body='The event has been updated',
+            url=f'/calendar?event={event.pk}',
         )
 
     def test_ignores_lower_sequence(self, mock_notify):
@@ -235,8 +238,10 @@ class ProcessCancelTest(ICSProcessorMixin, TestCase):
         mail_msg2 = self._create_mail_with_ics(ICS_CANCEL, uid=2)
         process_calendar_email(mail_msg2)
 
+        event = Event.objects.get(ical_uid='evt-abc-123@example.com')
         mock_notify.assert_called_once_with(
             recipient=self.user,
             origin='calendar',
             title='Cancelled: Sprint Review',
+            url=f'/calendar?event={event.pk}',
         )

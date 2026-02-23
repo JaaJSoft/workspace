@@ -73,6 +73,7 @@ def _handle_cancel(vevent, uid, mail_message):
         recipient=user,
         origin='calendar',
         title=f'Cancelled: {event.title}',
+        url=f'/calendar?event={event.pk}',
     )
 
 
@@ -117,6 +118,7 @@ def _create_event(vevent, uid, sequence, mail_message):
         origin='calendar',
         title=f'Invitation: {title}',
         body=f'From {organizer_email}',
+        url=f'/calendar?event={event.pk}',
     )
 
     return event
@@ -143,6 +145,7 @@ def _update_event(event, vevent, sequence, mail_message):
         origin='calendar',
         title=f'Updated: {event.title}',
         body='The event has been updated',
+        url=f'/calendar?event={event.pk}',
     )
 
 

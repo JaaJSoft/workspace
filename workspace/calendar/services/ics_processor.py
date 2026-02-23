@@ -150,10 +150,14 @@ def _get_or_create_invitation_calendar(account):
     """Get or create the invitation calendar for a mail account."""
     calendar = Calendar.objects.filter(mail_account=account).first()
     if calendar:
+        expected_name = account.display_name or account.email
+        if calendar.name != expected_name:
+            calendar.name = expected_name
+            calendar.save(update_fields=['name', 'updated_at'])
         return calendar
 
     return Calendar.objects.create(
-        name=f'Invitations ({account.email})',
+        name=account.display_name or account.email,
         color='secondary',
         owner=account.owner,
         mail_account=account,

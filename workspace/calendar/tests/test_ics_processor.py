@@ -115,7 +115,7 @@ class ProcessRequestTest(ICSProcessorMixin, TestCase):
         process_calendar_email(mail_msg)
 
         cal = Calendar.objects.get(mail_account=self.account)
-        self.assertEqual(cal.name, 'Invitations (bob@test.com)')
+        self.assertEqual(cal.name, 'bob@test.com')
         self.assertEqual(cal.color, 'secondary')
         self.assertEqual(cal.owner, self.user)
 

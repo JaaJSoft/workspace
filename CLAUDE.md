@@ -1,5 +1,10 @@
 # Claude Code Instructions
 
+## Git
+
+Never commit automatically. Only commit when I explicitly ask for it.
+Do not use git worktrees. Work directly on the current branch.
+
 ## API
 
 all api must be prefixed with `/api/` and have no trailing slashes

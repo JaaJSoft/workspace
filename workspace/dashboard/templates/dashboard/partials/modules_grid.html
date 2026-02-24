@@ -1,27 +1,28 @@
-<div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+<div class="flex flex-wrap justify-center gap-3">
   {% for module in modules %}
     {% if module.active %}
       <a
         href="{{ module.url }}"
-        class="group card bg-base-100 shadow border border-base-300 hover:border-{{ module.color }} transition-colors cursor-pointer"
+        class="group relative flex flex-col items-center gap-1.5 p-3 rounded-xl hover:bg-base-200 transition-colors w-20"
       >
-        <div class="card-body items-center text-center p-4 gap-2">
-          <div class="w-10 h-10 rounded-full bg-{{ module.color }}/10 flex items-center justify-center text-{{ module.color }} group-hover:bg-{{ module.color }}/20 transition-colors">
-            <i data-lucide="{{ module.icon }}" class="w-5 h-5"></i>
+        <div class="relative">
+          <div class="w-12 h-12 rounded-xl bg-{{ module.color }}/10 flex items-center justify-center text-{{ module.color }} group-hover:bg-{{ module.color }}/20 transition-colors">
+            <i data-lucide="{{ module.icon }}" class="w-6 h-6"></i>
           </div>
-          <span class="font-medium text-sm text-base-content">{{ module.name }}</span>
-          <span class="text-xs text-base-content/50 hidden sm:block">{{ module.description }}</span>
+          {% if module.pending_action_count %}
+            <span class="absolute -top-1.5 -right-1.5 min-w-5 h-5 flex items-center justify-center rounded-full bg-{{ module.color }} text-{{ module.color }}-content text-xs font-bold px-1">
+              {{ module.pending_action_count }}
+            </span>
+          {% endif %}
         </div>
+        <span class="text-xs font-medium text-base-content text-center leading-tight">{{ module.name }}</span>
       </a>
     {% else %}
-      <div class="card bg-base-100 border border-dashed border-base-300 opacity-60">
-        <div class="card-body items-center text-center p-4 gap-2">
-          <div class="w-10 h-10 rounded-full bg-base-200 flex items-center justify-center text-base-content/40">
-            <i data-lucide="{{ module.icon }}" class="w-5 h-5"></i>
-          </div>
-          <span class="font-medium text-sm text-base-content/60">{{ module.name }}</span>
-          <span class="badge badge-ghost badge-xs">Coming soon</span>
+      <div class="relative flex flex-col items-center gap-1.5 p-3 rounded-xl opacity-50 w-20">
+        <div class="w-12 h-12 rounded-xl bg-base-200 flex items-center justify-center text-base-content/40 border border-dashed border-base-300">
+          <i data-lucide="{{ module.icon }}" class="w-6 h-6"></i>
         </div>
+        <span class="text-xs font-medium text-base-content/50 text-center leading-tight">{{ module.name }}</span>
       </div>
     {% endif %}
   {% endfor %}

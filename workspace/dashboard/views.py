@@ -167,8 +167,14 @@ def _build_dashboard_context(
     include_conversations=False,
     include_events=False,
 ):
+    pending_action_counts = registry.get_pending_action_counts(user)
+    modules = []
+    for m in registry.get_for_template():
+        if m['slug'] != 'dashboard':
+            m['pending_action_count'] = pending_action_counts.get(m['slug'], 0)
+            modules.append(m)
     context = {
-        'modules': [m for m in registry.get_for_template() if m['slug'] != 'dashboard'],
+        'modules': modules,
     }
     # Fetch unread counts once, share between stats and conversations
     unread = None

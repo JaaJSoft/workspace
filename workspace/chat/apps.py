@@ -6,7 +6,7 @@ class ChatConfig(AppConfig):
     name = 'workspace.chat'
 
     def ready(self):
-        from workspace.core.module_registry import ModuleInfo, SearchProviderInfo, registry
+        from workspace.core.module_registry import ModuleInfo, PendingActionProviderInfo, SearchProviderInfo, registry
         from workspace.core.sse_registry import SSEProviderInfo, sse_registry
         from workspace.chat.search import search_conversations
         from workspace.chat.sse_provider import ChatSSEProvider
@@ -30,4 +30,13 @@ class ChatConfig(AppConfig):
         sse_registry.register(SSEProviderInfo(
             slug='chat',
             provider_cls=ChatSSEProvider,
+        ))
+
+        def _chat_pending_actions(user):
+            from workspace.chat.services import get_unread_counts
+            return get_unread_counts(user).get('total', 0)
+
+        registry.register_pending_action_provider(PendingActionProviderInfo(
+            module_slug='chat',
+            pending_action_fn=_chat_pending_actions,
         ))

@@ -1057,3 +1057,36 @@ class EventRespondNotificationTests(CalendarNotificationTestBase):
             format='json',
         )
         self.assertEqual(self._notifs_for(self.owner).count(), 0)
+
+
+# ---------- Pending Action Provider ----------
+
+
+class CalendarPendingActionProviderTests(CalendarTestMixin, TestCase):
+    """Tests for the calendar pending action provider."""
+
+    def test_pending_actions_returns_upcoming_event_count(self):
+        from workspace.core.module_registry import registry
+        counts = registry.get_pending_action_counts(self.owner)
+        self.assertEqual(counts.get('calendar'), 1)
+
+    def test_pending_actions_includes_events_as_member(self):
+        from workspace.core.module_registry import registry
+        counts = registry.get_pending_action_counts(self.member)
+        self.assertEqual(counts.get('calendar'), 1)
+
+    def test_pending_actions_excludes_past_events(self):
+        self.event.start = timezone.now() - timedelta(days=1)
+        self.event.end = timezone.now() - timedelta(hours=23)
+        self.event.save()
+        from workspace.core.module_registry import registry
+        counts = registry.get_pending_action_counts(self.owner)
+        self.assertEqual(counts.get('calendar'), 0)
+
+    def test_pending_actions_excludes_events_beyond_7_days(self):
+        self.event.start = timezone.now() + timedelta(days=10)
+        self.event.end = timezone.now() + timedelta(days=10, hours=1)
+        self.event.save()
+        from workspace.core.module_registry import registry
+        counts = registry.get_pending_action_counts(self.owner)
+        self.assertEqual(counts.get('calendar'), 0)

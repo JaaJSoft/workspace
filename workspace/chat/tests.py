@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from PIL import Image
+from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -1207,3 +1208,24 @@ class MessageReadersTests(ChatTestMixin, APITestCase):
         )
         resp = self.client.get(self._url(self.group.uuid, msg.uuid))
         self.assertEqual(resp.status_code, 403)
+
+
+class ChatPendingActionProviderTests(ChatTestMixin, TestCase):
+    """Tests for the chat pending action provider."""
+
+    def test_pending_actions_returns_unread_count(self):
+        ConversationMember.objects.filter(
+            conversation=self.group, user=self.member,
+        ).update(unread_count=3)
+        ConversationMember.objects.filter(
+            conversation=self.dm, user=self.member,
+        ).update(unread_count=2)
+
+        from workspace.core.module_registry import registry
+        counts = registry.get_pending_action_counts(self.member)
+        self.assertEqual(counts.get('chat'), 5)
+
+    def test_pending_actions_returns_zero_when_no_unread(self):
+        from workspace.core.module_registry import registry
+        counts = registry.get_pending_action_counts(self.creator)
+        self.assertEqual(counts.get('chat'), 0)

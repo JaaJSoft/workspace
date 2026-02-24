@@ -38,10 +38,17 @@ class SearchProviderInfo:
     search_fn: Callable
 
 
+@dataclass(frozen=True)
+class PendingActionProviderInfo:
+    module_slug: str
+    pending_action_fn: Callable  # signature: (user) -> int
+
+
 class ModuleRegistry:
     def __init__(self):
         self._modules: dict[str, ModuleInfo] = {}
         self._search_providers: dict[str, SearchProviderInfo] = {}
+        self._pending_action_providers: dict[str, PendingActionProviderInfo] = {}
         self._lock = threading.Lock()
 
     def register(self, module: ModuleInfo):
@@ -72,6 +79,31 @@ class ModuleRegistry:
             except Exception:
                 logger.exception("Search provider '%s' failed", provider.slug)
         return results
+
+    def register_pending_action_provider(self, provider: PendingActionProviderInfo):
+        with self._lock:
+            if provider.module_slug not in self._modules:
+                raise ValueError(
+                    f"Module '{provider.module_slug}' must be registered before its pending action provider"
+                )
+            if provider.module_slug in self._pending_action_providers:
+                raise ValueError(
+                    f"Pending action provider for '{provider.module_slug}' is already registered"
+                )
+            self._pending_action_providers[provider.module_slug] = provider
+
+    def get_pending_action_counts(self, user) -> dict[str, int]:
+        counts = {}
+        for slug, provider in self._pending_action_providers.items():
+            module = self._modules.get(slug)
+            if not module or not module.active:
+                continue
+            try:
+                counts[slug] = provider.pending_action_fn(user)
+            except Exception:
+                logger.exception("Pending action provider '%s' failed", slug)
+                counts[slug] = 0
+        return counts
 
     def get(self, slug: str) -> ModuleInfo | None:
         return self._modules.get(slug)

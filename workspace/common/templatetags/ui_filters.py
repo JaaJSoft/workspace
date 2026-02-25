@@ -35,6 +35,7 @@ def localtime_tag(value, fmt='time'):
       - ``time``      → HH:MM  (default)
       - ``date``      → "Today", "Yesterday", or "Feb 5"
       - ``datetime``  → "Feb 5, 2:30 PM"
+      - ``smart``     → HH:MM today, "Feb 5, 2:30 PM" otherwise
       - ``relative``  → "5 minutes ago"
       - ``full``      → "Feb 5, 2025 · 2:30 PM"
 

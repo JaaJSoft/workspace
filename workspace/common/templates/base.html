@@ -125,6 +125,13 @@
             else if (sec < 86400) { var h = Math.floor(sec / 3600); el.textContent = h + ' hour' + (h > 1 ? 's' : '') + ' ago'; }
             else { var dy = Math.floor(sec / 86400); el.textContent = dy + ' day' + (dy > 1 ? 's' : '') + ' ago'; }
             break;
+          case 'smart':
+            var now = new Date();
+            var isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+            el.textContent = isToday
+              ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+              : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            break;
           case 'full':
             el.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
             break;

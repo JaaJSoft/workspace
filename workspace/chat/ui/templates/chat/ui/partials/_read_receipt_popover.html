@@ -4,7 +4,7 @@
   <div class="flex items-center gap-2 py-1 px-1 rounded hover:bg-base-200">
     {% include "ui/partials/user_avatar.html" with user=r.user size="2xs" show_presence=False %}
     <span class="text-xs font-medium truncate flex-1">{{ r.user.username }}</span>
-    <span class="text-[0.6rem] text-base-content/40 flex-shrink-0">{{ r.read_at|localtime_tag }}</span>
+    <span class="text-[0.6rem] text-base-content/40 flex-shrink-0">{{ r.read_at|localtime_tag:"smart" }}</span>
   </div>
 {% empty %}
   <div class="text-xs text-base-content/40 px-1 py-1">No one yet</div>

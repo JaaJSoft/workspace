@@ -44,11 +44,24 @@ class PendingActionProviderInfo:
     pending_action_fn: Callable  # signature: (user) -> int
 
 
+@dataclass(frozen=True)
+class CommandInfo:
+    name: str
+    keywords: list[str]
+    icon: str
+    color: str
+    url: str
+    kind: str            # "navigate" | "action"
+    module_slug: str
+    order: int = 0
+
+
 class ModuleRegistry:
     def __init__(self):
         self._modules: dict[str, ModuleInfo] = {}
         self._search_providers: dict[str, SearchProviderInfo] = {}
         self._pending_action_providers: dict[str, PendingActionProviderInfo] = {}
+        self._commands: list[CommandInfo] = []
         self._lock = threading.Lock()
 
     def register(self, module: ModuleInfo):
@@ -104,6 +117,31 @@ class ModuleRegistry:
                 logger.exception("Pending action provider '%s' failed", slug)
                 counts[slug] = 0
         return counts
+
+    def register_commands(self, commands: list[CommandInfo]):
+        with self._lock:
+            for cmd in commands:
+                if cmd.module_slug not in self._modules:
+                    raise ValueError(
+                        f"Module '{cmd.module_slug}' must be registered before its commands"
+                    )
+            self._commands.extend(commands)
+
+    def search_commands(self, query: str) -> list[CommandInfo]:
+        q = query.lower()
+        name_matches = []
+        keyword_matches = []
+        for cmd in self._commands:
+            module = self._modules.get(cmd.module_slug)
+            if not module or not module.active:
+                continue
+            if q in cmd.name.lower():
+                name_matches.append(cmd)
+            elif any(q in kw.lower() for kw in cmd.keywords):
+                keyword_matches.append(cmd)
+        name_matches.sort(key=lambda c: c.order)
+        keyword_matches.sort(key=lambda c: c.order)
+        return name_matches + keyword_matches
 
     def get(self, slug: str) -> ModuleInfo | None:
         return self._modules.get(slug)

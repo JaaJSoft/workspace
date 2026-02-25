@@ -7,7 +7,7 @@ class MailConfig(AppConfig):
     label = 'mail'
 
     def ready(self):
-        from workspace.core.module_registry import ModuleInfo, PendingActionProviderInfo, SearchProviderInfo, registry
+        from workspace.core.module_registry import CommandInfo, ModuleInfo, PendingActionProviderInfo, SearchProviderInfo, registry
         from workspace.mail.search import search_contacts, search_mail
 
         registry.register(ModuleInfo(
@@ -44,3 +44,16 @@ class MailConfig(AppConfig):
             module_slug='mail',
             pending_action_fn=_mail_pending_actions,
         ))
+
+        registry.register_commands([
+            CommandInfo(
+                name='Mail', keywords=['mail', 'email', 'inbox'],
+                icon='mail', color='warning', url='/mail',
+                kind='navigate', module_slug='mail', order=25,
+            ),
+            CommandInfo(
+                name='New email', keywords=['new email', 'compose', 'send'],
+                icon='mail-plus', color='warning', url='/mail?compose=',
+                kind='action', module_slug='mail', order=26,
+            ),
+        ])

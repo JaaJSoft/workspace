@@ -99,8 +99,18 @@ function chatApp(currentUserId) {
         }
       });
 
+      // ?action=new — open new conversation dialog from command palette
+      const params = new URLSearchParams(window.location.search);
+      const action = params.get('action');
+      if (action === 'new') {
+        this.$nextTick(() => this.showNewConversationDialog());
+        const url = new URL(window.location);
+        url.searchParams.delete('action');
+        history.replaceState(null, '', url);
+      }
+
       // Auto-open DM from query param (e.g. /chat?dm=42)
-      const dmParam = new URLSearchParams(window.location.search).get('dm');
+      const dmParam = params.get('dm');
       if (dmParam) {
         await this._openDmByUserId(parseInt(dmParam, 10));
       }

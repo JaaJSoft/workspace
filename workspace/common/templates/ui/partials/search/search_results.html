@@ -5,6 +5,39 @@
   - container_class: classes CSS pour le conteneur (optionnel)
 {% endcomment %}
 <div x-show="query.length >= 2" class="{{ container_class|default:'max-h-96 overflow-y-auto scroll-smooth' }}">
+
+  <!-- Commands / Actions -->
+  <div x-show="commands.length > 0" class="p-2">
+    <div class="px-3 py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider">
+      Actions
+    </div>
+    <template x-for="(cmd, index) in commands" :key="cmd.name + cmd.url">
+      <a
+        :href="cmd.url"
+        {% if on_click %}@click="{{ on_click }}"{% endif %}
+        @mouseenter="activeIndex = index"
+        :class="isCommandActive(index) ? 'bg-base-300' : 'bg-transparent'"
+        class="flex items-center gap-3 px-3 py-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
+      >
+        <div class="flex-shrink-0">
+          <div :class="`bg-${cmd.color || 'primary'}/10 text-${cmd.color || 'primary'}`" class="rounded-lg w-8 h-8 flex items-center justify-center">
+            <i :data-lucide="cmd.icon || 'terminal'" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium" x-html="highlightMatch(cmd.name, searchQuery)"></div>
+        </div>
+        <div x-show="cmd.kind === 'action'" class="flex-shrink-0">
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-base-content/30"></i>
+        </div>
+        <div x-show="cmd.kind === 'navigate'" class="flex-shrink-0">
+          <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-base-content/30"></i>
+        </div>
+      </a>
+    </template>
+  </div>
+
+  <!-- Search results -->
   <div x-show="results.length > 0" class="p-2">
     <div class="px-3 py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider">
       <span x-text="`${results.length} Result${results.length > 1 ? 's' : ''}`"></span>
@@ -13,7 +46,7 @@
       <a
         :href="result.url"
         {% if on_click %}@click="{{ on_click }}"{% endif %}
-        @mouseenter="activeIndex = index"
+        @mouseenter="activeIndex = commands.length + index"
         :class="isResultActive(index) ? 'bg-base-300' : 'bg-transparent'"
         class="flex items-center gap-3 px-3 py-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
       >
@@ -53,7 +86,7 @@
   </div>
 
   <!-- No results -->
-  <div x-show="results.length === 0 && !loading" class="px-4 py-8 text-center">
+  <div x-show="commands.length === 0 && results.length === 0 && !loading" class="px-4 py-8 text-center">
     <i data-lucide="search-x" class="w-8 h-8 mx-auto mb-2 opacity-30"></i>
     <div class="text-sm text-base-content/60">No results found</div>
   </div>

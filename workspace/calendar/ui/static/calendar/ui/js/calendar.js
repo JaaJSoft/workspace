@@ -443,6 +443,24 @@ window.calendarApp = function calendarApp(calendarsData) {
       const pollId = params.get('poll');
       if (pollId) this.openPollDetail(pollId);
 
+      // ?action=new-event or ?action=new-poll — open create modal from command palette
+      const action = params.get('action');
+      if (action === 'new-event') {
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        const start = `${dateStr}T${timeStr}`;
+        this.$nextTick(() => this.openCreateModal(start, this._addHour(now.toISOString()), false));
+      } else if (action === 'new-poll') {
+        this.$nextTick(() => { this.showPollListModal = true; this.openPollCreate(); });
+      }
+      if (action) {
+        const url = new URL(window.location);
+        url.searchParams.delete('action');
+        history.replaceState(null, '', url);
+      }
+
       // Browser back/forward
       window.addEventListener('popstate', () => {
         const p = new URLSearchParams(window.location.search);

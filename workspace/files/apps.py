@@ -7,7 +7,7 @@ class FilesConfig(AppConfig):
 
     def ready(self):
         from django.db.models.signals import post_save, post_delete
-        from workspace.core.module_registry import ModuleInfo, SearchProviderInfo, registry
+        from workspace.core.module_registry import CommandInfo, ModuleInfo, SearchProviderInfo, registry
         from workspace.core.sse_registry import SSEProviderInfo, sse_registry
         from workspace.files.search import search_files
         from workspace.files.sse_provider import FilesSSEProvider
@@ -32,6 +32,14 @@ class FilesConfig(AppConfig):
             slug='files',
             provider_cls=FilesSSEProvider,
         ))
+
+        registry.register_commands([
+            CommandInfo(
+                name='Files', keywords=['files', 'documents', 'storage'],
+                icon='hard-drive', color='primary', url='/files',
+                kind='navigate', module_slug='files', order=10,
+            ),
+        ])
 
         from .models import MimeTypeRule
         from .services.mime import invalidate_cache

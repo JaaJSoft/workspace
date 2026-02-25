@@ -2,6 +2,7 @@ window.commandPaletteDropdown = function () {
   return {
     open: false,
     query: '',
+    commands: [],
     results: [],
     hasMore: false,
     loading: false,
@@ -38,6 +39,11 @@ window.commandPaletteDropdown = function () {
         this.activeIndex = -1;
       });
 
+      this.$watch('commands', () => {
+        this._cachedItems = null;
+        this._cacheKey = '';
+      });
+
       this.$watch('results', () => {
         this._cachedItems = null;
         this._cacheKey = '';
@@ -48,6 +54,7 @@ window.commandPaletteDropdown = function () {
     search() {
       this.searchQuery = this.query;
       if (this.query.length < 2) {
+        this.commands = [];
         this.results = [];
         this.activeIndex = -1;
         return;
@@ -58,6 +65,7 @@ window.commandPaletteDropdown = function () {
       fetch(`/api/v1/search?q=${q}`, { credentials: 'same-origin' })
         .then(r => r.json())
         .then(data => {
+          this.commands = data.commands || [];
           this.results = data.results || [];
           this.loading = false;
           if (window.lucide?.createIcons) {
@@ -65,6 +73,7 @@ window.commandPaletteDropdown = function () {
           }
         })
         .catch(() => {
+          this.commands = [];
           this.results = [];
           this.loading = false;
         });
@@ -80,6 +89,7 @@ window.commandPaletteDropdown = function () {
     close() {
       this.open = false;
       this.query = '';
+      this.commands = [];
       this.results = [];
       this.activeIndex = -1;
       this._cachedItems = null;
@@ -150,7 +160,7 @@ window.commandPaletteDropdown = function () {
     getAllItems() {
       if (!this.open) return [];
 
-      const cacheKey = `${this.query.length}-${this.results.length}`;
+      const cacheKey = `${this.query.length}-${this.commands.length}-${this.results.length}`;
       if (this._cachedItems && this._cacheKey === cacheKey) {
         return this._cachedItems;
       }
@@ -176,7 +186,7 @@ window.commandPaletteDropdown = function () {
 
     getItemCount() {
       if (this.query.length >= 2) {
-        return this.results.length;
+        return this.commands.length + this.results.length;
       }
       if (this.query.length === 0) {
         const quickActionsContainer = this.$root.querySelector('[x-show="query.length === 0"]');
@@ -188,11 +198,20 @@ window.commandPaletteDropdown = function () {
       return 0;
     },
 
-    isResultActive(index) {
+    isCommandActive(index) {
       if (!this.open) return false;
       if (this.activeIndex < 0) return false;
       if (this.query.length >= 2) {
         return this.activeIndex === index;
+      }
+      return false;
+    },
+
+    isResultActive(index) {
+      if (!this.open) return false;
+      if (this.activeIndex < 0) return false;
+      if (this.query.length >= 2) {
+        return this.activeIndex === this.commands.length + index;
       }
       return false;
     },

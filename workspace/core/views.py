@@ -40,4 +40,10 @@ class UnifiedSearchView(APIView):
         limit = max(1, min(limit, 50))
 
         results = registry.search(query, request.user, limit)
-        return Response({'query': query, 'results': results, 'count': len(results)})
+        commands = [asdict(c) for c in registry.search_commands(query)]
+        return Response({
+            'query': query,
+            'commands': commands,
+            'results': results,
+            'count': len(commands) + len(results),
+        })

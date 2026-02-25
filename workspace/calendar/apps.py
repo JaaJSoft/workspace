@@ -7,7 +7,7 @@ class CalendarConfig(AppConfig):
     label = 'calendar'
 
     def ready(self):
-        from workspace.core.module_registry import ModuleInfo, PendingActionProviderInfo, SearchProviderInfo, registry
+        from workspace.core.module_registry import CommandInfo, ModuleInfo, PendingActionProviderInfo, SearchProviderInfo, registry
         from workspace.calendar.search import search_events
 
         registry.register(ModuleInfo(
@@ -56,3 +56,21 @@ class CalendarConfig(AppConfig):
             module_slug='calendar',
             pending_action_fn=_calendar_pending_actions,
         ))
+
+        registry.register_commands([
+            CommandInfo(
+                name='Calendar', keywords=['calendar', 'agenda', 'events', 'planning'],
+                icon='calendar', color='accent', url='/calendar',
+                kind='navigate', module_slug='calendar', order=20,
+            ),
+            CommandInfo(
+                name='New event', keywords=['new event', 'meeting', 'schedule'],
+                icon='calendar-plus', color='accent', url='/calendar?action=new-event',
+                kind='action', module_slug='calendar', order=21,
+            ),
+            CommandInfo(
+                name='New poll', keywords=['new poll', 'survey', 'vote', 'sondage'],
+                icon='bar-chart-3', color='accent', url='/calendar?action=new-poll',
+                kind='action', module_slug='calendar', order=22,
+            ),
+        ])

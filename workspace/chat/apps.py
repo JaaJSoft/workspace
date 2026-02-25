@@ -6,7 +6,7 @@ class ChatConfig(AppConfig):
     name = 'workspace.chat'
 
     def ready(self):
-        from workspace.core.module_registry import ModuleInfo, PendingActionProviderInfo, SearchProviderInfo, registry
+        from workspace.core.module_registry import CommandInfo, ModuleInfo, PendingActionProviderInfo, SearchProviderInfo, registry
         from workspace.core.sse_registry import SSEProviderInfo, sse_registry
         from workspace.chat.search import search_conversations
         from workspace.chat.sse_provider import ChatSSEProvider
@@ -40,3 +40,16 @@ class ChatConfig(AppConfig):
             module_slug='chat',
             pending_action_fn=_chat_pending_actions,
         ))
+
+        registry.register_commands([
+            CommandInfo(
+                name='Chat', keywords=['chat', 'messages', 'conversations'],
+                icon='message-circle', color='info', url='/chat',
+                kind='navigate', module_slug='chat', order=15,
+            ),
+            CommandInfo(
+                name='New conversation', keywords=['new chat', 'message'],
+                icon='message-circle-plus', color='info', url='/chat?action=new',
+                kind='action', module_slug='chat', order=16,
+            ),
+        ])

@@ -1,3 +1,4 @@
+from django.conf import settings as django_settings
 from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -6,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Notification
+from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
 
 
@@ -91,3 +92,51 @@ class NotificationReadAllView(APIView):
             recipient=request.user, read_at__isnull=True,
         ).update(read_at=timezone.now())
         return Response({'marked': count})
+
+
+@extend_schema(tags=['Notifications'])
+class PushVapidKeyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Return the VAPID public key for push subscription."""
+        return Response({
+            'public_key': getattr(django_settings, 'WEBPUSH_VAPID_PUBLIC_KEY', ''),
+        })
+
+
+@extend_schema(tags=['Notifications'])
+class PushSubscribeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Subscribe to push notifications."""
+        endpoint = request.data.get('endpoint')
+        keys = request.data.get('keys', {})
+        p256dh = keys.get('p256dh') if isinstance(keys, dict) else None
+        auth = keys.get('auth') if isinstance(keys, dict) else None
+
+        if not endpoint or not p256dh or not auth:
+            return Response(
+                {'error': 'Missing required fields: endpoint, keys.p256dh, keys.auth'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        PushSubscription.objects.update_or_create(
+            endpoint=endpoint,
+            defaults={
+                'user': request.user,
+                'p256dh': p256dh,
+                'auth': auth,
+            },
+        )
+        return Response(status=status.HTTP_201_CREATED)
+
+    def delete(self, request):
+        """Unsubscribe from push notifications."""
+        endpoint = request.data.get('endpoint')
+        PushSubscription.objects.filter(
+            user=request.user,
+            endpoint=endpoint,
+        ).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -647,6 +647,85 @@
     window.addEventListener('sse:notifications.count', function(e) {
       Alpine.store('notifications').setCount(e.detail.unread);
     });
+
+    // Web Push store
+    Alpine.store('push', {
+      supported: 'serviceWorker' in navigator && 'PushManager' in window,
+      subscription: null,
+      loading: false,
+
+      get enabled() { return !!this.subscription; },
+
+      async init() {
+        if (!this.supported) return;
+        try {
+          var reg = await navigator.serviceWorker.register('/sw.js');
+          this.subscription = await reg.pushManager.getSubscription();
+        } catch (e) {
+          console.warn('SW registration failed:', e);
+        }
+      },
+
+      async toggle() {
+        if (this.loading) return;
+        this.loading = true;
+        try {
+          if (this.subscription) {
+            await this._unsubscribe();
+          } else {
+            await this._subscribe();
+          }
+        } finally {
+          this.loading = false;
+          this.$nextTick ? this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }) : void 0;
+        }
+      },
+
+      async _subscribe() {
+        var permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+        var resp = await fetch('/api/v1/notifications/push/key', { credentials: 'same-origin' });
+        var data = await resp.json();
+        if (!data.public_key) return;
+        var reg = await navigator.serviceWorker.ready;
+        var sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: this._b64toArray(data.public_key),
+        });
+        this.subscription = sub;
+        var json = sub.toJSON();
+        var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        await fetch('/api/v1/notifications/push/subscribe', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+        });
+      },
+
+      async _unsubscribe() {
+        if (!this.subscription) return;
+        var endpoint = this.subscription.endpoint;
+        await this.subscription.unsubscribe();
+        this.subscription = null;
+        var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        await fetch('/api/v1/notifications/push/subscribe', {
+          method: 'DELETE', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ endpoint: endpoint }),
+        });
+      },
+
+      _b64toArray(base64String) {
+        var padding = '='.repeat((4 - base64String.length % 4) % 4);
+        var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        var raw = window.atob(base64);
+        var arr = new Uint8Array(raw.length);
+        for (var i = 0; i < raw.length; ++i) arr[i] = raw.charCodeAt(i);
+        return arr;
+      }
+    });
+
+    Alpine.store('push').init();
   });
   </script>
   {% endif %}

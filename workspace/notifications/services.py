@@ -1,6 +1,7 @@
 from workspace.core.module_registry import registry
 from workspace.core.sse_registry import notify_sse
 from .models import Notification
+from .tasks import send_push_notification
 
 
 def _resolve_module_defaults(origin, icon, color):
@@ -29,6 +30,8 @@ def notify(*, recipient, origin, icon='', title, body='', url='', actor=None, pr
         priority=priority,
     )
     notify_sse('notifications', recipient.id)
+    if priority != 'low':
+        send_push_notification.delay(str(notif.uuid))
     return notif
 
 
@@ -51,6 +54,9 @@ def notify_many(*, recipients, origin, icon='', title, body='', url='', actor=No
     ])
     for user in recipients:
         notify_sse('notifications', user.id)
+    if priority != 'low':
+        for notif in notifs:
+            send_push_notification.delay(str(notif.uuid))
     return notifs
 
 

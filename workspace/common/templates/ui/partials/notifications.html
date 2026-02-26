@@ -91,6 +91,17 @@
       <h3 class="font-semibold text-base-content">Notifications</h3>
       <div class="flex items-center gap-1">
         <button
+          x-show="$store.push.supported"
+          x-cloak
+          @click="$store.push.toggle()"
+          class="btn btn-ghost btn-xs btn-circle"
+          :class="$store.push.enabled ? 'text-primary' : 'text-base-content/50'"
+          :title="$store.push.enabled ? 'Disable push notifications' : 'Enable push notifications'"
+          :disabled="$store.push.loading"
+        >
+          <i :data-lucide="$store.push.enabled ? 'bell-ring' : 'bell-off'" class="w-3.5 h-3.5"></i>
+        </button>
+        <button
           @click="searchOpen ? clearSearch() : (searchOpen = true, $nextTick(() => $refs.searchInput.focus()))"
           class="btn btn-ghost btn-xs btn-circle"
           :class="searchOpen ? 'text-primary' : 'text-base-content/50'"

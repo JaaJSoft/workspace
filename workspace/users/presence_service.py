@@ -207,6 +207,18 @@ def get_online_user_ids() -> list[int]:
     )
 
 
+def is_active(user_id: int) -> bool:
+    """Return True if *user_id* has been active within the last 30 seconds."""
+    raw = cache.get(_activity_key(user_id))
+    if raw is None:
+        return False
+    try:
+        delta = timezone.now() - datetime.fromisoformat(raw)
+    except (TypeError, ValueError):
+        return False
+    return delta < timedelta(seconds=30)
+
+
 def clear(user_id: int) -> None:
     """Remove presence data from cache so the user appears offline immediately."""
     cache.delete(_cache_key(user_id))

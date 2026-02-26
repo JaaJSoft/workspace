@@ -14,10 +14,13 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from pathlib import Path
+
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.urls import path, include
+from django.views.static import serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 from workspace.core.views_health import LiveView, ReadyView, StartupView
@@ -52,6 +55,8 @@ urlpatterns = [
     # Authentication
     path('login', auth_views.LoginView.as_view(template_name='users/auth/login.html'), name='login'),
     path('logout', auth_views.LogoutView.as_view(), name='logout'),
+    # Service Worker (must be at root scope for push notifications)
+    path('sw.js', serve, {'path': 'sw.js', 'document_root': Path(__file__).resolve().parent / 'common' / 'static'}, name='service-worker'),
     # Health probes (k8s)
     path('health/startup', StartupView.as_view(), name='health-startup'),
     path('health/live', LiveView.as_view(), name='health-live'),

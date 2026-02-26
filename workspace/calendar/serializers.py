@@ -12,10 +12,14 @@ class MemberUserSerializer(serializers.Serializer):
 
 class CalendarSerializer(serializers.ModelSerializer):
     owner = MemberUserSerializer()
+    is_synced = serializers.SerializerMethodField()
 
     class Meta:
         model = Calendar
-        fields = ['uuid', 'name', 'color', 'owner', 'created_at']
+        fields = ['uuid', 'name', 'color', 'owner', 'is_synced', 'created_at']
+
+    def get_is_synced(self, obj):
+        return obj.mail_account_id is not None
 
 
 class CalendarCreateSerializer(serializers.Serializer):

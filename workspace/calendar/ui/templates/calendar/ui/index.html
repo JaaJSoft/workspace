@@ -525,7 +525,7 @@
       <label class="form-control w-full">
         <div class="label"><span class="label-text">Calendar</span></div>
         <select class="select select-bordered select-sm w-full" x-model="form.calendar_id">
-          <template x-for="cal in ownedCalendars" :key="cal.uuid">
+          <template x-for="cal in ownedCalendars.filter(c => !c.is_synced)" :key="cal.uuid">
             <option :value="cal.uuid" x-text="cal.name"></option>
           </template>
         </select>

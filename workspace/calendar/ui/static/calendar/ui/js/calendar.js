@@ -560,7 +560,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (this.showModal) return; // prevent double-open from dateClick + select
       this.modalMode = 'create';
       this.showPanel = false;
-      const defaultCal = this.ownedCalendars[0]?.uuid || null;
+      const defaultCal = this.ownedCalendars.find(c => !c.is_synced)?.uuid || null;
 
       // Preference controls all-day default, ignore FullCalendar's allDay flag
       const useAllDay = this.prefs.defaultAllDay;

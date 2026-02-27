@@ -1,4 +1,4 @@
-import json
+import orjson
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -15,7 +15,7 @@ def index(request):
 
     return render(request, 'mail/ui/index.html', {
         'accounts': accounts,
-        'accounts_json': json.dumps(
+        'accounts_json': orjson.dumps(
             MailAccountSerializer(accounts, many=True).data,
-        ),
+        ).decode(),
     })

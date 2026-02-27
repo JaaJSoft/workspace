@@ -212,10 +212,15 @@ REST_FRAMEWORK = {
     ],
     # Disable BrowsableAPI renderer in production for better performance
     'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer',
+        'drf_orjson_renderer.renderers.ORJSONRenderer',
     ] if not DEBUG else [
-        'rest_framework.renderers.JSONRenderer',
+        'drf_orjson_renderer.renderers.ORJSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'drf_orjson_renderer.parsers.ORJSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
     ],
 }
 

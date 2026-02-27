@@ -1,5 +1,6 @@
-import json
 from datetime import timedelta
+
+import orjson
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import OuterRef, Prefetch, Subquery
@@ -137,7 +138,7 @@ def chat_view(request, conversation_uuid=None):
         'pinned_conversations': pinned,
         'dm_conversations': [c for c in conv_list if c.kind == Conversation.Kind.DM and str(c.uuid) not in pinned_uuids],
         'group_conversations': [c for c in conv_list if c.kind == Conversation.Kind.GROUP and str(c.uuid) not in pinned_uuids],
-        'conversations_json': json.dumps(serializer.data),
+        'conversations_json': orjson.dumps(serializer.data).decode(),
         'initial_conversation_uuid': str(conversation_uuid) if conversation_uuid else '',
     })
 

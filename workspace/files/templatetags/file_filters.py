@@ -1,4 +1,4 @@
-import json
+import orjson
 
 from django import template
 from django.utils.safestring import mark_safe
@@ -27,4 +27,4 @@ def to_json(value):
     Output is auto-escaped by Django (" becomes &quot;), which the
     browser decodes before JavaScript reads dataset.* attributes.
     """
-    return json.dumps(value)
+    return orjson.dumps(value).decode()

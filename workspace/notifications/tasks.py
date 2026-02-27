@@ -1,5 +1,6 @@
-import json
 import logging
+
+import orjson
 
 from celery import shared_task
 from django.conf import settings
@@ -30,7 +31,7 @@ def send_push_notification(notification_uuid: str):
     if not subscriptions.exists():
         return
 
-    payload = json.dumps({
+    payload = orjson.dumps({
         'title': notif.title,
         'body': notif.body,
         'icon': notif.icon,

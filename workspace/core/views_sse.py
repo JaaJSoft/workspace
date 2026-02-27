@@ -1,7 +1,7 @@
-import json
 import time
-import uuid as _uuid
 import logging
+
+import orjson
 
 from django.core.cache import cache
 from django.http import StreamingHttpResponse
@@ -17,13 +17,6 @@ SSE_CONNECTIONS = Gauge(
 )
 
 
-class _SSEEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, _uuid.UUID):
-            return str(obj)
-        return super().default(obj)
-
-
 def _format_sse(event_type, data, event_id=None):
     """Format an SSE event string.
 
@@ -36,7 +29,7 @@ def _format_sse(event_type, data, event_id=None):
     lines = ['event: sse']
     if event_id:
         lines.append(f'id: {event_id}')
-    lines.append(f'data: {json.dumps(payload, cls=_SSEEncoder)}')
+    lines.append(f'data: {orjson.dumps(payload).decode()}')
     lines.append('')
     lines.append('')
     return '\n'.join(lines)

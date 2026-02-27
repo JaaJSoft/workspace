@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.9.0
+
+### Calendar
+
+- Poll scheduling: create polls with time slots, invite guests via token, vote, and pick a final slot
+- Poll editing with slot add/remove, redesigned poll list with search and filtered views
+- Poll vote notifications for creators with preference toggle
+- iCalendar email integration: process incoming `.ics` attachments and send REPLY via Celery task
+- Event-specific URLs in notifications for direct navigation
+- Optimize event and poll query performance with prefetching, indexing, and poll ID annotation
+- Pending actions filter includes events until end of day
+- Fix invitation calendar name when account display name changes
+
+### Chat
+
+- Emoji picker for message input and reactions
+- Optimistic message sending with temporary bubbles and loading animation
+- Improved scroll handling for messages and delayed image loading
+- Fix read receipt dropdown positioning
+
+### Files
+
+- File locking with lock/unlock UI, API, and conflict prevention
+- Real-time file event notifications via SSE (edits, lock releases)
+
+### Notifications
+
+- Web Push support with VAPID key configuration
+
+### Dashboard
+
+- App grid with pending action badges showing unread counts per module
+- Command palette with registration and search support
+
+
+### Infrastructure
+
+- SSE: replace cache polling with Redis Pub/Sub for near-instant event delivery
+- Replace `json` with `orjson` for faster serialization
+- Dependency updates: redis 7.2.1, whitenoise 6.12.0, nh3 0.3.3, dj-database-url 3.1.2
+
+### Fixes
+
+- Mail: optimistic UI correctly handles unread count updates
+
 ## 0.8.0
 
 ### Chat

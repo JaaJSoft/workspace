@@ -43,23 +43,23 @@ class EventRespondReplyTest(APITestCase):
         )
         EventMember.objects.create(event=self.event, user=self.user)
 
-    @patch('workspace.calendar.views.send_ics_reply')
+    @patch('workspace.calendar.tasks.send_ics_reply.delay')
     def test_accept_sends_reply_email(self, mock_send):
         self.client.force_authenticate(self.user)
         url = f'/api/v1/calendar/events/{self.event.pk}/respond'
         resp = self.client.post(url, {'status': 'accepted'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        mock_send.assert_called_once_with(self.event, self.user, 'accepted')
+        mock_send.assert_called_once_with(str(self.event.pk), self.user.id, 'accepted')
 
-    @patch('workspace.calendar.views.send_ics_reply')
+    @patch('workspace.calendar.tasks.send_ics_reply.delay')
     def test_decline_sends_reply_email(self, mock_send):
         self.client.force_authenticate(self.user)
         url = f'/api/v1/calendar/events/{self.event.pk}/respond'
         resp = self.client.post(url, {'status': 'declined'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        mock_send.assert_called_once_with(self.event, self.user, 'declined')
+        mock_send.assert_called_once_with(str(self.event.pk), self.user.id, 'declined')
 
-    @patch('workspace.calendar.views.send_ics_reply')
+    @patch('workspace.calendar.tasks.send_ics_reply.delay')
     def test_no_reply_for_non_email_event(self, mock_send):
         self.event.organizer_email = None
         self.event.source_message = None

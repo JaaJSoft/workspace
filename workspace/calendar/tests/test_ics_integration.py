@@ -98,13 +98,13 @@ class EndToEndICSTest(APITestCase):
 
         # Step 3: User accepts the invitation
         self.client.force_authenticate(self.user)
-        with patch('workspace.calendar.views.send_ics_reply') as mock_reply:
+        with patch('workspace.calendar.tasks.send_ics_reply.delay') as mock_reply:
             url = f'/api/v1/calendar/events/{event.pk}/respond'
             resp = self.client.post(url, {'status': 'accepted'}, format='json')
             self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
             # Verify REPLY would be sent
-            mock_reply.assert_called_once_with(event, self.user, 'accepted')
+            mock_reply.assert_called_once_with(str(event.pk), self.user.id, 'accepted')
 
         # Verify member status updated
         member.refresh_from_db()

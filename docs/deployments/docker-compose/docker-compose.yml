@@ -11,6 +11,9 @@ services:
       - DATABASE_URL=sqlite:////app/data/db.sqlite3
       - MEDIA_ROOT=/app/data
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-6}
+      - WEBPUSH_VAPID_PRIVATE_KEY=${WEBPUSH_VAPID_PRIVATE_KEY:-}
+      - WEBPUSH_VAPID_PUBLIC_KEY=${WEBPUSH_VAPID_PUBLIC_KEY:-}
+      - WEBPUSH_VAPID_MAILTO=${WEBPUSH_VAPID_MAILTO:-}
     volumes:
       - workspace-data:/app/data
     restart: unless-stopped
@@ -23,6 +26,9 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-me-to-a-real-secret-key}
       - DATABASE_URL=sqlite:////app/data/db.sqlite3
       - MEDIA_ROOT=/app/data
+      - WEBPUSH_VAPID_PRIVATE_KEY=${WEBPUSH_VAPID_PRIVATE_KEY:-}
+      - WEBPUSH_VAPID_PUBLIC_KEY=${WEBPUSH_VAPID_PUBLIC_KEY:-}
+      - WEBPUSH_VAPID_MAILTO=${WEBPUSH_VAPID_MAILTO:-}
     volumes:
       - workspace-data:/app/data
     restart: unless-stopped

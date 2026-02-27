@@ -32,7 +32,7 @@ An **initContainer** (`migrate`) runs database migrations before the pod starts.
 | File             | Description                                                    |
 |------------------|----------------------------------------------------------------|
 | `namespace.yaml` | Namespace `workspace`                                          |
-| `secrets.yaml`   | Sensitive config: `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`    |
+| `secrets.yaml`   | Sensitive config: `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `WEBPUSH_VAPID_PRIVATE_KEY` |
 | `configmap.yaml` | Non-sensitive config: debug, allowed hosts, workers, log level |
 | `app.yaml`       | Deployment (all containers) + PVC + Service                    |
 | `ingress.yaml`   | Ingress (nginx) with TLS                                       |
@@ -72,9 +72,10 @@ kubectl apply -f ingress.yaml
 
 | Key            | Description                                                           |
 |----------------|-----------------------------------------------------------------------|
-| `SECRET_KEY`   | Django secret key. **Must be changed** before deploying.              |
-| `DATABASE_URL` | Database connection string. Default: `sqlite:////app/data/db.sqlite3` |
-| `REDIS_URL`    | Redis connection. Default: `redis://localhost:6379/0` (sidecar)       |
+| `SECRET_KEY`              | Django secret key. **Must be changed** before deploying.              |
+| `DATABASE_URL`            | Database connection string. Default: `sqlite:////app/data/db.sqlite3` |
+| `REDIS_URL`               | Redis connection. Default: `redis://localhost:6379/0` (sidecar)       |
+| `WEBPUSH_VAPID_PRIVATE_KEY` | VAPID private key (PEM). Generate with `manage.py generate_vapid_keys` |
 
 ### ConfigMap (`configmap.yaml`)
 
@@ -88,6 +89,8 @@ kubectl apply -f ingress.yaml
 | `DJANGO_LOG_LEVEL`     | `INFO`                          | Django log level                          |
 | `TRASH_RETENTION_DAYS` | `30`                            | Days before trashed files are purged      |
 | `MEDIA_ROOT`           | `/app/data`                     | Root directory for user files and uploads |
+| `WEBPUSH_VAPID_PUBLIC_KEY` | *(empty)*                  | VAPID public key (base64url)              |
+| `WEBPUSH_VAPID_MAILTO` | *(empty)*                       | Contact email for VAPID claims (`mailto:…`) |
 
 ## Storage
 

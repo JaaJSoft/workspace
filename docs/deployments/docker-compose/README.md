@@ -54,6 +54,9 @@ All settings are configurable via environment variables or a `.env` file next to
 | `ALLOWED_HOSTS`        | `*`                              | Comma-separated list of allowed hostnames |
 | `CSRF_TRUSTED_ORIGINS` | *(empty)*                        | Comma-separated list of trusted origins   |
 | `GUNICORN_WORKERS`     | `6`                              | Number of Gunicorn workers                |
+| `WEBPUSH_VAPID_PRIVATE_KEY` | *(empty)*                   | VAPID private key (PEM). Generate with `manage.py generate_vapid_keys` |
+| `WEBPUSH_VAPID_PUBLIC_KEY`  | *(empty)*                   | VAPID public key (base64url)              |
+| `WEBPUSH_VAPID_MAILTO`      | *(empty)*                   | Contact email for VAPID claims (`mailto:…`) |
 
 ### Example `.env`
 
@@ -62,6 +65,11 @@ SECRET_KEY=your-very-secret-random-key
 ALLOWED_HOSTS=workspace.example.com
 CSRF_TRUSTED_ORIGINS=https://workspace.example.com
 GUNICORN_WORKERS=4
+WEBPUSH_VAPID_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----"
+WEBPUSH_VAPID_PUBLIC_KEY=BHh5Vu...base64url...
+WEBPUSH_VAPID_MAILTO=mailto:admin@example.com
 ```
 
 ## Storage

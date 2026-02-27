@@ -25,7 +25,6 @@ dependencies = [
     "myl-discovery>=0.6.4",
     "icalendar>=6.1.0",
     # utils
-    "psutil>=7.2.2",
     "mistune>=3.2.0",
     "dj-database-url>=2.3.0",
     "psycopg[binary,pool]>=3.2.0",
@@ -36,6 +35,8 @@ dependencies = [
     "django-brotli>=0.4.0",
     "gevent>=25.9.1",
     "django-prometheus>=2.4.0",
+    # push notifications
+    "pywebpush>=2.3.0",
 ]
 
 [build-system]

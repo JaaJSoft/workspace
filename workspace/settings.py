@@ -108,21 +108,46 @@ if DEBUG and not TESTING:
 
 # Cache configuration
 # Default: in-memory cache for local/dev. Optional Redis via env.
+# When Redis is available, separate DBs are used to isolate concerns:
+#   DB 0 — cache (evictable)
+#   DB 1 — sessions (must not be evicted)
+#   DB 2 — Celery broker + results
 _REDIS_URL = os.getenv('REDIS_URL') or os.getenv('DJANGO_REDIS_URL')
+
+
+def _redis_db_url(base_url, db_number):
+    """Derive a Redis URL pointing to a specific DB number."""
+    from urllib.parse import urlparse, urlunparse
+    parsed = urlparse(base_url)
+    return urlunparse(parsed._replace(path=f'/{db_number}'))
+
+
 if _REDIS_URL:
+    _REDIS_CACHE_URL = _redis_db_url(_REDIS_URL, 0)
+    _REDIS_SESSION_URL = _redis_db_url(_REDIS_URL, 1)
+    _REDIS_CELERY_URL = _redis_db_url(_REDIS_URL, 2)
+
     CACHES = {
         'default': {
             'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': _REDIS_URL,
+            'LOCATION': _REDIS_CACHE_URL,
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             },
             'TIMEOUT': None,  # Infinite by default; specific features manage their own TTL
-        }
+        },
+        'sessions': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': _REDIS_SESSION_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            },
+            'TIMEOUT': None,
+        },
     }
-    # Use Redis for session storage when available (better performance than DB)
+    # Use dedicated Redis DB for sessions (isolated from cache evictions)
     SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-    SESSION_CACHE_ALIAS = 'default'
+    SESSION_CACHE_ALIAS = 'sessions'
 else:
     CACHES = {
         'default': {
@@ -487,11 +512,11 @@ if DEBUG:
     }
 
 # Celery Configuration
-# Use Redis as broker if available, otherwise fall back to in-memory (not recommended for production)
-CELERY_BROKER_URL = _REDIS_URL or 'memory://'
+# Use dedicated Redis DB as broker if available, otherwise fall back to in-memory
+CELERY_BROKER_URL = _REDIS_CELERY_URL if _REDIS_URL else 'memory://'
 import kombu
 CELERY_TASK_QUEUES = [kombu.Queue('celery')]
-CELERY_RESULT_BACKEND = _REDIS_URL or 'cache+memory://'
+CELERY_RESULT_BACKEND = _REDIS_CELERY_URL if _REDIS_URL else 'cache+memory://'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

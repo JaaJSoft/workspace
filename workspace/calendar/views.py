@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from dateutil.parser import parse as dateutil_parse
 from django.contrib.auth import get_user_model
-from django.db.models import Q, Prefetch
+from django.db.models import OuterRef, Q, Prefetch, Subquery
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -41,12 +41,17 @@ logger = logging.getLogger(__name__)
 
 
 def _prefetch_event(qs):
+    from workspace.calendar.models import Poll
     return qs.prefetch_related(
         Prefetch(
             'members',
             queryset=EventMember.objects.select_related('user'),
         ),
-    ).select_related('owner', 'calendar')
+    ).select_related('owner', 'calendar').annotate(
+        _poll_id=Subquery(
+            Poll.objects.filter(event=OuterRef('pk')).values('uuid')[:1]
+        ),
+    )
 
 
 def _visible_calendar_ids(user):

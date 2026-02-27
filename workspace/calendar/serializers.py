@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Calendar, Event, EventMember, Poll
+from .models import Calendar, Event, EventMember
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -57,8 +57,8 @@ class EventSerializer(serializers.ModelSerializer):
         ]
 
     def get_poll_id(self, obj):
-        poll = Poll.objects.filter(event=obj).values_list('uuid', flat=True).first()
-        return str(poll) if poll else None
+        poll_id = getattr(obj, '_poll_id', None)
+        return str(poll_id) if poll_id else None
 
 
 class EventCreateSerializer(serializers.Serializer):

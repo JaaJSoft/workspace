@@ -525,3 +525,8 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 120.0,  # Every 2 minutes
     },
 }
+
+# Web Push (VAPID)
+WEBPUSH_VAPID_PRIVATE_KEY = os.getenv('WEBPUSH_VAPID_PRIVATE_KEY', '')
+WEBPUSH_VAPID_PUBLIC_KEY = os.getenv('WEBPUSH_VAPID_PUBLIC_KEY', '')
+WEBPUSH_VAPID_CLAIMS = {'sub': os.getenv('WEBPUSH_VAPID_MAILTO', '')}

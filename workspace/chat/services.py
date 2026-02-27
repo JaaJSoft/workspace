@@ -1,7 +1,6 @@
-from django.core.cache import cache
-from django.utils import timezone
-
 import mistune
+
+from workspace.core.sse_registry import notify_sse
 
 
 def get_or_create_dm(user, other_user):
@@ -87,13 +86,12 @@ def notify_conversation_members(conversation, exclude_user=None):
         left_at__isnull=True,
     ).values_list('user_id', flat=True)
 
-    now = timezone.now().isoformat()
     for uid in member_user_ids:
         if exclude_user and uid == exclude_user.id:
             continue
-        cache.set(f'sse:chat:last_event:{uid}', now, 120)
+        notify_sse('chat', uid)
 
 
 def notify_user(user_id):
     """Mark that a user has pending SSE events."""
-    cache.set(f'sse:chat:last_event:{user_id}', timezone.now().isoformat(), 120)
+    notify_sse('chat', user_id)

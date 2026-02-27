@@ -552,7 +552,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'sync-all-mail-accounts': {
         'task': 'mail.sync_all_accounts',
-        'schedule': 120.0,  # Every 2 minutes
+        'schedule': 300.0,  # Every 5 minutes
     },
 }
 

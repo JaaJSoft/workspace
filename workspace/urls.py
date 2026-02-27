@@ -20,6 +20,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.urls import path, include
+from django.views.decorators.cache import cache_page
 from django.views.static import serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
@@ -27,7 +28,7 @@ from workspace.core.views_health import LiveView, ReadyView, StartupView
 
 api_urlpatterns = [
     # OpenAPI schema and documentation
-    path('schema/', login_required(SpectacularAPIView.as_view()), name='schema'),
+    path('schema/', login_required(cache_page(3600)(SpectacularAPIView.as_view())), name='schema'),
     path('schema/swagger-ui/', login_required(SpectacularSwaggerView.as_view(url_name='schema')), name='swagger-ui'),
     path('schema/redoc/', login_required(SpectacularRedocView.as_view(url_name='schema')), name='redoc'),
     # API endpoints

@@ -29,6 +29,7 @@ class SearchResult:
     module_slug: str
     module_color: str
     date: str | None = None
+    tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

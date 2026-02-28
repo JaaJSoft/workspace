@@ -1,0 +1,40 @@
+<!-- Account Context Menu -->
+<div
+  x-show="accountCtx.open"
+  x-cloak
+  @click.outside="accountCtx.open = false"
+  @keydown.escape.window="accountCtx.open = false"
+  class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-44 p-1"
+  :style="`top: ${accountCtx.y}px; left: ${accountCtx.x}px;`"
+  id="account-context-menu"
+>
+  <ul class="menu menu-sm p-0">
+    <li>
+      <button type="button" class="gap-3 rounded" @click="accountCtxAction('sync')"
+              :class="syncingAccounts[accountCtx.account?.uuid] ? 'pointer-events-none opacity-50' : ''">
+        <i data-lucide="refresh-cw" class="w-4 h-4" x-show="!syncingAccounts[accountCtx.account?.uuid]"></i>
+        <span class="loading loading-spinner loading-xs" x-show="syncingAccounts[accountCtx.account?.uuid]" x-cloak></span>
+        <span x-text="syncingAccounts[accountCtx.account?.uuid] ? 'Syncing...' : 'Sync'"></span>
+      </button>
+    </li>
+    <li>
+      <button type="button" class="gap-3 rounded" @click="accountCtxAction('edit')">
+        <i data-lucide="settings" class="w-4 h-4"></i>
+        <span>Edit</span>
+      </button>
+    </li>
+    <li>
+      <button type="button" class="gap-3 rounded" @click="accountCtxAction('test')">
+        <i data-lucide="plug" class="w-4 h-4"></i>
+        <span>Test</span>
+      </button>
+    </li>
+    <hr class="my-1 border-base-300" />
+    <li>
+      <button type="button" class="gap-3 rounded text-error" @click="accountCtxAction('remove')">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+        <span>Remove</span>
+      </button>
+    </li>
+  </ul>
+</div>

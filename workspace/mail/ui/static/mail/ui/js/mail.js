@@ -212,6 +212,9 @@ function mailApp() {
     },
     _searchTimer: null,
 
+    // Account context menu
+    accountCtx: { open: false, x: 0, y: 0, account: null },
+
     // Folder context menu
     folderCtx: { open: false, x: 0, y: 0, folder: null },
 
@@ -1170,6 +1173,49 @@ function mailApp() {
         this.editAccountError = data.detail || JSON.stringify(data) || 'Failed to save account';
       }
       this.savingAccount = false;
+    },
+
+    // ----- Account context menu -----
+    openAccountContextMenu(event, account) {
+      event.preventDefault();
+      event.stopPropagation();
+      const menu = document.getElementById('account-context-menu');
+      if (!menu) return;
+
+      this.accountCtx.account = account;
+      this.accountCtx.open = true;
+
+      this.$nextTick(() => {
+        const rect = menu.getBoundingClientRect();
+        let x = event.clientX;
+        let y = event.clientY;
+        if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 10;
+        if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
+        this.accountCtx.x = x;
+        this.accountCtx.y = y;
+        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+      });
+    },
+
+    accountCtxAction(action) {
+      const account = this.accountCtx.account;
+      this.accountCtx.open = false;
+      if (!account) return;
+
+      switch (action) {
+        case 'sync':
+          this.syncAccount(account.uuid);
+          break;
+        case 'edit':
+          this.showEditAccount(account);
+          break;
+        case 'test':
+          this.testAccount(account.uuid);
+          break;
+        case 'remove':
+          this.removeAccount(account.uuid);
+          break;
+      }
     },
 
     // ----- Folder context menu -----

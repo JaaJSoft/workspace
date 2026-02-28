@@ -29,6 +29,7 @@ from .services import (
     get_or_create_dm,
     get_unread_counts,
     notify_conversation_members,
+    notify_new_message,
     render_message_body,
 )
 
@@ -409,11 +410,12 @@ class MessageListView(APIView):
             updated_at=timezone.now(),
         )
 
-        # Notify other members via SSE cache (use conversation_id directly to avoid lazy load)
-        conversation = Conversation(pk=conversation_id)
+        # Notify other members via SSE + push notifications
+        conversation = Conversation.objects.get(pk=conversation_id)
         notify_conversation_members(
             conversation, exclude_user=request.user,
         )
+        notify_new_message(conversation, request.user, body)
 
         msg = (
             Message.objects.filter(pk=message.pk)

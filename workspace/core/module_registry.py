@@ -19,6 +19,12 @@ class ModuleInfo:
 
 
 @dataclass(frozen=True)
+class SearchTag:
+    label: str
+    color: str = 'ghost'
+
+
+@dataclass(frozen=True)
 class SearchResult:
     uuid: str
     name: str
@@ -29,7 +35,7 @@ class SearchResult:
     module_slug: str
     module_color: str
     date: str | None = None
-    tags: tuple[str, ...] = ()
+    tags: tuple[SearchTag, ...] = ()
 
 
 @dataclass(frozen=True)

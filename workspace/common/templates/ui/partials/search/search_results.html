@@ -67,8 +67,8 @@
               :class="`text-${result.module_color || 'primary'}`"
             ></i>
             <span class="truncate flex-1" x-html="highlightMatch(result.matched_value, searchQuery)"></span>
-            <template x-for="tag in (result.tags || [])" :key="tag">
-              <span class="badge badge-xs badge-ghost flex-shrink-0" x-text="tag"></span>
+            <template x-for="tag in (result.tags || [])" :key="tag.label">
+              <span class="badge badge-xs flex-shrink-0" :class="`badge-${tag.color || 'ghost'}`" x-text="tag.label"></span>
             </template>
           </div>
         </div>

@@ -3,7 +3,7 @@ from collections import Counter, defaultdict
 
 from django.db.models import Q
 
-from workspace.core.module_registry import SearchResult
+from workspace.core.module_registry import SearchResult, SearchTag
 
 from .models import MailAccount, MailMessage
 
@@ -37,7 +37,7 @@ def search_mail(query, user, limit):
             module_slug='mail',
             module_color='warning',
             date=_format_date(m.date),
-            tags=(m.folder.display_name,) if m.folder else (),
+            tags=(SearchTag(m.folder.display_name, 'warning'),) if m.folder else (),
         )
         for m in messages
     ]

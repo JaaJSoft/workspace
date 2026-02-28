@@ -1,7 +1,7 @@
 from django.db.models import Q, Value, CharField
 from django.db.models.functions import Concat
 
-from workspace.core.module_registry import SearchResult
+from workspace.core.module_registry import SearchResult, SearchTag
 from workspace.chat.models import Conversation, ConversationMember
 
 
@@ -55,6 +55,7 @@ def search_conversations(query, user, limit):
             type_icon='users',
             module_slug='chat',
             module_color='info',
+            tags=(SearchTag('Group', 'info'),),
         ))
 
     for member in dm_members:
@@ -70,6 +71,7 @@ def search_conversations(query, user, limit):
             type_icon='message-circle',
             module_slug='chat',
             module_color='info',
+            tags=(SearchTag('DM', 'info'),),
         ))
 
     # Sort combined results by relevance isn't trivial here,

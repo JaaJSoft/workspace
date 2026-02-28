@@ -1,10 +1,11 @@
-from workspace.core.module_registry import SearchResult
+from workspace.core.module_registry import SearchResult, SearchTag
 from workspace.files.models import File
 
 
 def search_files(query, user, limit):
     qs = (
         File.objects
+        .select_related('parent')
         .filter(owner=user, deleted_at__isnull=True, name__icontains=query)
         .order_by('-updated_at')[:limit]
     )
@@ -17,6 +18,10 @@ def search_files(query, user, limit):
             url = f'/files/{f.parent_id}' if f.parent_id else '/files'
             type_icon = 'file'
 
+        tags = ()
+        if f.parent:
+            tags = (SearchTag(f.parent.name, 'primary'),)
+
         results.append(SearchResult(
             uuid=str(f.uuid),
             name=f.name,
@@ -26,5 +31,6 @@ def search_files(query, user, limit):
             type_icon=type_icon,
             module_slug='files',
             module_color='primary',
+            tags=tags,
         ))
     return results

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head><title>Connecting account...</title></head>
+<body>
+<p id="status">Connecting your account...</p>
+<script>
+(function() {
+  var result = {{ result_json|safe }};
+  var sent = false;
+
+  // BroadcastChannel: works even when window.opener is null (cross-origin redirects)
+  try {
+    var bc = new BroadcastChannel('oauth2');
+    bc.postMessage(result);
+    bc.close();
+    sent = true;
+  } catch(e) {}
+
+  // Fallback: postMessage via opener (same-origin popups)
+  if (!sent && window.opener) {
+    window.opener.postMessage(result, window.location.origin);
+    sent = true;
+  }
+
+  if (sent) {
+    window.close();
+  } else {
+    var el = document.getElementById('status');
+    if (result.type === 'oauth2-success') {
+      el.textContent = 'Account connected! You can close this window.';
+    } else {
+      el.textContent = 'Error: ' + (result.error || 'Unknown error');
+    }
+  }
+})();
+</script>
+</body>
+</html>

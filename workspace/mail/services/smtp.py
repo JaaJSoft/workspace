@@ -1,11 +1,12 @@
 """SMTP service for sending emails."""
 
+import base64
 import logging
 import smtplib
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import formatdate, make_msgid
+from email.utils import formataddr, formatdate, make_msgid
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,13 @@ def connect_smtp(account):
         server = smtplib.SMTP_SSL(account.smtp_host, account.smtp_port)
         server.ehlo()
 
-    server.login(account.username, account.get_password())
+    if account.auth_method == 'oauth2':
+        from workspace.mail.services.oauth2 import get_valid_access_token
+        token = get_valid_access_token(account)
+        auth_string = f'user={account.username}\x01auth=Bearer {token}\x01\x01'
+        server.docmd('AUTH', 'XOAUTH2 ' + base64.b64encode(auth_string.encode()).decode())
+    else:
+        server.login(account.username, account.get_password())
     return server
 
 
@@ -58,7 +65,7 @@ def build_draft_message(account, to=None, subject='', body_html='',
     attachments = attachments or []
 
     msg = MIMEMultipart('mixed')
-    msg['From'] = f'{account.display_name or account.email} <{account.email}>'
+    msg['From'] = formataddr((account.display_name, account.email))
     msg['To'] = ', '.join(to)
     msg['Subject'] = subject
     msg['Date'] = formatdate(localtime=True)

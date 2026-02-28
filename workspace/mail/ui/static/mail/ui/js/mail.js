@@ -199,6 +199,7 @@ function mailApp() {
     accountError: '',
     addingAccount: false,
     autoDiscovering: false,
+    oauthProviders: [],
     editAccount: null,
     editAccountError: '',
     savingAccount: false,
@@ -272,6 +273,38 @@ function mailApp() {
       // Listen for mail:compose events from contact card popovers
       document.addEventListener('mail:compose', (e) => {
         this.showCompose(e.detail || {});
+      });
+
+      // Load OAuth providers
+      const oauthEl = document.getElementById('oauth-providers-data');
+      if (oauthEl) {
+        try { this.oauthProviders = JSON.parse(oauthEl.textContent); } catch(e) {}
+      }
+
+      // Listen for OAuth2 popup result
+      const handleOAuth2Result = async (data) => {
+        if (data?.type === 'oauth2-success' && data.account) {
+          this.accounts.push(data.account);
+          this.expandedAccounts[data.account.uuid] = true;
+          await this.loadFolders(data.account.uuid);
+          this.closeAddAccount();
+          this.syncAccount(data.account.uuid);
+          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+        } else if (data?.type === 'oauth2-error') {
+          this.accountError = data.error || 'OAuth2 connection failed';
+        }
+      };
+
+      // BroadcastChannel: works even when window.opener is null (cross-origin redirects)
+      try {
+        const bc = new BroadcastChannel('oauth2');
+        bc.onmessage = (event) => handleOAuth2Result(event.data);
+      } catch(e) {}
+
+      // Fallback: postMessage via opener (same-origin popups)
+      window.addEventListener('message', (event) => {
+        if (event.origin !== window.location.origin) return;
+        handleOAuth2Result(event.data);
       });
     },
 
@@ -1046,6 +1079,17 @@ function mailApp() {
 
     closeAddAccount() {
       document.getElementById('mail-add-account-dialog').close();
+    },
+
+    startOAuth(provider) {
+      const w = 600, h = 700;
+      const left = (screen.width - w) / 2;
+      const top = (screen.height - h) / 2;
+      window.open(
+        `/api/v1/mail/oauth2/authorize?provider=${provider}`,
+        'oauth2',
+        `width=${w},height=${h},left=${left},top=${top}`,
+      );
     },
 
     async addAccount() {

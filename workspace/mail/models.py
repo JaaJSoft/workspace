@@ -70,6 +70,18 @@ class MailAccount(models.Model):
             return ''
         return decrypt(bytes(self.password_encrypted))
 
+    def set_oauth2_data(self, data):
+        import orjson
+        from workspace.mail.services.credentials import encrypt
+        self.oauth2_data_encrypted = encrypt(orjson.dumps(data).decode())
+
+    def get_oauth2_data(self):
+        import orjson
+        from workspace.mail.services.credentials import decrypt
+        if not self.oauth2_data_encrypted:
+            return None
+        return orjson.loads(decrypt(bytes(self.oauth2_data_encrypted)))
+
 
 class MailFolder(models.Model):
     """IMAP folder synced from a mail account."""

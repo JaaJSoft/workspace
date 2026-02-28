@@ -67,13 +67,31 @@ NAME_TYPE_MAP = {
 }
 
 
+def _quote_mailbox(name):
+    """Quote an IMAP mailbox name for use in commands.
+
+    Python 3.14 removed automatic quoting from imaplib._command, so
+    folder names containing spaces, brackets, etc. must be quoted by
+    the caller.
+    """
+    name = name.replace('\\', '\\\\').replace('"', '\\"')
+    return f'"{name}"'
+
+
 def connect_imap(account):
     """Open and authenticate an IMAP connection for the given account."""
     if account.imap_use_ssl:
         conn = imaplib.IMAP4_SSL(account.imap_host, account.imap_port)
     else:
         conn = imaplib.IMAP4(account.imap_host, account.imap_port)
-    conn.login(account.username, account.get_password())
+
+    if account.auth_method == 'oauth2':
+        from workspace.mail.services.oauth2 import get_valid_access_token
+        token = get_valid_access_token(account)
+        auth_string = f'user={account.username}\x01auth=Bearer {token}\x01\x01'
+        conn.authenticate('XOAUTH2', lambda _: auth_string.encode())
+    else:
+        conn.login(account.username, account.get_password())
     return conn
 
 
@@ -94,9 +112,26 @@ def list_folders(conn):
     if status != 'OK':
         return result
 
-    for item in data:
+    i = 0
+    while i < len(data):
+        item = data[i]
         if item is None:
+            i += 1
             continue
+
+        # imaplib returns tuples for literal folder names:
+        #   (b'(\\flags) "/" {N}', b'folder name')
+        if isinstance(item, tuple):
+            header = item[0].decode('utf-8', errors='replace')
+            name = item[1].decode('utf-8', errors='replace')
+            match = re.match(r'\(([^)]*)\)\s+"([^"]+)"\s+\{', header)
+            if match:
+                flags = match.group(1)
+                delimiter = match.group(2)
+                result.append((flags, delimiter, name))
+            i += 1
+            continue
+
         decoded = item.decode('utf-8', errors='replace') if isinstance(item, bytes) else item
         # Parse: (\flags) "delimiter" "name"
         match = re.match(r'\(([^)]*)\)\s+"([^"]+)"\s+"?([^"]*)"?', decoded)
@@ -105,6 +140,7 @@ def list_folders(conn):
             delimiter = match.group(2)
             name = match.group(3).strip('"')
             result.append((flags, delimiter, name))
+        i += 1
     return result
 
 
@@ -127,12 +163,37 @@ def _detect_folder_type(name, flags):
     return 'other'
 
 
+def _decode_mutf7(s):
+    """Decode IMAP Modified UTF-7 (RFC 3501 §5.1.3) to Unicode."""
+    result = []
+    i = 0
+    while i < len(s):
+        if s[i] == '&':
+            j = s.index('-', i + 1)
+            if j == i + 1:
+                result.append('&')
+            else:
+                encoded = s[i + 1:j].replace(',', '/')
+                result.append(('+' + encoded + '-').encode('ascii').decode('utf-7'))
+            i = j + 1
+        else:
+            result.append(s[i])
+            i += 1
+    return ''.join(result)
+
+
 def _display_name(name):
     """Derive a human-readable display name from an IMAP folder name."""
     # Take last segment after / or .
     for sep in ('/', '.'):
         if sep in name:
             name = name.rsplit(sep, 1)[-1]
+    # Decode IMAP Modified UTF-7 for display
+    if '&' in name and '-' in name:
+        try:
+            name = _decode_mutf7(name)
+        except (ValueError, UnicodeDecodeError):
+            pass
     return name
 
 
@@ -160,6 +221,12 @@ def sync_folders(account):
     remote_names = set()
 
     for flags, _delim, name in remote_folders:
+        # Skip non-selectable containers (e.g. [Gmail])
+        if '\\noselect' in flags.lower():
+            continue
+        # Skip \All folder (Gmail "All Mail") — duplicates every message
+        if '\\all' in flags.lower():
+            continue
         remote_names.add(name)
         folder_type = _detect_folder_type(name, flags)
         display = _display_name(name)
@@ -189,26 +256,38 @@ def sync_folders(account):
         MailFolder.objects.filter(account=account, name__in=gone).delete()
 
 
+def _get_uidvalidity(conn):
+    """Extract UIDVALIDITY from the last SELECT/EXAMINE response."""
+    for resp in (conn.untagged_responses.get('OK') or []):
+        decoded = resp.decode('ascii', errors='replace') if isinstance(resp, bytes) else resp
+        m = re.search(r'\[UIDVALIDITY\s+(\d+)\]', decoded)
+        if m:
+            return int(m.group(1))
+    return None
+
+
 def sync_folder_messages(account, folder):
     """Incrementally sync messages for one folder."""
     from workspace.mail.models import MailMessage
 
     conn = connect_imap(account)
     try:
-        status, data = conn.select(folder.name, readonly=True)
+        status, data = conn.select(_quote_mailbox(folder.name), readonly=True)
         if status != 'OK':
             logger.warning("Could not SELECT folder %s: %s", folder.name, data)
             return
 
-        # Check UIDVALIDITY
-        uid_validity = int(data[0])
-        if folder.uid_validity and folder.uid_validity != uid_validity:
+        # Check UIDVALIDITY (parsed from untagged OK response, NOT from
+        # data[0] which is the EXISTS message count)
+        uid_validity = _get_uidvalidity(conn)
+        if uid_validity and folder.uid_validity and folder.uid_validity != uid_validity:
             # UIDVALIDITY changed — purge and re-sync
             logger.info("UIDVALIDITY changed for %s, resetting", folder.name)
             MailMessage.objects.filter(folder=folder).delete()
             folder.last_sync_uid = 0
 
-        folder.uid_validity = uid_validity
+        if uid_validity:
+            folder.uid_validity = uid_validity
         folder.save(update_fields=['uid_validity', 'updated_at'])
 
         # Search for new UIDs (always use UID SEARCH to get real UIDs)
@@ -410,6 +489,9 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
 
     # Flags
     is_read = '\\Seen' in flags_str
+    # Messages in Sent/Drafts folders are always "read" (user wrote them)
+    if folder.folder_type in ('sent', 'drafts'):
+        is_read = True
     is_starred = '\\Flagged' in flags_str
     is_draft = '\\Draft' in flags_str
 
@@ -490,6 +572,11 @@ def _parse_address(addr_string):
         return {'name': '', 'email': ''}
     decoded = _decode_header(addr_string)
     name, email_addr = email.utils.parseaddr(decoded)
+    if not email_addr:
+        # Fallback: parseaddr fails on ambiguous formats like "user@d <user@d>"
+        match = re.search(r'[\w.+-]+@[\w.-]+\.\w+', decoded)
+        if match:
+            email_addr = match.group(0)
     return {'name': name, 'email': email_addr}
 
 
@@ -528,7 +615,7 @@ def delete_message(account, message):
     _set_flag(account, message, '\\Deleted', True)
     conn = connect_imap(account)
     try:
-        conn.select(message.folder.name)
+        conn.select(_quote_mailbox(message.folder.name))
         conn.uid('STORE', str(message.imap_uid), '+FLAGS', '(\\Deleted)')
         conn.expunge()
     finally:
@@ -542,8 +629,8 @@ def move_message(account, message, target_folder):
     """Move a message to another folder via IMAP COPY + DELETE."""
     conn = connect_imap(account)
     try:
-        conn.select(message.folder.name)
-        conn.uid('COPY', str(message.imap_uid), target_folder.name)
+        conn.select(_quote_mailbox(message.folder.name))
+        conn.uid('COPY', str(message.imap_uid), _quote_mailbox(target_folder.name))
         conn.uid('STORE', str(message.imap_uid), '+FLAGS', '(\\Deleted)')
         conn.expunge()
     finally:
@@ -557,7 +644,7 @@ def _set_flag(account, message, flag, add):
     """Add or remove an IMAP flag on a message."""
     conn = connect_imap(account)
     try:
-        conn.select(message.folder.name)
+        conn.select(_quote_mailbox(message.folder.name))
         op = '+FLAGS' if add else '-FLAGS'
         conn.uid('STORE', str(message.imap_uid), op, f'({flag})')
     finally:
@@ -595,7 +682,7 @@ def append_to_sent(account, raw_message_bytes):
 
     conn = connect_imap(account)
     try:
-        conn.select(sent_folder.name, readonly=True)
+        conn.select(_quote_mailbox(sent_folder.name), readonly=True)
 
         # Check if the server already auto-copied it
         if msg_id:
@@ -605,9 +692,9 @@ def append_to_sent(account, raw_message_bytes):
                 return
 
         # Not found — append it ourselves
-        conn.select(sent_folder.name, readonly=False)
+        conn.select(_quote_mailbox(sent_folder.name), readonly=False)
         status, _ = conn.append(
-            sent_folder.name,
+            _quote_mailbox(sent_folder.name),
             '(\\Seen)',
             imaplib.Time2Internaldate(time.time()),
             raw_message_bytes,
@@ -643,7 +730,7 @@ def save_draft(account, raw_message_bytes, old_uid=None):
 
     conn = connect_imap(account)
     try:
-        conn.select(drafts_folder.name, readonly=False)
+        conn.select(_quote_mailbox(drafts_folder.name), readonly=False)
 
         # Delete old draft if updating
         if old_uid:
@@ -652,7 +739,7 @@ def save_draft(account, raw_message_bytes, old_uid=None):
 
         # Append new draft
         status, _ = conn.append(
-            drafts_folder.name,
+            _quote_mailbox(drafts_folder.name),
             '(\\Draft \\Seen)',
             imaplib.Time2Internaldate(time.time()),
             raw_message_bytes,
@@ -685,7 +772,7 @@ def delete_draft(account, message):
     """Delete a draft message from the IMAP server and locally."""
     conn = connect_imap(account)
     try:
-        conn.select(message.folder.name, readonly=False)
+        conn.select(_quote_mailbox(message.folder.name), readonly=False)
         conn.uid('STORE', str(message.imap_uid), '+FLAGS', '(\\Deleted)')
         conn.expunge()
     finally:
@@ -713,7 +800,7 @@ def create_folder(account, folder_name, parent_name=''):
 
     conn = connect_imap(account)
     try:
-        status, data = conn.create(full_name)
+        status, data = conn.create(_quote_mailbox(full_name))
         if status != 'OK':
             raise Exception(f'IMAP CREATE failed: {data}')
     finally:
@@ -736,7 +823,7 @@ def delete_folder(account, folder):
     conn = connect_imap(account)
     try:
         # Close the folder first if selected, then delete
-        status, data = conn.delete(folder.name)
+        status, data = conn.delete(_quote_mailbox(folder.name))
         if status != 'OK':
             raise Exception(f'IMAP DELETE failed: {data}')
     finally:
@@ -752,7 +839,7 @@ def rename_folder(account, folder, new_name):
     """Rename an IMAP folder."""
     conn = connect_imap(account)
     try:
-        status, data = conn.rename(folder.name, new_name)
+        status, data = conn.rename(_quote_mailbox(folder.name), _quote_mailbox(new_name))
         if status != 'OK':
             raise Exception(f'IMAP RENAME failed: {data}')
     finally:
@@ -788,7 +875,7 @@ def move_folder(account, folder, new_parent_name):
 
     conn = connect_imap(account)
     try:
-        st, data = conn.rename(old_name, new_name)
+        st, data = conn.rename(_quote_mailbox(old_name), _quote_mailbox(new_name))
         if st != 'OK':
             raise Exception(f'IMAP RENAME failed: {data}')
     finally:

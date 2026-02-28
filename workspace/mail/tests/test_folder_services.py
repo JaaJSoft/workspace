@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
-from workspace.mail.services.imap import create_folder, delete_folder, rename_folder
+from workspace.mail.services.imap import _quote_mailbox, create_folder, delete_folder, rename_folder
 
 User = get_user_model()
 
@@ -45,7 +45,7 @@ class CreateFolderTests(IMAPFolderServiceMixin, TestCase):
 
         folder = create_folder(self.account, 'Projects')
 
-        mock_conn.create.assert_called_once_with('Projects')
+        mock_conn.create.assert_called_once_with(_quote_mailbox('Projects'))
         mock_conn.logout.assert_called_once()
         self.assertIsNotNone(folder)
         self.assertEqual(folder.name, 'Projects')
@@ -61,7 +61,7 @@ class CreateFolderTests(IMAPFolderServiceMixin, TestCase):
 
         folder = create_folder(self.account, 'Work/Projects')
 
-        mock_conn.create.assert_called_once_with('Work/Projects')
+        mock_conn.create.assert_called_once_with(_quote_mailbox('Work/Projects'))
         self.assertEqual(folder.name, 'Work/Projects')
         self.assertEqual(folder.display_name, 'Projects')  # last segment
 
@@ -120,7 +120,7 @@ class DeleteFolderTests(IMAPFolderServiceMixin, TestCase):
 
         delete_folder(self.account, self.folder)
 
-        mock_conn.delete.assert_called_once_with('ToDelete')
+        mock_conn.delete.assert_called_once_with(_quote_mailbox('ToDelete'))
         mock_conn.logout.assert_called_once()
         self.assertFalse(MailFolder.objects.filter(uuid=folder_uuid).exists())
         # Messages should also be deleted (cascade)
@@ -170,7 +170,7 @@ class RenameFolderTests(IMAPFolderServiceMixin, TestCase):
 
         result = rename_folder(self.account, self.folder, 'NewName')
 
-        mock_conn.rename.assert_called_once_with('OldName', 'NewName')
+        mock_conn.rename.assert_called_once_with(_quote_mailbox('OldName'), _quote_mailbox('NewName'))
         mock_conn.logout.assert_called_once()
         self.assertEqual(result.name, 'NewName')
         self.assertEqual(result.display_name, 'NewName')

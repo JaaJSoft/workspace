@@ -556,7 +556,33 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
+# --------------------------------------------------
 # Web Push (VAPID)
+# --------------------------------------------------
 WEBPUSH_VAPID_PRIVATE_KEY = os.getenv('WEBPUSH_VAPID_PRIVATE_KEY', '')
 WEBPUSH_VAPID_PUBLIC_KEY = os.getenv('WEBPUSH_VAPID_PUBLIC_KEY', '')
 WEBPUSH_VAPID_CLAIMS = {'sub': os.getenv('WEBPUSH_VAPID_MAILTO', '')}
+
+# --------------------------------------------------
+# OAuth2 Mail Providers
+# --------------------------------------------------
+# Each provider is enabled by setting its CLIENT_ID + CLIENT_SECRET.
+# Only providers with a configured CLIENT_ID will appear in the UI.
+
+# Google (Gmail / Google Workspace)
+OAUTH_GOOGLE_CLIENT_ID = os.getenv('OAUTH_GOOGLE_CLIENT_ID', '')
+OAUTH_GOOGLE_CLIENT_SECRET = os.getenv('OAUTH_GOOGLE_CLIENT_SECRET', '')
+
+# Microsoft (Outlook / Office 365 / Hotmail)
+OAUTH_MICROSOFT_CLIENT_ID = os.getenv('OAUTH_MICROSOFT_CLIENT_ID', '')
+OAUTH_MICROSOFT_CLIENT_SECRET = os.getenv('OAUTH_MICROSOFT_CLIENT_SECRET', '')
+
+# Generic OAuth2 provider (single custom provider, fully configurable)
+OAUTH_GENERIC_CLIENT_ID = os.getenv('OAUTH_GENERIC_CLIENT_ID', '')
+OAUTH_GENERIC_CLIENT_SECRET = os.getenv('OAUTH_GENERIC_CLIENT_SECRET', '')
+OAUTH_GENERIC_NAME = os.getenv('OAUTH_GENERIC_NAME', '')
+OAUTH_GENERIC_AUTH_URL = os.getenv('OAUTH_GENERIC_AUTH_URL', '')
+OAUTH_GENERIC_TOKEN_URL = os.getenv('OAUTH_GENERIC_TOKEN_URL', '')
+OAUTH_GENERIC_SCOPES = os.getenv('OAUTH_GENERIC_SCOPES', '')
+OAUTH_GENERIC_IMAP_HOST = os.getenv('OAUTH_GENERIC_IMAP_HOST', '')
+OAUTH_GENERIC_SMTP_HOST = os.getenv('OAUTH_GENERIC_SMTP_HOST', '')

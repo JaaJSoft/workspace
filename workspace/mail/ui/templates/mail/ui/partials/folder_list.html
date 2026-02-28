@@ -39,7 +39,7 @@
           </span>
           <span class="flex-1 text-left truncate" x-text="node.folder.display_name"></span>
           <span
-            x-show="getSubtreeUnreadCount(node) > 0"
+            x-show="getSubtreeUnreadCount(node) > 0 && !['sent', 'drafts'].includes(node.folder.folder_type)"
             class="badge badge-xs badge-warning"
             x-text="getSubtreeUnreadCount(node)"
           ></span>

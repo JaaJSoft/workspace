@@ -76,6 +76,18 @@ kubectl apply -f ingress.yaml
 | `DATABASE_URL`            | Database connection string. Default: `sqlite:////app/data/db.sqlite3` |
 | `REDIS_URL`               | Redis connection. Default: `redis://localhost:6379/0` (sidecar)       |
 | `WEBPUSH_VAPID_PRIVATE_KEY` | VAPID private key (PEM). Generate with `manage.py generate_vapid_keys` |
+| `OAUTH_GOOGLE_CLIENT_ID` | Google OAuth2 client ID (enables Gmail login) |
+| `OAUTH_GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret |
+| `OAUTH_MICROSOFT_CLIENT_ID` | Microsoft OAuth2 client ID (enables Outlook login) |
+| `OAUTH_MICROSOFT_CLIENT_SECRET` | Microsoft OAuth2 client secret |
+| `OAUTH_GENERIC_CLIENT_ID` | Custom OAuth2 provider client ID |
+| `OAUTH_GENERIC_CLIENT_SECRET` | Custom OAuth2 provider client secret |
+| `OAUTH_GENERIC_NAME` | Display name for the custom provider (e.g. `Yahoo`) |
+| `OAUTH_GENERIC_AUTH_URL` | Authorization endpoint URL |
+| `OAUTH_GENERIC_TOKEN_URL` | Token endpoint URL |
+| `OAUTH_GENERIC_SCOPES` | Space-separated OAuth2 scopes |
+| `OAUTH_GENERIC_IMAP_HOST` | IMAP server hostname |
+| `OAUTH_GENERIC_SMTP_HOST` | SMTP server hostname |
 
 ### ConfigMap (`configmap.yaml`)
 

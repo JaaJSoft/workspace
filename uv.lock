@@ -105,6 +105,18 @@ wheels = [
 ]
 
 [[package]]
+name = "authlib"
+version = "1.6.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6b/6c/c88eac87468c607f88bc24df1f3b31445ee6fc9ba123b09e666adf687cd9/authlib-1.6.8.tar.gz", hash = "sha256:41ae180a17cf672bc784e4a518e5c82687f1fe1e98b0cafaeda80c8e4ab2d1cb", size = 165074, upload-time = "2026-02-14T04:02:17.941Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9b/73/f7084bf12755113cd535ae586782ff3a6e710bfbe6a0d13d1c2f81ffbbfa/authlib-1.6.8-py2.py3-none-any.whl", hash = "sha256:97286fd7a15e6cfefc32771c8ef9c54f0ed58028f1322de6a2a7c969c3817888", size = 244116, upload-time = "2026-02-14T04:02:15.579Z" },
+]
+
+[[package]]
 name = "billiard"
 version = "4.2.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1515,6 +1527,7 @@ name = "workspace"
 version = "0.9.0"
 source = { editable = "." }
 dependencies = [
+    { name = "authlib" },
     { name = "cairosvg" },
     { name = "celery" },
     { name = "cryptography" },
@@ -1550,6 +1563,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "authlib", specifier = ">=1.5.0" },
     { name = "cairosvg", specifier = ">=2.7.0" },
     { name = "celery", specifier = ">=5.6.2" },
     { name = "cryptography", specifier = ">=44.0.0" },

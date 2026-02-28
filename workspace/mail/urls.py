@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from . import views_oauth2
 
 urlpatterns = [
     path('api/v1/mail/autodiscover', views.MailAutodiscoverView.as_view(), name='mail-autodiscover'),
@@ -20,4 +21,6 @@ urlpatterns = [
     path('api/v1/mail/messages/<uuid:uuid>', views.MailMessageDetailView.as_view(), name='mail-message-detail'),
     path('api/v1/mail/attachments/<uuid:uuid>', views.MailAttachmentDownloadView.as_view(), name='mail-attachment-download'),
     path('api/v1/mail/attachments/<uuid:uuid>/save-to-files', views.MailAttachmentSaveToFilesView.as_view(), name='mail-attachment-save-to-files'),
+    path('api/v1/mail/oauth2/providers', views_oauth2.OAuthProvidersView.as_view(), name='mail-oauth2-providers'),
+    path('api/v1/mail/oauth2/authorize', views_oauth2.OAuthAuthorizeView.as_view(), name='mail-oauth2-authorize'),
 ]

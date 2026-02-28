@@ -57,6 +57,18 @@ All settings are configurable via environment variables or a `.env` file next to
 | `WEBPUSH_VAPID_PRIVATE_KEY` | *(empty)*                   | VAPID private key (PEM). Generate with `manage.py generate_vapid_keys` |
 | `WEBPUSH_VAPID_PUBLIC_KEY`  | *(empty)*                   | VAPID public key (base64url)              |
 | `WEBPUSH_VAPID_MAILTO`      | *(empty)*                   | Contact email for VAPID claims (`mailto:…`) |
+| `OAUTH_GOOGLE_CLIENT_ID` | *(empty)* | Google OAuth2 client ID (enables Gmail login) |
+| `OAUTH_GOOGLE_CLIENT_SECRET` | *(empty)* | Google OAuth2 client secret |
+| `OAUTH_MICROSOFT_CLIENT_ID` | *(empty)* | Microsoft OAuth2 client ID (enables Outlook login) |
+| `OAUTH_MICROSOFT_CLIENT_SECRET` | *(empty)* | Microsoft OAuth2 client secret |
+| `OAUTH_GENERIC_CLIENT_ID` | *(empty)* | Custom OAuth2 provider client ID |
+| `OAUTH_GENERIC_CLIENT_SECRET` | *(empty)* | Custom OAuth2 provider client secret |
+| `OAUTH_GENERIC_NAME` | *(empty)* | Display name for the custom provider (e.g. `Yahoo`) |
+| `OAUTH_GENERIC_AUTH_URL` | *(empty)* | Authorization endpoint URL |
+| `OAUTH_GENERIC_TOKEN_URL` | *(empty)* | Token endpoint URL |
+| `OAUTH_GENERIC_SCOPES` | *(empty)* | Space-separated OAuth2 scopes |
+| `OAUTH_GENERIC_IMAP_HOST` | *(empty)* | IMAP server hostname |
+| `OAUTH_GENERIC_SMTP_HOST` | *(empty)* | SMTP server hostname |
 
 ### Example `.env`
 

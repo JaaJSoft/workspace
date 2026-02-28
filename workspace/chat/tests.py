@@ -972,6 +972,69 @@ class UnreadCountModelTests(ChatTestMixin, APITestCase):
         self.assertEqual(self._get_unread(self.member, self.group), 0)
         self.assertEqual(self._get_unread(self.extra_user, self.group), 1)
 
+    def test_mark_read_clears_chat_notification(self):
+        """POST /read marks the matching chat notification as read."""
+        from workspace.notifications.models import Notification
+
+        # Creator sends a message → creates a notification for member
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'hey'}, format='json')
+
+        # Simulate the notification that notify_new_message would create
+        notif = Notification.objects.create(
+            recipient=self.member,
+            origin='chat',
+            icon='message-square',
+            title='creator in Test Group',
+            body='hey',
+            url=f'/chat/{self.group.uuid}',
+            actor=self.creator,
+        )
+        self.assertIsNone(notif.read_at)
+
+        # Member marks conversation as read
+        self.client.force_authenticate(self.member)
+        resp = self.client.post(self._read_url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        # Notification should now be marked as read
+        notif.refresh_from_db()
+        self.assertIsNotNone(notif.read_at)
+
+    def test_mark_read_does_not_clear_other_conversation_notification(self):
+        """POST /read only clears notifications for that specific conversation."""
+        from workspace.notifications.models import Notification
+
+        # Create notifications for two different conversations
+        notif_group = Notification.objects.create(
+            recipient=self.member,
+            origin='chat',
+            icon='message-square',
+            title='creator in Test Group',
+            body='hey',
+            url=f'/chat/{self.group.uuid}',
+            actor=self.creator,
+        )
+        notif_dm = Notification.objects.create(
+            recipient=self.member,
+            origin='chat',
+            icon='message-square',
+            title='creator',
+            body='dm msg',
+            url=f'/chat/{self.dm.uuid}',
+            actor=self.creator,
+        )
+
+        # Member marks only the group as read
+        self.client.force_authenticate(self.member)
+        self.client.post(self._read_url(self.group.uuid))
+
+        # Group notification cleared, DM notification untouched
+        notif_group.refresh_from_db()
+        notif_dm.refresh_from_db()
+        self.assertIsNotNone(notif_group.read_at)
+        self.assertIsNone(notif_dm.read_at)
+
     # ── Delete message decrements ──────────────────────────────
 
     def test_delete_message_decrements_unread(self):

@@ -760,6 +760,18 @@ class MarkReadView(APIView):
         membership.unread_count = 0
         membership.save(update_fields=['last_read_at', 'unread_count'])
 
+        # Mark any unread chat notification for this conversation as read
+        from workspace.notifications.models import Notification
+        marked = Notification.objects.filter(
+            recipient=request.user,
+            origin='chat',
+            url=f'/chat/{conversation_id}',
+            read_at__isnull=True,
+        ).update(read_at=timezone.now())
+        if marked:
+            from workspace.core.sse_registry import notify_sse
+            notify_sse('notifications', request.user.id)
+
         notify_conversation_members(
             Conversation(pk=conversation_id), exclude_user=request.user,
         )

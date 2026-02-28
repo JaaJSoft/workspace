@@ -23,7 +23,7 @@
             <!-- Selected user chips -->
             <template x-for="u in addMemberSelected" :key="u.id">
               <span class="badge badge-sm gap-1 pl-0.5 pr-0.5 py-2.5">
-                <div class="flex-shrink-0" x-html="userAvatarHtml(u.id, u.username, 'w-4 h-4 text-[0.55rem]')"></div>
+                <div class="flex-shrink-0" x-html="userAvatarHtml(u.id, u.username, 'w-4 h-4 text-[0.55rem]', {presence: false})"></div>
                 <span class="text-xs" x-text="u.username"></span>
                 <button @click.stop="removeAddMember(u.id)" class="btn btn-ghost btn-circle p-0 w-4 h-4 min-h-0 hover:bg-base-300">
                   <i data-lucide="x" class="w-2.5 h-2.5"></i>

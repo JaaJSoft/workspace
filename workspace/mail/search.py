@@ -13,6 +13,7 @@ def search_mail(query, user, limit):
 
     messages = (
         MailMessage.objects
+        .select_related('folder')
         .filter(
             account_id__in=account_ids,
             deleted_at__isnull=True,
@@ -36,6 +37,7 @@ def search_mail(query, user, limit):
             module_slug='mail',
             module_color='warning',
             date=_format_date(m.date),
+            tags=(m.folder.display_name,) if m.folder else (),
         )
         for m in messages
     ]

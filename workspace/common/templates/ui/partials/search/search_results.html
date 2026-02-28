@@ -66,7 +66,10 @@
               class="w-3 h-3 flex-shrink-0"
               :class="`text-${result.module_color || 'primary'}`"
             ></i>
-            <span class="truncate" x-html="highlightMatch(result.matched_value, searchQuery)"></span>
+            <span class="truncate flex-1" x-html="highlightMatch(result.matched_value, searchQuery)"></span>
+            <template x-for="tag in (result.tags || [])" :key="tag">
+              <span class="badge badge-xs badge-ghost flex-shrink-0" x-text="tag"></span>
+            </template>
           </div>
         </div>
       </a>

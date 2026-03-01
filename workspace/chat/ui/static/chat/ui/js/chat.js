@@ -272,6 +272,13 @@ function chatApp(currentUserId) {
       await this.$nextTick();
 
       await this.loadMessages(conv.uuid);
+
+      // Restore bot typing indicator if there's an active AI task
+      const msgList = document.getElementById('message-list');
+      if (msgList?.dataset.botProcessing === 'true') {
+        this.botTyping = true;
+      }
+
       await this.markAsRead(conv.uuid);
       await this.loadPinnedMessages(conv.uuid);
 
@@ -2222,6 +2229,29 @@ function chatApp(currentUserId) {
     botTypingName() {
       const m = this._getBotMember();
       return m ? this.memberDisplayName(m) : 'AI';
+    },
+
+    async retryBotResponse(errorMsgUuid) {
+      if (!this.activeConversation) return;
+      const convId = this.activeConversation.uuid;
+
+      // Remove the error message from the DOM immediately
+      const el = document.getElementById(`msg-${errorMsgUuid}`);
+      const group = el?.closest('.msg-group');
+      if (group) group.remove();
+
+      this.botTyping = true;
+      try {
+        const res = await fetch(`/api/v1/chat/conversations/${convId}/messages/${errorMsgUuid}/retry`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': this._csrf() },
+        });
+        if (!res.ok) throw new Error('Retry failed');
+      } catch (e) {
+        console.error('Bot retry failed', e);
+        this.botTyping = false;
+        await this._refreshCurrentMessages();
+      }
     },
 
     botTypingAvatar() {

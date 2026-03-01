@@ -1411,3 +1411,39 @@ class AttachmentSaveToFilesView(APIView):
             {'detail': 'File saved.', 'file_uuid': str(file_obj.uuid)},
             status=status.HTTP_201_CREATED,
         )
+
+
+@extend_schema(tags=['Chat'])
+class BotRetryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Retry a failed bot response")
+    def post(self, request, conversation_id, message_id):
+        membership = _get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Hard-delete the error message
+        Message.objects.filter(
+            uuid=message_id,
+            conversation_id=conversation_id,
+        ).delete()
+
+        # Find the last user message to retry with
+        last_user_msg = (
+            Message.objects.filter(
+                conversation_id=conversation_id,
+                author=request.user,
+                deleted_at__isnull=True,
+            )
+            .order_by('-created_at')
+            .first()
+        )
+        if not last_user_msg:
+            return Response(
+                {'detail': 'No user message found to retry.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        _trigger_bot_response(conversation_id, last_user_msg, request.user)
+        return Response({'status': 'ok'})

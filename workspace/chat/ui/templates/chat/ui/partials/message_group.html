@@ -110,6 +110,15 @@
             {% endif %}
           </div>
 
+          {# Retry button for bot error messages #}
+          {% if not is_own and msg.body|slice:":1" == "⚠" %}
+            <button class="btn btn-ghost btn-xs gap-1 text-warning mt-0.5"
+                    @click="retryBotResponse('{{ msg.uuid }}')">
+              <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+              Retry
+            </button>
+          {% endif %}
+
           {# Hover toolbar — floats below the bubble #}
           <div class="absolute top-full mt-0 pt-1 {% if is_own %}right-0{% else %}left-0{% endif %} opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto transition-opacity delay-150 group-hover/msg:delay-0 z-50">
             <div class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-sm px-0.5 py-0.5">

@@ -102,6 +102,12 @@ urlpatterns = [
         views.ConversationPinnedMessagesView.as_view(),
         name='chat-conversation-pinned-messages',
     ),
+    # Bot retry
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/messages/<uuid:message_id>/retry',
+        views.BotRetryView.as_view(),
+        name='chat-bot-retry',
+    ),
     # Attachments
     path(
         'api/v1/chat/attachments/<uuid:attachment_id>',

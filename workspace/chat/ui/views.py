@@ -281,6 +281,14 @@ def conversation_messages_view(request, conversation_uuid):
         PinnedMessage.objects.filter(conversation_id=conversation_uuid).values_list('message_id', flat=True)
     )
 
+    # Check if there's an active AI task for this conversation
+    from workspace.ai.models import AITask
+    bot_processing = AITask.objects.filter(
+        task_type=AITask.TaskType.CHAT,
+        status__in=[AITask.Status.PENDING, AITask.Status.PROCESSING],
+        input_data__conversation_id=str(conversation_uuid),
+    ).exists()
+
     return render(request, 'chat/ui/partials/message_list.html', {
         'groups': groups,
         'has_more': has_more,
@@ -289,6 +297,7 @@ def conversation_messages_view(request, conversation_uuid):
         'pinned_message_ids': pinned_message_ids,
         'conversation_kind': conversation_kind,
         'conversation_uuid': str(conversation_uuid),
+        'bot_processing': bot_processing,
     })
 
 

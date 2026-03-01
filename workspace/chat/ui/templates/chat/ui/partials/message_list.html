@@ -2,7 +2,8 @@
 <div id="message-list"
      data-has-more="{{ has_more|yesno:'true,false' }}"
      data-conversation-id="{{ conversation_uuid }}"
-     {% if first_uuid %}data-first-uuid="{{ first_uuid }}"{% endif %}>
+     {% if first_uuid %}data-first-uuid="{{ first_uuid }}"{% endif %}
+     {% if bot_processing %}data-bot-processing="true"{% endif %}>
 
   {% for group in groups %}
     {% if group.type == 'date' %}

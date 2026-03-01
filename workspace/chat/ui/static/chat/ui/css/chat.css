@@ -37,26 +37,58 @@
 }
 
 /* ── Bot typing indicator ─────────────────────── */
-@keyframes typing-dot {
-  0%, 60%, 100% { opacity: .3; transform: translateY(0); }
-  30%           { opacity: 1;  transform: translateY(-4px); }
+
+/* Orbital dots — each dot traces a stretched elliptical path */
+@keyframes orbit-1 {
+  0%      { transform: translateX(0)   scale(1);   opacity: .4; }
+  25%     { transform: translateX(14px) scale(1.3); opacity: 1; }
+  50%     { transform: translateX(28px) scale(1);   opacity: .4; }
+  75%     { transform: translateX(14px) scale(.7);  opacity: .25; }
+  100%    { transform: translateX(0)    scale(1);   opacity: .4; }
+}
+@keyframes orbit-2 {
+  0%      { transform: translateX(0)    scale(.7);  opacity: .25; }
+  25%     { transform: translateX(-14px) scale(1);  opacity: .4; }
+  50%     { transform: translateX(0)    scale(1.3); opacity: 1; }
+  75%     { transform: translateX(14px) scale(1);   opacity: .4; }
+  100%    { transform: translateX(0)    scale(.7);  opacity: .25; }
+}
+@keyframes orbit-3 {
+  0%      { transform: translateX(0)    scale(1);   opacity: .4; }
+  25%     { transform: translateX(-14px) scale(.7); opacity: .25; }
+  50%     { transform: translateX(-28px) scale(1);  opacity: .4; }
+  75%     { transform: translateX(-14px) scale(1.3); opacity: 1; }
+  100%    { transform: translateX(0)    scale(1);   opacity: .4; }
 }
 
-@keyframes shimmer {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+/* Glow pulse behind the dots */
+@keyframes glow-pulse {
+  0%, 100% { opacity: .15; transform: scale(.8); }
+  50%      { opacity: .4;  transform: scale(1.1); }
 }
 
-.bot-typing-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: oklch(var(--s));
-  animation: typing-dot 1.4s ease-in-out infinite;
+/* Sweeping shimmer across the bubble */
+@keyframes shimmer-sweep {
+  0%   { transform: translateX(-100%) skewX(-15deg); }
+  100% { transform: translateX(200%)  skewX(-15deg); }
 }
 
-.bot-typing-dot:nth-child(2) { animation-delay: .15s; }
-.bot-typing-dot:nth-child(3) { animation-delay: .3s; }
+/* Breathing border glow */
+@keyframes border-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(var(--s) / 0), inset 0 0 0 0 oklch(var(--s) / 0); }
+  50%      { box-shadow: 0 0 12px 2px oklch(var(--s) / .12), inset 0 0 8px 0 oklch(var(--s) / .06); }
+}
+
+.bot-typing-bubble {
+  position: relative;
+  overflow: hidden;
+  animation: border-breathe 3s ease-in-out infinite;
+  border: 1px solid oklch(var(--s) / .15);
+  background:
+    radial-gradient(ellipse at 30% 50%, oklch(var(--s) / .06) 0%, transparent 70%),
+    radial-gradient(ellipse at 70% 50%, oklch(var(--s) / .04) 0%, transparent 70%),
+    oklch(var(--b2));
+}
 
 .bot-typing-shimmer {
   position: absolute;
@@ -64,11 +96,47 @@
   background: linear-gradient(
     90deg,
     transparent 0%,
-    oklch(var(--s) / .06) 50%,
+    oklch(var(--s) / .1) 45%,
+    oklch(var(--s) / .15) 50%,
+    oklch(var(--s) / .1) 55%,
     transparent 100%
   );
-  animation: shimmer 2.5s ease-in-out infinite;
+  animation: shimmer-sweep 3s ease-in-out infinite;
 }
+
+.bot-typing-glow {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  top: 50%;
+  left: 50%;
+  margin: -20px 0 0 -20px;
+  border-radius: 50%;
+  background: radial-gradient(circle, oklch(var(--s) / .3) 0%, transparent 70%);
+  animation: glow-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.bot-typing-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  position: relative;
+  min-width: 52px;
+}
+
+.bot-typing-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: oklch(var(--s));
+  will-change: transform, opacity;
+}
+
+.bot-typing-dot:nth-child(1) { animation: orbit-1 2s cubic-bezier(.4,0,.6,1) infinite; }
+.bot-typing-dot:nth-child(2) { animation: orbit-2 2s cubic-bezier(.4,0,.6,1) infinite; }
+.bot-typing-dot:nth-child(3) { animation: orbit-3 2s cubic-bezier(.4,0,.6,1) infinite; }
 
 /* Chat input: remove inner textarea focus ring — outer container handles it */
 .textarea-ghost:focus {

@@ -29,6 +29,7 @@ dependencies = [
     "mistune>=3.2.0",
     "dj-database-url>=2.3.0",
     "psycopg[binary,pool]>=3.2.0",
+    "python-dotenv>=1.2.1",
     # webdav
     "wsgidav>=4.3.0",
     # server

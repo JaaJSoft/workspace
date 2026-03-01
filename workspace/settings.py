@@ -14,6 +14,9 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Fix MIME types for JavaScript modules on Windows
 mimetypes.add_type("application/javascript", ".js", True)

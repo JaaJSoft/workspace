@@ -2,28 +2,30 @@
 <div x-data="chatAttachmentViewer()">
   <dialog x-ref="dialog" class="modal" @close="open = false">
     <div class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col max-w-5xl">
+      <!-- Actions (Top Right) -->
+      <div class="absolute top-4 right-4 z-10 flex items-center gap-1">
+        <!-- Download -->
+        <a :href="downloadUrl" download
+           class="btn btn-ghost btn-sm btn-square" title="Download">
+          <i data-lucide="download" class="w-4 h-4"></i>
+        </a>
+        <!-- Save to Files -->
+        <button type="button" class="btn btn-ghost btn-sm btn-square"
+                @click="saveToFiles()" title="Save to Files">
+          <i data-lucide="folder-down" class="w-4 h-4"></i>
+        </button>
+        <!-- Close -->
+        <button type="button" class="btn btn-ghost btn-sm btn-square"
+                @click="close()" title="Close (ESC)">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
       <!-- Header -->
-      <div class="flex items-center gap-2 p-4 border-b border-base-300 bg-base-100">
+      <div class="flex items-center gap-2 p-4 pr-24 border-b border-base-300 bg-base-100">
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
           <p class="text-sm text-base-content/60" x-text="mimeType"></p>
-        </div>
-        <div class="flex items-center gap-1 flex-shrink-0">
-          <!-- Download -->
-          <a :href="downloadUrl" download
-             class="btn btn-ghost btn-sm btn-square" title="Download">
-            <i data-lucide="download" class="w-4 h-4"></i>
-          </a>
-          <!-- Save to Files -->
-          <button type="button" class="btn btn-ghost btn-sm btn-square"
-                  @click="saveToFiles()" title="Save to Files">
-            <i data-lucide="folder-down" class="w-4 h-4"></i>
-          </button>
-          <!-- Close -->
-          <button type="button" class="btn btn-ghost btn-sm btn-square"
-                  @click="close()" title="Close (ESC)">
-            <i data-lucide="x" class="w-4 h-4"></i>
-          </button>
         </div>
       </div>
 

@@ -98,6 +98,7 @@ INSTALLED_APPS = [
     'workspace.mail',
     'workspace.mail.ui',
     'workspace.notifications',
+    'workspace.ai',
 ]
 
 # Add Debug Toolbar only in DEBUG mode and not during tests
@@ -209,6 +210,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'workspace.core.context_processors.workspace_modules',
+                'workspace.ai.context_processors.ai_context',
                 # Expose `request_processing_ms` au template
                 # 'workspace.ui.context_processors.request_timing',
             ],
@@ -589,3 +591,11 @@ OAUTH_GENERIC_TOKEN_URL = os.getenv('OAUTH_GENERIC_TOKEN_URL', '')
 OAUTH_GENERIC_SCOPES = os.getenv('OAUTH_GENERIC_SCOPES', '')
 OAUTH_GENERIC_IMAP_HOST = os.getenv('OAUTH_GENERIC_IMAP_HOST', '')
 OAUTH_GENERIC_SMTP_HOST = os.getenv('OAUTH_GENERIC_SMTP_HOST', '')
+
+# --------------------------------------------------
+# AI Configuration
+# --------------------------------------------------
+AI_API_KEY = os.getenv('AI_API_KEY', '')
+AI_BASE_URL = os.getenv('AI_BASE_URL') or None  # For Ollama, LM Studio, etc.
+AI_MODEL = os.getenv('AI_MODEL', 'gpt-5')
+AI_MAX_TOKENS = int(os.getenv('AI_MAX_TOKENS', '2048'))

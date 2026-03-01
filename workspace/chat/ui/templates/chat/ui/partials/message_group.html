@@ -11,8 +11,9 @@
   <div class="flex flex-col {% if is_own %}items-end{% else %}items-start{% endif %} gap-0.5 min-w-0 max-w-[75%]">
     {# Header: username #}
     {% if not is_own %}
-      <div class="flex items-baseline gap-1.5 px-1 text-xs">
+      <div class="flex items-center gap-1.5 px-1 text-xs">
         <span class="font-semibold text-base-content">{{ author.username }}</span>
+        <span x-show="isBotMessage({author: {id: {{ author.id }}}})" x-cloak class="badge badge-xs badge-secondary gap-0.5">AI</span>
       </div>
     {% endif %}
 

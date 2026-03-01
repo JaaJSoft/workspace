@@ -78,6 +78,9 @@ Alpine bindings reference the parent chatApp() x-data scope.
             <div class="flex items-center justify-between gap-1">
               <span class="font-medium text-sm truncate flex items-center gap-1">
                 {{ conv.display_name }}
+                <span x-show="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.is_bot_conversation" x-cloak class="text-secondary flex-shrink-0" title="AI Bot">
+                  <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                </span>
                 <i data-lucide="pin" class="w-3 h-3 text-base-content/30 flex-shrink-0"></i>
               </span>
               <span class="flex-shrink-0 w-12 h-5 inline-flex items-center justify-end">
@@ -146,7 +149,12 @@ Alpine bindings reference the parent chatApp() x-data scope.
           </div>
           <div class="flex-1 min-w-0 text-left" x-show="!collapsed" x-transition>
             <div class="flex items-center justify-between gap-1">
-              <span class="font-medium text-sm truncate">{{ conv.display_name }}</span>
+              <span class="font-medium text-sm truncate flex items-center gap-1">
+                {{ conv.display_name }}
+                <span x-show="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.is_bot_conversation" x-cloak class="text-secondary flex-shrink-0" title="AI Bot">
+                  <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                </span>
+              </span>
               {# time_ago and more btn occupy the same slot — swap on hover #}
               <span class="flex-shrink-0 w-12 h-5 inline-flex items-center justify-end">
                 <span class="text-xs text-base-content/50 whitespace-nowrap group-hover/conv:hidden">{{ conv.time_ago }}</span>
@@ -217,7 +225,12 @@ Alpine bindings reference the parent chatApp() x-data scope.
           </div>
           <div class="flex-1 min-w-0 text-left" x-show="!collapsed" x-transition>
             <div class="flex items-center justify-between gap-1">
-              <span class="font-medium text-sm truncate">{{ conv.display_name }}</span>
+              <span class="font-medium text-sm truncate flex items-center gap-1">
+                {{ conv.display_name }}
+                <span x-show="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.is_bot_conversation" x-cloak class="text-secondary flex-shrink-0" title="AI Bot">
+                  <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                </span>
+              </span>
               {# time_ago and more btn occupy the same slot — swap on hover #}
               <span class="flex-shrink-0 w-12 h-5 inline-flex items-center justify-end">
                 <span class="text-xs text-base-content/50 whitespace-nowrap group-hover/conv:hidden">{{ conv.time_ago }}</span>

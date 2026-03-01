@@ -45,6 +45,30 @@ def _get_active_membership(user, conversation_id):
     ).first()
 
 
+def _trigger_bot_response(conversation_id, message, sender):
+    """If the conversation includes a bot, trigger an AI response."""
+    bot_member = (
+        ConversationMember.objects.filter(
+            conversation_id=conversation_id,
+            left_at__isnull=True,
+            user__bot_profile__isnull=False,
+        )
+        .exclude(user=sender)
+        .select_related('user')
+        .first()
+    )
+    if bot_member:
+        try:
+            from workspace.ai.tasks import generate_chat_response
+            generate_chat_response.delay(
+                str(conversation_id),
+                str(message.uuid),
+                bot_member.user_id,
+            )
+        except Exception:
+            logger.exception('Failed to trigger bot response for conversation=%s', conversation_id)
+
+
 @extend_schema(tags=['Chat'])
 class ConversationListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -416,6 +440,9 @@ class MessageListView(APIView):
             conversation, exclude_user=request.user,
         )
         notify_new_message(conversation, request.user, body)
+
+        # Trigger AI response if a bot is in the conversation
+        _trigger_bot_response(conversation_id, message, request.user)
 
         msg = (
             Message.objects.filter(pk=message.pk)

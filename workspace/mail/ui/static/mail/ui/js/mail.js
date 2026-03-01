@@ -240,6 +240,15 @@ function mailApp() {
     compose: _defaultCompose(),
     showCcBcc: false,
 
+    // AI features
+    aiSummarizing: false,
+    aiSummary: null,
+    _aiPollInterval: null,
+    showAICompose: false,
+    aiComposePrompt: '',
+    aiComposing: false,
+    _aiComposePollInterval: null,
+
     // Autocomplete
     _autocomplete: { results: [], highlight: -1, show: false, loading: false, field: null, _timer: null },
 
@@ -551,6 +560,11 @@ function mailApp() {
 
     // ----- Message detail -----
     async selectMessage(msg) {
+      // Clear AI state from previous message
+      this.aiSummary = null;
+      this.aiSummarizing = false;
+      if (this._aiPollInterval) clearInterval(this._aiPollInterval);
+
       this.selectedMessage = msg;
       this.loadingDetail = true;
       this._updateUrl(msg.uuid);
@@ -741,6 +755,7 @@ function mailApp() {
         body: `\n\n---\nOn ${this.formatFullDate(msg.date)}, ${msg.from_address?.name || from} wrote:\n> ${(msg.body_text || msg.snippet || '').replace(/\n/g, '\n> ')}`,
         account_id: msg.account_id,
         is_reply: true,
+        reply_message_id: msg.uuid,
       });
     },
 
@@ -761,6 +776,7 @@ function mailApp() {
         body: `\n\n---\nOn ${this.formatFullDate(msg.date)}, ${msg.from_address?.name || from} wrote:\n> ${(msg.body_text || msg.snippet || '').replace(/\n/g, '\n> ')}`,
         account_id: msg.account_id,
         is_reply: true,
+        reply_message_id: msg.uuid,
       });
     },
 
@@ -772,6 +788,127 @@ function mailApp() {
         account_id: msg.account_id,
         is_reply: true,
       });
+    },
+
+    // ----- AI features -----
+    async summarizeMessage(message) {
+      this.aiSummarizing = true;
+      this.aiSummary = null;
+      try {
+        const resp = await fetch('/api/v1/ai/tasks/summarize', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this._csrf(),
+          },
+          body: JSON.stringify({ message_id: message.uuid }),
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.detail || 'Failed to start summarization');
+        }
+        const task = await resp.json();
+        this._pollAITask(task.uuid);
+      } catch (e) {
+        this.aiSummarizing = false;
+        AppDialog.error({ message: e.message });
+      }
+    },
+
+    async _pollAITask(taskId) {
+      let attempts = 0;
+      const maxAttempts = 30; // 60s max
+      const poll = async () => {
+        if (++attempts > maxAttempts) {
+          this.aiSummarizing = false;
+          clearInterval(this._aiPollInterval);
+          AppDialog.error({ message: 'AI task timed out' });
+          return;
+        }
+        try {
+          const resp = await fetch(`/api/v1/ai/tasks/${taskId}`);
+          if (!resp.ok) return;
+          const task = await resp.json();
+          if (task.status === 'completed') {
+            this.aiSummary = task.result.replace(/\n/g, '<br>');
+            this.aiSummarizing = false;
+            clearInterval(this._aiPollInterval);
+            this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+          } else if (task.status === 'failed') {
+            AppDialog.error({ message: task.error || 'AI task failed' });
+            this.aiSummarizing = false;
+            clearInterval(this._aiPollInterval);
+          }
+        } catch (e) {
+          // silent retry
+        }
+      };
+      this._aiPollInterval = setInterval(poll, 2000);
+      poll();
+    },
+
+    async aiCompose() {
+      if (!this.aiComposePrompt.trim()) return;
+      this.aiComposing = true;
+
+      const isReply = this.compose.is_reply && this.compose.reply_message_id;
+      const endpoint = isReply ? '/api/v1/ai/tasks/reply' : '/api/v1/ai/tasks/compose';
+      const body = isReply
+        ? { message_id: this.compose.reply_message_id, instructions: this.aiComposePrompt }
+        : { instructions: this.aiComposePrompt, context: this.compose.body };
+
+      try {
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this._csrf(),
+          },
+          body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.detail || 'Failed to start AI composition');
+        }
+        const task = await resp.json();
+        this._pollAIComposeTask(task.uuid);
+      } catch (e) {
+        this.aiComposing = false;
+        AppDialog.error({ message: e.message });
+      }
+    },
+
+    async _pollAIComposeTask(taskId) {
+      let attempts = 0;
+      const maxAttempts = 30; // 60s max
+      const poll = async () => {
+        if (++attempts > maxAttempts) {
+          this.aiComposing = false;
+          clearInterval(this._aiComposePollInterval);
+          AppDialog.error({ message: 'AI composition timed out' });
+          return;
+        }
+        try {
+          const resp = await fetch(`/api/v1/ai/tasks/${taskId}`);
+          if (!resp.ok) return;
+          const task = await resp.json();
+          if (task.status === 'completed') {
+            this.compose.body = task.result;
+            this.aiComposing = false;
+            this.showAICompose = false;
+            this.aiComposePrompt = '';
+            clearInterval(this._aiComposePollInterval);
+          } else if (task.status === 'failed') {
+            AppDialog.error({ message: task.error || 'AI composition failed' });
+            this.aiComposing = false;
+            clearInterval(this._aiComposePollInterval);
+          }
+        } catch (e) {
+          // silent retry
+        }
+      };
+      this._aiComposePollInterval = setInterval(poll, 2000);
+      poll();
     },
 
     // ----- Tag input helpers -----
@@ -1978,7 +2115,7 @@ function _defaultNewAccount() {
 function _defaultCompose() {
   return {
     account_id: '', to: [], cc: [], bcc: [],
-    subject: '', body: '', is_reply: false,
+    subject: '', body: '', is_reply: false, reply_message_id: null,
     attachments: [], sending: false, error: '',
     draft_id: null, saving: false, last_saved: null,
     _saveTimer: null,

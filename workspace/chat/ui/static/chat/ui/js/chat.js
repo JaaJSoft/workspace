@@ -56,6 +56,11 @@ function chatApp(currentUserId) {
     draggingPinned: null,
     dragOverPinned: null,
 
+    // Bot / AI
+    showBotPicker: false,
+    availableBots: [],
+    botTyping: false,
+
     // Emoji picker
     emojiPickerVisible: false,
     emojiPickerMode: null,       // 'input' | 'reaction'
@@ -135,6 +140,9 @@ function chatApp(currentUserId) {
       this.$nextTick(() => {
         if (typeof lucide !== 'undefined') lucide.createIcons();
       });
+
+      // Fetch available AI bots
+      this.fetchBots();
 
       // Emoji picker event listener
       this.$nextTick(() => {
@@ -239,6 +247,7 @@ function chatApp(currentUserId) {
       this.messageBody = '';
       this.pendingFiles = [];
       this.pinnedMessages = [];
+      this.botTyping = false;
       this.showInfoPanel = false;
       this.conversationStats = null;
       this.showSearchPanel = false;
@@ -466,6 +475,13 @@ function chatApp(currentUserId) {
           // Re-fetch messages — replaces optimistic bubble with real server-rendered one
           await this._refreshCurrentMessages();
           this.$nextTick(() => this.scrollToBottom());
+          // Show typing indicator if this is a bot conversation and bot hasn't replied yet
+          if (this.isBotConversation(this.activeConversation)) {
+            const lastMsg = this.messages[this.messages.length - 1];
+            if (!lastMsg || !this.isBotMessage(lastMsg)) {
+              this.botTyping = true;
+            }
+          }
         } else {
           // Remove optimistic message and restore input on error
           this._removeOptimisticMessage(tempId);
@@ -879,6 +895,10 @@ function chatApp(currentUserId) {
     // ── SSE event handlers ─────────────────────────────────
     async handleSSEMessage(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
+        // Hide bot typing indicator if the incoming message is from a bot
+        if (this.botTyping && this.isBotMessage(detail.message)) {
+          this.botTyping = false;
+        }
         // Check if message already exists in the DOM
         if (!document.getElementById(`msg-${detail.message.uuid}`)) {
           await this._refreshCurrentMessages();
@@ -2135,6 +2155,53 @@ function chatApp(currentUserId) {
           }
         }
       }
+    },
+
+    // ── Bot / AI ─────────────────────────────────────────────
+    async fetchBots() {
+      try {
+        const resp = await fetch('/api/v1/ai/bots', { credentials: 'same-origin' });
+        if (resp.ok) this.availableBots = await resp.json();
+      } catch (e) {
+        // AI may not be enabled — silently ignore
+      }
+    },
+
+    async startBotConversation(bot) {
+      this.showBotPicker = false;
+      try {
+        const resp = await fetch('/api/v1/chat/conversations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this._csrf(),
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            member_ids: [bot.user_id],
+          }),
+        });
+        if (!resp.ok) throw new Error('Failed to create conversation');
+        const conv = await resp.json();
+        if (!this.conversations.find(c => c.uuid === conv.uuid)) {
+          this.conversations.unshift(conv);
+          this.refreshConversationList();
+        }
+        await this.selectConversation(conv);
+      } catch (e) {
+        console.error('Failed to start bot conversation', e);
+      }
+    },
+
+    isBotConversation(conv) {
+      if (!conv) return false;
+      if (conv.is_bot_conversation) return true;
+      if (!conv.members) return false;
+      return conv.members.some(m => this.availableBots.some(b => b.user_id === m.user.id));
+    },
+
+    isBotMessage(msg) {
+      return this.availableBots.some(b => b.user_id === msg.author?.id);
     },
   };
 }

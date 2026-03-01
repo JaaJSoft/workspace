@@ -105,6 +105,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
     unread_count = serializers.IntegerField(read_only=True, default=0)
     is_pinned = serializers.BooleanField(read_only=True, default=False)
     pin_position = serializers.IntegerField(read_only=True, default=None)
+    is_bot_conversation = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
@@ -112,8 +113,17 @@ class ConversationListSerializer(serializers.ModelSerializer):
             'uuid', 'kind', 'title', 'description', 'created_by_id',
             'created_at', 'updated_at', 'has_avatar',
             'members', 'last_message', 'unread_count',
-            'is_pinned', 'pin_position',
+            'is_pinned', 'pin_position', 'is_bot_conversation',
         ]
+
+    def get_is_bot_conversation(self, obj):
+        """Check if this conversation includes a bot member."""
+        if hasattr(obj, '_prefetched_objects_cache') and 'members' in obj._prefetched_objects_cache:
+            for member in obj.members.all():
+                if hasattr(member.user, 'bot_profile'):
+                    return True
+            return False
+        return obj.members.filter(user__bot_profile__isnull=False).exists()
 
     def get_last_message(self, obj):
         # _last_message is set by the view; use sentinel to avoid fallback query

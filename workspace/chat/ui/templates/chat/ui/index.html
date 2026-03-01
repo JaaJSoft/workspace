@@ -50,14 +50,24 @@ x-init="init()"
           <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
           <span x-show="!collapsed" x-transition>Chat</span>
         </h2>
-        <button
-          x-show="!collapsed" x-transition
-          class="btn btn-ghost btn-sm btn-square mr-1 hover:text-info"
-          @click="showNewConversationDialog()"
-          title="New conversation (Alt+N)"
-        >
-          <i data-lucide="plus" class="w-4 h-4"></i>
-        </button>
+        <div x-show="!collapsed" x-transition class="flex items-center gap-0.5">
+          {% if ai_enabled %}
+          <button
+            class="btn btn-ghost btn-sm btn-square hover:text-secondary"
+            @click="showBotPicker = true"
+            title="New AI Chat"
+          >
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+          </button>
+          {% endif %}
+          <button
+            class="btn btn-ghost btn-sm btn-square mr-1 hover:text-info"
+            @click="showNewConversationDialog()"
+            title="New conversation (Alt+N)"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -209,6 +219,18 @@ x-init="init()"
 
             <!-- Server-rendered messages container -->
             <div id="messages-container"></div>
+
+            <!-- Bot typing indicator -->
+            <div x-show="botTyping" x-cloak class="flex items-center gap-2 px-4 py-2">
+              <div class="avatar placeholder">
+                <div class="bg-secondary text-secondary-content w-8 rounded-full">
+                  <i data-lucide="bot" class="w-4 h-4"></i>
+                </div>
+              </div>
+              <div class="flex gap-1">
+                <span class="loading loading-dots loading-sm text-secondary"></span>
+              </div>
+            </div>
           </div>
 
           <!-- Drag-drop overlay -->
@@ -415,6 +437,42 @@ x-init="init()"
 {% include "chat/ui/partials/new_conversation_dialog.html" %}
 {% include "chat/ui/partials/add_member_dialog.html" %}
 {% include "chat/ui/partials/help_dialog.html" %}
+
+<!-- Bot picker dialog -->
+{% if ai_enabled %}
+<dialog :class="{'modal-open': showBotPicker}" class="modal"
+        x-effect="if (showBotPicker) $nextTick(() => lucide.createIcons())">
+  <div class="modal-box max-w-sm">
+    <h3 class="font-semibold mb-4 flex items-center gap-2">
+      <i data-lucide="sparkles" class="w-5 h-5 text-secondary"></i>
+      Start AI Chat
+    </h3>
+    <div class="space-y-2">
+      <template x-for="bot in availableBots" :key="bot.user_id">
+        <button class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition-colors text-left"
+                @click="startBotConversation(bot)">
+          <div class="avatar placeholder">
+            <div class="bg-secondary text-secondary-content w-10 rounded-full">
+              <i data-lucide="bot" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-medium text-sm" x-text="bot.display_name"></div>
+            <div class="text-xs text-base-content/50 truncate" x-text="bot.description"></div>
+          </div>
+        </button>
+      </template>
+      <div x-show="availableBots.length === 0" class="text-center text-sm text-base-content/50 py-4">
+        No AI bots available.
+      </div>
+    </div>
+    <div class="modal-action">
+      <button class="btn btn-ghost btn-sm" @click="showBotPicker = false">Cancel</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button @click="showBotPicker = false">close</button></form>
+</dialog>
+{% endif %}
 
 <!-- Embedded conversation data for fast Alpine init -->
 <script id="conversations-data" type="application/json">{{ conversations_json|safe }}</script>

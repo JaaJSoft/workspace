@@ -442,12 +442,17 @@ x-init="init()"
 {% if ai_enabled %}
 <dialog :class="{'modal-open': showBotPicker}" class="modal"
         x-effect="if (showBotPicker) $nextTick(() => lucide.createIcons())">
-  <div class="modal-box max-w-sm">
-    <h3 class="font-semibold mb-4 flex items-center gap-2">
-      <i data-lucide="sparkles" class="w-5 h-5 text-secondary"></i>
-      Start AI Chat
-    </h3>
-    <div class="space-y-2">
+  <div class="modal-box max-w-sm p-0 flex flex-col">
+    <div class="flex items-center justify-between px-5 pt-5 pb-2">
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i data-lucide="sparkles" class="w-5 h-5 text-secondary"></i>
+        Start AI Chat
+      </h3>
+      <button class="btn btn-ghost btn-sm btn-circle" @click="showBotPicker = false">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div class="px-5 pb-5 space-y-2">
       <template x-for="bot in availableBots" :key="bot.user_id">
         <button class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition-colors text-left"
                 @click="startBotConversation(bot)">
@@ -466,7 +471,7 @@ x-init="init()"
         No AI bots available.
       </div>
     </div>
-    <div class="modal-action">
+    <div class="flex justify-end px-5 pb-5 pt-1">
       <button class="btn btn-ghost btn-sm" @click="showBotPicker = false">Cancel</button>
     </div>
   </div>

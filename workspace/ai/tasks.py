@@ -207,10 +207,10 @@ def compose_email(self, task_id: str):
     from workspace.ai.models import AITask
     from workspace.ai.prompts.mail import build_compose_messages, build_reply_messages
     from workspace.core.sse_registry import notify_sse
-    from workspace.mail.models import MailMessage
+    from workspace.mail.models import MailAccount, MailMessage
 
     try:
-        ai_task = AITask.objects.get(pk=task_id)
+        ai_task = AITask.objects.get(pk=task_id, owner__isnull=False)
     except AITask.DoesNotExist:
         logger.error('Compose task not found: %s', task_id)
         return {'status': 'error', 'error': 'Task not found'}
@@ -221,17 +221,39 @@ def compose_email(self, task_id: str):
     instructions = ai_task.input_data.get('instructions', '')
     original_message_id = ai_task.input_data.get('message_id')
 
+    # Resolve sender identity from the mail account or user profile
+    sender_name = ''
+    sender_email = ''
+    account_id = ai_task.input_data.get('account_id')
+    if account_id:
+        account = MailAccount.objects.filter(pk=account_id, owner=ai_task.owner).first()
+        if account:
+            sender_name = account.display_name
+            sender_email = account.email
+    if not sender_email:
+        sender_name = ai_task.owner.get_full_name()
+        sender_email = ai_task.owner.email or ''
+
     try:
         if original_message_id:
-            message = MailMessage.objects.get(
+            message = MailMessage.objects.select_related('account').get(
                 pk=original_message_id,
                 account__owner=ai_task.owner,
             )
             body = message.body_text or message.body_html or ''
-            messages = build_reply_messages(instructions, message.subject or '', body)
+            # Use the account from the original message for reply
+            reply_name = message.account.display_name or sender_name
+            reply_email = message.account.email or sender_email
+            messages = build_reply_messages(
+                instructions, message.subject or '', body,
+                sender_name=reply_name, sender_email=reply_email,
+            )
         else:
             context = ai_task.input_data.get('context', '')
-            messages = build_compose_messages(instructions, context)
+            messages = build_compose_messages(
+                instructions, context,
+                sender_name=sender_name, sender_email=sender_email,
+            )
 
         result = _call_openai(messages)
         ai_task.status = AITask.Status.COMPLETED

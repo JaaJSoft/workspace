@@ -426,7 +426,9 @@ function chatApp(currentUserId) {
       // ── Optimistic UI: inject temporary message immediately ──
       const tempId = '_optimistic_' + Date.now();
       const hasFiles = files.length > 0;
+      const isBotConv = this.isBotConversation(this.activeConversation);
       this._injectOptimisticMessage(tempId, body, replyInfo, hasFiles ? files : null);
+      if (isBotConv) this.botTyping = true;
       this.$nextTick(() => this.scrollToBottom());
 
       // Revoke object URLs after optimistic bubble is injected
@@ -474,25 +476,27 @@ function chatApp(currentUserId) {
           this._updateConversationLastMessage(this.activeConversation.uuid, msg);
           // Re-fetch messages — replaces optimistic bubble with real server-rendered one
           await this._refreshCurrentMessages();
-          this.$nextTick(() => this.scrollToBottom());
-          // Show typing indicator if this is a bot conversation and bot hasn't replied yet
-          if (this.isBotConversation(this.activeConversation)) {
-            const lastMsg = this.messages[this.messages.length - 1];
-            if (!lastMsg || !this.isBotMessage(lastMsg)) {
-              this.botTyping = true;
+          // If bot already replied during the round-trip, hide typing immediately
+          if (isBotConv) {
+            const lastGroup = document.getElementById('messages-container')?.querySelector('.msg-group:last-child');
+            if (lastGroup && lastGroup.classList.contains('msg-group-start')) {
+              this.botTyping = false;
             }
           }
+          this.$nextTick(() => this.scrollToBottom());
         } else {
           // Remove optimistic message and restore input on error
           this._removeOptimisticMessage(tempId);
           this.messageBody = body;
           this.pendingFiles = files;
+          this.botTyping = false;
         }
       } catch (e) {
         console.error('Failed to send message', e);
         this._removeOptimisticMessage(tempId);
         this.messageBody = body;
         this.pendingFiles = files;
+        this.botTyping = false;
       }
     },
 
@@ -996,11 +1000,11 @@ function chatApp(currentUserId) {
       if (conv.title) return conv.title;
       if (conv.kind === 'dm') {
         const other = conv.members?.find(m => m.user.id !== this.currentUserId);
-        return other ? other.user.username : 'Direct Message';
+        return other ? this.memberDisplayName(other) : 'Direct Message';
       }
       const names = (conv.members || [])
         .filter(m => m.user.id !== this.currentUserId)
-        .map(m => m.user.username)
+        .map(m => this.memberDisplayName(m))
         .slice(0, 3);
       if (names.length === 0) return 'Group';
       return names.join(', ');
@@ -1024,7 +1028,7 @@ function chatApp(currentUserId) {
       const initials = (conv.members || [])
         .filter(m => m.user.id !== this.currentUserId)
         .slice(0, 2)
-        .map(m => m.user.username[0].toUpperCase())
+        .map(m => this.memberDisplayName(m)[0].toUpperCase())
         .join('');
       return `<div class="w-10 h-10 rounded-full bg-info text-info-content flex items-center justify-center flex-shrink-0"><span class="text-sm">${initials || 'G'}</span></div>`;
     },
@@ -1422,7 +1426,7 @@ function chatApp(currentUserId) {
     async removeMember(userId) {
       if (!this.activeConversation) return;
       const member = this.activeConversation.members?.find(m => m.user.id === userId);
-      const name = member ? member.user.username : 'this member';
+      const name = member ? this.memberDisplayName(member) : 'this member';
       const ok = await AppDialog.confirm({
         title: 'Remove member',
         message: `Remove ${name} from this group?`,
@@ -2205,6 +2209,26 @@ function chatApp(currentUserId) {
 
     isBotMessage(msg) {
       return this.availableBots.some(b => b.user_id === msg.author?.id);
+    },
+
+    _getBotMember() {
+      if (!this.activeConversation?.members) return null;
+      return this.activeConversation.members.find(m =>
+        this.availableBots.some(b => b.user_id === m.user.id)
+      );
+    },
+
+    botTypingName() {
+      const m = this._getBotMember();
+      return m ? this.memberDisplayName(m) : 'AI';
+    },
+
+    botTypingAvatar() {
+      const m = this._getBotMember();
+      if (m) {
+        return window.userAvatarHtml(m.user.id, m.user.username, 'w-8 h-8 text-xs', { presence: false });
+      }
+      return '<div class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center"><i data-lucide="sparkles" class="w-4 h-4 text-secondary-content"></i></div>';
     },
   };
 }

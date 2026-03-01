@@ -221,14 +221,28 @@ x-init="init()"
             <div id="messages-container"></div>
 
             <!-- Bot typing indicator -->
-            <div x-show="botTyping" x-cloak class="flex items-center gap-2 px-4 py-2">
-              <div class="avatar placeholder">
-                <div class="bg-secondary text-secondary-content w-8 rounded-full">
-                  <i data-lucide="bot" class="w-4 h-4"></i>
+            <div x-show="botTyping" x-cloak
+                 x-effect="if (botTyping) $nextTick(() => lucide.createIcons())"
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 translate-y-2"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 class="flex gap-2 mb-3">
+              <!-- Bot avatar -->
+              <div class="flex-shrink-0 w-8 mt-auto" x-html="botTypingAvatar()"></div>
+              <!-- Content column -->
+              <div class="flex flex-col items-start gap-0.5 min-w-0">
+                <div class="flex items-center gap-1.5 px-1 text-xs">
+                  <span class="font-semibold text-base-content" x-text="botTypingName()"></span>
+                  <span class="badge badge-xs badge-secondary gap-0.5">AI</span>
                 </div>
-              </div>
-              <div class="flex gap-1">
-                <span class="loading loading-dots loading-sm text-secondary"></span>
+                <div class="msg-bubble rounded-2xl px-6 py-3 bg-base-200 relative overflow-hidden min-w-[5rem]">
+                  <div class="bot-typing-shimmer"></div>
+                  <div class="flex items-center justify-center gap-2.5 relative">
+                    <span class="bot-typing-dot"></span>
+                    <span class="bot-typing-dot"></span>
+                    <span class="bot-typing-dot"></span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

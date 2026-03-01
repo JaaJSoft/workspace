@@ -71,20 +71,23 @@ def _build_conversation_context(user):
         active_members = list(c.members.all())
         other_members = [m for m in active_members if m.user_id != user.id]
 
+        def _display(u):
+            return u.get_full_name() or u.username
+
         if c.title:
             c.display_name = c.title
         elif c.kind == Conversation.Kind.DM and other_members:
-            c.display_name = other_members[0].user.username
+            c.display_name = _display(other_members[0].user)
         else:
-            names = [m.user.username for m in other_members[:3]]
+            names = [_display(m.user) for m in other_members[:3]]
             c.display_name = ', '.join(names) if names else 'Group'
 
         # Avatar
         if c.kind == Conversation.Kind.DM and other_members:
-            c.avatar_initial = other_members[0].user.username[0].upper()
+            c.avatar_initial = _display(other_members[0].user)[0].upper()
             c.other_user = other_members[0].user
         else:
-            initials = [m.user.username[0].upper() for m in other_members[:2]]
+            initials = [_display(m.user)[0].upper() for m in other_members[:2]]
             c.avatar_initial = ''.join(initials) or 'G'
             c.other_user = None
 
@@ -94,12 +97,12 @@ def _build_conversation_context(user):
             if body:
                 if len(body) > 30:
                     body = body[:30] + '\u2026'
-                c.last_message_preview = f'{c._last_message.author.username}: {body}'
+                c.last_message_preview = f'{_display(c._last_message.author)}: {body}'
             elif (att := list(c._last_message.attachments.all())):
                 label = 'sent a file' if len(att) == 1 else f'sent {len(att)} files'
-                c.last_message_preview = f'{c._last_message.author.username}: {label}'
+                c.last_message_preview = f'{_display(c._last_message.author)}: {label}'
             else:
-                c.last_message_preview = f'{c._last_message.author.username}: '
+                c.last_message_preview = f'{_display(c._last_message.author)}: '
             diff = (now - c._last_message.created_at).total_seconds()
             if diff < 60:
                 c.time_ago = 'now'

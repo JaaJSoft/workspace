@@ -80,13 +80,17 @@ class ComposeView(APIView):
         serializer = ComposeRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        input_data = {
+            'instructions': serializer.validated_data['instructions'],
+            'context': serializer.validated_data.get('context', ''),
+        }
+        if serializer.validated_data.get('account_id'):
+            input_data['account_id'] = str(serializer.validated_data['account_id'])
+
         ai_task = AITask.objects.create(
             owner=request.user,
             task_type=AITask.TaskType.COMPOSE,
-            input_data={
-                'instructions': serializer.validated_data['instructions'],
-                'context': serializer.validated_data.get('context', ''),
-            },
+            input_data=input_data,
         )
 
         from workspace.ai.tasks import compose_email

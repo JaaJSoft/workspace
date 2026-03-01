@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -34,6 +35,7 @@ from .services import (
 )
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 def _get_active_membership(user, conversation_id):

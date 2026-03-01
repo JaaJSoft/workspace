@@ -855,7 +855,7 @@ function mailApp() {
       const endpoint = isReply ? '/api/v1/ai/tasks/reply' : '/api/v1/ai/tasks/compose';
       const body = isReply
         ? { message_id: this.compose.reply_message_id, instructions: this.aiComposePrompt }
-        : { instructions: this.aiComposePrompt, context: this.compose.body };
+        : { instructions: this.aiComposePrompt, context: this.compose.body, account_id: this.compose.account_id };
 
       try {
         const resp = await fetch(endpoint, {

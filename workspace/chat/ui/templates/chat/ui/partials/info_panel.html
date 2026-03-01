@@ -132,7 +132,7 @@
         <div class="flex-shrink-0" x-html="userAvatarWithCardHtml(member.user.id, member.user.username, 'w-8 h-8 text-xs')"></div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1.5">
-            <span class="text-sm font-medium truncate" x-text="member.user.username"></span>
+            <span class="text-sm font-medium truncate" x-text="memberDisplayName(member)"></span>
             <span
               x-show="member.user.id === currentUserId"
               class="badge badge-ghost badge-sm"
@@ -145,7 +145,7 @@
           <p
             class="text-xs text-base-content/50 truncate"
             x-show="memberDisplayName(member) !== member.user.username"
-            x-text="memberDisplayName(member)"
+            x-text="'@' + member.user.username"
           ></p>
         </div>
         <!-- Remove button (visible to creator, not on self) -->
@@ -175,10 +175,10 @@
           <i data-lucide="pin" class="w-3.5 h-3.5 text-warning flex-shrink-0 mt-0.5"></i>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-1">
-              <span class="text-xs font-semibold truncate" x-text="pin.message_author?.username || 'Unknown'"></span>
+              <span class="text-xs font-semibold truncate" x-text="((pin.message_author?.first_name || '') + ' ' + (pin.message_author?.last_name || '')).trim() || pin.message_author?.username || 'Unknown'"></span>
             </div>
             <p class="text-xs text-base-content/70 truncate" x-text="pin.message_body"></p>
-            <p class="text-[0.65rem] text-base-content/40" x-text="'Pinned by ' + (pin.pinned_by?.username || 'Unknown')"></p>
+            <p class="text-[0.65rem] text-base-content/40" x-text="'Pinned by ' + (((pin.pinned_by?.first_name || '') + ' ' + (pin.pinned_by?.last_name || '')).trim() || pin.pinned_by?.username || 'Unknown')"></p>
           </div>
           <button
             class="btn btn-ghost btn-xs btn-circle opacity-0 group-hover:opacity-100 text-base-content/50 hover:text-error transition-opacity flex-shrink-0"

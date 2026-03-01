@@ -12,7 +12,7 @@
     {# Header: username #}
     {% if not is_own %}
       <div class="flex items-center gap-1.5 px-1 text-xs">
-        <span class="font-semibold text-base-content">{{ author.username }}</span>
+        <span class="font-semibold text-base-content">{{ author.get_full_name|default:author.username }}</span>
         <span x-show="isBotMessage({author: {id: {{ author.id }}}})" x-cloak class="badge badge-xs badge-secondary gap-0.5">AI</span>
       </div>
     {% endif %}
@@ -42,7 +42,7 @@
                   {% if msg.reply_to.deleted_at %}
                     <span class="text-xs italic opacity-50">Message deleted</span>
                   {% else %}
-                    <span class="text-xs font-semibold text-info">{{ msg.reply_to.author.username }}</span>
+                    <span class="text-xs font-semibold text-info">{{ msg.reply_to.author.get_full_name|default:msg.reply_to.author.username }}</span>
                     <p class="text-xs text-base-content/70 truncate">{{ msg.reply_to.body|truncatechars:100 }}</p>
                   {% endif %}
                 </div>
@@ -129,7 +129,7 @@
               </button>
               {# Reply #}
               <button class="btn btn-ghost btn-xs btn-circle"
-                      @click="startReply('{{ msg.uuid }}', '{{ msg.author.username|escapejs }}', '{{ msg.body|truncatechars:100|escapejs }}')"
+                      @click="startReply('{{ msg.uuid }}', '{{ msg.author.get_full_name|default:msg.author.username|escapejs }}', '{{ msg.body|truncatechars:100|escapejs }}')"
                       title="Reply">
                 <i data-lucide="reply" class="w-3.5 h-3.5"></i>
               </button>

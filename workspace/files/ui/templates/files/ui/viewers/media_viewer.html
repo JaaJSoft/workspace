@@ -7,7 +7,7 @@
       controls
       autoplay
       class="max-w-full max-h-full"
-      src="/api/v1/files/{{ file.uuid }}/content"
+      src="{{ content_url }}"
       preload="metadata"
     >
       Your browser does not support the video element.
@@ -27,7 +27,7 @@
           controls
           autoplay
           class="w-full"
-          src="/api/v1/files/{{ file.uuid }}/content"
+          src="{{ content_url }}"
           preload="metadata"
         >
           Your browser does not support the audio element.

@@ -10,6 +10,7 @@ from .serializers import (
     AITaskSerializer,
     BotProfileSerializer,
     ComposeRequestSerializer,
+    EditorActionRequestSerializer,
     ReplyRequestSerializer,
     SummarizeRequestSerializer,
 )
@@ -136,6 +137,46 @@ class ReplyView(APIView):
 
         from workspace.ai.tasks import compose_email
         compose_email.delay(str(ai_task.uuid))
+
+        return Response(
+            AITaskSerializer(ai_task).data,
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class EditorActionView(APIView):
+    """POST /api/v1/ai/tasks/editor — Run an AI action on editor content."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from workspace.ai.client import is_ai_enabled
+        if not is_ai_enabled():
+            return Response(
+                {'detail': 'AI is not configured.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        serializer = EditorActionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        input_data = {
+            'action': data['action'],
+            'content': data['content'],
+            'language': data.get('language', ''),
+            'filename': data.get('filename', ''),
+        }
+        if data.get('instructions'):
+            input_data['instructions'] = data['instructions']
+
+        ai_task = AITask.objects.create(
+            owner=request.user,
+            task_type=AITask.TaskType.EDITOR,
+            input_data=input_data,
+        )
+
+        from workspace.ai.tasks import editor_action
+        editor_action.delay(str(ai_task.uuid))
 
         return Response(
             AITaskSerializer(ai_task).data,

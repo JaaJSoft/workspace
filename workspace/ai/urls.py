@@ -24,6 +24,11 @@ urlpatterns = [
         name='ai-reply',
     ),
     path(
+        'api/v1/ai/tasks/editor',
+        views.EditorActionView.as_view(),
+        name='ai-editor-action',
+    ),
+    path(
         'api/v1/ai/tasks/<uuid:task_id>',
         views.TaskDetailView.as_view(),
         name='ai-task-detail',

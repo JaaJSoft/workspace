@@ -60,14 +60,15 @@
                   {% for att in attachments %}
                     {% if att.is_image %}
                       <div class="relative group/att inline-block">
-                        <a href="/api/v1/chat/attachments/{{ att.uuid }}" target="_blank" class="block">
+                        <div class="block cursor-pointer"
+                             @click="window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {detail: {uuid: '{{ att.uuid }}', name: '{{ att.original_name|escapejs }}', mime_type: '{{ att.mime_type }}'}}))">
                           <img
                             src="/api/v1/chat/attachments/{{ att.uuid }}"
                             alt="{{ att.original_name }}"
                             class="max-h-64 max-w-full rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity"
                             loading="lazy"
                           />
-                        </a>
+                        </div>
                         <button
                           class="absolute top-1 right-1 btn btn-xs btn-circle bg-base-100/80 hover:bg-base-100 border-base-300 shadow-sm opacity-0 group-hover/att:opacity-100 transition-opacity"
                           @click="saveAttachmentToFiles('{{ att.uuid }}')"
@@ -78,14 +79,13 @@
                       </div>
                     {% else %}
                       <div class="flex items-center gap-0.5 group/att">
-                        <a href="/api/v1/chat/attachments/{{ att.uuid }}"
-                           target="_blank"
-                           class="flex items-center gap-2 p-2 rounded-lg {% if is_own %}bg-info/15 hover:bg-info/25{% else %}bg-base-300/50 hover:bg-base-300{% endif %} transition-colors min-w-0 flex-1">
+                        <div class="flex items-center gap-2 p-2 rounded-lg {% if is_own %}bg-info/15 hover:bg-info/25{% else %}bg-base-300/50 hover:bg-base-300{% endif %} transition-colors min-w-0 flex-1 cursor-pointer"
+                             @click="window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {detail: {uuid: '{{ att.uuid }}', name: '{{ att.original_name|escapejs }}', mime_type: '{{ att.mime_type }}'}}))">
                           <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
                           <span class="truncate text-xs font-medium">{{ att.original_name }}</span>
                           <span class="text-[0.65rem] opacity-60 flex-shrink-0">{{ att.size|filesize }}</span>
-                          <i data-lucide="download" class="w-3.5 h-3.5 flex-shrink-0 opacity-60"></i>
-                        </a>
+                          <i data-lucide="eye" class="w-3.5 h-3.5 flex-shrink-0 opacity-60"></i>
+                        </div>
                         <button
                           class="btn btn-ghost btn-xs btn-circle opacity-0 group-hover/att:opacity-100 transition-opacity flex-shrink-0"
                           @click="saveAttachmentToFiles('{{ att.uuid }}')"

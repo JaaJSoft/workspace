@@ -104,6 +104,11 @@ function chatApp(currentUserId) {
         }
       });
 
+      // Save-to-files from attachment viewer modal
+      window.addEventListener('chat-save-attachment-to-files', (e) => {
+        this.saveAttachmentToFiles(e.detail.uuid);
+      });
+
       // ?action=new — open new conversation dialog from command palette
       const params = new URLSearchParams(window.location.search);
       const action = params.get('action');
@@ -2251,6 +2256,21 @@ function chatApp(currentUserId) {
         console.error('Bot retry failed', e);
         this.botTyping = false;
         await this._refreshCurrentMessages();
+      }
+    },
+
+    async cancelBotResponse() {
+      if (!this.activeConversation) return;
+      const convId = this.activeConversation.uuid;
+      this.botTyping = false;
+      try {
+        await fetch(`/api/v1/chat/conversations/${convId}/bot-cancel`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+        });
+      } catch (e) {
+        console.error('Bot cancel failed', e);
       }
     },
 

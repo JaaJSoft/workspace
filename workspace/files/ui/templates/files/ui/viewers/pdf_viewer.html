@@ -2,7 +2,7 @@
 <div class="flex flex-col h-full" x-data="pdfViewerData()">
   <!-- Toolbar -->
   <div class="flex items-center justify-center gap-2 p-2 bg-base-100 border-b border-base-300">
-    <a href="/api/v1/files/{{ file.uuid }}/content"
+    <a href="{{ content_url }}"
        target="_blank"
        class="btn btn-sm btn-ghost" title="Open in new tab">
       <i data-lucide="external-link" class="w-4 h-4"></i>
@@ -12,7 +12,7 @@
 
   <!-- PDF iframe -->
   <iframe
-    src="/api/v1/files/{{ file.uuid }}/content"
+    src="{{ content_url }}"
     class="flex-1 w-full border-none bg-base-200"
     title="{{ file.name }}"
     @load="onLoad()"

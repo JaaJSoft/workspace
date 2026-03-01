@@ -108,6 +108,12 @@ urlpatterns = [
         views.BotRetryView.as_view(),
         name='chat-bot-retry',
     ),
+    # Bot cancel
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/bot-cancel',
+        views.BotCancelView.as_view(),
+        name='chat-bot-cancel',
+    ),
     # Attachments
     path(
         'api/v1/chat/attachments/<uuid:attachment_id>',

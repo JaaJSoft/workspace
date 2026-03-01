@@ -112,6 +112,12 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
     try:
         result = _call_openai(messages, model=bot_profile.get_model())
 
+        # Guard: check if the task was cancelled while we were waiting for OpenAI
+        ai_task.refresh_from_db(fields=['status'])
+        if ai_task.status == AITask.Status.FAILED:
+            logger.info('Bot response cancelled: conversation=%s', conversation_id)
+            return {'status': 'cancelled'}
+
         body = result['content']
         body_html = render_message_body(body)
         bot_message = Message.objects.create(
@@ -230,6 +236,77 @@ def summarize(self, task_id: str):
 
     except Exception as e:
         logger.exception('Summarize failed: task=%s', task_id)
+        ai_task.status = AITask.Status.FAILED
+        ai_task.error = str(e)
+        ai_task.completed_at = timezone.now()
+        ai_task.save()
+        notify_sse('ai', ai_task.owner_id)
+        return {'status': 'error', 'error': str(e)}
+
+
+@shared_task(name='ai.editor_action', bind=True, max_retries=0)
+def editor_action(self, task_id: str):
+    """Run an AI action on editor content (improve, explain, summarize, custom)."""
+    from workspace.ai.models import AITask
+    from workspace.ai.prompts.editor import (
+        build_custom_messages,
+        build_explain_messages,
+        build_improve_messages,
+        build_summarize_messages,
+    )
+    from workspace.core.sse_registry import notify_sse
+
+    try:
+        ai_task = AITask.objects.get(pk=task_id)
+    except AITask.DoesNotExist:
+        logger.error('Editor action task not found: %s', task_id)
+        return {'status': 'error', 'error': 'Task not found'}
+
+    ai_task.status = AITask.Status.PROCESSING
+    ai_task.save(update_fields=['status'])
+
+    action = ai_task.input_data.get('action', '')
+    content = ai_task.input_data.get('content', '')
+    language = ai_task.input_data.get('language', '')
+    filename = ai_task.input_data.get('filename', '')
+
+    builders = {
+        'improve': lambda: build_improve_messages(content, language, filename),
+        'explain': lambda: build_explain_messages(content, language, filename),
+        'summarize': lambda: build_summarize_messages(content, language, filename),
+        'custom': lambda: build_custom_messages(
+            content, ai_task.input_data.get('instructions', ''), language, filename,
+        ),
+    }
+
+    builder = builders.get(action)
+    if not builder:
+        ai_task.status = AITask.Status.FAILED
+        ai_task.error = f'Unknown action: {action}'
+        ai_task.completed_at = timezone.now()
+        ai_task.save()
+        notify_sse('ai', ai_task.owner_id)
+        return {'status': 'error', 'error': f'Unknown action: {action}'}
+
+    try:
+        messages = builder()
+        result = _call_openai(messages)
+        ai_task.status = AITask.Status.COMPLETED
+        ai_task.result = result['content']
+        ai_task.model_used = result['model']
+        ai_task.prompt_tokens = result['prompt_tokens']
+        ai_task.completion_tokens = result['completion_tokens']
+        ai_task.completed_at = timezone.now()
+        ai_task.save()
+
+        notify_sse('ai', ai_task.owner_id)
+
+        logger.info('Editor action complete: task=%s action=%s tokens=%s+%s',
+                     task_id, action, result['prompt_tokens'], result['completion_tokens'])
+        return {'status': 'ok', 'task_id': task_id}
+
+    except Exception as e:
+        logger.exception('Editor action failed: task=%s action=%s', task_id, action)
         ai_task.status = AITask.Status.FAILED
         ai_task.error = str(e)
         ai_task.completed_at = timezone.now()

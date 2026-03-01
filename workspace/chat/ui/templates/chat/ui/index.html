@@ -230,9 +230,13 @@ x-init="init()"
                  class="flex items-center gap-2 mb-3">
               <!-- Bot avatar -->
               <div class="flex-shrink-0 w-8" x-html="botTypingAvatar()"></div>
-              <!-- Content column -->
-              <div class="flex flex-col items-start min-w-0">
+              <!-- Content column + cancel -->
+              <div class="group flex items-center gap-2 min-w-0">
                 {% include "ui/partials/ai_thinking_bubble.html" %}
+                <button class="btn btn-ghost btn-xs btn-circle text-base-content/40 hover:text-error opacity-0 group-hover:opacity-100 transition-opacity"
+                        @click="cancelBotResponse()" title="Cancel">
+                  <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                </button>
               </div>
             </div>
           </div>
@@ -482,6 +486,9 @@ x-init="init()"
   <form method="dialog" class="modal-backdrop"><button @click="showBotPicker = false">close</button></form>
 </dialog>
 {% endif %}
+
+<!-- Attachment viewer modal -->
+{% include "chat/ui/partials/attachment_viewer_modal.html" %}
 
 <!-- Embedded conversation data for fast Alpine init -->
 <script id="conversations-data" type="application/json">{{ conversations_json|safe }}</script>

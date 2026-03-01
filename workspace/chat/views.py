@@ -1447,3 +1447,31 @@ class BotRetryView(APIView):
 
         _trigger_bot_response(conversation_id, last_user_msg, request.user)
         return Response({'status': 'ok'})
+
+
+@extend_schema(tags=['Chat'])
+class BotCancelView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Cancel an in-progress bot response")
+    def post(self, request, conversation_id):
+        from workspace.ai.models import AITask
+
+        membership = _get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        cancelled = AITask.objects.filter(
+            task_type=AITask.TaskType.CHAT,
+            status__in=[AITask.Status.PENDING, AITask.Status.PROCESSING],
+            input_data__conversation_id=str(conversation_id),
+        ).update(
+            status=AITask.Status.FAILED,
+            error='Cancelled by user',
+            completed_at=timezone.now(),
+        )
+
+        if not cancelled:
+            return Response({'detail': 'No active task found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({'status': 'cancelled'})

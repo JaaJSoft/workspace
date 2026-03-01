@@ -102,6 +102,47 @@
         <i data-lucide="map" class="w-3.5 h-3.5"></i>
       </button>
 
+      {% if ai_enabled %}
+      <div class="w-px h-4 bg-base-300 mx-0.5"></div>
+
+      <!-- AI Actions -->
+      <div class="dropdown dropdown-end">
+        <label tabindex="0" class="btn btn-ghost btn-xs gap-1" :class="aiProcessing ? 'btn-disabled' : ''">
+          <span x-show="aiProcessing" class="loading loading-spinner loading-xs"></span>
+          <i x-show="!aiProcessing" data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          AI
+          <i data-lucide="chevron-down" class="w-3 h-3"></i>
+        </label>
+        <ul tabindex="0" class="dropdown-content z-50 menu menu-sm shadow-xl bg-base-100 border border-base-300 rounded-lg w-52 p-1 mt-2">
+          <li>
+            <button type="button" class="gap-3 rounded" @click="aiAction('improve'); document.activeElement.blur()">
+              <i data-lucide="wand-2" class="w-4 h-4"></i>
+              <span>Improve</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="gap-3 rounded" @click="aiAction('explain'); document.activeElement.blur()">
+              <i data-lucide="message-square-text" class="w-4 h-4"></i>
+              <span>Explain</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="gap-3 rounded" @click="aiAction('summarize'); document.activeElement.blur()">
+              <i data-lucide="list" class="w-4 h-4"></i>
+              <span>Summarize</span>
+            </button>
+          </li>
+          <hr class="my-1 border-base-300" />
+          <li>
+            <button type="button" class="gap-3 rounded" @click="aiAction('custom'); document.activeElement.blur()">
+              <i data-lucide="pencil" class="w-4 h-4"></i>
+              <span>Custom prompt...</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+      {% endif %}
+
       {% if can_edit %}
       <div class="w-px h-4 bg-base-300 mx-0.5"></div>
 
@@ -136,6 +177,7 @@ window.textViewerMonaco = function() {
   let _themeObserver = null;
   let _prefsSaveTimer = null;
   let _lock = null;
+  let _aiPollTimer = null;
 
   var PREFS_URL = '/api/v1/settings/files/editor';
   var PREFS_DEFAULTS = {
@@ -181,6 +223,7 @@ window.textViewerMonaco = function() {
   return {
     isDirty: false,
     saving: false,
+    aiProcessing: false,
     wordWrap: PREFS_DEFAULTS.wordWrap,
     minimapEnabled: PREFS_DEFAULTS.minimap,
     fontSize: PREFS_DEFAULTS.fontSize,
@@ -401,9 +444,135 @@ window.textViewerMonaco = function() {
       }
     },
 
+    _getEditorContent() {
+      if (!_editor) return null;
+      var selection = _editor.getSelection();
+      if (selection && !selection.isEmpty()) {
+        return {
+          text: _editor.getModel().getValueInRange(selection),
+          range: selection,
+        };
+      }
+      var model = _editor.getModel();
+      return {
+        text: model.getValue(),
+        range: model.getFullModelRange(),
+      };
+    },
+
+    async aiAction(action) {
+      if (!_editor || this.aiProcessing) return;
+
+      var instructions = '';
+      if (action === 'custom') {
+        instructions = await AppDialog.prompt({
+          title: 'Custom AI Prompt',
+          message: 'What would you like AI to do with the selected content?',
+          placeholder: 'e.g. Translate to French, Add comments, Refactor...',
+          okLabel: 'Run',
+          icon: 'sparkles',
+        });
+        if (!instructions) return;
+      }
+
+      var content = this._getEditorContent();
+      if (!content || !content.text.trim()) {
+        if (window.AppAlert) AppAlert.error('No content to process');
+        return;
+      }
+
+      this.aiProcessing = true;
+
+      try {
+        var body = {
+          action: action,
+          content: content.text,
+          language: this.language,
+          filename: this.fileName,
+        };
+        if (instructions) body.instructions = instructions;
+
+        var response = await fetch('/api/v1/ai/tasks/editor', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          var err = await response.json().catch(function() { return {}; });
+          throw new Error(err.detail || 'Failed to start AI task');
+        }
+
+        var task = await response.json();
+        this._pollAITask(task.uuid, action, content.range);
+      } catch (error) {
+        this.aiProcessing = false;
+        if (window.AppAlert) AppAlert.error('AI error: ' + error.message);
+      }
+    },
+
+    _pollAITask(taskId, action, editRange) {
+      var self = this;
+      _aiPollTimer = setInterval(async function() {
+        try {
+          var response = await fetch('/api/v1/ai/tasks/' + taskId, {
+            credentials: 'same-origin',
+          });
+          if (!response.ok) throw new Error('Failed to poll task');
+
+          var task = await response.json();
+
+          if (task.status === 'completed') {
+            clearInterval(_aiPollTimer);
+            _aiPollTimer = null;
+            self._handleAIResult(action, task.result, task.result_html, editRange);
+            self.aiProcessing = false;
+          } else if (task.status === 'failed') {
+            clearInterval(_aiPollTimer);
+            _aiPollTimer = null;
+            self.aiProcessing = false;
+            if (window.AppAlert) AppAlert.error('AI failed: ' + (task.error || 'Unknown error'));
+          }
+        } catch (error) {
+          clearInterval(_aiPollTimer);
+          _aiPollTimer = null;
+          self.aiProcessing = false;
+          if (window.AppAlert) AppAlert.error('AI error: ' + error.message);
+        }
+      }, 2000);
+    },
+
+    _handleAIResult(action, result, resultHtml, editRange) {
+      if (!result) return;
+      if (action === 'explain' || action === 'summarize') {
+        var title = action === 'explain' ? 'Explanation' : 'Summary';
+        var icon = action === 'explain' ? 'message-square-text' : 'list';
+        AppDialog.message({
+          title: title,
+          html: '<div class="prose prose-sm max-w-none">' + (resultHtml || result) + '</div>',
+          icon: icon,
+          iconClass: 'bg-primary/10 text-primary',
+        });
+      } else {
+        if (!_editor) return;
+        _editor.pushUndoStop();
+        _editor.executeEdits('ai-action', [{
+          range: editRange,
+          text: result,
+          forceMoveMarkers: true,
+        }]);
+        _editor.pushUndoStop();
+        _editor.focus();
+      }
+    },
+
     dispose() {
       if (_lock) _lock.dispose();
       clearTimeout(_prefsSaveTimer);
+      clearInterval(_aiPollTimer);
       if (_themeObserver) {
         _themeObserver.disconnect();
         _themeObserver = null;

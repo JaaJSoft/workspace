@@ -76,10 +76,12 @@ class BaseViewer(ABC):
         lock_info = getattr(self, '_lock_info', None)
         if lock_info:
             can_edit = False  # Force read-only when locked by another user
+        content_url = getattr(self, '_content_url', None) or f'/api/v1/files/{self.file.uuid}/content'
         return {
             'file': self.file,
             'can_edit': can_edit,
             'lock_info': lock_info,
+            'content_url': content_url,
         }
 
 

@@ -10,4 +10,5 @@ urlpatterns = [
     path('/conversations', views.conversation_list_view, name='conversation_list'),
     path('/<uuid:conversation_uuid>/messages', views.conversation_messages_view, name='conversation_messages'),
     path('/<uuid:conversation_uuid>/messages/<uuid:message_uuid>/readers', views.message_readers_view, name='message_readers'),
+    path('/view-attachment/<uuid:attachment_uuid>', views.view_attachment, name='view_attachment'),
 ]

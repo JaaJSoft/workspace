@@ -1,0 +1,164 @@
+<!-- Chat Attachment Viewer Modal -->
+<div x-data="chatAttachmentViewer()">
+  <dialog x-ref="dialog" class="modal" @close="open = false">
+    <div class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col max-w-5xl">
+      <!-- Header -->
+      <div class="flex items-center gap-2 p-4 border-b border-base-300 bg-base-100">
+        <div class="flex-1 min-w-0">
+          <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
+          <p class="text-sm text-base-content/60" x-text="mimeType"></p>
+        </div>
+        <div class="flex items-center gap-1 flex-shrink-0">
+          <!-- Download -->
+          <a :href="downloadUrl" download
+             class="btn btn-ghost btn-sm btn-square" title="Download">
+            <i data-lucide="download" class="w-4 h-4"></i>
+          </a>
+          <!-- Save to Files -->
+          <button type="button" class="btn btn-ghost btn-sm btn-square"
+                  @click="saveToFiles()" title="Save to Files">
+            <i data-lucide="folder-down" class="w-4 h-4"></i>
+          </button>
+          <!-- Close -->
+          <button type="button" class="btn btn-ghost btn-sm btn-square"
+                  @click="close()" title="Close (ESC)">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Viewer Container -->
+      <div x-ref="viewerContainer" class="flex-1 overflow-auto bg-base-200"
+           x-show="!loading && !error"></div>
+
+      <!-- Loading -->
+      <div x-show="loading" class="flex-1 flex items-center justify-center" x-cloak>
+        <span class="loading loading-spinner loading-lg"></span>
+      </div>
+
+      <!-- Error -->
+      <div x-show="error" class="flex-1 flex items-center justify-center p-8" x-cloak>
+        <div class="text-center">
+          <i data-lucide="alert-circle" class="w-12 h-12 text-error mx-auto mb-4"></i>
+          <p class="text-lg font-medium mb-2">Failed to load file</p>
+          <p class="text-sm text-base-content/60" x-text="error"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Backdrop -->
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
+
+  <script>
+    function chatAttachmentViewer() {
+      return {
+        open: false,
+        loading: false,
+        error: null,
+        attachmentUuid: null,
+        fileName: '',
+        mimeType: '',
+        downloadUrl: '',
+        loadedScripts: [],
+
+        async openAttachment(uuid, name, mimeType) {
+          this.attachmentUuid = uuid;
+          this.fileName = name || 'File';
+          this.mimeType = mimeType || '';
+          this.downloadUrl = '/api/v1/chat/attachments/' + uuid;
+          this.error = null;
+
+          var container = this.$refs.viewerContainer;
+
+          // Dispatch cleanup event before removing DOM
+          window.dispatchEvent(new CustomEvent('viewer-cleanup'));
+
+          // Clear previous content and scripts
+          container.replaceChildren();
+          this.loadedScripts.forEach(function(s) { s.remove(); });
+          this.loadedScripts = [];
+
+          this.loading = true;
+          this.open = true;
+          this.$refs.dialog.showModal();
+
+          try {
+            var response = await fetch('/chat/view-attachment/' + uuid);
+            if (!response.ok) {
+              throw new Error('Failed to load viewer: ' + response.status);
+            }
+
+            var rawHtml = await response.text();
+
+            // Parse HTML
+            var temp = document.createElement('template');
+            temp.innerHTML = rawHtml;
+
+            // Extract and re-execute scripts
+            var scriptEls = temp.content.querySelectorAll('script');
+            var scripts = [];
+            var self = this;
+            scriptEls.forEach(function(el) {
+              scripts.push(el.textContent);
+              el.remove();
+            });
+
+            scripts.forEach(function(scriptContent) {
+              var newScript = document.createElement('script');
+              newScript.textContent = scriptContent;
+              document.head.appendChild(newScript);
+              self.loadedScripts.push(newScript);
+            });
+
+            // Move content to container
+            while (temp.content.firstChild) {
+              container.appendChild(temp.content.firstChild);
+            }
+
+            this.$nextTick(function() {
+              if (typeof lucide !== 'undefined') lucide.createIcons();
+            });
+          } catch (err) {
+            this.error = err.message;
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        saveToFiles() {
+          var uuid = this.attachmentUuid;
+          this.close();
+          // Delegate to the chat component which already has the working flow
+          window.dispatchEvent(new CustomEvent('chat-save-attachment-to-files', {
+            detail: { uuid: uuid },
+          }));
+        },
+
+        close() {
+          window.dispatchEvent(new CustomEvent('viewer-cleanup'));
+          this.$refs.dialog.close();
+          this.open = false;
+          this.attachmentUuid = null;
+          this.fileName = '';
+          this.mimeType = '';
+          this.error = null;
+          this.$refs.viewerContainer.replaceChildren();
+          this.loadedScripts.forEach(function(s) { s.remove(); });
+          this.loadedScripts = [];
+        },
+
+        init() {
+          var self = this;
+          this._openHandler = function(e) {
+            var d = e.detail;
+            self.openAttachment(d.uuid, d.name, d.mime_type);
+          };
+          window.addEventListener('open-chat-attachment-viewer', this._openHandler);
+        },
+      };
+    }
+  </script>
+</div>

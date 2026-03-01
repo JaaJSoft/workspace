@@ -5,14 +5,15 @@ import orjson
 from django.contrib.auth.decorators import login_required
 from django.db.models import OuterRef, Prefetch, Subquery
 from django.db.models import Q
-from django.http import HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.chat.models import Conversation, ConversationMember, Message, PinnedConversation, PinnedMessage
+from workspace.chat.models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage
 from workspace.chat.serializers import ConversationListSerializer
 from workspace.chat.services import get_unread_counts
+from workspace.files.ui.viewers import ViewerRegistry
 
 
 def _build_conversation_context(user):
@@ -338,3 +339,51 @@ def message_readers_view(request, conversation_uuid, message_uuid):
         'readers': readers,
         'not_read': not_read,
     })
+
+
+@login_required
+def view_attachment(request, attachment_uuid):
+    """Render viewer HTML for a chat attachment (read-only)."""
+    attachment = MessageAttachment.objects.select_related('message__conversation').filter(
+        uuid=attachment_uuid,
+    ).first()
+
+    if not attachment:
+        from django.http import Http404
+        raise Http404
+
+    # Check user is member of the conversation
+    is_member = ConversationMember.objects.filter(
+        conversation=attachment.message.conversation,
+        user=request.user,
+        left_at__isnull=True,
+    ).exists()
+    if not is_member:
+        from django.http import Http404
+        raise Http404
+
+    ViewerClass = ViewerRegistry.get_viewer(attachment.mime_type)
+    if not ViewerClass:
+        return HttpResponse(
+            f'<div class="p-8 text-center text-error">No viewer available for {attachment.mime_type}</div>',
+            status=400,
+        )
+
+    # Create a file-like adapter for the viewer
+    class AttachmentAdapter:
+        def __init__(self, att):
+            self.uuid = att.uuid
+            self.name = att.original_name
+            self.mime_type = att.mime_type
+            self.content = att.file
+
+        def is_viewable(self):
+            return True
+
+    adapter = AttachmentAdapter(attachment)
+    viewer = ViewerClass(adapter)
+    viewer._user_can_edit = False
+    viewer._content_url = f'/api/v1/chat/attachments/{attachment.uuid}'
+    html = viewer.render(request)
+
+    return HttpResponse(html)

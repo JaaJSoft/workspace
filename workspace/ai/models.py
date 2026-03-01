@@ -48,6 +48,7 @@ class AITask(models.Model):
         COMPOSE = 'compose'
         REPLY = 'reply'
         CHAT = 'chat'
+        EDITOR = 'editor'
 
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(

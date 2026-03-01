@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.10.0
+
+### New: AI Assistant
+
+AI-powered assistant integrated across Chat and Mail modules.
+
+- Configurable AI bots with bot picker modal and per-conversation assignment
+- Chat AI: bots respond in conversations with multimodal support (text and image attachments)
+- Mail AI: email summarization with dismiss option and formatting preservation
+- Mail AI: email composition and reply assistance with sender identity context
+- Editor task type with attachment viewer for AI-generated content
+- Bot presence status support
+
+### Mail
+
+- OAuth2 support for mail account authentication
+- Hidden folders support
+- Folder tags displayed in search results
+
+### Chat
+
+- Push notifications for new messages
+- Mark-as-read clears chat notification badges
+
+### Search
+
+- Tags support in search results
+
+### Calendar
+
+- Dynamic document title updates with poll title
+
+### Admin
+
+- Admin interfaces for AI, notifications, and user settings
+
+### Infrastructure
+
+- Support for loading environment variables from `.env` files
+
+### Fixes
+
+- Disable presence indicators in user avatars for dialogs
+- Mail account menu visual update
+
 ## 0.9.0
 
 ### Calendar

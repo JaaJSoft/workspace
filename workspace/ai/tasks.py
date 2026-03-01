@@ -61,14 +61,22 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         .prefetch_related('attachments')
         .order_by('-created_at')[:50]
     )
+    # Find the most recent user message that has image attachments
+    last_image_msg_uuid = None
+    for msg in recent_messages:  # newest first
+        is_bot = hasattr(msg.author, 'bot_profile')
+        if not is_bot and any(att.is_image for att in msg.attachments.all()):
+            last_image_msg_uuid = str(msg.uuid)
+            break
+
     history = []
     for msg in reversed(recent_messages):
         is_bot = hasattr(msg.author, 'bot_profile')
         role = 'assistant' if is_bot else 'user'
 
-        # Build multimodal content only for the triggering message
+        # Include images only from the most recent message that has images
         image_parts = []
-        if not is_bot and str(msg.uuid) == message_id:
+        if not is_bot and str(msg.uuid) == last_image_msg_uuid:
             for att in msg.attachments.all():
                 if att.is_image:
                     try:

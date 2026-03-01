@@ -111,8 +111,7 @@
           </div>
 
           {# Hover toolbar — floats below the bubble #}
-          <div class="absolute top-full mt-0.5 {% if is_own %}right-0{% else %}left-0{% endif %} opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto transition-opacity z-50"
-               >
+          <div class="absolute top-full mt-0 pt-1 {% if is_own %}right-0{% else %}left-0{% endif %} opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto transition-opacity delay-150 group-hover/msg:delay-0 z-50">
             <div class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-sm px-0.5 py-0.5">
               {# Quick reactions #}
               <template x-for="emoji in quickEmojis" :key="emoji">

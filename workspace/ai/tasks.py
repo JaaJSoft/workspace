@@ -1,3 +1,4 @@
+import base64
 import logging
 
 from celery import shared_task
@@ -57,15 +58,39 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             deleted_at__isnull=True,
         )
         .select_related('author')
+        .prefetch_related('attachments')
         .order_by('-created_at')[:50]
     )
     history = []
     for msg in reversed(recent_messages):
         is_bot = hasattr(msg.author, 'bot_profile')
-        history.append({
-            'role': 'assistant' if is_bot else 'user',
-            'content': msg.body,
-        })
+        role = 'assistant' if is_bot else 'user'
+
+        # Build multimodal content if the message has image attachments
+        image_parts = []
+        if not is_bot:
+            for att in msg.attachments.all():
+                if att.is_image:
+                    try:
+                        data = att.file.read()
+                        b64 = base64.b64encode(data).decode()
+                        image_parts.append({
+                            'type': 'image_url',
+                            'image_url': {
+                                'url': f'data:{att.mime_type};base64,{b64}',
+                            },
+                        })
+                    except Exception:
+                        logger.warning('Could not read attachment %s', att.uuid)
+
+        if image_parts:
+            content = []
+            if msg.body:
+                content.append({'type': 'text', 'text': msg.body})
+            content.extend(image_parts)
+            history.append({'role': role, 'content': content})
+        else:
+            history.append({'role': role, 'content': msg.body})
 
     messages = build_chat_messages(bot_profile.system_prompt, history)
 

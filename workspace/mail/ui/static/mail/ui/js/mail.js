@@ -893,7 +893,12 @@ function mailApp() {
           if (!resp.ok) return;
           const task = await resp.json();
           if (task.status === 'completed') {
-            this.compose.body = task.result;
+            if (this.compose.is_reply && this.compose.body) {
+              // Prepend AI response before the quoted original
+              this.compose.body = task.result + '\n\n' + this.compose.body;
+            } else {
+              this.compose.body = task.result;
+            }
             this.aiComposing = false;
             this.showAICompose = false;
             this.aiComposePrompt = '';

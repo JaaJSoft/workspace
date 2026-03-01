@@ -125,7 +125,7 @@
             <label class="text-xs font-semibold text-secondary flex items-center gap-1 mb-1">
               <i data-lucide="sparkles" class="w-3 h-3"></i> AI Assistant
             </label>
-            <input type="text" x-model="aiComposePrompt"
+            <input type="text" x-model="aiComposePrompt" x-ref="aiComposeInput"
                    @keydown.enter.prevent="aiCompose()"
                    class="input input-sm input-bordered w-full"
                    placeholder="Describe what you want to write..." />
@@ -188,7 +188,7 @@
 
         {% if ai_enabled %}
         <button type="button" class="btn btn-ghost btn-sm btn-square"
-                @click="showAICompose = !showAICompose" title="Compose with AI">
+                @click="showAICompose = !showAICompose; if (showAICompose) $nextTick(() => $refs.aiComposeInput?.focus())" title="Compose with AI">
           <i data-lucide="sparkles" class="w-4 h-4" :class="showAICompose ? 'text-secondary' : ''"></i>
         </button>
         {% endif %}

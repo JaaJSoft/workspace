@@ -908,7 +908,10 @@ function chatApp(currentUserId) {
       }
 
       this._updateConversationLastMessage(detail.conversation_id, detail.message);
-      this._bumpConversationUnread(detail.conversation_id);
+      // Only bump unread if the user is NOT currently viewing this conversation
+      if (!this.activeConversation || detail.conversation_id !== this.activeConversation.uuid) {
+        this._bumpConversationUnread(detail.conversation_id);
+      }
       this.refreshConversationList();
     },
 

@@ -66,9 +66,9 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         is_bot = hasattr(msg.author, 'bot_profile')
         role = 'assistant' if is_bot else 'user'
 
-        # Build multimodal content if the message has image attachments
+        # Build multimodal content only for the triggering message
         image_parts = []
-        if not is_bot:
+        if not is_bot and str(msg.uuid) == message_id:
             for att in msg.attachments.all():
                 if att.is_image:
                     try:

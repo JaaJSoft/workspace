@@ -50,7 +50,23 @@ class PresenceSSEProvider(SSEProvider):
                     away.append(uid)
                 # else: offline, skip
 
-        return {'online': online, 'away': away, 'busy': busy}
+        # Bot user IDs — always shown with a distinct "bot" presence
+        bot_ids = list(self._get_bot_ids())
+
+        return {'online': online, 'away': away, 'busy': busy, 'bot': bot_ids}
+
+    @staticmethod
+    def _get_bot_ids():
+        """Return bot user IDs (cached for the process lifetime of the snapshot cycle)."""
+        from django.core.cache import cache
+
+        cache_key = 'presence:bot_user_ids'
+        bot_ids = cache.get(cache_key)
+        if bot_ids is None:
+            from workspace.ai.models import BotProfile
+            bot_ids = list(BotProfile.objects.values_list('user_id', flat=True))
+            cache.set(cache_key, bot_ids, 300)  # 5 min TTL
+        return bot_ids
 
     def get_initial_events(self):
         snapshot = self._build_snapshot()

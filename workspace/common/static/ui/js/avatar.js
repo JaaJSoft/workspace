@@ -35,6 +35,7 @@ window.userAvatarHtml = function(userId, username, sizeClass, options) {
 /* ── Patch user card status from Alpine presence store ────────── */
 
 var _statusConfig = {
+  bot:     { dot: 'bg-secondary', label: 'text-secondary', showAgo: false },
   online:  { dot: 'bg-success',  label: 'text-success',  showAgo: false },
   away:    { dot: 'bg-warning',  label: 'text-warning',  showAgo: true  },
   busy:    { dot: 'bg-error',    label: 'text-error',    showAgo: false },

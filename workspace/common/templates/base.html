@@ -517,15 +517,18 @@
       online: new Set(),
       away: new Set(),
       busy: new Set(),
+      bot: new Set(),
 
       handleSnapshot(data) {
         this.online = new Set(data.online || []);
         this.away = new Set(data.away || []);
         this.busy = new Set(data.busy || []);
+        this.bot = new Set(data.bot || []);
       },
 
       statusOf(userId) {
         var uid = Number(userId);
+        if (this.bot.has(uid)) return 'bot';
         if (this.busy.has(uid)) return 'busy';
         if (this.online.has(uid)) return 'online';
         if (this.away.has(uid)) return 'away';
@@ -534,6 +537,7 @@
 
       ringClass(userId) {
         var s = this.statusOf(userId);
+        if (s === 'bot') return 'ring-secondary';
         if (s === 'busy') return 'ring-error';
         if (s === 'online') return 'ring-success';
         if (s === 'away') return 'ring-warning';
@@ -542,6 +546,7 @@
 
       dotClass(userId) {
         var s = this.statusOf(userId);
+        if (s === 'bot') return 'bg-secondary';
         if (s === 'busy') return 'bg-error';
         if (s === 'online') return 'bg-success';
         if (s === 'away') return 'bg-warning';

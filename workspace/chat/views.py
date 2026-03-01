@@ -92,7 +92,7 @@ class ConversationListView(APIView):
                     'members',
                     queryset=ConversationMember.objects.filter(
                         left_at__isnull=True,
-                    ).select_related('user'),
+                    ).select_related('user', 'user__bot_profile'),
                 ),
             )
             .order_by('-updated_at')
@@ -193,7 +193,7 @@ class ConversationListView(APIView):
                     'members',
                     queryset=ConversationMember.objects.filter(
                         left_at__isnull=True,
-                    ).select_related('user'),
+                    ).select_related('user', 'user__bot_profile'),
                 ),
             )
             .first()
@@ -224,7 +224,7 @@ class ConversationDetailView(APIView):
                     'members',
                     queryset=ConversationMember.objects.filter(
                         left_at__isnull=True,
-                    ).select_related('user'),
+                    ).select_related('user', 'user__bot_profile'),
                 ),
             )
             .first()
@@ -713,7 +713,7 @@ class ConversationMembersView(APIView):
                     'members',
                     queryset=ConversationMember.objects.filter(
                         left_at__isnull=True,
-                    ).select_related('user'),
+                    ).select_related('user', 'user__bot_profile'),
                 ),
             )
             .first()

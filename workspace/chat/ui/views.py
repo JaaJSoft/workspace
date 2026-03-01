@@ -28,7 +28,7 @@ def _build_conversation_context(user):
                 'members',
                 queryset=ConversationMember.objects.filter(
                     left_at__isnull=True,
-                ).select_related('user'),
+                ).select_related('user', 'user__bot_profile'),
             ),
         )
         .order_by('-updated_at')

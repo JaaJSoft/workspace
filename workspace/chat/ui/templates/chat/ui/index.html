@@ -4,6 +4,7 @@
 {% block title %}Chat - Workspace{% endblock %}
 
 {% block extra_head %}
+<link rel="stylesheet" href="{% static 'ui/css/ai-thinking.css' %}">
 <link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" integrity="sha384-6LFfkTKLRlzFtgx8xsWyBdKGpcMMQTkv+dB7rAbugeJAu1Ym2q1Aji1cjHBG12Xh" crossorigin="anonymous" />
 <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
@@ -231,15 +232,7 @@ x-init="init()"
               <div class="flex-shrink-0 w-8" x-html="botTypingAvatar()"></div>
               <!-- Content column -->
               <div class="flex flex-col items-start min-w-0">
-                <div class="bot-typing-bubble msg-bubble rounded-2xl px-8 py-3.5 min-w-[9rem]">
-                  <div class="bot-typing-shimmer"></div>
-                  <div class="bot-typing-glow"></div>
-                  <div class="bot-typing-dots">
-                    <span class="bot-typing-dot"></span>
-                    <span class="bot-typing-dot"></span>
-                    <span class="bot-typing-dot"></span>
-                  </div>
-                </div>
+                {% include "ui/partials/ai_thinking_bubble.html" %}
               </div>
             </div>
           </div>

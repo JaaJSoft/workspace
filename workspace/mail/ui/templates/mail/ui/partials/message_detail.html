@@ -161,6 +161,11 @@
         <span class="loading loading-spinner loading-md text-warning"></span>
       </div>
 
+      <!-- AI Summary loading -->
+      <div x-show="aiSummarizing && !aiSummary" x-cloak class="mb-4 flex justify-center">
+        {% include "ui/partials/ai_thinking_bubble.html" %}
+      </div>
+
       <!-- AI Summary (inside scrollable area) -->
       <div x-show="aiSummary" x-cloak
            class="mb-4 p-3 rounded-lg bg-secondary/5 border border-secondary/20">

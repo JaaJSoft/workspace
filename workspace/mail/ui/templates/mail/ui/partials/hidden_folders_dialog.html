@@ -1,0 +1,45 @@
+<!-- Hidden folders management dialog -->
+<dialog id="mail-hidden-folders-dialog" class="modal">
+  <div class="modal-box max-w-sm">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+      <span class="w-8 h-8 rounded-full bg-warning/10 text-warning flex items-center justify-center flex-shrink-0">
+        <i data-lucide="eye-off" class="w-4 h-4"></i>
+      </span>
+      Hidden folders
+    </h3>
+
+    <template x-if="hiddenFolders.length === 0">
+      <p class="text-base-content/60 text-sm py-4 text-center">No hidden folders for this account.</p>
+    </template>
+
+    <template x-if="hiddenFolders.length > 0">
+      <div>
+        <input type="text" x-model="hiddenFoldersSearch" placeholder="Search..."
+               class="input input-bordered input-sm w-full mb-3" />
+      </div>
+    </template>
+
+    <template x-if="hiddenFolders.length > 0">
+      <ul class="space-y-1 max-h-64 overflow-y-auto">
+        <template x-for="folder in filteredHiddenFolders" :key="folder.uuid">
+          <li class="flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-base-content/5">
+            <span class="flex items-center gap-2 min-w-0">
+              <i :data-lucide="folder.icon || 'folder'" class="w-4 h-4 flex-shrink-0 text-base-content/50"></i>
+              <span class="text-sm truncate" x-text="folder.display_name"></span>
+            </span>
+            <button class="btn btn-ghost btn-xs" @click="restoreFolder(folder)" title="Restore">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </li>
+        </template>
+      </ul>
+    </template>
+
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>

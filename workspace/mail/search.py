@@ -18,6 +18,7 @@ def search_mail(query, user, limit):
             account_id__in=account_ids,
             deleted_at__isnull=True,
         )
+        .exclude(folder__is_hidden=True)
         .filter(
             Q(subject__icontains=query)
             | Q(snippet__icontains=query)

@@ -472,6 +472,63 @@ class MailFolderDeleteTests(MailTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
 
+# ---------- Folder Hide/Unhide ----------
+
+
+class MailFolderHideTests(MailTestMixin, APITestCase):
+    """Tests for hiding/showing folders via PATCH is_hidden."""
+
+    list_url = '/api/v1/mail/folders'
+
+    def _url(self, folder):
+        return f'/api/v1/mail/folders/{folder.uuid}'
+
+    def test_hide_other_folder(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(self._url(self.custom), {'is_hidden': True}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data['is_hidden'])
+        self.custom.refresh_from_db()
+        self.assertTrue(self.custom.is_hidden)
+
+    def test_cannot_hide_special_folder(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(self._url(self.inbox), {'is_hidden': True}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('special folder', resp.data['detail'].lower())
+
+    def test_unhide_folder(self):
+        self.custom.is_hidden = True
+        self.custom.save()
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(self._url(self.custom), {'is_hidden': False}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.data['is_hidden'])
+        self.custom.refresh_from_db()
+        self.assertFalse(self.custom.is_hidden)
+
+    def test_hidden_folders_excluded_from_listing(self):
+        self.custom.is_hidden = True
+        self.custom.save()
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(self.list_url, {'account': self.account.uuid})
+        uuids = [f['uuid'] for f in resp.data]
+        self.assertNotIn(str(self.custom.uuid), uuids)
+        self.assertEqual(len(resp.data), 2)
+
+    def test_show_hidden_includes_all(self):
+        self.custom.is_hidden = True
+        self.custom.save()
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(self.list_url, {
+            'account': self.account.uuid,
+            'show_hidden': 'true',
+        })
+        uuids = [f['uuid'] for f in resp.data]
+        self.assertIn(str(self.custom.uuid), uuids)
+        self.assertEqual(len(resp.data), 3)
+
+
 # ---------- Mark All Read ----------
 
 

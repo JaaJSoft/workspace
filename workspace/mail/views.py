@@ -235,6 +235,8 @@ class MailFolderListView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         folders = MailFolder.objects.filter(account=account)
+        if request.query_params.get('show_hidden') != 'true':
+            folders = folders.filter(is_hidden=False)
         return Response(MailFolderSerializer(folders, many=True).data)
 
     @extend_schema(summary="Create a folder", request=MailFolderCreateSerializer)
@@ -324,9 +326,16 @@ class MailFolderUpdateView(APIView):
                         status=status.HTTP_502_BAD_GATEWAY,
                     )
 
-        # Update icon/color locally
+        # Reject hiding special folders
+        if ser.validated_data.get('is_hidden') and folder.folder_type != 'other':
+            return Response(
+                {'detail': 'Cannot hide a special folder'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update icon/color/is_hidden locally
         update_fields = ['updated_at']
-        for field in ('icon', 'color'):
+        for field in ('icon', 'color', 'is_hidden'):
             if field in ser.validated_data:
                 setattr(folder, field, ser.validated_data[field])
                 update_fields.append(field)

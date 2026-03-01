@@ -49,6 +49,13 @@
       </button>
     </li>
     <li>
+      <button type="button" class="gap-3 rounded" @click="folderCtxAction('hide')"
+              :class="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''">
+        <i data-lucide="eye-off" class="w-4 h-4"></i>
+        <span>Hide</span>
+      </button>
+    </li>
+    <li>
       <button type="button" class="gap-3 rounded text-error" @click="folderCtxAction('delete')"
               :class="folderCtx.folder?.folder_type !== 'other' ? 'opacity-40 pointer-events-none' : ''">
         <i data-lucide="trash-2" class="w-4 h-4"></i>

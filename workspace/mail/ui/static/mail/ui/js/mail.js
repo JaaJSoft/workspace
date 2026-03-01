@@ -232,6 +232,10 @@ function mailApp() {
     // Folder icon edit
     folderIconEdit: { uuid: null, name: '', icon: null, color: null },
 
+    // Hidden folders
+    hiddenFolders: [],
+    hiddenFoldersSearch: '',
+
     // Compose
     compose: _defaultCompose(),
     showCcBcc: false,
@@ -1256,6 +1260,9 @@ function mailApp() {
         case 'test':
           this.testAccount(account.uuid);
           break;
+        case 'hidden_folders':
+          this._showHiddenFolders(account);
+          break;
         case 'remove':
           this.removeAccount(account.uuid);
           break;
@@ -1306,6 +1313,9 @@ function mailApp() {
           break;
         case 'move':
           await this._moveFolder(folder);
+          break;
+        case 'hide':
+          await this._hideFolder(folder);
           break;
         case 'delete':
           await this._deleteFolder(folder);
@@ -1695,6 +1705,78 @@ function mailApp() {
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to move folder' });
+      }
+    },
+
+    // ----- Hide/unhide folders -----
+    async _hideFolder(folder) {
+      if (folder.folder_type !== 'other') return;
+
+      const ok = await AppDialog.confirm({
+        title: 'Hide folder',
+        message: `Hide "${folder.display_name}"? It will no longer appear in the sidebar or search results. You can restore it from the account menu.`,
+        okLabel: 'Hide',
+        okClass: 'btn-warning',
+        icon: 'eye-off',
+        iconClass: 'bg-warning/10 text-warning',
+      });
+      if (!ok) return;
+
+      const res = await this._fetch(`/api/v1/mail/folders/${folder.uuid}`, {
+        method: 'PATCH',
+        body: { is_hidden: true },
+      });
+
+      if (res.ok) {
+        const flds = this.folders[folder.account_id];
+        if (flds) {
+          this.folders[folder.account_id] = flds.filter(f => f.uuid !== folder.uuid);
+        }
+        if (this.selectedFolder?.uuid === folder.uuid) {
+          this.selectedFolder = null;
+          this.messages = [];
+          this.selectedMessage = null;
+          this.messageDetail = null;
+          this._updateUrl(null);
+        }
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await AppDialog.error({ message: data.detail || 'Failed to hide folder' });
+      }
+    },
+
+    get filteredHiddenFolders() {
+      const q = (this.hiddenFoldersSearch || '').toLowerCase();
+      if (!q) return this.hiddenFolders;
+      return this.hiddenFolders.filter(f => f.display_name.toLowerCase().includes(q));
+    },
+
+    async _showHiddenFolders(account) {
+      const res = await this._fetch(`/api/v1/mail/folders?account=${account.uuid}&show_hidden=true`);
+      if (!res.ok) return;
+      const allFolders = await res.json();
+      this.hiddenFolders = allFolders.filter(f => f.is_hidden);
+      this.hiddenFoldersSearch = '';
+      document.getElementById('mail-hidden-folders-dialog').showModal();
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    async restoreFolder(folder) {
+      const res = await this._fetch(`/api/v1/mail/folders/${folder.uuid}`, {
+        method: 'PATCH',
+        body: { is_hidden: false },
+      });
+      if (res.ok) {
+        this.hiddenFolders = this.hiddenFolders.filter(f => f.uuid !== folder.uuid);
+        await this.loadFolders(folder.account_id);
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+        if (this.hiddenFolders.length === 0) {
+          document.getElementById('mail-hidden-folders-dialog').close();
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await AppDialog.error({ message: data.detail || 'Failed to restore folder' });
       }
     },
 

@@ -29,6 +29,12 @@
         <span>Test</span>
       </button>
     </li>
+    <li>
+      <button type="button" class="gap-3 rounded" @click="accountCtxAction('hidden_folders')">
+        <i data-lucide="eye-off" class="w-4 h-4"></i>
+        <span>Hidden folders</span>
+      </button>
+    </li>
     <hr class="my-1 border-base-300" />
     <li>
       <button type="button" class="gap-3 rounded text-error" @click="accountCtxAction('remove')">

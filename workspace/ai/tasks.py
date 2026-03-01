@@ -1,5 +1,4 @@
 import logging
-import time
 
 from celery import shared_task
 from django.conf import settings
@@ -44,9 +43,6 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
 
     User = get_user_model()
 
-    # Debounce: wait briefly so rapid-fire messages consolidate into one response
-    time.sleep(1.5)
-
     try:
         bot_user = User.objects.get(pk=bot_user_id)
         bot_profile = BotProfile.objects.get(user=bot_user)
@@ -55,22 +51,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         logger.error('Bot response failed: conversation=%s bot=%s not found', conversation_id, bot_user_id)
         return {'status': 'error', 'error': 'Not found'}
 
-    # Skip if a newer user message exists — that task will respond instead
-    latest_user_msg = (
-        Message.objects.filter(
-            conversation_id=conversation_id,
-            deleted_at__isnull=True,
-        )
-        .exclude(author=bot_user)
-        .order_by('-created_at')
-        .values_list('uuid', flat=True)
-        .first()
-    )
-    if latest_user_msg and str(latest_user_msg) != message_id:
-        logger.info('Skipping bot response: newer message exists conversation=%s', conversation_id)
-        return {'status': 'skipped', 'reason': 'newer message exists'}
-
-    recent_messages = list(
+    recent_messages = (
         Message.objects.filter(
             conversation_id=conversation_id,
             deleted_at__isnull=True,
@@ -78,28 +59,15 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         .select_related('author')
         .order_by('-created_at')[:50]
     )
-    recent_messages.reverse()
-
-    # Split into past conversation history and new unanswered messages.
-    # Walk backwards to find the last bot message — everything after it
-    # is "new" (unanswered by the bot).
-    last_bot_idx = -1
-    for i in range(len(recent_messages) - 1, -1, -1):
-        if hasattr(recent_messages[i].author, 'bot_profile'):
-            last_bot_idx = i
-            break
-
     history = []
-    new_messages = []
-    for i, msg in enumerate(recent_messages):
+    for msg in reversed(recent_messages):
         is_bot = hasattr(msg.author, 'bot_profile')
-        entry = {'role': 'assistant' if is_bot else 'user', 'content': msg.body}
-        if i <= last_bot_idx:
-            history.append(entry)
-        else:
-            new_messages.append(entry)
+        history.append({
+            'role': 'assistant' if is_bot else 'user',
+            'content': msg.body,
+        })
 
-    messages = build_chat_messages(bot_profile.system_prompt, history, new_messages)
+    messages = build_chat_messages(bot_profile.system_prompt, history)
 
     ai_task = AITask.objects.create(
         owner=bot_user,
@@ -217,6 +185,9 @@ def summarize(self, task_id: str):
         ai_task.completion_tokens = result['completion_tokens']
         ai_task.completed_at = timezone.now()
         ai_task.save()
+
+        message.ai_summary = result['content']
+        message.save(update_fields=['ai_summary'])
 
         notify_sse('ai', ai_task.owner_id)
 

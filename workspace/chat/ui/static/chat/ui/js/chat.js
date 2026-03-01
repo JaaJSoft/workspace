@@ -1901,6 +1901,7 @@ function chatApp(currentUserId) {
       // Enter (without shift) → send / save edit
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
+        if (this.botTyping && this.isBotConversation(this.activeConversation)) return;
         this.sendOrEdit();
         return;
       }

@@ -374,7 +374,7 @@ x-init="init()"
             <button
               class="btn btn-info btn-sm btn-circle"
               @click="sendOrEdit()"
-              :disabled="!messageBody.trim() && pendingFiles.length === 0"
+              :disabled="(!messageBody.trim() && pendingFiles.length === 0) || (botTyping && isBotConversation(activeConversation))"
             >
               <i data-lucide="send" class="w-3.5 h-3.5"></i>
             </button>

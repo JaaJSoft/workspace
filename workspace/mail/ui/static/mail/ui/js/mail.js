@@ -571,6 +571,9 @@ function mailApp() {
       const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`);
       if (res.ok) {
         this.messageDetail = await res.json();
+        if (this.messageDetail.ai_summary) {
+          this.aiSummary = this.messageDetail.ai_summary.replace(/\n/g, '<br>');
+        }
         // Auto-mark as read
         if (!msg.is_read) {
           this.toggleRead(this.messageDetail, true);

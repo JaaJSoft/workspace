@@ -95,7 +95,7 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
             'bcc_addresses', 'reply_to', 'date', 'snippet',
             'body_text', 'body_html',
             'is_read', 'is_starred', 'is_draft', 'has_attachments',
-            'has_calendar_event', 'attachments', 'created_at',
+            'has_calendar_event', 'ai_summary', 'attachments', 'created_at',
         ]
 
 

@@ -168,6 +168,7 @@ class MailMessage(models.Model):
     is_draft = models.BooleanField(default=False)
     has_attachments = models.BooleanField(default=False)
     has_calendar_event = models.BooleanField(default=False)
+    ai_summary = models.TextField(blank=True, default='')
 
     deleted_at = models.DateTimeField(null=True, blank=True)
 

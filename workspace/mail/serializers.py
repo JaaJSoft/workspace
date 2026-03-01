@@ -102,6 +102,7 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
 class MailMessageUpdateSerializer(serializers.Serializer):
     is_read = serializers.BooleanField(required=False)
     is_starred = serializers.BooleanField(required=False)
+    ai_summary = serializers.CharField(required=False, allow_blank=True)
 
 
 class SendEmailSerializer(serializers.Serializer):

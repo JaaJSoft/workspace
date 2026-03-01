@@ -520,6 +520,9 @@ class MailMessageDetailView(APIView):
             except Exception:
                 logger.warning("Failed to sync star flag to IMAP for %s", msg.uuid)
 
+        if 'ai_summary' in ser.validated_data:
+            msg.ai_summary = ser.validated_data['ai_summary']
+
         msg.save()
         _refresh_folder_counts(msg.folder)
         return Response(MailMessageDetailSerializer(msg).data)

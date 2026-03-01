@@ -589,6 +589,9 @@ function mailApp() {
       if (res.ok) {
         this.messageDetail = await res.json();
         this.selectedMessage = this.messageDetail;
+        if (this.messageDetail.ai_summary) {
+          this.aiSummary = this.messageDetail.ai_summary.replace(/\n/g, '<br>');
+        }
         // Load the folder
         const folderId = this.messageDetail.folder_id;
         const accountId = this.messageDetail.account_id;
@@ -848,6 +851,19 @@ function mailApp() {
       };
       this._aiPollInterval = setInterval(poll, 2000);
       poll();
+    },
+
+    async dismissSummary(message) {
+      this.aiSummary = null;
+      try {
+        await fetch(`/api/v1/mail/messages/${message.uuid}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          body: JSON.stringify({ ai_summary: '' }),
+        });
+      } catch (e) {
+        // silent — summary already hidden locally
+      }
     },
 
     async aiCompose() {

@@ -57,7 +57,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             conversation_id=conversation_id,
             deleted_at__isnull=True,
         )
-        .select_related('author')
+        .select_related('author', 'author__bot_profile')
         .prefetch_related('attachments')
         .order_by('-created_at')[:50]
     )

@@ -108,18 +108,6 @@
                     :checked="prefs.notifyPollVotes"
                     @change="updatePref('notifyPollVotes', $event.target.checked)">
                 </label>
-                <hr class="border-base-300">
-                <!-- Max events per day -->
-                <div>
-                  <label class="text-sm text-base-content/60 block mb-1">Max events per day</label>
-                  <div class="flex items-center gap-2">
-                    <input type="range" min="2" max="8" step="1"
-                      class="range range-sm range-accent flex-1"
-                      :value="prefs.dayMaxEvents"
-                      @input="updatePref('dayMaxEvents', parseInt($event.target.value))">
-                    <span class="text-sm font-mono w-5 text-center" x-text="prefs.dayMaxEvents"></span>
-                  </div>
-                </div>
               </div>
             </div>
           </div>

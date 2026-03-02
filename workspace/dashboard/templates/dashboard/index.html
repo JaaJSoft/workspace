@@ -12,8 +12,10 @@
 
   {# ── Hero ── #}
   <section class="text-center space-y-1">
-    <h1 class="text-3xl font-semibold text-base-content">Welcome back, {{ user.username }}.</h1>
-    <p class="text-base-content/60">Your workspace, all in one place.</p>
+    <h1 class="text-3xl font-semibold text-base-content" x-data x-text="(() => { const h = new Date().getHours(); const g = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; return g + ', {{ user.username }}.'; })()">Welcome back, {{ user.username }}.</h1>
+    <p class="text-base-content/60" x-data="weatherWidget()" x-init="init()" x-cloak>
+      <span x-text="label"></span>
+    </p>
   </section>
 
   {# ── Search bar ── #}
@@ -164,4 +166,82 @@
   </section>
 
 </div>
+
+<script>
+var _weatherCodes = {
+  0:'clear-day',1:'clear-day',2:'partly-cloudy',3:'cloudy',
+  45:'fog',48:'fog',
+  51:'drizzle',53:'drizzle',55:'drizzle',56:'drizzle',57:'drizzle',
+  61:'rain',63:'rain',65:'rain',66:'rain',67:'rain',
+  71:'snow',73:'snow',75:'snow',77:'snow',
+  80:'rain',81:'rain',82:'rain',
+  85:'snow',86:'snow',
+  95:'thunderstorm',96:'thunderstorm',99:'thunderstorm',
+};
+var _weatherIcons = {
+  'clear-day':'sun','clear-night':'moon','partly-cloudy':'cloud-sun',
+  'cloudy':'cloud','fog':'cloud-fog','drizzle':'cloud-drizzle',
+  'rain':'cloud-rain','snow':'snowflake','thunderstorm':'cloud-lightning',
+};
+var _WEATHER_CACHE_KEY = 'dashboard_weather';
+var _WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 min
+
+function weatherWidget() {
+  return {
+    label: '',
+    init() {
+      var now = new Date();
+      this.label = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+      this._loadWeather();
+    },
+    _loadWeather() {
+      var self = this;
+      // Check cache
+      try {
+        var raw = localStorage.getItem(_WEATHER_CACHE_KEY);
+        if (raw) {
+          var c = JSON.parse(raw);
+          if (c.ts + _WEATHER_CACHE_TTL > Date.now()) {
+            self._applyWeather(c.temp, c.code);
+            return;
+          }
+        }
+      } catch(e) {}
+
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        var lat = pos.coords.latitude.toFixed(2);
+        var lon = pos.coords.longitude.toFixed(2);
+        fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current=temperature_2m,weather_code')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var temp = Math.round(data.current.temperature_2m);
+            var code = data.current.weather_code;
+            try { localStorage.setItem(_WEATHER_CACHE_KEY, JSON.stringify({ temp: temp, code: code, ts: Date.now() })); } catch(e) {}
+            self._applyWeather(temp, code);
+        }).catch(function() {});
+      }, function() {}, { timeout: 5000 });
+    },
+    _applyWeather(temp, code) {
+      var condition = _weatherCodes[code] || 'cloudy';
+      var h = new Date().getHours();
+      if ((condition === 'clear-day') && (h < 6 || h >= 20)) condition = 'clear-night';
+      var icon = _weatherIcons[condition] || 'cloud';
+      var dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+      this.label = dateStr + '  ·  ' + temp + '°C';
+      // Inject lucide icon next to temperature
+      this.$nextTick(() => {
+        var el = this.$el.querySelector('[data-weather-icon]');
+        if (el) el.remove();
+        var span = document.createElement('i');
+        span.setAttribute('data-lucide', icon);
+        span.setAttribute('data-weather-icon', '');
+        span.className = 'inline-block w-4 h-4 ml-1 -translate-y-px';
+        this.$el.querySelector('span').appendChild(span);
+        lucide?.createIcons({ nodes: [span] });
+      });
+    },
+  };
+}
+</script>
 {% endblock %}

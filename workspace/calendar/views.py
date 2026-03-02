@@ -144,7 +144,7 @@ class CalendarListView(APIView):
 class CalendarDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Update a calendar")
+    @extend_schema(summary="Update a calendar", request=CalendarCreateSerializer)
     def put(self, request, calendar_id):
         try:
             cal = Calendar.objects.get(pk=calendar_id, owner=request.user)

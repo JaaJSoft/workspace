@@ -1,8 +1,8 @@
 from django.conf import settings as django_settings
 from django.db.models import Q
 from django.utils import timezone
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,6 +15,7 @@ from .serializers import NotificationSerializer
 class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(summary="List notifications")
     def get(self, request):
         qs = Notification.objects.filter(
             recipient=request.user,
@@ -61,6 +62,7 @@ class NotificationListView(APIView):
 class NotificationDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(summary="Mark a notification as read")
     def patch(self, request, notification_id):
         """Mark a single notification as read."""
         try:
@@ -72,6 +74,7 @@ class NotificationDetailView(APIView):
             notif.save(update_fields=['read_at'])
         return Response(NotificationSerializer(notif).data)
 
+    @extend_schema(summary="Delete a notification")
     def delete(self, request, notification_id):
         """Delete a notification."""
         deleted, _ = Notification.objects.filter(
@@ -86,6 +89,7 @@ class NotificationDetailView(APIView):
 class NotificationReadAllView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(summary="Mark all notifications as read")
     def post(self, request):
         """Mark all unread notifications as read."""
         count = Notification.objects.filter(
@@ -98,6 +102,7 @@ class NotificationReadAllView(APIView):
 class PushVapidKeyView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(summary="Get VAPID public key for push subscriptions")
     def get(self, request):
         """Return the VAPID public key for push subscription."""
         return Response({
@@ -109,6 +114,16 @@ class PushVapidKeyView(APIView):
 class PushSubscribeView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Subscribe to push notifications",
+        request=inline_serializer('PushSubscribe', fields={
+            'endpoint': serializers.URLField(help_text='Push service endpoint URL.'),
+            'keys': inline_serializer('PushKeys', fields={
+                'p256dh': serializers.CharField(),
+                'auth': serializers.CharField(),
+            }),
+        }),
+    )
     def post(self, request):
         """Subscribe to push notifications."""
         endpoint = request.data.get('endpoint')
@@ -132,6 +147,12 @@ class PushSubscribeView(APIView):
         )
         return Response(status=status.HTTP_201_CREATED)
 
+    @extend_schema(
+        summary="Unsubscribe from push notifications",
+        request=inline_serializer('PushUnsubscribe', fields={
+            'endpoint': serializers.URLField(help_text='Push service endpoint URL to remove.'),
+        }),
+    )
     def delete(self, request):
         """Unsubscribe from push notifications."""
         endpoint = request.data.get('endpoint')

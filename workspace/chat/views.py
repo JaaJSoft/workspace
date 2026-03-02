@@ -231,7 +231,13 @@ class ConversationDetailView(APIView):
         )
         return Response(ConversationDetailSerializer(conversation).data)
 
-    @extend_schema(summary="Update conversation details")
+    @extend_schema(
+        summary="Update conversation details",
+        request=inline_serializer('ConversationUpdate', fields={
+            'title': serializers.CharField(required=False),
+            'description': serializers.CharField(required=False),
+        }),
+    )
     def patch(self, request, conversation_id):
         membership = _get_active_membership(request.user, conversation_id)
         if not membership:
@@ -1214,7 +1220,12 @@ class ConversationPinView(APIView):
 class ConversationPinReorderView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Reorder pinned conversations")
+    @extend_schema(
+        summary="Reorder pinned conversations",
+        request=inline_serializer('ConversationPinReorder', fields={
+            'order': serializers.ListField(child=serializers.UUIDField()),
+        }),
+    )
     def post(self, request):
         order = request.data.get('order', [])
         if not isinstance(order, list):
@@ -1354,7 +1365,12 @@ class AttachmentDownloadView(APIView):
 class AttachmentSaveToFilesView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Save a chat attachment to the user's Files")
+    @extend_schema(
+        summary="Save a chat attachment to the user's Files",
+        request=inline_serializer('AttachmentSaveToFiles', fields={
+            'folder_id': serializers.UUIDField(required=False, help_text='Target folder UUID.'),
+        }),
+    )
     def post(self, request, attachment_id):
         from django.core.files.base import ContentFile
         from workspace.files.services.files import FileService

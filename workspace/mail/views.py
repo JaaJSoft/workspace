@@ -4,8 +4,8 @@ from collections import Counter, defaultdict
 from django.db.models import Count, Q
 from django.http import FileResponse
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import status
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -47,7 +47,12 @@ def _refresh_folder_counts(folder):
 class MailAutodiscoverView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Auto-discover IMAP/SMTP settings for an email address")
+    @extend_schema(
+        summary="Auto-discover IMAP/SMTP settings for an email address",
+        request=inline_serializer('MailAutodiscover', fields={
+            'email': serializers.EmailField(help_text='Email address to discover settings for.'),
+        }),
+    )
     def post(self, request):
         email = (request.data.get('email') or '').strip()
         if not email or '@' not in email:
@@ -284,7 +289,10 @@ class MailFolderUpdateView(APIView):
             return None
         return folder
 
-    @extend_schema(summary="Update folder (icon, color, rename, move)")
+    @extend_schema(
+        summary="Update folder (icon, color, rename, move)",
+        request=MailFolderUpdateSerializer,
+    )
     def patch(self, request, uuid):
         folder = self._get_folder(request, uuid)
         if not folder:
@@ -819,7 +827,12 @@ class MailAttachmentDownloadView(APIView):
 class MailAttachmentSaveToFilesView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Save a mail attachment to the user's Files")
+    @extend_schema(
+        summary="Save a mail attachment to the user's Files",
+        request=inline_serializer('MailAttachmentSaveToFiles', fields={
+            'folder_id': serializers.UUIDField(required=False, help_text='Target folder UUID.'),
+        }),
+    )
     def post(self, request, uuid):
         from django.core.files.base import ContentFile
         from workspace.files.models import File

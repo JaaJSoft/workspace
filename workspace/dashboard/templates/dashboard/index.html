@@ -30,117 +30,46 @@
     {% include 'dashboard/partials/modules_grid.html' %}
   </section>
 
-  {# ── Overview section header + stats ── #}
-  <section class="space-y-4" x-data="{ loading: false }" @ajax:before="loading = true" @ajax:after="loading = false; $nextTick(() => lucide.createIcons())">
-    <div class="flex items-center justify-between gap-4 flex-wrap">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-        </div>
-        <div>
-          <h2 class="text-xl font-semibold text-base-content">Overview</h2>
-          <p class="text-sm text-base-content/60">Your workspace at a glance.</p>
-        </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <a
-          href="{% url 'dashboard:stats' %}"
-          class="btn btn-ghost btn-sm gap-2"
-          x-target="dashboard-stats"
-          aria-label="Refresh stats"
-          title="Refresh stats"
-        >
-          <i data-lucide="rotate-cw" class="w-4 h-4"></i>
-          Refresh
-        </a>
-      </div>
-    </div>
-    {# ── Stats skeleton ── #}
-    <div x-show="loading" x-cloak class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 animate-pulse">
-      {% for _ in "1234" %}
-      <div class="stats shadow border border-base-300 bg-base-100">
-        <div class="stat">
-          <div class="stat-figure"><div class="w-7 h-7 rounded bg-base-300"></div></div>
-          <div class="stat-title"><div class="h-3 bg-base-300 rounded w-16"></div></div>
-          <div class="stat-value"><div class="h-8 bg-base-300 rounded w-12 mt-1"></div></div>
-          <div class="stat-desc"><div class="h-3 bg-base-300 rounded w-20 mt-1"></div></div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    <div x-show="!loading">
-      {% include 'dashboard/partials/stats.html' %}
-    </div>
-  </section>
-
-  {# ── Insights + sidebar ── #}
-  <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-    <div class="xl:col-span-2">
-      <div class="card bg-base-100 shadow border border-base-300" x-data="{ insightTab: '{{ insight_tab|default:"recent" }}', loading: false }" @ajax:before="loading = true" @ajax:after="loading = false; $nextTick(() => lucide.createIcons())">
+  {# ── Activity feed + sidebar ── #}
+  <section class="grid grid-cols-1 {% if user.is_staff %}xl:grid-cols-3{% endif %} gap-6">
+    <div class="{% if user.is_staff %}xl:col-span-2{% endif %}">
+      <div class="card bg-base-100 shadow border border-base-300" x-data="{ activityTab: '{{ activity_tab|default:"all" }}', loading: false }" @ajax:before="loading = true" @ajax:after="loading = false; $nextTick(() => lucide.createIcons())">
         <div class="card-body">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div class="space-y-1">
               <h2 class="card-title text-2xl">
                 <i data-lucide="activity" class="w-5 h-5"></i>
-                Insights
+                Recent Activity
               </h2>
-              <p class="text-sm text-base-content/60">Recent activity across your workspace.</p>
+              <p class="text-sm text-base-content/60">What's happening across your workspace.</p>
             </div>
             <div class="tabs tabs-boxed flex-wrap">
               <a
-                href="{% url 'dashboard:insights_recent' %}"
+                href="{% url 'dashboard:activity_feed' %}"
                 class="tab gap-1.5"
-                :class="insightTab === 'recent' ? 'tab-active' : ''"
-                @click="insightTab = 'recent'"
-                x-target="dashboard-insights"
+                :class="activityTab === 'all' ? 'tab-active' : ''"
+                @click="activityTab = 'all'"
+                x-target="dashboard-activity"
               >
-                <i data-lucide="clock" class="w-3.5 h-3.5"></i>
-                Recent
+                <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+                All
               </a>
+              {% for src in activity_sources %}
               <a
-                href="{% url 'dashboard:insights_conversations' %}"
+                href="{% url 'dashboard:activity_feed' %}?source={{ src.slug }}"
                 class="tab gap-1.5"
-                :class="insightTab === 'conversations' ? 'tab-active' : ''"
-                @click="insightTab = 'conversations'"
-                x-target="dashboard-insights"
+                :class="activityTab === '{{ src.slug }}' ? 'tab-active' : ''"
+                @click="activityTab = '{{ src.slug }}'"
+                x-target="dashboard-activity"
               >
-                <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
-                Chat
+                <i data-lucide="{{ src.icon }}" class="w-3.5 h-3.5"></i>
+                {{ src.label }}
               </a>
-              <a
-                href="{% url 'dashboard:insights_events' %}"
-                class="tab gap-1.5"
-                :class="insightTab === 'events' ? 'tab-active' : ''"
-                @click="insightTab = 'events'"
-                x-target="dashboard-insights"
-              >
-                <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
-                Events
-              </a>
-              <a
-                href="{% url 'dashboard:insights_favorites' %}"
-                class="tab gap-1.5"
-                :class="insightTab === 'favorites' ? 'tab-active' : ''"
-                @click="insightTab = 'favorites'"
-                x-target="dashboard-insights"
-              >
-                <i data-lucide="star" class="w-3.5 h-3.5"></i>
-                Favorites
-              </a>
-              <a
-                href="{% url 'dashboard:insights_trash' %}"
-                class="tab gap-1.5"
-                :class="insightTab === 'trash' ? 'tab-active' : ''"
-                @click="insightTab = 'trash'"
-                x-target="dashboard-insights"
-              >
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                Trash
-              </a>
+              {% endfor %}
             </div>
           </div>
 
-          {# ── Insights skeleton ── #}
+          {# ── Activity skeleton ── #}
           <div x-show="loading" x-cloak class="mt-4 animate-pulse">
             <ul class="divide-y divide-base-200">
               {% for _ in "123456" %}
@@ -157,62 +86,15 @@
           </div>
 
           <div x-show="!loading">
-            {% if insight_tab == 'conversations' %}
-              {% include 'dashboard/partials/insights_conversations.html' %}
-            {% elif insight_tab == 'events' %}
-              {% include 'dashboard/partials/insights_events.html' %}
-            {% elif insight_tab == 'favorites' %}
-              {% include 'dashboard/partials/insights_favorites.html' %}
-            {% elif insight_tab == 'trash' %}
-              {% include 'dashboard/partials/insights_trash.html' %}
-            {% else %}
-              {% include 'dashboard/partials/insights_recent.html' %}
-            {% endif %}
+            {% include 'dashboard/partials/activity_feed.html' %}
           </div>
         </div>
       </div>
     </div>
 
-    <div class="space-y-6">
-      {# ── Quick Access card ── #}
-      <div class="card bg-base-100 shadow border border-base-300">
-        <div class="card-body">
-          <h3 class="card-title text-xl">
-            <i data-lucide="zap" class="w-5 h-5"></i>
-            Quick Access
-          </h3>
-          <div class="space-y-2 mt-2">
-            <a href="/files" class="btn btn-ghost btn-sm w-full justify-between gap-3">
-              <span class="flex items-center gap-3">
-                <i data-lucide="file" class="w-4 h-4"></i>
-                Files
-              </span>
-              <span class="badge badge-sm">{{ stats.file_count }}</span>
-            </a>
-            <a href="/chat" class="btn btn-ghost btn-sm w-full justify-between gap-3">
-              <span class="flex items-center gap-3">
-                <i data-lucide="message-circle" class="w-4 h-4"></i>
-                Chat
-              </span>
-              {% if stats.unread_messages > 0 %}
-                <span class="badge badge-info badge-sm">{{ stats.unread_messages }}</span>
-              {% endif %}
-            </a>
-            <a href="/calendar" class="btn btn-ghost btn-sm w-full justify-between gap-3">
-              <span class="flex items-center gap-3">
-                <i data-lucide="calendar" class="w-4 h-4"></i>
-                Calendar
-              </span>
-              {% if stats.upcoming_events > 0 %}
-                <span class="badge badge-accent badge-sm">{{ stats.upcoming_events }}</span>
-              {% endif %}
-            </a>
-          </div>
-        </div>
-      </div>
-
-      {# ── Utilities card (admin only) ── #}
-      {% if user.is_staff %}
+    {# ── Utilities card (admin only) ── #}
+    {% if user.is_staff %}
+    <div>
       <div class="card bg-base-100 shadow border border-base-300">
         <div class="card-body">
           <h3 class="card-title text-xl">
@@ -231,8 +113,8 @@
           </div>
         </div>
       </div>
-      {% endif %}
     </div>
+    {% endif %}
   </section>
 
 </div>

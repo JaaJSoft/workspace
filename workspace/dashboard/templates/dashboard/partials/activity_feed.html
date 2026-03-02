@@ -1,0 +1,27 @@
+<div id="dashboard-activity" class="mt-4 space-y-3" x-init="$nextTick(() => lucide.createIcons())">
+  {% if activity_events %}
+    <ul class="divide-y divide-base-200">
+      {% for event in activity_events %}
+        <li class="py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-{{ event.source_color }}/10 flex items-center justify-center flex-shrink-0">
+            <i data-lucide="{{ event.icon }}" class="w-4 h-4 text-{{ event.source_color }}"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <div class="font-medium truncate">{{ event.description }}</div>
+              <span class="badge badge-ghost badge-xs">{{ event.label }}</span>
+            </div>
+            <div class="text-xs text-base-content/60 truncate">
+              {% if event.actor %}{{ event.actor.username }} &middot; {% endif %}{{ event.time_ago }}
+            </div>
+          </div>
+          <div class="flex-shrink-0">
+            <a href="{{ event.url }}" class="btn btn-ghost btn-xs">View</a>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    {% include "ui/partials/inline_alert.html" with type="info" message="No recent activity to show." %}
+  {% endif %}
+</div>

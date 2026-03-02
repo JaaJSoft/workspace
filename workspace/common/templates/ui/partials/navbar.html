@@ -1,14 +1,14 @@
 <div class="navbar bg-base-100 border-b border-base-300 backdrop-blur-lg bg-opacity-80 sticky top-0 z-50 min-h-[3.25rem] py-1">
   <div class="{% if navbar_full_width %}container mx-auto max-w-none{% else %}container mx-auto{% endif %}">
     <!-- Brand -->
-    <div class="flex-none">
+    <div class="flex-1">
       <a href="/" class="btn btn-ghost normal-case hover:bg-primary/10 transition-all">
         {% include 'ui/partials/app_logo.html' with size='sm' %}
       </a>
     </div>
 
     <!-- Command palette dropdown -->
-    <div class="flex-1 flex justify-center px-4" x-data="{ mobileSearchOpen: false }">
+    <div class="flex-none flex justify-center px-4" x-data="{ mobileSearchOpen: false }">
       <!-- Mobile search icon (visible only on small screens) -->
       <button
         @click="mobileSearchOpen = true"
@@ -19,7 +19,7 @@
       </button>
 
       <!-- Desktop search bar (hidden on small screens) -->
-      <div class="w-full max-w-lg hidden sm:block relative" x-data="commandPaletteDropdown()">
+      <div class="w-[32rem] hidden sm:block relative" x-data="commandPaletteDropdown()">
         <!-- Search input trigger -->
         {% include 'ui/partials/search/search_input.html' with input_class='input-sm hover:border-primary/30' show_kbd=True %}
 
@@ -131,7 +131,7 @@
     </div>
 
     <!-- Right side actions -->
-    <div class="flex-none flex items-center gap-1.5">
+    <div class="flex-1 flex items-center justify-end gap-1.5">
       <!-- Theme toggle -->
       <label
         class="swap swap-rotate btn btn-ghost btn-circle btn-sm hover:bg-warning/10 transition-all"

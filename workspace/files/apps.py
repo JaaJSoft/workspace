@@ -49,3 +49,14 @@ class FilesConfig(AppConfig):
 
         post_save.connect(_invalidate, sender=MimeTypeRule)
         post_delete.connect(_invalidate, sender=MimeTypeRule)
+
+        from workspace.core.activity_registry import ActivityProviderInfo, activity_registry
+        from workspace.files.activity import FilesActivityProvider
+
+        activity_registry.register(ActivityProviderInfo(
+            slug='files',
+            label='Files',
+            icon='hard-drive',
+            color='primary',
+            provider_cls=FilesActivityProvider,
+        ))

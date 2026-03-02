@@ -269,28 +269,52 @@ SPECTACULAR_SETTINGS = {
             'description': 'AI-powered tasks: summarize, compose, reply, and editor actions.',
         },
         {
-            'name': 'Files',
-            'description': 'Browse and manage files and folders.',
+            'name': 'Calendar',
+            'description': 'Calendars and events.',
         },
         {
-            'name': 'Settings',
-            'description': 'Per-user, per-module key-value settings.',
+            'name': 'Calendar - Polls',
+            'description': 'Scheduling polls for finding the best meeting time.',
         },
         {
-            'name': 'Modules',
-            'description': 'Workspace module registry.',
-        },
-        {
-            'name': 'Search',
-            'description': 'Unified search across workspace modules.',
+            'name': 'Calendar - Polls (Public)',
+            'description': 'Public endpoints for guest poll participation.',
         },
         {
             'name': 'Chat',
             'description': 'Real-time messaging with direct and group conversations.',
         },
         {
+            'name': 'Files',
+            'description': 'Browse and manage files and folders.',
+        },
+        {
+            'name': 'Thumbnails',
+            'description': 'File thumbnail generation.',
+        },
+        {
             'name': 'Mail',
             'description': 'Read and send emails from external mail accounts.',
+        },
+        {
+            'name': 'Modules',
+            'description': 'Workspace module registry.',
+        },
+        {
+            'name': 'Notifications',
+            'description': 'User notifications and push subscriptions.',
+        },
+        {
+            'name': 'Search',
+            'description': 'Unified search across workspace modules.',
+        },
+        {
+            'name': 'Settings',
+            'description': 'Per-user, per-module key-value settings.',
+        },
+        {
+            'name': 'Users',
+            'description': 'User profiles, avatars, passwords, and presence status.',
         },
     ],
     'SWAGGER_UI_SETTINGS': {

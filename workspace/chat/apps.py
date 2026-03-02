@@ -53,3 +53,14 @@ class ChatConfig(AppConfig):
                 kind='action', module_slug='chat', order=16,
             ),
         ])
+
+        from workspace.core.activity_registry import ActivityProviderInfo, activity_registry
+        from workspace.chat.activity import ChatActivityProvider
+
+        activity_registry.register(ActivityProviderInfo(
+            slug='chat',
+            label='Chat',
+            icon='message-circle',
+            color='info',
+            provider_cls=ChatActivityProvider,
+        ))

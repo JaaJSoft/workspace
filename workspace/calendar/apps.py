@@ -74,3 +74,14 @@ class CalendarConfig(AppConfig):
                 kind='action', module_slug='calendar', order=22,
             ),
         ])
+
+        from workspace.core.activity_registry import ActivityProviderInfo, activity_registry
+        from workspace.calendar.activity import CalendarActivityProvider
+
+        activity_registry.register(ActivityProviderInfo(
+            slug='calendar',
+            label='Calendar',
+            icon='calendar',
+            color='accent',
+            provider_cls=CalendarActivityProvider,
+        ))

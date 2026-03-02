@@ -1,5 +1,6 @@
 import logging
 
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -22,6 +23,7 @@ class BotListView(APIView):
     """GET /api/v1/ai/bots — List available AI bots."""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(tags=['AI'], responses=BotProfileSerializer(many=True))
     def get(self, request):
         bots = BotProfile.objects.select_related('user').all()
         serializer = BotProfileSerializer(bots, many=True)
@@ -29,9 +31,14 @@ class BotListView(APIView):
 
 
 class SummarizeView(APIView):
-    """POST /api/v1/ai/tasks/summarize — Start email summarization."""
+    """POST /api/v1/ai/tasks/mail/summarize — Start email summarization."""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=['AI'],
+        request=SummarizeRequestSerializer,
+        responses={202: AITaskSerializer},
+    )
     def post(self, request):
         from workspace.ai.client import is_ai_enabled
         if not is_ai_enabled():
@@ -67,9 +74,14 @@ class SummarizeView(APIView):
 
 
 class ComposeView(APIView):
-    """POST /api/v1/ai/tasks/compose — Start email composition."""
+    """POST /api/v1/ai/tasks/mail/compose — Start email composition."""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=['AI'],
+        request=ComposeRequestSerializer,
+        responses={202: AITaskSerializer},
+    )
     def post(self, request):
         from workspace.ai.client import is_ai_enabled
         if not is_ai_enabled():
@@ -104,9 +116,14 @@ class ComposeView(APIView):
 
 
 class ReplyView(APIView):
-    """POST /api/v1/ai/tasks/reply — Generate an email reply."""
+    """POST /api/v1/ai/tasks/mail/reply — Generate an email reply."""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=['AI'],
+        request=ReplyRequestSerializer,
+        responses={202: AITaskSerializer},
+    )
     def post(self, request):
         from workspace.ai.client import is_ai_enabled
         if not is_ai_enabled():
@@ -148,6 +165,11 @@ class EditorActionView(APIView):
     """POST /api/v1/ai/tasks/editor — Run an AI action on editor content."""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=['AI'],
+        request=EditorActionRequestSerializer,
+        responses={202: AITaskSerializer},
+    )
     def post(self, request):
         from workspace.ai.client import is_ai_enabled
         if not is_ai_enabled():
@@ -188,6 +210,7 @@ class TaskDetailView(APIView):
     """GET /api/v1/ai/tasks/<uuid> — Get task status and result."""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(tags=['AI'], responses=AITaskSerializer)
     def get(self, request, task_id):
         try:
             ai_task = AITask.objects.get(pk=task_id, owner=request.user)

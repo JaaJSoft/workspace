@@ -9,17 +9,17 @@ urlpatterns = [
         name='ai-bots',
     ),
     path(
-        'api/v1/ai/tasks/summarize',
+        'api/v1/ai/tasks/mail/summarize',
         views.SummarizeView.as_view(),
         name='ai-summarize',
     ),
     path(
-        'api/v1/ai/tasks/compose',
+        'api/v1/ai/tasks/mail/compose',
         views.ComposeView.as_view(),
         name='ai-compose',
     ),
     path(
-        'api/v1/ai/tasks/reply',
+        'api/v1/ai/tasks/mail/reply',
         views.ReplyView.as_view(),
         name='ai-reply',
     ),

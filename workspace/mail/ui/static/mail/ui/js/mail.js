@@ -801,7 +801,7 @@ function mailApp() {
       this.aiSummarizing = true;
       this.aiSummary = null;
       try {
-        const resp = await fetch('/api/v1/ai/tasks/summarize', {
+        const resp = await fetch('/api/v1/ai/tasks/mail/summarize', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -871,7 +871,7 @@ function mailApp() {
       this.aiComposing = true;
 
       const isReply = this.compose.is_reply && this.compose.reply_message_id;
-      const endpoint = isReply ? '/api/v1/ai/tasks/reply' : '/api/v1/ai/tasks/compose';
+      const endpoint = isReply ? '/api/v1/ai/tasks/mail/reply' : '/api/v1/ai/tasks/mail/compose';
       const body = isReply
         ? { message_id: this.compose.reply_message_id, instructions: this.aiComposePrompt }
         : { instructions: this.aiComposePrompt, context: this.compose.body, account_id: this.compose.account_id };

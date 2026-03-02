@@ -6,6 +6,7 @@ import orjson
 from django.http import HttpResponseBadRequest, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
+from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -23,6 +24,7 @@ from workspace.mail.services.oauth2 import (
 logger = logging.getLogger(__name__)
 
 
+@extend_schema(tags=['Mail'])
 class OAuthProvidersView(APIView):
     """List OAuth2 providers that are configured and available."""
     permission_classes = [IsAuthenticated]
@@ -31,6 +33,7 @@ class OAuthProvidersView(APIView):
         return Response(get_available_providers())
 
 
+@extend_schema(tags=['Mail'])
 class OAuthAuthorizeView(APIView):
     """Start OAuth2 flow: redirect to provider's authorization page."""
     permission_classes = [IsAuthenticated]

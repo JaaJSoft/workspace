@@ -1136,6 +1136,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         if (resp.ok) this.polls = await resp.json();
       } catch (e) {}
       this.pollsLoading = false;
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     setPollFilter(filter) {

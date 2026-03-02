@@ -100,7 +100,8 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         else:
             history.append({'role': role, 'content': msg.body})
 
-    messages = build_chat_messages(bot_profile.system_prompt, history)
+    bot_name = bot_user.get_full_name() or bot_user.username
+    messages = build_chat_messages(bot_profile.system_prompt, history, bot_name=bot_name)
 
     ai_task = AITask.objects.create(
         owner=bot_user,

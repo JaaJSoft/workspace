@@ -150,7 +150,6 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (!this.calendar) return;
       this.calendar.setOption('firstDay', this.prefs.firstDay);
       this.calendar.setOption('weekNumbers', this.prefs.weekNumbers);
-      this.calendar.setOption('dayMaxEvents', this.prefs.dayMaxEvents);
       this.calendar.setOption('eventTimeFormat', this._timeFormatFC());
       this.calendar.setOption('slotLabelFormat', this._timeFormatFC());
       // Only apply default view if URL didn't specify one
@@ -174,8 +173,6 @@ window.calendarApp = function calendarApp(calendarsData) {
           this.calendar.setOption('firstDay', value);
         } else if (key === 'weekNumbers') {
           this.calendar.setOption('weekNumbers', value);
-        } else if (key === 'dayMaxEvents') {
-          this.calendar.setOption('dayMaxEvents', value);
         } else if (key === 'timeFormat') {
           this.calendar.setOption('eventTimeFormat', this._timeFormatFC());
           this.calendar.setOption('slotLabelFormat', this._timeFormatFC());
@@ -379,7 +376,8 @@ window.calendarApp = function calendarApp(calendarsData) {
         editable: false,
         selectable: urlView !== 'listWeek',
         selectMirror: true,
-        dayMaxEvents: this.prefs.dayMaxEvents,
+        dayMaxEvents: true,
+        expandRows: true,
         eventTimeFormat: this._timeFormatFC(),
         slotLabelFormat: this._timeFormatFC(),
         height: '100%',
@@ -443,6 +441,7 @@ window.calendarApp = function calendarApp(calendarsData) {
 
       this.calendar.render();
       this._syncTitle();
+
 
       const eventId = params.get('event');
       if (eventId) this.openEventById(eventId);

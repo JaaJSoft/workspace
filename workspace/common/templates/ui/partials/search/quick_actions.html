@@ -2,6 +2,7 @@
   Partial pour les actions rapides (affiché quand query est vide)
   Paramètres:
   - on_click: handler supplémentaire lors du clic sur un lien (optionnel)
+  - size: "lg" pour des items plus grands avec descriptions (optionnel)
   Contexte requis:
   - workspace_active_modules: list of active module dicts from context processor
 {% endcomment %}
@@ -15,13 +16,16 @@
       {% if on_click %}@click="{{ on_click }}"{% endif %}
       @mouseenter="activeIndex = {{ forloop.counter0 }}"
       :class="isQuickActionActive({{ forloop.counter0 }}) ? 'bg-base-300' : 'bg-transparent'"
-      class="flex items-center gap-3 px-3 py-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
+      class="flex items-center gap-3 px-3 {% if size == 'lg' %}py-3{% else %}py-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
     >
-      <div class="w-8 h-8 rounded-lg bg-{{ module.color }}/10 flex items-center justify-center flex-shrink-0">
-        <i data-lucide="{{ module.icon }}" class="w-4 h-4 text-{{ module.color }}"></i>
+      <div class="{% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} rounded-lg bg-{{ module.color }}/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="{{ module.icon }}" class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %} text-{{ module.color }}"></i>
       </div>
       <div class="flex-1 min-w-0">
-        <div class="text-sm font-medium">{{ module.name }}</div>
+        <div class="{% if size == 'lg' %}text-base{% else %}text-sm{% endif %} font-medium">{{ module.name }}</div>
+        {% if size == 'lg' and module.description %}
+          <div class="text-xs text-base-content/50">{{ module.description }}</div>
+        {% endif %}
       </div>
     </a>
   {% endfor %}
@@ -31,13 +35,13 @@
       {% if on_click %}@click="{{ on_click }}"{% endif %}
       @mouseenter="activeIndex = {{ workspace_active_modules|length }}"
       :class="isQuickActionActive({{ workspace_active_modules|length }}) ? 'bg-base-300' : 'bg-transparent'"
-      class="flex items-center gap-3 px-3 py-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
+      class="flex items-center gap-3 px-3 {% if size == 'lg' %}py-3{% else %}py-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
     >
-      <div class="w-8 h-8 rounded-lg bg-info/10 flex items-center justify-center flex-shrink-0">
-        <i data-lucide="settings" class="w-4 h-4 text-info"></i>
+      <div class="{% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} rounded-lg bg-info/10 flex items-center justify-center flex-shrink-0">
+        <i data-lucide="settings" class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %} text-info"></i>
       </div>
       <div class="flex-1 min-w-0">
-        <div class="text-sm font-medium">Settings</div>
+        <div class="{% if size == 'lg' %}text-base{% else %}text-sm{% endif %} font-medium">Settings</div>
       </div>
     </a>
   {% endif %}

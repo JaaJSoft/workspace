@@ -3,8 +3,9 @@
   Paramètres:
   - on_click: handler supplémentaire lors du clic sur un résultat (optionnel)
   - container_class: classes CSS pour le conteneur (optionnel)
+  - size: 'lg' pour des éléments plus grands avec des icônes plus grandes (optionnel)
 {% endcomment %}
-<div x-show="query.length >= 2" class="{{ container_class|default:'max-h-96 overflow-y-auto scroll-smooth' }}">
+<div x-show="query.length >= 2" class="{{ container_class|default:'overflow-y-auto scroll-smooth' }} {% if size == 'lg' %}max-h-[28rem]{% elif not container_class %}max-h-96{% endif %}">
 
   <!-- Commands / Actions -->
   <div x-show="commands.length > 0" class="p-2">
@@ -17,15 +18,15 @@
         {% if on_click %}@click="{{ on_click }}"{% endif %}
         @mouseenter="activeIndex = index"
         :class="isCommandActive(index) ? 'bg-base-300' : 'bg-transparent'"
-        class="flex items-center gap-3 px-3 py-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
+        class="flex items-center gap-3 px-3 {% if size == 'lg' %}py-3{% else %}py-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
       >
         <div class="flex-shrink-0">
-          <div :class="`bg-${cmd.color || 'primary'}/10 text-${cmd.color || 'primary'}`" class="rounded-lg w-8 h-8 flex items-center justify-center">
-            <i :data-lucide="cmd.icon || 'terminal'" class="w-4 h-4"></i>
+          <div :class="`bg-${cmd.color || 'primary'}/10 text-${cmd.color || 'primary'}`" class="rounded-lg {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} flex items-center justify-center">
+            <i :data-lucide="cmd.icon || 'terminal'" class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %}"></i>
           </div>
         </div>
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium" x-html="highlightMatch(cmd.name, searchQuery)"></div>
+          <div class="{% if size == 'lg' %}text-base{% else %}text-sm{% endif %} font-medium" x-html="highlightMatch(cmd.name, searchQuery)"></div>
         </div>
         <div x-show="cmd.kind === 'action'" class="flex-shrink-0">
           <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-base-content/30"></i>
@@ -48,16 +49,16 @@
         {% if on_click %}@click="{{ on_click }}"{% endif %}
         @mouseenter="activeIndex = commands.length + index"
         :class="isResultActive(index) ? 'bg-base-300' : 'bg-transparent'"
-        class="flex items-center gap-3 px-3 py-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
+        class="flex items-center gap-3 px-3 {% if size == 'lg' %}py-3{% else %}py-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
       >
         <div class="avatar placeholder flex-shrink-0">
-          <div :class="`bg-${result.module_color || 'primary'} text-${result.module_color || 'primary'}-content`" class="rounded-full w-8 h-8 flex items-center justify-center overflow-hidden">
-            <i :data-lucide="result.type_icon || 'search'" class="w-4 h-4"></i>
+          <div :class="`bg-${result.module_color || 'primary'} text-${result.module_color || 'primary'}-content`" class="rounded-full {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} flex items-center justify-center overflow-hidden">
+            <i :data-lucide="result.type_icon || 'search'" class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %}"></i>
           </div>
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
-            <div class="text-sm font-medium truncate flex-1" x-text="result.name"></div>
+            <div class="{% if size == 'lg' %}text-base{% else %}text-sm{% endif %} font-medium truncate flex-1" x-text="result.name"></div>
             <span x-show="result.date" class="text-xs text-base-content/50 flex-shrink-0 tabular-nums" x-text="result.date"></span>
           </div>
           <div class="text-xs text-base-content/60 flex items-center gap-2">

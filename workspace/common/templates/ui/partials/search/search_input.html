@@ -4,12 +4,13 @@
   - input_class: classes CSS supplémentaires pour l'input (optionnel)
   - show_kbd: afficher le raccourci clavier (défaut: false)
   - on_escape: handler personnalisé pour Escape (défaut: "close()")
+  - size: taille du composant - "lg" pour grande taille (optionnel, défaut: taille normale)
 {% endcomment %}
 <div class="relative group flex-1">
   <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
     <i
       data-lucide="search"
-      class="w-4 h-4 text-base-content/40 group-focus-within:text-primary transition-colors"
+      class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %} text-base-content/40 group-focus-within:text-primary transition-colors"
     ></i>
   </div>
   <input
@@ -23,14 +24,14 @@
     @keydown.arrow-up.prevent="navigate(-1)"
     @keydown.enter.prevent="select()"
     @keydown.escape="{{ on_escape|default:'close()' }}"
-    class="input input-bordered w-full pl-10 {% if show_kbd %}pr-20{% else %}pr-10{% endif %} bg-base-200/50 focus:bg-base-100 border-base-300 focus:border-primary/50 transition-all {{ input_class }}"
+    class="input input-bordered w-full {% if size == 'lg' %}pl-12{% else %}pl-10{% endif %} {% if show_kbd %}pr-20{% else %}pr-10{% endif %} bg-base-200/50 focus:bg-base-100 border-base-300 focus:border-primary/50 transition-all {{ input_class }}"
     placeholder="Search..."
     autocomplete="off"
   />
   <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
-    <span x-show="loading" x-cloak class="loading loading-spinner {% if show_kbd %}loading-xs{% else %}loading-sm{% endif %} text-primary"></span>
+    <span x-show="loading" x-cloak class="loading loading-spinner {% if show_kbd %}{% if size == 'lg' %}loading-sm{% else %}loading-xs{% endif %}{% else %}loading-sm{% endif %} text-primary"></span>
     {% if show_kbd %}
-      <kbd class="kbd kbd-xs bg-base-300 border-base-400 text-base-content/60" x-show="!loading">⌘K</kbd>
+      <kbd class="kbd {% if size == 'lg' %}kbd-sm{% else %}kbd-xs{% endif %} bg-base-300 border-base-400 text-base-content/60" x-show="!loading">⌘K</kbd>
     {% endif %}
   </div>
 </div>

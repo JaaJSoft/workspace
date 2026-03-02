@@ -36,21 +36,14 @@ class CalendarConfig(AppConfig):
 
         def _calendar_pending_actions(user):
             from datetime import datetime, time
-            from django.db.models import Q
             from django.utils import timezone
-            from workspace.calendar.models import Event, EventMember
+            from workspace.calendar.upcoming import get_upcoming_for_user
             now = timezone.now()
             end_of_today = timezone.make_aware(
                 datetime.combine(now.date(), time.max),
                 timezone.get_current_timezone(),
             )
-            return Event.objects.filter(
-                Q(owner=user) | Q(members__user=user, members__status__in=[
-                    EventMember.Status.ACCEPTED, EventMember.Status.PENDING,
-                ]),
-                start__gte=now,
-                start__lte=end_of_today,
-            ).distinct().count()
+            return len(get_upcoming_for_user(user, now, end_of_today))
 
         registry.register_pending_action_provider(PendingActionProviderInfo(
             module_slug='calendar',

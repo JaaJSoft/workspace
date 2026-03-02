@@ -1,0 +1,56 @@
+{% load ui_filters %}
+<div class="p-3 w-72">
+  <div class="flex items-start gap-3 mb-2">
+    <span class="w-3 h-3 rounded-full bg-{{ event.calendar.color }} flex-shrink-0 mt-1"></span>
+    <div class="min-w-0 flex-1">
+      <div class="font-semibold text-sm truncate">{{ event.title }}</div>
+      <div class="text-xs text-base-content/50 flex items-center gap-1">
+        {{ event.calendar.name }}
+        {% if event.is_recurring %}<i data-lucide="repeat" class="w-3 h-3 opacity-60"></i>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="space-y-1.5 text-xs text-base-content/60 mb-3">
+    <div class="flex items-center gap-1.5">
+      <i data-lucide="clock" class="w-3 h-3 flex-shrink-0"></i>
+      {% if event.all_day %}
+        <span>All day</span>
+      {% elif occ_start %}
+        <span>{{ occ_start|localtime_tag:"datetime" }}{% if occ_end %} – {{ occ_end|localtime_tag:"time" }}{% endif %}</span>
+      {% else %}
+        <span>{{ event.start|localtime_tag:"datetime" }}{% if event.end %} – {{ event.end|localtime_tag:"time" }}{% endif %}</span>
+      {% endif %}
+    </div>
+    {% if event.location %}
+    <div class="flex items-center gap-1.5 truncate">
+      <i data-lucide="map-pin" class="w-3 h-3 flex-shrink-0"></i>
+      <span class="truncate">{{ event.location }}</span>
+    </div>
+    {% endif %}
+    {% if event.owner %}
+    <div class="flex items-center gap-1.5 truncate">
+      <i data-lucide="user" class="w-3 h-3 flex-shrink-0"></i>
+      <span class="truncate">{{ event.owner.username }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if attendees %}
+  <div class="flex items-center gap-1.5 mb-3">
+    <div class="flex -space-x-2">
+      {% for member in attendees %}
+        {% include "ui/partials/user_avatar.html" with user=member.user size="xs" show_presence=False %}
+      {% endfor %}
+    </div>
+    {% if event.members.count > 5 %}
+      <span class="text-xs text-base-content/40">+{{ event.members.count|add:"-5" }}</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <a href="/calendar?event={{ event.uuid }}" class="btn btn-ghost btn-xs w-full gap-1">
+    <i data-lucide="calendar" class="w-3 h-3"></i>
+    View in calendar
+  </a>
+</div>

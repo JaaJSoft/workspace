@@ -66,6 +66,7 @@ class CalendarActivityProvider(ActivityProvider):
                 'actor': {
                     'id': evt.owner_id,
                     'username': evt.owner.username,
+                    'full_name': evt.owner.get_full_name(),
                 },
             })
         return events

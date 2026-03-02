@@ -17,7 +17,8 @@ window.commandPaletteDropdown = function () {
         document.addEventListener('keydown', (e) => {
           if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
             e.preventDefault();
-            const input = document.querySelector('[x-data*="commandPaletteDropdown"]')?.querySelector('input');
+            const input = document.getElementById('dashboard-search')?.querySelector('input')
+              || document.querySelector('[x-data*="commandPaletteDropdown"]')?.querySelector('input');
             input?.focus();
             input?.select?.();
           }

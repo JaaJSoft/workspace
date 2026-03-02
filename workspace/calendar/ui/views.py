@@ -1,11 +1,13 @@
 import orjson
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import render
+from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.calendar.models import Calendar, CalendarSubscription, Poll, PollInvitee, PollVote
+from workspace.calendar.models import Calendar, CalendarSubscription, Event, EventMember, Poll, PollInvitee, PollVote
 from workspace.calendar.serializers import CalendarSerializer
 
 
@@ -49,6 +51,46 @@ def index(request):
             'subscribed': CalendarSerializer(subscribed, many=True).data,
         }).decode(),
         'poll_count': poll_count,
+    })
+
+
+@login_required
+def event_card(request, event_id):
+    """Return a compact event card partial for popover display."""
+    event = (
+        Event.objects.filter(
+            Q(owner=request.user) | Q(members__user=request.user, members__status__in=[
+                EventMember.Status.ACCEPTED, EventMember.Status.PENDING,
+            ]),
+            uuid=event_id,
+            is_cancelled=False,
+        )
+        .select_related('calendar', 'owner')
+        .prefetch_related('members__user')
+        .distinct()
+        .first()
+    )
+    if not event:
+        raise Http404
+    attendees = list(event.members.select_related('user').exclude(
+        status=EventMember.Status.DECLINED,
+    )[:5])
+
+    # For recurring occurrences, override start/end with the occurrence's actual times
+    occ_start = None
+    occ_end = None
+    raw_start = request.GET.get('start')
+    if raw_start:
+        occ_start = parse_datetime(raw_start)
+        if occ_start and event.start and event.end:
+            duration = event.end - event.start
+            occ_end = occ_start + duration
+
+    return render(request, 'calendar/ui/partials/event_card.html', {
+        'event': event,
+        'attendees': attendees,
+        'occ_start': occ_start,
+        'occ_end': occ_end,
     })
 
 

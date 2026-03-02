@@ -63,6 +63,7 @@ class ChatActivityProvider(ActivityProvider):
                 'actor': {
                     'id': msg.author_id,
                     'username': msg.author.username,
+                    'full_name': msg.author.get_full_name(),
                 },
             })
         return events

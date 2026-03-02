@@ -1,25 +1,48 @@
+from datetime import datetime, time
+
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
+from django.utils import timezone
 
+from workspace.calendar.upcoming import get_upcoming_for_user
 from workspace.core.activity_service import annotate_time_ago, get_recent_events, get_sources
 from workspace.core.module_registry import registry
 
 ACTIVITY_LIMIT = 10
 
 
-def _get_activity_context(user, source=None):
+def _get_upcoming_events(user):
+    """Return today's upcoming events for the user, including recurring."""
+    now = timezone.now()
+    end_of_today = timezone.make_aware(
+        datetime.combine(now.date(), time.max),
+        timezone.get_current_timezone(),
+    )
+    return get_upcoming_for_user(user, now, end_of_today)
+
+
+def _get_activity_context(user, source=None, offset=0, search=None):
     """Build activity feed context for templates."""
     events = get_recent_events(
         viewer_id=user.id,
         source=source,
         exclude_user_id=user.id,
-        limit=ACTIVITY_LIMIT,
+        search=search,
+        limit=ACTIVITY_LIMIT + 1,
+        offset=offset,
     )
+
+    has_more = len(events) > ACTIVITY_LIMIT
+    events = events[:ACTIVITY_LIMIT]
     annotate_time_ago(events)
 
     return {
         'activity_events': events,
         'activity_sources': get_sources(),
+        'activity_source': source,
+        'activity_search': search or '',
+        'activity_has_more': has_more,
+        'activity_next_offset': offset + ACTIVITY_LIMIT,
     }
 
 
@@ -33,6 +56,7 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
 
     context = {
         'modules': modules,
+        'upcoming_events': _get_upcoming_events(user),
     }
     if include_activity:
         context.update(_get_activity_context(user, source=activity_source))
@@ -53,14 +77,19 @@ def activity_feed(request):
     source = request.GET.get('source')
     tab = source or 'all'
 
+    offset = int(request.GET.get('offset', 0))
+    search = request.GET.get('q', '').strip() or None
+    append = offset > 0
+
     if request.headers.get('X-Alpine-Request'):
         context = _build_dashboard_context(
             request.user,
             include_activity=False,
             activity_source=source,
         )
-        context.update(_get_activity_context(request.user, source=source))
-        return render(request, 'dashboard/partials/activity_feed.html', context)
+        context.update(_get_activity_context(request.user, source=source, offset=offset, search=search))
+        template = 'dashboard/partials/activity_page.html' if append else 'dashboard/partials/activity_feed.html'
+        return render(request, template, context)
 
     context = _build_dashboard_context(request.user, activity_source=source)
     context['activity_tab'] = tab

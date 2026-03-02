@@ -22,6 +22,7 @@ def get_recent_events(
     viewer_id=None,
     source=None,
     exclude_user_id=None,
+    search=None,
     limit=10,
     offset=0,
 ):
@@ -32,25 +33,37 @@ def get_recent_events(
         viewer_id: Who is viewing (for access filtering).
         source: Provider slug to filter by (None = all).
         exclude_user_id: Exclude events from this user (e.g. self).
+        search: Text to filter events by (matches description, label, actor).
         limit: Max events to return.
         offset: Skip this many events.
     """
-    if exclude_user_id is not None:
-        # Fetch extra to account for post-filter exclusion
-        fetch_limit = limit + 20
+    needs_post_filter = exclude_user_id is not None or search
+    if needs_post_filter:
+        fetch_limit = limit + offset + 50
     else:
         fetch_limit = limit
 
     events = activity_registry.get_recent_events(
         user_id,
         limit=fetch_limit,
-        offset=offset if exclude_user_id is None else 0,
+        offset=0 if needs_post_filter else offset,
         viewer_id=viewer_id,
         source=source,
     )
 
     if exclude_user_id is not None:
         events = [e for e in events if e.get('actor', {}).get('id') != exclude_user_id]
+
+    if search:
+        q = search.lower()
+        events = [
+            e for e in events
+            if q in e.get('description', '').lower()
+            or q in e.get('label', '').lower()
+            or q in (e.get('actor', {}).get('username', '') if isinstance(e.get('actor'), dict) else '').lower()
+        ]
+
+    if needs_post_filter:
         events = events[offset:offset + limit]
     return events
 

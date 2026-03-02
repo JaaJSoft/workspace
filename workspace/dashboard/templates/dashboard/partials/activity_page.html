@@ -1,0 +1,19 @@
+<ul id="activity-list">
+  {% for event in activity_events %}
+    {% include 'dashboard/partials/activity_item.html' %}
+  {% endfor %}
+</ul>
+{% if activity_has_more %}
+<div id="activity-load-more" class="text-center pt-2" x-init="$nextTick(() => lucide.createIcons())" @ajax:before.stop>
+  <a
+    href="{% url 'dashboard:activity_feed' %}?{% if activity_source %}source={{ activity_source }}&{% endif %}{% if activity_search %}q={{ activity_search|urlencode }}&{% endif %}offset={{ activity_next_offset }}"
+    class="btn btn-ghost btn-sm gap-2"
+    x-target="activity-list activity-load-more"
+  >
+    <i data-lucide="chevrons-down" class="w-4 h-4"></i>
+    Show older activity
+  </a>
+</div>
+{% else %}
+<div id="activity-load-more" x-init="$nextTick(() => lucide.createIcons())"></div>
+{% endif %}

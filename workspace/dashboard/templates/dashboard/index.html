@@ -11,17 +11,50 @@
 <div class="py-6 space-y-8">
 
   {# ── Hero ── #}
-  <section class="flex items-center gap-4">
-    {% include "ui/partials/user_avatar.html" with size="lg" %}
-    <div class="space-y-1">
-      <h1 class="text-3xl font-semibold text-base-content">Welcome back, {{ user.username }}.</h1>
-      <p class="text-base-content/60">Your workspace, all in one place.</p>
-    </div>
-    <div class="ml-auto hidden md:flex items-center gap-2 text-xs text-base-content/40">
-      <kbd class="kbd kbd-sm">Ctrl</kbd>
-      <span>+</span>
-      <kbd class="kbd kbd-sm">K</kbd>
-      <span>to search</span>
+  <section class="text-center space-y-1">
+    <h1 class="text-3xl font-semibold text-base-content">Welcome back, {{ user.username }}.</h1>
+    <p class="text-base-content/60">Your workspace, all in one place.</p>
+  </section>
+
+  {# ── Search bar ── #}
+  <section id="dashboard-search" class="max-w-2xl mx-auto w-full" x-data="commandPaletteDropdown()" x-init="$nextTick(() => lucide.createIcons())">
+    <div class="relative">
+      {% include 'ui/partials/search/search_input.html' with input_class='input-md text-base shadow-sm' show_kbd=True size='lg' %}
+
+      {# ── Dropdown ── #}
+      <div
+        x-show="open"
+        x-cloak
+        @click.outside="close()"
+        class="absolute z-[100] mt-2 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
+      >
+        {% include 'ui/partials/search/quick_actions.html' with size='lg' %}
+        {% include 'ui/partials/search/search_results.html' with size='lg' %}
+
+        {# ── Footer hints ── #}
+        <div
+          x-show="open"
+          class="border-t border-base-300 px-3 py-2 bg-base-200/50 text-xs text-base-content/60 flex gap-3"
+        >
+          <span class="flex items-center gap-1">
+            <kbd class="kbd kbd-xs">↑↓</kbd>
+            navigate
+          </span>
+          <span class="flex items-center gap-1">
+            <kbd class="kbd kbd-xs">⏎</kbd>
+            select
+          </span>
+          <button
+            type="button"
+            @click="close()"
+            class="btn btn-ghost btn-xs ml-auto"
+            title="Close"
+            aria-label="Close search results"
+          >
+            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -30,11 +63,16 @@
     {% include 'dashboard/partials/modules_grid.html' %}
   </section>
 
-  {# ── Activity feed + sidebar ── #}
-  <section class="grid grid-cols-1 {% if user.is_staff %}xl:grid-cols-3{% endif %} gap-6">
-    <div class="{% if user.is_staff %}xl:col-span-2{% endif %}">
-      <div class="card bg-base-100 shadow border border-base-300" x-data="{ activityTab: '{{ activity_tab|default:"all" }}', loading: false }" @ajax:before="loading = true" @ajax:after="loading = false; $nextTick(() => lucide.createIcons())">
-        <div class="card-body">
+  {# ── Upcoming events ── #}
+  <section>
+    {% include 'dashboard/partials/upcoming_events.html' %}
+  </section>
+
+  {# ── Activity feed ── #}
+  <section class="max-w-4xl mx-auto w-full">
+    <div>
+      <div class="card bg-base-100 shadow border border-base-300" x-data="{ activityTab: '{{ activity_tab|default:"all" }}', activitySearch: '', searchOpen: false, loading: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }" @ajax:before="loading = true" @ajax:after="loading = false; $nextTick(() => lucide.createIcons())">
+        <div class="card-body gap-4">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div class="space-y-1">
               <h2 class="card-title text-2xl">
@@ -43,9 +81,10 @@
               </h2>
               <p class="text-sm text-base-content/60">What's happening across your workspace.</p>
             </div>
+            <div class="flex items-center gap-2">
             <div class="tabs tabs-boxed flex-wrap">
               <a
-                href="{% url 'dashboard:activity_feed' %}"
+                :href="feedUrl.replace(/source=[^&]*/g, '').replace(/[?&]$/, '')"
                 class="tab gap-1.5"
                 :class="activityTab === 'all' ? 'tab-active' : ''"
                 @click="activityTab = 'all'"
@@ -56,7 +95,7 @@
               </a>
               {% for src in activity_sources %}
               <a
-                href="{% url 'dashboard:activity_feed' %}?source={{ src.slug }}"
+                :href="feedUrl.includes('source=') ? feedUrl.replace(/source=[^&]*/, 'source={{ src.slug }}') : feedUrl + (feedUrl.includes('?') ? '&' : '?') + 'source={{ src.slug }}'"
                 class="tab gap-1.5"
                 :class="activityTab === '{{ src.slug }}' ? 'tab-active' : ''"
                 @click="activityTab = '{{ src.slug }}'"
@@ -67,10 +106,40 @@
               </a>
               {% endfor %}
             </div>
+            <button
+              class="btn btn-ghost btn-sm btn-square"
+              :class="searchOpen && 'btn-active'"
+              title="Search"
+              @click="searchOpen = !searchOpen; if (!searchOpen) { activitySearch = ''; $nextTick(() => $refs.activitySearchLink.click()) } else { $nextTick(() => $refs.activitySearchInput.focus()) }"
+            >
+              <i data-lucide="search" class="w-4 h-4"></i>
+            </button>
+            <a
+              :href="feedUrl"
+              class="btn btn-ghost btn-sm btn-square"
+              x-target="dashboard-activity"
+              title="Refresh"
+            >
+              <i data-lucide="refresh-cw" class="w-4 h-4" :class="loading && 'animate-spin'"></i>
+            </a>
+            </div>
+          </div>
+          <div x-show="searchOpen" x-collapse x-cloak class="relative">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none"></i>
+            <input
+              x-ref="activitySearchInput"
+              type="text"
+              x-model.debounce.400ms="activitySearch"
+              placeholder="Search activity..."
+              class="input input-bordered input-sm w-full pl-9"
+              @input.debounce.400ms="$nextTick(() => { $refs.activitySearchLink.click() })"
+              @keydown.escape="searchOpen = false; activitySearch = ''; $nextTick(() => $refs.activitySearchLink.click())"
+            >
+            <a x-ref="activitySearchLink" :href="feedUrl" x-target="dashboard-activity" class="hidden"></a>
           </div>
 
           {# ── Activity skeleton ── #}
-          <div x-show="loading" x-cloak class="mt-4 animate-pulse">
+          <div x-show="loading" x-cloak class="animate-pulse">
             <ul class="divide-y divide-base-200">
               {% for _ in "123456" %}
               <li class="py-3 flex items-center gap-3">
@@ -92,29 +161,6 @@
       </div>
     </div>
 
-    {# ── Utilities card (admin only) ── #}
-    {% if user.is_staff %}
-    <div>
-      <div class="card bg-base-100 shadow border border-base-300">
-        <div class="card-body">
-          <h3 class="card-title text-xl">
-            <i data-lucide="wrench" class="w-5 h-5"></i>
-            Utilities
-          </h3>
-          <div class="space-y-2">
-            <a href="/admin/" class="btn btn-ghost btn-sm w-full justify-start gap-3">
-              <i data-lucide="shield" class="w-4 h-4"></i>
-              Admin panel
-            </a>
-            <a href="/schema/swagger-ui/" class="btn btn-ghost btn-sm w-full justify-start gap-3">
-              <i data-lucide="code-2" class="w-4 h-4"></i>
-              API docs
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-    {% endif %}
   </section>
 
 </div>

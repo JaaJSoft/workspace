@@ -89,14 +89,17 @@ const _USER_CARD_CACHE_TTL = 30000; // 30 seconds
 
 /**
  * Compute fixed position for a popover relative to a trigger element.
+ * Shared by user card and event card popovers.
  * @param {HTMLElement} trigger
+ * @param {number} [minSpace=280] - minimum space needed below trigger
  * @returns {{ top: number, left: number, placement: string }}
  */
-function _computePopoverPosition(trigger) {
+window._computePopoverPosition = function _computePopoverPosition(trigger, minSpace) {
+  if (minSpace === undefined) minSpace = 280;
   var rect = trigger.getBoundingClientRect();
   var centerX = rect.left + rect.width / 2;
   var spaceBelow = window.innerHeight - rect.bottom;
-  var placement = spaceBelow < 280 ? 'top' : 'bottom';
+  var placement = spaceBelow < minSpace ? 'top' : 'bottom';
   var top = placement === 'top' ? rect.top - 8 : rect.bottom + 8;
 
   // Clamp horizontally so the popover (w-64 = 256px) stays in viewport
@@ -105,15 +108,16 @@ function _computePopoverPosition(trigger) {
   centerX = Math.max(halfWidth + margin, Math.min(centerX, window.innerWidth - halfWidth - margin));
 
   return { top: top, left: centerX, placement: placement };
-}
+};
 
 /**
  * Apply the slide+fade transform to a popover element.
+ * Shared by user card and event card popovers.
  * @param {HTMLElement} popover
  * @param {string} placement - 'top' or 'bottom'
  * @param {boolean} visible - true = final state, false = initial (hidden) state
  */
-function _applyPopoverTransform(popover, placement, visible) {
+window._applyPopoverTransform = function _applyPopoverTransform(popover, placement, visible) {
   var baseX = 'translateX(-50%)';
   var anchorY = placement === 'top' ? ' translateY(-100%)' : '';
   if (visible) {
@@ -124,7 +128,7 @@ function _applyPopoverTransform(popover, placement, visible) {
     popover.style.opacity = '0';
     popover.style.transform = baseX + slideOffset;
   }
-}
+};
 
 /**
  * Generate avatar HTML wrapped in a popover that shows a user card on hover.
@@ -148,12 +152,12 @@ window.userAvatarWithCardHtml = function(userId, username, sizeClass, options) {
  * @param {HTMLElement} el
  * @param {string} html - trusted server-rendered HTML
  */
-function _setPopoverContent(el, html) {
+window._setPopoverContent = function _setPopoverContent(el, html) {
   el.textContent = '';
   var tpl = document.createElement('template');
   tpl.innerHTML = html;  // safe: content is from our own server endpoint
   el.appendChild(tpl.content);
-}
+};
 
 /**
  * Show the user card popover for a wrapper element.

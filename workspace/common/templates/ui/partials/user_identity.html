@@ -1,0 +1,11 @@
+{% comment %}
+User identity partial - displays avatar + clickable name with user card popover on hover.
+Parameters:
+  - user: Object with id, username, and optionally full_name
+  - size: Avatar size: '2xs', 'xs', 'sm' (default: '2xs')
+  - show_presence: Boolean (default: False)
+{% endcomment %}
+<div class="inline-flex items-center gap-1" x-data="userCard({{ user.id }})" @mouseenter="show()" @mouseleave="scheduleHide()">
+  {% include "ui/partials/user_avatar.html" with user=user size=size|default:"2xs" show_presence=show_presence|default:False show_card=False %}
+  <a href="/users/profile/{{ user.username }}" class="hover:underline">{{ user.full_name|default:user.username }}</a>
+</div>

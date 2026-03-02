@@ -66,6 +66,7 @@ class FilesActivityProvider(ActivityProvider):
                 'actor': {
                     'id': f.owner_id,
                     'username': f.owner.username,
+                    'full_name': f.owner.get_full_name(),
                 },
             })
         return events

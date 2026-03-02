@@ -421,6 +421,13 @@ window.calendarApp = function calendarApp(calendarsData) {
             e.preventDefault();
             this.openContextMenu(e, info.event.extendedProps._raw);
           });
+          // Event card popover on hover
+          info.el.addEventListener('mouseenter', () => {
+            window._eventCardShow(info.el, info.event.id);
+          });
+          info.el.addEventListener('mouseleave', () => {
+            window._eventCardScheduleHide(info.el);
+          });
           // Add recurring indicator
           const raw = info.event.extendedProps._raw;
           if (raw?.is_recurring) {
@@ -814,7 +821,8 @@ window.calendarApp = function calendarApp(calendarsData) {
     // --- Respond ---
     async respondToInvitation(newStatus) {
       try {
-        const resp = await fetch(`/api/v1/calendar/events/${this.form.uuid}/respond`, {
+        const targetUuid = this._panelRaw.master_event_id || this.form.uuid;
+        const resp = await fetch(`/api/v1/calendar/events/${targetUuid}/respond`, {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },

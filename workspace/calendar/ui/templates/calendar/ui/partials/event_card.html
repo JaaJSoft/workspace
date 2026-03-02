@@ -40,7 +40,7 @@
   <div class="flex items-center gap-1.5 mb-3">
     <div class="flex -space-x-2">
       {% for member in attendees %}
-        {% include "ui/partials/user_avatar.html" with user=member.user size="xs" show_presence=False %}
+        {% include "ui/partials/user_avatar.html" with user=member.user size="xs" show_presence=False show_card=True %}
       {% endfor %}
     </div>
     {% if event.members.count > 5 %}

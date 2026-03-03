@@ -1,9 +1,114 @@
+from datetime import date as date_type, timedelta
+
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.http import Http404
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+from django.utils import timezone
 
+from workspace.core.activity_registry import activity_registry
+from workspace.core.activity_service import annotate_time_ago, get_recent_events, get_sources
 from workspace.users import avatar_service, presence_service
+
+ACTIVITY_LIMIT = 10
+
+
+def _build_heatmap_data(user_id, viewer_id=None):
+    """Build contribution heatmap grid data for the last 12 months."""
+    today = timezone.now().date()
+    # Go back ~12 months (52 weeks)
+    # Start from the Monday of the week 51 weeks ago
+    start = today - timedelta(days=today.weekday()) - timedelta(weeks=51)
+    date_from = start
+    date_to = today
+
+    counts = activity_registry.get_daily_counts(
+        user_id, date_from, date_to, viewer_id=viewer_id,
+    )
+
+    # Compute quantile thresholds from non-zero values
+    nonzero = sorted(v for v in counts.values() if v > 0)
+    if nonzero:
+        q1 = nonzero[len(nonzero) // 4] if len(nonzero) >= 4 else 1
+        q2 = nonzero[len(nonzero) // 2] if len(nonzero) >= 2 else q1 + 1
+        q3 = nonzero[3 * len(nonzero) // 4] if len(nonzero) >= 4 else q2 + 1
+    else:
+        q1, q2, q3 = 1, 2, 3
+
+    def level(count):
+        if count == 0:
+            return 0
+        if count <= q1:
+            return 1
+        if count <= q2:
+            return 2
+        if count <= q3:
+            return 3
+        return 4
+
+    # Build weeks (columns), each week has 7 days (rows: Mon=0 ... Sun=6)
+    weeks = []
+    current = start
+    week = []
+    while current <= date_to:
+        c = counts.get(current, 0)
+        week.append({
+            'date': current.isoformat(),
+            'count': c,
+            'level': level(c),
+        })
+        if len(week) == 7:
+            weeks.append(week)
+            week = []
+        current += timedelta(days=1)
+    if week:
+        weeks.append(week)
+
+    # Month labels: label only the first week that contains a new month
+    month_labels = []
+    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    last_labeled_month = None
+    for w in weeks:
+        label = ''
+        for day in w:
+            d = date_type.fromisoformat(day['date'])
+            if d.day <= 7 and d.month != last_labeled_month:
+                label = month_names[d.month - 1]
+                last_labeled_month = d.month
+                break
+        month_labels.append(label)
+
+    total_contributions = sum(counts.values())
+
+    return {
+        'weeks': weeks,
+        'month_labels': month_labels,
+        'total_contributions': total_contributions,
+    }
+
+
+def _get_profile_activity_context(user_id, viewer_id=None, source=None, offset=0):
+    """Build activity feed context for the profile page."""
+    events = get_recent_events(
+        user_id=user_id,
+        viewer_id=viewer_id,
+        source=source,
+        limit=ACTIVITY_LIMIT + 1,
+        offset=offset,
+    )
+
+    has_more = len(events) > ACTIVITY_LIMIT
+    events = events[:ACTIVITY_LIMIT]
+    annotate_time_ago(events)
+
+    return {
+        'activity_events': events,
+        'activity_sources': get_sources(),
+        'activity_source': source,
+        'activity_has_more': has_more,
+        'activity_next_offset': offset + ACTIVITY_LIMIT,
+    }
 
 
 @login_required
@@ -15,12 +120,59 @@ def profile_view(request, username=None):
             profile_user = User.objects.get(username=username)
         except User.DoesNotExist:
             raise Http404
-    return render(request, 'users/ui/profile.html', {
+
+    is_own_profile = profile_user == request.user
+    user_id = profile_user.id
+    viewer_id = None if is_own_profile else request.user.id
+
+    # Activity stats
+    stats = activity_registry.get_stats(user_id, viewer_id=viewer_id)
+
+    # Heatmap
+    heatmap = _build_heatmap_data(user_id, viewer_id=viewer_id)
+
+    # Activity feed
+    activity_ctx = _get_profile_activity_context(user_id, viewer_id=viewer_id)
+
+    context = {
         'profile_user': profile_user,
-        'is_own_profile': profile_user == request.user,
-        'user_status': presence_service.get_status(profile_user.id),
-        'last_seen': presence_service.get_last_seen(profile_user.id),
-    })
+        'is_own_profile': is_own_profile,
+        'last_seen': presence_service.get_last_seen(user_id),
+        'activity_stats': stats,
+        'heatmap': heatmap,
+    }
+    context.update(activity_ctx)
+    return render(request, 'users/ui/profile.html', context)
+
+
+@login_required
+def profile_activity_feed(request, username):
+    """Activity feed partial for Alpine AJAX load-more on profile page."""
+    try:
+        profile_user = User.objects.get(username=username)
+    except User.DoesNotExist:
+        raise Http404
+
+    is_own_profile = profile_user == request.user
+    viewer_id = None if is_own_profile else request.user.id
+
+    source = request.GET.get('source')
+    try:
+        offset = int(request.GET.get('offset', 0))
+    except (TypeError, ValueError):
+        offset = 0
+
+    activity_ctx = _get_profile_activity_context(
+        profile_user.id, viewer_id=viewer_id, source=source, offset=offset,
+    )
+    activity_ctx['profile_user'] = profile_user
+
+    append = offset > 0
+    if request.headers.get('X-Alpine-Request'):
+        template = 'users/ui/partials/profile_activity_page.html' if append else 'users/ui/partials/profile_activity_feed.html'
+        return render(request, template, activity_ctx)
+
+    return redirect('users_ui:profile_by_username', username=username)
 
 
 @login_required

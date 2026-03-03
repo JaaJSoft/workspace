@@ -81,18 +81,73 @@
             {{ profile_user.email }}
           </span>
           {% endif %}
+          <span class="flex items-center gap-1.5"
+                x-data="{ get status() { return $store.presence.statusOf({{ profile_user.id }}) }, lastSeen: {% if last_seen %}'{{ last_seen|date:'c' }}'{% else %}null{% endif %} }">
+            <span class="w-2 h-2 rounded-full flex-shrink-0" :class="$store.presence.dotClass({{ profile_user.id }})"></span>
+            <span class="font-medium capitalize"
+                  :class="{
+                    'text-success': status === 'online',
+                    'text-warning': status === 'away',
+                    'text-error': status === 'busy',
+                    'text-secondary': status === 'bot',
+                    'text-base-content/40': status === 'offline'
+                  }"
+                  x-text="status"></span>
+            <template x-if="(status === 'offline' || status === 'away') && lastSeen">
+              <span class="text-base-content/40" x-text="(() => { let d = (Date.now() - new Date(lastSeen).getTime()) / 1000; if (d < 60) return ''; if (d < 3600) { let m = Math.floor(d/60); return '\u00b7 ' + m + ' minute' + (m>1?'s':'') + ' ago'; } if (d < 86400) { let h = Math.floor(d/3600); return '\u00b7 ' + h + ' hour' + (h>1?'s':'') + ' ago'; } let dy = Math.floor(d/86400); return '\u00b7 ' + dy + ' day' + (dy>1?'s':'') + ' ago'; })()"></span>
+            </template>
+          </span>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ── Stat cards ─────────────────────────────────────── -->
-  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-    <!-- Member since -->
+  <!-- ── Activity stats ───────────────────────────────── -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <!-- Files -->
     <div class="card bg-base-100 border border-base-300 shadow-sm">
       <div class="card-body p-4 flex-row items-center gap-4">
         <div class="rounded-lg bg-primary/10 p-2.5">
-          <i data-lucide="calendar" class="w-5 h-5 text-primary"></i>
+          <i data-lucide="hard-drive" class="w-5 h-5 text-primary"></i>
+        </div>
+        <div>
+          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Files</div>
+          <div class="font-semibold text-lg mt-0.5">{{ activity_stats.files.total_files|default:"0" }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="card bg-base-100 border border-base-300 shadow-sm">
+      <div class="card-body p-4 flex-row items-center gap-4">
+        <div class="rounded-lg bg-info/10 p-2.5">
+          <i data-lucide="message-circle" class="w-5 h-5 text-info"></i>
+        </div>
+        <div>
+          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Messages</div>
+          <div class="font-semibold text-lg mt-0.5">{{ activity_stats.chat.total_messages|default:"0" }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Events -->
+    <div class="card bg-base-100 border border-base-300 shadow-sm">
+      <div class="card-body p-4 flex-row items-center gap-4">
+        <div class="rounded-lg bg-secondary/10 p-2.5">
+          <i data-lucide="calendar" class="w-5 h-5 text-secondary"></i>
+        </div>
+        <div>
+          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Events</div>
+          <div class="font-semibold text-lg mt-0.5">{{ activity_stats.calendar.total_events|default:"0" }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Member since -->
+    <div class="card bg-base-100 border border-base-300 shadow-sm">
+      <div class="card-body p-4 flex-row items-center gap-4">
+        <div class="rounded-lg bg-accent/10 p-2.5">
+          <i data-lucide="clock" class="w-5 h-5 text-accent"></i>
         </div>
         <div>
           <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Member since</div>
@@ -100,134 +155,143 @@
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Last seen -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-4 flex-row items-center gap-4">
-        <div class="rounded-lg {% if user_status == 'online' %}bg-success/10{% elif user_status == 'away' %}bg-warning/10{% else %}bg-base-200{% endif %} p-2.5">
-          <i data-lucide="{% if user_status == 'online' %}circle-check{% elif user_status == 'away' %}clock{% else %}circle-off{% endif %}" class="w-5 h-5 {% if user_status == 'online' %}text-success{% elif user_status == 'away' %}text-warning{% else %}text-base-content/40{% endif %}"></i>
-        </div>
-        <div>
-          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Last seen</div>
-          <div class="font-semibold mt-0.5">
-            {% if last_seen %}
-              {{ last_seen|localtime_tag:"relative" }}
-            {% else %}
-              Never
-            {% endif %}
-          </div>
-        </div>
+  <!-- ── Contribution heatmap ─────────────────────────── -->
+  <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card-body">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="card-title text-base gap-2">
+          <i data-lucide="grid-3x3" class="w-5 h-5"></i>
+          {{ heatmap.total_contributions }} contribution{{ heatmap.total_contributions|pluralize }} in the last year
+        </h2>
       </div>
-    </div>
 
-    <!-- Role -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-4 flex-row items-center gap-4">
-        <div class="rounded-lg bg-secondary/10 p-2.5">
-          <i data-lucide="fingerprint" class="w-5 h-5 text-secondary"></i>
+      <div x-data="{ tooltip: '', tooltipX: 0, tooltipY: 0, showTooltip: false }">
+        <!-- Month labels -->
+        <div class="flex mb-1">
+          <div class="flex-none" style="width: 24px;"></div>
+          {% for label in heatmap.month_labels %}
+          <div class="flex-1 min-w-0 text-xs text-base-content/40 whitespace-nowrap">{{ label }}</div>
+          {% endfor %}
         </div>
-        <div>
-          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Role</div>
-          <div class="font-semibold mt-0.5">
-            {% if profile_user.is_superuser %}Superuser{% elif profile_user.is_staff %}Staff{% else %}Member{% endif %}
+
+        <!-- Grid -->
+        <div class="flex gap-px">
+          <!-- Day labels -->
+          <div class="flex flex-col gap-px flex-none" style="width: 24px;">
+            <div class="flex-1 flex items-center"></div>
+            <div class="flex-1 flex items-center text-base-content/40" style="font-size: 9px;">Mon</div>
+            <div class="flex-1 flex items-center"></div>
+            <div class="flex-1 flex items-center text-base-content/40" style="font-size: 9px;">Wed</div>
+            <div class="flex-1 flex items-center"></div>
+            <div class="flex-1 flex items-center text-base-content/40" style="font-size: 9px;">Fri</div>
+            <div class="flex-1 flex items-center"></div>
           </div>
+
+          <!-- Week columns -->
+          {% for week in heatmap.weeks %}
+          <div class="flex-1 min-w-0 flex flex-col gap-px">
+            {% for day in week %}
+            <div
+              class="aspect-square rounded-sm cursor-pointer {% if day.level == 0 %}bg-base-300/50{% elif day.level == 1 %}bg-primary/20{% elif day.level == 2 %}bg-primary/40{% elif day.level == 3 %}bg-primary/60{% else %}bg-primary{% endif %}"
+              aria-label="{{ day.count }} contribution{{ day.count|pluralize }} on {{ day.date }}"
+              @mouseenter="tooltip = '{{ day.count }} contribution{{ day.count|pluralize }} on {{ day.date }}'; showTooltip = true; tooltipX = $event.clientX; tooltipY = $event.clientY"
+              @mouseleave="showTooltip = false"
+            ></div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Tooltip -->
+        <div
+          x-show="showTooltip"
+          x-cloak
+          class="fixed z-50 px-2 py-1 text-xs bg-neutral text-neutral-content rounded shadow-lg pointer-events-none whitespace-nowrap"
+          :style="'left: ' + tooltipX + 'px; top: ' + (tooltipY - 32) + 'px; transform: translateX(-50%)'"
+          x-text="tooltip"
+        ></div>
+
+        <!-- Legend -->
+        <div class="flex items-center justify-end gap-1.5 mt-2 text-xs text-base-content/40">
+          <span>Less</span>
+          <div class="w-2.5 h-2.5 rounded-sm bg-base-300/50"></div>
+          <div class="w-2.5 h-2.5 rounded-sm bg-primary/20"></div>
+          <div class="w-2.5 h-2.5 rounded-sm bg-primary/40"></div>
+          <div class="w-2.5 h-2.5 rounded-sm bg-primary/60"></div>
+          <div class="w-2.5 h-2.5 rounded-sm bg-primary"></div>
+          <span>More</span>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ── Details + Activity ─────────────────────────────── -->
-  <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
-
-    <!-- Details card (3/5) -->
-    <div class="lg:col-span-3 card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body">
-        <h2 class="card-title text-base gap-2 mb-3">
-          <i data-lucide="contact" class="w-5 h-5"></i>
-          Details
-        </h2>
-
-        <div class="space-y-4">
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">First name</div>
-              <div class="mt-1 font-medium">{{ profile_user.first_name|default:"—" }}</div>
-            </div>
-            <div>
-              <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Last name</div>
-              <div class="mt-1 font-medium">{{ profile_user.last_name|default:"—" }}</div>
-            </div>
-          </div>
-
-          <div class="divider my-0"></div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Username</div>
-              <div class="mt-1 font-medium">{{ profile_user.username }}</div>
-            </div>
-            <div>
-              <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Email</div>
-              <div class="mt-1 font-medium">{{ profile_user.email|default:"—" }}</div>
-            </div>
-          </div>
-
-          <div class="divider my-0"></div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Joined</div>
-              <div class="mt-1 font-medium">{{ profile_user.date_joined|localtime_tag:"date" }}</div>
-            </div>
-            <div>
-              <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Last seen</div>
-              <div class="mt-1 font-medium">{% if last_seen %}{{ last_seen|localtime_tag:"datetime" }}{% else %}Never{% endif %}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Activity timeline (2/5) -->
-    <div class="lg:col-span-2 card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body">
-        <h2 class="card-title text-base gap-2 mb-3">
+  <!-- ── Activity feed ────────────────────────────────── -->
+  <div class="card bg-base-100 border border-base-300 shadow-sm"
+       x-data="{
+         activityTab: 'all',
+         loading: false,
+         get feedUrl() {
+           let u = '{% url 'users_ui:profile_activity_feed' username=profile_user.username %}';
+           if (this.activityTab !== 'all') u += '?source=' + this.activityTab;
+           return u;
+         }
+       }"
+       @ajax:before="loading = true"
+       @ajax:after="loading = false; $nextTick(() => lucide.createIcons())"
+  >
+    <div class="card-body gap-4">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h2 class="card-title text-base gap-2">
           <i data-lucide="activity" class="w-5 h-5"></i>
           Activity
         </h2>
-
-        <!-- Timeline -->
-        <div>
-          <!-- Event: Last seen -->
-          {% if last_seen %}
-          <div class="flex gap-4">
-            <div class="flex flex-col items-center">
-              <div class="w-4 h-4 rounded-full {% if user_status == 'online' %}bg-success/20 border-2 border-success{% elif user_status == 'away' %}bg-warning/20 border-2 border-warning{% else %}bg-base-300/20 border-2 border-base-300{% endif %} flex-shrink-0 mt-0.5"></div>
-              <div class="flex-1 w-px bg-base-300 my-1"></div>
-            </div>
-            <div class="pb-5">
-              <div class="font-medium text-sm">Last seen</div>
-              <div class="text-xs text-base-content/50 mt-0.5">{{ last_seen|localtime_tag:"full" }}</div>
-              <div class="text-xs text-base-content/40 mt-0.5">{{ last_seen|localtime_tag:"relative" }}</div>
-            </div>
-          </div>
-          {% endif %}
-
-          <!-- Event: Account created -->
-          <div class="flex gap-4">
-            <div class="flex flex-col items-center">
-              <div class="w-4 h-4 rounded-full bg-primary/20 border-2 border-primary flex-shrink-0 mt-0.5"></div>
-            </div>
-            <div>
-              <div class="font-medium text-sm">Account created</div>
-              <div class="text-xs text-base-content/50 mt-0.5">{{ profile_user.date_joined|localtime_tag:"full" }}</div>
-              <div class="text-xs text-base-content/40 mt-0.5">{{ profile_user.date_joined|localtime_tag:"relative" }}</div>
-            </div>
-          </div>
+        <div class="tabs tabs-boxed">
+          <a
+            :href="'{% url 'users_ui:profile_activity_feed' username=profile_user.username %}'"
+            class="tab gap-1.5 tab-sm"
+            :class="activityTab === 'all' ? 'tab-active' : ''"
+            @click="activityTab = 'all'"
+            x-target="profile-activity"
+          >
+            <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+            All
+          </a>
+          {% for src in activity_sources %}
+          <a
+            :href="'{% url 'users_ui:profile_activity_feed' username=profile_user.username %}?source={{ src.slug }}'"
+            class="tab gap-1.5 tab-sm"
+            :class="activityTab === '{{ src.slug }}' ? 'tab-active' : ''"
+            @click="activityTab = '{{ src.slug }}'"
+            x-target="profile-activity"
+          >
+            <i data-lucide="{{ src.icon }}" class="w-3.5 h-3.5"></i>
+            {{ src.label }}
+          </a>
+          {% endfor %}
         </div>
       </div>
-    </div>
 
+      <!-- Loading skeleton -->
+      <div x-show="loading" x-cloak class="animate-pulse">
+        <ul class="divide-y divide-base-200">
+          {% for _ in "12345" %}
+          <li class="py-3 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-base-300 flex-shrink-0"></div>
+            <div class="flex-1 min-w-0 space-y-2">
+              <div class="h-4 bg-base-300 rounded w-3/4"></div>
+              <div class="h-3 bg-base-300 rounded w-1/2"></div>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div x-show="!loading">
+        {% include 'users/ui/partials/profile_activity_feed.html' %}
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

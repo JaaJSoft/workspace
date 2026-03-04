@@ -1,3 +1,5 @@
+import re
+
 import mistune
 
 from workspace.core.sse_registry import notify_sse
@@ -72,9 +74,61 @@ _markdown = mistune.create_markdown(
 )
 
 
-def render_message_body(body):
-    """Render markdown body to HTML suitable for chat messages."""
+_MENTION_PREFIX = 'MNTN__'
+_MENTION_SUFFIX = '__MNTN'
+
+
+def render_message_body(body, mention_map=None):
+    """Render markdown body to HTML suitable for chat messages.
+
+    If mention_map is provided (dict of username -> user_id), @username tokens
+    matching those usernames are rendered as mention badges with hover cards.
+    Mentions are replaced with placeholders in raw text before markdown rendering
+    to avoid corrupting URLs or code blocks.
+    """
+    if mention_map:
+        placeholders = {}
+
+        def _placeholder(match):
+            username = match.group(1)
+            if username in mention_map or username == 'everyone':
+                key = f'{_MENTION_PREFIX}{username}{_MENTION_SUFFIX}'
+                user_id = mention_map.get(username)
+                placeholders[key] = _mention_badge(username, user_id)
+                return key
+            return match.group(0)
+
+        body = re.sub(r'(?:(?<=\s)|(?<=^))@(\w+)', _placeholder, body, flags=re.MULTILINE)
+        html = _markdown(body)
+        for key, badge in placeholders.items():
+            html = html.replace(key, badge)
+        return html
+
     return _markdown(body)
+
+
+def _mention_badge(username, user_id=None):
+    if username == 'everyone':
+        return '<span class="mention-badge mention-everyone">@everyone</span>'
+    if user_id:
+        return (
+            f'<span class="mention-badge" data-username="{username}" data-user-id="{user_id}"'
+            f' onmouseenter="window._userCardShow(this,{user_id})"'
+            f' onmouseleave="window._userCardScheduleHide(this)"'
+            f'>@{username}</span>'
+        )
+    return f'<span class="mention-badge" data-username="{username}">@{username}</span>'
+
+
+def extract_mentions(body):
+    """Extract @username tokens from message body text.
+
+    Returns a set of usernames (excluding 'everyone') and whether @everyone was used.
+    """
+    tokens = set(re.findall(r'@(\w+)', body))
+    has_everyone = 'everyone' in tokens
+    tokens.discard('everyone')
+    return tokens, has_everyone
 
 
 def notify_conversation_members(conversation, exclude_user=None):
@@ -92,7 +146,7 @@ def notify_conversation_members(conversation, exclude_user=None):
         notify_sse('chat', uid)
 
 
-def notify_new_message(conversation, author, body):
+def notify_new_message(conversation, author, body, mentioned_user_ids=None, mention_everyone=False):
     """Send push notifications for a new chat message.
 
     Merges into existing unread notifications for the same conversation:
@@ -107,6 +161,8 @@ def notify_new_message(conversation, author, body):
     from workspace.notifications.tasks import send_push_notification
     from workspace.core.sse_registry import notify_sse as _notify_sse
     from .models import ConversationMember
+
+    mentioned_user_ids = mentioned_user_ids or set()
 
     User = get_user_model()
     member_ids = list(
@@ -131,6 +187,9 @@ def notify_new_message(conversation, author, body):
     icon, color = _resolve_module_defaults('chat', '', '')
 
     for uid in member_ids:
+        is_mentioned = uid in mentioned_user_ids or mention_everyone
+        priority = 'high' if is_mentioned else 'normal'
+
         # Try to merge into an existing unread notification for this conversation
         existing = Notification.objects.filter(
             recipient_id=uid,
@@ -144,7 +203,9 @@ def notify_new_message(conversation, author, body):
             existing.body = preview
             existing.title = title_single
             existing.actor = author
-            existing.save(update_fields=['body', 'title', 'actor'])
+            if is_mentioned and existing.priority != 'urgent':
+                existing.priority = priority
+            existing.save(update_fields=['body', 'title', 'actor', 'priority'])
             # Bump created_at so it rises to the top of the list
             Notification.objects.filter(pk=existing.pk).update(created_at=timezone.now())
             # Refresh the bell icon count via SSE (count unchanged but content updated)
@@ -160,6 +221,7 @@ def notify_new_message(conversation, author, body):
                 body=preview,
                 url=conv_url,
                 actor=author,
+                priority=priority,
             )
             _notify_sse('notifications', uid)
             send_push_notification.delay(str(notif.uuid))

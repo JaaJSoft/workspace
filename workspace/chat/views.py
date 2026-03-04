@@ -27,6 +27,7 @@ from .serializers import (
     ReactionToggleSerializer,
 )
 from .services import (
+    extract_mentions,
     get_or_create_dm,
     get_unread_counts,
     notify_conversation_members,
@@ -394,7 +395,22 @@ class MessageListView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        body_html = render_message_body(body) if body else ''
+        # Extract mentions and resolve to real usernames
+        mention_map = {}
+        mentioned_user_ids = set()
+        has_everyone = False
+        if body:
+            raw_mentions, has_everyone = extract_mentions(body)
+            if raw_mentions:
+                mentioned_users = User.objects.filter(
+                    username__in=raw_mentions
+                ).values_list('id', 'username')
+                mention_map = {uname: uid for uid, uname in mentioned_users}
+                mentioned_user_ids = set(mention_map.values())
+            if has_everyone:
+                mention_map['everyone'] = None
+
+        body_html = render_message_body(body, mention_map=mention_map or None) if body else ''
 
         reply_to = None
         reply_to_uuid = serializer.validated_data.get('reply_to_uuid')
@@ -447,7 +463,7 @@ class MessageListView(APIView):
         notify_conversation_members(
             conversation, exclude_user=request.user,
         )
-        notify_new_message(conversation, request.user, body)
+        notify_new_message(conversation, request.user, body, mentioned_user_ids=mentioned_user_ids, mention_everyone=has_everyone)
 
         # Trigger AI response if a bot is in the conversation
         _trigger_bot_response(conversation_id, message, request.user)
@@ -509,7 +525,20 @@ class MessageDetailView(APIView):
         serializer.is_valid(raise_exception=True)
 
         message.body = serializer.validated_data['body']
-        message.body_html = render_message_body(message.body)
+
+        # Extract mentions for rendering
+        body = message.body
+        raw_mentions, has_everyone = extract_mentions(body)
+        mention_map = {}
+        if raw_mentions:
+            mentioned_users = User.objects.filter(
+                username__in=raw_mentions
+            ).values_list('id', 'username')
+            mention_map = {uname: uid for uid, uname in mentioned_users}
+        if has_everyone:
+            mention_map['everyone'] = None
+        message.body_html = render_message_body(body, mention_map=mention_map or None)
+
         message.edited_at = timezone.now()
         message.save(update_fields=['body', 'body_html', 'edited_at'])
 

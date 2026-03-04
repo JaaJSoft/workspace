@@ -61,3 +61,21 @@ emoji-picker {
   --emoji-size: 1.4rem;
   height: 20rem;
 }
+
+/* ── @mention badges ────────────────────────────────────── */
+.mention-badge {
+  background-color: oklch(var(--in) / 0.15);
+  color: oklch(var(--in));
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.mention-badge[data-user-id] {
+  cursor: pointer;
+}
+
+.mention-everyone {
+  background-color: oklch(var(--wa) / 0.15);
+  color: oklch(var(--wa));
+}

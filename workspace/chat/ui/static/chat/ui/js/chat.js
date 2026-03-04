@@ -68,6 +68,13 @@ function chatApp(currentUserId) {
     emojiPickerX: 0,
     emojiPickerY: 0,
 
+    // Mention autocomplete
+    mentionActive: false,
+    mentionQuery: '',
+    mentionResults: [],
+    mentionHighlight: -1,
+    mentionStartPos: -1,
+
     // Sidebar
     collapsed: JSON.parse(localStorage.getItem('chatSidebarCollapsed') || 'false'),
 
@@ -303,6 +310,14 @@ function chatApp(currentUserId) {
       // Initialize Alpine on dynamically injected HTML and refresh Lucide icons
       if (typeof Alpine !== 'undefined') Alpine.initTree(container);
       if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [container] });
+      // Attach hover card listeners on @mention badges
+      this._initMentionCards(container);
+    },
+
+    _initMentionCards(container) {
+      // Mention badges have inline onmouseenter/onmouseleave handlers
+      // rendered by the server, so no JS init needed. This method exists
+      // as a hook point if additional init is ever required.
     },
 
     async loadMessages(conversationId) {
@@ -1910,6 +1925,34 @@ function chatApp(currentUserId) {
     handleInputKeydown(e) {
       const ta = this.$refs.messageInput;
 
+      // ── Mention autocomplete navigation ──
+      if (this.mentionActive) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          this.mentionHighlight = (this.mentionHighlight + 1) % this.mentionResults.length;
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          this.mentionHighlight = this.mentionHighlight <= 0
+            ? this.mentionResults.length - 1
+            : this.mentionHighlight - 1;
+          return;
+        }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          if (this.mentionHighlight >= 0 && this.mentionHighlight < this.mentionResults.length) {
+            this.insertMention(this.mentionResults[this.mentionHighlight]);
+          }
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          this.closeMentionDropdown();
+          return;
+        }
+      }
+
       // Enter (without shift) → send / save edit
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -2033,6 +2076,77 @@ function chatApp(currentUserId) {
           ta.focus();
         });
       }
+    },
+
+    // ── Mention autocomplete ────────────────────────────────
+    handleMentionInput() {
+      const ta = this.$refs.messageInput;
+      if (!ta) return;
+      const pos = ta.selectionStart;
+      const text = ta.value.substring(0, pos);
+
+      // Find the last '@' that starts a mention (preceded by start-of-string or whitespace)
+      const match = text.match(/(?:^|\s)@(\w*)$/);
+      if (match) {
+        this.mentionActive = true;
+        this.mentionQuery = match[1].toLowerCase();
+        this.mentionStartPos = pos - match[1].length - 1; // position of '@'
+        this.filterMentionResults();
+      } else {
+        this.closeMentionDropdown();
+      }
+    },
+
+    filterMentionResults() {
+      if (!this.activeConversation?.members) {
+        this.mentionResults = [];
+        return;
+      }
+      const q = this.mentionQuery;
+      let results = [];
+
+      // Add @everyone option for group conversations
+      if (this.activeConversation.kind === 'group') {
+        if (!q || 'everyone'.startsWith(q)) {
+          results.push({ username: 'everyone', first_name: 'Notify', last_name: 'everyone', id: null });
+        }
+      }
+
+      // Filter conversation members (exclude self)
+      for (const m of this.activeConversation.members) {
+        if (m.user.id === this.currentUserId) continue;
+        const u = m.user;
+        const searchStr = `${u.username} ${u.first_name || ''} ${u.last_name || ''}`.toLowerCase();
+        if (!q || searchStr.includes(q)) {
+          results.push({ username: u.username, first_name: u.first_name, last_name: u.last_name, id: u.id });
+        }
+      }
+
+      this.mentionResults = results.slice(0, 8);
+      this.mentionHighlight = results.length > 0 ? 0 : -1;
+    },
+
+    insertMention(user) {
+      const ta = this.$refs.messageInput;
+      if (!ta) return;
+      const before = ta.value.substring(0, this.mentionStartPos);
+      const after = ta.value.substring(ta.selectionStart);
+      const mention = `@${user.username} `;
+      this.messageBody = before + mention + after;
+      this.closeMentionDropdown();
+      this.$nextTick(() => {
+        const newPos = before.length + mention.length;
+        ta.setSelectionRange(newPos, newPos);
+        ta.focus();
+      });
+    },
+
+    closeMentionDropdown() {
+      this.mentionActive = false;
+      this.mentionQuery = '';
+      this.mentionResults = [];
+      this.mentionHighlight = -1;
+      this.mentionStartPos = -1;
     },
 
     // ── File upload ──────────────────────────────────────────

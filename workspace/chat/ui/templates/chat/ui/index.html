@@ -305,6 +305,35 @@ x-init="init()"
               </template>
             </div>
 
+            <!-- Mention autocomplete dropdown -->
+            <div x-show="mentionActive && mentionResults.length > 0" x-cloak
+                 class="bg-base-100 border border-base-300 rounded-lg shadow-lg mb-1 max-h-48 overflow-y-auto z-50">
+              <template x-for="(user, idx) in mentionResults" :key="user.username">
+                <button
+                  class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-base-200 transition-colors text-left"
+                  :class="idx === mentionHighlight ? 'bg-base-200' : ''"
+                  @mousedown.prevent="insertMention(user)"
+                  @mouseenter="mentionHighlight = idx"
+                >
+                  <template x-if="user.username === 'everyone'">
+                    <div class="avatar placeholder">
+                      <div class="bg-warning text-warning-content w-7 h-7 rounded-full flex items-center justify-center">
+                        <i data-lucide="users" class="w-3.5 h-3.5"></i>
+                      </div>
+                    </div>
+                  </template>
+                  <template x-if="user.username !== 'everyone'">
+                    <div x-html="window.userAvatarHtml(user.id, user.username, 'w-7 h-7 text-[0.6rem]', { presence: false })"></div>
+                  </template>
+                  <div class="flex-1 min-w-0">
+                    <span class="font-medium" x-text="user.username === 'everyone' ? '@everyone' : '@' + user.username"></span>
+                    <span x-show="user.username !== 'everyone'" class="text-base-content/50 ml-1 text-xs"
+                          x-text="[user.first_name, user.last_name].filter(Boolean).join(' ')"></span>
+                  </div>
+                </button>
+              </template>
+            </div>
+
         <!-- Input container -->
         <div class="border border-base-300 rounded-xl transition-colors focus-within:border-info/50">
           <!-- Toolbar + Send -->
@@ -347,6 +376,7 @@ x-init="init()"
                   <span>Search messages</span>   <kbd class="kbd kbd-xs">Ctrl+F</kbd>
                   <span>Conversation info</span> <kbd class="kbd kbd-xs">Alt+I</kbd>
                   <span>New chat</span>          <kbd class="kbd kbd-xs">Alt+N</kbd>
+                  <span>Mention user</span>      <kbd class="kbd kbd-xs">@</kbd>
                 </div>
                 <p class="text-xs text-base-content/40 mt-2">Markdown supported</p>
               </div>
@@ -382,7 +412,7 @@ x-init="init()"
             x-ref="messageInput"
             x-model="messageBody"
             @keydown="handleInputKeydown($event)"
-            @input="autoResize($el)"
+            @input="autoResize($el); handleMentionInput()"
             @paste="handlePaste($event)"
             class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none"
             placeholder="Type a message..."

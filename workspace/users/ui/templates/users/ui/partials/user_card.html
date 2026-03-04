@@ -33,13 +33,13 @@
       <span>Joined {{ card_user.date_joined|date:"N j, Y" }}</span>
     </div>
     {% if card_user.is_superuser %}
-    <span class="badge badge-sm badge-primary gap-1">
-      <i data-lucide="shield" class="w-2.5 h-2.5"></i>
+    <span class="badge badge-sm badge-error gap-1">
+      <i data-lucide="shield-check" class="w-2.5 h-2.5"></i>
       Admin
     </span>
     {% elif card_user.is_staff %}
-    <span class="badge badge-sm badge-secondary gap-1">
-      <i data-lucide="briefcase" class="w-2.5 h-2.5"></i>
+    <span class="badge badge-sm badge-warning gap-1">
+      <i data-lucide="shield" class="w-2.5 h-2.5"></i>
       Staff
     </span>
     {% endif %}

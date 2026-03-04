@@ -28,6 +28,12 @@ services:
       - OAUTH_GENERIC_SCOPES=${OAUTH_GENERIC_SCOPES:-}
       - OAUTH_GENERIC_IMAP_HOST=${OAUTH_GENERIC_IMAP_HOST:-}
       - OAUTH_GENERIC_SMTP_HOST=${OAUTH_GENERIC_SMTP_HOST:-}
+      # AI (optional)
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_BASE_URL=${AI_BASE_URL:-}
+      - AI_MODEL=${AI_MODEL:-gpt-5}
+      - AI_MAX_TOKENS=${AI_MAX_TOKENS:-2048}
+      - AI_CHAT_CONTEXT_SIZE=${AI_CHAT_CONTEXT_SIZE:-150}
     volumes:
       - workspace-data:/app/data
     restart: unless-stopped
@@ -57,6 +63,12 @@ services:
       - OAUTH_GENERIC_SCOPES=${OAUTH_GENERIC_SCOPES:-}
       - OAUTH_GENERIC_IMAP_HOST=${OAUTH_GENERIC_IMAP_HOST:-}
       - OAUTH_GENERIC_SMTP_HOST=${OAUTH_GENERIC_SMTP_HOST:-}
+      # AI (optional)
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_BASE_URL=${AI_BASE_URL:-}
+      - AI_MODEL=${AI_MODEL:-gpt-5}
+      - AI_MAX_TOKENS=${AI_MAX_TOKENS:-2048}
+      - AI_CHAT_CONTEXT_SIZE=${AI_CHAT_CONTEXT_SIZE:-150}
     volumes:
       - workspace-data:/app/data
     restart: unless-stopped

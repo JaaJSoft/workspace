@@ -59,7 +59,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         )
         .select_related('author', 'author__bot_profile')
         .prefetch_related('attachments')
-        .order_by('-created_at')[:50]
+        .order_by('-created_at')[:settings.AI_CHAT_CONTEXT_SIZE]
     )
     # Find the most recent user message that has image attachments
     last_image_msg_uuid = None

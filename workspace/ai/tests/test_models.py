@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
 
 from workspace.ai.models import AITask, BotProfile, UserMemory
@@ -45,6 +46,56 @@ class AITaskTests(TestCase):
         )
         self.assertEqual(task.status, AITask.Status.PENDING)
         self.assertEqual(task.task_type, 'summarize')
+
+
+class BotPermissionTests(TestCase):
+    def setUp(self):
+        self.creator = User.objects.create_user(username='creator', password='pass123')
+        self.user = User.objects.create_user(username='user', password='pass123')
+        self.superuser = User.objects.create_superuser(username='super', password='pass123')
+        self.bot_user = User.objects.create_user(username='bot', password='pass123')
+        self.bot = BotProfile.objects.create(
+            user=self.bot_user,
+            created_by=self.creator,
+            is_public=False,
+        )
+
+    def test_private_bot_not_accessible_by_random_user(self):
+        self.assertFalse(self.bot.is_accessible_by(self.user))
+
+    def test_public_bot_accessible_by_anyone(self):
+        self.bot.is_public = True
+        self.bot.save()
+        self.assertTrue(self.bot.is_accessible_by(self.user))
+
+    def test_creator_always_has_access(self):
+        self.assertTrue(self.bot.is_accessible_by(self.creator))
+
+    def test_superuser_always_has_access(self):
+        self.assertTrue(self.bot.is_accessible_by(self.superuser))
+
+    def test_allowed_user_has_access(self):
+        self.bot.allowed_users.add(self.user)
+        self.assertTrue(self.bot.is_accessible_by(self.user))
+
+    def test_allowed_group_has_access(self):
+        group = Group.objects.create(name='testers')
+        self.user.groups.add(group)
+        self.bot.allowed_groups.add(group)
+        self.assertTrue(self.bot.is_accessible_by(self.user))
+
+    def test_accessible_by_queryset_filters_correctly(self):
+        public_bot_user = User.objects.create_user(username='pub-bot')
+        BotProfile.objects.create(user=public_bot_user, is_public=True)
+
+        accessible = BotProfile.accessible_by(self.user)
+        self.assertIn(public_bot_user.pk, [b.pk for b in accessible])
+        self.assertNotIn(self.bot_user.pk, [b.pk for b in accessible])
+
+    def test_accessible_by_includes_allowed_user(self):
+        self.bot.allowed_users.add(self.user)
+        accessible = BotProfile.accessible_by(self.user)
+        self.assertIn(self.bot_user.pk, [b.pk for b in accessible])
 
 
 class UserMemoryTests(TestCase):

@@ -159,6 +159,16 @@ class ConversationListView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Check bot access permissions
+        from workspace.ai.models import BotProfile
+        bot_users = users.filter(bot_profile__isnull=False).select_related('bot_profile')
+        for bot_user in bot_users:
+            if not bot_user.bot_profile.is_accessible_by(request.user):
+                return Response(
+                    {'detail': 'You do not have access to this bot.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         # DM: exactly one other user
         if len(member_ids) == 1:
             other_user = users.first()

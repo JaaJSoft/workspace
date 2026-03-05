@@ -1,7 +1,9 @@
 import uuid
 
 from django.conf import settings
+from django.contrib.auth.models import Group
 from django.db import models
+from django.db.models import Q
 
 
 class BotProfile(models.Model):
@@ -24,6 +26,19 @@ class BotProfile(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Access control
+    is_public = models.BooleanField(default=False)
+    allowed_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='allowed_bots',
+    )
+    allowed_groups = models.ManyToManyField(
+        Group,
+        blank=True,
+        related_name='allowed_bots',
+    )
+
     class Meta:
         ordering = ['user__username']
 
@@ -33,6 +48,30 @@ class BotProfile(models.Model):
     def get_model(self):
         """Return the model to use, falling back to the global default."""
         return self.model or settings.AI_MODEL
+
+    def is_accessible_by(self, user) -> bool:
+        """Check if a user can access this bot."""
+        if self.is_public or user.is_superuser:
+            return True
+        if self.created_by_id == user.id:
+            return True
+        if self.allowed_users.filter(pk=user.pk).exists():
+            return True
+        if self.allowed_groups.filter(user=user).exists():
+            return True
+        return False
+
+    @classmethod
+    def accessible_by(cls, user):
+        """Return a queryset of BotProfiles accessible by the given user."""
+        if user.is_superuser:
+            return cls.objects.all()
+        return cls.objects.filter(
+            Q(is_public=True)
+            | Q(created_by=user)
+            | Q(allowed_users=user)
+            | Q(allowed_groups__user=user)
+        ).distinct()
 
 
 class AITask(models.Model):

@@ -5,11 +5,12 @@ from .models import AITask, BotProfile
 
 @admin.register(BotProfile)
 class BotProfileAdmin(admin.ModelAdmin):
-    list_display = ['user', 'model', 'created_by', 'created_at']
-    list_filter = ['model']
+    list_display = ['user', 'model', 'is_public', 'created_by', 'created_at']
+    list_filter = ['model', 'is_public']
     search_fields = ['user__username', 'user__first_name', 'user__last_name', 'description']
     raw_id_fields = ['user', 'created_by']
     readonly_fields = ['created_at']
+    filter_horizontal = ['allowed_users', 'allowed_groups']
 
 
 @admin.register(AITask)

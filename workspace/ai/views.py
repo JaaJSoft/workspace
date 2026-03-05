@@ -26,7 +26,7 @@ class BotListView(APIView):
 
     @extend_schema(tags=['AI'], responses=BotProfileSerializer(many=True))
     def get(self, request):
-        bots = BotProfile.objects.select_related('user').all()
+        bots = BotProfile.accessible_by(request.user).select_related('user')
         serializer = BotProfileSerializer(bots, many=True)
         return Response(serializer.data)
 

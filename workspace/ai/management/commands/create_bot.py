@@ -15,6 +15,7 @@ class Command(BaseCommand):
         parser.add_argument('--prompt', type=str, default='', help='System prompt')
         parser.add_argument('--model', type=str, default='', help='Model override')
         parser.add_argument('--description', type=str, default='', help='Bot description')
+        parser.add_argument('--public', action='store_true', help='Make bot accessible to all users')
 
     def handle(self, *args, **options):
         username = options['username']
@@ -41,6 +42,7 @@ class Command(BaseCommand):
                 'system_prompt': options['prompt'],
                 'model': options['model'],
                 'description': options['description'],
+                'is_public': options['public'],
             },
         )
 

@@ -101,6 +101,13 @@
     </button>
     <button
       class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
+      @click="clearConversation()"
+    >
+      <i data-lucide="trash-2" class="w-3 h-3"></i>
+      Clear
+    </button>
+    <button
+      class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
       @click="leaveConversation()"
     >
       <i data-lucide="log-out" class="w-3 h-3"></i>

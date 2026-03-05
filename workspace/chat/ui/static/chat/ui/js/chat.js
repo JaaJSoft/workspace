@@ -1317,6 +1317,31 @@ function chatApp(currentUserId) {
       }
     },
 
+    async clearConversation() {
+      if (!this.activeConversation) return;
+      const ok = await AppDialog.confirm({
+        title: 'Clear conversation',
+        message: 'This will permanently delete all messages and media in this conversation. This cannot be undone.',
+        okLabel: 'Clear all',
+        okClass: 'btn-error',
+      });
+      if (!ok) return;
+
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/clear`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': this._csrf() },
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          await this._refreshCurrentMessages();
+          this.refreshConversationList();
+        }
+      } catch (e) {
+        console.error('Failed to clear conversation', e);
+      }
+    },
+
     async leaveConversation() {
       if (!this.activeConversation) return;
       const ok = await AppDialog.confirm({

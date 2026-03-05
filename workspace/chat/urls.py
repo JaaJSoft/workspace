@@ -102,6 +102,12 @@ urlpatterns = [
         views.ConversationPinnedMessagesView.as_view(),
         name='chat-conversation-pinned-messages',
     ),
+    # Clear conversation
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/clear',
+        views.ConversationClearView.as_view(),
+        name='chat-conversation-clear',
+    ),
     # Bot retry
     path(
         'api/v1/chat/conversations/<uuid:conversation_id>/messages/<uuid:message_id>/retry',

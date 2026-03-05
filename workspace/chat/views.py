@@ -1505,6 +1505,44 @@ class BotRetryView(APIView):
 
 
 @extend_schema(tags=['Chat'])
+class ConversationClearView(APIView):
+    """DELETE /api/v1/chat/conversations/<id>/messages — Clear all messages and attachments."""
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=['Chat'], summary="Clear all messages in a conversation")
+    def delete(self, request, conversation_id):
+        membership = _get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        messages = Message.objects.filter(conversation_id=conversation_id)
+
+        # Delete attachment files from storage (best-effort, files may be locked)
+        attachments = MessageAttachment.objects.filter(message__in=messages)
+        for att in attachments.iterator():
+            if att.file:
+                try:
+                    att.file.delete(save=False)
+                except OSError:
+                    logger.warning('Could not delete file %s', att.file.name)
+
+        # Delete all messages (hard delete, not soft)
+        count, _ = messages.delete()
+
+        # Reset unread counts
+        ConversationMember.objects.filter(
+            conversation_id=conversation_id,
+            left_at__isnull=True,
+        ).update(unread_count=0)
+
+        notify_conversation_members(
+            Conversation.objects.get(pk=conversation_id),
+            exclude_user=request.user,
+        )
+
+        return Response({'deleted': count}, status=status.HTTP_200_OK)
+
+
 class BotCancelView(APIView):
     permission_classes = [IsAuthenticated]
 

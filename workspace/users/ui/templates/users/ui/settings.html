@@ -54,6 +54,16 @@
           <i data-lucide="shield" class="w-4 h-4"></i>
           Security
         </button>
+        <button
+          @click="tab = 'ai-memory'; updateHash()"
+          class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
+          :class="tab === 'ai-memory'
+            ? 'bg-primary/10 text-primary font-semibold'
+            : 'hover:bg-base-200 text-base-content'"
+        >
+          <i data-lucide="brain" class="w-4 h-4"></i>
+          AI Memory
+        </button>
       </div>
     </nav>
 
@@ -149,6 +159,75 @@
                   </div>
                   <span class="text-sm font-medium capitalize" x-text="t.label"></span>
                 </button>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Memory Tab -->
+      <div x-show="tab === 'ai-memory'" x-cloak x-data="aiMemorySettings()">
+        <div class="card bg-base-100 border border-base-300 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg gap-2">
+              <i data-lucide="brain" class="w-5 h-5"></i>
+              AI Memory
+            </h2>
+            <p class="text-sm text-base-content/60 mt-1">
+              Things AI bots remember about you. You can edit or delete any memory.
+            </p>
+
+            <!-- Loading -->
+            <div x-show="loading" class="flex justify-center py-8">
+              <span class="loading loading-spinner loading-md"></span>
+            </div>
+
+            <!-- Empty state -->
+            <template x-if="!loading && memories.length === 0">
+              <div class="text-center py-8 text-base-content/50">
+                <i data-lucide="brain" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
+                <p>No memories yet. AI bots will remember things about you as you chat.</p>
+              </div>
+            </template>
+
+            <!-- Memory list -->
+            <div x-show="!loading && memories.length > 0" class="mt-4 space-y-2">
+              <template x-for="mem in memories" :key="mem.id">
+                <div class="flex items-start gap-3 p-3 rounded-lg border border-base-300 group">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="badge badge-sm badge-ghost" x-text="mem.bot_name"></span>
+                      <span class="font-medium text-sm" x-text="mem.key"></span>
+                    </div>
+                    <!-- View mode -->
+                    <template x-if="editingId !== mem.id">
+                      <p class="text-sm text-base-content/80" x-text="mem.content"></p>
+                    </template>
+                    <!-- Edit mode -->
+                    <template x-if="editingId === mem.id">
+                      <div class="flex gap-2 mt-1">
+                        <input
+                          type="text"
+                          class="input input-sm input-bordered flex-1"
+                          x-model="editContent"
+                          @keydown.enter="saveEdit(mem)"
+                          @keydown.escape="cancelEdit()"
+                        />
+                        <button class="btn btn-sm btn-primary" @click="saveEdit(mem)">Save</button>
+                        <button class="btn btn-sm btn-ghost" @click="cancelEdit()">Cancel</button>
+                      </div>
+                    </template>
+                  </div>
+                  <!-- Actions -->
+                  <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" x-show="editingId !== mem.id">
+                    <button class="btn btn-ghost btn-xs btn-square" @click="startEdit(mem)" title="Edit">
+                      <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button class="btn btn-ghost btn-xs btn-square text-error" @click="deleteMemory(mem)" title="Delete">
+                      <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                </div>
               </template>
             </div>
           </div>
@@ -260,7 +339,7 @@
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
 <script>
   function settingsPage() {
-    const validTabs = ['profile', 'preferences', 'security'];
+    const validTabs = ['profile', 'preferences', 'security', 'ai-memory'];
     return {
       tab: validTabs.includes(location.hash.replace('#', '')) ? location.hash.replace('#', '') : 'profile',
       init() {
@@ -445,6 +524,72 @@
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
           body: JSON.stringify({ value: id }),
         });
+      },
+    };
+  }
+
+  function aiMemorySettings() {
+    return {
+      memories: [],
+      loading: true,
+      editingId: null,
+      editContent: '',
+
+      async init() {
+        await this.fetchMemories();
+      },
+
+      async fetchMemories() {
+        this.loading = true;
+        try {
+          const resp = await fetch('/api/v1/ai/memories');
+          if (resp.ok) this.memories = await resp.json();
+        } finally {
+          this.loading = false;
+          this.$nextTick(() => { lucide.createIcons(); });
+        }
+      },
+
+      startEdit(mem) {
+        this.editingId = mem.id;
+        this.editContent = mem.content;
+      },
+
+      cancelEdit() {
+        this.editingId = null;
+        this.editContent = '';
+      },
+
+      async saveEdit(mem) {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+          || document.cookie.split('; ').find(function(c) { return c.startsWith('csrftoken='); })?.split('=')[1]
+          || '';
+        const resp = await fetch(`/api/v1/ai/memories/${mem.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+          },
+          body: JSON.stringify({ content: this.editContent }),
+        });
+        if (resp.ok) {
+          mem.content = this.editContent;
+          this.cancelEdit();
+        }
+      },
+
+      async deleteMemory(mem) {
+        if (!confirm(`Delete memory "${mem.key}"?`)) return;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+          || document.cookie.split('; ').find(function(c) { return c.startsWith('csrftoken='); })?.split('=')[1]
+          || '';
+        const resp = await fetch(`/api/v1/ai/memories/${mem.id}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': csrfToken },
+        });
+        if (resp.ok) {
+          this.memories = this.memories.filter(m => m.id !== mem.id);
+        }
       },
     };
   }

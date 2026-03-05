@@ -1,4 +1,5 @@
 import base64
+import json
 import logging
 
 from celery import shared_task
@@ -8,7 +9,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-def _call_openai(messages: list[dict], model: str | None = None, max_tokens: int | None = None) -> dict:
+def _call_openai(messages: list[dict], model: str | None = None, max_tokens: int | None = None, tools: list | None = None) -> dict:
     """Call the OpenAI API and return a dict with content and usage info."""
     from workspace.ai.client import get_ai_client
 
@@ -16,15 +17,21 @@ def _call_openai(messages: list[dict], model: str | None = None, max_tokens: int
     if not client:
         raise RuntimeError('AI is not configured (AI_API_KEY missing)')
 
-    response = client.chat.completions.create(
-        model=model or settings.AI_MODEL,
-        messages=messages,
-        max_tokens=max_tokens or settings.AI_MAX_TOKENS,
-    )
+    kwargs = {
+        'model': model or settings.AI_MODEL,
+        'messages': messages,
+        'max_tokens': max_tokens or settings.AI_MAX_TOKENS,
+    }
+    if tools:
+        kwargs['tools'] = tools
+
+    response = client.chat.completions.create(**kwargs)
 
     choice = response.choices[0]
     return {
         'content': choice.message.content or '',
+        'tool_calls': choice.message.tool_calls,
+        'message': choice.message,
         'model': response.model,
         'prompt_tokens': response.usage.prompt_tokens if response.usage else None,
         'completion_tokens': response.usage.completion_tokens if response.usage else None,
@@ -39,6 +46,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
 
     from workspace.ai.models import AITask, BotProfile
     from workspace.ai.prompts.chat import build_chat_messages
+    from workspace.ai.tools import CHAT_TOOLS, execute_tool_call
     from workspace.chat.models import Conversation, ConversationMember, Message
     from workspace.chat.services import notify_conversation_members, render_message_body
 
@@ -101,7 +109,15 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             history.append({'role': role, 'content': msg.body})
 
     bot_name = bot_user.get_full_name() or bot_user.username
-    messages = build_chat_messages(bot_profile.system_prompt, history, bot_name=bot_name)
+
+    # Identify the human user who triggered the response
+    trigger_message = Message.objects.filter(pk=message_id).select_related('author').first()
+    human_user = trigger_message.author if trigger_message else None
+
+    messages = build_chat_messages(
+        bot_profile.system_prompt, history, bot_name=bot_name,
+        user=human_user, bot=bot_user,
+    )
 
     ai_task = AITask.objects.create(
         owner=bot_user,
@@ -111,7 +127,37 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
     )
 
     try:
-        result = _call_openai(messages, model=bot_profile.get_model())
+        result = _call_openai(messages, model=bot_profile.get_model(), tools=CHAT_TOOLS)
+
+        # Tool call loop: execute tools and re-call until we get a text response
+        retained_keys = []
+        max_tool_rounds = 5
+        for _ in range(max_tool_rounds):
+            if not result.get('tool_calls'):
+                break
+
+            # Append assistant message with tool calls
+            messages.append(result['message'].to_dict())
+
+            # Execute each tool call and append results
+            for tc in result['tool_calls']:
+                tool_result = execute_tool_call(tc, user=human_user, bot=bot_user)
+                messages.append({
+                    'role': 'tool',
+                    'tool_call_id': tc.id,
+                    'content': tool_result,
+                })
+                # Track saved memories for the retention badge
+                if tc.function.name == 'save_memory' and 'Saved' in tool_result:
+                    try:
+                        key = json.loads(tc.function.arguments).get('key', '')
+                        if key:
+                            retained_keys.append(key)
+                    except (json.JSONDecodeError, AttributeError):
+                        pass
+
+            # Call again to get the next response
+            result = _call_openai(messages, model=bot_profile.get_model(), tools=CHAT_TOOLS)
 
         # Guard: check if the task was cancelled while we were waiting for OpenAI
         ai_task.refresh_from_db(fields=['status'])
@@ -121,6 +167,15 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
 
         body = result['content']
         body_html = render_message_body(body)
+
+        # Append retention badge if memories were saved
+        if retained_keys:
+            keys_display = ' &bull; '.join(retained_keys)
+            body_html += (
+                f'\n<div class="mt-2 text-xs text-base-content/40 flex items-center gap-1">'
+                f'<span>🧠</span> Retained: {keys_display}'
+                f'</div>'
+            )
         bot_message = Message.objects.create(
             conversation_id=conversation_id,
             author=bot_user,

@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import AITask, BotProfile
+from .models import AITask, BotProfile, UserMemory
 from .serializers import (
     AITaskSerializer,
     BotProfileSerializer,
@@ -14,6 +14,7 @@ from .serializers import (
     EditorActionRequestSerializer,
     ReplyRequestSerializer,
     SummarizeRequestSerializer,
+    UserMemorySerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -220,3 +221,43 @@ class TaskDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(AITaskSerializer(ai_task).data)
+
+
+class MemoryListView(APIView):
+    """GET /api/v1/ai/memories — List current user's memories."""
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=['AI'], responses=UserMemorySerializer(many=True))
+    def get(self, request):
+        memories = UserMemory.objects.filter(user=request.user).select_related('bot')
+        serializer = UserMemorySerializer(memories, many=True)
+        return Response(serializer.data)
+
+
+class MemoryDetailView(APIView):
+    """PATCH/DELETE /api/v1/ai/memories/<id>"""
+    permission_classes = [IsAuthenticated]
+
+    def _get_memory(self, request, pk):
+        try:
+            return UserMemory.objects.get(pk=pk, user=request.user)
+        except UserMemory.DoesNotExist:
+            return None
+
+    @extend_schema(tags=['AI'], request=UserMemorySerializer, responses=UserMemorySerializer)
+    def patch(self, request, pk):
+        memory = self._get_memory(request, pk)
+        if not memory:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = UserMemorySerializer(memory, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @extend_schema(tags=['AI'])
+    def delete(self, request, pk):
+        memory = self._get_memory(request, pk)
+        if not memory:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        memory.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -83,3 +83,28 @@ class AITask(models.Model):
 
     def __str__(self):
         return f'AITask {self.uuid} ({self.task_type} - {self.status})'
+
+
+class UserMemory(models.Model):
+    """Persistent memory that a bot stores about a user."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='ai_memories',
+    )
+    bot = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='bot_memories',
+    )
+    key = models.CharField(max_length=100)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'bot', 'key')
+        ordering = ['key']
+
+    def __str__(self):
+        return f'Memory: {self.user.username}/{self.bot.username} — {self.key}'

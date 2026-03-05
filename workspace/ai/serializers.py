@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import AITask, BotProfile
+from .models import AITask, BotProfile, UserMemory
 
 
 class BotProfileSerializer(serializers.ModelSerializer):
@@ -84,3 +84,15 @@ class EditorActionRequestSerializer(serializers.Serializer):
                 {'instructions': 'Instructions are required for custom actions.'}
             )
         return attrs
+
+
+class UserMemorySerializer(serializers.ModelSerializer):
+    bot_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserMemory
+        fields = ['id', 'key', 'content', 'bot_name', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'bot_name', 'created_at', 'updated_at']
+
+    def get_bot_name(self, obj):
+        return obj.bot.get_full_name() or obj.bot.username

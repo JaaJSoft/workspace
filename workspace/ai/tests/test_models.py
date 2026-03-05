@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from workspace.ai.models import AITask, BotProfile
+from workspace.ai.models import AITask, BotProfile, UserMemory
 
 User = get_user_model()
 
@@ -45,3 +45,41 @@ class AITaskTests(TestCase):
         )
         self.assertEqual(task.status, AITask.Status.PENDING)
         self.assertEqual(task.task_type, 'summarize')
+
+
+class UserMemoryTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='user', password='pass123')
+        self.bot_user = User.objects.create_user(username='bot', password='pass123')
+        BotProfile.objects.create(user=self.bot_user, system_prompt='Test bot')
+
+    def test_create_memory(self):
+        mem = UserMemory.objects.create(
+            user=self.user, bot=self.bot_user,
+            key='name', content='Pierre',
+        )
+        self.assertEqual(str(mem), 'Memory: user/bot — name')
+        self.assertEqual(mem.content, 'Pierre')
+
+    def test_unique_constraint(self):
+        UserMemory.objects.create(
+            user=self.user, bot=self.bot_user,
+            key='name', content='Pierre',
+        )
+        with self.assertRaises(Exception):
+            UserMemory.objects.create(
+                user=self.user, bot=self.bot_user,
+                key='name', content='Paul',
+            )
+
+    def test_update_or_create(self):
+        UserMemory.objects.create(
+            user=self.user, bot=self.bot_user,
+            key='name', content='Pierre',
+        )
+        UserMemory.objects.update_or_create(
+            user=self.user, bot=self.bot_user, key='name',
+            defaults={'content': 'Paul'},
+        )
+        mem = UserMemory.objects.get(user=self.user, bot=self.bot_user, key='name')
+        self.assertEqual(mem.content, 'Paul')

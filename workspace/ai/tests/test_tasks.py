@@ -41,7 +41,7 @@ class GenerateChatResponseTests(TestCase):
     def test_generates_response(self, mock_get_client):
         mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.choices = [MagicMock(message=MagicMock(content='Hello human!'))]
+        mock_response.choices = [MagicMock(message=MagicMock(content='Hello human!', tool_calls=None))]
         mock_response.model = 'gpt-4o-mini'
         mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=5)
         mock_client.chat.completions.create.return_value = mock_response
@@ -153,3 +153,93 @@ class SummarizeTaskTests(TestCase):
 
         self.message.refresh_from_db()
         self.assertEqual(self.message.ai_summary, '• New summary')
+
+
+@override_settings(
+    AI_API_KEY='test-key',
+    AI_MODEL='gpt-4o-mini',
+    AI_MAX_TOKENS=100,
+    CELERY_TASK_ALWAYS_EAGER=True,
+    CELERY_TASK_EAGER_PROPAGATES=True,
+)
+class GenerateChatResponseWithToolsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='user', password='pass123')
+        self.bot_user = User.objects.create_user(username='bot', password='pass123')
+        self.bot_profile = BotProfile.objects.create(
+            user=self.bot_user,
+            system_prompt='You are a test bot.',
+        )
+        self.conversation = Conversation.objects.create(
+            kind=Conversation.Kind.DM,
+            created_by=self.user,
+        )
+        ConversationMember.objects.create(conversation=self.conversation, user=self.user)
+        ConversationMember.objects.create(conversation=self.conversation, user=self.bot_user)
+        self.message = Message.objects.create(
+            conversation=self.conversation,
+            author=self.user,
+            body='My name is Pierre',
+        )
+
+    @patch('workspace.ai.client.get_ai_client')
+    def test_tool_call_saves_memory_then_responds(self, mock_get_client):
+        mock_client = MagicMock()
+
+        # First call: tool_calls response
+        tool_call = MagicMock()
+        tool_call.id = 'call_abc'
+        tool_call.type = 'function'
+        tool_call.function.name = 'save_memory'
+        tool_call.function.arguments = '{"key": "name", "content": "Pierre"}'
+
+        first_response = MagicMock()
+        first_message = MagicMock()
+        first_message.content = None
+        first_message.tool_calls = [tool_call]
+        first_message.role = 'assistant'
+        first_message.to_dict.return_value = {
+            'role': 'assistant',
+            'content': None,
+            'tool_calls': [{'id': 'call_abc', 'type': 'function', 'function': {'name': 'save_memory', 'arguments': '{"key": "name", "content": "Pierre"}'}}],
+        }
+        first_response.choices = [MagicMock(message=first_message, finish_reason='tool_calls')]
+        first_response.model = 'gpt-4o-mini'
+        first_response.usage = MagicMock(prompt_tokens=20, completion_tokens=10)
+
+        # Second call: final text response
+        second_response = MagicMock()
+        second_message = MagicMock()
+        second_message.content = "Got it, Pierre!"
+        second_message.tool_calls = None
+        second_response.choices = [MagicMock(message=second_message, finish_reason='stop')]
+        second_response.model = 'gpt-4o-mini'
+        second_response.usage = MagicMock(prompt_tokens=30, completion_tokens=8)
+
+        mock_client.chat.completions.create.side_effect = [first_response, second_response]
+        mock_get_client.return_value = mock_client
+
+        from workspace.ai.tasks import generate_chat_response
+        result = generate_chat_response(
+            str(self.conversation.uuid),
+            str(self.message.uuid),
+            self.bot_user.id,
+        )
+
+        self.assertEqual(result['status'], 'ok')
+
+        # Memory was saved
+        from workspace.ai.models import UserMemory
+        mem = UserMemory.objects.get(user=self.user, bot=self.bot_user, key='name')
+        self.assertEqual(mem.content, 'Pierre')
+
+        # Final response posted
+        bot_msg = Message.objects.filter(author=self.bot_user).first()
+        self.assertEqual(bot_msg.body, "Got it, Pierre!")
+
+        # Retention badge appears in body_html
+        self.assertIn('Retained:', bot_msg.body_html)
+        self.assertIn('name', bot_msg.body_html)
+
+        # Two API calls were made
+        self.assertEqual(mock_client.chat.completions.create.call_count, 2)

@@ -7,19 +7,43 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 
 
-def build_chat_messages(system_prompt: str, history: list[dict], bot_name: str = '') -> list[dict]:
+def _build_memory_block(user, bot) -> str:
+    """Build a memory section from stored UserMemory entries."""
+    from workspace.ai.models import UserMemory
+
+    memories = UserMemory.objects.filter(user=user, bot=bot).order_by('key')
+    if not memories:
+        return ''
+    lines = [f'- {m.key}: {m.content}' for m in memories]
+    return '\n\n## What you remember about this user\n' + '\n'.join(lines)
+
+
+def build_chat_messages(
+    system_prompt: str,
+    history: list[dict],
+    bot_name: str = '',
+    user=None,
+    bot=None,
+) -> list[dict]:
     """Build the messages list for the OpenAI API from conversation history.
 
     Args:
         system_prompt: The bot's system prompt.
         history: List of dicts with 'role' and 'content' keys.
         bot_name: The display name of the bot.
+        user: The user interacting with the bot (for memory lookup).
+        bot: The bot's user instance (for memory lookup).
     """
     base_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
     context = build_context_block()
     if bot_name:
         context = f"Your name is {bot_name}.\n{context}"
-    system_content = f"{base_prompt}\n\n{context}"
+
+    memory_block = ''
+    if user and bot:
+        memory_block = _build_memory_block(user, bot)
+
+    system_content = f"{base_prompt}\n\n{context}{memory_block}"
     messages = [{'role': 'system', 'content': system_content}]
     messages.extend(history)
     return messages

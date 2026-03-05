@@ -17,6 +17,8 @@ class BotProfile(models.Model):
     system_prompt = models.TextField(blank=True)
     model = models.CharField(max_length=100, blank=True)
     description = models.TextField(blank=True)
+    supports_tools = models.BooleanField(default=True)
+    supports_vision = models.BooleanField(default=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

@@ -6,6 +6,7 @@ from django.test import TestCase
 
 from workspace.ai.models import BotProfile, UserMemory
 from workspace.ai.tools import CHAT_TOOLS, execute_tool_call
+from workspace.chat.models import Conversation, ConversationMember, Message
 
 User = get_user_model()
 
@@ -16,6 +17,8 @@ class ChatToolDefinitionTests(TestCase):
         names = [t['function']['name'] for t in CHAT_TOOLS]
         self.assertIn('save_memory', names)
         self.assertIn('delete_memory', names)
+        self.assertIn('search_messages', names)
+        self.assertIn('get_current_user_info', names)
 
 
 class ExecuteToolCallTests(TestCase):
@@ -81,3 +84,52 @@ class ExecuteToolCallTests(TestCase):
         result = execute_tool_call(tool_call, user=self.user, bot=self.bot_user)
 
         self.assertIn('Unknown', result)
+
+    def test_search_messages(self):
+        conv = Conversation.objects.create(created_by=self.user)
+        ConversationMember.objects.create(conversation=conv, user=self.user)
+        Message.objects.create(conversation=conv, author=self.user, body='Hello world')
+        Message.objects.create(conversation=conv, author=self.user, body='Goodbye world')
+        Message.objects.create(conversation=conv, author=self.user, body='Nothing here')
+
+        tool_call = MagicMock()
+        tool_call.id = 'call_6'
+        tool_call.function.name = 'search_messages'
+        tool_call.function.arguments = json.dumps({'query': 'world'})
+
+        result = execute_tool_call(tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk))
+
+        self.assertIn('Hello world', result)
+        self.assertIn('Goodbye world', result)
+        self.assertNotIn('Nothing here', result)
+
+    def test_search_messages_no_results(self):
+        conv = Conversation.objects.create(created_by=self.user)
+
+        tool_call = MagicMock()
+        tool_call.id = 'call_7'
+        tool_call.function.name = 'search_messages'
+        tool_call.function.arguments = json.dumps({'query': 'nonexistent'})
+
+        result = execute_tool_call(tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk))
+
+        self.assertIn('No messages found', result)
+
+    def test_get_current_user_info(self):
+        self.user.first_name = 'Pierre'
+        self.user.last_name = 'Dupont'
+        self.user.email = 'pierre@example.com'
+        self.user.save()
+
+        tool_call = MagicMock()
+        tool_call.id = 'call_8'
+        tool_call.function.name = 'get_current_user_info'
+        tool_call.function.arguments = '{}'
+
+        result = execute_tool_call(tool_call, user=self.user, bot=self.bot_user)
+
+        data = json.loads(result)
+        self.assertEqual(data['username'], 'user')
+        self.assertEqual(data['first_name'], 'Pierre')
+        self.assertEqual(data['last_name'], 'Dupont')
+        self.assertEqual(data['email'], 'pierre@example.com')

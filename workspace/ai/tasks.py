@@ -1,12 +1,20 @@
 import base64
 import json
 import logging
+import re
 
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+_THINK_RE = re.compile(r'<think>[\s\S]*?</think>\s*', re.IGNORECASE)
+
+
+def _strip_thinking(content: str) -> str:
+    """Remove <think>...</think> blocks from model output."""
+    return _THINK_RE.sub('', content).strip()
 
 
 def _call_openai(messages: list[dict], model: str | None = None, max_tokens: int | None = None, tools: list | None = None) -> dict:
@@ -28,14 +36,73 @@ def _call_openai(messages: list[dict], model: str | None = None, max_tokens: int
     response = client.chat.completions.create(**kwargs)
 
     choice = response.choices[0]
+    content = _strip_thinking(choice.message.content or '')
     return {
-        'content': choice.message.content or '',
+        'content': content,
         'tool_calls': choice.message.tool_calls,
         'message': choice.message,
         'model': response.model,
         'prompt_tokens': response.usage.prompt_tokens if response.usage else None,
         'completion_tokens': response.usage.completion_tokens if response.usage else None,
     }
+
+
+TOOL_BADGE_CONFIG = {
+    'save_memory': {'icon': '🧠', 'label': 'Retained'},
+    'delete_memory': {'icon': '🧠', 'label': 'Forgot'},
+    'search_messages': {'icon': '🔍', 'label': 'Searched'},
+    'get_current_user_info': {'icon': '👤', 'label': 'Looked up profile'},
+}
+
+
+def _track_tool_usage(tool_call, tool_result, used_tools):
+    """Extract a human-readable detail from a successful tool call."""
+    name = tool_call.function.name
+    try:
+        args = json.loads(tool_call.function.arguments)
+    except (json.JSONDecodeError, AttributeError):
+        args = {}
+
+    if name == 'save_memory':
+        detail = args.get('key', '')
+    elif name == 'delete_memory':
+        detail = args.get('key', '')
+    elif name == 'search_messages':
+        detail = args.get('query', '')
+    elif name == 'get_current_user_info':
+        detail = ''
+    else:
+        detail = ''
+
+    used_tools.append((name, detail))
+
+
+def _render_tool_badges(used_tools):
+    """Render HTML badges for tools used during response generation."""
+    # Group by tool name to consolidate duplicates
+    grouped = {}
+    for name, detail in used_tools:
+        grouped.setdefault(name, [])
+        if detail:
+            grouped[name].append(detail)
+
+    parts = []
+    for name, details in grouped.items():
+        cfg = TOOL_BADGE_CONFIG.get(name, {'icon': '⚡', 'label': name})
+        icon = cfg['icon']
+        label = cfg['label']
+        if details:
+            details_display = ' &bull; '.join(details)
+            parts.append(f'<span>{icon}</span> {label}: {details_display}')
+        else:
+            parts.append(f'<span>{icon}</span> {label}')
+
+    badges_html = ' <span class="opacity-30">|</span> '.join(parts)
+    return (
+        f'\n<div class="mt-2 text-xs text-base-content/40 flex items-center gap-1 flex-wrap">'
+        f'{badges_html}'
+        f'</div>'
+    )
 
 
 @shared_task(name='ai.generate_chat_response', bind=True, max_retries=0)
@@ -71,11 +138,12 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
     )
     # Find the most recent user message that has image attachments
     last_image_msg_uuid = None
-    for msg in recent_messages:  # newest first
-        is_bot = hasattr(msg.author, 'bot_profile')
-        if not is_bot and any(att.is_image for att in msg.attachments.all()):
-            last_image_msg_uuid = str(msg.uuid)
-            break
+    if bot_profile.supports_vision:
+        for msg in recent_messages:  # newest first
+            is_bot = hasattr(msg.author, 'bot_profile')
+            if not is_bot and any(att.is_image for att in msg.attachments.all()):
+                last_image_msg_uuid = str(msg.uuid)
+                break
 
     history = []
     for msg in reversed(recent_messages):
@@ -127,10 +195,11 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
     )
 
     try:
-        result = _call_openai(messages, model=bot_profile.get_model(), tools=CHAT_TOOLS)
+        tools = CHAT_TOOLS if bot_profile.supports_tools else None
+        result = _call_openai(messages, model=bot_profile.get_model(), tools=tools)
 
         # Tool call loop: execute tools and re-call until we get a text response
-        retained_keys = []
+        used_tools = []  # list of (tool_name, detail_string)
         max_tool_rounds = 5
         for _ in range(max_tool_rounds):
             if not result.get('tool_calls'):
@@ -141,23 +210,18 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
 
             # Execute each tool call and append results
             for tc in result['tool_calls']:
-                tool_result = execute_tool_call(tc, user=human_user, bot=bot_user)
+                tool_result = execute_tool_call(tc, user=human_user, bot=bot_user, conversation_id=conversation_id)
                 messages.append({
                     'role': 'tool',
                     'tool_call_id': tc.id,
                     'content': tool_result,
                 })
-                # Track saved memories for the retention badge
-                if tc.function.name == 'save_memory' and 'Saved' in tool_result:
-                    try:
-                        key = json.loads(tc.function.arguments).get('key', '')
-                        if key:
-                            retained_keys.append(key)
-                    except (json.JSONDecodeError, AttributeError):
-                        pass
+                # Track tool usage for the badge
+                if 'Error' not in tool_result:
+                    _track_tool_usage(tc, tool_result, used_tools)
 
             # Call again to get the next response
-            result = _call_openai(messages, model=bot_profile.get_model(), tools=CHAT_TOOLS)
+            result = _call_openai(messages, model=bot_profile.get_model(), tools=tools)
 
         # Guard: check if the task was cancelled while we were waiting for OpenAI
         ai_task.refresh_from_db(fields=['status'])
@@ -168,14 +232,9 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         body = result['content']
         body_html = render_message_body(body)
 
-        # Append retention badge if memories were saved
-        if retained_keys:
-            keys_display = ' &bull; '.join(retained_keys)
-            body_html += (
-                f'\n<div class="mt-2 text-xs text-base-content/40 flex items-center gap-1">'
-                f'<span>🧠</span> Retained: {keys_display}'
-                f'</div>'
-            )
+        # Append tool usage badges
+        if used_tools:
+            body_html += _render_tool_badges(used_tools)
         bot_message = Message.objects.create(
             conversation_id=conversation_id,
             author=bot_user,

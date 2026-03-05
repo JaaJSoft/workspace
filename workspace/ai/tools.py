@@ -9,6 +9,40 @@ CHAT_TOOLS = [
     {
         'type': 'function',
         'function': {
+            'name': 'search_messages',
+            'description': (
+                'Search through the current conversation history for messages matching a query. '
+                'Use this when the user asks about something said earlier or wants to find a specific message.'
+            ),
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'query': {
+                        'type': 'string',
+                        'description': 'The search term to look for in message content.',
+                    },
+                },
+                'required': ['query'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'get_current_user_info',
+            'description': (
+                'Get profile information about the current user you are talking to. '
+                'Use this when you need to know the user\'s name, email, or other profile details.'
+            ),
+            'parameters': {
+                'type': 'object',
+                'properties': {},
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
             'name': 'save_memory',
             'description': (
                 'Save or update a fact about the user for future conversations. '
@@ -54,7 +88,7 @@ CHAT_TOOLS = [
 ]
 
 
-def execute_tool_call(tool_call, user, bot) -> str:
+def execute_tool_call(tool_call, user, bot, conversation_id=None) -> str:
     """Execute a tool call and return the result string."""
     name = tool_call.function.name
     try:
@@ -81,5 +115,43 @@ def execute_tool_call(tool_call, user, bot) -> str:
             logger.info('Memory deleted: %s/%s — %s', user.username, bot.username, key)
             return f'Deleted memory "{key}".'
         return f'Memory "{key}" not found.'
+
+    elif name == 'search_messages':
+        query = args.get('query', '').strip()
+        if not query:
+            return 'Error: query is required'
+        if not conversation_id:
+            return 'Error: no conversation context'
+        from workspace.chat.models import Message
+        matches = (
+            Message.objects.filter(
+                conversation_id=conversation_id,
+                deleted_at__isnull=True,
+                body__icontains=query,
+            )
+            .select_related('author')
+            .order_by('-created_at')[:10]
+        )
+        if not matches:
+            return f'No messages found matching "{query}".'
+        results = []
+        for msg in matches:
+            author = msg.author.get_full_name() or msg.author.username
+            snippet = msg.body[:200]
+            ts = msg.created_at.strftime('%Y-%m-%d %H:%M')
+            results.append(f'[{ts}] {author}: {snippet}')
+        return '\n'.join(results)
+
+    elif name == 'get_current_user_info':
+        if not user:
+            return 'Error: no user context'
+        info = {
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'email': user.email,
+            'date_joined': user.date_joined.strftime('%Y-%m-%d'),
+        }
+        return json.dumps(info)
 
     return f'Unknown tool: {name}'

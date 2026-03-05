@@ -16,6 +16,8 @@ class Command(BaseCommand):
         parser.add_argument('--model', type=str, default='', help='Model override')
         parser.add_argument('--description', type=str, default='', help='Bot description')
         parser.add_argument('--public', action='store_true', help='Make bot accessible to all users')
+        parser.add_argument('--no-tools', action='store_true', help='Disable tool calling (for models that do not support it)')
+        parser.add_argument('--no-vision', action='store_true', help='Disable vision/images (for models that do not support it)')
 
     def handle(self, *args, **options):
         username = options['username']
@@ -43,6 +45,8 @@ class Command(BaseCommand):
                 'model': options['model'],
                 'description': options['description'],
                 'is_public': options['public'],
+                'supports_tools': not options['no_tools'],
+                'supports_vision': not options['no_vision'],
             },
         )
 

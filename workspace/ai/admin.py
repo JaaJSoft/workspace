@@ -5,8 +5,8 @@ from .models import AITask, BotProfile
 
 @admin.register(BotProfile)
 class BotProfileAdmin(admin.ModelAdmin):
-    list_display = ['user', 'model', 'is_public', 'created_by', 'created_at']
-    list_filter = ['model', 'is_public']
+    list_display = ['user', 'model', 'is_public', 'supports_tools', 'supports_vision', 'created_by', 'created_at']
+    list_filter = ['model', 'is_public', 'supports_tools', 'supports_vision']
     search_fields = ['user__username', 'user__first_name', 'user__last_name', 'description']
     raw_id_fields = ['user', 'created_by']
     readonly_fields = ['created_at']

@@ -925,7 +925,9 @@ function chatApp(currentUserId) {
 
     // ── SSE event handlers ─────────────────────────────────
     async handleSSEMessage(detail) {
-      if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
+      const isViewing = this.activeConversation && detail.conversation_id === this.activeConversation.uuid;
+
+      if (isViewing) {
         // Hide bot typing indicator if the incoming message is from a bot
         if (this.botTyping && this.isBotMessage(detail.message)) {
           this.botTyping = false;
@@ -934,13 +936,13 @@ function chatApp(currentUserId) {
         if (!document.getElementById(`msg-${detail.message.uuid}`)) {
           await this._refreshCurrentMessages();
           this.scrollToBottom();
-          this.markAsRead(detail.conversation_id);
+          await this.markAsRead(detail.conversation_id);
         }
       }
 
       this._updateConversationLastMessage(detail.conversation_id, detail.message);
       // Only bump unread if the user is NOT currently viewing this conversation
-      if (!this.activeConversation || detail.conversation_id !== this.activeConversation.uuid) {
+      if (!isViewing) {
         this._bumpConversationUnread(detail.conversation_id);
       }
       this.refreshConversationList();

@@ -1,0 +1,28 @@
+{% extends 'base_with_navbar.html' %}
+
+{% block title %}403 - Forbidden{% endblock %}
+
+{% block main_class %}flex items-center justify-center{% endblock %}
+
+{% block content %}
+<div class="text-center max-w-md mx-auto px-4">
+  <div class="flex justify-center mb-4">
+    <div class="w-16 h-16 rounded-full bg-error/10 flex items-center justify-center">
+      <i data-lucide="shield-off" class="w-8 h-8 text-error"></i>
+    </div>
+  </div>
+  <div class="text-8xl font-black text-base-content/10 select-none mb-2">403</div>
+  <h1 class="text-2xl font-bold mb-2">Access denied</h1>
+  <p class="text-base-content/60 mb-8">You don't have permission to access this page.</p>
+  <div class="flex gap-3 justify-center">
+    <a href="javascript:history.back()" class="btn btn-ghost gap-2">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i>
+      Go back
+    </a>
+    <a href="/" class="btn btn-primary gap-2">
+      <i data-lucide="home" class="w-4 h-4"></i>
+      Home
+    </a>
+  </div>
+</div>
+{% endblock %}

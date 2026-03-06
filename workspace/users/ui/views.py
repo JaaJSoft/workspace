@@ -117,7 +117,7 @@ def profile_view(request, username=None):
         profile_user = request.user
     else:
         try:
-            profile_user = User.objects.get(username=username)
+            profile_user = User.objects.get(username=username, is_active=True, bot_profile__isnull=True)
         except User.DoesNotExist:
             raise Http404
 
@@ -149,7 +149,7 @@ def profile_view(request, username=None):
 def profile_activity_feed(request, username):
     """Activity feed partial for Alpine AJAX load-more on profile page."""
     try:
-        profile_user = User.objects.get(username=username)
+        profile_user = User.objects.get(username=username, is_active=True, bot_profile__isnull=True)
     except User.DoesNotExist:
         raise Http404
 

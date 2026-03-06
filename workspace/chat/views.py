@@ -151,8 +151,8 @@ class ConversationListView(APIView):
         member_ids = serializer.validated_data['member_ids']
         title = serializer.validated_data.get('title', '')
 
-        # Validate that all member_ids exist
-        users = User.objects.filter(id__in=member_ids)
+        # Validate that all member_ids exist and are active
+        users = User.objects.filter(id__in=member_ids, is_active=True)
         if users.count() != len(member_ids):
             return Response(
                 {'detail': 'One or more user IDs are invalid.'},
@@ -715,7 +715,7 @@ class ConversationMembersView(APIView):
         ser.is_valid(raise_exception=True)
         user_ids = ser.validated_data['user_ids']
 
-        users = User.objects.filter(id__in=user_ids)
+        users = User.objects.filter(id__in=user_ids, is_active=True)
         if users.count() != len(user_ids):
             return Response(
                 {'detail': 'One or more user IDs are invalid.'},

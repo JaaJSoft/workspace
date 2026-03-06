@@ -66,6 +66,7 @@ class UserSearchView(APIView):
             Q(first_name__icontains=query) |
             Q(last_name__icontains=query),
             is_active=True,
+            bot_profile__isnull=True,
         ).exclude(pk=request.user.pk)[:limit]
 
         results = [
@@ -223,6 +224,8 @@ class UserAvatarRetrieveView(APIView):
         },
     )
     def get(self, request, user_id):
+        if not User.objects.filter(pk=user_id, is_active=True).exists():
+            return HttpResponse(status=404)
         path = avatar_service.get_avatar_path(user_id)
         if not default_storage.exists(path):
             return HttpResponse(status=404)

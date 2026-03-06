@@ -1,3 +1,22 @@
+/* ── Mobile: thin scrollbars & touch-friendly scroll ──── */
+@media (max-width: 1023px) {
+  /* Thin scrollbar on mobile-width viewports */
+  .overflow-y-auto {
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .overflow-y-auto::-webkit-scrollbar {
+    width: 4px;
+  }
+  .overflow-y-auto::-webkit-scrollbar-thumb {
+    background: oklch(var(--bc) / 0.15);
+    border-radius: 9999px;
+  }
+  .overflow-y-auto::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
 /* Grouped bubble radius adjustments — connected look */
 
 /* Other user (left-aligned): reduce top-left corner on subsequent bubbles */

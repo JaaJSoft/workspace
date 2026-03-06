@@ -111,7 +111,7 @@ x-init="init()"
   </template>
 
   <template x-if="activeConversation">
-    <div class="flex flex-col h-full">
+    <div class="flex flex-col h-full relative">
       <!-- Conversation header -->
       <div class="px-4 py-2.5 border-b border-base-300 flex items-center gap-3 bg-base-100">
         <!-- Back button (mobile) -->
@@ -338,27 +338,27 @@ x-init="init()"
         <div class="border border-base-300 rounded-xl transition-colors focus-within:border-info/50">
           <!-- Toolbar + Send -->
           <div class="flex items-center gap-0.5 px-2 py-1">
-            <!-- Formatting buttons (left) -->
-            <button class="btn btn-ghost btn-xs btn-square" title="Bold (Ctrl+B)" @click="wrapSelection('**')">
+            <!-- Formatting buttons (left, hidden on mobile) -->
+            <button class="btn btn-ghost btn-xs btn-square hidden sm:inline-flex" title="Bold (Ctrl+B)" @click="wrapSelection('**')">
               <i data-lucide="bold" class="w-3.5 h-3.5"></i>
             </button>
-            <button class="btn btn-ghost btn-xs btn-square" title="Italic (Ctrl+I)" @click="wrapSelection('*')">
+            <button class="btn btn-ghost btn-xs btn-square hidden sm:inline-flex" title="Italic (Ctrl+I)" @click="wrapSelection('*')">
               <i data-lucide="italic" class="w-3.5 h-3.5"></i>
             </button>
-            <button class="btn btn-ghost btn-xs btn-square" title="Strikethrough (Ctrl+Shift+X)" @click="wrapSelection('~~')">
+            <button class="btn btn-ghost btn-xs btn-square hidden sm:inline-flex" title="Strikethrough (Ctrl+Shift+X)" @click="wrapSelection('~~')">
               <i data-lucide="strikethrough" class="w-3.5 h-3.5"></i>
             </button>
-            <button class="btn btn-ghost btn-xs btn-square" title="Code (Ctrl+E)" @click="wrapSelection('`')">
+            <button class="btn btn-ghost btn-xs btn-square hidden sm:inline-flex" title="Code (Ctrl+E)" @click="wrapSelection('`')">
               <i data-lucide="code" class="w-3.5 h-3.5"></i>
             </button>
-            <button class="btn btn-ghost btn-xs btn-square" title="Insert link" @click="insertLink()">
+            <button class="btn btn-ghost btn-xs btn-square hidden sm:inline-flex" title="Insert link" @click="insertLink()">
               <i data-lucide="link" class="w-3.5 h-3.5"></i>
             </button>
 
-            <div class="w-px self-stretch my-1 bg-base-300"></div>
+            <div class="w-px self-stretch my-1 bg-base-300 hidden sm:block"></div>
 
             <!-- Help popover -->
-            <div class="dropdown dropdown-top">
+            <div class="dropdown dropdown-top hidden sm:block">
               <button class="btn btn-ghost btn-xs btn-square opacity-40 hover:opacity-100" tabindex="0" title="Keyboard shortcuts">
                 <i data-lucide="circle-help" class="w-3.5 h-3.5"></i>
               </button>
@@ -431,7 +431,7 @@ x-init="init()"
           x-transition:leave="transition-[width] ease-in duration-150"
           x-transition:leave-start="!w-72"
           x-transition:leave-end="!w-0"
-          class="w-72 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden"
+          class="hidden lg:flex w-72 border-l border-base-300 bg-base-100 flex-col overflow-hidden"
         >
           <div class="w-72 flex-1 overflow-y-auto">
             {% include "chat/ui/partials/info_panel.html" %}
@@ -447,13 +447,41 @@ x-init="init()"
           x-transition:leave="transition-[width] ease-in duration-150"
           x-transition:leave-start="!w-72"
           x-transition:leave-end="!w-0"
-          class="w-72 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden"
+          class="hidden lg:flex w-72 border-l border-base-300 bg-base-100 flex-col overflow-hidden"
         >
           <div class="w-72 flex-1 overflow-y-auto">
             {% include "chat/ui/partials/search_panel.html" %}
           </div>
         </div>
       </div><!-- /content area -->
+
+      <!-- Mobile info panel (full-screen overlay) -->
+      <div
+        x-show="showInfoPanel" x-cloak
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="translate-x-full"
+        x-transition:enter-end="translate-x-0"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="translate-x-0"
+        x-transition:leave-end="translate-x-full"
+        class="lg:hidden absolute inset-0 z-30 bg-base-100 flex flex-col overflow-y-auto"
+      >
+        {% include "chat/ui/partials/info_panel.html" %}
+      </div>
+
+      <!-- Mobile search panel (full-screen overlay) -->
+      <div
+        x-show="showSearchPanel" x-cloak
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="translate-x-full"
+        x-transition:enter-end="translate-x-0"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="translate-x-0"
+        x-transition:leave-end="translate-x-full"
+        class="lg:hidden absolute inset-0 z-30 bg-base-100 flex flex-col overflow-y-auto"
+      >
+        {% include "chat/ui/partials/search_panel.html" %}
+      </div>
     </div>
   </template>
 </div>

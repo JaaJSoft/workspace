@@ -334,31 +334,61 @@ x-init="init()"
               </template>
             </div>
 
-        <!-- Input container -->
-        <div class="border border-base-300 rounded-xl transition-colors focus-within:border-info/50">
+        <!-- Input container — mobile: compact row; desktop: toolbar + textarea -->
+        <input type="file" multiple x-ref="fileInput" class="hidden" @change="handleFileSelect($event)" />
+
+        <!-- Mobile input (< sm) -->
+        <div class="flex sm:hidden items-center gap-1.5">
+          <button class="btn btn-ghost btn-circle flex-shrink-0 self-end w-9 h-9 min-h-0" title="Attach file" @click="openFileDialog()">
+            <i data-lucide="paperclip" class="w-4 h-4"></i>
+          </button>
+          <div class="flex-1 flex items-center border border-base-300 rounded-2xl transition-colors focus-within:border-info/50 min-h-[38px]">
+            <textarea
+              x-ref="messageInputMobile"
+              x-model="messageBody"
+              @keydown="handleInputKeydown($event)"
+              @input="autoResize($el); handleMentionInput()"
+              @paste="handlePaste($event)"
+              style="min-height:36px;line-height:20px;padding-top:8px;padding-bottom:8px"
+              class="textarea textarea-ghost w-full max-h-[6rem] resize-none px-3 focus:outline-none text-sm !border-0 !outline-0"
+              placeholder="Message..."
+              rows="1"
+            ></textarea>
+          </div>
+          <button
+            class="btn btn-info btn-circle flex-shrink-0 self-end w-9 h-9 min-h-0"
+            @click="sendOrEdit()"
+            :disabled="(!messageBody.trim() && pendingFiles.length === 0) || (botTyping && isBotConversation(activeConversation))"
+          >
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+        <!-- Desktop input (>= sm) -->
+        <div class="hidden sm:block border border-base-300 rounded-xl transition-colors focus-within:border-info/50">
           <!-- Toolbar + Send -->
           <div class="flex items-center gap-0.5 px-2 py-1">
-            <!-- Formatting buttons (left, hidden on mobile) -->
-            <button class="btn btn-ghost btn-xs btn-square hidden sm:inline-flex" title="Bold (Ctrl+B)" @click="wrapSelection('**')">
+            <!-- Formatting buttons (left) -->
+            <button class="btn btn-ghost btn-xs btn-square" title="Bold (Ctrl+B)" @click="wrapSelection('**')">
               <i data-lucide="bold" class="w-3.5 h-3.5"></i>
             </button>
-            <button class="btn btn-ghost btn-xs btn-square hidden sm:inline-flex" title="Italic (Ctrl+I)" @click="wrapSelection('*')">
+            <button class="btn btn-ghost btn-xs btn-square" title="Italic (Ctrl+I)" @click="wrapSelection('*')">
               <i data-lucide="italic" class="w-3.5 h-3.5"></i>
             </button>
-            <button class="btn btn-ghost btn-xs btn-square hidden sm:inline-flex" title="Strikethrough (Ctrl+Shift+X)" @click="wrapSelection('~~')">
+            <button class="btn btn-ghost btn-xs btn-square" title="Strikethrough (Ctrl+Shift+X)" @click="wrapSelection('~~')">
               <i data-lucide="strikethrough" class="w-3.5 h-3.5"></i>
             </button>
-            <button class="btn btn-ghost btn-xs btn-square hidden sm:inline-flex" title="Code (Ctrl+E)" @click="wrapSelection('`')">
+            <button class="btn btn-ghost btn-xs btn-square" title="Code (Ctrl+E)" @click="wrapSelection('`')">
               <i data-lucide="code" class="w-3.5 h-3.5"></i>
             </button>
-            <button class="btn btn-ghost btn-xs btn-square hidden sm:inline-flex" title="Insert link" @click="insertLink()">
+            <button class="btn btn-ghost btn-xs btn-square" title="Insert link" @click="insertLink()">
               <i data-lucide="link" class="w-3.5 h-3.5"></i>
             </button>
 
-            <div class="w-px self-stretch my-1 bg-base-300 hidden sm:block"></div>
+            <div class="w-px self-stretch my-1 bg-base-300"></div>
 
             <!-- Help popover -->
-            <div class="dropdown dropdown-top hidden sm:block">
+            <div class="dropdown dropdown-top">
               <button class="btn btn-ghost btn-xs btn-square opacity-40 hover:opacity-100" tabindex="0" title="Keyboard shortcuts">
                 <i data-lucide="circle-help" class="w-3.5 h-3.5"></i>
               </button>
@@ -393,7 +423,6 @@ x-init="init()"
             <button class="btn btn-ghost btn-xs btn-square" title="Attach file" @click="openFileDialog()">
               <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
             </button>
-            <input type="file" multiple x-ref="fileInput" class="hidden" @change="handleFileSelect($event)" />
 
             <div class="w-px self-stretch my-1 bg-base-300"></div>
 

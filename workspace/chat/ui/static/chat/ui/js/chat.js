@@ -193,6 +193,16 @@ function chatApp(currentUserId) {
       return window.matchMedia('(max-width: 1023px)').matches;
     },
 
+    isSmallScreen() {
+      return window.matchMedia('(max-width: 639px)').matches;
+    },
+
+    getMessageInput() {
+      return this.isSmallScreen()
+        ? this.$refs.messageInputMobile
+        : this.$refs.messageInput;
+    },
+
     // ── Conversations ──────────────────────────────────────
     async loadConversations() {
       try {
@@ -300,7 +310,7 @@ function chatApp(currentUserId) {
       this.$nextTick(() => {
         this.$nextTick(() => {
           this.scrollToBottom(true);
-          this.$refs.messageInput?.focus();
+          this.getMessageInput()?.focus();
         });
       });
     },
@@ -630,7 +640,7 @@ function chatApp(currentUserId) {
     startReply(uuid, author, body) {
       this.editingMessageUuid = null;
       this.replyingTo = { uuid, author, body };
-      this.$nextTick(() => this.$refs.messageInput?.focus());
+      this.$nextTick(() => this.getMessageInput()?.focus());
     },
 
     cancelReply() {
@@ -643,7 +653,7 @@ function chatApp(currentUserId) {
       if (!el) return;
       this.editingMessageUuid = msgUuid;
       this.messageBody = el.dataset.body || '';
-      this.$nextTick(() => this.$refs.messageInput?.focus());
+      this.$nextTick(() => this.getMessageInput()?.focus());
     },
 
     cancelEdit() {
@@ -1883,7 +1893,7 @@ function chatApp(currentUserId) {
     },
 
     insertEmoji(emoji) {
-      const ta = this.$refs.messageInput;
+      const ta = this.getMessageInput();
       if (!ta) {
         this.messageBody += emoji;
         return;
@@ -1950,7 +1960,7 @@ function chatApp(currentUserId) {
 
     // ── Input keyboard shortcuts ────────────────────────────
     handleInputKeydown(e) {
-      const ta = this.$refs.messageInput;
+      const ta = this.getMessageInput();
 
       // ── Mention autocomplete navigation ──
       if (this.mentionActive) {
@@ -2044,7 +2054,7 @@ function chatApp(currentUserId) {
     },
 
     wrapSelection(marker) {
-      const ta = this.$refs.messageInput;
+      const ta = this.getMessageInput();
       if (!ta) return;
       ta.focus();
 
@@ -2073,7 +2083,7 @@ function chatApp(currentUserId) {
     },
 
     insertLink() {
-      const ta = this.$refs.messageInput;
+      const ta = this.getMessageInput();
       if (!ta) return;
       ta.focus();
 
@@ -2107,7 +2117,7 @@ function chatApp(currentUserId) {
 
     // ── Mention autocomplete ────────────────────────────────
     handleMentionInput() {
-      const ta = this.$refs.messageInput;
+      const ta = this.getMessageInput();
       if (!ta) return;
       const pos = ta.selectionStart;
       const text = ta.value.substring(0, pos);
@@ -2154,7 +2164,7 @@ function chatApp(currentUserId) {
     },
 
     insertMention(user) {
-      const ta = this.$refs.messageInput;
+      const ta = this.getMessageInput();
       if (!ta) return;
       const before = ta.value.substring(0, this.mentionStartPos);
       const after = ta.value.substring(ta.selectionStart);

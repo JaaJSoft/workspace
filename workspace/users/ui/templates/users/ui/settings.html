@@ -54,6 +54,7 @@
           <i data-lucide="shield" class="w-4 h-4"></i>
           Security
         </button>
+        {% if has_ai %}
         <button
           @click="tab = 'ai-memory'; updateHash()"
           class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
@@ -64,6 +65,7 @@
           <i data-lucide="brain" class="w-4 h-4"></i>
           AI Memory
         </button>
+        {% endif %}
       </div>
     </nav>
 
@@ -166,6 +168,7 @@
       </div>
 
       <!-- AI Memory Tab -->
+      {% if has_ai %}
       <div x-show="tab === 'ai-memory'" x-cloak x-data="aiMemorySettings()">
         <div class="card bg-base-100 border border-base-300 shadow-sm">
           <div class="card-body">
@@ -233,6 +236,7 @@
           </div>
         </div>
       </div>
+      {% endif %}
 
       <!-- Security Tab -->
       <div x-show="tab === 'security'" x-cloak x-data="changePasswordForm()">
@@ -339,7 +343,7 @@
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
 <script>
   function settingsPage() {
-    const validTabs = ['profile', 'preferences', 'security', 'ai-memory'];
+    const validTabs = ['profile', 'preferences', 'security'{% if has_ai %}, 'ai-memory'{% endif %}];
     return {
       tab: validTabs.includes(location.hash.replace('#', '')) ? location.hash.replace('#', '') : 'profile',
       init() {
@@ -528,6 +532,7 @@
     };
   }
 
+  {% if has_ai %}
   function aiMemorySettings() {
     return {
       memories: [],
@@ -593,6 +598,7 @@
       },
     };
   }
+  {% endif %}
 
   function changePasswordForm() {
     return {

@@ -38,6 +38,9 @@ def build_chat_messages(
     context = build_context_block()
     if bot_name:
         context = f"Your name is {bot_name}.\n{context}"
+    if user:
+        display = user.get_full_name() or user.username
+        context += f"\nYou are talking to {display} (@{user.username})."
 
     memory_block = ''
     if user and bot:

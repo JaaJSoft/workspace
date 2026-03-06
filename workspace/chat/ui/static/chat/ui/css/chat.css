@@ -98,3 +98,136 @@ emoji-picker {
   background-color: oklch(var(--wa) / 0.15);
   color: oklch(var(--wa));
 }
+
+/* ── Markdown prose overrides for chat bubbles ────────── */
+.msg-body.prose {
+  --tw-prose-body: oklch(var(--bc));
+  --tw-prose-headings: oklch(var(--bc));
+  --tw-prose-links: oklch(var(--in));
+  --tw-prose-bold: oklch(var(--bc));
+  --tw-prose-code: oklch(var(--bc));
+  --tw-prose-pre-bg: oklch(var(--b2));
+  --tw-prose-pre-code: oklch(var(--bc));
+  --tw-prose-bullets: oklch(var(--bc) / 0.5);
+  --tw-prose-counters: oklch(var(--bc) / 0.5);
+  --tw-prose-quotes: oklch(var(--bc) / 0.7);
+  --tw-prose-quote-borders: oklch(var(--bc) / 0.2);
+  --tw-prose-th-borders: oklch(var(--bc) / 0.2);
+  --tw-prose-td-borders: oklch(var(--bc) / 0.1);
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.msg-body.prose :first-child { margin-top: 0; }
+.msg-body.prose :last-child { margin-bottom: 0; }
+
+/* Compact spacing inside bubbles */
+.msg-body.prose p { margin-top: 0.25em; margin-bottom: 0.25em; }
+.msg-body.prose ul,
+.msg-body.prose ol { margin-top: 0.25em; margin-bottom: 0.25em; padding-left: 1.25em; }
+.msg-body.prose li { margin-top: 0.1em; margin-bottom: 0.1em; }
+.msg-body.prose blockquote { margin-top: 0.5em; margin-bottom: 0.5em; }
+.msg-body.prose hr { margin-top: 0.75em; margin-bottom: 0.75em; }
+.msg-body.prose h1,
+.msg-body.prose h2,
+.msg-body.prose h3,
+.msg-body.prose h4 {
+  margin-top: 0.5em;
+  margin-bottom: 0.25em;
+  font-weight: 600;
+}
+
+/* Task list checkboxes */
+.msg-body.prose ul.task-list {
+  list-style: none;
+  padding-left: 0;
+}
+.msg-body.prose .task-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+}
+.msg-body.prose .task-list input[type="checkbox"] {
+  pointer-events: none;
+}
+
+/* Inline code */
+.msg-body .code-inline {
+  background: oklch(var(--b2));
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+}
+
+/* ── Pygments code blocks ─────────────────────────────── */
+.msg-body .code-block {
+  background: oklch(var(--n) / 0.06);
+  border: 1px solid oklch(var(--bc) / 0.12);
+  border-radius: 0.5rem;
+  padding: 0.75em 1em;
+  margin: 0.5em 0;
+  overflow-x: auto;
+  font-size: 0.8em;
+  line-height: 1.5;
+  position: relative;
+}
+
+/* Language label in top-right corner */
+.msg-body .code-block[data-lang]::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 0.35rem;
+  right: 0.5rem;
+  font-size: 0.6em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: oklch(var(--bc) / 0.5);
+  font-family: sans-serif;
+  background: oklch(var(--bc) / 0.07);
+  padding: 0.15em 0.5em;
+  border-radius: 0.25rem;
+}
+
+/* Pygments token colors — DaisyUI-aware via oklch */
+.msg-body .code-block .c,
+.msg-body .code-block .cm,
+.msg-body .code-block .c1,
+.msg-body .code-block .cs,
+.msg-body .code-block .cp { color: oklch(var(--bc) / 0.45); font-style: italic; }  /* Comments */
+.msg-body .code-block .k,
+.msg-body .code-block .kd,
+.msg-body .code-block .kn,
+.msg-body .code-block .kp,
+.msg-body .code-block .kr,
+.msg-body .code-block .kt { color: oklch(var(--p)); font-weight: 600; }            /* Keywords */
+.msg-body .code-block .s,
+.msg-body .code-block .s1,
+.msg-body .code-block .s2,
+.msg-body .code-block .sb,
+.msg-body .code-block .sc,
+.msg-body .code-block .sd,
+.msg-body .code-block .se,
+.msg-body .code-block .sh,
+.msg-body .code-block .si,
+.msg-body .code-block .sx,
+.msg-body .code-block .sr { color: oklch(var(--su)); }                               /* Strings */
+.msg-body .code-block .mi,
+.msg-body .code-block .mf,
+.msg-body .code-block .mh,
+.msg-body .code-block .mo,
+.msg-body .code-block .mb,
+.msg-body .code-block .il { color: oklch(var(--wa)); }                               /* Numbers */
+.msg-body .code-block .nf,
+.msg-body .code-block .fm { color: oklch(var(--in)); }                               /* Functions */
+.msg-body .code-block .nb { color: oklch(var(--in) / 0.8); }                         /* Builtins */
+.msg-body .code-block .nc,
+.msg-body .code-block .nd { color: oklch(var(--a)); }                                /* Classes/Decorators */
+.msg-body .code-block .o,
+.msg-body .code-block .ow { color: oklch(var(--bc) / 0.7); }                         /* Operators */
+.msg-body .code-block .p { color: oklch(var(--bc) / 0.6); }                          /* Punctuation */
+.msg-body .code-block .err { color: oklch(var(--er)); text-decoration: underline; }  /* Errors */
+
+/* Tables */
+.msg-body.prose table {
+  font-size: 0.85em;
+}

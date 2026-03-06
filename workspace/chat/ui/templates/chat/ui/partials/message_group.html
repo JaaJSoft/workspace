@@ -49,7 +49,7 @@
               </a>
             {% endif %}
             {% if msg.body_html %}
-              <div class="msg-body break-words">{{ msg.body_html|safe }}</div>
+              <div class="msg-body prose prose-sm max-w-none break-words">{{ msg.body_html|safe }}</div>
             {% endif %}
 
             {# Attachments #}

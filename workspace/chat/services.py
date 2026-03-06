@@ -1,6 +1,10 @@
 import re
 
 import mistune
+from pygments import highlight
+from pygments.formatters import HtmlFormatter
+from pygments.lexers import TextLexer, get_lexer_by_name, guess_lexer
+from pygments.util import ClassNotFound
 
 from workspace.core.sse_registry import notify_sse
 
@@ -67,10 +71,35 @@ def get_unread_counts(user):
     return {'total': total, 'conversations': conversations}
 
 
-# Markdown renderer configured for chat (no images, no headings)
+class _ChatRenderer(mistune.HTMLRenderer):
+    """Markdown renderer with Pygments syntax highlighting for code blocks."""
+
+    _formatter = HtmlFormatter(nowrap=True)
+
+    def block_code(self, code, info=None):
+        lang = None
+        if info:
+            lang = info.strip().split()[0]
+        try:
+            if lang:
+                lexer = get_lexer_by_name(lang)
+            else:
+                lexer = guess_lexer(code)
+        except ClassNotFound:
+            lexer = TextLexer()
+
+        highlighted = highlight(code, lexer, self._formatter)
+        lang_attr = f' data-lang="{mistune.escape(lang)}"' if lang else ''
+        return f'<pre class="code-block"{lang_attr}><code>{highlighted}</code></pre>\n'
+
+    def codespan(self, text):
+        return f'<code class="code-inline">{mistune.escape(text)}</code>'
+
+
+# Markdown renderer configured for chat with syntax highlighting
 _markdown = mistune.create_markdown(
-    escape=True,
-    plugins=['strikethrough', 'url'],
+    renderer=_ChatRenderer(escape=True),
+    plugins=['strikethrough', 'url', 'table', 'task_lists'],
 )
 
 

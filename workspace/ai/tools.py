@@ -1,137 +1,22 @@
+"""Core AI chat tools (memory, search, avatar)."""
 import base64
 import json
 import logging
 
 from .models import UserMemory
+from .tool_registry import Param, ToolProvider, tool
 
 logger = logging.getLogger(__name__)
 
-CHAT_TOOLS = [
-    {
-        'type': 'function',
-        'function': {
-            'name': 'search_messages',
-            'description': (
-                'Search through the current conversation history for messages matching a query. '
-                'Use this when the user asks about something said earlier or wants to find a specific message.'
-            ),
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'query': {
-                        'type': 'string',
-                        'description': 'The search term to look for in message content.',
-                    },
-                },
-                'required': ['query'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'get_current_user_info',
-            'description': (
-                'Get profile information about the current user you are talking to. '
-                'Use this when you need to know the user\'s name, email, or other profile details.'
-            ),
-            'parameters': {
-                'type': 'object',
-                'properties': {},
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'save_memory',
-            'description': (
-                'Save or update a fact about the user for future conversations. '
-                'Use this when the user shares personal information, preferences, '
-                'or context you should remember.'
-            ),
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'key': {
-                        'type': 'string',
-                        'description': 'A short category label (e.g. name, language, project, preference).',
-                    },
-                    'content': {
-                        'type': 'string',
-                        'description': 'The fact to remember.',
-                    },
-                },
-                'required': ['key', 'content'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'delete_memory',
-            'description': (
-                'Delete a previously saved memory about the user. '
-                'Use this when the user asks you to forget something.'
-            ),
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'key': {
-                        'type': 'string',
-                        'description': 'The key of the memory to delete.',
-                    },
-                },
-                'required': ['key'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'get_my_avatar',
-            'description': (
-                'Retrieve your own avatar image. '
-                'Use this when the user asks what you look like, about your avatar, or your appearance.'
-            ),
-            'parameters': {
-                'type': 'object',
-                'properties': {},
-            },
-        },
-    },
-]
 
+class CoreToolProvider(ToolProvider):
 
-def execute_tool_call(tool_call, user, bot, conversation_id=None) -> str:
-    """Execute a tool call and return the result string."""
-    name = tool_call.function.name
-    try:
-        args = json.loads(tool_call.function.arguments)
-    except json.JSONDecodeError:
-        return 'Error: invalid JSON arguments'
-
-    if name == 'save_memory':
-        key = args.get('key', '').strip()[:100]
-        content = args.get('content', '').strip()
-        if not key or not content:
-            return 'Error: key and content are required'
-        UserMemory.objects.update_or_create(
-            user=user, bot=bot, key=key,
-            defaults={'content': content},
-        )
-        logger.info('Memory saved: %s/%s — %s', user.username, bot.username, key)
-        return f'Saved memory "{key}".'
-
-    elif name == 'delete_memory':
-        key = args.get('key', '').strip()
-        deleted, _ = UserMemory.objects.filter(user=user, bot=bot, key=key).delete()
-        if deleted:
-            logger.info('Memory deleted: %s/%s — %s', user.username, bot.username, key)
-            return f'Deleted memory "{key}".'
-        return f'Memory "{key}" not found.'
-
-    elif name == 'search_messages':
+    @tool(badge_icon='🔍', badge_label='Searched', detail_key='query', params={
+        'query': Param('The search term to look for in message content.'),
+    })
+    def search_messages(self, args, user, bot, conversation_id):
+        """Search through the current conversation history for messages matching a query. \
+Use this when the user asks about something said earlier or wants to find a specific message."""
         query = args.get('query', '').strip()
         if not query:
             return 'Error: query is required'
@@ -157,7 +42,10 @@ def execute_tool_call(tool_call, user, bot, conversation_id=None) -> str:
             results.append(f'[{ts}] {author}: {snippet}')
         return '\n'.join(results)
 
-    elif name == 'get_current_user_info':
+    @tool(badge_icon='👤', badge_label='Looked up profile')
+    def get_current_user_info(self, args, user, bot, conversation_id):
+        """Get profile information about the current user you are talking to. \
+Use this when you need to know the user's name, email, or other profile details."""
         if not user:
             return 'Error: no user context'
         info = {
@@ -169,7 +57,41 @@ def execute_tool_call(tool_call, user, bot, conversation_id=None) -> str:
         }
         return json.dumps(info)
 
-    elif name == 'get_my_avatar':
+    @tool(badge_icon='🧠', badge_label='Retained', detail_key='key', params={
+        'key': Param('A short category label (e.g. name, language, project, preference).'),
+        'content': Param('The fact to remember.'),
+    })
+    def save_memory(self, args, user, bot, conversation_id):
+        """Save or update a fact about the user for future conversations. \
+Use this when the user shares personal information, preferences, or context you should remember."""
+        key = args.get('key', '').strip()[:100]
+        content = args.get('content', '').strip()
+        if not key or not content:
+            return 'Error: key and content are required'
+        UserMemory.objects.update_or_create(
+            user=user, bot=bot, key=key,
+            defaults={'content': content},
+        )
+        logger.info('Memory saved: %s/%s — %s', user.username, bot.username, key)
+        return f'Saved memory "{key}".'
+
+    @tool(badge_icon='🧠', badge_label='Forgot', detail_key='key', params={
+        'key': Param('The key of the memory to delete.'),
+    })
+    def delete_memory(self, args, user, bot, conversation_id):
+        """Delete a previously saved memory about the user. \
+Use this when the user asks you to forget something."""
+        key = args.get('key', '').strip()
+        deleted, _ = UserMemory.objects.filter(user=user, bot=bot, key=key).delete()
+        if deleted:
+            logger.info('Memory deleted: %s/%s — %s', user.username, bot.username, key)
+            return f'Deleted memory "{key}".'
+        return f'Memory "{key}" not found.'
+
+    @tool(badge_icon='🖼️', badge_label='Viewed own avatar')
+    def get_my_avatar(self, args, user, bot, conversation_id):
+        """Retrieve your own avatar image. \
+Use this when the user asks what you look like, about your avatar, or your appearance."""
         if not bot:
             return 'Error: no bot context'
         from django.core.files.storage import default_storage
@@ -188,5 +110,3 @@ def execute_tool_call(tool_call, user, bot, conversation_id=None) -> str:
         except Exception:
             logger.warning('Could not read avatar for bot %s', bot.id)
             return 'Error: could not read avatar file.'
-
-    return f'Unknown tool: {name}'

@@ -5,16 +5,17 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.ai.models import BotProfile, UserMemory
-from workspace.ai.tools import CHAT_TOOLS, execute_tool_call
+from workspace.ai.tool_registry import tool_registry
 from workspace.chat.models import Conversation, ConversationMember, Message
 
 User = get_user_model()
 
 
 class ChatToolDefinitionTests(TestCase):
-    def test_tools_are_list(self):
-        self.assertIsInstance(CHAT_TOOLS, list)
-        names = [t['function']['name'] for t in CHAT_TOOLS]
+    def test_tools_are_registered(self):
+        definitions = tool_registry.get_definitions()
+        self.assertIsInstance(definitions, list)
+        names = [t['function']['name'] for t in definitions]
         self.assertIn('save_memory', names)
         self.assertIn('delete_memory', names)
         self.assertIn('search_messages', names)
@@ -33,7 +34,7 @@ class ExecuteToolCallTests(TestCase):
         tool_call.function.name = 'save_memory'
         tool_call.function.arguments = json.dumps({'key': 'name', 'content': 'Pierre'})
 
-        result = execute_tool_call(tool_call, user=self.user, bot=self.bot_user)
+        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         self.assertIn('Saved', result)
         mem = UserMemory.objects.get(user=self.user, bot=self.bot_user, key='name')
@@ -47,7 +48,7 @@ class ExecuteToolCallTests(TestCase):
         tool_call.function.name = 'save_memory'
         tool_call.function.arguments = json.dumps({'key': 'name', 'content': 'Paul'})
 
-        execute_tool_call(tool_call, user=self.user, bot=self.bot_user)
+        tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         mem = UserMemory.objects.get(user=self.user, bot=self.bot_user, key='name')
         self.assertEqual(mem.content, 'Paul')
@@ -60,7 +61,7 @@ class ExecuteToolCallTests(TestCase):
         tool_call.function.name = 'delete_memory'
         tool_call.function.arguments = json.dumps({'key': 'name'})
 
-        result = execute_tool_call(tool_call, user=self.user, bot=self.bot_user)
+        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         self.assertIn('Deleted', result)
         self.assertFalse(UserMemory.objects.filter(user=self.user, bot=self.bot_user, key='name').exists())
@@ -71,7 +72,7 @@ class ExecuteToolCallTests(TestCase):
         tool_call.function.name = 'delete_memory'
         tool_call.function.arguments = json.dumps({'key': 'nonexistent'})
 
-        result = execute_tool_call(tool_call, user=self.user, bot=self.bot_user)
+        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         self.assertIn('not found', result.lower())
 
@@ -81,7 +82,7 @@ class ExecuteToolCallTests(TestCase):
         tool_call.function.name = 'unknown_tool'
         tool_call.function.arguments = '{}'
 
-        result = execute_tool_call(tool_call, user=self.user, bot=self.bot_user)
+        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         self.assertIn('Unknown', result)
 
@@ -97,7 +98,7 @@ class ExecuteToolCallTests(TestCase):
         tool_call.function.name = 'search_messages'
         tool_call.function.arguments = json.dumps({'query': 'world'})
 
-        result = execute_tool_call(tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk))
+        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk))
 
         self.assertIn('Hello world', result)
         self.assertIn('Goodbye world', result)
@@ -111,7 +112,7 @@ class ExecuteToolCallTests(TestCase):
         tool_call.function.name = 'search_messages'
         tool_call.function.arguments = json.dumps({'query': 'nonexistent'})
 
-        result = execute_tool_call(tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk))
+        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk))
 
         self.assertIn('No messages found', result)
 
@@ -126,7 +127,7 @@ class ExecuteToolCallTests(TestCase):
         tool_call.function.name = 'get_current_user_info'
         tool_call.function.arguments = '{}'
 
-        result = execute_tool_call(tool_call, user=self.user, bot=self.bot_user)
+        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
         data = json.loads(result)
         self.assertEqual(data['username'], 'user')

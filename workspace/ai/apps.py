@@ -13,3 +13,8 @@ class AIConfig(AppConfig):
             slug='ai',
             provider_cls=AISSEProvider,
         ))
+
+        from workspace.ai.tool_registry import tool_registry
+        from workspace.ai.tools import CoreToolProvider
+
+        tool_registry.register_provider(CoreToolProvider())

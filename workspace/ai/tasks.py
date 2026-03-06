@@ -63,40 +63,21 @@ def _call_openai(messages: list[dict], model: str | None = None, max_tokens: int
     }
 
 
-TOOL_BADGE_CONFIG = {
-    'save_memory': {'icon': '🧠', 'label': 'Retained'},
-    'delete_memory': {'icon': '🧠', 'label': 'Forgot'},
-    'search_messages': {'icon': '🔍', 'label': 'Searched'},
-    'get_current_user_info': {'icon': '👤', 'label': 'Looked up profile'},
-    'get_my_avatar': {'icon': '🖼️', 'label': 'Viewed own avatar'},
-}
-
-
 def _track_tool_usage(tool_call, tool_result, used_tools):
     """Extract a human-readable detail from a successful tool call."""
+    from workspace.ai.tool_registry import tool_registry
     name = tool_call.function.name
     try:
         args = json.loads(tool_call.function.arguments)
     except (json.JSONDecodeError, AttributeError):
         args = {}
-
-    if name == 'save_memory':
-        detail = args.get('key', '')
-    elif name == 'delete_memory':
-        detail = args.get('key', '')
-    elif name == 'search_messages':
-        detail = args.get('query', '')
-    elif name == 'get_current_user_info':
-        detail = ''
-    else:
-        detail = ''
-
-    used_tools.append((name, detail))
+    used_tools.append((name, tool_registry.get_detail(name, args)))
 
 
 def _render_tool_badges(used_tools):
     """Render HTML badges for tools used during response generation."""
-    # Group by tool name to consolidate duplicates
+    from workspace.ai.tool_registry import tool_registry
+
     grouped = {}
     for name, detail in used_tools:
         grouped.setdefault(name, [])
@@ -105,7 +86,7 @@ def _render_tool_badges(used_tools):
 
     parts = []
     for name, details in grouped.items():
-        cfg = TOOL_BADGE_CONFIG.get(name, {'icon': '⚡', 'label': name})
+        cfg = tool_registry.get_badge(name)
         icon = cfg['icon']
         label = cfg['label']
         if details:
@@ -130,7 +111,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
 
     from workspace.ai.models import AITask, BotProfile
     from workspace.ai.prompts.chat import build_chat_messages
-    from workspace.ai.tools import CHAT_TOOLS, execute_tool_call
+    from workspace.ai.tool_registry import tool_registry
     from workspace.chat.models import Conversation, ConversationMember, Message
     from workspace.chat.services import notify_conversation_members, render_message_body
 
@@ -212,7 +193,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
     )
 
     try:
-        tools = CHAT_TOOLS if bot_profile.supports_tools else None
+        tools = tool_registry.get_definitions() if bot_profile.supports_tools else None
         result = _call_openai(messages, model=bot_profile.get_model(), tools=tools)
 
         # Tool call loop: execute tools and re-call until we get a text response
@@ -227,7 +208,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
 
             # Execute each tool call and append results
             for tc in result['tool_calls']:
-                tool_result = execute_tool_call(tc, user=human_user, bot=bot_user, conversation_id=conversation_id)
+                tool_result = tool_registry.execute(tc, user=human_user, bot=bot_user, conversation_id=conversation_id)
                 tool_content = _build_tool_content(tool_result)
                 messages.append({
                     'role': 'tool',

@@ -18,6 +18,11 @@ class UsersConfig(AppConfig):
 
         user_logged_out.connect(self._on_logout)
 
+        from workspace.ai.tool_registry import tool_registry
+        from workspace.users.ai_tools import UsersToolProvider
+
+        tool_registry.register_provider(UsersToolProvider())
+
     @staticmethod
     def _on_logout(sender, request, user, **kwargs):
         if user and user.is_authenticated:

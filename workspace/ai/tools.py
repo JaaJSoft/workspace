@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 
@@ -85,6 +86,20 @@ CHAT_TOOLS = [
             },
         },
     },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'get_my_avatar',
+            'description': (
+                'Retrieve your own avatar image. '
+                'Use this when the user asks what you look like, about your avatar, or your appearance.'
+            ),
+            'parameters': {
+                'type': 'object',
+                'properties': {},
+            },
+        },
+    },
 ]
 
 
@@ -153,5 +168,25 @@ def execute_tool_call(tool_call, user, bot, conversation_id=None) -> str:
             'date_joined': user.date_joined.strftime('%Y-%m-%d'),
         }
         return json.dumps(info)
+
+    elif name == 'get_my_avatar':
+        if not bot:
+            return 'Error: no bot context'
+        from django.core.files.storage import default_storage
+        from workspace.users.avatar_service import get_avatar_path, has_avatar
+        if not has_avatar(bot):
+            return 'You do not have an avatar set.'
+        try:
+            path = get_avatar_path(bot.id)
+            with default_storage.open(path, 'rb') as f:
+                b64 = base64.b64encode(f.read()).decode()
+            return json.dumps({
+                'type': 'image',
+                'mime_type': 'image/webp',
+                'data': b64,
+            })
+        except Exception:
+            logger.warning('Could not read avatar for bot %s', bot.id)
+            return 'Error: could not read avatar file.'
 
     return f'Unknown tool: {name}'

@@ -12,6 +12,22 @@ logger = logging.getLogger(__name__)
 _THINK_RE = re.compile(r'<think>[\s\S]*?</think>\s*', re.IGNORECASE)
 
 
+def _build_tool_content(tool_result: str):
+    """Convert a tool result string into API content, handling image payloads."""
+    try:
+        parsed = json.loads(tool_result)
+        if isinstance(parsed, dict) and parsed.get('type') == 'image':
+            mime = parsed.get('mime_type', 'image/webp')
+            data = parsed['data']
+            return [
+                {'type': 'text', 'text': 'Here is the image:'},
+                {'type': 'image_url', 'image_url': {'url': f'data:{mime};base64,{data}'}},
+            ]
+    except (json.JSONDecodeError, KeyError):
+        pass
+    return tool_result
+
+
 def _strip_thinking(content: str) -> str:
     """Remove <think>...</think> blocks from model output."""
     return _THINK_RE.sub('', content).strip()
@@ -52,6 +68,7 @@ TOOL_BADGE_CONFIG = {
     'delete_memory': {'icon': '🧠', 'label': 'Forgot'},
     'search_messages': {'icon': '🔍', 'label': 'Searched'},
     'get_current_user_info': {'icon': '👤', 'label': 'Looked up profile'},
+    'get_my_avatar': {'icon': '🖼️', 'label': 'Viewed own avatar'},
 }
 
 
@@ -211,10 +228,11 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             # Execute each tool call and append results
             for tc in result['tool_calls']:
                 tool_result = execute_tool_call(tc, user=human_user, bot=bot_user, conversation_id=conversation_id)
+                tool_content = _build_tool_content(tool_result)
                 messages.append({
                     'role': 'tool',
                     'tool_call_id': tc.id,
-                    'content': tool_result,
+                    'content': tool_content,
                 })
                 # Track tool usage for the badge
                 if 'Error' not in tool_result:

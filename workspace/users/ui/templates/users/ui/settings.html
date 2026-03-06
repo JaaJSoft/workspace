@@ -172,13 +172,42 @@
       <div x-show="tab === 'ai-memory'" x-cloak x-data="aiMemorySettings()">
         <div class="card bg-base-100 border border-base-300 shadow-sm">
           <div class="card-body">
-            <h2 class="card-title text-lg gap-2">
-              <i data-lucide="brain" class="w-5 h-5"></i>
-              AI Memory
-            </h2>
+            <div class="flex items-center justify-between">
+              <h2 class="card-title text-lg gap-2">
+                <i data-lucide="brain" class="w-5 h-5"></i>
+                AI Memory
+              </h2>
+              <span x-show="!loading && memories.length > 0" class="badge badge-sm badge-ghost" x-text="filteredMemories.length + ' / ' + memories.length"></span>
+            </div>
             <p class="text-sm text-base-content/60 mt-1">
               Things AI bots remember about you. You can edit or delete any memory.
             </p>
+
+            <!-- Search & Filter -->
+            <div x-show="!loading && memories.length > 0" class="mt-4 flex flex-col sm:flex-row gap-2">
+              <label class="input input-sm input-bordered flex items-center gap-2 flex-1">
+                <i data-lucide="search" class="w-4 h-4 text-base-content/40"></i>
+                <input
+                  type="text"
+                  class="grow"
+                  placeholder="Search memories..."
+                  x-model.debounce.200ms="search"
+                />
+                <button x-show="search" @click="search = ''" class="btn btn-ghost btn-xs btn-circle">
+                  <i data-lucide="x" class="w-3 h-3"></i>
+                </button>
+              </label>
+              <select
+                x-show="botNames.length > 1"
+                x-model="filterBot"
+                class="select select-sm select-bordered w-full sm:w-auto"
+              >
+                <option value="">All bots</option>
+                <template x-for="name in botNames" :key="name">
+                  <option :value="name" x-text="name"></option>
+                </template>
+              </select>
+            </div>
 
             <!-- Loading -->
             <div x-show="loading" class="flex justify-center py-8">
@@ -193,9 +222,15 @@
               </div>
             </template>
 
+            <!-- No results -->
+            <div x-show="!loading && memories.length > 0 && filteredMemories.length === 0" class="text-center py-8 text-base-content/50">
+              <i data-lucide="search-x" class="w-10 h-10 mx-auto mb-3 opacity-30"></i>
+              <p>No memories match your search.</p>
+            </div>
+
             <!-- Memory list -->
-            <div x-show="!loading && memories.length > 0" class="mt-4 space-y-2">
-              <template x-for="mem in memories" :key="mem.id">
+            <div x-show="!loading && filteredMemories.length > 0" class="mt-4 space-y-2">
+              <template x-for="mem in filteredMemories" :key="mem.id">
                 <div class="flex items-start gap-3 p-3 rounded-lg border border-base-300 group">
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
@@ -539,9 +574,31 @@
       loading: true,
       editingId: null,
       editContent: '',
+      search: '',
+      filterBot: '',
+
+      get botNames() {
+        return [...new Set(this.memories.map(m => m.bot_name))].sort();
+      },
+
+      get filteredMemories() {
+        let result = this.memories;
+        if (this.filterBot) {
+          result = result.filter(m => m.bot_name === this.filterBot);
+        }
+        if (this.search) {
+          const q = this.search.toLowerCase();
+          result = result.filter(m =>
+            m.key.toLowerCase().includes(q) || m.content.toLowerCase().includes(q)
+          );
+        }
+        return result;
+      },
 
       async init() {
         await this.fetchMemories();
+        this.$watch('search', () => this.$nextTick(() => lucide.createIcons()));
+        this.$watch('filterBot', () => this.$nextTick(() => lucide.createIcons()));
       },
 
       async fetchMemories() {

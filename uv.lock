@@ -471,14 +471,14 @@ wheels = [
 
 [[package]]
 name = "django-daisy"
-version = "2.0.8"
+version = "2.0.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/29/ad/084e1ec9df1b8a54a54f8f2b48f49359970b975f96a51e976769c4b4bbf8/django_daisy-2.0.8.tar.gz", hash = "sha256:56131b899a79ebd366646d5364d474dc77656a819ae542c02fc613528b38ce06", size = 2589004, upload-time = "2026-02-27T16:29:25.007Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/1e/387acf32a4cc95c6e78c2eb554577ad9e4f4a79f5c1d3c2933802a0f5fe6/django_daisy-2.0.7.tar.gz", hash = "sha256:8eedb34f0fbde4ef76da739ef157b94f8ede2ac808717db6507d0fb835caecaa", size = 2538029, upload-time = "2025-12-17T19:30:05.456Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d3/d7/d1c70aa802e7a967f0f480a77b2b69afb8ae5b6585ee09b11badb4f5a06f/django_daisy-2.0.8-py3-none-any.whl", hash = "sha256:07be5a891a0e828922e6d27b619d4960a1e72334b085d4621f461760fc9d777d", size = 2423888, upload-time = "2026-02-27T16:29:23.539Z" },
+    { url = "https://files.pythonhosted.org/packages/b8/81/da68ffc803efa2317d24b90cd544c8cf19cb6b98e11c19aec28c0f8c77a0/django_daisy-2.0.7-py3-none-any.whl", hash = "sha256:c45807701de9995f6d28a8a985261e3951918e4d8f269f04f61607ded7cdc897", size = 2370271, upload-time = "2025-12-17T19:30:03.472Z" },
 ]
 
 [[package]]
@@ -1787,7 +1787,7 @@ requires-dist = [
     { name = "dj-database-url", specifier = ">=2.3.0" },
     { name = "django", specifier = ">=6.0.3,<7.0" },
     { name = "django-brotli", specifier = ">=0.4.0" },
-    { name = "django-daisy", specifier = ">=2.0.5" },
+    { name = "django-daisy", specifier = "==2.0.7" },
     { name = "django-filter", specifier = "==25.2" },
     { name = "django-prometheus", specifier = ">=2.4.0" },
     { name = "django-redis", specifier = ">=5.4.0" },

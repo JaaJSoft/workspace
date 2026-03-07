@@ -1,4 +1,4 @@
-"""Core AI chat tools (memory, search, avatar)."""
+"""Core AI chat tools (memory, search, workspace search, avatar)."""
 import base64
 import json
 import logging
@@ -87,6 +87,30 @@ Use this when the user asks you to forget something."""
             logger.info('Memory deleted: %s/%s — %s', user.username, bot.username, key)
             return f'Deleted memory "{key}".'
         return f'Memory "{key}" not found.'
+
+    @tool(badge_icon='🔎', badge_label='Searched workspace', detail_key='query', params={
+        'query': Param('The search term to find across all workspace modules.'),
+    })
+    def search_workspace(self, args, user, bot, conversation_id):
+        """Search across the entire workspace (files, conversations, emails, calendar events, contacts) \
+for items matching a query. Use this when the user asks to find, look up, or locate something in their workspace."""
+        query = args.get('query', '').strip()
+        if not query:
+            return 'Error: query is required'
+        from workspace.core.module_registry import registry
+        results = registry.search(query, user, limit=10)
+        if not results:
+            return f'No results found for "{query}" across the workspace.'
+        lines = []
+        for r in results:
+            line = f'[{r["module_slug"]}] {r["name"]}'
+            if r.get('matched_value') and r['matched_value'] != r['name']:
+                line += f' — matched: {r["matched_value"]}'
+            if r.get('date'):
+                line += f' ({r["date"]})'
+            line += f'  {r["url"]}'
+            lines.append(line)
+        return '\n'.join(lines)
 
     @tool(badge_icon='🖼️', badge_label='Viewed own avatar')
     def get_my_avatar(self, args, user, bot, conversation_id):

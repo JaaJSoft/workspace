@@ -60,22 +60,22 @@ class ChatSSEProvider(SSEProvider):
     def poll(self, cache_value):
         events = []
         user_id = self.user.id
-        now = time.time()
 
-        # Periodic unread counts every 10 seconds
-        if now - self._last_unread_push >= 10:
+        # Only query for new events if dirty flag changed
+        if cache_value is None:
+            return events
+
+        # Push updated unread counts (at most every 5 seconds)
+        now = time.time()
+        if now - self._last_unread_push >= 5:
             try:
                 unread = get_unread_counts(self.user)
                 events.append(('unread', unread, None))
             except Exception:
                 logger.exception(
-                    "Failed to send periodic unread counts for user %s", user_id,
+                    "Failed to send unread counts for user %s", user_id,
                 )
             self._last_unread_push = now
-
-        # Only query for new events if dirty flag changed
-        if cache_value is None:
-            return events
 
         # Refresh member conversation IDs
         self._member_conv_ids = set(

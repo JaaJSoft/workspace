@@ -60,6 +60,10 @@ function chatApp(currentUserId) {
     showBotPicker: false,
     availableBots: [],
     botTyping: false,
+    // Bot memory (info panel)
+    botMemories: [],
+    loadingBotMemories: false,
+    memorySearch: '',
 
     // Emoji picker
     emojiPickerVisible: false,
@@ -272,6 +276,8 @@ function chatApp(currentUserId) {
       this.botTyping = false;
       this.showInfoPanel = false;
       this.conversationStats = null;
+      this.botMemories = [];
+      this.memorySearch = '';
       this.showSearchPanel = false;
       this.searchQuery = '';
       this.searchResults = [];
@@ -1091,6 +1097,9 @@ function chatApp(currentUserId) {
         if (this.activeConversation) {
           this.loadConversationStats(this.activeConversation.uuid);
           this.loadPinnedMessages(this.activeConversation.uuid);
+          if (this.isBotConversation(this.activeConversation)) {
+            this.loadBotMemories();
+          }
         }
       }
     },
@@ -2431,6 +2440,79 @@ function chatApp(currentUserId) {
         return window.userAvatarHtml(m.user.id, m.user.username, 'w-8 h-8 text-xs', { presence: false });
       }
       return '<div class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center"><i data-lucide="sparkles" class="w-4 h-4 text-secondary-content"></i></div>';
+    },
+
+    // ── Bot Memory (info panel) ──────────────────────────────
+    get filteredBotMemories() {
+      if (!this.memorySearch) return this.botMemories;
+      const q = this.memorySearch.toLowerCase();
+      return this.botMemories.filter(m =>
+        m.key.toLowerCase().includes(q) || m.content.toLowerCase().includes(q)
+      );
+    },
+
+    async loadBotMemories() {
+      const botMember = this._getBotMember();
+      if (!botMember) return;
+      this.loadingBotMemories = true;
+      this.botMemories = [];
+      try {
+        const resp = await fetch(`/api/v1/ai/memories?bot_id=${botMember.user.id}`, {
+          credentials: 'same-origin',
+        });
+        if (resp.ok) this.botMemories = await resp.json();
+      } catch (e) {
+        console.error('Failed to load bot memories', e);
+      }
+      this.loadingBotMemories = false;
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      this.$watch('memorySearch', () => {
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      });
+    },
+
+    async editMemory(mem) {
+      const content = await AppDialog.prompt({
+        title: 'Edit memory',
+        message: mem.key,
+        value: mem.content,
+        placeholder: 'Memory content...',
+        okLabel: 'Save',
+        inputSize: 'textarea',
+        icon: 'brain',
+        iconClass: 'bg-secondary/10 text-secondary',
+      });
+      if (content === null || content.trim() === mem.content) return;
+      const resp = await fetch(`/api/v1/ai/memories/${mem.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': this._csrf(),
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ content: content.trim() }),
+      });
+      if (resp.ok) {
+        mem.content = content.trim();
+      }
+    },
+
+    async deleteMemory(mem) {
+      const ok = await AppDialog.confirm({
+        title: 'Delete memory',
+        message: `Delete memory "${mem.key}"?`,
+        okLabel: 'Delete',
+        okClass: 'btn-error',
+      });
+      if (!ok) return;
+      const resp = await fetch(`/api/v1/ai/memories/${mem.id}`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': this._csrf() },
+        credentials: 'same-origin',
+      });
+      if (resp.ok) {
+        this.botMemories = this.botMemories.filter(m => m.id !== mem.id);
+      }
     },
   };
 }

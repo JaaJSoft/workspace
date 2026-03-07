@@ -177,11 +177,8 @@ def profile_activity_feed(request, username):
 
 @login_required
 def settings_view(request):
-    from workspace.ai.models import BotProfile
-    has_ai = BotProfile.accessible_by(request.user).exists()
     return render(request, 'users/ui/settings.html', {
         'has_avatar': avatar_service.has_avatar(request.user),
-        'has_ai': has_ai,
     })
 
 

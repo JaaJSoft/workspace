@@ -9,6 +9,8 @@ def get_ai_client() -> OpenAI | None:
     return OpenAI(
         api_key=settings.AI_API_KEY,
         base_url=settings.AI_BASE_URL,
+        timeout=settings.AI_TIMEOUT,
+        max_retries=settings.AI_MAX_RETRIES,
     )
 
 
@@ -22,6 +24,8 @@ def get_image_client() -> OpenAI | None:
     return OpenAI(
         api_key=settings.AI_API_KEY,
         base_url=settings.AI_IMAGE_BASE_URL or settings.AI_BASE_URL,
+        timeout=settings.AI_TIMEOUT,
+        max_retries=settings.AI_MAX_RETRIES,
     )
 
 

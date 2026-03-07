@@ -165,16 +165,14 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
                     except Exception:
                         logger.warning('Could not read attachment %s', att.uuid)
 
-        ts = msg.created_at.strftime('[%Y-%m-%d %H:%M] ')
-
         if image_parts:
             content = []
             if msg.body:
-                content.append({'type': 'text', 'text': ts + msg.body})
+                content.append({'type': 'text', 'text': msg.body})
             content.extend(image_parts)
             history.append({'role': role, 'content': content})
         else:
-            history.append({'role': role, 'content': ts + msg.body})
+            history.append({'role': role, 'content': msg.body})
 
     bot_name = bot_user.get_full_name() or bot_user.username
 

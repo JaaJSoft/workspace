@@ -31,6 +31,8 @@ def _build_tools_block() -> str:
         'You have the following tools available. Use them proactively whenever '
         'they are relevant to the user\'s request — do not hesitate or ask for '
         'confirmation before calling a tool.\n'
+        'When the user asks to retry, redo, or try again, you MUST call the '
+        'relevant tool again — even if a previous attempt succeeded.\n'
         + '\n'.join(lines)
     )
 

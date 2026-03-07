@@ -250,7 +250,11 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         from workspace.chat.models import MessageAttachment
         pending = tool_context.get('images', [])
         for i, img in enumerate(pending):
-            filename = f'generated_{i + 1}.png'
+            # Build a readable filename from the prompt
+            slug = img.get('prompt', 'image')[:60].strip().replace(' ', '_')
+            slug = ''.join(c for c in slug if c.isalnum() or c in '_-')
+            suffix = f'_{i + 1}' if len(pending) > 1 else ''
+            filename = f'{slug}{suffix}.png'
             att = MessageAttachment(
                 message=bot_message,
                 original_name=filename,

@@ -57,3 +57,7 @@ class MailConfig(AppConfig):
                 kind='action', module_slug='mail', order=26,
             ),
         ])
+
+        from workspace.ai.tool_registry import tool_registry
+        from workspace.mail.ai_tools import MailToolProvider
+        tool_registry.register_provider(MailToolProvider())

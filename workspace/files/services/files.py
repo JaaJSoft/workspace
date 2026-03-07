@@ -182,6 +182,33 @@ class FileService:
         return FileService._copy_node(file_obj, target_parent, owner)
 
     # ------------------------------------------------------------------
+    # Access control
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def can_access(user, file_obj):
+        """Check whether *user* can access *file_obj*.
+
+        Access is granted when the user owns the file **or** has been
+        granted a share (``FileShare``).  Only non-deleted files are
+        considered accessible.
+
+        Returns:
+            ``True`` if the user has at least read access, ``False`` otherwise.
+        """
+        from workspace.files.models import FileShare
+
+        if file_obj.deleted_at is not None:
+            return False
+        if file_obj.owner_id == user.id:
+            return True
+        if file_obj.node_type != File.NodeType.FILE:
+            return False
+        return FileShare.objects.filter(
+            file=file_obj, shared_with=user,
+        ).exists()
+
+    # ------------------------------------------------------------------
     # Validation (raise ValueError on failure)
     # ------------------------------------------------------------------
 
@@ -260,6 +287,61 @@ class FileService:
         if uploaded is not None:
             return getattr(uploaded, 'content_type', None) or 'application/octet-stream'
         return 'application/octet-stream'
+
+    # ------------------------------------------------------------------
+    # Reading
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def read_text_content(file_obj, *, max_bytes=32_768):
+        """Read and return the text content of a file.
+
+        Args:
+            file_obj: A File instance (must be a FILE, not a FOLDER).
+            max_bytes: Maximum number of bytes to read (default 32 KB).
+
+        Returns:
+            The decoded text content (truncated to *max_bytes*), or None
+            if the file has no stored content or cannot be decoded as text.
+        """
+        if file_obj.node_type != File.NodeType.FILE:
+            return None
+        if not file_obj.content or not file_obj.content.name:
+            return None
+        try:
+            with file_obj.content.open('rb') as fh:
+                raw = fh.read(max_bytes)
+            return raw.decode('utf-8')
+        except (OSError, UnicodeDecodeError):
+            return None
+
+    _IMAGE_MIME_PREFIXES = ('image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml')
+
+    @staticmethod
+    def read_image_content(file_obj, *, max_bytes=10_485_760):
+        """Read and return the raw bytes of an image file.
+
+        Args:
+            file_obj: A File instance whose ``mime_type`` starts with ``image/``.
+            max_bytes: Maximum number of bytes to read (default 10 MB).
+
+        Returns:
+            A ``(raw_bytes, mime_type)`` tuple, or ``(None, None)`` if the
+            file is not an image, has no stored content, or cannot be read.
+        """
+        if file_obj.node_type != File.NodeType.FILE:
+            return None, None
+        if not file_obj.content or not file_obj.content.name:
+            return None, None
+        mime = file_obj.mime_type or ''
+        if not mime.startswith('image/'):
+            return None, None
+        try:
+            with file_obj.content.open('rb') as fh:
+                raw = fh.read(max_bytes)
+            return raw, mime
+        except OSError:
+            return None, None
 
     # ------------------------------------------------------------------
     # Internal helpers

@@ -64,3 +64,7 @@ class ChatConfig(AppConfig):
             color='info',
             provider_cls=ChatActivityProvider,
         ))
+
+        from workspace.ai.tool_registry import tool_registry
+        from workspace.chat.ai_tools import ChatToolProvider
+        tool_registry.register_provider(ChatToolProvider())

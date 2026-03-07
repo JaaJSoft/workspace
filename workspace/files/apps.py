@@ -60,3 +60,7 @@ class FilesConfig(AppConfig):
             color='primary',
             provider_cls=FilesActivityProvider,
         ))
+
+        from workspace.ai.tool_registry import tool_registry
+        from workspace.files.ai_tools import FilesToolProvider
+        tool_registry.register_provider(FilesToolProvider())

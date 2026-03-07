@@ -333,7 +333,7 @@ class MessageListView(APIView):
 
         messages = Message.objects.filter(
             conversation_id=conversation_id,
-        ).select_related('author', 'reply_to', 'reply_to__author').prefetch_related(
+        ).select_related('author', 'author__bot_profile', 'reply_to', 'reply_to__author').prefetch_related(
             Prefetch(
                 'reactions',
                 queryset=Reaction.objects.select_related('user'),
@@ -480,7 +480,7 @@ class MessageListView(APIView):
 
         msg = (
             Message.objects.filter(pk=message.pk)
-            .select_related('author', 'reply_to', 'reply_to__author')
+            .select_related('author', 'author__bot_profile', 'reply_to', 'reply_to__author')
             .prefetch_related(
                 Prefetch(
                     'reactions',
@@ -559,7 +559,7 @@ class MessageDetailView(APIView):
         # Refetch with prefetches for serialization
         message = (
             Message.objects.filter(pk=message.pk)
-            .select_related('author', 'reply_to', 'reply_to__author')
+            .select_related('author', 'author__bot_profile', 'reply_to', 'reply_to__author')
             .prefetch_related(
                 Prefetch(
                     'reactions',

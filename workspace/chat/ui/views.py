@@ -229,7 +229,7 @@ def conversation_messages_view(request, conversation_uuid):
     qs = (
         Message.objects
         .filter(conversation_id=conversation_uuid)
-        .select_related('author', 'reply_to', 'reply_to__author')
+        .select_related('author', 'author__bot_profile', 'reply_to', 'reply_to__author')
         .prefetch_related('reactions__user', 'attachments')
         .order_by('-created_at')
     )

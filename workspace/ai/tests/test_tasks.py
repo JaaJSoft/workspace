@@ -1,9 +1,11 @@
+import base64
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
 from workspace.ai.models import AITask, BotProfile
+from workspace.ai.tools import CoreToolProvider
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
@@ -243,3 +245,75 @@ class GenerateChatResponseWithToolsTests(TestCase):
 
         # Two API calls were made
         self.assertEqual(mock_client.chat.completions.create.call_count, 2)
+
+
+class GenerateImageToolTest(TestCase):
+    """Unit tests for the generate_image tool."""
+
+    def setUp(self):
+        from workspace.ai.tools import ImageToolProvider
+        self.provider = ImageToolProvider()
+        self.conv_id = 'test-conv-img'
+        self.context = {}
+
+    @patch('workspace.ai.tools.get_image_client')
+    def test_generate_image_success(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [MagicMock(b64_json=base64.b64encode(b'\x89PNG fake').decode())]
+        mock_client.images.generate.return_value = mock_response
+        mock_get_client.return_value = mock_client
+
+        result = self.provider.generate_image(
+            {'prompt': 'a cat'}, user=None, bot=None,
+            conversation_id=self.conv_id, context=self.context,
+        )
+
+        self.assertIn('successfully', result)
+        self.assertEqual(len(self.context['images']), 1)
+        self.assertEqual(self.context['images'][0]['prompt'], 'a cat')
+        mock_client.images.generate.assert_called_once()
+
+    def test_generate_image_empty_prompt(self):
+        result = self.provider.generate_image(
+            {'prompt': ''}, user=None, bot=None,
+            conversation_id=self.conv_id, context=self.context,
+        )
+        self.assertIn('Error', result)
+        self.assertNotIn('images', self.context)
+
+    def test_generate_image_no_conversation(self):
+        result = self.provider.generate_image(
+            {'prompt': 'a cat'}, user=None, bot=None,
+            conversation_id=None, context=self.context,
+        )
+        self.assertIn('Error', result)
+
+    @patch('workspace.ai.tools.get_image_client')
+    def test_generate_image_invalid_size_defaults(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [MagicMock(b64_json=base64.b64encode(b'\x89PNG fake').decode())]
+        mock_client.images.generate.return_value = mock_response
+        mock_get_client.return_value = mock_client
+
+        self.provider.generate_image(
+            {'prompt': 'a cat', 'size': '999x999'},
+            user=None, bot=None, conversation_id=self.conv_id,
+            context=self.context,
+        )
+        call_kwargs = mock_client.images.generate.call_args[1]
+        self.assertEqual(call_kwargs['size'], '1024x1024')
+
+    @patch('workspace.ai.tools.get_image_client')
+    def test_generate_image_api_error(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.images.generate.side_effect = Exception('API timeout')
+        mock_get_client.return_value = mock_client
+
+        result = self.provider.generate_image(
+            {'prompt': 'a cat'}, user=None, bot=None,
+            conversation_id=self.conv_id, context=self.context,
+        )
+        self.assertIn('Error', result)
+        self.assertNotIn('images', self.context)

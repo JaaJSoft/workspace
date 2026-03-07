@@ -81,7 +81,7 @@ This approach prioritizes operational simplicity, security, and the freedom to d
 - Conversation descriptions and custom avatars
 - Pinned conversations with drag-and-drop reordering
 - Member management with context menus
-- Markdown message rendering
+- Rich Markdown rendering with syntax highlighting (Pygments), tables, and task lists
 - AI bot integration — add bots to conversations for intelligent assistance
 - Keyboard shortcuts and help dialog
 
@@ -117,6 +117,7 @@ This approach prioritizes operational simplicity, security, and the freedom to d
 - AI-powered chat bots with configurable models and system prompts
 - Email intelligence: summarization, composition assistance, and reply generation
 - Text editor actions for AI-assisted writing
+- Image generation — bots can generate images from text prompts (DALL-E, Stable Diffusion, or any compatible API)
 - Bot memory system — bots remember context about users across conversations
 - Support for vision (image understanding), function calling, and extended thinking
 - Access control: public bots, private bots, or group-restricted
@@ -202,6 +203,8 @@ Visit `http://localhost:8000` — that's it! No webpack, no npm, no build step.
 
 ### Docker (Recommended)
 
+**Basic (no AI):**
+
 ```bash
 docker build -t workspace .
 docker run -d -p 8000:8000 \
@@ -209,6 +212,36 @@ docker run -d -p 8000:8000 \
   -v workspace-files:/app/files \
   -e SECRET_KEY=your-secret-key-here \
   -e ALLOWED_HOSTS=yourdomain.com \
+  workspace
+```
+
+**With AI assistants and image generation:**
+
+```bash
+docker run -d -p 8000:8000 \
+  -v workspace-db:/app/db \
+  -v workspace-files:/app/files \
+  -e SECRET_KEY=your-secret-key-here \
+  -e ALLOWED_HOSTS=yourdomain.com \
+  -e AI_API_KEY=sk-your-openai-key \
+  -e AI_MODEL=gpt-4o \
+  -e AI_IMAGE_MODEL=dall-e-3 \
+  workspace
+```
+
+**With a self-hosted LLM (Ollama) and separate image service:**
+
+```bash
+docker run -d -p 8000:8000 \
+  -v workspace-db:/app/db \
+  -v workspace-files:/app/files \
+  -e SECRET_KEY=your-secret-key-here \
+  -e ALLOWED_HOSTS=yourdomain.com \
+  -e AI_API_KEY=ollama \
+  -e AI_BASE_URL=http://ollama:11434/v1 \
+  -e AI_MODEL=llama3 \
+  -e AI_IMAGE_BASE_URL=https://api.openai.com/v1 \
+  -e AI_IMAGE_MODEL=dall-e-3 \
   workspace
 ```
 
@@ -226,6 +259,13 @@ docker run -d -p 8000:8000 \
 | `DJANGO_LOG_LEVEL`     | Logging level                                                                       | `INFO`                       |
 | `TRASH_RETENTION_DAYS` | Days before trashed items are permanently deleted                                   | `30`                         |
 | `GUNICORN_WORKERS`     | Gunicorn worker count (Docker)                                                      | `3`                          |
+| `AI_API_KEY`           | OpenAI API key (or compatible provider)                                             | *(none, AI disabled)*        |
+| `AI_BASE_URL`          | Custom base URL for the LLM API (Ollama, LM Studio, etc.)                           | *(OpenAI default)*           |
+| `AI_MODEL`             | Default LLM model for chat and tasks                                                | `gpt-5`                      |
+| `AI_MAX_TOKENS`        | Maximum tokens per AI response                                                      | `2048`                       |
+| `AI_CHAT_CONTEXT_SIZE` | Number of recent messages included as context                                       | `150`                        |
+| `AI_IMAGE_MODEL`       | Model for image generation                                                          | `dall-e-3`                   |
+| `AI_IMAGE_BASE_URL`    | Custom base URL for image generation (falls back to `AI_BASE_URL`)                  | *(same as AI_BASE_URL)*      |
 
 ## CI/CD
 
@@ -294,10 +334,10 @@ Workspace is in active development. Shipped and planned modules:
 
 **Shipped:**
 - **Files** — Hierarchical file browser, sharing, WebDAV, thumbnails, comments
-- **Chat** — Direct messages, group conversations, reactions, file attachments, message pinning, search
+- **Chat** — Direct messages, group conversations, reactions, file attachments, message pinning, search, rich Markdown with syntax highlighting
 - **Calendar** — Day/week/month/agenda views, recurring events, participants, invitations & RSVP, subscriptions, scheduling polls
 - **Mail** — IMAP/SMTP client with OAuth2, auto-discovery, compose, folders, filters, contact autocomplete
-- **AI** — Chat bots, email intelligence, editor actions, bot memory, multi-provider support
+- **AI** — Chat bots, email intelligence, editor actions, image generation, bot memory, multi-provider support
 - **Notifications** — In-app notifications, Web Push, priority levels
 
 **Planned:**

@@ -10,13 +10,18 @@ class FilesToolProvider(ToolProvider):
     @tool(badge_icon='📄', badge_label='Read file', detail_key='uuid', params={
         'uuid': Param('The UUID of the file to read.'),
     })
-    def read_file(self, args, user, bot, conversation_id):
+    def read_file(self, args, user, bot, conversation_id, context):
         """Read the content of a file by its UUID. Works for text files and images. \
 Use this when the user asks to read, open, view, or see the contents of a specific file, \
 typically after finding it via search_workspace."""
+        import uuid as uuid_mod
         file_uuid = args.get('uuid', '').strip()
         if not file_uuid:
             return 'Error: uuid is required'
+        try:
+            uuid_mod.UUID(file_uuid)
+        except ValueError:
+            return 'Error: invalid UUID format.'
         from workspace.files.models import File
         from workspace.files.services import FileService
         file_obj = File.objects.filter(uuid=file_uuid).select_related('owner').first()

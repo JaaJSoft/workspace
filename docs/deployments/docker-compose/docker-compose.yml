@@ -34,6 +34,8 @@ services:
       - AI_MODEL=${AI_MODEL:-gpt-5}
       - AI_MAX_TOKENS=${AI_MAX_TOKENS:-2048}
       - AI_CHAT_CONTEXT_SIZE=${AI_CHAT_CONTEXT_SIZE:-150}
+      - AI_IMAGE_MODEL=${AI_IMAGE_MODEL:-dall-e-3}
+      - AI_IMAGE_BASE_URL=${AI_IMAGE_BASE_URL:-}
     volumes:
       - workspace-data:/app/data
     restart: unless-stopped
@@ -69,6 +71,8 @@ services:
       - AI_MODEL=${AI_MODEL:-gpt-5}
       - AI_MAX_TOKENS=${AI_MAX_TOKENS:-2048}
       - AI_CHAT_CONTEXT_SIZE=${AI_CHAT_CONTEXT_SIZE:-150}
+      - AI_IMAGE_MODEL=${AI_IMAGE_MODEL:-dall-e-3}
+      - AI_IMAGE_BASE_URL=${AI_IMAGE_BASE_URL:-}
     volumes:
       - workspace-data:/app/data
     restart: unless-stopped

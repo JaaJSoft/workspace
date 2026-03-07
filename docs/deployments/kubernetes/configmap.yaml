@@ -17,3 +17,4 @@ data:
   AI_MODEL: "gpt-5"
   AI_MAX_TOKENS: "2048"
   AI_CHAT_CONTEXT_SIZE: "150"
+  AI_IMAGE_MODEL: "dall-e-3"

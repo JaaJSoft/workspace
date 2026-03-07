@@ -7,7 +7,7 @@ class ChatToolProvider(ToolProvider):
     @tool(badge_icon='🔍', badge_label='Searched', detail_key='query', params={
         'query': Param('The search term to look for in message content.'),
     })
-    def search_messages(self, args, user, bot, conversation_id):
+    def search_messages(self, args, user, bot, conversation_id, context):
         """Search through the current conversation history for messages matching a query. \
 Use this when the user asks about something said earlier or wants to find a specific message."""
         query = args.get('query', '').strip()

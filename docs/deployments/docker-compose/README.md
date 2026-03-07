@@ -69,6 +69,13 @@ All settings are configurable via environment variables or a `.env` file next to
 | `OAUTH_GENERIC_SCOPES` | *(empty)* | Space-separated OAuth2 scopes |
 | `OAUTH_GENERIC_IMAP_HOST` | *(empty)* | IMAP server hostname |
 | `OAUTH_GENERIC_SMTP_HOST` | *(empty)* | SMTP server hostname |
+| `AI_API_KEY` | *(empty)* | OpenAI API key (or compatible provider). AI disabled if empty |
+| `AI_BASE_URL` | *(empty)* | Custom base URL for the LLM API (Ollama, LM Studio, etc.) |
+| `AI_MODEL` | `gpt-5` | Default LLM model for chat and tasks |
+| `AI_MAX_TOKENS` | `2048` | Maximum tokens per AI response |
+| `AI_CHAT_CONTEXT_SIZE` | `150` | Number of recent messages included as context |
+| `AI_IMAGE_MODEL` | `dall-e-3` | Model for image generation |
+| `AI_IMAGE_BASE_URL` | *(empty)* | Custom base URL for image generation (falls back to `AI_BASE_URL`) |
 
 ### Example `.env`
 
@@ -82,6 +89,11 @@ WEBPUSH_VAPID_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 -----END PRIVATE KEY-----"
 WEBPUSH_VAPID_PUBLIC_KEY=BHh5Vu...base64url...
 WEBPUSH_VAPID_MAILTO=mailto:admin@example.com
+
+# AI (optional)
+AI_API_KEY=sk-your-openai-key
+AI_MODEL=gpt-4o
+AI_IMAGE_MODEL=dall-e-3
 ```
 
 ## Storage

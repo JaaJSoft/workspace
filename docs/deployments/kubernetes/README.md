@@ -32,7 +32,7 @@ An **initContainer** (`migrate`) runs database migrations before the pod starts.
 | File             | Description                                                    |
 |------------------|----------------------------------------------------------------|
 | `namespace.yaml` | Namespace `workspace`                                          |
-| `secrets.yaml`   | Sensitive config: `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `WEBPUSH_VAPID_PRIVATE_KEY` |
+| `secrets.yaml`   | Sensitive config: `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `WEBPUSH_VAPID_PRIVATE_KEY`, `AI_API_KEY` |
 | `configmap.yaml` | Non-sensitive config: debug, allowed hosts, workers, log level |
 | `app.yaml`       | Deployment (all containers) + PVC + Service                    |
 | `ingress.yaml`   | Ingress (nginx) with TLS                                       |
@@ -88,6 +88,9 @@ kubectl apply -f ingress.yaml
 | `OAUTH_GENERIC_SCOPES` | Space-separated OAuth2 scopes |
 | `OAUTH_GENERIC_IMAP_HOST` | IMAP server hostname |
 | `OAUTH_GENERIC_SMTP_HOST` | SMTP server hostname |
+| `AI_API_KEY`             | OpenAI API key (or compatible provider). AI disabled if empty |
+| `AI_BASE_URL`            | Custom base URL for the LLM API (Ollama, LM Studio, etc.) |
+| `AI_IMAGE_BASE_URL`      | Custom base URL for image generation (falls back to `AI_BASE_URL`) |
 
 ### ConfigMap (`configmap.yaml`)
 
@@ -103,6 +106,10 @@ kubectl apply -f ingress.yaml
 | `MEDIA_ROOT`           | `/app/data`                     | Root directory for user files and uploads |
 | `WEBPUSH_VAPID_PUBLIC_KEY` | *(empty)*                  | VAPID public key (base64url)              |
 | `WEBPUSH_VAPID_MAILTO` | *(empty)*                       | Contact email for VAPID claims (`mailto:…`) |
+| `AI_MODEL`             | `gpt-5`                        | Default LLM model for chat and tasks |
+| `AI_MAX_TOKENS`        | `2048`                          | Maximum tokens per AI response |
+| `AI_CHAT_CONTEXT_SIZE` | `150`                           | Number of recent messages included as context |
+| `AI_IMAGE_MODEL`       | `dall-e-3`                      | Model for image generation |
 
 ## Storage
 

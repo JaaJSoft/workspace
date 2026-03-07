@@ -65,7 +65,11 @@ class ToolProvider:
 
     Subclass this and decorate methods with :func:`tool`.  Each decorated
     method becomes a chat tool whose handler receives
-    ``(self, args, user, bot, conversation_id)`` and returns a ``str``.
+    ``(self, args, user, bot, conversation_id, context)`` and returns a ``str``.
+
+    *context* is a mutable dict scoped to a single response generation.
+    Tools can store side-effects there (e.g. generated images) for the
+    caller to process after the tool loop completes.
     """
 
 
@@ -78,7 +82,7 @@ class _ToolInfo:
     name: str
     description: str
     parameters: dict
-    handler: object  # callable(args, user, bot, conversation_id) -> str
+    handler: object  # callable(args, user, bot, conversation_id, context) -> str
     badge_icon: str
     badge_label: str
     detail_key: str | None = None
@@ -161,7 +165,7 @@ class ToolRegistry:
 
     # -- execution ----------------------------------------------------------
 
-    def execute(self, tool_call, user, bot, conversation_id=None) -> str:
+    def execute(self, tool_call, user, bot, conversation_id=None, context=None) -> str:
         """Execute a tool call and return the result string."""
         name = tool_call.function.name
         try:
@@ -171,7 +175,9 @@ class ToolRegistry:
         info = self._tools.get(name)
         if not info:
             return f'Unknown tool: {name}'
-        return info.handler(args, user, bot, conversation_id)
+        if context is None:
+            context = {}
+        return info.handler(args, user, bot, conversation_id, context)
 
     # -- display ------------------------------------------------------------
 

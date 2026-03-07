@@ -18,6 +18,23 @@ def _build_memory_block(user, bot) -> str:
     return '\n\n## What you remember about this user\n' + '\n'.join(lines)
 
 
+def _build_tools_block() -> str:
+    """Build a capabilities section listing all registered tools."""
+    from workspace.ai.tool_registry import tool_registry
+
+    tools = tool_registry.get_all()
+    if not tools:
+        return ''
+    lines = [f'- **{t.name}**: {t.description.split(".")[0]}.' for t in tools]
+    return (
+        '\n\n## Your tools\n'
+        'You have the following tools available. Use them proactively whenever '
+        'they are relevant to the user\'s request — do not hesitate or ask for '
+        'confirmation before calling a tool.\n'
+        + '\n'.join(lines)
+    )
+
+
 def build_chat_messages(
     system_prompt: str,
     history: list[dict],
@@ -58,7 +75,9 @@ def build_chat_messages(
         "Update existing memories when information changes."
     )
 
-    system_content = f"{base_prompt}\n\n{context}{memory_instructions}{memory_block}"
+    tools_block = _build_tools_block()
+
+    system_content = f"{base_prompt}\n\n{context}{memory_instructions}{tools_block}{memory_block}"
     messages = [{'role': 'system', 'content': system_content}]
     messages.extend(history)
     return messages

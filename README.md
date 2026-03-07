@@ -2,7 +2,7 @@
 
 > **Early Development** — This project is under active development and has not reached a stable release. APIs, database schemas, and features may change without notice or migration path. Use at your own risk.
 
-A self-hosted, modular productivity suite built with Django. Workspace brings together file management, dashboards, and extensible modules into a unified platform you control.
+A self-hosted, modular productivity suite built with Django. Workspace brings together file management, messaging, email, calendar, AI assistants, and more into a unified platform you control.
 
 **Run anywhere, scale everywhere** — from a Raspberry Pi to a Kubernetes cluster.
 
@@ -59,26 +59,30 @@ This approach prioritizes operational simplicity, security, and the freedom to d
 - File copy with conflict resolution
 - Folder download as ZIP archive
 - Custom folder icons and colors
-- WebDAV access with Django authentication
 - File sharing with read-only / read-write permissions per user
+- File locking to prevent concurrent editing
 - Automatic thumbnail generation for images and SVGs
 - Mosaic/grid view with adjustable tile size
 - File comments with edit and soft-delete
 - Extensible file action registry (open, transfer, organize, edit, etc.)
 - File viewer navigation with Previous/Next and keyboard arrows
 - Folder picker component for file selection
+- WebDAV access — mount your files as a network drive on any OS
 
 ### Chat & Messaging
 - Direct messages (1:1) and group conversations
 - Real-time updates via Server-Sent Events (SSE)
 - Emoji reactions with grouped display
 - File attachments with upload, download, and "Save to Files" integration
-- Message search with filters, highlight navigation
+- Message search with filters and highlight navigation
 - Message pinning
-- Conversation descriptions
+- Message editing and soft-delete
+- Read receipts with reader list
+- Conversation descriptions and custom avatars
 - Pinned conversations with drag-and-drop reordering
 - Member management with context menus
 - Markdown message rendering
+- AI bot integration — add bots to conversations for intelligent assistance
 - Keyboard shortcuts and help dialog
 
 ### Calendar & Scheduling
@@ -87,21 +91,42 @@ This approach prioritizes operational simplicity, security, and the freedom to d
 - Recurring events with scope-aware edit and delete (single, this and future, all)
 - Invitations and RSVP (pending / accepted / declined)
 - Calendar subscriptions (subscribe to other users' calendars)
+- Multiple calendars per user with color coding
+- Scheduling polls — Doodle-style polls to find the best meeting time, with guest participation (no account required)
+- iCalendar (RFC 5545) and iTIP support for email-based invitations
 - Event context menu with quick actions (edit, delete, duplicate)
 - Show/hide declined events
 - Keyboard shortcuts and help dialog
 
 ### Mail
 - IMAP/SMTP integration with auto-discovery of server settings
+- OAuth2 authentication for Google (Gmail/Google Workspace) and Microsoft (Outlook/Office 365)
 - Compose dialog with reply/forward detection, draft management, and attachments
 - Hierarchical folder tree with subfolder creation, move, and drag-and-drop
 - Folder icon and color customization
 - Message filters: search, unread, starred, and attachments
 - Drag-and-drop message move between folders
+- Batch operations: mark read/unread, star, delete, move
 - Contact autocomplete with search and contact card popovers
 - "Save to Files" action to save mail attachments to the file browser
+- AI-powered email summarization, composition, and reply suggestions
 - Sent mail handling with IMAP APPEND support
 - Help dialog with shortcuts, features, and API access
+
+### AI Assistants
+- AI-powered chat bots with configurable models and system prompts
+- Email intelligence: summarization, composition assistance, and reply generation
+- Text editor actions for AI-assisted writing
+- Bot memory system — bots remember context about users across conversations
+- Support for vision (image understanding), function calling, and extended thinking
+- Access control: public bots, private bots, or group-restricted
+- Token usage tracking
+- Compatible with OpenAI API and any OpenAI-compatible provider (Ollama, LM Studio, etc.)
+
+### Notifications
+- In-app notification center with priority levels (low, normal, high, urgent)
+- Web Push notifications via VAPID protocol — get notified even when the browser tab is closed
+- Read tracking and bulk mark-as-read
 
 ### Dashboard
 - Storage statistics and file/folder counts
@@ -119,6 +144,7 @@ This approach prioritizes operational simplicity, security, and the freedom to d
 - Avatar upload with Cropper.js and WebP conversion
 - User mini profile popover on hover
 - Enhanced profile page with stats and activity timeline
+- Presence and status management (online, away, busy, invisible)
 - Password management with configurable validation rules
 - 12 themes (light, dark, cupcake, emerald, corporate, forest, dracula, night, winter, nord, sunset, autumn)
 
@@ -126,16 +152,19 @@ This approach prioritizes operational simplicity, security, and the freedom to d
 
 Built with boring, reliable technology:
 
-| Layer              | Technology                                                  |
-|--------------------|-------------------------------------------------------------|
-| **Backend**        | Django 6.0, Django REST Framework                           |
-| **Frontend**       | Alpine.js, Tailwind CSS, DaisyUI, Lucide Icons              |
-| **Database**       | SQLite (WAL mode) or PostgreSQL                             |
-| **Cache / Broker** | Redis (optional, for caching, sessions, and Celery tasks)   |
-| **Task Queue**     | Celery with Redis broker, Celery Beat for periodic tasks    |
-| **Server**         | Gunicorn with gevent workers, WhiteNoise, Brotli compression|
-| **Imaging**        | Pillow, CairoSVG (thumbnail generation)                    |
-| **Tooling**        | uv, Docker, drf-spectacular (OpenAPI)                       |
+| Layer              | Technology                                                   |
+|--------------------|--------------------------------------------------------------|
+| **Backend**        | Django 6.0, Django REST Framework                            |
+| **Frontend**       | Alpine.js, Tailwind CSS, DaisyUI, Lucide Icons               |
+| **Real-time**      | Server-Sent Events (SSE)                                     |
+| **Database**       | SQLite (WAL mode) or PostgreSQL                              |
+| **Cache / Broker** | Redis (optional, for caching, sessions, and Celery tasks)    |
+| **Task Queue**     | Celery with Redis broker, Celery Beat for periodic tasks     |
+| **Server**         | Gunicorn with gevent workers, WhiteNoise, Brotli compression |
+| **AI**             | OpenAI API (or any compatible provider)                      |
+| **Imaging**        | Pillow, CairoSVG (thumbnail generation)                      |
+| **Monitoring**     | Prometheus metrics, Kubernetes health probes                 |
+| **Tooling**        | uv, Docker, drf-spectacular (OpenAPI)                        |
 
 No build steps, no frontend framework complexity, no microservices. Just Python and templates.
 
@@ -220,7 +249,7 @@ Interactive API documentation is available when the server is running:
 
 ### Module System
 
-Workspace is designed to be modular. Each module (Files, Dashboard, Notes, Tasks, etc.) registers itself dynamically at startup.
+Workspace is designed to be modular. Each module (Files, Chat, Calendar, Mail, AI, etc.) registers itself dynamically at startup.
 
 **Adding a new module:**
 
@@ -264,16 +293,19 @@ Kubernetes-ready health endpoints for liveness, readiness, and startup probes:
 Workspace is in active development. Shipped and planned modules:
 
 **Shipped:**
-- 💬 **Chat** — Direct messages, group conversations, reactions, file attachments, message pinning, message search, pinned conversations
-- 📅 **Calendar** — Day/week/month/agenda views, recurring events, participants, invitations & RSVP, subscriptions
-- 📧 **Mail** — Basic IMAP/SMTP client with auto-discovery, compose, folders, filters, contact autocomplete
+- **Files** — Hierarchical file browser, sharing, WebDAV, thumbnails, comments
+- **Chat** — Direct messages, group conversations, reactions, file attachments, message pinning, search
+- **Calendar** — Day/week/month/agenda views, recurring events, participants, invitations & RSVP, subscriptions, scheduling polls
+- **Mail** — IMAP/SMTP client with OAuth2, auto-discovery, compose, folders, filters, contact autocomplete
+- **AI** — Chat bots, email intelligence, editor actions, bot memory, multi-provider support
+- **Notifications** — In-app notifications, Web Push, priority levels
 
 **Planned:**
-- 📝 **Notes & Wiki** — Rich text editor with backlinks and page hierarchy
-- ✅ **Tasks & Projects** — Kanban boards, sprints, time tracking
-- 👥 **Contacts & CRM** — Contact management with interaction history
-- 🔗 **Bookmarks** — Save and organize links with automatic previews
-- 🔐 **Password Manager** — Encrypted vault with TOTP support
+- **Notes & Wiki** — Rich text editor with backlinks and page hierarchy
+- **Tasks & Projects** — Kanban boards, sprints, time tracking
+- **Contacts & CRM** — Contact management with interaction history
+- **Bookmarks** — Save and organize links with automatic previews
+- **Password Manager** — Encrypted vault with TOTP support
 
 See [IDEAS.md](IDEAS.md) for the complete roadmap and implementation details.
 

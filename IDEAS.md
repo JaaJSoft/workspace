@@ -113,7 +113,7 @@ Calendar and planning. **Module shipped in v0.4.0.**
 - [x] Recurring events
 - [ ] Sync CalDAV / Google Calendar / Outlook
 - [ ] Reminders (email, in-app notification)
-- [ ] Quick event creation — click a time slot, type title, expand for details
+- [x] Quick event creation — click a time slot or drag-to-select, type title, expand for details
 - [ ] Drag to resize events — resize duration by dragging bottom edge
 - [ ] Multi-calendar overlay — see multiple users' calendars side by side
 - [ ] Availability slots (Calendly style)
@@ -151,7 +151,7 @@ Real-time internal communication. **Module shipped in v0.4.0.**
 - [ ] Discussion threads
 - [x] File sharing (upload, download, save to Files module)
 - [x] Emoji reactions (toggle, grouped display, real-time SSE)
-- [ ] @user and @channel mentions (unified across chat, file comments, calendar notes)
+- [x] @user and @everyone mentions with badge rendering and hover cards
 - [x] Message search (full-text within conversations, highlight navigation)
 - [x] Real-time updates (SSE-based streaming with unread counts)
 - [x] Online / away / busy status
@@ -162,13 +162,13 @@ Real-time internal communication. **Module shipped in v0.4.0.**
 - [x] Group conversations with avatar, stats, and info panel
 - [x] Member management and context menus
 - [x] Keyboard shortcuts and help dialog
-- [x] Markdown message rendering
+- [x] Markdown message rendering — rich formatting with Pygments syntax highlighting, tables, task lists
 - [ ] Typing indicators — "X is typing..." via SSE (cache key + short TTL)
 - [x] Message replies — quote a specific message when replying (parent_id FK)
 - [ ] Link previews — auto-unfurl URLs with OpenGraph metadata (title, image, description)
-- [ ] Read receipts — show who has read messages in group conversations
+- [x] Read receipts — show who has read messages in group conversations
 - [ ] Voice messages — record and send audio clips (MediaRecorder API + file upload)
-- [ ] Message formatting toolbar — WYSIWYG for bold/italic/code/lists (current: raw Markdown)
+- [x] Message formatting toolbar — bold/italic/strikethrough/code/link buttons + keyboard shortcuts
 
 ---
 
@@ -287,7 +287,7 @@ Features shared across all modules.
 - [x] SSE for real-time notifications (same pattern as chat)
 - [ ] Notification preferences per module
 - [ ] Email digest (daily/weekly)
-- [ ] Push notifications (PWA)
+- [x] Push notifications (VAPID keys, service worker, Celery task)
 
 ### Users & Teams
 - [x] Enhanced user profiles (avatar, stats, activity timeline, settings page)
@@ -325,8 +325,8 @@ Features shared across all modules.
 - [ ] **E2E tests** — Playwright test suite for critical flows (login, file upload, chat send, mail compose)
 
 ### UI/UX
-- [ ] PWA (Progressive Web App) - installable on desktop/mobile
-- [ ] Mobile responsive design
+- [ ] PWA (Progressive Web App) — service worker + push notifications done, missing manifest.json for installability
+- [x] Mobile responsive design — Tailwind responsive classes across all modules
 - [x] Modular sidebar (each module = one section)
 - [x] Customizable themes (12 themes: light, dark, cupcake, emerald, corporate, forest, dracula, night, winter, nord, sunset, autumn)
 - [ ] Onboarding wizard for new users

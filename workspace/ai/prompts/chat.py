@@ -46,7 +46,19 @@ def build_chat_messages(
     if user and bot:
         memory_block = _build_memory_block(user, bot)
 
-    system_content = f"{base_prompt}\n\n{context}{memory_block}"
+    memory_instructions = (
+        "\n\n## Memory\n"
+        "You have a persistent memory system. Actively use the save_memory tool to remember "
+        "important facts about the user as they come up in conversation. Do not ask for permission — "
+        "just save anything useful.\n"
+        "Save things like: their name, role, projects they work on, technical preferences, "
+        "languages they speak, tools they use, recurring topics, personal details they share, "
+        "opinions, and anything that would help you be more helpful in future conversations.\n"
+        "Use short, descriptive keys (e.g. 'role', 'preferred_language', 'current_project'). "
+        "Update existing memories when information changes."
+    )
+
+    system_content = f"{base_prompt}\n\n{context}{memory_instructions}{memory_block}"
     messages = [{'role': 'system', 'content': system_content}]
     messages.extend(history)
     return messages

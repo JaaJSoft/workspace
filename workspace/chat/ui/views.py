@@ -205,6 +205,7 @@ def group_messages(messages, current_user):
                 'type': 'messages',
                 'author': msg.author,
                 'is_own': msg.author_id == current_user.id,
+                'is_bot': hasattr(msg.author, 'bot_profile'),
                 'messages': [msg],
             }
 

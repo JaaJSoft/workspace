@@ -582,7 +582,7 @@ class MessageDetailView(APIView):
 
         try:
             message = Message.objects.select_related(
-                'conversation',
+                'conversation', 'author__bot_profile',
             ).get(
                 uuid=message_id,
                 conversation_id=conversation_id,
@@ -593,7 +593,9 @@ class MessageDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        if message.author_id != request.user.id:
+        is_author = message.author_id == request.user.id
+        is_bot_message = hasattr(message.author, 'bot_profile')
+        if not is_author and not is_bot_message:
             return Response(
                 {'detail': 'Only the author can delete this message.'},
                 status=status.HTTP_403_FORBIDDEN,

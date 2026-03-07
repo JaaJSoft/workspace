@@ -1,5 +1,5 @@
 {% load chat_tags ui_filters %}
-{% with author=group.author is_own=group.is_own messages=group.messages first_msg=group.messages.0 %}
+{% with author=group.author is_own=group.is_own is_bot=group.is_bot messages=group.messages first_msg=group.messages.0 %}
 <div class="msg-group {% if is_own %}msg-group-end{% else %}msg-group-start{% endif %} flex gap-2 mb-3 {% if is_own %}flex-row-reverse{% endif %}">
 
   {# Avatar column #}
@@ -160,6 +160,8 @@
                         title="Edit">
                   <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
                 </button>
+              {% endif %}
+              {% if is_own or is_bot %}
                 <button class="btn btn-ghost btn-xs btn-circle text-error"
                         @click="deleteMessage('{{ msg.uuid }}')"
                         title="Delete">

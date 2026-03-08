@@ -10,8 +10,9 @@ class UsersToolProvider(ToolProvider):
         'username': Param('The username of the person to check.'),
     })
     def check_user_status(self, args, user, bot, conversation_id, context):
-        """Check the presence status of a colleague (online, away, busy, or offline). \
-Use this when the user asks if someone is available or what their status is."""
+        """Check whether a specific colleague is online, away, busy, or offline. \
+Also returns their last-seen time if offline. \
+Call this when the user asks if someone is available, reachable, or what their status is."""
         username = args.get('username', '').strip()
         if not username:
             return 'Error: username is required'
@@ -34,8 +35,8 @@ Use this when the user asks if someone is available or what their status is."""
         'limit': Param('Maximum number of users to return (default 20).', 'integer', required=False),
     })
     def list_online_users(self, args, user, bot, conversation_id, context):
-        """List users who are currently online, away, or busy. \
-Use this when the user asks who is available or who is online right now."""
+        """List all users who are currently online, away, or busy (excludes offline users and bots). \
+Call this when the user asks who is available, who is online, or wants an overview of active colleagues."""
         limit = min(int(args.get('limit', 20)), 50)
         from django.contrib.auth import get_user_model
         from workspace.users.presence_service import get_online_user_ids, get_statuses

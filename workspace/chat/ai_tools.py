@@ -8,8 +8,10 @@ class ChatToolProvider(ToolProvider):
         'query': Param('The search term to look for in message content.'),
     })
     def search_messages(self, args, user, bot, conversation_id, context):
-        """Search through the current conversation history for messages matching a query. \
-Use this when the user asks about something said earlier or wants to find a specific message."""
+        """Search through the current conversation for messages containing a keyword. \
+Returns up to 10 recent matches with author, timestamp, and content. \
+Call this when the user asks about something said earlier, wants to find a specific message, \
+or references a past discussion in this conversation."""
         query = args.get('query', '').strip()
         if not query:
             return 'Error: query is required'

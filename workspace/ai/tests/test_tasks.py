@@ -317,3 +317,114 @@ class GenerateImageToolTest(TestCase):
         )
         self.assertIn('Error', result)
         self.assertNotIn('images', self.context)
+
+
+class EditImageToolTest(TestCase):
+    """Unit tests for the edit_image tool."""
+
+    def setUp(self):
+        from workspace.ai.tools import ImageToolProvider
+        self.provider = ImageToolProvider()
+        self.context = {}
+        self.user = User.objects.create_user(username='editimguser', password='pw')
+        self.conv = Conversation.objects.create(kind='dm', created_by=self.user)
+        ConversationMember.objects.create(conversation=self.conv, user=self.user)
+
+    def _attach_image(self):
+        """Create a message with an image attachment in the conversation."""
+        from django.core.files.base import ContentFile
+        from workspace.chat.models import MessageAttachment
+        msg = Message.objects.create(conversation=self.conv, author=self.user, body='here')
+        att = MessageAttachment(
+            message=msg, original_name='photo.png', mime_type='image/png', size=8,
+        )
+        att.file.save('photo.png', ContentFile(b'\x89PNGdata'), save=False)
+        att.save()
+        return att
+
+    @patch('workspace.ai.tools.get_image_client')
+    def test_edit_image_openai_success(self, mock_get_client):
+        """OpenAI images.edit works on first try."""
+        self._attach_image()
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [MagicMock(b64_json=base64.b64encode(b'\x89PNG edited').decode())]
+        mock_client.images.edit.return_value = mock_response
+        mock_get_client.return_value = mock_client
+
+        result = self.provider.edit_image(
+            {'prompt': 'make it blue'}, user=self.user, bot=None,
+            conversation_id=str(self.conv.uuid), context=self.context,
+        )
+
+        self.assertIn('successfully', result)
+        self.assertEqual(len(self.context['images']), 1)
+        self.assertEqual(self.context['images'][0]['prompt'], 'make it blue')
+        mock_client.images.edit.assert_called_once()
+
+    @override_settings(
+        AI_IMAGE_MODEL='test-model',
+        AI_IMAGE_BASE_URL='http://localhost:11434/v1/',
+        AI_TIMEOUT=30,
+    )
+    @patch('workspace.ai.tools.get_image_client')
+    def test_edit_image_ollama_fallback(self, mock_get_client):
+        """Falls back to Ollama native API when OpenAI endpoint fails."""
+        self._attach_image()
+        mock_client = MagicMock()
+        mock_client.images.edit.side_effect = Exception('400 Bad Request')
+        mock_get_client.return_value = mock_client
+
+        edited_b64 = base64.b64encode(b'\x89PNG ollama').decode()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {'images': [edited_b64]}
+
+        with patch('workspace.ai.tools.ImageToolProvider._edit_via_ollama',
+                   return_value=b'\x89PNG ollama') as mock_ollama:
+            result = self.provider.edit_image(
+                {'prompt': 'make it red'}, user=self.user, bot=None,
+                conversation_id=str(self.conv.uuid), context=self.context,
+            )
+
+        self.assertIn('successfully', result)
+        self.assertEqual(len(self.context['images']), 1)
+        mock_ollama.assert_called_once()
+
+    def test_edit_image_empty_prompt(self):
+        result = self.provider.edit_image(
+            {'prompt': ''}, user=None, bot=None,
+            conversation_id=str(self.conv.uuid), context=self.context,
+        )
+        self.assertIn('Error', result)
+
+    def test_edit_image_no_image_in_conversation(self):
+        result = self.provider.edit_image(
+            {'prompt': 'make it blue'}, user=self.user, bot=None,
+            conversation_id=str(self.conv.uuid), context=self.context,
+        )
+        self.assertIn('no image found', result)
+
+    @patch('workspace.ai.tools.get_image_client')
+    def test_edit_image_both_backends_fail(self, mock_get_client):
+        """Returns error when both OpenAI and Ollama fail."""
+        self._attach_image()
+        mock_client = MagicMock()
+        mock_client.images.edit.side_effect = Exception('OpenAI failed')
+        mock_get_client.return_value = mock_client
+
+        with patch('workspace.ai.tools.ImageToolProvider._edit_via_ollama',
+                   side_effect=Exception('Ollama failed')):
+            result = self.provider.edit_image(
+                {'prompt': 'make it blue'}, user=self.user, bot=None,
+                conversation_id=str(self.conv.uuid), context=self.context,
+            )
+
+        self.assertIn('Error', result)
+        self.assertNotIn('images', self.context)
+
+    def test_edit_image_no_conversation(self):
+        result = self.provider.edit_image(
+            {'prompt': 'make it blue'}, user=None, bot=None,
+            conversation_id=None, context=self.context,
+        )
+        self.assertIn('Error', result)

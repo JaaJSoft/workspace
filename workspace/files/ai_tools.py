@@ -11,9 +11,9 @@ class FilesToolProvider(ToolProvider):
         'uuid': Param('The UUID of the file to read.'),
     })
     def read_file(self, args, user, bot, conversation_id, context):
-        """Read the content of a file by its UUID. Works for text files and images. \
-Use this when the user asks to read, open, view, or see the contents of a specific file, \
-typically after finding it via search_workspace."""
+        """Read the content of a file by its UUID. Supports text files (returns text) and images (returns the image). \
+Call this after finding a file via search_workspace to get its content, \
+or when the user asks to read, open, view, or see a specific file."""
         import uuid as uuid_mod
         file_uuid = args.get('uuid', '').strip()
         if not file_uuid:

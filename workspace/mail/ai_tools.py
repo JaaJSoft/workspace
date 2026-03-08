@@ -8,9 +8,9 @@ class MailToolProvider(ToolProvider):
         'uuid': Param('The UUID of the email message to read.'),
     })
     def read_email(self, args, user, bot, conversation_id, context):
-        """Read the full content of an email message by its UUID. \
-Use this when the user asks to read, open, or see the details of a specific email, \
-typically after finding it via search_workspace."""
+        """Read the full content of an email by its UUID: subject, sender, recipients, date, and body text. \
+Call this after finding an email via search_workspace to get its complete content, \
+or when the user asks to read, open, or see the details of a specific email."""
         email_uuid = args.get('uuid', '').strip()
         if not email_uuid:
             return 'Error: uuid is required'

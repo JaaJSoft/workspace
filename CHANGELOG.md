@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.11.0
+
+### AI & Bots
+
+AI tools ecosystem and bot management overhaul.
+
+- AI Tool Registry: centralized registry with Mail, Files, Chat, and Workspace Search tools
+- Image generation tool with `AI_IMAGE_MODEL` support
+- Image editing tool with enhanced AI workflows
+- AI Memory system with persistent bot memory, search & filter UI, and bot-specific context
+- Bot access controls with public visibility settings and capability flags
+- Bot appearance tools: avatar management and customization
+- Workspace search tool for querying across all modules
+- Message search and user info retrieval tools
+- Personalized system prompt with bot name context
+- Configurable timeout (default 300s), retry options, context size, and API integration settings
+
+### Chat
+
+- Draft saving and restoration for conversations
+- @mention support with notifications
+- Syntax highlighting and improved Markdown rendering
+- Clear Conversation feature
+- Bot message deletion with improved UI handling
+- Custom bot avatars in chat UI
+- Redesigned input bar for responsive mobile and desktop views
+- Enhanced mobile responsiveness
+- Reduced unread count push interval to 5 seconds
+
+### Dashboard & UI
+
+- Personalized greeting with `first_name` fallback and dynamic weather widget
+- Centralized activity tracking framework with modular providers
+- User profile enhancements: activity feed, stats, and contribution heatmap
+- Upcoming events dashboard widget
+- Custom error pages for 400, 403, 404, and 500
+- Replace "Superuser" label with "Admin" badge
+- Navbar alignment and responsiveness improvements
+
+### Infrastructure
+
+- API schema documentation enhanced with `@extend_schema` and inline serializers
+- Process-level cache for presence snapshots with threading lock
+- Unified query logic for activity stats and events
+- SSE message handling streamlined with `isViewing` check
+- Bot profile included in message query optimizations
+
+### Fixes
+
+- Calendar icon initialization after polls update
+- Greeting fallback to `username` when `first_name` is empty
+
+### Dependencies
+
+- Django 6.0.3
+- openai 2.24.0 → 2.26.0
+- authlib 1.6.8 → 1.6.9
+- python-dotenv 1.2.1 → 1.2.2
+- icalendar 7.0.2 → 7.0.3
+- django-daisy pinned to 2.0.7
+
 ## 0.10.0
 
 ### New: AI Assistant

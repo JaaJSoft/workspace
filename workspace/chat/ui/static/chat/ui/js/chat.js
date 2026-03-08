@@ -115,6 +115,9 @@ function chatApp(currentUserId) {
         }
       });
 
+      // Save draft on page unload
+      window.addEventListener('beforeunload', () => this._saveDraft());
+
       // Save-to-files from attachment viewer modal
       window.addEventListener('chat-save-attachment-to-files', (e) => {
         this.saveAttachmentToFiles(e.detail.uuid);
@@ -265,12 +268,35 @@ function chatApp(currentUserId) {
       await this.selectConversation(conv, updateUrl);
     },
 
+    _saveDraft() {
+      if (!this.activeConversation) return;
+      const key = `chat_draft_${this.activeConversation.uuid}`;
+      const body = this.messageBody.trim();
+      if (body) {
+        localStorage.setItem(key, body);
+      } else {
+        localStorage.removeItem(key);
+      }
+    },
+
+    _restoreDraft(convUuid) {
+      const key = `chat_draft_${convUuid}`;
+      return localStorage.getItem(key) || '';
+    },
+
+    _clearDraft(convUuid) {
+      localStorage.removeItem(`chat_draft_${convUuid || this.activeConversation?.uuid}`);
+    },
+
     async selectConversation(conv, updateUrl = true) {
+      // Save draft of current conversation before switching
+      this._saveDraft();
+
       this.activeConversation = conv;
       this.hasMoreMessages = false;
       this.editingMessageUuid = null;
       this.replyingTo = null;
-      this.messageBody = '';
+      this.messageBody = this._restoreDraft(conv.uuid);
       this.pendingFiles = [];
       this.pinnedMessages = [];
       this.botTyping = false;
@@ -464,6 +490,7 @@ function chatApp(currentUserId) {
 
       this.messageBody = '';
       this.pendingFiles = [];
+      this._clearDraft();
       this.cancelReply();
 
       // ── Optimistic UI: inject temporary message immediately ──

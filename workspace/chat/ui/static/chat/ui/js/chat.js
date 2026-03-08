@@ -45,7 +45,7 @@ function chatApp(currentUserId) {
     searchFilterHasImages: false,
     searchFiltersExpanded: false,
     // Context menu state
-    ctxMenu: { open: false, x: 0, y: 0, uuid: null, kind: null, isPinned: false },
+    ctxMenu: { open: false, x: 0, y: 0, uuid: null, kind: null, isPinned: false, isBot: false },
     // File upload
     pendingFiles: [],
     isDraggingOver: false,
@@ -1299,13 +1299,15 @@ function chatApp(currentUserId) {
 
     // ── Conversation management ──────────────────────────────
     async renameConversation() {
-      if (!this.activeConversation || this.activeConversation.kind !== 'group') return;
+      if (!this.activeConversation) return;
+      const isBot = this.activeConversation.is_bot_conversation;
+      if (!isBot && this.activeConversation.kind !== 'group') return;
       const current = this.activeConversation.title || '';
       const title = await AppDialog.prompt({
-        title: 'Rename group',
-        message: 'Enter a new name for this group:',
+        title: isBot ? 'Rename conversation' : 'Rename group',
+        message: isBot ? 'Enter a new name for this conversation:' : 'Enter a new name for this group:',
         value: current,
-        placeholder: 'Group name',
+        placeholder: isBot ? 'Conversation name' : 'Group name',
         okLabel: 'Rename',
       });
       if (title === null) return;
@@ -1362,6 +1364,7 @@ function chatApp(currentUserId) {
         console.error('Failed to update description', e);
       }
     },
+
 
     async clearConversation() {
       if (!this.activeConversation) return;
@@ -1847,7 +1850,9 @@ function chatApp(currentUserId) {
 
       this.ctxMenu.uuid = uuid;
       this.ctxMenu.kind = kind;
-      this.ctxMenu.isPinned = isPinned || this.conversations.find(c => c.uuid === uuid)?.is_pinned || false;
+      const conv = this.conversations.find(c => c.uuid === uuid);
+      this.ctxMenu.isPinned = isPinned || conv?.is_pinned || false;
+      this.ctxMenu.isBot = conv?.is_bot_conversation || false;
       this.ctxMenu.open = true;
 
       this.$nextTick(() => {

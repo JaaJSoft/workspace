@@ -152,7 +152,7 @@ class ConversationListView(APIView):
         title = serializer.validated_data.get('title', '')
 
         # Validate that all member_ids exist and are active
-        users = User.objects.filter(id__in=member_ids, is_active=True)
+        users = User.objects.filter(id__in=member_ids, is_active=True).select_related('bot_profile')
         if users.count() != len(member_ids):
             return Response(
                 {'detail': 'One or more user IDs are invalid.'},
@@ -177,7 +177,18 @@ class ConversationListView(APIView):
                     {'detail': 'Cannot create a DM with yourself.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            conversation = get_or_create_dm(request.user, other_user)
+            # Bot conversations: always create a new DM (no dedup)
+            if hasattr(other_user, 'bot_profile'):
+                conversation = Conversation.objects.create(
+                    kind=Conversation.Kind.DM,
+                    created_by=request.user,
+                )
+                ConversationMember.objects.bulk_create([
+                    ConversationMember(conversation=conversation, user=request.user),
+                    ConversationMember(conversation=conversation, user=other_user),
+                ])
+            else:
+                conversation = get_or_create_dm(request.user, other_user)
         else:
             # Group conversation
             conversation = Conversation.objects.create(
@@ -260,9 +271,12 @@ class ConversationDetailView(APIView):
         conversation = Conversation.objects.get(pk=conversation_id)
         update_fields = []
 
-        # Title update (groups only)
+        # Title update (groups and bot conversations)
         if 'title' in request.data:
-            if conversation.kind != Conversation.Kind.GROUP:
+            is_bot_conv = conversation.members.filter(
+                user__bot_profile__isnull=False, left_at__isnull=True,
+            ).exists()
+            if conversation.kind != Conversation.Kind.GROUP and not is_bot_conv:
                 return Response(
                     {'detail': 'Only group conversations can be renamed.'},
                     status=status.HTTP_400_BAD_REQUEST,

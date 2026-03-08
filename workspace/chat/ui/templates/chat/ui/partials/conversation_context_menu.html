@@ -38,8 +38,8 @@
       </button>
     </li>
 
-    <!-- Rename (group only) -->
-    <li x-show="ctxMenu.kind === 'group'">
+    <!-- Rename (group or bot conversation) -->
+    <li x-show="ctxMenu.kind === 'group' || ctxMenu.isBot">
       <button type="button" class="gap-3 rounded" @click="ctxMenuAction('rename')">
         <i data-lucide="pencil" class="w-4 h-4"></i>
         <span>Rename</span>

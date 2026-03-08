@@ -10,6 +10,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 _THINK_RE = re.compile(r'<think>[\s\S]*?</think>\s*', re.IGNORECASE)
+_RAW_TOOL_CALL_RE = re.compile(r'</?tool_call>', re.IGNORECASE)
 
 
 def _build_tool_content(tool_result: str):
@@ -31,6 +32,30 @@ def _build_tool_content(tool_result: str):
 def _strip_thinking(content: str) -> str:
     """Remove <think>...</think> blocks from model output."""
     return _THINK_RE.sub('', content).strip()
+
+
+def _extract_raw_tool_calls(content: str):
+    """Parse tool calls that a model emitted as plain text instead of structured output.
+
+    Some models output ``<tool_call>{"name": "...", "arguments": {...}}</tool_call>``
+    in the message content.  Return a list of (name, arguments_json) tuples and the
+    remaining text, or (None, content) if nothing was found.
+    """
+    cleaned = _RAW_TOOL_CALL_RE.sub('', content).strip()
+    if not cleaned:
+        return None, content
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return None, content
+    if isinstance(parsed, dict) and 'name' in parsed and 'arguments' in parsed:
+        args = parsed['arguments']
+        if isinstance(args, str):
+            args_json = args
+        else:
+            args_json = json.dumps(args)
+        return [(parsed['name'], args_json)], ''
+    return None, content
 
 
 def _call_openai(messages: list[dict], model: str | None = None, max_tokens: int | None = None, tools: list | None = None) -> dict:
@@ -201,6 +226,35 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         tool_context = {}  # shared mutable dict for tool side-effects
         max_tool_rounds = 5
         for _ in range(max_tool_rounds):
+            # Some models emit tool calls as plain text — parse and convert them
+            if not result.get('tool_calls') and result.get('content'):
+                raw_calls, remaining = _extract_raw_tool_calls(result['content'])
+                if raw_calls:
+                    import types
+                    result['content'] = remaining
+                    result['tool_calls'] = []
+                    for name, args_json in raw_calls:
+                        tc = types.SimpleNamespace(
+                            id=f'raw_{name}',
+                            type='function',
+                            function=types.SimpleNamespace(name=name, arguments=args_json),
+                        )
+                        result['tool_calls'].append(tc)
+                    # Rebuild the message object for the API history
+                    result['message'] = types.SimpleNamespace(
+                        content=remaining or None,
+                        tool_calls=result['tool_calls'],
+                        role='assistant',
+                    )
+                    result['message'].to_dict = lambda m=result['message']: {
+                        'role': 'assistant',
+                        'content': m.content,
+                        'tool_calls': [
+                            {'id': tc.id, 'type': 'function', 'function': {'name': tc.function.name, 'arguments': tc.function.arguments}}
+                            for tc in m.tool_calls
+                        ],
+                    }
+
             if not result.get('tool_calls'):
                 break
 
@@ -232,7 +286,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             logger.info('Bot response cancelled: conversation=%s', conversation_id)
             return {'status': 'cancelled'}
 
-        body = result['content']
+        body = _RAW_TOOL_CALL_RE.sub('', result['content']).strip()
         body_html = render_message_body(body)
 
         # Append tool usage badges

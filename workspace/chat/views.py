@@ -33,6 +33,7 @@ from .services import (
     notify_conversation_members,
     notify_new_message,
     render_message_body,
+    user_conversation_ids,
 )
 
 User = get_user_model()
@@ -81,10 +82,7 @@ class ConversationListView(APIView):
         user = request.user
 
         # Get conversation IDs where user is an active member
-        member_convos = ConversationMember.objects.filter(
-            user=user,
-            left_at__isnull=True,
-        ).values_list('conversation_id', flat=True)
+        member_convos = user_conversation_ids(user)
 
         conversations = (
             Conversation.objects.filter(uuid__in=member_convos)

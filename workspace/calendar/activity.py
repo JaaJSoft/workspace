@@ -10,17 +10,11 @@ from workspace.core.activity_registry import ActivityProvider
 class CalendarActivityProvider(ActivityProvider):
 
     def _visibility_filter(self, user_id, viewer_id):
-        """Restrict to events visible to viewer (subscribed calendars or event membership)."""
+        """Restrict to events visible to viewer (owned, subscribed or event membership)."""
         if viewer_id is None or viewer_id == user_id:
             return Q()
-        from workspace.calendar.models import CalendarSubscription, EventMember
-        subscribed_cal_ids = CalendarSubscription.objects.filter(
-            user_id=viewer_id,
-        ).values_list('calendar_id', flat=True)
-        member_event_ids = EventMember.objects.filter(
-            user_id=viewer_id,
-        ).values_list('event_id', flat=True)
-        return Q(calendar_id__in=subscribed_cal_ids) | Q(pk__in=member_event_ids)
+        from workspace.calendar.queries import visible_events_q
+        return visible_events_q(viewer_id)
 
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
         from workspace.calendar.models import Event

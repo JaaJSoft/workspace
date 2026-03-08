@@ -6,10 +6,11 @@ from django.db.models import Q
 from workspace.core.module_registry import SearchResult, SearchTag
 
 from .models import MailAccount, MailMessage
+from .queries import user_account_ids
 
 
 def search_mail(query, user, limit):
-    account_ids = MailAccount.objects.filter(owner=user).values_list('uuid', flat=True)
+    account_ids = user_account_ids(user)
 
     messages = (
         MailMessage.objects
@@ -60,7 +61,7 @@ def _format_date(dt):
 
 
 def search_contacts(query, user, limit):
-    account_ids = MailAccount.objects.filter(owner=user).values_list('uuid', flat=True)
+    account_ids = user_account_ids(user)
 
     messages = (
         MailMessage.objects

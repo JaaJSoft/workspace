@@ -3,15 +3,12 @@ from django.db.models.functions import Concat
 
 from workspace.core.module_registry import SearchResult, SearchTag
 from workspace.chat.models import Conversation, ConversationMember
+from workspace.chat.services import user_conversation_ids
 
 
 def search_conversations(query, user, limit):
     # Conversations the user is an active member of
-    user_conv_uuids = (
-        ConversationMember.objects
-        .filter(user=user, left_at__isnull=True)
-        .values_list('conversation_id', flat=True)
-    )
+    user_conv_uuids = user_conversation_ids(user)
 
     # Groups: match on title
     groups = (

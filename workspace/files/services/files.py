@@ -21,6 +21,15 @@ class FileService:
     """Stateless service that encapsulates file/folder business logic."""
 
     # ------------------------------------------------------------------
+    # Querysets
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def user_files_qs(user):
+        """Return a queryset of active (non-deleted) files owned by the user."""
+        return File.objects.filter(owner=user, deleted_at__isnull=True)
+
+    # ------------------------------------------------------------------
     # Creation
     # ------------------------------------------------------------------
 

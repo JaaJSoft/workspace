@@ -26,6 +26,7 @@ def _parse_dt(value):
 
 from workspace.notifications.services import notify, notify_many
 from .models import Calendar, CalendarSubscription, Event, EventMember
+from .queries import visible_calendar_ids
 from .recurrence import expand_recurring_events, make_virtual_occurrence
 from .serializers import (
     CalendarCreateSerializer,
@@ -52,13 +53,6 @@ def _prefetch_event(qs):
             Poll.objects.filter(event=OuterRef('pk')).values('uuid')[:1]
         ),
     )
-
-
-def _visible_calendar_ids(user):
-    """Calendar IDs the user can see: owned + subscribed."""
-    owned = Calendar.objects.filter(owner=user).values_list('uuid', flat=True)
-    subscribed = CalendarSubscription.objects.filter(user=user).values_list('calendar_id', flat=True)
-    return list(owned) + list(subscribed)
 
 
 def _update_event_fields(event, data, user):
@@ -202,7 +196,7 @@ class EventListView(APIView):
         if calendar_ids_param is not None:
             cal_ids = [c.strip() for c in calendar_ids_param.split(',') if c.strip()]
         else:
-            cal_ids = _visible_calendar_ids(user)
+            cal_ids = visible_calendar_ids(user)
 
         cal_or_member = Q(calendar_id__in=cal_ids) | Q(members__user=user)
 
@@ -297,7 +291,7 @@ class EventDetailView(APIView):
         if not event:
             return None, Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
         is_member = event.members.filter(user=user).exists()
-        cal_ids = _visible_calendar_ids(user)
+        cal_ids = visible_calendar_ids(user)
         if event.calendar_id not in cal_ids and not is_member:
             return None, Response({'detail': 'No access.'}, status=status.HTTP_403_FORBIDDEN)
         return event, None

@@ -9,6 +9,15 @@ from pygments.util import ClassNotFound
 from workspace.core.sse_registry import notify_sse
 
 
+def user_conversation_ids(user):
+    """Return conversation UUIDs where the user is an active member."""
+    from .models import ConversationMember
+
+    return ConversationMember.objects.filter(
+        user=user, left_at__isnull=True,
+    ).values_list('conversation_id', flat=True)
+
+
 def get_or_create_dm(user, other_user):
     """Get or create a DM conversation between two users.
 

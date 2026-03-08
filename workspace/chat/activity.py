@@ -7,17 +7,14 @@ from workspace.core.activity_registry import ActivityProvider
 class ChatActivityProvider(ActivityProvider):
 
     def _base_qs(self, user_id, viewer_id):
-        from workspace.chat.models import Conversation, ConversationMember
+        from workspace.chat.models import Conversation
+        from workspace.chat.services import user_conversation_ids
 
         qs = Conversation.objects.filter(kind=Conversation.Kind.GROUP)
         if user_id is not None:
             qs = qs.filter(created_by_id=user_id)
         if viewer_id is not None and viewer_id != user_id:
-            visible_ids = ConversationMember.objects.filter(
-                user_id=viewer_id,
-                left_at__isnull=True,
-            ).values_list('conversation_id', flat=True)
-            qs = qs.filter(pk__in=visible_ids)
+            qs = qs.filter(pk__in=user_conversation_ids(viewer_id))
         return qs
 
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):

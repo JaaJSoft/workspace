@@ -1,21 +1,14 @@
-from django.db.models import Q
-
 from workspace.core.module_registry import SearchResult, SearchTag
-from .models import Calendar, CalendarSubscription, Event, EventMember, Poll
+from .models import Event, Poll
+from .queries import visible_events_q
 
 
 def search_events(query, user, limit):
-    owned_cal_ids = Calendar.objects.filter(owner=user).values_list('uuid', flat=True)
-    sub_cal_ids = CalendarSubscription.objects.filter(user=user).values_list('calendar_id', flat=True)
-    member_event_ids = EventMember.objects.filter(user=user).values_list('event_id', flat=True)
-
     events = (
         Event.objects
         .select_related('calendar')
         .filter(
-            Q(calendar_id__in=owned_cal_ids) |
-            Q(calendar_id__in=sub_cal_ids) |
-            Q(uuid__in=member_event_ids),
+            visible_events_q(user),
             title__icontains=query,
             recurrence_parent__isnull=True,
             is_cancelled=False,

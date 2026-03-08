@@ -28,18 +28,15 @@ or references a past discussion."""
 
         from datetime import timedelta
         from django.utils import timezone
-        from workspace.chat.models import Conversation, ConversationMember, Message
+        from workspace.chat.models import Conversation, Message
+        from workspace.chat.services import user_conversation_ids
 
         # Determine scope
         conv_only = args.get('conversation_only', False)
         if conv_only and conversation_id:
             conv_ids = [conversation_id]
         else:
-            conv_ids = list(
-                ConversationMember.objects.filter(
-                    user=user, left_at__isnull=True,
-                ).values_list('conversation_id', flat=True)
-            )
+            conv_ids = list(user_conversation_ids(user))
 
         qs = (
             Message.objects.filter(

@@ -9,7 +9,7 @@ from workspace.core.sse_registry import SSEProvider
 
 from .models import ConversationMember, Message, PinnedMessage, Reaction
 from .serializers import MessageSerializer
-from .services import get_unread_counts
+from .services import get_unread_counts, user_conversation_ids
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +20,7 @@ class ChatSSEProvider(SSEProvider):
         user_id = user.id
 
         # Get conversations user is a member of
-        self._member_conv_ids = set(
-            ConversationMember.objects.filter(
-                user_id=user_id,
-                left_at__isnull=True,
-            ).values_list('conversation_id', flat=True)
-        )
+        self._member_conv_ids = set(user_conversation_ids(user))
 
         # Determine "since" timestamp
         if last_event_id:
@@ -78,12 +73,7 @@ class ChatSSEProvider(SSEProvider):
             self._last_unread_push = now
 
         # Refresh member conversation IDs
-        self._member_conv_ids = set(
-            ConversationMember.objects.filter(
-                user_id=user_id,
-                left_at__isnull=True,
-            ).values_list('conversation_id', flat=True)
-        )
+        self._member_conv_ids = set(user_conversation_ids(self.user))
 
         # New messages
         new_messages = list(

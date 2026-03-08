@@ -17,22 +17,14 @@ Call this when the user asks about upcoming events, meetings, or scheduling poll
         if not query:
             return 'Error: query is required'
 
-        from django.db.models import Q
-        from workspace.calendar.models import (
-            Calendar, CalendarSubscription, Event, EventMember, Poll,
-        )
+        from workspace.calendar.models import Event, Poll
+        from workspace.calendar.queries import visible_events_q
 
         # Events the user can see
-        owned_cal_ids = Calendar.objects.filter(owner=user).values_list('uuid', flat=True)
-        sub_cal_ids = CalendarSubscription.objects.filter(user=user).values_list('calendar_id', flat=True)
-        member_event_ids = EventMember.objects.filter(user=user).values_list('event_id', flat=True)
-
         events = (
             Event.objects
             .filter(
-                Q(calendar_id__in=owned_cal_ids)
-                | Q(calendar_id__in=sub_cal_ids)
-                | Q(uuid__in=member_event_ids),
+                visible_events_q(user),
                 title__icontains=query,
                 recurrence_parent__isnull=True,
                 is_cancelled=False,

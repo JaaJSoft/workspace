@@ -85,12 +85,10 @@ class FileSyncService:
             if not entry.is_dir(follow_symlinks=False):
                 continue
 
-            folder_db = File.objects.filter(
-                owner=user,
+            folder_db = FileService.user_files_qs(user).filter(
                 parent=parent_db,
                 name=entry.name,
                 node_type=File.NodeType.FOLDER,
-                deleted_at__isnull=True,
             ).first()
 
             if folder_db:
@@ -118,10 +116,8 @@ class FileSyncService:
             disk_names[entry.name] = entry
 
         # --- Read DB entries (non-deleted) at this level ---
-        db_records = File.objects.filter(
-            owner=user,
+        db_records = FileService.user_files_qs(user).filter(
             parent=parent_db,
-            deleted_at__isnull=True,
         )
         db_by_name = {}  # (name, node_type) -> File
         for rec in db_records:

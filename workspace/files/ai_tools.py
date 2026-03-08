@@ -62,10 +62,10 @@ Use read_file with the returned UUID to get the content."""
         if not query:
             return 'Error: query is required'
 
-        from workspace.files.models import File
+        from workspace.files.services import FileService
 
-        qs = File.objects.filter(
-            owner=user, deleted_at__isnull=True, name__icontains=query,
+        qs = FileService.user_files_qs(user).filter(
+            name__icontains=query,
         ).select_related('parent').order_by('-updated_at')
 
         file_type = args.get('file_type', '').strip().lower()

@@ -66,9 +66,10 @@ Use read_email with the returned UUID to get the full content."""
             return 'Error: query is required'
 
         from django.db.models import Q
-        from workspace.mail.models import MailAccount, MailMessage
+        from workspace.mail.models import MailMessage
+        from workspace.mail.queries import user_account_ids
 
-        account_ids = MailAccount.objects.filter(owner=user).values_list('uuid', flat=True)
+        account_ids = user_account_ids(user)
         qs = (
             MailMessage.objects
             .filter(account_id__in=account_ids, deleted_at__isnull=True)

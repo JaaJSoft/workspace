@@ -12,15 +12,13 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.chat.models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage
 from workspace.chat.serializers import ConversationListSerializer
-from workspace.chat.services import get_unread_counts
+from workspace.chat.services import get_unread_counts, user_conversation_ids
 from workspace.files.ui.viewers import ViewerRegistry
 
 
 def _build_conversation_context(user):
     """Build conversation list with display data for templates."""
-    member_convos = ConversationMember.objects.filter(
-        user=user, left_at__isnull=True,
-    ).values_list('conversation_id', flat=True)
+    member_convos = user_conversation_ids(user)
 
     conversations = (
         Conversation.objects.filter(uuid__in=member_convos)

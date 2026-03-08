@@ -92,11 +92,10 @@ def sync_folder(self, user_id, folder_uuid=None):
     parent_db = None
 
     if folder_uuid:
-        parent_db = File.objects.get(
+        from workspace.files.services import FileService
+        parent_db = FileService.user_files_qs(user).get(
             uuid=folder_uuid,
-            owner=user,
             node_type=File.NodeType.FOLDER,
-            deleted_at__isnull=True,
         )
 
     service = FileSyncService(log=logger)

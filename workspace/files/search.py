@@ -1,12 +1,13 @@
 from workspace.core.module_registry import SearchResult, SearchTag
 from workspace.files.models import File
+from workspace.files.services import FileService
 
 
 def search_files(query, user, limit):
     qs = (
-        File.objects
+        FileService.user_files_qs(user)
         .select_related('parent')
-        .filter(owner=user, deleted_at__isnull=True, name__icontains=query)
+        .filter(name__icontains=query)
         .order_by('-updated_at')[:limit]
     )
     results = []

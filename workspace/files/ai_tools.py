@@ -12,7 +12,7 @@ class FilesToolProvider(ToolProvider):
     })
     def read_file(self, args, user, bot, conversation_id, context):
         """Read the content of a file by its UUID. Supports text files (returns text) and images (returns the image). \
-Call this after finding a file via search_workspace to get its content, \
+Call this after finding a file via search_files to get its content, \
 or when the user asks to read, open, view, or see a specific file."""
         import uuid as uuid_mod
         file_uuid = args.get('uuid', '').strip()
@@ -45,3 +45,47 @@ or when the user asks to read, open, view, or see a specific file."""
         if file_obj.mime_type:
             header += f' ({file_obj.mime_type})'
         return f'{header}\n\n{text}'
+
+    @tool(badge_icon='🔍', badge_label='Searched files', detail_key='query', params={
+        'query': Param('The search term to look for in file names.'),
+        'file_type': Param(
+            'Filter by type: file or folder.',
+            required=False,
+        ),
+    })
+    def search_files(self, args, user, bot, conversation_id, context):
+        """Search through your files and folders by name. \
+Returns up to 20 matches with name, type, and parent folder. \
+Call this when the user asks to find, look up, or locate a file or folder. \
+Use read_file with the returned UUID to get the content."""
+        query = args.get('query', '').strip()
+        if not query:
+            return 'Error: query is required'
+
+        from workspace.files.models import File
+
+        qs = File.objects.filter(
+            owner=user, deleted_at__isnull=True, name__icontains=query,
+        ).select_related('parent').order_by('-updated_at')
+
+        file_type = args.get('file_type', '').strip().lower()
+        if file_type == 'file':
+            qs = qs.filter(node_type=File.NodeType.FILE)
+        elif file_type == 'folder':
+            qs = qs.filter(node_type=File.NodeType.FOLDER)
+
+        matches = qs[:20]
+        if not matches:
+            return f'No files found matching "{query}".'
+
+        results = []
+        for f in matches:
+            results.append({
+                'uuid': str(f.uuid),
+                'name': f.name,
+                'type': f.node_type,
+                'mime_type': f.mime_type or '',
+                'parent_folder': f.parent.name if f.parent else '',
+                'updated_at': f.updated_at.strftime('%Y-%m-%d %H:%M'),
+            })
+        return json.dumps(results, ensure_ascii=False)

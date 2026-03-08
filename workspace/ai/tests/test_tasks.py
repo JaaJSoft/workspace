@@ -175,6 +175,7 @@ class GenerateChatResponseWithToolsTests(TestCase):
         self.conversation = Conversation.objects.create(
             kind=Conversation.Kind.DM,
             created_by=self.user,
+            title='Test conversation',
         )
         ConversationMember.objects.create(conversation=self.conversation, user=self.user)
         ConversationMember.objects.create(conversation=self.conversation, user=self.bot_user)
@@ -397,7 +398,9 @@ class EditImageToolTest(TestCase):
         )
         self.assertIn('Error', result)
 
-    def test_edit_image_no_image_in_conversation(self):
+    @patch('workspace.ai.tools.get_image_client')
+    def test_edit_image_no_image_in_conversation(self, mock_get_client):
+        mock_get_client.return_value = MagicMock()
         result = self.provider.edit_image(
             {'prompt': 'make it blue'}, user=self.user, bot=None,
             conversation_id=str(self.conv.uuid), context=self.context,

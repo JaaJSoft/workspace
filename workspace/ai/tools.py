@@ -62,23 +62,6 @@ Call this when the user explicitly asks you to forget something or when a stored
             return f'Deleted memory "{key}".'
         return f'Memory "{key}" not found.'
 
-    @tool(badge_icon='🔎', badge_label='Searched workspace', detail_key='query', params={
-        'query': Param("The search term to find across all workspace modules. it's a 'like %term%' in the database. so one term for each search"),
-    })
-    def search_workspace(self, args, user, bot, conversation_id, context):
-        """Search across the entire workspace — files, conversations, emails, calendar events, and contacts — \
-for items matching a keyword. Returns results from all modules at once. \
-Call this when the user asks to find, look up, or locate anything. Use a single keyword or short phrase for best results. \
-You can then use read_email or read_file with the returned UUIDs to get full content."""
-        query = args.get('query', '').strip()
-        if not query:
-            return 'Error: query is required'
-        from workspace.core.module_registry import registry
-        results = registry.search(query, user, limit=50)
-        if not results:
-            return f'No results found for "{query}" across the workspace.'
-        return json.dumps(results, ensure_ascii=False)
-
     @tool(badge_icon='🖼️', badge_label='Viewed own avatar')
     def get_my_avatar(self, args, user, bot, conversation_id, context):
         """Retrieve your own avatar image so you can see or describe it. \

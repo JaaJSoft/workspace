@@ -1,4 +1,6 @@
 """AI tools for the Mail module."""
+import json
+
 from workspace.ai.tool_registry import Param, ToolProvider, tool
 
 
@@ -9,7 +11,7 @@ class MailToolProvider(ToolProvider):
     })
     def read_email(self, args, user, bot, conversation_id, context):
         """Read the full content of an email by its UUID: subject, sender, recipients, date, and body text. \
-Call this after finding an email via search_workspace to get its complete content, \
+Call this after finding an email via search_emails to get its complete content, \
 or when the user asks to read, open, or see the details of a specific email."""
         email_uuid = args.get('uuid', '').strip()
         if not email_uuid:
@@ -47,3 +49,63 @@ or when the user asks to read, open, or see the details of a specific email."""
         body = msg.body_text or msg.snippet or '(no content)'
         parts.append(body[:3000])
         return '\n'.join(parts)
+
+    @tool(badge_icon='🔍', badge_label='Searched emails', detail_key='query', params={
+        'query': Param('The search term to look for in email subject, content, or sender.'),
+        'unread_only': Param('If true, only return unread emails.', type='boolean', required=False),
+        'starred_only': Param('If true, only return starred emails.', type='boolean', required=False),
+        'has_attachments': Param('If true, only return emails with attachments.', type='boolean', required=False),
+    })
+    def search_emails(self, args, user, bot, conversation_id, context):
+        """Search through your emails by subject, content, or sender. \
+Returns up to 20 matches with subject, sender, date, and folder. \
+Call this when the user asks to find, look up, or locate an email. \
+Use read_email with the returned UUID to get the full content."""
+        query = args.get('query', '').strip()
+        if not query:
+            return 'Error: query is required'
+
+        from django.db.models import Q
+        from workspace.mail.models import MailAccount, MailMessage
+
+        account_ids = MailAccount.objects.filter(owner=user).values_list('uuid', flat=True)
+        qs = (
+            MailMessage.objects
+            .filter(account_id__in=account_ids, deleted_at__isnull=True)
+            .exclude(folder__is_hidden=True)
+            .filter(
+                Q(subject__icontains=query)
+                | Q(snippet__icontains=query)
+                | Q(from_address__icontains=query)
+            )
+            .select_related('folder')
+        )
+
+        if args.get('unread_only'):
+            qs = qs.filter(is_read=False)
+        if args.get('starred_only'):
+            qs = qs.filter(is_starred=True)
+        if args.get('has_attachments'):
+            qs = qs.filter(has_attachments=True)
+
+        matches = qs.order_by('-date')[:20]
+        if not matches:
+            return f'No emails found matching "{query}".'
+
+        def _sender(addr):
+            if isinstance(addr, dict):
+                return addr.get('name') or addr.get('email', '')
+            return str(addr)
+
+        results = []
+        for msg in matches:
+            results.append({
+                'uuid': str(msg.uuid),
+                'subject': msg.subject or '(no subject)',
+                'from': _sender(msg.from_address),
+                'date': msg.date.strftime('%Y-%m-%d %H:%M') if msg.date else '',
+                'folder': msg.folder.display_name if msg.folder else '',
+                'is_read': msg.is_read,
+                'has_attachments': msg.has_attachments,
+            })
+        return json.dumps(results, ensure_ascii=False)

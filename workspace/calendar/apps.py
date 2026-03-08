@@ -68,6 +68,10 @@ class CalendarConfig(AppConfig):
             ),
         ])
 
+        from workspace.ai.tool_registry import tool_registry
+        from workspace.calendar.ai_tools import CalendarToolProvider
+        tool_registry.register_provider(CalendarToolProvider())
+
         from workspace.core.activity_registry import ActivityProviderInfo, activity_registry
         from workspace.calendar.activity import CalendarActivityProvider
 

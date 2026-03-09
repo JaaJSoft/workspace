@@ -85,6 +85,16 @@ class FileSyncService:
             if not entry.is_dir(follow_symlinks=False):
                 continue
 
+            # Skip folders that are in the trash
+            if File.objects.filter(
+                owner=user,
+                parent=parent_db,
+                name=entry.name,
+                node_type=File.NodeType.FOLDER,
+                deleted_at__isnull=False,
+            ).exists():
+                continue
+
             folder_db = FileService.user_files_qs(user).filter(
                 parent=parent_db,
                 name=entry.name,
@@ -123,6 +133,15 @@ class FileSyncService:
         for rec in db_records:
             db_by_name[(rec.name, rec.node_type)] = rec
 
+        # --- Read trashed DB entries to avoid creating duplicates ---
+        trashed_names = set(
+            File.objects.filter(
+                owner=user,
+                parent=parent_db,
+                deleted_at__isnull=False,
+            ).values_list('name', 'node_type')
+        )
+
         # --- Phase 1: Disk -> DB (create missing) ---
         for entry_name, entry in disk_names.items():
             is_dir = entry.is_dir(follow_symlinks=False)
@@ -135,6 +154,9 @@ class FileSyncService:
 
             if (entry_name, node_type) in db_by_name:
                 continue  # already tracked
+
+            if (entry_name, node_type) in trashed_names:
+                continue  # in trash, don't create a duplicate
 
             if self.dry_run:
                 self.log.info("[DRY-RUN] Would create %s: %s", node_type, entry_name)

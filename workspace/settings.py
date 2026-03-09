@@ -587,6 +587,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mail.sync_all_accounts',
         'schedule': 300.0,  # Every 5 minutes
     },
+    'dispatch-scheduled-messages': {
+        'task': 'ai.dispatch_scheduled_messages',
+        'schedule': 60.0,  # Every minute
+    },
 }
 
 # --------------------------------------------------

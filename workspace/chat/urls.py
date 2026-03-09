@@ -108,6 +108,17 @@ urlpatterns = [
         views.ConversationClearView.as_view(),
         name='chat-conversation-clear',
     ),
+    # Scheduled messages
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/schedules',
+        views.ScheduledMessageListView.as_view(),
+        name='chat-scheduled-messages',
+    ),
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/schedules/<uuid:schedule_id>',
+        views.ScheduledMessageDetailView.as_view(),
+        name='chat-scheduled-message-detail',
+    ),
     # Bot retry
     path(
         'api/v1/chat/conversations/<uuid:conversation_id>/messages/<uuid:message_id>/retry',

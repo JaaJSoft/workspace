@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from workspace.ai.models import ScheduledMessage
+
 from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedMessage, Reaction
 
 
@@ -173,3 +175,27 @@ class MessageEditSerializer(serializers.Serializer):
 
 class ReactionToggleSerializer(serializers.Serializer):
     emoji = serializers.CharField(max_length=32)
+
+
+class ScheduledMessageSerializer(serializers.ModelSerializer):
+    bot_username = serializers.CharField(source='bot.username', read_only=True)
+    bot_display_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ScheduledMessage
+        fields = [
+            'uuid', 'prompt', 'kind',
+            'scheduled_at', 'recurrence_unit', 'recurrence_interval',
+            'recurrence_time', 'recurrence_day',
+            'next_run_at', 'last_run_at', 'is_active',
+            'bot_username', 'bot_display_name',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'uuid', 'next_run_at', 'last_run_at', 'is_active',
+            'bot_username', 'bot_display_name',
+            'created_at', 'updated_at',
+        ]
+
+    def get_bot_display_name(self, obj):
+        return obj.bot.get_full_name() or obj.bot.username

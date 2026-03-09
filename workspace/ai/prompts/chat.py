@@ -77,9 +77,19 @@ def build_chat_messages(
         "Update existing memories when information changes."
     )
 
+    scheduling_instructions = (
+        "\n\n## Scheduling\n"
+        "You can schedule messages to contact the user later using the schedule_message tool. "
+        "Use this proactively when appropriate:\n"
+        "- When the user asks to be reminded of something\n"
+        "- When you want to follow up on a task or discussion\n"
+        "- When periodic check-ins would be helpful\n"
+        "You can also list and cancel existing schedules with list_schedules and cancel_schedule."
+    )
+
     tools_block = _build_tools_block()
 
-    system_content = f"{base_prompt}\n\n{context}{memory_instructions}{tools_block}{memory_block}"
+    system_content = f"{base_prompt}\n\n{context}{memory_instructions}{scheduling_instructions}{tools_block}{memory_block}"
     messages = [{'role': 'system', 'content': system_content}]
     messages.extend(history)
     return messages

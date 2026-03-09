@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.utils import timezone
 
 from workspace.common.uuids import uuid_v7_or_v4
 from django.contrib.auth.models import Group
@@ -149,3 +150,126 @@ class UserMemory(models.Model):
 
     def __str__(self):
         return f'Memory: {self.user.username}/{self.bot.username} — {self.key}'
+
+
+class ScheduledMessage(models.Model):
+    """Bot-initiated scheduled message (one-time or recurring)."""
+
+    class Kind(models.TextChoices):
+        ONCE = 'once', 'Once'
+        RECURRING = 'recurring', 'Recurring'
+
+    class RecurrenceUnit(models.TextChoices):
+        HOURS = 'hours', 'Hours'
+        DAYS = 'days', 'Days'
+        WEEKS = 'weeks', 'Weeks'
+        MONTHS = 'months', 'Months'
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    conversation = models.ForeignKey(
+        'chat.Conversation',
+        on_delete=models.CASCADE,
+        related_name='scheduled_messages',
+    )
+    bot = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='bot_scheduled_messages',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='created_scheduled_messages',
+    )
+    prompt = models.TextField()
+
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+
+    recurrence_unit = models.CharField(
+        max_length=10,
+        choices=RecurrenceUnit.choices,
+        blank=True,
+        default='',
+    )
+    recurrence_interval = models.PositiveIntegerField(default=1)
+    recurrence_time = models.TimeField(null=True, blank=True)
+    recurrence_day = models.PositiveIntegerField(null=True, blank=True)
+
+    next_run_at = models.DateTimeField(db_index=True)
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['next_run_at']
+
+    def __str__(self):
+        return f'ScheduledMessage {self.uuid} ({self.kind} — {self.conversation_id})'
+
+    def compute_next_run(self):
+        """Calculate and set the next run time, or deactivate for one-time messages."""
+        if self.kind == self.Kind.ONCE:
+            self.is_active = False
+            return
+
+        now = timezone.now()
+        base = self.last_run_at or self.next_run_at or now
+
+        if self.recurrence_unit == self.RecurrenceUnit.HOURS:
+            delta = timezone.timedelta(hours=self.recurrence_interval)
+            self.next_run_at = base + delta
+
+        elif self.recurrence_unit == self.RecurrenceUnit.DAYS:
+            delta = timezone.timedelta(days=self.recurrence_interval)
+            candidate = base + delta
+            if self.recurrence_time is not None:
+                candidate = candidate.replace(
+                    hour=self.recurrence_time.hour,
+                    minute=self.recurrence_time.minute,
+                    second=self.recurrence_time.second,
+                    microsecond=0,
+                )
+            self.next_run_at = candidate
+
+        elif self.recurrence_unit == self.RecurrenceUnit.WEEKS:
+            delta = timezone.timedelta(weeks=self.recurrence_interval)
+            candidate = base + delta
+            if self.recurrence_day is not None:
+                # Adjust to the target weekday (0=Mon..6=Sun)
+                current_weekday = candidate.weekday()
+                day_offset = (self.recurrence_day - current_weekday) % 7
+                candidate = candidate + timezone.timedelta(days=day_offset)
+            if self.recurrence_time is not None:
+                candidate = candidate.replace(
+                    hour=self.recurrence_time.hour,
+                    minute=self.recurrence_time.minute,
+                    second=self.recurrence_time.second,
+                    microsecond=0,
+                )
+            self.next_run_at = candidate
+
+        elif self.recurrence_unit == self.RecurrenceUnit.MONTHS:
+            import calendar
+            year = base.year
+            month = base.month + self.recurrence_interval
+            # Handle year rollover
+            year += (month - 1) // 12
+            month = (month - 1) % 12 + 1
+            day = base.day
+            if self.recurrence_day is not None:
+                day = self.recurrence_day
+            # Clamp to the last day of the target month
+            max_day = calendar.monthrange(year, month)[1]
+            day = min(day, max_day)
+            candidate = base.replace(year=year, month=month, day=day)
+            if self.recurrence_time is not None:
+                candidate = candidate.replace(
+                    hour=self.recurrence_time.hour,
+                    minute=self.recurrence_time.minute,
+                    second=self.recurrence_time.second,
+                    microsecond=0,
+                )
+            self.next_run_at = candidate

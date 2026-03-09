@@ -64,6 +64,9 @@ function chatApp(currentUserId) {
     botMemories: [],
     loadingBotMemories: false,
     memorySearch: '',
+    // Scheduled messages (info panel)
+    scheduledMessages: [],
+    loadingSchedules: false,
 
     // Emoji picker
     emojiPickerVisible: false,
@@ -1126,6 +1129,7 @@ function chatApp(currentUserId) {
           this.loadPinnedMessages(this.activeConversation.uuid);
           if (this.isBotConversation(this.activeConversation)) {
             this.loadBotMemories();
+            this.loadScheduledMessages(this.activeConversation.uuid);
           }
         }
       }
@@ -2544,6 +2548,96 @@ function chatApp(currentUserId) {
       });
       if (resp.ok) {
         this.botMemories = this.botMemories.filter(m => m.id !== mem.id);
+      }
+    },
+
+    // ── Scheduled messages ──────────────────────────────────
+
+    async loadScheduledMessages(conversationId) {
+      if (!this.activeConversation || !this.isBotConversation(this.activeConversation)) return;
+      this.loadingSchedules = true;
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${conversationId}/schedules`, {
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          this.scheduledMessages = await resp.json();
+        }
+      } catch (e) {
+        console.error('Failed to load schedules', e);
+      }
+      this.loadingSchedules = false;
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    scheduleTimingLabel(sched) {
+      if (sched.kind === 'once') {
+        return 'One-time';
+      }
+      let label = `Every ${sched.recurrence_interval > 1 ? sched.recurrence_interval + ' ' : ''}${sched.recurrence_unit}`;
+      if (sched.recurrence_time) {
+        label += ` at ${sched.recurrence_time.slice(0, 5)}`;
+      }
+      return label;
+    },
+
+    async editSchedule(sched) {
+      const prompt = await AppDialog.prompt({
+        title: 'Edit scheduled message',
+        message: 'Update the instruction for this schedule:',
+        value: sched.prompt,
+        placeholder: 'Instruction...',
+        okLabel: 'Save',
+        inputSize: 'textarea',
+        icon: 'clock',
+        iconClass: 'bg-info/10 text-info',
+      });
+      if (prompt === null || prompt.trim() === sched.prompt) return;
+      try {
+        const resp = await fetch(
+          `/api/v1/chat/conversations/${this.activeConversation.uuid}/schedules/${sched.uuid}`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this._csrf(),
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({ prompt: prompt.trim() }),
+          },
+        );
+        if (resp.ok) {
+          const updated = await resp.json();
+          const idx = this.scheduledMessages.findIndex(s => s.uuid === sched.uuid);
+          if (idx !== -1) this.scheduledMessages[idx] = updated;
+        }
+      } catch (e) {
+        console.error('Failed to edit schedule', e);
+      }
+    },
+
+    async deleteSchedule(sched) {
+      const ok = await AppDialog.confirm({
+        title: 'Delete scheduled message',
+        message: 'Delete this scheduled message?',
+        okLabel: 'Delete',
+        okClass: 'btn-error',
+      });
+      if (!ok) return;
+      try {
+        const resp = await fetch(
+          `/api/v1/chat/conversations/${this.activeConversation.uuid}/schedules/${sched.uuid}`,
+          {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': this._csrf() },
+            credentials: 'same-origin',
+          },
+        );
+        if (resp.ok) {
+          this.scheduledMessages = this.scheduledMessages.filter(s => s.uuid !== sched.uuid);
+        }
+      } catch (e) {
+        console.error('Failed to delete schedule', e);
       }
     },
   };

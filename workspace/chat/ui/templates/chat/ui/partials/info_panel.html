@@ -328,6 +328,55 @@
       </template>
     </div>
   </template>
+
+  <!-- Scheduled Messages (bot conversations only) -->
+  <template x-if="isBotConversation(activeConversation)">
+    <div class="space-y-5">
+      <div class="divider my-0 text-xs text-base-content/40">
+        Scheduled Messages
+        <span x-show="scheduledMessages.length > 0" class="badge badge-ghost badge-xs" x-text="scheduledMessages.length"></span>
+      </div>
+
+      <!-- Loading -->
+      <div x-show="loadingSchedules" class="flex justify-center py-4">
+        <span class="loading loading-spinner loading-sm"></span>
+      </div>
+
+      <!-- Empty state -->
+      <template x-if="!loadingSchedules && scheduledMessages.length === 0">
+        <p class="text-xs text-base-content/40 text-center py-2">No scheduled messages</p>
+      </template>
+
+      <!-- Schedule list -->
+      <template x-if="!loadingSchedules && scheduledMessages.length > 0">
+        <ul class="space-y-1">
+          <template x-for="sched in scheduledMessages" :key="sched.uuid">
+            <li class="group flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors">
+              <i :data-lucide="sched.kind === 'once' ? 'clock' : 'repeat'" class="w-3.5 h-3.5 text-info flex-shrink-0 mt-0.5"></i>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs text-base-content/90 break-words line-clamp-2" x-text="sched.prompt"></p>
+                <div class="flex items-center gap-1 mt-0.5">
+                  <span class="badge badge-xs" :class="sched.kind === 'once' ? 'badge-ghost' : 'badge-info badge-outline'" x-text="scheduleTimingLabel(sched)"></span>
+                </div>
+                <p class="text-[0.65rem] text-base-content/40 mt-0.5">
+                  Next: <span x-text="formatDateTime(sched.next_run_at)"></span>
+                </p>
+              </div>
+              <!-- Actions -->
+              <div class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                <button class="btn btn-ghost btn-xs btn-circle" @click="editSchedule(sched)" title="Edit">
+                  <i data-lucide="pencil" class="w-3 h-3"></i>
+                </button>
+                <button class="btn btn-ghost btn-xs btn-circle text-error" @click="deleteSchedule(sched)" title="Delete">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i>
+                </button>
+              </div>
+            </li>
+          </template>
+        </ul>
+      </template>
+    </div>
+  </template>
 </div>
 
 <!-- Avatar cropper modal -->

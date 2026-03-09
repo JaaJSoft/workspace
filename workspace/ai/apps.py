@@ -19,6 +19,9 @@ class AIConfig(AppConfig):
 
         tool_registry.register_provider(CoreToolProvider())
 
+        from workspace.ai.tools import ScheduleToolProvider
+        tool_registry.register_provider(ScheduleToolProvider())
+
         from django.conf import settings
         if getattr(settings, 'AI_IMAGE_MODEL', ''):
             from workspace.ai.tools import ImageToolProvider

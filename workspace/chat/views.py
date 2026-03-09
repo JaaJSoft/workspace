@@ -25,6 +25,7 @@ from .serializers import (
     MessageSerializer,
     PinnedMessageSerializer,
     ReactionToggleSerializer,
+    ScheduledMessageSerializer,
 )
 from .services import (
     extract_mentions,
@@ -1582,3 +1583,103 @@ class BotCancelView(APIView):
             return Response({'detail': 'No active task found.'}, status=status.HTTP_404_NOT_FOUND)
 
         return Response({'status': 'cancelled'})
+
+
+@extend_schema(tags=['Chat'])
+class ScheduledMessageListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="List active scheduled messages for a conversation")
+    def get(self, request, conversation_id):
+        from workspace.ai.models import ScheduledMessage
+
+        membership = _get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {'detail': 'Not a member of this conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        schedules = (
+            ScheduledMessage.objects.filter(
+                conversation_id=conversation_id,
+                is_active=True,
+            )
+            .select_related('bot')
+            .order_by('next_run_at')
+        )
+        serializer = ScheduledMessageSerializer(schedules, many=True)
+        return Response(serializer.data)
+
+
+@extend_schema(tags=['Chat'])
+class ScheduledMessageDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    TIMING_FIELDS = {
+        'scheduled_at', 'recurrence_unit', 'recurrence_interval',
+        'recurrence_time', 'recurrence_day', 'kind',
+    }
+
+    @extend_schema(summary="Update a scheduled message")
+    def patch(self, request, conversation_id, schedule_id):
+        from workspace.ai.models import ScheduledMessage
+
+        membership = _get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {'detail': 'Not a member of this conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        schedule = (
+            ScheduledMessage.objects.filter(
+                uuid=schedule_id,
+                conversation_id=conversation_id,
+                is_active=True,
+            )
+            .select_related('bot')
+            .first()
+        )
+        if not schedule:
+            return Response(
+                {'detail': 'Scheduled message not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = ScheduledMessageSerializer(schedule, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated = serializer.save()
+
+        # Recompute next_run_at if any timing fields were changed
+        if self.TIMING_FIELDS & set(request.data.keys()):
+            updated.compute_next_run()
+            updated.save(update_fields=['next_run_at', 'is_active'])
+
+        return Response(ScheduledMessageSerializer(updated).data)
+
+    @extend_schema(summary="Deactivate a scheduled message")
+    def delete(self, request, conversation_id, schedule_id):
+        from workspace.ai.models import ScheduledMessage
+
+        membership = _get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {'detail': 'Not a member of this conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        schedule = ScheduledMessage.objects.filter(
+            uuid=schedule_id,
+            conversation_id=conversation_id,
+            is_active=True,
+        ).first()
+        if not schedule:
+            return Response(
+                {'detail': 'Scheduled message not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        schedule.is_active = False
+        schedule.save(update_fields=['is_active'])
+        return Response(status=status.HTTP_204_NO_CONTENT)

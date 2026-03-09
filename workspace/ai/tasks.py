@@ -403,10 +403,10 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             conversation, bot_user, result, used_tools, tool_context, ai_task,
         )
 
-        # Auto-generate title after the first bot response (2 messages = 1 user + 1 bot)
+        # Auto-generate title if the conversation doesn't have one yet
         if not conversation.title and Message.objects.filter(
             conversation_id=conversation_id, deleted_at__isnull=True,
-        ).count() == 2:
+        ).count() >= 2:
             generate_conversation_title.delay(str(conversation_id))
 
         logger.info('Bot response generated: conversation=%s tokens=%s+%s',

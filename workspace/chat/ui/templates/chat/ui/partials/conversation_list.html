@@ -58,9 +58,9 @@ Alpine bindings reference the parent chatApp() x-data scope.
           @click="selectConversationById('{{ conv.uuid }}')"
           :title="collapsed ? '{{ conv.display_name|escapejs }}' : ''"
         >
-          <div class="relative flex-shrink-0">
+          <div class="relative flex-shrink-0 flex">
             {% if conv.other_user %}
-              {% include "ui/partials/user_avatar.html" with user=conv.other_user size="sm" show_card=True %}
+              {% include "ui/partials/user_avatar.html" with user=conv.other_user size="sm" %}
             {% elif conv.has_avatar %}
               <div class="w-8 h-8 rounded-full overflow-hidden">
                 <img src="/api/v1/chat/conversations/{{ conv.uuid }}/avatar/image" alt="{{ conv.display_name|escapejs }}" class="w-full h-full object-cover" />
@@ -136,9 +136,9 @@ Alpine bindings reference the parent chatApp() x-data scope.
           @click="selectConversationById('{{ conv.uuid }}')"
           :title="collapsed ? '{{ conv.display_name|escapejs }}' : ''"
         >
-          <div class="relative flex-shrink-0">
+          <div class="relative flex-shrink-0 flex">
             {% if conv.other_user %}
-              {% include "ui/partials/user_avatar.html" with user=conv.other_user size="sm" show_card=True %}
+              {% include "ui/partials/user_avatar.html" with user=conv.other_user size="sm" %}
             {% else %}
               <div class="w-8 h-8 rounded-full bg-neutral text-neutral-content flex items-center justify-center">
                 <span class="text-xs font-medium">{{ conv.avatar_initial }}</span>

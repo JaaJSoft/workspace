@@ -669,7 +669,7 @@ def generate_conversation_title(self, conversation_id: str):
                 },
                 {'role': 'user', 'content': excerpt},
             ],
-            max_tokens=30,
+            max_tokens=2048,
         )
         title = result['content'].strip().strip('"\'')
         if title:

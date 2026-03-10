@@ -196,9 +196,10 @@ class ImageViewer(BaseViewer):
     def get_context(self, request) -> dict:
         from django.conf import settings
         context = super().get_context(request)
+        parent_id = getattr(self.file, 'parent_id', None)
         context['ai_edit_available'] = bool(getattr(settings, 'AI_IMAGE_MODEL', ''))
         context['file_uuid'] = str(self.file.uuid)
-        context['file_parent'] = str(self.file.parent_id) if self.file.parent_id else ''
+        context['file_parent'] = str(parent_id) if parent_id else ''
         context['file_name'] = self.file.name
         return context
 

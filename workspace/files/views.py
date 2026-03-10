@@ -1514,3 +1514,69 @@ class FileViewSet(viewsets.ModelViewSet):
         comment.save(update_fields=['body', 'edited_at'])
         serializer = FileCommentSerializer(comment)
         return Response(serializer.data)
+
+    # ── AI Image Editing ──────────────────────────────────────
+
+    @extend_schema(
+        summary="AI-edit an image file",
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'prompt': {'type': 'string', 'description': 'Edit instruction'},
+                    'size': {'type': 'string', 'enum': ['1024x1024', '1792x1024', '1024x1792']},
+                    'source_image': {'type': 'string', 'nullable': True, 'description': 'Base64 source (null = use original file)'},
+                },
+                'required': ['prompt'],
+            }
+        },
+        responses={
+            200: OpenApiResponse(description="Base64-encoded edited image."),
+            400: OpenApiResponse(description="Missing prompt."),
+            404: OpenApiResponse(description="File not found or AI not configured."),
+            502: OpenApiResponse(description="AI backend error."),
+        },
+    )
+    @action(detail=True, methods=['post'], url_path='ai-edit')
+    def ai_edit(self, request, uuid=None):
+        """Edit an image file using AI based on a text prompt."""
+        import base64
+
+        if not getattr(settings, 'AI_IMAGE_MODEL', ''):
+            raise Http404
+
+        file_obj = self.get_object()
+
+        if file_obj.node_type != File.NodeType.FILE or not (file_obj.mime_type or '').startswith('image/'):
+            return Response({'error': 'file is not an image'}, status=status.HTTP_400_BAD_REQUEST)
+
+        prompt = request.data.get('prompt', '').strip()
+        if not prompt:
+            return Response({'error': 'prompt is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        size = request.data.get('size', '1024x1024')
+
+        # Use provided source_image (iterative edit) or read from storage
+        source_b64 = request.data.get('source_image')
+        if source_b64:
+            try:
+                source_data = base64.b64decode(source_b64)
+            except Exception:
+                return Response({'error': 'invalid base64 in source_image'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            try:
+                fh = file_obj.content.open('rb')
+                source_data = fh.read()
+                fh.close()
+            except Exception:
+                return Response({'error': 'could not read file content'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from workspace.ai.image_service import ai_edit_image
+        try:
+            image_data = ai_edit_image(source_data, prompt, size)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except RuntimeError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({'image': base64.b64encode(image_data).decode()})

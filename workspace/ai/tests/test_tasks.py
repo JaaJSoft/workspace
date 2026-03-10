@@ -343,7 +343,7 @@ class EditImageToolTest(TestCase):
         att.save()
         return att
 
-    @patch('workspace.ai.tools.get_image_client')
+    @patch('workspace.ai.image_service.get_image_client')
     def test_edit_image_openai_success(self, mock_get_client):
         """OpenAI images.edit works on first try."""
         self._attach_image()
@@ -368,7 +368,7 @@ class EditImageToolTest(TestCase):
         AI_IMAGE_BASE_URL='http://localhost:11434/v1/',
         AI_TIMEOUT=30,
     )
-    @patch('workspace.ai.tools.get_image_client')
+    @patch('workspace.ai.image_service.get_image_client')
     def test_edit_image_ollama_fallback(self, mock_get_client):
         """Falls back to Ollama native API when OpenAI endpoint fails."""
         self._attach_image()
@@ -376,11 +376,7 @@ class EditImageToolTest(TestCase):
         mock_client.images.edit.side_effect = Exception('400 Bad Request')
         mock_get_client.return_value = mock_client
 
-        edited_b64 = base64.b64encode(b'\x89PNG ollama').decode()
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {'images': [edited_b64]}
-
-        with patch('workspace.ai.tools.ImageToolProvider._edit_via_ollama',
+        with patch('workspace.ai.image_service._edit_via_ollama',
                    return_value=b'\x89PNG ollama') as mock_ollama:
             result = self.provider.edit_image(
                 {'prompt': 'make it red'}, user=self.user, bot=None,
@@ -398,16 +394,14 @@ class EditImageToolTest(TestCase):
         )
         self.assertIn('Error', result)
 
-    @patch('workspace.ai.tools.get_image_client')
-    def test_edit_image_no_image_in_conversation(self, mock_get_client):
-        mock_get_client.return_value = MagicMock()
+    def test_edit_image_no_image_in_conversation(self):
         result = self.provider.edit_image(
             {'prompt': 'make it blue'}, user=self.user, bot=None,
             conversation_id=str(self.conv.uuid), context=self.context,
         )
         self.assertIn('no image found', result)
 
-    @patch('workspace.ai.tools.get_image_client')
+    @patch('workspace.ai.image_service.get_image_client')
     def test_edit_image_both_backends_fail(self, mock_get_client):
         """Returns error when both OpenAI and Ollama fail."""
         self._attach_image()
@@ -415,7 +409,7 @@ class EditImageToolTest(TestCase):
         mock_client.images.edit.side_effect = Exception('OpenAI failed')
         mock_get_client.return_value = mock_client
 
-        with patch('workspace.ai.tools.ImageToolProvider._edit_via_ollama',
+        with patch('workspace.ai.image_service._edit_via_ollama',
                    side_effect=Exception('Ollama failed')):
             result = self.provider.edit_image(
                 {'prompt': 'make it blue'}, user=self.user, bot=None,

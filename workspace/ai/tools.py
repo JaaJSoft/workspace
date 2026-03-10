@@ -1,6 +1,5 @@
 """Core AI chat tools (memory, workspace search, avatar, image generation)."""
 import base64
-import io
 import json
 import logging
 
@@ -141,42 +140,6 @@ Do NOT use this to modify an existing image — use edit_image instead."""
 
         return f'Image generated successfully for: {prompt}'
 
-    def _edit_via_openai(self, client, image_file, prompt, size):
-        """Try editing via the OpenAI-compatible /v1/images/edits endpoint."""
-        response = client.images.edit(
-            model=settings.AI_IMAGE_MODEL,
-            image=image_file,
-            prompt=prompt,
-            size=size,
-            n=1,
-            response_format='b64_json',
-        )
-        return base64.b64decode(response.data[0].b64_json)
-
-    def _edit_via_ollama(self, source_data, prompt):
-        """Fallback: use Ollama native /api/generate with images param (img2img)."""
-        import httpx
-        base_url = (settings.AI_IMAGE_BASE_URL or settings.AI_BASE_URL or '').rstrip('/')
-        if base_url.endswith('/v1'):
-            base_url = base_url[:-3]
-        resp = httpx.post(
-            f'{base_url}/api/generate',
-            json={
-                'model': settings.AI_IMAGE_MODEL,
-                'prompt': prompt,
-                'images': [base64.b64encode(source_data).decode()],
-                'stream': False,
-            },
-            timeout=settings.AI_TIMEOUT,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        # Ollama returns 'image' (singular) for img2img
-        result_b64 = data.get('image') or ''
-        if not result_b64:
-            raise RuntimeError(f'no image returned from Ollama — response keys: {list(data.keys())}')
-        return base64.b64decode(result_b64)
-
     @tool(badge_icon='✏️', badge_label='Edited image', detail_key='prompt', params={
         'prompt': Param('A description of the changes to apply to the image.'),
         'size': Param('Output size: 1024x1024, 1792x1024, or 1024x1792.', required=False),
@@ -187,15 +150,13 @@ Automatically uses the most recent image in the conversation as the source. \
 Call this when the user asks you to modify, change, update, transform, or edit a picture — \
 for example "make it darker", "remove the background", "add a hat". \
 Do NOT use this to create an image from scratch — use generate_image instead."""
+        from .image_service import ai_edit_image
+
         prompt = args.get('prompt', '').strip()
         if not prompt:
             return 'Error: prompt is required'
         if not conversation_id:
             return 'Error: no conversation context'
-
-        client = get_image_client()
-        if not client:
-            return 'Error: AI is not configured'
 
         # Find the most recent image attachment in the conversation
         from workspace.chat.models import MessageAttachment
@@ -217,28 +178,11 @@ Do NOT use this to create an image from scratch — use generate_image instead."
             return 'Error: could not read the source image'
 
         size = args.get('size', '1024x1024')
-        if size not in ('1024x1024', '1792x1024', '1024x1792'):
-            size = '1024x1024'
 
-        logger.info(
-            'Starting image edit: model=%s size=%s source=%s prompt=%.80s',
-            settings.AI_IMAGE_MODEL, size, attachment.uuid, prompt,
-        )
-
-        # Try OpenAI-compatible endpoint first, fall back to Ollama native API
         try:
-            image_file = io.BytesIO(source_data)
-            image_file.name = attachment.original_name or 'image.png'
-            image_data = self._edit_via_openai(client, image_file, prompt, size)
-            logger.info('Image edited via OpenAI endpoint: model=%s bytes=%d', settings.AI_IMAGE_MODEL, len(image_data))
-        except Exception as openai_err:
-            logger.info('OpenAI images.edit failed (%s), falling back to Ollama native API', openai_err)
-            try:
-                image_data = self._edit_via_ollama(source_data, prompt)
-                logger.info('Image edited via Ollama native API: model=%s bytes=%d', settings.AI_IMAGE_MODEL, len(image_data))
-            except Exception as ollama_err:
-                logger.exception('Image edit failed on both OpenAI and Ollama backends')
-                return f'Error: image edit failed — {ollama_err}'
+            image_data = ai_edit_image(source_data, prompt, size)
+        except (ValueError, RuntimeError) as exc:
+            return f'Error: {exc}'
 
         context.setdefault('images', []).append({
             'data': image_data,

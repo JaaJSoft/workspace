@@ -16,30 +16,246 @@
     <button type="button" class="btn btn-sm btn-ghost" @click="reset()" title="Reset (0)">
       <i data-lucide="refresh-cw" class="w-4 h-4"></i>
     </button>
+    {% if ai_edit_available %}
+    <div class="divider divider-horizontal mx-2"></div>
+    <button
+      type="button"
+      class="btn btn-sm"
+      :class="editMode ? 'btn-primary' : 'btn-ghost'"
+      @click="toggleEditMode()"
+      title="AI Edit"
+    >
+      <i data-lucide="wand-2" class="w-4 h-4"></i>
+      <span class="hidden sm:inline">AI Edit</span>
+    </button>
+    {% endif %}
   </div>
 
-  <!-- Image Container -->
-  <div class="flex-1 overflow-auto flex items-center justify-center p-4 min-h-0">
-    <img
-      src="{{ content_url }}"
-      alt="{{ file.name }}"
-      class="max-w-full max-h-full object-contain transition-transform duration-200"
-      :style="`transform: scale(${zoomLevel}) rotate(${rotation}deg)`"
-      x-ref="image"
-    />
+  <!-- Main content: image + edit panel -->
+  <div class="flex-1 flex min-h-0">
+    <!-- Image Container -->
+    <div class="flex-1 overflow-auto flex items-center justify-center p-4 min-h-0">
+      <img
+        :src="editPreview || '{{ content_url }}'"
+        alt="{{ file.name }}"
+        class="max-w-full max-h-full object-contain transition-transform duration-200"
+        :style="`transform: scale(${zoomLevel}) rotate(${rotation}deg)`"
+        x-ref="image"
+      />
+    </div>
+
+    <!-- AI Edit Panel -->
+    {% if ai_edit_available %}
+    <div
+      x-show="editMode"
+      x-cloak
+      class="w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-y-auto shrink-0"
+    >
+      <div class="p-4 flex flex-col gap-4 h-full">
+        <h4 class="font-semibold text-sm flex items-center gap-2">
+          <i data-lucide="wand-2" class="w-4 h-4"></i>
+          AI Image Edit
+        </h4>
+
+        <!-- Prompt -->
+        <div class="form-control">
+          <label class="label"><span class="label-text text-xs">Describe the edit</span></label>
+          <textarea
+            x-model="editPrompt"
+            class="textarea textarea-bordered textarea-sm w-full"
+            rows="3"
+            placeholder='e.g. "remove the background", "make it brighter"'
+            :disabled="editLoading"
+            @keydown.ctrl.enter="generateEdit()"
+          ></textarea>
+        </div>
+
+        <!-- Size selector -->
+        <div class="form-control">
+          <label class="label"><span class="label-text text-xs">Output size</span></label>
+          <select x-model="editSize" class="select select-bordered select-sm w-full" :disabled="editLoading">
+            <option value="1024x1024">1024 x 1024</option>
+            <option value="1792x1024">1792 x 1024 (landscape)</option>
+            <option value="1024x1792">1024 x 1792 (portrait)</option>
+          </select>
+        </div>
+
+        <!-- Generate button -->
+        <button
+          type="button"
+          class="btn btn-primary btn-sm w-full"
+          @click="generateEdit()"
+          :disabled="editLoading || !editPrompt.trim()"
+        >
+          <span x-show="!editLoading" class="flex items-center gap-2">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            Generate
+          </span>
+          <span x-show="editLoading" class="flex items-center gap-2" x-cloak>
+            <span class="loading loading-spinner loading-xs"></span>
+            Generating...
+          </span>
+        </button>
+
+        <!-- Error -->
+        <template x-if="editError">
+          {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="editError"></span>' class="text-xs" %}
+        </template>
+
+        <!-- Edit history actions (visible when there's a preview) -->
+        <template x-if="editPreview">
+          <div class="flex flex-col gap-2 mt-auto">
+            <div class="text-xs text-base-content/60 text-center" x-text="'Edit ' + editHistory.length + ' of ' + editHistory.length"></div>
+
+            <!-- Undo -->
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm w-full"
+              @click="undoEdit()"
+              :disabled="editHistory.length <= 1"
+            >
+              <i data-lucide="undo-2" class="w-4 h-4"></i>
+              Undo
+            </button>
+
+            <!-- Save As -->
+            <button
+              type="button"
+              class="btn btn-success btn-sm w-full"
+              @click="showSaveAs = true"
+              x-show="!showSaveAs"
+            >
+              <i data-lucide="save" class="w-4 h-4"></i>
+              Save as copy
+            </button>
+
+            <!-- Save As form -->
+            <div x-show="showSaveAs" x-cloak class="flex flex-col gap-2 p-3 bg-base-200 rounded-lg">
+              <div class="form-control">
+                <label class="label"><span class="label-text text-xs">File name</span></label>
+                <input
+                  type="text"
+                  x-model="saveAsName"
+                  class="input input-bordered input-sm w-full"
+                  :disabled="saveAsLoading"
+                />
+              </div>
+              <div class="form-control">
+                <label class="label"><span class="label-text text-xs">Folder</span></label>
+                <select x-model="saveAsParent" class="select select-bordered select-sm w-full" :disabled="saveAsLoading">
+                  <option value="">Root</option>
+                  <template x-for="folder in folders" :key="folder.uuid">
+                    <option :value="folder.uuid" x-text="folder.path || folder.name" :selected="folder.uuid === saveAsParent"></option>
+                  </template>
+                </select>
+              </div>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm flex-1"
+                  @click="showSaveAs = false"
+                  :disabled="saveAsLoading"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-success btn-sm flex-1"
+                  @click="saveAsCopy()"
+                  :disabled="saveAsLoading || !saveAsName.trim()"
+                >
+                  <span x-show="!saveAsLoading">Save</span>
+                  <span x-show="saveAsLoading" x-cloak class="loading loading-spinner loading-xs"></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Discard -->
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm w-full text-error"
+              @click="discardEdits()"
+            >
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+              Discard edits
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 
 <script>
 window.imageViewerData = function imageViewerData() {
+  var fileUuid = '{{ file_uuid|escapejs }}';
+  var fileParent = '{{ file_parent|escapejs }}';
+  var fileName = '{{ file_name|escapejs }}';
+
+  function getCSRFToken() {
+    var match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
+    return match ? match.split('=')[1] : '';
+  }
+
+  function editedName(originalName) {
+    var dot = originalName.lastIndexOf('.');
+    if (dot > 0) {
+      return originalName.substring(0, dot) + '_edited.png';
+    }
+    return originalName + '_edited.png';
+  }
+
+  function closestSize(w, h) {
+    if (!w || !h) return '1024x1024';
+    var ratio = w / h;
+    var sizes = [
+      { value: '1024x1024', ratio: 1 },
+      { value: '1792x1024', ratio: 1792 / 1024 },
+      { value: '1024x1792', ratio: 1024 / 1792 },
+    ];
+    var best = sizes[0];
+    var bestDiff = Math.abs(ratio - best.ratio);
+    for (var i = 1; i < sizes.length; i++) {
+      var diff = Math.abs(ratio - sizes[i].ratio);
+      if (diff < bestDiff) { best = sizes[i]; bestDiff = diff; }
+    }
+    return best.value;
+  }
+
   return {
     zoomLevel: 1,
     rotation: 0,
 
+    editMode: false,
+    editPrompt: '',
+    editSize: '1024x1024',
+    editLoading: false,
+    editHistory: [],
+    editPreview: null,
+    editError: null,
+
+    showSaveAs: false,
+    saveAsName: editedName(fileName),
+    saveAsParent: fileParent,
+    saveAsLoading: false,
+    folders: [],
+
     init() {
-      this.$nextTick(() => {
+      var self = this;
+      this.$nextTick(function() {
         if (typeof lucide !== 'undefined') {
           lucide.createIcons();
+        }
+        var img = self.$refs.image;
+        if (img) {
+          if (img.naturalWidth) {
+            self.editSize = closestSize(img.naturalWidth, img.naturalHeight);
+          } else {
+            img.addEventListener('load', function() {
+              self.editSize = closestSize(img.naturalWidth, img.naturalHeight);
+            }, { once: true });
+          }
         }
       });
     },
@@ -55,7 +271,138 @@ window.imageViewerData = function imageViewerData() {
     reset() {
       this.zoomLevel = 1;
       this.rotation = 0;
-    }
+    },
+
+    toggleEditMode() {
+      this.editMode = !this.editMode;
+      if (this.editMode && this.folders.length === 0) {
+        this.loadFolders();
+      }
+      this.$nextTick(() => {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      });
+    },
+
+    async loadFolders() {
+      try {
+        var resp = await fetch('/api/v1/files?node_type=folder', { credentials: 'same-origin' });
+        if (resp.ok) {
+          var data = await resp.json();
+          this.folders = data.results || data;
+        }
+      } catch (e) {}
+    },
+
+    async generateEdit() {
+      var prompt = this.editPrompt.trim();
+      if (!prompt || this.editLoading) return;
+
+      this.editLoading = true;
+      this.editError = null;
+
+      var body = { prompt: prompt, size: this.editSize };
+      if (this.editPreview) {
+        body.source_image = this.editPreview.split(',')[1];
+      }
+
+      try {
+        var resp = await fetch('/api/v1/files/' + fileUuid + '/ai-edit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify(body),
+        });
+
+        if (!resp.ok) {
+          var err = await resp.json().catch(function() { return {}; });
+          throw new Error(err.error || 'Edit failed (HTTP ' + resp.status + ')');
+        }
+
+        var data = await resp.json();
+        var dataUrl = 'data:image/png;base64,' + data.image;
+
+        this.editHistory.push(dataUrl);
+        this.editPreview = dataUrl;
+        this.editPrompt = '';
+      } catch (e) {
+        this.editError = e.message;
+      } finally {
+        this.editLoading = false;
+        this.$nextTick(() => {
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+      }
+    },
+
+    undoEdit() {
+      if (this.editHistory.length <= 1) return;
+      this.editHistory.pop();
+      this.editPreview = this.editHistory[this.editHistory.length - 1] || null;
+    },
+
+    discardEdits() {
+      this.editPreview = null;
+      this.editHistory = [];
+      this.editPrompt = '';
+      this.editError = null;
+      this.editMode = false;
+      this.showSaveAs = false;
+    },
+
+    async saveAsCopy() {
+      if (this.saveAsLoading || !this.editPreview) return;
+      this.saveAsLoading = true;
+
+      try {
+        var b64 = this.editPreview.split(',')[1];
+        var binary = atob(b64);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        var blob = new Blob([bytes], { type: 'image/png' });
+
+        var formData = new FormData();
+        formData.append('name', this.saveAsName);
+        formData.append('node_type', 'file');
+        formData.append('content', blob, this.saveAsName);
+        if (this.saveAsParent) {
+          formData.append('parent', this.saveAsParent);
+        }
+
+        var resp = await fetch('/api/v1/files', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+          credentials: 'same-origin',
+          body: formData,
+        });
+
+        if (!resp.ok) {
+          var err = await resp.json().catch(function() { return {}; });
+          throw new Error(err.detail || err.name || 'Save failed');
+        }
+
+        var saved = await resp.json();
+        this.showSaveAs = false;
+        this.editPreview = null;
+        this.editHistory = [];
+        this.editPrompt = '';
+        this.editMode = false;
+
+        window.dispatchEvent(new CustomEvent('open-file-viewer', {
+          detail: { uuid: saved.uuid, name: saved.name, mime_type: saved.mime_type }
+        }));
+
+        window.dispatchEvent(new CustomEvent('files-changed'));
+      } catch (e) {
+        this.editError = e.message;
+      } finally {
+        this.saveAsLoading = false;
+      }
+    },
   };
 };
 </script>

@@ -1576,7 +1576,8 @@ class FileViewSet(viewsets.ModelViewSet):
             image_data = ai_edit_image(source_data, prompt, size)
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except RuntimeError as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        except RuntimeError:
+            logger.exception('AI image edit failed')
+            return Response({'error': 'image editing failed'}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({'image': base64.b64encode(image_data).decode()})

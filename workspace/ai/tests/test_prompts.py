@@ -27,6 +27,6 @@ class BuildChatMessagesMemoryTests(TestCase):
             user=self.user, bot=self.bot_user,
         )
         system = msgs[0]['content']
-        self.assertIn('What you remember about this user', system)
+        self.assertIn('User context', system)
         self.assertIn('name: Pierre', system)
         self.assertIn('lang: Python', system)

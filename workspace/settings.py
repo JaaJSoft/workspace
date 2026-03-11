@@ -631,6 +631,7 @@ OAUTH_GENERIC_SMTP_HOST = os.getenv('OAUTH_GENERIC_SMTP_HOST', '')
 AI_API_KEY = os.getenv('AI_API_KEY', '')
 AI_BASE_URL = os.getenv('AI_BASE_URL') or None  # For Ollama, LM Studio, etc.
 AI_MODEL = os.getenv('AI_MODEL', 'gpt-5')
+AI_SMALL_MODEL = os.getenv('AI_SMALL_MODEL', '') or None  # Fast model for summaries, titles, etc.
 AI_MAX_TOKENS = int(os.getenv('AI_MAX_TOKENS', '2048'))
 AI_CHAT_CONTEXT_SIZE = int(os.getenv('AI_CHAT_CONTEXT_SIZE', '150'))
 AI_TIMEOUT = int(os.getenv('AI_TIMEOUT', '300'))  # seconds per request

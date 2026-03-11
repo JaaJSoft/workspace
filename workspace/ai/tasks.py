@@ -452,7 +452,7 @@ def summarize(self, task_id: str):
     messages = build_summarize_messages(message.subject or '', body)
 
     try:
-        result = _call_openai(messages)
+        result = _call_openai(messages, model=settings.AI_SMALL_MODEL)
         ai_task.status = AITask.Status.COMPLETED
         ai_task.result = result['content']
         ai_task.model_used = result['model']
@@ -669,6 +669,7 @@ def generate_conversation_title(self, conversation_id: str):
                 },
                 {'role': 'user', 'content': excerpt},
             ],
+            model=settings.AI_SMALL_MODEL,
             max_tokens=2048,
         )
         title = result['content'].strip().strip('"\'')

@@ -514,24 +514,31 @@
   <script src="{% static 'ui/js/icon_picker.js' %}"></script>
 
 
-  <!-- Session expiry handler: redirect to login on 401 from AJAX requests -->
+  <!-- Session expiry handler: redirect to login on expired session (AJAX & alpine-ajax) -->
   <script>
   (function() {
     var loginUrl = '{% url "login" %}';
+    var redirecting = false;
     function redirectToLogin() {
+      if (redirecting) return;
+      redirecting = true;
       window.location.href = loginUrl + '?next=' + encodeURIComponent(window.location.pathname);
     }
 
-    // Alpine AJAX: intercept 401 responses via ajax:error (detail = response body)
+    // Alpine AJAX: intercept 401 responses via ajax:error
     document.addEventListener('ajax:error', function(e) {
       if (e.detail === 'login_required') redirectToLogin();
     });
 
-    // fetch(): wrap global fetch to detect 401 on all AJAX calls (including alpine-ajax internals)
+    // Wrap global fetch to detect session expiry on ALL async calls.
+    // Two cases:
+    //   1. Middleware returned 401 (request had AJAX headers)
+    //   2. fetch() silently followed a 302 to /login (no AJAX headers)
     var _origFetch = window.fetch;
     window.fetch = function() {
       return _origFetch.apply(this, arguments).then(function(resp) {
         if (resp.status === 401) redirectToLogin();
+        if (resp.redirected && new URL(resp.url).pathname === loginUrl) redirectToLogin();
         return resp;
       });
     };

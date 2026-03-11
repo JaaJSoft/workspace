@@ -204,6 +204,26 @@
         .catch(() => {});
     })();
 
+    // Auto-detect timezone and store once (only if not already set)
+    (function () {
+      var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (!tz) return;
+      var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+        || document.cookie.split('; ').find(function(c) { return c.startsWith('csrftoken='); })?.split('=')[1]
+        || '';
+      fetch('/api/v1/settings/core/timezone')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if (data && data.value) return;  // already set, don't overwrite
+          fetch('/api/v1/settings/core/timezone', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ value: tz }),
+          }).catch(function() {});
+        })
+        .catch(function() {});
+    })();
+
     // Dialog utilities
     const AppDialog = {
       _setIcon(iconEl, icon, iconClass) {
@@ -493,6 +513,30 @@
   <script src="{% static 'ui/js/user_selector.js' %}"></script>
   <script src="{% static 'ui/js/icon_picker.js' %}"></script>
 
+
+  <!-- Session expiry handler: redirect to login on 401 from AJAX requests -->
+  <script>
+  (function() {
+    var loginUrl = '{% url "login" %}';
+    function redirectToLogin() {
+      window.location.href = loginUrl + '?next=' + encodeURIComponent(window.location.pathname);
+    }
+
+    // Alpine AJAX: intercept 401 responses via ajax:error (detail = response body)
+    document.addEventListener('ajax:error', function(e) {
+      if (e.detail === 'login_required') redirectToLogin();
+    });
+
+    // fetch(): wrap global fetch to detect 401 on all AJAX calls (including alpine-ajax internals)
+    var _origFetch = window.fetch;
+    window.fetch = function() {
+      return _origFetch.apply(this, arguments).then(function(resp) {
+        if (resp.status === 401) redirectToLogin();
+        return resp;
+      });
+    };
+  })();
+  </script>
 
   {% if user.is_authenticated %}
   <script>

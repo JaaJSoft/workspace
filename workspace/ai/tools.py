@@ -210,6 +210,7 @@ Call this when the user asks you to send a message later, set a reminder, or cre
         from datetime import datetime, time, timedelta
         import calendar
         from django.utils import timezone
+        from workspace.users.settings_service import get_user_timezone
         from .models import ScheduledMessage
 
         prompt = args.get('prompt', '').strip()
@@ -224,6 +225,7 @@ Call this when the user asks you to send a message later, set a reminder, or cre
         if not at and not every:
             return 'Error: provide either "at" (ISO datetime) for one-time or "every" (hours/days/weeks/months) for recurring'
 
+        user_tz = get_user_timezone(user)
         now = timezone.now()
 
         if at:
@@ -232,9 +234,9 @@ Call this when the user asks you to send a message later, set a reminder, or cre
                 dt = datetime.fromisoformat(at)
             except ValueError:
                 return f'Error: could not parse datetime "{at}". Use ISO format like 2026-03-10T09:00'
-            # Make timezone-aware if naive
+            # Interpret naive datetimes in the user's timezone
             if dt.tzinfo is None:
-                dt = timezone.make_aware(dt)
+                dt = dt.replace(tzinfo=user_tz)
             if dt <= now:
                 return 'Error: scheduled time must be in the future'
 
@@ -247,7 +249,8 @@ Call this when the user asks you to send a message later, set a reminder, or cre
                 scheduled_at=dt,
                 next_run_at=dt,
             )
-            return f'Scheduled one-time message for {dt.strftime("%Y-%m-%d %H:%M %Z")} (id: {schedule.uuid})'
+            dt_local = dt.astimezone(user_tz)
+            return f'Scheduled one-time message for {dt_local.strftime("%Y-%m-%d %H:%M")} ({user_tz}) (id: {schedule.uuid})'
 
         # Recurring schedule
         valid_units = ['hours', 'days', 'weeks', 'months']
@@ -275,49 +278,53 @@ Call this when the user asks you to send a message later, set a reminder, or cre
                 return 'Error: on_day must be an integer'
             recurrence_day = on_day
 
-        # Compute first next_run_at
+        # Compute first next_run_at — recurrence_time is in the user's timezone
+        now_local = now.astimezone(user_tz)
         if every == 'hours':
             next_run = now + timedelta(hours=interval)
         elif every == 'days':
-            next_run = now + timedelta(days=interval)
+            candidate = now_local + timedelta(days=interval)
             if recurrence_time is not None:
-                next_run = next_run.replace(
+                candidate = candidate.replace(
                     hour=recurrence_time.hour,
                     minute=recurrence_time.minute,
                     second=0,
                     microsecond=0,
                 )
+            next_run = candidate.astimezone(timezone.utc)
         elif every == 'weeks':
-            next_run = now + timedelta(weeks=interval)
+            candidate = now_local + timedelta(weeks=interval)
             if recurrence_day is not None:
-                current_weekday = next_run.weekday()
+                current_weekday = candidate.weekday()
                 day_offset = (recurrence_day - current_weekday) % 7
-                next_run = next_run + timedelta(days=day_offset)
+                candidate = candidate + timedelta(days=day_offset)
             if recurrence_time is not None:
-                next_run = next_run.replace(
+                candidate = candidate.replace(
                     hour=recurrence_time.hour,
                     minute=recurrence_time.minute,
                     second=0,
                     microsecond=0,
                 )
+            next_run = candidate.astimezone(timezone.utc)
         elif every == 'months':
-            year = now.year
-            month = now.month + interval
+            year = now_local.year
+            month = now_local.month + interval
             year += (month - 1) // 12
             month = (month - 1) % 12 + 1
-            day = now.day
+            day = now_local.day
             if recurrence_day is not None:
                 day = recurrence_day
             max_day = calendar.monthrange(year, month)[1]
             day = min(day, max_day)
-            next_run = now.replace(year=year, month=month, day=day)
+            candidate = now_local.replace(year=year, month=month, day=day)
             if recurrence_time is not None:
-                next_run = next_run.replace(
+                candidate = candidate.replace(
                     hour=recurrence_time.hour,
                     minute=recurrence_time.minute,
                     second=0,
                     microsecond=0,
                 )
+            next_run = candidate.astimezone(timezone.utc)
 
         schedule = ScheduledMessage.objects.create(
             conversation_id=conversation_id,
@@ -342,7 +349,8 @@ Call this when the user asks you to send a message later, set a reminder, or cre
             elif every == 'months':
                 detail += f' on day {recurrence_day}'
 
-        return f'Scheduled recurring message ({detail}), next run: {next_run.strftime("%Y-%m-%d %H:%M %Z")} (id: {schedule.uuid})'
+        next_local = next_run.astimezone(user_tz)
+        return f'Scheduled recurring message ({detail}), next run: {next_local.strftime("%Y-%m-%d %H:%M")} ({user_tz}) (id: {schedule.uuid})'
 
     @tool(badge_icon='\u274c', badge_label='Cancelled schedule', detail_key='schedule_id', params={
         'schedule_id': Param('UUID of the schedule to cancel.'),
@@ -374,6 +382,7 @@ Call this when the user wants to stop or remove a previously scheduled message."
     def list_schedules(self, args, user, bot, conversation_id, context):
         """List all active scheduled messages in this conversation. \
 Call this when the user wants to see what messages are scheduled or pending."""
+        from workspace.users.settings_service import get_user_timezone
         from .models import ScheduledMessage
 
         schedules = ScheduledMessage.objects.filter(
@@ -385,10 +394,12 @@ Call this when the user wants to see what messages are scheduled or pending."""
         if not schedules.exists():
             return 'No active schedules in this conversation.'
 
+        user_tz = get_user_timezone(user)
         lines = []
         for s in schedules:
+            next_local = s.next_run_at.astimezone(user_tz)
             if s.kind == ScheduledMessage.Kind.ONCE:
-                timing = f'once at {s.next_run_at.strftime("%Y-%m-%d %H:%M %Z")}'
+                timing = f'once at {next_local.strftime("%Y-%m-%d %H:%M")} ({user_tz})'
             else:
                 timing = f'every {s.recurrence_interval} {s.recurrence_unit}'
                 if s.recurrence_time:
@@ -399,7 +410,7 @@ Call this when the user wants to see what messages are scheduled or pending."""
                         timing += f' on {day_names[s.recurrence_day]}'
                     elif s.recurrence_unit == 'months':
                         timing += f' on day {s.recurrence_day}'
-                timing += f', next run: {s.next_run_at.strftime("%Y-%m-%d %H:%M %Z")}'
+                timing += f', next run: {next_local.strftime("%Y-%m-%d %H:%M")} ({user_tz})'
             lines.append(f'- {s.uuid}: "{s.prompt[:60]}" — {timing}')
 
         return f'Active schedules ({len(lines)}):\n' + '\n'.join(lines)

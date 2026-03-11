@@ -1653,7 +1653,8 @@ class ScheduledMessageDetailView(APIView):
 
         # Recompute next_run_at if any timing fields were changed
         if self.TIMING_FIELDS & set(request.data.keys()):
-            updated.compute_next_run()
+            from workspace.users.settings_service import get_user_timezone
+            updated.compute_next_run(user_tz=get_user_timezone(request.user))
             updated.save(update_fields=['next_run_at', 'is_active'])
 
         return Response(ScheduledMessageSerializer(updated).data)

@@ -77,9 +77,12 @@ x-init="init()"
       {% include "chat/ui/partials/conversation_list.html" %}
     </div>
 
-    <!-- New chat button (visible when collapsed) -->
+    <!-- New chat buttons (visible when collapsed) -->
     <div class="px-3 pb-2" x-show="collapsed" x-cloak>
       <ul class="menu p-0">
+        {% if ai_enabled %}
+        {% include "ui/partials/drawer_item.html" with icon="sparkles" label="AI" color="secondary" onclick="showBotPicker = true" tooltip="New AI Chat" %}
+        {% endif %}
         {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="info" onclick="showNewConversationDialog()" tooltip="New chat" %}
       </ul>
     </div>

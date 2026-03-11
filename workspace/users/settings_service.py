@@ -10,9 +10,24 @@ Usage from another app::
 
 from __future__ import annotations
 
+from datetime import timezone as dt_timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from workspace.users.models import UserSetting
+
+UTC = ZoneInfo('UTC')
+
+
+def get_user_timezone(user) -> ZoneInfo:
+    """Return the user's configured timezone, or UTC if unset/invalid."""
+    tz_name = get_setting(user, 'core', 'timezone')
+    if not tz_name:
+        return UTC
+    try:
+        return ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, KeyError):
+        return UTC
 
 
 def get_setting(user, module: str, key: str, *, default: Any = None) -> Any:

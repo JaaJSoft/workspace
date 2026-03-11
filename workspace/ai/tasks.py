@@ -719,8 +719,11 @@ def generate_scheduled_response(self, schedule_id: str):
     if not schedule.is_active:
         return {'status': 'skipped', 'reason': 'inactive'}
 
+    from workspace.users.settings_service import get_user_timezone
+    creator_tz = get_user_timezone(schedule.created_by)
+
     schedule.last_run_at = timezone.now()
-    schedule.compute_next_run()
+    schedule.compute_next_run(user_tz=creator_tz)
     schedule.save(update_fields=['last_run_at', 'next_run_at', 'is_active'])
 
     try:

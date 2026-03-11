@@ -14,6 +14,7 @@ _RAW_TOOL_CALL_RE = re.compile(r'</?tool_call>', re.IGNORECASE)
 _JSON_TOOL_RE = re.compile(
     r'\{[^{}]*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}[^{}]*\}',
 )
+_MD_IMAGE_RE = re.compile(r'!\[([^\]]*)\]\([^\)]+\)')
 
 
 def _build_tool_content(tool_result: str):
@@ -43,25 +44,39 @@ def _extract_raw_tool_calls(content: str):
     Some models output ``<tool_call>{"name": "...", "arguments": {...}}</tool_call>``
     or just bare JSON in the message content.  Return a list of (name, arguments_json)
     tuples and the remaining text, or (None, content) if nothing was found.
+
+    Also detects markdown images ``![prompt](url)`` and converts them to
+    ``generate_image`` tool calls (models that don't support native tool
+    calling sometimes "fake" image generation this way).
     """
     # Strip <tool_call> tags first
     cleaned = _RAW_TOOL_CALL_RE.sub('', content).strip()
 
     # Try to find a JSON object with "name" and "arguments" anywhere in the text
     match = _JSON_TOOL_RE.search(cleaned)
-    if not match:
-        return None, content
+    if match:
+        try:
+            parsed = json.loads(match.group())
+        except json.JSONDecodeError:
+            parsed = None
 
-    try:
-        parsed = json.loads(match.group())
-    except json.JSONDecodeError:
-        return None, content
+        if isinstance(parsed, dict) and 'name' in parsed and 'arguments' in parsed:
+            args = parsed['arguments']
+            args_json = args if isinstance(args, str) else json.dumps(args)
+            remaining = (cleaned[:match.start()] + cleaned[match.end():]).strip()
+            return [(parsed['name'], args_json)], remaining
 
-    if isinstance(parsed, dict) and 'name' in parsed and 'arguments' in parsed:
-        args = parsed['arguments']
-        args_json = args if isinstance(args, str) else json.dumps(args)
-        remaining = (cleaned[:match.start()] + cleaned[match.end():]).strip()
-        return [(parsed['name'], args_json)], remaining
+    # Detect markdown images as failed generate_image attempts
+    md_images = _MD_IMAGE_RE.findall(cleaned)
+    if md_images:
+        calls = []
+        remaining = _MD_IMAGE_RE.sub('', cleaned).strip()
+        for alt in md_images:
+            prompt = alt.strip() or 'image'
+            calls.append(('generate_image', json.dumps({'prompt': prompt})))
+            logger.info('Converted markdown image to generate_image tool call: %s', prompt)
+        return calls, remaining
+
     return None, content
 
 

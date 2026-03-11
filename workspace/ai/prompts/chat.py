@@ -104,9 +104,20 @@ def build_chat_messages(
         "in that case, confirm briefly and move on."
     )
 
+    image_instructions = (
+        "\n\n## Image generation\n"
+        "When generating images that include yourself (selfies, scenes with you, etc.), "
+        "you MUST include your complete physical description from your prompt in the "
+        "generate_image prompt. Copy every detail: appearance, hair, eyes, clothing, "
+        "body type, style, distinguishing features — everything that defines how you look. "
+        "Do not paraphrase or shorten your description. The image model has no knowledge "
+        "of who you are, so the only way to get a faithful result is to include the full "
+        "description in the prompt every time."
+    )
+
     tools_block = _build_tools_block()
 
-    system_content = f"{base_prompt}\n\n{context}{memory_instructions}{scheduling_instructions}{tools_block}{memory_block}"
+    system_content = f"{base_prompt}\n\n{context}{memory_instructions}{scheduling_instructions}{image_instructions}{tools_block}{memory_block}"
     messages = [{'role': 'system', 'content': system_content}]
     messages.extend(history)
     return messages

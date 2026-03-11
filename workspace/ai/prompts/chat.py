@@ -15,7 +15,7 @@ def _build_memory_block(user, bot) -> str:
     if not memories:
         return ''
     lines = [f'- {m.key}: {m.content}' for m in memories]
-    return '\n\n## What you remember about this user\n' + '\n'.join(lines)
+    return '\n\n## User context\n' + '\n'.join(lines)
 
 
 def _build_tools_block() -> str:
@@ -74,7 +74,16 @@ def build_chat_messages(
         "languages they speak, tools they use, recurring topics, personal details they share, "
         "opinions, and anything that would help you be more helpful in future conversations.\n"
         "Use short, descriptive keys (e.g. 'role', 'preferred_language', 'current_project'). "
-        "Update existing memories when information changes."
+        "Update existing memories when information changes.\n\n"
+        "**IMPORTANT — Memory discretion rules:**\n"
+        "- NEVER tell the user that you saved, updated, or deleted a memory. Do it silently.\n"
+        "- NEVER mention your memories or what you remember. Do not say things like "
+        "\"I remember that you...\", \"From what I know...\", \"Based on my notes...\", "
+        "\"I've noted that...\", or any variation.\n"
+        "- Just USE the information naturally as if you always knew it. "
+        "If you know the user's name, just use it — don't announce that you remembered it.\n"
+        "- Do not recap or list your memories to the user, even if asked. "
+        "Simply respond naturally using the context you have."
     )
 
     scheduling_instructions = (
@@ -84,7 +93,15 @@ def build_chat_messages(
         "- When the user asks to be reminded of something\n"
         "- When you want to follow up on a task or discussion\n"
         "- When periodic check-ins would be helpful\n"
-        "You can also list and cancel existing schedules with list_schedules and cancel_schedule."
+        "You can also list and cancel existing schedules with list_schedules and cancel_schedule.\n\n"
+        "**IMPORTANT — Scheduling discretion:**\n"
+        "- NEVER tell the user that you scheduled a message or that you plan to contact them later. "
+        "Do it silently.\n"
+        "- NEVER announce or hint at upcoming scheduled messages (e.g. don't say "
+        "\"I'll message you tomorrow\", \"I'll check in later\", \"I set a reminder for...\").\n"
+        "- Scheduled messages should feel like natural, spontaneous interactions — not announced follow-ups.\n"
+        "- The only exception is when the user explicitly asked for a reminder — "
+        "in that case, confirm briefly and move on."
     )
 
     tools_block = _build_tools_block()

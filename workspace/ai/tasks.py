@@ -393,6 +393,18 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             human_user, bot_user, conversation_id,
         )
 
+        # Auto-retry once if the model returned an empty response
+        body_preview = _RAW_TOOL_CALL_RE.sub('', result.get('content') or '').strip()
+        if not body_preview and not tool_context.get('images'):
+            logger.warning('Empty response, retrying once: conversation=%s', conversation_id)
+            result, used_tools, tool_context = _run_tool_loop(
+                messages, bot_profile.get_model(), bot_profile.supports_tools,
+                human_user, bot_user, conversation_id,
+            )
+            body_preview = _RAW_TOOL_CALL_RE.sub('', result.get('content') or '').strip()
+            if not body_preview and not tool_context.get('images'):
+                raise RuntimeError('Empty response from model')
+
         # Guard: check if the task was cancelled while we were waiting for OpenAI
         ai_task.refresh_from_db(fields=['status'])
         if ai_task.status == AITask.Status.FAILED:

@@ -16,6 +16,7 @@ def send_push_notification(notification_uuid: str):
     """Send a Web Push notification to all of the recipient's subscriptions."""
     private_key = getattr(settings, 'WEBPUSH_VAPID_PRIVATE_KEY', '')
     if not private_key:
+        logger.warning("Push skipped: WEBPUSH_VAPID_PRIVATE_KEY is not configured")
         return
 
     from workspace.notifications.models import Notification, PushSubscription
@@ -25,6 +26,7 @@ def send_push_notification(notification_uuid: str):
         return
 
     if is_active(notif.recipient_id):
+        logger.debug("Skipping push for %s: user is active", notif.recipient_id)
         return
 
     subscriptions = PushSubscription.objects.filter(user=notif.recipient)
@@ -40,6 +42,9 @@ def send_push_notification(notification_uuid: str):
     })
 
     vapid_claims = getattr(settings, 'WEBPUSH_VAPID_CLAIMS', {})
+    if not vapid_claims.get('sub'):
+        logger.warning("Push skipped: WEBPUSH_VAPID_MAILTO is not configured (vapid_claims.sub is empty)")
+        return
 
     for sub in subscriptions:
         try:

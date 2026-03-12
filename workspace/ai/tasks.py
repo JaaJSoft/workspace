@@ -17,6 +17,58 @@ _JSON_TOOL_RE = re.compile(
 _MD_IMAGE_RE = re.compile(r'!\[([^\]]*)\]\([^\)]+\)')
 
 
+def _serialize_response(result):
+    """Serialize an _call_openai result dict for storage."""
+    tc = result.get('tool_calls')
+    return {
+        'content': result.get('content', ''),
+        'tool_calls': [
+            {'id': c.id, 'name': c.function.name, 'arguments': c.function.arguments}
+            for c in tc
+        ] if tc else None,
+        'model': result.get('model', ''),
+        'prompt_tokens': result.get('prompt_tokens'),
+        'completion_tokens': result.get('completion_tokens'),
+    }
+
+
+def _sanitize_messages_for_storage(messages):
+    """Strip large base64 image data and truncate huge text from messages."""
+    sanitized = []
+    for msg in messages:
+        content = msg.get('content')
+        if isinstance(content, list):
+            parts = []
+            for part in content:
+                if isinstance(part, dict) and (
+                    part.get('type') == 'image_url' or 'image_url' in part
+                ):
+                    parts.append({'type': 'image_url', 'image_url': '[stripped]'})
+                else:
+                    parts.append(part)
+            sanitized.append({**msg, 'content': parts})
+        elif isinstance(content, str) and len(content) > 50_000:
+            sanitized.append({**msg, 'content': content[:50_000] + '… [truncated]'})
+        else:
+            sanitized.append(msg)
+    return sanitized
+
+
+def _truncate_tool_result(text, max_len=2000):
+    """Truncate tool result strings for storage, stripping image data."""
+    if not text:
+        return text
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict) and parsed.get('type') == 'image':
+            return json.dumps({'type': 'image', 'data': '[stripped]'})
+    except (json.JSONDecodeError, TypeError):
+        pass
+    if len(text) > max_len:
+        return text[:max_len] + '… [truncated]'
+    return text
+
+
 def _build_tool_content(tool_result: str):
     """Convert a tool result string into API content, handling image payloads."""
     try:
@@ -151,10 +203,12 @@ def _render_tool_badges(used_tools):
 
 
 def _run_tool_loop(messages, model, supports_tools, human_user, bot_user, conversation_id):
-    """Run the tool call loop and return (result, used_tools, tool_context).
+    """Run the tool call loop and return (result, used_tools, tool_context, rounds).
 
     Calls the AI model, executes any tool calls it returns, and re-calls
-    until we get a plain text response (max 5 rounds).
+    until we get a plain text response (max 5 rounds).  *rounds* is a list
+    of dicts capturing each LLM response and the tool executions that
+    followed it, suitable for storage in ``AITask.raw_messages``.
     """
     from workspace.ai.tool_registry import tool_registry
 
@@ -163,6 +217,7 @@ def _run_tool_loop(messages, model, supports_tools, human_user, bot_user, conver
 
     used_tools = []
     tool_context = {}
+    rounds = []
     max_tool_rounds = 5
     for _ in range(max_tool_rounds):
         # Some models emit tool calls as plain text — parse and convert them
@@ -198,7 +253,13 @@ def _run_tool_loop(messages, model, supports_tools, human_user, bot_user, conver
                 }
 
         if not result.get('tool_calls'):
+            rounds.append({'response': _serialize_response(result)})
             break
+
+        round_data = {
+            'response': _serialize_response(result),
+            'tool_executions': [],
+        }
 
         messages.append(result['message'].to_dict())
 
@@ -215,13 +276,23 @@ def _run_tool_loop(messages, model, supports_tools, human_user, bot_user, conver
             })
             if 'Error' not in tool_result and 'Unknown tool' not in tool_result:
                 _track_tool_usage(tc, tool_result, used_tools)
+            round_data['tool_executions'].append({
+                'tool_call_id': tc.id,
+                'name': tc.function.name,
+                'arguments': tc.function.arguments,
+                'result': _truncate_tool_result(tool_result),
+            })
 
+        rounds.append(round_data)
         result = _call_openai(messages, model=model, tools=tools)
+    else:
+        # Max rounds reached — capture the final response
+        rounds.append({'response': _serialize_response(result)})
 
-    return result, used_tools, tool_context
+    return result, used_tools, tool_context, rounds
 
 
-def _post_bot_message(conversation, bot_user, result, used_tools, tool_context, ai_task):
+def _post_bot_message(conversation, bot_user, result, used_tools, tool_context, ai_task, raw_messages=None):
     """Create the bot message, attach images, update unread counts, notify, and complete AITask.
 
     Returns (body, bot_message).
@@ -279,6 +350,7 @@ def _post_bot_message(conversation, bot_user, result, used_tools, tool_context, 
     ai_task.model_used = result['model']
     ai_task.prompt_tokens = result['prompt_tokens']
     ai_task.completion_tokens = result['completion_tokens']
+    ai_task.raw_messages = raw_messages
     ai_task.completed_at = timezone.now()
     ai_task.save()
 
@@ -403,7 +475,9 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
     )
 
     try:
-        result, used_tools, tool_context = _run_tool_loop(
+        initial_messages = _sanitize_messages_for_storage(list(messages))
+
+        result, used_tools, tool_context, rounds = _run_tool_loop(
             messages, bot_profile.get_model(), bot_profile.supports_tools,
             human_user, bot_user, conversation_id,
         )
@@ -412,13 +486,16 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         body_preview = _RAW_TOOL_CALL_RE.sub('', result.get('content') or '').strip()
         if not body_preview and not tool_context.get('images'):
             logger.warning('Empty response, retrying once: conversation=%s', conversation_id)
-            result, used_tools, tool_context = _run_tool_loop(
+            result, used_tools, tool_context, retry_rounds = _run_tool_loop(
                 messages, bot_profile.get_model(), bot_profile.supports_tools,
                 human_user, bot_user, conversation_id,
             )
+            rounds.extend(retry_rounds)
             body_preview = _RAW_TOOL_CALL_RE.sub('', result.get('content') or '').strip()
             if not body_preview and not tool_context.get('images'):
                 raise RuntimeError('Empty response from model')
+
+        raw_messages = {'messages': initial_messages, 'rounds': rounds}
 
         # Guard: check if the task was cancelled while we were waiting for OpenAI
         ai_task.refresh_from_db(fields=['status'])
@@ -427,7 +504,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             return {'status': 'cancelled'}
 
         body, bot_message = _post_bot_message(
-            conversation, bot_user, result, used_tools, tool_context, ai_task,
+            conversation, bot_user, result, used_tools, tool_context, ai_task, raw_messages,
         )
 
         # Auto-generate title if the conversation doesn't have one yet
@@ -485,6 +562,10 @@ def summarize(self, task_id: str):
         ai_task.model_used = result['model']
         ai_task.prompt_tokens = result['prompt_tokens']
         ai_task.completion_tokens = result['completion_tokens']
+        ai_task.raw_messages = {
+            'messages': _sanitize_messages_for_storage(messages),
+            'response': _serialize_response(result),
+        }
         ai_task.completed_at = timezone.now()
         ai_task.save()
 
@@ -559,6 +640,10 @@ def editor_action(self, task_id: str):
         ai_task.model_used = result['model']
         ai_task.prompt_tokens = result['prompt_tokens']
         ai_task.completion_tokens = result['completion_tokens']
+        ai_task.raw_messages = {
+            'messages': _sanitize_messages_for_storage(messages),
+            'response': _serialize_response(result),
+        }
         ai_task.completed_at = timezone.now()
         ai_task.save()
 
@@ -638,6 +723,10 @@ def compose_email(self, task_id: str):
         ai_task.model_used = result['model']
         ai_task.prompt_tokens = result['prompt_tokens']
         ai_task.completion_tokens = result['completion_tokens']
+        ai_task.raw_messages = {
+            'messages': _sanitize_messages_for_storage(messages),
+            'response': _serialize_response(result),
+        }
         ai_task.completed_at = timezone.now()
         ai_task.save()
 
@@ -807,10 +896,14 @@ def generate_scheduled_response(self, schedule_id: str):
     )
 
     try:
-        result, used_tools, tool_context = _run_tool_loop(
+        initial_messages = _sanitize_messages_for_storage(list(messages))
+
+        result, used_tools, tool_context, rounds = _run_tool_loop(
             messages, bot_profile.get_model(), bot_profile.supports_tools,
             human_user, bot_user, str(conversation.pk),
         )
+
+        raw_messages = {'messages': initial_messages, 'rounds': rounds}
 
         # Let the bot skip if it judges the message is no longer relevant
         body = _RAW_TOOL_CALL_RE.sub('', result['content']).strip()
@@ -820,13 +913,14 @@ def generate_scheduled_response(self, schedule_id: str):
             ai_task.model_used = result['model']
             ai_task.prompt_tokens = result['prompt_tokens']
             ai_task.completion_tokens = result['completion_tokens']
+            ai_task.raw_messages = raw_messages
             ai_task.completed_at = timezone.now()
             ai_task.save()
             logger.info('Scheduled response skipped (bot judged irrelevant): schedule=%s', schedule_id)
             return {'status': 'skipped', 'reason': 'bot_judged_irrelevant'}
 
         body, bot_message = _post_bot_message(
-            conversation, bot_user, result, used_tools, tool_context, ai_task,
+            conversation, bot_user, result, used_tools, tool_context, ai_task, raw_messages,
         )
 
         notify_new_message(conversation, bot_user, body)

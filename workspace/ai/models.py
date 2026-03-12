@@ -108,6 +108,7 @@ class AITask(models.Model):
     model_used = models.CharField(max_length=100, blank=True)
     prompt_tokens = models.IntegerField(null=True, blank=True)
     completion_tokens = models.IntegerField(null=True, blank=True)
+    raw_messages = models.JSONField(null=True, blank=True)
 
     chat_message = models.ForeignKey(
         'chat.Message',

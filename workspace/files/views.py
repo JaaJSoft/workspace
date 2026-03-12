@@ -1574,8 +1574,8 @@ class FileViewSet(viewsets.ModelViewSet):
         from workspace.ai.image_service import ai_edit_image
         try:
             image_data = ai_edit_image(source_data, prompt, size)
-        except ValueError as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError:
+            return Response({'error': 'invalid request (check prompt and AI configuration)'}, status=status.HTTP_400_BAD_REQUEST)
         except RuntimeError:
             logger.exception('AI image edit failed')
             return Response({'error': 'image editing failed'}, status=status.HTTP_502_BAD_GATEWAY)

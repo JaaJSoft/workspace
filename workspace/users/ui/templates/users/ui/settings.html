@@ -54,6 +54,16 @@
           <i data-lucide="shield" class="w-4 h-4"></i>
           Security
         </button>
+        <button
+          @click="tab = 'mail'; updateHash()"
+          class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
+          :class="tab === 'mail'
+            ? 'bg-primary/10 text-primary font-semibold'
+            : 'hover:bg-base-200 text-base-content'"
+        >
+          <i data-lucide="mail" class="w-4 h-4"></i>
+          Mail
+        </button>
       </div>
     </nav>
 
@@ -251,6 +261,39 @@
         </div>
       </div>
 
+      <!-- Mail Tab -->
+      <div x-show="tab === 'mail'" x-cloak class="space-y-4">
+        <!-- AI Features -->
+        <div class="card bg-base-100 border border-base-300 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg gap-2">
+              <i data-lucide="sparkles" class="w-5 h-5"></i>
+              AI Features
+            </h2>
+            <p class="text-sm text-base-content/60 mt-1">
+              Control AI-powered features for your mailbox.
+            </p>
+
+            <div class="form-control mt-4">
+              <label class="label cursor-pointer justify-start gap-3">
+                <input type="checkbox"
+                       class="toggle toggle-warning toggle-sm"
+                       :checked="getSetting('mail', 'ai_enabled', true)"
+                       @change="setSetting('mail', 'ai_enabled', $event.target.checked)"
+                />
+                <div>
+                  <span class="label-text font-medium">Enable AI features for mail</span>
+                  <p class="text-xs text-base-content/50 mt-0.5">
+                    Auto-classify emails, generate summaries, and AI-assisted composition.
+                    Disable to turn off all AI processing for your mail.
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -260,19 +303,50 @@
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
 <script>
   function settingsPage() {
-    const validTabs = ['profile', 'preferences', 'security'];
+    const validTabs = ['profile', 'preferences', 'security', 'mail'];
     return {
       tab: validTabs.includes(location.hash.replace('#', '')) ? location.hash.replace('#', '') : 'profile',
-      init() {
+      settings: {},
+      async init() {
         window.addEventListener('hashchange', () => {
           const hash = location.hash.replace('#', '');
           if (validTabs.includes(hash)) {
             this.tab = hash;
           }
         });
+        // Load mail settings
+        try {
+          const res = await fetch('/api/v1/settings?module=mail');
+          if (res.ok) {
+            const data = await res.json();
+            (data.results || []).forEach(s => {
+              if (!this.settings[s.module]) this.settings[s.module] = {};
+              this.settings[s.module][s.key] = s.value;
+            });
+          }
+        } catch (e) {
+          // silently ignore — defaults will be used
+        }
       },
       updateHash() {
         location.hash = this.tab;
+      },
+      getSetting(module, key, defaultValue) {
+        return (this.settings[module] && this.settings[module][key] !== undefined)
+          ? this.settings[module][key]
+          : defaultValue;
+      },
+      setSetting(module, key, value) {
+        if (!this.settings[module]) this.settings[module] = {};
+        this.settings[module][key] = value;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+          || document.cookie.split('; ').find(function(c) { return c.startsWith('csrftoken='); })?.split('=')[1]
+          || '';
+        fetch('/api/v1/settings/' + module + '/' + key, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ value: value }),
+        });
       },
     };
   }

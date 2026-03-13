@@ -98,5 +98,5 @@ class AITaskAdmin(admin.ModelAdmin):
     list_filter = ['task_type', 'status', 'model_used']
     search_fields = ['uuid', 'owner__username', 'result', 'error']
     raw_id_fields = ['owner', 'chat_message']
-    readonly_fields = ['uuid', 'created_at']
+    readonly_fields = ['uuid', 'created_at', 'raw_messages']
     date_hierarchy = 'created_at'

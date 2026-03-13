@@ -190,6 +190,7 @@ function mailApp() {
     syncingAccounts: {},  // { accountUuid: true }
     actionInProgress: false,
     batchInProgress: false,
+    classifyingFolder: false,
     hasMoreMessages: false,
     currentPage: 1,
     totalMessages: 0,
@@ -240,6 +241,13 @@ function mailApp() {
     compose: _defaultCompose(),
     showCcBcc: false,
 
+    // Labels
+    labels: {},
+    selectedLabel: null,
+    labelModal: { accountId: null, uuid: null, name: '', color: 'ghost', icon: '', saving: false, error: '' },
+    labelCtx: { open: false, x: 0, y: 0, label: null },
+    dragOverLabel: null,
+
     // AI features
     aiSummarizing: false,
     aiSummary: null,
@@ -264,6 +272,7 @@ function mailApp() {
         this.expandedAccounts[acc.uuid] = true;
         this.syncingAccounts[acc.uuid] = false;
         this.loadFolders(acc.uuid);
+        this.fetchLabels(acc.uuid);
       }
 
       // Check URL params for deep linking
@@ -300,6 +309,7 @@ function mailApp() {
           this.accounts.push(data.account);
           this.expandedAccounts[data.account.uuid] = true;
           await this.loadFolders(data.account.uuid);
+          await this.fetchLabels(data.account.uuid);
           this.closeAddAccount();
           this.syncAccount(data.account.uuid);
           this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
@@ -476,6 +486,7 @@ function mailApp() {
     // ----- Messages -----
     async selectFolder(folder) {
       this.selectedFolder = folder;
+      this.selectedLabel = null;
       this.selectedMessage = null;
       this.messageDetail = null;
       this._updateUrl(null);
@@ -486,6 +497,14 @@ function mailApp() {
     },
 
     _buildMessagesUrl() {
+      if (this.selectedLabel) {
+        let url = `/api/v1/mail/messages?label=${this.selectedLabel.uuid}&page=${this.currentPage}`;
+        if (this.filters.search) url += `&search=${encodeURIComponent(this.filters.search)}`;
+        if (this.filters.unread) url += '&unread=true';
+        if (this.filters.starred) url += '&starred=true';
+        if (this.filters.attachments) url += '&attachments=true';
+        return url;
+      }
       let url = `/api/v1/mail/messages?folder=${this.selectedFolder.uuid}&page=${this.currentPage}`;
       if (this.filters.search) url += `&search=${encodeURIComponent(this.filters.search)}`;
       if (this.filters.unread) url += '&unread=1';
@@ -495,7 +514,7 @@ function mailApp() {
     },
 
     async loadMessages() {
-      if (!this.selectedFolder) return;
+      if (!this.selectedFolder && !this.selectedLabel) return;
       this.loadingMessages = true;
       const res = await this._fetch(this._buildMessagesUrl());
       if (res.ok) {
@@ -525,6 +544,29 @@ function mailApp() {
       if (!this.selectedFolder) return;
       const accountUuid = this.selectedFolder.account_id;
       await this.syncAccount(accountUuid);
+    },
+
+    async classifyFolder() {
+      if (this.classifyingFolder) return;
+      this.classifyingFolder = true;
+      try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        const body = {};
+        if (this.selectedFolder) body.folder_id = this.selectedFolder.uuid;
+        const resp = await fetch('/api/v1/ai/tasks/mail/classify', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(body),
+        });
+        if (resp.ok) {
+          setTimeout(() => this.loadMessages(), 3000);
+        }
+      } catch (e) {
+        console.warn('Classify failed:', e);
+      } finally {
+        this.classifyingFolder = false;
+      }
     },
 
     // ----- Filters -----
@@ -1271,6 +1313,7 @@ function mailApp() {
         this.accounts.push(account);
         this.expandedAccounts[account.uuid] = true;
         await this.loadFolders(account.uuid);
+        await this.fetchLabels(account.uuid);
         this.closeAddAccount();
 
         // Trigger initial sync
@@ -1509,8 +1552,8 @@ function mailApp() {
 
     async msgCtxAction(action) {
       const msg = this.msgCtx.msg;
-      this.msgCtx.open = false;
       if (!msg) return;
+      this.msgCtx.open = false;
 
       switch (action) {
         case 'reply':
@@ -1537,6 +1580,48 @@ function mailApp() {
         case 'delete':
           await this.deleteMessage(msg);
           break;
+      }
+    },
+
+    _getMsgCtxTargetIds() {
+      const msg = this.msgCtx.msg;
+      if (!msg) return [];
+      return this.selectedMessages.length > 0 && this.selectedMessages.includes(msg.uuid)
+        ? [...this.selectedMessages] : [msg.uuid];
+    },
+
+    _getMsgCtxAccountLabels() {
+      const accountId = this.selectedFolder?.account_id || this.selectedLabel?.account_id;
+      return accountId ? (this.labels[accountId] || []) : [];
+    },
+
+    _msgCtxHasLabel(labelUuid) {
+      const ids = this._getMsgCtxTargetIds();
+      // Check if ALL targeted messages have the label
+      return ids.every(id => {
+        const msg = this.messages.find(m => m.uuid === id);
+        return msg?.labels?.some(l => l.uuid === labelUuid);
+      });
+    },
+
+    async toggleMsgLabel(label) {
+      const ids = this._getMsgCtxTargetIds();
+      if (!ids.length) return;
+      const hasLabel = this._msgCtxHasLabel(label.uuid);
+      const method = hasLabel ? 'DELETE' : 'POST';
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+      try {
+        await Promise.all(ids.map(msgId =>
+          fetch(`/api/v1/mail/messages/${msgId}/labels`, {
+            method,
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ label_ids: [label.uuid] }),
+          })
+        ));
+        await this.loadMessages();
+      } catch (e) {
+        console.warn('Toggle label failed:', e);
       }
     },
 
@@ -1601,7 +1686,7 @@ function mailApp() {
         ids = [msg.uuid];
       }
       this._draggingMsgIds = ids;
-      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.effectAllowed = 'copyMove';
       event.dataTransfer.setData('text/plain', JSON.stringify(ids));
       // Custom drag image label
       const count = ids.length;
@@ -1618,6 +1703,7 @@ function mailApp() {
     onMsgDragEnd(event) {
       this._draggingMsgIds = null;
       this.dragOverFolder = null;
+      this.dragOverLabel = null;
     },
 
     onFolderDragOver(event, folder) {
@@ -1646,6 +1732,40 @@ function mailApp() {
           this.moveMessages(ids, folder);
         }
       } catch (e) {}
+      this._draggingMsgIds = null;
+    },
+
+    onLabelDragOver(event, label) {
+      event.dataTransfer.dropEffect = 'copy';
+      this.dragOverLabel = label;
+    },
+
+    onLabelDragLeave(event, label) {
+      if (this.dragOverLabel?.uuid === label.uuid) {
+        this.dragOverLabel = null;
+      }
+    },
+
+    async onLabelDrop(event, label) {
+      this.dragOverLabel = null;
+      try {
+        const raw = event.dataTransfer.getData('text/plain');
+        const ids = JSON.parse(raw);
+        if (!Array.isArray(ids) || !ids.length) return;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        await Promise.all(ids.map(msgId =>
+          fetch(`/api/v1/mail/messages/${msgId}/labels`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ label_ids: [label.uuid] }),
+          })
+        ));
+        // Refresh message list to show new labels
+        this.loadMessages();
+      } catch (e) {
+        console.warn('Label drop failed:', e);
+      }
       this._draggingMsgIds = null;
     },
 
@@ -2123,6 +2243,139 @@ function mailApp() {
       let i = 0;
       while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
       return `${bytes.toFixed(i ? 1 : 0)} ${units[i]}`;
+    },
+
+    // ----- Labels -----
+    async fetchLabels(accountId) {
+      try {
+        const resp = await fetch(`/api/v1/mail/labels?account=${accountId}`, { credentials: 'same-origin' });
+        if (resp.ok) {
+          this.labels[accountId] = await resp.json();
+        }
+      } catch (e) {
+        console.warn('Failed to fetch labels:', e);
+      }
+    },
+
+    selectLabel(label) {
+      this.selectedLabel = label;
+      this.selectedFolder = null;
+      this.selectedMessage = null;
+      this.messageDetail = null;
+      this.currentPage = 1;
+      this.loadMessages();
+    },
+
+    showLabelModal(accountId, label) {
+      this.labelModal = {
+        accountId: label ? label.account_id : accountId,
+        uuid: label?.uuid || null,
+        name: label?.name || '',
+        color: label?.color || 'ghost',
+        icon: label?.icon || '',
+        saving: false,
+        error: '',
+      };
+      const dlg = document.getElementById('mail-label-dialog');
+      if (dlg) {
+        dlg.showModal();
+        this.$nextTick(() => {
+          const input = dlg.querySelector('input[type="text"]');
+          if (input) input.focus();
+        });
+      }
+    },
+
+    closeLabelModal() {
+      document.getElementById('mail-label-dialog')?.close();
+    },
+
+    async saveLabelModal() {
+      const m = this.labelModal;
+      if (!m.name.trim() || !m.accountId) return;
+      m.saving = true;
+      m.error = '';
+      try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        const isEdit = !!m.uuid;
+        const url = isEdit ? `/api/v1/mail/labels/${m.uuid}` : '/api/v1/mail/labels';
+        const resp = await fetch(url, {
+          method: isEdit ? 'PATCH' : 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(isEdit
+            ? { name: m.name.trim(), color: m.color, icon: m.icon }
+            : { account_id: m.accountId, name: m.name.trim(), color: m.color, icon: m.icon }
+          ),
+        });
+        if (resp.ok) {
+          await this.fetchLabels(m.accountId);
+          this.closeLabelModal();
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          m.error = data.name?.[0] || data.detail || 'Failed to save label.';
+        }
+      } catch (e) {
+        m.error = 'Network error.';
+      } finally {
+        m.saving = false;
+      }
+    },
+
+    async deleteLabelConfirm() {
+      const m = this.labelModal;
+      if (!m.uuid) return;
+      if (!confirm(`Delete label "${m.name}"? Messages won't be deleted.`)) return;
+      try {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        const resp = await fetch(`/api/v1/mail/labels/${m.uuid}`, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': csrfToken },
+        });
+        if (resp.ok || resp.status === 204) {
+          if (this.selectedLabel?.uuid === m.uuid) {
+            this.selectedLabel = null;
+          }
+          await this.fetchLabels(m.accountId);
+          this.closeLabelModal();
+        }
+      } catch (e) {
+        console.warn('Delete label failed:', e);
+      }
+    },
+
+    openLabelContextMenu(event, label) {
+      event.preventDefault();
+      const menu = document.getElementById('label-context-menu');
+      if (!menu) return;
+
+      this.labelCtx.label = label;
+      this.labelCtx.open = true;
+
+      this.$nextTick(() => {
+        const rect = menu.getBoundingClientRect();
+        let x = event.clientX;
+        let y = event.clientY;
+        if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 10;
+        if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
+        this.labelCtx.x = x;
+        this.labelCtx.y = y;
+        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+      });
+    },
+
+    labelCtxAction(action) {
+      const label = this.labelCtx.label;
+      this.labelCtx.open = false;
+      if (!label) return;
+
+      if (action === 'edit') {
+        this.showLabelModal(null, label);
+      } else if (action === 'delete') {
+        this.showLabelModal(null, label);
+        this.$nextTick(() => this.deleteLabelConfirm());
+      }
     },
   };
 }

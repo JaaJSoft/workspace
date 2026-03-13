@@ -799,6 +799,30 @@ def generate_conversation_title(self, conversation_id: str):
         return {'status': 'error', 'error': str(e)}
 
 
+@shared_task(name='ai.purge_ai_tasks', bind=True, max_retries=0)
+def purge_ai_tasks(self):
+    """Delete completed AI tasks older than AI_TASK_RETENTION_DAYS."""
+    from datetime import timedelta
+
+    from workspace.ai.models import AITask
+
+    retention_days = getattr(settings, 'AI_TASK_RETENTION_DAYS', 90)
+    cutoff = timezone.now() - timedelta(days=retention_days)
+
+    qs = AITask.objects.filter(created_at__lte=cutoff)
+    count = qs.count()
+
+    if not count:
+        logger.info('AI task purge: nothing to delete.')
+        return {'deleted': 0, 'retention_days': retention_days}
+
+    logger.info('AI task purge: deleting %d tasks older than %d days', count, retention_days)
+    qs.delete()
+
+    logger.info('AI task purge complete.')
+    return {'deleted': count, 'retention_days': retention_days}
+
+
 @shared_task(name='ai.dispatch_scheduled_messages')
 def dispatch_scheduled_messages():
     """Find due scheduled messages and dispatch a generation task for each."""
@@ -932,4 +956,141 @@ def generate_scheduled_response(self, schedule_id: str):
     except Exception as e:
         logger.exception('Scheduled response failed: schedule=%s', schedule_id)
         _handle_generation_error(conversation, bot_user, ai_task, e)
+        return {'status': 'error', 'error': str(e)}
+
+
+CLASSIFY_BATCH_SIZE = 10
+MAX_LABELS_PER_MESSAGE = 3
+
+
+@shared_task(name='ai.classify_mail', bind=True, max_retries=0)
+def classify_mail_messages(self, task_id: str):
+    """Classify mail messages by assigning user-defined labels."""
+    import orjson as _orjson
+    from collections import defaultdict
+    from workspace.ai.models import AITask
+    from workspace.ai.prompts.mail import build_classify_messages
+    from workspace.core.sse_registry import notify_sse
+    from workspace.mail.models import MailLabel, MailMessage, MailMessageLabel
+
+    try:
+        ai_task = AITask.objects.get(pk=task_id)
+    except AITask.DoesNotExist:
+        logger.error('Classify task not found: %s', task_id)
+        return {'status': 'error', 'error': 'Task not found'}
+
+    ai_task.status = AITask.Status.PROCESSING
+    ai_task.save(update_fields=['status'])
+
+    message_uuids = ai_task.input_data.get('message_uuids', [])
+    msgs = list(
+        MailMessage.objects.filter(
+            uuid__in=message_uuids,
+            account__owner=ai_task.owner,
+        ).only('uuid', 'subject', 'from_address', 'snippet', 'account_id')
+    )
+
+    if not msgs:
+        ai_task.status = AITask.Status.COMPLETED
+        ai_task.result = 'No messages to classify'
+        ai_task.completed_at = timezone.now()
+        ai_task.save()
+        notify_sse('ai', ai_task.owner_id)
+        return {'status': 'ok', 'task_id': task_id}
+
+    # Group messages by account
+    msgs_by_account = defaultdict(list)
+    for m in msgs:
+        msgs_by_account[m.account_id].append(m)
+
+    total_prompt = 0
+    total_completion = 0
+    model_used = ''
+
+    try:
+        for account_id, account_msgs in msgs_by_account.items():
+            account_labels = list(MailLabel.objects.filter(account_id=account_id))
+            label_names = [lbl.name for lbl in account_labels]
+            label_by_lower = {lbl.name.lower(): lbl for lbl in account_labels}
+
+            for batch_start in range(0, len(account_msgs), CLASSIFY_BATCH_SIZE):
+                batch = account_msgs[batch_start:batch_start + CLASSIFY_BATCH_SIZE]
+                uuid_index = {i + 1: m for i, m in enumerate(batch)}
+
+                emails = []
+                for m in batch:
+                    from_addr = m.from_address if isinstance(m.from_address, dict) else {}
+                    emails.append({
+                        'subject': m.subject or '',
+                        'from_name': from_addr.get('name', ''),
+                        'from_email': from_addr.get('email', ''),
+                        'snippet': m.snippet or '',
+                    })
+
+                messages = build_classify_messages(emails, label_names)
+                result = _call_openai(messages, model=settings.AI_SMALL_MODEL)
+
+                model_used = result['model']
+                total_prompt += result['prompt_tokens'] or 0
+                total_completion += result['completion_tokens'] or 0
+
+                try:
+                    items = _orjson.loads(result['content'])
+                except (ValueError, TypeError):
+                    logger.warning('Classify: malformed JSON response for task %s', task_id)
+                    raise ValueError('Malformed JSON response from LLM')
+
+                if not isinstance(items, list):
+                    raise ValueError('Expected JSON array from LLM')
+
+                links_to_create = []
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    idx = item.get('i')
+                    raw_labels = item.get('labels', [])
+
+                    msg = uuid_index.get(idx)
+                    if not msg:
+                        continue
+
+                    if not isinstance(raw_labels, list):
+                        continue
+
+                    count = 0
+                    for raw_name in raw_labels:
+                        if count >= MAX_LABELS_PER_MESSAGE:
+                            break
+                        if not isinstance(raw_name, str):
+                            continue
+                        label = label_by_lower.get(raw_name.lower())
+                        if label:
+                            links_to_create.append(
+                                MailMessageLabel(message=msg, label=label)
+                            )
+                            count += 1
+
+                if links_to_create:
+                    MailMessageLabel.objects.bulk_create(links_to_create, ignore_conflicts=True)
+
+        ai_task.status = AITask.Status.COMPLETED
+        ai_task.result = f'Classified {len(msgs)} messages'
+        ai_task.model_used = model_used
+        ai_task.prompt_tokens = total_prompt
+        ai_task.completion_tokens = total_completion
+        ai_task.completed_at = timezone.now()
+        ai_task.save()
+        notify_sse('ai', ai_task.owner_id)
+
+        logger.info('Classify complete: task=%s messages=%d tokens=%d+%d',
+                     task_id, len(msgs), total_prompt, total_completion)
+        return {'status': 'ok', 'task_id': task_id}
+
+    except Exception as e:
+        logger.exception('Classify failed: task=%s', task_id)
+        ai_task.status = AITask.Status.FAILED
+        ai_task.error = str(e)
+        ai_task.completed_at = timezone.now()
+        ai_task.save()
+        notify_sse('ai', ai_task.owner_id)
         return {'status': 'error', 'error': str(e)}

@@ -134,3 +134,17 @@ class UserMemoryTests(TestCase):
         )
         mem = UserMemory.objects.get(user=self.user, bot=self.bot_user, key='name')
         self.assertEqual(mem.content, 'Paul')
+
+
+class AITaskTypeClassifyTests(TestCase):
+    def test_classify_task_type_exists(self):
+        """CLASSIFY should be a valid TaskType choice."""
+        self.assertIn('classify', [c[0] for c in AITask.TaskType.choices])
+
+    def test_create_classify_task(self):
+        user = User.objects.create_user(username='cls_user', password='pass123')
+        task = AITask.objects.create(
+            owner=user,
+            task_type=AITask.TaskType.CLASSIFY,
+        )
+        self.assertEqual(task.task_type, 'classify')

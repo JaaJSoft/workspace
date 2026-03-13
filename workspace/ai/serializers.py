@@ -99,3 +99,8 @@ class UserMemorySerializer(serializers.ModelSerializer):
 
     def get_bot_name(self, obj):
         return obj.bot.get_full_name() or obj.bot.username
+
+
+class ClassifyRequestSerializer(serializers.Serializer):
+    account_id = serializers.UUIDField(required=False)
+    folder_id = serializers.UUIDField(required=False)

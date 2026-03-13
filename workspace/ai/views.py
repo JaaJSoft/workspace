@@ -10,6 +10,7 @@ from .models import AITask, BotProfile, UserMemory
 from .serializers import (
     AITaskSerializer,
     BotProfileSerializer,
+    ClassifyRequestSerializer,
     ComposeRequestSerializer,
     EditorActionRequestSerializer,
     ReplyRequestSerializer,
@@ -46,6 +47,13 @@ class SummarizeView(APIView):
             return Response(
                 {'detail': 'AI is not configured.'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        from workspace.users.settings_service import get_setting
+        if get_setting(request.user, 'mail', 'ai_enabled', default=True) is False:
+            return Response(
+                {'detail': 'Mail AI features are disabled in your settings.'},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = SummarizeRequestSerializer(data=request.data)
@@ -91,6 +99,13 @@ class ComposeView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        from workspace.users.settings_service import get_setting
+        if get_setting(request.user, 'mail', 'ai_enabled', default=True) is False:
+            return Response(
+                {'detail': 'Mail AI features are disabled in your settings.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = ComposeRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -131,6 +146,13 @@ class ReplyView(APIView):
             return Response(
                 {'detail': 'AI is not configured.'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        from workspace.users.settings_service import get_setting
+        if get_setting(request.user, 'mail', 'ai_enabled', default=True) is False:
+            return Response(
+                {'detail': 'Mail AI features are disabled in your settings.'},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = ReplyRequestSerializer(data=request.data)
@@ -200,6 +222,96 @@ class EditorActionView(APIView):
 
         from workspace.ai.tasks import editor_action
         editor_action.delay(str(ai_task.uuid))
+
+        return Response(
+            AITaskSerializer(ai_task).data,
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class ClassifyView(APIView):
+    """POST /api/v1/ai/tasks/mail/classify — Start batch email classification."""
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=['AI'],
+        request=ClassifyRequestSerializer,
+        responses={202: AITaskSerializer},
+    )
+    def post(self, request):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from workspace.ai.client import is_ai_enabled
+        if not is_ai_enabled():
+            return Response(
+                {'detail': 'AI is not configured.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        from workspace.users.settings_service import get_setting
+        if get_setting(request.user, 'mail', 'ai_enabled', default=True) is False:
+            return Response(
+                {'detail': 'Mail AI features are disabled in your settings.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = ClassifyRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from workspace.mail.models import MailFolder, MailMessage
+        from workspace.mail.queries import user_account_ids
+
+        account_ids = user_account_ids(request.user)
+        account_id = serializer.validated_data.get('account_id')
+        folder_id = serializer.validated_data.get('folder_id')
+
+        # Access control
+        if account_id:
+            if not account_ids.filter(pk=account_id).exists():
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            account_ids = account_ids.filter(pk=account_id)
+
+        if folder_id:
+            if not MailFolder.objects.filter(uuid=folder_id, account_id__in=account_ids).exists():
+                return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Rate limit: 1 per user per 5 minutes
+        cutoff = timezone.now() - timedelta(minutes=5)
+        if AITask.objects.filter(
+            owner=request.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            status__in=[AITask.Status.PENDING, AITask.Status.PROCESSING, AITask.Status.COMPLETED],
+            created_at__gte=cutoff,
+        ).exists():
+            return Response(
+                {'detail': 'A classification task is already in progress. Try again later.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        # Collect unclassified inbox messages (no labels assigned yet)
+        qs = MailMessage.objects.filter(
+            account_id__in=account_ids,
+            deleted_at__isnull=True,
+        ).filter(
+            message_labels__isnull=True,
+        )
+        if folder_id:
+            qs = qs.filter(folder_id=folder_id)
+        else:
+            qs = qs.filter(folder__folder_type='inbox')
+
+        message_uuids = list(qs.values_list('uuid', flat=True)[:500])
+
+        ai_task = AITask.objects.create(
+            owner=request.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={'message_uuids': [str(u) for u in message_uuids]},
+        )
+
+        from workspace.ai.tasks import classify_mail_messages
+        classify_mail_messages.delay(str(ai_task.uuid))
 
         return Response(
             AITaskSerializer(ai_task).data,

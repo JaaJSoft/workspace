@@ -61,3 +61,5 @@ class MailConfig(AppConfig):
         from workspace.ai.tool_registry import tool_registry
         from workspace.mail.ai_tools import MailToolProvider
         tool_registry.register_provider(MailToolProvider())
+
+        import workspace.mail.signals  # noqa: F401

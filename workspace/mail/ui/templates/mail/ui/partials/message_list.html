@@ -1,6 +1,12 @@
 <!-- Message list header -->
 <div class="px-4 py-3 border-b border-base-300 flex items-center gap-2 bg-base-100">
-  <h3 class="font-semibold text-sm flex-1 truncate" x-text="selectedFolder?.display_name || 'Messages'"></h3>
+  <h3 class="font-semibold text-sm flex-1 truncate"
+      x-text="selectedLabel?.name || selectedFolder?.display_name || 'Messages'"></h3>
+  <button class="btn btn-ghost btn-xs btn-circle" @click="classifyFolder()"
+          :disabled="classifyingFolder" title="Classify with AI">
+    <i data-lucide="sparkles" class="w-3.5 h-3.5" x-show="!classifyingFolder"></i>
+    <span class="loading loading-spinner loading-xs" x-show="classifyingFolder" x-cloak></span>
+  </button>
   <button class="btn btn-ghost btn-xs btn-circle" @click="refreshFolder()"
           :disabled="syncingAccounts[selectedFolder?.account_id] === true" title="Refresh">
     <i data-lucide="refresh-cw" class="w-3.5 h-3.5"
@@ -125,6 +131,16 @@
         </div>
         <!-- Subject -->
         <div class="text-sm truncate" :class="msg.is_read ? 'text-base-content/60' : ''" x-html="highlightSearch(msg.subject || '(no subject)')"></div>
+        <!-- Label badges -->
+        <div class="flex items-center gap-1 mt-0.5 flex-wrap" x-show="msg.labels?.length" x-cloak>
+          <template x-for="lbl in msg.labels.slice(0, 3)" :key="lbl.uuid">
+            <span class="badge badge-xs gap-0.5"
+                  :class="lbl.color ? ('badge-' + lbl.color) : 'badge-ghost'"
+                  x-text="lbl.name"></span>
+          </template>
+          <span class="badge badge-ghost badge-xs" x-show="msg.labels.length > 3"
+                x-text="'+' + (msg.labels.length - 3)"></span>
+        </div>
         <!-- Snippet -->
         <div class="text-xs text-base-content/50 truncate mt-0.5" x-html="highlightSearch(msg.snippet)"></div>
       </div>

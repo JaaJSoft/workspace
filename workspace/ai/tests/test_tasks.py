@@ -1,4 +1,5 @@
 import base64
+import json
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -425,3 +426,160 @@ class EditImageToolTest(TestCase):
             conversation_id=None, context=self.context,
         )
         self.assertIn('Error', result)
+
+
+@override_settings(
+    AI_API_KEY='test-key',
+    AI_MODEL='gpt-4o-mini',
+    AI_SMALL_MODEL='gpt-4o-mini',
+    AI_MAX_TOKENS=100,
+    CELERY_TASK_ALWAYS_EAGER=False,
+)
+class ClassifyMailMessagesTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='clsuser', password='pass123')
+        self.account = MailAccount.objects.create(
+            owner=self.user, email='cls@test.com',
+            imap_host='imap.test.com', smtp_host='smtp.test.com',
+            username='cls@test.com',
+        )
+        self.folder = MailFolder.objects.create(
+            account=self.account, name='INBOX',
+            display_name='Inbox', folder_type='inbox',
+        )
+        self.msg1 = MailMessage.objects.create(
+            account=self.account, folder=self.folder, imap_uid=1,
+            subject='Server down!', snippet='Production is down',
+            from_address={'name': 'Alert', 'email': 'alert@ops.com'},
+        )
+        self.msg2 = MailMessage.objects.create(
+            account=self.account, folder=self.folder, imap_uid=2,
+            subject='Weekly digest', snippet='Here is your digest',
+            from_address={'name': 'News', 'email': 'news@co.com'},
+        )
+        self.label_urgent = self.account.labels.get(name='Urgent')
+        self.label_newsletter = self.account.labels.get(name='Newsletter')
+
+    @patch('workspace.ai.client.get_ai_client')
+    def test_classifies_messages_with_labels(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps([
+            {'i': 1, 'labels': ['Urgent']},
+            {'i': 2, 'labels': ['Newsletter']},
+        ])
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = 'gpt-4o-mini'
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={'message_uuids': [str(self.msg1.uuid), str(self.msg2.uuid)]},
+        )
+        from workspace.ai.tasks import classify_mail_messages
+        classify_mail_messages(str(ai_task.uuid))
+
+        from workspace.mail.models import MailMessageLabel
+        self.assertTrue(MailMessageLabel.objects.filter(message=self.msg1, label=self.label_urgent).exists())
+        self.assertTrue(MailMessageLabel.objects.filter(message=self.msg2, label=self.label_newsletter).exists())
+        ai_task.refresh_from_db()
+        self.assertEqual(ai_task.status, AITask.Status.COMPLETED)
+
+    @patch('workspace.ai.client.get_ai_client')
+    def test_unknown_label_names_ignored(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps([
+            {'i': 1, 'labels': ['Urgent', 'NonExistent']},
+        ])
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = 'gpt-4o-mini'
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={'message_uuids': [str(self.msg1.uuid)]},
+        )
+        from workspace.ai.tasks import classify_mail_messages
+        classify_mail_messages(str(ai_task.uuid))
+
+        from workspace.mail.models import MailMessageLabel
+        self.assertEqual(self.msg1.message_labels.count(), 1)
+        self.assertEqual(self.msg1.message_labels.first().label.name, 'Urgent')
+
+    @patch('workspace.ai.client.get_ai_client')
+    def test_case_insensitive_label_matching(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps([
+            {'i': 1, 'labels': ['urgent', 'NEWSLETTER']},
+        ])
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = 'gpt-4o-mini'
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={'message_uuids': [str(self.msg1.uuid)]},
+        )
+        from workspace.ai.tasks import classify_mail_messages
+        classify_mail_messages(str(ai_task.uuid))
+
+        from workspace.mail.models import MailMessageLabel
+        self.assertEqual(self.msg1.message_labels.count(), 2)
+
+    @patch('workspace.ai.client.get_ai_client')
+    def test_max_3_labels_per_message(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps([
+            {'i': 1, 'labels': ['Urgent', 'Action', 'FYI', 'Newsletter', 'Notification']},
+        ])
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = 'gpt-4o-mini'
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={'message_uuids': [str(self.msg1.uuid)]},
+        )
+        from workspace.ai.tasks import classify_mail_messages
+        classify_mail_messages(str(ai_task.uuid))
+
+        from workspace.mail.models import MailMessageLabel
+        self.assertEqual(self.msg1.message_labels.count(), 3)
+
+    @patch('workspace.ai.client.get_ai_client')
+    def test_malformed_json_fails_gracefully(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = 'not json'
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = 'gpt-4o-mini'
+        mock_response.usage.prompt_tokens = 50
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={'message_uuids': [str(self.msg1.uuid)]},
+        )
+        from workspace.ai.tasks import classify_mail_messages
+        result = classify_mail_messages(str(ai_task.uuid))
+
+        self.assertEqual(result['status'], 'error')
+        ai_task.refresh_from_db()
+        self.assertEqual(ai_task.status, 'failed')

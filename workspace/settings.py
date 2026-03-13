@@ -592,6 +592,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'ai.dispatch_scheduled_messages',
         'schedule': 60.0,  # Every minute
     },
+    'purge-ai-tasks': {
+        'task': 'ai.purge_ai_tasks',
+        'schedule': crontab(hour=3, minute=30),  # Every day at 3:30 AM
+    },
 }
 
 # --------------------------------------------------
@@ -636,5 +640,6 @@ AI_MAX_TOKENS = int(os.getenv('AI_MAX_TOKENS', '2048'))
 AI_CHAT_CONTEXT_SIZE = int(os.getenv('AI_CHAT_CONTEXT_SIZE', '150'))
 AI_TIMEOUT = int(os.getenv('AI_TIMEOUT', '300'))  # seconds per request
 AI_MAX_RETRIES = int(os.getenv('AI_MAX_RETRIES', '2'))  # retries on transient errors (timeout, 5xx)
+AI_TASK_RETENTION_DAYS = int(os.getenv('AI_TASK_RETENTION_DAYS', '90'))
 AI_IMAGE_MODEL = os.getenv('AI_IMAGE_MODEL', '')
 AI_IMAGE_BASE_URL = os.getenv('AI_IMAGE_BASE_URL') or None

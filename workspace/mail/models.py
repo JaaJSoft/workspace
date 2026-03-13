@@ -134,6 +134,36 @@ class MailFolder(models.Model):
         return f'{self.account.email} / {self.display_name}'
 
 
+class MailLabel(models.Model):
+    """User-defined label that can be applied to mail messages."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    account = models.ForeignKey(
+        MailAccount,
+        on_delete=models.CASCADE,
+        related_name='labels',
+    )
+    name = models.CharField(max_length=100)
+    color = models.CharField(max_length=30, blank=True, default='')
+    icon = models.CharField(max_length=50, blank=True, default='')
+    position = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['position', 'name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['account', 'name'],
+                name='unique_mail_label_per_account',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.account.email} / {self.name}'
+
+
 class MailMessage(models.Model):
     """Email message synced from IMAP."""
 
@@ -191,6 +221,33 @@ class MailMessage(models.Model):
 
     def __str__(self):
         return self.subject or '(no subject)'
+
+
+class MailMessageLabel(models.Model):
+    """Junction table linking mail messages to labels."""
+
+    message = models.ForeignKey(
+        MailMessage,
+        on_delete=models.CASCADE,
+        related_name='message_labels',
+    )
+    label = models.ForeignKey(
+        MailLabel,
+        on_delete=models.CASCADE,
+        related_name='label_links',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['message', 'label'],
+                name='unique_mail_message_label',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.message} / {self.label.name}'
 
 
 def mail_attachment_path(instance, filename):

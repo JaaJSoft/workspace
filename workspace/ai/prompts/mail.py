@@ -103,3 +103,41 @@ def build_reply_messages(
             f"{INJECTION_GUARD}"
         )},
     ]
+
+
+def _build_classify_system(labels: list[str]) -> str:
+    label_list = '\n'.join(f'- {name}' for name in labels) if labels else '- (no labels defined)'
+    return (
+        "You are an email classification assistant. Assign 1-3 labels to each email "
+        "from the list below.\n\n"
+        f"Available labels:\n{label_list}\n\n"
+        "Return a JSON array only, no other text.\n"
+        'Response format: [{"i":1,"labels":["Label1","Label2"]},...]'
+    )
+
+
+def build_classify_messages(emails: list[dict], labels: list[str]) -> list[dict]:
+    """Build messages for batch email classification.
+
+    Each email dict must have: subject, from_name, from_email, snippet.
+    labels: list of label names available for this account.
+    """
+    lines = []
+    for idx, e in enumerate(emails, 1):
+        name = e.get('from_name') or ''
+        email = e.get('from_email') or ''
+        sender = f"{name} <{email}>" if name else email
+        lines.append(
+            f"[{idx}] From: {sender} | Subject: {e.get('subject', '')} "
+            f"| Preview: {e.get('snippet', '')}"
+        )
+    email_block = '\n'.join(lines)
+
+    return [
+        {'role': 'system', 'content': _build_classify_system(labels)},
+        {'role': 'user', 'content': (
+            f"Classify these emails:\n\n"
+            f"<untrusted-content>\n{email_block}\n</untrusted-content>\n\n"
+            f"{INJECTION_GUARD}"
+        )},
+    ]

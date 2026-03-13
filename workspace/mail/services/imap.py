@@ -321,6 +321,7 @@ def sync_folder_messages(account, folder):
             return
 
         max_uid = folder.last_sync_uid
+        new_message_uuids = []
         # Fetch in batches
         for i in range(0, len(uid_list), FETCH_BATCH_SIZE):
             batch = uid_list[i:i + FETCH_BATCH_SIZE]
@@ -347,6 +348,7 @@ def sync_folder_messages(account, folder):
                     msg = _parse_message(raw_email, account, folder, uid, flags_str)
                     if msg:
                         max_uid = max(max_uid, uid)
+                        new_message_uuids.append(str(msg.uuid))
                 except Exception:
                     logger.exception("Failed to parse message UID %d in %s", uid, folder.name)
 
@@ -354,6 +356,25 @@ def sync_folder_messages(account, folder):
         if max_uid > folder.last_sync_uid:
             folder.last_sync_uid = max_uid
         _update_folder_counts(folder)
+
+        # Dispatch AI classification for new inbox messages
+        if new_message_uuids and folder.folder_type == 'inbox':
+            try:
+                from workspace.ai.client import is_ai_enabled
+                from workspace.users.settings_service import get_setting
+                if is_ai_enabled() and get_setting(account.owner, 'mail', 'ai_enabled', default=True):
+                    from workspace.ai.models import AITask
+                    ai_task = AITask.objects.create(
+                        owner=account.owner,
+                        task_type=AITask.TaskType.CLASSIFY,
+                        input_data={'message_uuids': new_message_uuids},
+                    )
+                    from workspace.ai.tasks import classify_mail_messages
+                    classify_mail_messages.delay(str(ai_task.uuid))
+                    logger.info('Dispatched classify task for %d new messages in %s',
+                                len(new_message_uuids), folder.name)
+            except Exception:
+                logger.exception('Failed to dispatch classify task for %s', folder.name)
 
         # Process any new calendar invitations
         from workspace.mail.models import MailMessage as _MailMsg

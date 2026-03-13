@@ -24,6 +24,11 @@ urlpatterns = [
         name='ai-reply',
     ),
     path(
+        'api/v1/ai/tasks/mail/classify',
+        views.ClassifyView.as_view(),
+        name='ai-classify',
+    ),
+    path(
         'api/v1/ai/tasks/editor',
         views.EditorActionView.as_view(),
         name='ai-editor-action',

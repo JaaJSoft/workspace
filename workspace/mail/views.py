@@ -1,7 +1,7 @@
 import logging
 from collections import Counter, defaultdict
 
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.http import FileResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
@@ -10,7 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import MailAccount, MailAttachment, MailFolder, MailMessage
+from .models import MailAccount, MailAttachment, MailFolder, MailLabel, MailMessage, MailMessageLabel
 from .serializers import (
     BatchActionSerializer,
     DraftSaveSerializer,
@@ -20,6 +20,10 @@ from .serializers import (
     MailFolderCreateSerializer,
     MailFolderSerializer,
     MailFolderUpdateSerializer,
+    MailLabelAssignSerializer,
+    MailLabelCreateSerializer,
+    MailLabelSerializer,
+    MailLabelUpdateSerializer,
     MailMessageDetailSerializer,
     MailMessageListSerializer,
     MailMessageUpdateSerializer,
@@ -219,6 +223,106 @@ class MailAccountSyncView(APIView):
 
 
 @extend_schema(tags=['Mail'])
+class MailLabelListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="List labels for a mail account",
+        parameters=[OpenApiParameter('account', str, required=True)],
+    )
+    def get(self, request):
+        account_id = request.query_params.get('account')
+        if not account_id:
+            return Response(
+                {'detail': 'account query parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            account = MailAccount.objects.get(uuid=account_id, owner=request.user)
+        except MailAccount.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        labels = MailLabel.objects.filter(account=account)
+        return Response(MailLabelSerializer(labels, many=True).data)
+
+    @extend_schema(summary="Create a label", request=MailLabelCreateSerializer)
+    def post(self, request):
+        ser = MailLabelCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        try:
+            account = MailAccount.objects.get(
+                uuid=ser.validated_data['account_id'], owner=request.user,
+            )
+        except MailAccount.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if MailLabel.objects.filter(account=account, name=ser.validated_data['name']).exists():
+            return Response(
+                {'detail': 'A label with this name already exists for this account.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        label = MailLabel.objects.create(
+            account=account,
+            name=ser.validated_data['name'],
+            color=ser.validated_data.get('color', ''),
+            icon=ser.validated_data.get('icon', ''),
+        )
+        return Response(MailLabelSerializer(label).data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(tags=['Mail'])
+class MailLabelDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_label(self, request, uuid):
+        try:
+            label = MailLabel.objects.select_related('account').get(uuid=uuid)
+        except MailLabel.DoesNotExist:
+            return None
+        if label.account.owner != request.user:
+            return None
+        return label
+
+    @extend_schema(summary="Update a label", request=MailLabelUpdateSerializer)
+    def patch(self, request, uuid):
+        label = self._get_label(request, uuid)
+        if not label:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        ser = MailLabelUpdateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        new_name = ser.validated_data.get('name')
+        if new_name and new_name != label.name:
+            if MailLabel.objects.filter(account=label.account, name=new_name).exists():
+                return Response(
+                    {'detail': 'A label with this name already exists for this account.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        update_fields = ['updated_at']
+        for field in ('name', 'color', 'icon', 'position'):
+            if field in ser.validated_data:
+                setattr(label, field, ser.validated_data[field])
+                update_fields.append(field)
+        if len(update_fields) > 1:
+            label.save(update_fields=update_fields)
+
+        return Response(MailLabelSerializer(label).data)
+
+    @extend_schema(summary="Delete a label")
+    def delete(self, request, uuid):
+        label = self._get_label(request, uuid)
+        if not label:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        label.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=['Mail'])
 class MailFolderListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -411,7 +515,8 @@ class MailMessageListView(APIView):
     @extend_schema(
         summary="List messages in a folder",
         parameters=[
-            OpenApiParameter('folder', str, required=True),
+            OpenApiParameter('folder', str, required=False),
+            OpenApiParameter('label', str, required=False),
             OpenApiParameter('page', int, required=False),
             OpenApiParameter('search', str, required=False),
             OpenApiParameter('unread', bool, required=False),
@@ -421,25 +526,46 @@ class MailMessageListView(APIView):
     )
     def get(self, request):
         folder_id = request.query_params.get('folder')
-        if not folder_id:
+        label_id = request.query_params.get('label')
+
+        if not folder_id and not label_id:
             return Response(
-                {'detail': 'folder query parameter is required'},
+                {'detail': 'folder or label query parameter is required'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            folder = MailFolder.objects.select_related('account').get(uuid=folder_id)
-        except MailFolder.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        folder = None
+        label = None
 
-        if folder.account.owner != request.user:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        if label_id:
+            try:
+                label = MailLabel.objects.select_related('account').get(uuid=label_id)
+            except MailLabel.DoesNotExist:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            if label.account.owner != request.user:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if folder_id:
+            try:
+                folder = MailFolder.objects.select_related('account').get(uuid=folder_id)
+            except MailFolder.DoesNotExist:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            if folder.account.owner != request.user:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Build base queryset
+        if folder:
+            qs = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
+        else:
+            # label-only: cross-folder for the label's account
+            qs = MailMessage.objects.filter(account=label.account, deleted_at__isnull=True)
+
+        if label:
+            qs = qs.filter(message_labels__label=label)
 
         page = int(request.query_params.get('page', 1))
         page_size = 50
         offset = (page - 1) * page_size
-
-        qs = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
 
         # Apply optional filters
         search = request.query_params.get('search', '').strip()
@@ -459,6 +585,9 @@ class MailMessageListView(APIView):
         total = qs.count()
         messages = (
             qs.annotate(attachments_count=Count('attachments'))
+            .prefetch_related(
+                Prefetch('message_labels', queryset=MailMessageLabel.objects.select_related('label'))
+            )
             .order_by('-date')[offset:offset + page_size]
         )
 
@@ -479,7 +608,10 @@ class MailMessageDetailView(APIView):
             msg = (
                 MailMessage.objects
                 .select_related('account', 'folder')
-                .prefetch_related('attachments')
+                .prefetch_related(
+                    'attachments',
+                    Prefetch('message_labels', queryset=MailMessageLabel.objects.select_related('label')),
+                )
                 .get(uuid=uuid)
             )
         except MailMessage.DoesNotExist:
@@ -797,6 +929,60 @@ class MailDraftView(APIView):
 
         _refresh_folder_counts(msg.folder)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=['Mail'])
+class MailMessageLabelView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_message(self, request, uuid):
+        try:
+            msg = MailMessage.objects.select_related('account').get(uuid=uuid)
+        except MailMessage.DoesNotExist:
+            return None
+        if msg.account.owner != request.user:
+            return None
+        return msg
+
+    @extend_schema(summary="Assign labels to a message", request=MailLabelAssignSerializer)
+    def post(self, request, uuid):
+        msg = self._get_message(request, uuid)
+        if not msg:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        ser = MailLabelAssignSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        labels = MailLabel.objects.filter(
+            uuid__in=ser.validated_data['label_ids'],
+            account=msg.account,
+        )
+        if labels.count() != len(ser.validated_data['label_ids']):
+            return Response(
+                {'detail': 'One or more labels do not belong to this account.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        MailMessageLabel.objects.bulk_create(
+            [MailMessageLabel(message=msg, label=lbl) for lbl in labels],
+            ignore_conflicts=True,
+        )
+        return Response({'status': 'ok'})
+
+    @extend_schema(summary="Remove labels from a message", request=MailLabelAssignSerializer)
+    def delete(self, request, uuid):
+        msg = self._get_message(request, uuid)
+        if not msg:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        ser = MailLabelAssignSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        MailMessageLabel.objects.filter(
+            message=msg,
+            label_id__in=ser.validated_data['label_ids'],
+        ).delete()
+        return Response({'status': 'ok'})
 
 
 @extend_schema(tags=['Mail'])

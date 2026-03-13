@@ -47,6 +47,27 @@ def _refresh_folder_counts(folder):
     folder.save(update_fields=['message_count', 'unread_count', 'updated_at'])
 
 
+def _refresh_label_counts(labels):
+    """Recompute unread_count for one or more labels.
+
+    Accepts a single MailLabel, a queryset, or an iterable of MailLabels.
+    """
+    if isinstance(labels, MailLabel):
+        labels = [labels]
+    for label in labels:
+        label.unread_count = MailMessageLabel.objects.filter(
+            label=label, message__is_read=False, message__deleted_at__isnull=True,
+        ).count()
+        label.save(update_fields=['unread_count', 'updated_at'])
+
+
+def _refresh_message_label_counts(message):
+    """Refresh unread counts for all labels attached to a message."""
+    label_ids = MailMessageLabel.objects.filter(message=message).values_list('label_id', flat=True)
+    if label_ids:
+        _refresh_label_counts(MailLabel.objects.filter(pk__in=label_ids))
+
+
 @extend_schema(tags=['Mail'])
 class MailAutodiscoverView(APIView):
     permission_classes = [IsAuthenticated]
@@ -665,6 +686,8 @@ class MailMessageDetailView(APIView):
 
         msg.save()
         _refresh_folder_counts(msg.folder)
+        if 'is_read' in ser.validated_data:
+            _refresh_message_label_counts(msg)
         return Response(MailMessageDetailSerializer(msg).data)
 
     @extend_schema(summary="Soft-delete a message")
@@ -684,6 +707,7 @@ class MailMessageDetailView(APIView):
             logger.warning("Failed to delete message on IMAP for %s", msg.uuid)
 
         _refresh_folder_counts(msg.folder)
+        _refresh_message_label_counts(msg)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -840,6 +864,14 @@ class MailBatchActionView(APIView):
         for folder in MailFolder.objects.filter(uuid__in=affected_folders):
             _refresh_folder_counts(folder)
 
+        # Refresh label counts for read/unread/delete actions
+        if action in ('mark_read', 'mark_unread', 'delete'):
+            affected_label_ids = MailMessageLabel.objects.filter(
+                message__in=messages,
+            ).values_list('label_id', flat=True).distinct()
+            if affected_label_ids:
+                _refresh_label_counts(MailLabel.objects.filter(pk__in=affected_label_ids))
+
         return Response({'processed': processed})
 
 
@@ -967,6 +999,7 @@ class MailMessageLabelView(APIView):
             [MailMessageLabel(message=msg, label=lbl) for lbl in labels],
             ignore_conflicts=True,
         )
+        _refresh_label_counts(labels)
         return Response({'status': 'ok'})
 
     @extend_schema(summary="Remove labels from a message", request=MailLabelAssignSerializer)
@@ -978,10 +1011,15 @@ class MailMessageLabelView(APIView):
         ser = MailLabelAssignSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
+        affected_labels = list(MailLabel.objects.filter(
+            pk__in=ser.validated_data['label_ids'],
+            account=msg.account,
+        ))
         MailMessageLabel.objects.filter(
             message=msg,
             label_id__in=ser.validated_data['label_ids'],
         ).delete()
+        _refresh_label_counts(affected_labels)
         return Response({'status': 'ok'})
 
 

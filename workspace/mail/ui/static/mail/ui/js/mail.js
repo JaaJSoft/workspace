@@ -541,9 +541,13 @@ function mailApp() {
     },
 
     async refreshFolder() {
-      if (!this.selectedFolder) return;
-      const accountUuid = this.selectedFolder.account_id;
+      const accountUuid = this.selectedFolder?.account_id || this.selectedLabel?.account_id;
+      if (!accountUuid) return;
       await this.syncAccount(accountUuid);
+      if (this.selectedLabel) {
+        await this.fetchLabels(accountUuid);
+        this.loadMessages();
+      }
     },
 
     async classifyFolder() {
@@ -656,8 +660,19 @@ function mailApp() {
       msg.is_read = newVal;
       const listMsg = this.messages.find(m => m.uuid === msg.uuid);
       if (listMsg) listMsg.is_read = newVal;
-      if (this.selectedFolder && wasRead !== newVal) {
-        this.selectedFolder.unread_count = Math.max(0, (this.selectedFolder.unread_count || 0) + (newVal ? -1 : 1));
+      if (wasRead !== newVal) {
+        const delta = newVal ? -1 : 1;
+        if (this.selectedFolder) {
+          this.selectedFolder.unread_count = Math.max(0, (this.selectedFolder.unread_count || 0) + delta);
+        }
+        // Update label unread counts for labels on this message
+        const msgLabels = listMsg?.labels || msg.labels || [];
+        const accountId = msg.account_id || this.selectedFolder?.account_id || this.selectedLabel?.account_id;
+        const accountLabels = accountId ? (this.labels[accountId] || []) : [];
+        for (const ml of msgLabels) {
+          const lbl = accountLabels.find(l => l.uuid === ml.uuid);
+          if (lbl) lbl.unread_count = Math.max(0, (lbl.unread_count || 0) + delta);
+        }
       }
       await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
         method: 'PATCH',
@@ -1619,7 +1634,8 @@ function mailApp() {
             body: JSON.stringify({ label_ids: [label.uuid] }),
           })
         ));
-        await this.loadMessages();
+        const accountId = this.selectedFolder?.account_id || this.selectedLabel?.account_id;
+        await Promise.all([this.loadMessages(), accountId ? this.fetchLabels(accountId) : null]);
       } catch (e) {
         console.warn('Toggle label failed:', e);
       }
@@ -1761,8 +1777,9 @@ function mailApp() {
             body: JSON.stringify({ label_ids: [label.uuid] }),
           })
         ));
-        // Refresh message list to show new labels
-        this.loadMessages();
+        // Refresh message list and label counts
+        const accountId = this.selectedFolder?.account_id || this.selectedLabel?.account_id;
+        await Promise.all([this.loadMessages(), accountId ? this.fetchLabels(accountId) : null]);
       } catch (e) {
         console.warn('Label drop failed:', e);
       }

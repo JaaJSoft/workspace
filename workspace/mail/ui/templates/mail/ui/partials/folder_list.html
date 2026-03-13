@@ -86,6 +86,11 @@
               <i :data-lucide="label.icon || 'tag'" class="w-4 h-4"></i>
             </span>
             <span class="flex-1 text-left truncate" x-text="label.name"></span>
+            <span
+              x-show="label.unread_count > 0"
+              class="badge badge-xs badge-warning"
+              x-text="label.unread_count"
+            ></span>
           </button>
         </template>
       </div>

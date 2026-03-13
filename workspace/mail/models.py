@@ -147,6 +147,7 @@ class MailLabel(models.Model):
     color = models.CharField(max_length=30, blank=True, default='')
     icon = models.CharField(max_length=50, blank=True, default='')
     position = models.PositiveIntegerField(default=0)
+    unread_count = models.IntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

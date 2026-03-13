@@ -45,8 +45,8 @@ class MailAccountUpdateSerializer(serializers.Serializer):
 class MailLabelSerializer(serializers.ModelSerializer):
     class Meta:
         model = MailLabel
-        fields = ['uuid', 'account_id', 'name', 'color', 'icon', 'position']
-        read_only_fields = ['uuid', 'account_id']
+        fields = ['uuid', 'account_id', 'name', 'color', 'icon', 'position', 'unread_count']
+        read_only_fields = ['uuid', 'account_id', 'unread_count']
 
 
 class MailLabelCreateSerializer(serializers.Serializer):

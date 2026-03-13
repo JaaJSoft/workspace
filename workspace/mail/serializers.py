@@ -116,6 +116,7 @@ class MailMessageListSerializer(serializers.ModelSerializer):
 class MailMessageDetailSerializer(serializers.ModelSerializer):
     attachments = MailAttachmentSerializer(many=True, read_only=True)
     labels = serializers.SerializerMethodField()
+    ai_summary_html = serializers.SerializerMethodField()
 
     class Meta:
         model = MailMessage
@@ -125,9 +126,15 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
             'bcc_addresses', 'reply_to', 'date', 'snippet',
             'body_text', 'body_html',
             'is_read', 'is_starred', 'is_draft', 'has_attachments',
-            'has_calendar_event', 'ai_summary',
+            'has_calendar_event', 'ai_summary', 'ai_summary_html',
             'attachments', 'labels', 'created_at',
         ]
+
+    def get_ai_summary_html(self, obj):
+        if obj.ai_summary:
+            import mistune
+            return mistune.html(obj.ai_summary)
+        return None
 
     def get_labels(self, obj):
         # Django serves from prefetch cache when message_labels is prefetched

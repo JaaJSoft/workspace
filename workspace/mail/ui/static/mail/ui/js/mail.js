@@ -613,8 +613,8 @@ function mailApp() {
       const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`);
       if (res.ok) {
         this.messageDetail = await res.json();
-        if (this.messageDetail.ai_summary) {
-          this.aiSummary = this.messageDetail.ai_summary.replace(/\n/g, '<br>');
+        if (this.messageDetail.ai_summary_html) {
+          this.aiSummary = this.messageDetail.ai_summary_html;
         }
         // Auto-mark as read
         if (!msg.is_read) {
@@ -631,8 +631,8 @@ function mailApp() {
       if (res.ok) {
         this.messageDetail = await res.json();
         this.selectedMessage = this.messageDetail;
-        if (this.messageDetail.ai_summary) {
-          this.aiSummary = this.messageDetail.ai_summary.replace(/\n/g, '<br>');
+        if (this.messageDetail.ai_summary_html) {
+          this.aiSummary = this.messageDetail.ai_summary_html;
         }
         // Load the folder
         const folderId = this.messageDetail.folder_id;
@@ -878,7 +878,7 @@ function mailApp() {
           if (!resp.ok) return;
           const task = await resp.json();
           if (task.status === 'completed') {
-            this.aiSummary = task.result.replace(/\n/g, '<br>');
+            this.aiSummary = task.result_html || task.result;
             this.aiSummarizing = false;
             clearInterval(this._aiPollInterval);
             this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });

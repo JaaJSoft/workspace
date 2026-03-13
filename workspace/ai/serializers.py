@@ -39,11 +39,14 @@ class AITaskSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_result_html(self, obj):
+        if obj.status != AITask.Status.COMPLETED or not obj.result:
+            return None
+        if obj.task_type == AITask.TaskType.SUMMARIZE:
+            import mistune
+            return mistune.html(obj.result)
         if (
             obj.task_type == AITask.TaskType.EDITOR
-            and obj.status == AITask.Status.COMPLETED
             and obj.input_data.get('action') in ('explain', 'summarize')
-            and obj.result
         ):
             import mistune
             return mistune.html(obj.result)

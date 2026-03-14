@@ -9,6 +9,8 @@ from workspace.core.activity_service import annotate_time_ago, get_recent_events
 from workspace.core.activity_registry import activity_registry
 from workspace.core.module_registry import registry
 
+from django.conf import settings as django_settings
+
 ACTIVITY_LIMIT = 10
 
 
@@ -59,6 +61,7 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
         'modules': modules,
         'upcoming_events': _get_upcoming_events(user),
         'usage_stats': activity_registry.get_stats(user.id),
+        'storage_quota': django_settings.STORAGE_QUOTA_BYTES,
     }
     if include_activity:
         context.update(_get_activity_context(user, source=activity_source))

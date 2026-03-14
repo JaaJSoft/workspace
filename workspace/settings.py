@@ -630,6 +630,11 @@ OAUTH_GENERIC_IMAP_HOST = os.getenv('OAUTH_GENERIC_IMAP_HOST', '')
 OAUTH_GENERIC_SMTP_HOST = os.getenv('OAUTH_GENERIC_SMTP_HOST', '')
 
 # --------------------------------------------------
+# Storage
+# --------------------------------------------------
+STORAGE_QUOTA_BYTES = int(os.getenv('STORAGE_QUOTA_BYTES', str(1 * 1024 * 1024 * 1024)))  # 1 GB
+
+# --------------------------------------------------
 # AI Configuration
 # --------------------------------------------------
 AI_API_KEY = os.getenv('AI_API_KEY', '')

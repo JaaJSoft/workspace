@@ -306,9 +306,9 @@
 
       <!-- Usage Tab -->
       {% load ui_filters %}
-      <div x-show="tab === 'usage'" x-cloak class="space-y-4">
+      <div x-show="tab === 'usage'" x-cloak x-data="usageTab()" x-init="$watch('$root.tab', v => { if (v === 'usage') animate() })" class="space-y-4">
         <!-- Files -->
-        <div class="card bg-base-100 border border-base-300 shadow-sm">
+        <a href="/files" class="card bg-base-100 border border-base-300 shadow-sm hover:border-primary/30 transition-colors block">
           <div class="card-body">
             <h2 class="card-title text-lg gap-2">
               <div class="rounded-lg bg-primary/10 p-2">
@@ -319,18 +319,27 @@
             <div class="grid grid-cols-2 gap-4 mt-4">
               <div>
                 <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Total files</div>
-                <div class="font-semibold text-2xl mt-1">{{ usage_stats.files.total_files|default:"0" }}</div>
+                <div class="font-semibold text-2xl mt-1" data-count="{{ usage_stats.files.total_files|default:"0" }}">0</div>
               </div>
               <div>
-                <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Storage used</div>
+                <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide flex items-center gap-1">
+                  Storage used
+                  <span class="tooltip tooltip-top cursor-help" data-tip="Storage quota is indicative and not enforced.">
+                    <i data-lucide="info" class="w-3 h-3 text-base-content/40"></i>
+                  </span>
+                </div>
                 <div class="font-semibold text-2xl mt-1">{{ usage_stats.files.total_size|default:"0"|filesize }}</div>
+                <div class="w-full bg-base-300 rounded-full h-2 mt-2">
+                  <div class="bg-primary rounded-full h-2 transition-all duration-700" x-ref="settingsStorageBar" style="width: 0%"></div>
+                </div>
+                <div class="text-xs text-base-content/50 mt-1">{{ usage_stats.files.total_size|default:"0"|filesize }} / {{ storage_quota|filesize }}</div>
               </div>
             </div>
           </div>
-        </div>
+        </a>
 
         <!-- Chat -->
-        <div class="card bg-base-100 border border-base-300 shadow-sm">
+        <a href="/chat" class="card bg-base-100 border border-base-300 shadow-sm hover:border-info/30 transition-colors block">
           <div class="card-body">
             <h2 class="card-title text-lg gap-2">
               <div class="rounded-lg bg-info/10 p-2">
@@ -341,18 +350,18 @@
             <div class="grid grid-cols-2 gap-4 mt-4">
               <div>
                 <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Conversations</div>
-                <div class="font-semibold text-2xl mt-1">{{ usage_stats.chat.active_conversations|default:"0" }}</div>
+                <div class="font-semibold text-2xl mt-1" data-count="{{ usage_stats.chat.active_conversations|default:"0" }}">0</div>
               </div>
               <div>
                 <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Messages sent</div>
-                <div class="font-semibold text-2xl mt-1">{{ usage_stats.chat.total_messages|default:"0" }}</div>
+                <div class="font-semibold text-2xl mt-1" data-count="{{ usage_stats.chat.total_messages|default:"0" }}">0</div>
               </div>
             </div>
           </div>
-        </div>
+        </a>
 
         <!-- Mail -->
-        <div class="card bg-base-100 border border-base-300 shadow-sm">
+        <a href="/mail" class="card bg-base-100 border border-base-300 shadow-sm hover:border-warning/30 transition-colors block">
           <div class="card-body">
             <h2 class="card-title text-lg gap-2">
               <div class="rounded-lg bg-warning/10 p-2">
@@ -363,22 +372,22 @@
             <div class="grid grid-cols-3 gap-4 mt-4">
               <div>
                 <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Accounts</div>
-                <div class="font-semibold text-2xl mt-1">{{ usage_stats.mail.total_accounts|default:"0" }}</div>
+                <div class="font-semibold text-2xl mt-1" data-count="{{ usage_stats.mail.total_accounts|default:"0" }}">0</div>
               </div>
               <div>
                 <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Messages</div>
-                <div class="font-semibold text-2xl mt-1">{{ usage_stats.mail.total_messages|default:"0" }}</div>
+                <div class="font-semibold text-2xl mt-1" data-count="{{ usage_stats.mail.total_messages|default:"0" }}">0</div>
               </div>
               <div>
                 <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Unread</div>
-                <div class="font-semibold text-2xl mt-1">{{ usage_stats.mail.unread_messages|default:"0" }}</div>
+                <div class="font-semibold text-2xl mt-1" data-count="{{ usage_stats.mail.unread_messages|default:"0" }}">0</div>
               </div>
             </div>
           </div>
-        </div>
+        </a>
 
         <!-- Calendar -->
-        <div class="card bg-base-100 border border-base-300 shadow-sm">
+        <a href="/calendar" class="card bg-base-100 border border-base-300 shadow-sm hover:border-secondary/30 transition-colors block">
           <div class="card-body">
             <h2 class="card-title text-lg gap-2">
               <div class="rounded-lg bg-secondary/10 p-2">
@@ -389,15 +398,15 @@
             <div class="grid grid-cols-2 gap-4 mt-4">
               <div>
                 <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Total events</div>
-                <div class="font-semibold text-2xl mt-1">{{ usage_stats.calendar.total_events|default:"0" }}</div>
+                <div class="font-semibold text-2xl mt-1" data-count="{{ usage_stats.calendar.total_events|default:"0" }}">0</div>
               </div>
               <div>
                 <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Upcoming</div>
-                <div class="font-semibold text-2xl mt-1">{{ usage_stats.calendar.upcoming_events|default:"0" }}</div>
+                <div class="font-semibold text-2xl mt-1" data-count="{{ usage_stats.calendar.upcoming_events|default:"0" }}">0</div>
               </div>
             </div>
           </div>
-        </div>
+        </a>
       </div>
 
     </div>
@@ -625,6 +634,40 @@
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
           body: JSON.stringify({ value: id }),
         });
+      },
+    };
+  }
+
+  function usageTab() {
+    return {
+      animated: false,
+      animate() {
+        if (this.animated) return;
+        this.animated = true;
+        this.$nextTick(() => {
+          this.$el.querySelectorAll('[data-count]').forEach(el => {
+            var target = parseInt(el.dataset.count) || 0;
+            if (target === 0) { el.textContent = '0'; return; }
+            this._countUp(el, target, 600);
+          });
+          var bar = this.$refs.settingsStorageBar;
+          if (bar) {
+            var used = {{ usage_stats.files.total_size|default:"0" }};
+            var quota = {{ storage_quota }};
+            var pct = quota > 0 ? Math.min((used / quota) * 100, 100) : 0;
+            requestAnimationFrame(() => { bar.style.width = pct + '%'; });
+          }
+        });
+      },
+      _countUp(el, target, duration) {
+        var start = performance.now();
+        function tick(now) {
+          var progress = Math.min((now - start) / duration, 1);
+          var eased = 1 - Math.pow(1 - progress, 3);
+          el.textContent = Math.round(eased * target).toLocaleString();
+          if (progress < 1) requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
       },
     };
   }

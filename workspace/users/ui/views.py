@@ -177,9 +177,11 @@ def profile_activity_feed(request, username):
 
 @login_required
 def settings_view(request):
+    from django.conf import settings as django_settings
     return render(request, 'users/ui/settings.html', {
         'has_avatar': avatar_service.has_avatar(request.user),
         'usage_stats': activity_registry.get_stats(request.user.id),
+        'storage_quota': django_settings.STORAGE_QUOTA_BYTES,
     })
 
 

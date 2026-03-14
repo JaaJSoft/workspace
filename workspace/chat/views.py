@@ -7,12 +7,16 @@ from django.db.models import Count, F, Max, Min, OuterRef, Prefetch, Q, Subquery
 from django.db.models.functions import Greatest
 from django.http import FileResponse, HttpResponse
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from workspace.common.ratelimit import get_rate
 
 from . import avatar_service as group_avatar_service
 from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage, Reaction
@@ -1065,6 +1069,7 @@ class GroupAvatarRetrieveView(APIView):
             404: OpenApiResponse(description="No avatar found"),
         },
     )
+    @method_decorator(ratelimit(key='ip', rate=get_rate('anon'), method='GET', block=True))
     def get(self, request, conversation_id):
         path = group_avatar_service.get_group_avatar_path(conversation_id)
         if not default_storage.exists(path):

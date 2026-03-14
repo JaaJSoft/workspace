@@ -2,6 +2,8 @@ from django.contrib.auth import password_validation, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
 from django.http import FileResponse, HttpResponse
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,
@@ -15,6 +17,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from django.db.models import Q
+
+from workspace.common.ratelimit import get_rate
 
 from workspace.users import avatar_service, presence_service
 from workspace.users.models import UserSetting
@@ -223,6 +227,7 @@ class UserAvatarRetrieveView(APIView):
             404: OpenApiResponse(description="No avatar found"),
         },
     )
+    @method_decorator(ratelimit(key='ip', rate=get_rate('anon'), method='GET', block=True))
     def get(self, request, user_id):
         if not User.objects.filter(pk=user_id, is_active=True).exists():
             return HttpResponse(status=404)

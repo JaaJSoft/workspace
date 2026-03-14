@@ -2,15 +2,17 @@ import re
 import uuid
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.ratelimit import get_rate
 from workspace.notifications.services import notify_many
 from workspace.users.settings_service import get_setting
 
@@ -392,6 +394,7 @@ class SharedPollView(APIView):
     authentication_classes = []
 
     @extend_schema(summary="Get poll via share link", responses=PollSerializer)
+    @method_decorator(ratelimit(key='ip', rate=get_rate('anon'), method='GET', block=True))
     def get(self, request, token):
         poll = get_object_or_404(_poll_detail_queryset(), share_token=token)
         _prefetch_poll_votes(poll)
@@ -420,26 +423,10 @@ class SharedPollVoteView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
-    def _get_client_ip(self, request):
-        xff = request.META.get('HTTP_X_FORWARDED_FOR')
-        if xff:
-            return xff.split(',')[0].strip()
-        return request.META.get('REMOTE_ADDR', '')
-
     @extend_schema(summary="Submit guest votes", request=GuestVoteSubmitSerializer, responses=PollSerializer)
+    @method_decorator(ratelimit(key='ip', rate=get_rate('sensitive'), method='POST', block=True))
     def post(self, request, token):
         poll = get_object_or_404(Poll, share_token=token, status=Poll.Status.OPEN)
-
-        # Rate limit: max 10 vote submissions per IP per hour
-        ip = self._get_client_ip(request)
-        rate_key = f'poll_vote_rate:{token}:{ip}'
-        attempts = cache.get(rate_key, 0)
-        if attempts >= 10:
-            return Response(
-                {'detail': 'Too many vote submissions. Please try again later.'},
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
-            )
-        cache.set(rate_key, attempts + 1, 3600)
 
         ser = GuestVoteSubmitSerializer(data=request.data)
         ser.is_valid(raise_exception=True)

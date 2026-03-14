@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -442,6 +443,11 @@ class GuestVoteTests(PollTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+    @override_settings(RATE_LIMITS={
+        'anon': '60/m', 'anon_hourly': '500/h',
+        'user': '300/m', 'user_hourly': '3000/h',
+        'sensitive': '2/m',
+    })
     def test_guest_vote_rate_limit(self):
         cache.clear()
         url = f'/api/v1/calendar/polls/shared/{self.poll.share_token}/vote'
@@ -449,12 +455,12 @@ class GuestVoteTests(PollTestMixin, APITestCase):
             'guest_name': 'Spammer',
             'votes': [{'slot_id': str(self.slot1.uuid), 'choice': 'yes'}],
         }
-        for i in range(10):
+        for i in range(2):
             resp = self.client.post(url, payload, format='json')
             self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        # 11th should be rate limited
+        # 3rd should be rate limited (via middleware -> 429)
         resp = self.client.post(url, payload, format='json')
-        self.assertEqual(resp.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(resp.status_code, 429)
 
 
 # ── Finalize ─────────────────────────────────────────────────────

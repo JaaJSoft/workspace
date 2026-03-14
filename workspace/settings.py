@@ -167,6 +167,7 @@ else:
 MIDDLEWARE = [
     'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'workspace.common.middleware_ratelimit.RatelimitMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     # HTTP conditional GET support (ETags & Last-Modified headers for browser caching)
@@ -230,6 +231,7 @@ TEMPLATES = [
 ]
 
 REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'workspace.common.ratelimit.ratelimit_exception_handler',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
@@ -253,6 +255,21 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.FormParser',
         'rest_framework.parsers.MultiPartParser',
     ],
+}
+
+# ---------------------------------------------------------------------------
+# Rate Limiting (django-ratelimit)
+# ---------------------------------------------------------------------------
+# Use custom callable that checks X-Forwarded-For first, then falls back to REMOTE_ADDR
+RATELIMIT_IP_META_KEY = 'workspace.common.ratelimit.get_client_ip'
+
+# Centralised rate definitions (referenced by decorators)
+RATE_LIMITS = {
+    'anon': '60/m',          # Anonymous: 60 requests/minute
+    'anon_hourly': '500/h',  # Anonymous: 500 requests/hour
+    'user': '300/m',         # Authenticated: 300 requests/minute
+    'user_hourly': '3000/h', # Authenticated: 3000 requests/hour
+    'sensitive': '30/m',     # Sensitive endpoints: 30 requests/minute
 }
 
 SPECTACULAR_SETTINGS = {

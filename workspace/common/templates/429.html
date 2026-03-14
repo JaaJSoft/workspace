@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Too Many Requests — Workspace{% endblock %}
+
+{% block body %}
+<div class="min-h-screen flex items-center justify-center">
+  <div class="text-center max-w-md mx-auto p-8">
+    <div class="text-6xl font-bold text-base-content/20 mb-4">429</div>
+    <h1 class="text-2xl font-semibold mb-2">Too many requests</h1>
+    <p class="text-base-content/60 mb-6">
+      You've made too many requests in a short period. Please wait a moment and try again.
+    </p>
+    <a href="javascript:history.back()" class="btn btn-primary">Go Back</a>
+  </div>
+</div>
+{% endblock %}

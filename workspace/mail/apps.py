@@ -62,4 +62,14 @@ class MailConfig(AppConfig):
         from workspace.mail.ai_tools import MailToolProvider
         tool_registry.register_provider(MailToolProvider())
 
+        from workspace.core.activity_registry import ActivityProviderInfo, activity_registry
+        from workspace.mail.activity import MailActivityProvider
+        activity_registry.register(ActivityProviderInfo(
+            slug='mail',
+            label='Mail',
+            icon='mail',
+            color='warning',
+            provider_cls=MailActivityProvider,
+        ))
+
         import workspace.mail.signals  # noqa: F401

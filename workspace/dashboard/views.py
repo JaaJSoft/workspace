@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from workspace.calendar.upcoming import get_upcoming_for_user
 from workspace.core.activity_service import annotate_time_ago, get_recent_events, get_sources
+from workspace.core.activity_registry import activity_registry
 from workspace.core.module_registry import registry
 
 ACTIVITY_LIMIT = 10
@@ -57,6 +58,7 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
     context = {
         'modules': modules,
         'upcoming_events': _get_upcoming_events(user),
+        'usage_stats': activity_registry.get_stats(user.id),
     }
     if include_activity:
         context.update(_get_activity_context(user, source=activity_source))

@@ -64,6 +64,16 @@
           <i data-lucide="mail" class="w-4 h-4"></i>
           Mail
         </button>
+        <button
+          @click="tab = 'usage'; updateHash()"
+          class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
+          :class="tab === 'usage'
+            ? 'bg-primary/10 text-primary font-semibold'
+            : 'hover:bg-base-200 text-base-content'"
+        >
+          <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+          Usage
+        </button>
       </div>
     </nav>
 
@@ -294,6 +304,102 @@
         </div>
       </div>
 
+      <!-- Usage Tab -->
+      {% load ui_filters %}
+      <div x-show="tab === 'usage'" x-cloak class="space-y-4">
+        <!-- Files -->
+        <div class="card bg-base-100 border border-base-300 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg gap-2">
+              <div class="rounded-lg bg-primary/10 p-2">
+                <i data-lucide="hard-drive" class="w-5 h-5 text-primary"></i>
+              </div>
+              Files
+            </h2>
+            <div class="grid grid-cols-2 gap-4 mt-4">
+              <div>
+                <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Total files</div>
+                <div class="font-semibold text-2xl mt-1">{{ usage_stats.files.total_files|default:"0" }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Storage used</div>
+                <div class="font-semibold text-2xl mt-1">{{ usage_stats.files.total_size|default:"0"|filesize }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat -->
+        <div class="card bg-base-100 border border-base-300 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg gap-2">
+              <div class="rounded-lg bg-info/10 p-2">
+                <i data-lucide="message-circle" class="w-5 h-5 text-info"></i>
+              </div>
+              Chat
+            </h2>
+            <div class="grid grid-cols-2 gap-4 mt-4">
+              <div>
+                <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Conversations</div>
+                <div class="font-semibold text-2xl mt-1">{{ usage_stats.chat.active_conversations|default:"0" }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Messages sent</div>
+                <div class="font-semibold text-2xl mt-1">{{ usage_stats.chat.total_messages|default:"0" }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mail -->
+        <div class="card bg-base-100 border border-base-300 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg gap-2">
+              <div class="rounded-lg bg-warning/10 p-2">
+                <i data-lucide="mail" class="w-5 h-5 text-warning"></i>
+              </div>
+              Mail
+            </h2>
+            <div class="grid grid-cols-3 gap-4 mt-4">
+              <div>
+                <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Accounts</div>
+                <div class="font-semibold text-2xl mt-1">{{ usage_stats.mail.total_accounts|default:"0" }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Messages</div>
+                <div class="font-semibold text-2xl mt-1">{{ usage_stats.mail.total_messages|default:"0" }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Unread</div>
+                <div class="font-semibold text-2xl mt-1">{{ usage_stats.mail.unread_messages|default:"0" }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Calendar -->
+        <div class="card bg-base-100 border border-base-300 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-lg gap-2">
+              <div class="rounded-lg bg-secondary/10 p-2">
+                <i data-lucide="calendar" class="w-5 h-5 text-secondary"></i>
+              </div>
+              Calendar
+            </h2>
+            <div class="grid grid-cols-2 gap-4 mt-4">
+              <div>
+                <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Total events</div>
+                <div class="font-semibold text-2xl mt-1">{{ usage_stats.calendar.total_events|default:"0" }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Upcoming</div>
+                <div class="font-semibold text-2xl mt-1">{{ usage_stats.calendar.upcoming_events|default:"0" }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -303,7 +409,7 @@
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
 <script>
   function settingsPage() {
-    const validTabs = ['profile', 'preferences', 'security', 'mail'];
+    const validTabs = ['profile', 'preferences', 'security', 'mail', 'usage'];
     return {
       tab: validTabs.includes(location.hash.replace('#', '')) ? location.hash.replace('#', '') : 'profile',
       settings: {},

@@ -1,0 +1,47 @@
+{% load ui_filters %}
+
+<div class="space-y-3">
+  <div class="text-xs font-semibold uppercase tracking-wider text-base-content/50">Workspace usage</div>
+
+  <div class="flex items-center gap-3">
+    <div class="rounded-lg bg-primary/10 p-2">
+      <i data-lucide="hard-drive" class="w-4 h-4 text-primary"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="text-sm font-medium">Files</div>
+      <div class="text-xs text-base-content/50">{{ usage_stats.files.total_size|default:"0"|filesize }}</div>
+    </div>
+    <div class="font-semibold text-sm">{{ usage_stats.files.total_files|default:"0" }}</div>
+  </div>
+
+  <div class="flex items-center gap-3">
+    <div class="rounded-lg bg-info/10 p-2">
+      <i data-lucide="message-circle" class="w-4 h-4 text-info"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="text-sm font-medium">Messages</div>
+    </div>
+    <div class="font-semibold text-sm">{{ usage_stats.chat.total_messages|default:"0" }}</div>
+  </div>
+
+  <div class="flex items-center gap-3">
+    <div class="rounded-lg bg-warning/10 p-2">
+      <i data-lucide="mail" class="w-4 h-4 text-warning"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="text-sm font-medium">Mail</div>
+      {% if usage_stats.mail.unread_messages %}<div class="text-xs text-base-content/50">{{ usage_stats.mail.unread_messages }} unread</div>{% endif %}
+    </div>
+    <div class="font-semibold text-sm">{{ usage_stats.mail.total_messages|default:"0" }}</div>
+  </div>
+
+  <div class="flex items-center gap-3">
+    <div class="rounded-lg bg-secondary/10 p-2">
+      <i data-lucide="calendar" class="w-4 h-4 text-secondary"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="text-sm font-medium">Events</div>
+    </div>
+    <div class="font-semibold text-sm">{{ usage_stats.calendar.total_events|default:"0" }}</div>
+  </div>
+</div>

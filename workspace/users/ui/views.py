@@ -179,6 +179,7 @@ def profile_activity_feed(request, username):
 def settings_view(request):
     return render(request, 'users/ui/settings.html', {
         'has_avatar': avatar_service.has_avatar(request.user),
+        'usage_stats': activity_registry.get_stats(request.user.id),
     })
 
 

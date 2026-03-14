@@ -11,11 +11,30 @@
 <div class="py-6 space-y-8">
 
   {# ── Hero ── #}
-  <section class="text-center space-y-1">
+  <section class="text-center space-y-1 relative">
     <h1 class="text-3xl font-semibold text-base-content" x-data x-text="(() => { const h = new Date().getHours(); const g = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; return g + ', {{ user.first_name|default:user.username }}.'; })()">Welcome back, {{ user.first_name|default:user.username }}.</h1>
     <p class="text-base-content/60" x-data="weatherWidget()" x-init="init()" x-cloak>
       <span x-text="label"></span>
     </p>
+
+    {# ── Usage popover ── #}
+    <div class="absolute right-0 top-0" x-data="{ open: false }" @click.outside="open = false">
+      <button
+        @click="open = !open; $nextTick(() => lucide.createIcons())"
+        class="btn btn-ghost btn-sm btn-square"
+        title="Workspace usage"
+      >
+        <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+      </button>
+      <div
+        x-show="open"
+        x-cloak
+        x-transition.opacity
+        class="absolute right-0 top-full mt-2 z-50 w-72 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
+      >
+        {% include 'dashboard/partials/usage_widget.html' %}
+      </div>
+    </div>
   </section>
 
   {# ── Search bar ── #}

@@ -60,6 +60,11 @@ function chatApp(currentUserId) {
     showBotPicker: false,
     availableBots: [],
     botTyping: false,
+
+    // Typing indicators
+    typingUsers: {},
+    _lastTypingSent: 0,
+    _typingHideTimer: null,
     // Bot memory (info panel)
     botMemories: [],
     loadingBotMemories: false,
@@ -493,6 +498,7 @@ function chatApp(currentUserId) {
 
       this.messageBody = '';
       this.pendingFiles = [];
+      this._lastTypingSent = 0;
       this._clearDraft();
       this.cancelReply();
 
@@ -1785,6 +1791,40 @@ function chatApp(currentUserId) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
         this._refreshCurrentMessages();
       }
+    },
+
+    // ── Typing indicators ───────────────────────────────────
+    handleSSETyping(detail) {
+      this.typingUsers = detail;
+      clearTimeout(this._typingHideTimer);
+      this._typingHideTimer = setTimeout(() => {
+        this.typingUsers = {};
+      }, 5000);
+    },
+
+    sendTypingSignal() {
+      if (!this.activeConversation) return;
+      const now = Date.now();
+      if (now - this._lastTypingSent < 3000) return;
+      this._lastTypingSent = now;
+      fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/typing`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': this._csrf() },
+        credentials: 'same-origin',
+      }).catch(() => {});
+    },
+
+    activeTypingUsers() {
+      if (!this.activeConversation) return [];
+      return this.typingUsers[this.activeConversation.uuid] || [];
+    },
+
+    typingText() {
+      const users = this.activeTypingUsers();
+      if (users.length === 0) return '';
+      if (users.length === 1) return `${users[0].display_name} is typing`;
+      if (users.length === 2) return `${users[0].display_name} and ${users[1].display_name} are typing`;
+      return `${users[0].display_name} and ${users.length - 1} others are typing`;
     },
 
     onPinnedDragStart(event, uuid) {

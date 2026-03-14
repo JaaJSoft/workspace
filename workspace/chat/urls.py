@@ -69,6 +69,12 @@ urlpatterns = [
         views.UnreadCountsView.as_view(),
         name='chat-unread-counts',
     ),
+    # Typing indicator
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/typing',
+        views.TypingIndicatorView.as_view(),
+        name='chat-typing',
+    ),
     # Group avatars
     path(
         'api/v1/chat/conversations/<uuid:conversation_id>/avatar',

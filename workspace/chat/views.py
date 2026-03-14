@@ -488,6 +488,10 @@ class MessageListView(APIView):
         )
         notify_new_message(conversation, request.user, body, mentioned_user_ids=mentioned_user_ids, mention_everyone=has_everyone)
 
+        # Clear typing indicator now that the message is sent
+        from .typing_service import clear_typing
+        clear_typing(conversation_id, request.user.id)
+
         # Trigger AI response if a bot is in the conversation
         _trigger_bot_response(conversation_id, message, request.user)
 
@@ -865,6 +869,31 @@ class MarkReadView(APIView):
             Conversation(pk=conversation_id), exclude_user=request.user,
         )
 
+        return Response({'status': 'ok'})
+
+
+@extend_schema(tags=['Chat'])
+class TypingIndicatorView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Signal typing", request=None, responses={200: None})
+    def post(self, request, conversation_id):
+        membership = _get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {'detail': 'Not a member.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        from .typing_service import set_typing
+        set_typing(
+            conversation_id,
+            request.user.id,
+            request.user.get_full_name() or request.user.username,
+        )
+        notify_conversation_members(
+            Conversation(pk=conversation_id), exclude_user=request.user,
+        )
         return Response({'status': 'ok'})
 
 

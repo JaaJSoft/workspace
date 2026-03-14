@@ -39,6 +39,7 @@ class ChatSSEProvider(SSEProvider):
         self._seen_pin_ids = set()
         self._last_unread_push = 0
         self._last_read_check = timezone.now()
+        self._last_typing_state = {}
 
     def get_initial_events(self):
         events = []
@@ -55,6 +56,13 @@ class ChatSSEProvider(SSEProvider):
     def poll(self, cache_value):
         events = []
         user_id = self.user.id
+
+        # Typing — always check (independent of dirty flag)
+        from .typing_service import get_typing_users
+        typing_data = get_typing_users(self._member_conv_ids, exclude_user_id=user_id)
+        if typing_data != self._last_typing_state:
+            self._last_typing_state = typing_data
+            events.append(('typing', typing_data, None))
 
         # Only query for new events if dirty flag changed
         if cache_value is None:

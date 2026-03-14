@@ -29,6 +29,7 @@ x-init="init()"
 @chat-unread.window="handleSSEUnread($event.detail)"
 @chat-message_pinned.window="handleSSEMessagePinned($event.detail)"
 @chat-read.window="handleSSERead($event.detail)"
+@chat-typing.window="handleSSETyping($event.detail)"
 @keydown.window="
   if ($event.altKey && $event.key === 'n') { $event.preventDefault(); showNewConversationDialog(); }
   if (($event.ctrlKey || $event.metaKey) && $event.key === 'f' && activeConversation) { $event.preventDefault(); toggleSearchPanel(); }
@@ -253,6 +254,23 @@ x-init="init()"
             </div>
           </div>
 
+          <!-- User typing indicator -->
+          <div x-show="activeTypingUsers().length > 0" x-cloak
+               x-transition:enter="transition ease-out duration-200"
+               x-transition:enter-start="opacity-0 translate-y-1"
+               x-transition:enter-end="opacity-100 translate-y-0"
+               x-transition:leave="transition ease-in duration-150"
+               x-transition:leave-start="opacity-100 translate-y-0"
+               x-transition:leave-end="opacity-0 translate-y-1"
+               class="flex items-center gap-2 px-4 h-6">
+            <div class="flex items-center gap-0.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-base-content/40 animate-bounce [animation-delay:0ms]"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-base-content/40 animate-bounce [animation-delay:150ms]"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-base-content/40 animate-bounce [animation-delay:300ms]"></span>
+            </div>
+            <span class="text-xs text-base-content/50 italic" x-text="typingText()"></span>
+          </div>
+
           <!-- Input area -->
           <div class="p-3 bg-base-100 border-t border-base-300"
                @dragenter.prevent="handleDragEnter($event)"
@@ -350,7 +368,7 @@ x-init="init()"
               x-ref="messageInputMobile"
               x-model="messageBody"
               @keydown="handleInputKeydown($event)"
-              @input="autoResize($el); handleMentionInput()"
+              @input="autoResize($el); handleMentionInput(); sendTypingSignal()"
               @paste="handlePaste($event)"
               style="min-height:36px;line-height:20px;padding-top:8px;padding-bottom:8px"
               class="textarea textarea-ghost w-full max-h-[6rem] resize-none px-3 focus:outline-none text-sm !border-0 !outline-0"
@@ -444,7 +462,7 @@ x-init="init()"
             x-ref="messageInput"
             x-model="messageBody"
             @keydown="handleInputKeydown($event)"
-            @input="autoResize($el); handleMentionInput()"
+            @input="autoResize($el); handleMentionInput(); sendTypingSignal()"
             @paste="handlePaste($event)"
             class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none"
             placeholder="Type a message..."

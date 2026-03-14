@@ -38,7 +38,7 @@
   </section>
 
   {# ── Search bar ── #}
-  <section id="dashboard-search" class="max-w-2xl mx-auto w-full" x-data="commandPaletteDropdown()" x-init="$nextTick(() => lucide.createIcons())">
+  <section id="dashboard-search" class="hidden sm:block max-w-2xl mx-auto w-full" x-data="commandPaletteDropdown()" x-init="$nextTick(() => lucide.createIcons())">
     <div class="relative">
       {% include 'ui/partials/search/search_input.html' with input_class='input-md text-base shadow-sm' show_kbd=True size='lg' %}
 

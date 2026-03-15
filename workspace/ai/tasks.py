@@ -209,9 +209,20 @@ def _render_tool_badges(used_tools):
         else:
             parts.append(f'<span>{icon}</span> {label}')
 
-    badges_html = ' <span class="opacity-30">|</span> '.join(parts)
+    # Single tool or short badges: inline. Multiple tools: one per line.
+    if len(parts) <= 2:
+        badges_html = ' <span class="opacity-30">|</span> '.join(parts)
+        return (
+            f'\n<div class="mt-2 text-xs text-base-content/40 flex items-center gap-1 flex-wrap">'
+            f'{badges_html}'
+            f'</div>'
+        )
+
+    badges_html = ''.join(
+        f'<div class="flex items-center gap-1">{p}</div>' for p in parts
+    )
     return (
-        f'\n<div class="mt-2 text-xs text-base-content/40 flex items-center gap-1 flex-wrap">'
+        f'\n<div class="mt-2 text-xs text-base-content/40 flex flex-col gap-0.5">'
         f'{badges_html}'
         f'</div>'
     )

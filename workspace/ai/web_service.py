@@ -73,6 +73,10 @@ def search(query: str, *, max_results: int = 5) -> list[dict]:
                     'categories': 'general',
                     'language': 'auto',
                 },
+                headers={
+                    'Accept': 'application/json',
+                    'User-Agent': _HEADERS['User-Agent'],
+                },
             )
             resp.raise_for_status()
     except httpx.HTTPError:

@@ -59,6 +59,8 @@ urlpatterns = [
     path('logout', auth_views.LogoutView.as_view(), name='logout'),
     # Service Worker (must be at root scope for push notifications)
     path('sw.js', serve, {'path': 'sw.js', 'document_root': Path(__file__).resolve().parent / 'common' / 'static'}, name='service-worker'),
+    # Web App Manifest (must be at root for PWA install)
+    path('manifest.json', serve, {'path': 'manifest.json', 'document_root': Path(__file__).resolve().parent / 'common' / 'static'}, name='manifest'),
     # Health probes (k8s)
     path('health/startup', StartupView.as_view(), name='health-startup'),
     path('health/live', LiveView.as_view(), name='health-live'),

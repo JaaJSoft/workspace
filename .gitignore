@@ -124,4 +124,7 @@ db.sqlite3*
 /thumbnails/
 /avatars/
 /chat/
-/mail/
+/mail/scripts/node_modules/
+/scripts/node_modules/
+/scripts/package.json
+/scripts/package-lock.json

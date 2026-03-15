@@ -117,9 +117,11 @@ CSRF_TRUSTED_ORIGINS=https://your-domain.com
 
 To give the AI web search capabilities, deploy a [SearXNG](https://docs.searxng.org/) instance alongside the stack:
 
-1. Uncomment the `searxng` service and `searxng-data` volume in `docker-compose.yml`
+1. Uncomment the `searxng` service in `docker-compose.yml`
 2. Set `SEARXNG_URL=http://searxng:8080` in your `.env`
 3. Restart: `docker compose up -d`
+
+The `searxng/` directory contains a `settings.yml` that enables the JSON API format required by Workspace. It is mounted into the container automatically.
 
 SearXNG requires no API keys — it aggregates results from public search engines.
 

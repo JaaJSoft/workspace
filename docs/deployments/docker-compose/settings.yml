@@ -1,0 +1,13 @@
+# SearXNG settings for Workspace integration.
+# Mount this directory at /etc/searxng in the SearXNG container.
+
+use_default_settings: true
+
+search:
+  formats:
+    - html
+    - json
+
+server:
+  limiter: false
+  secret_key: change-me-to-a-real-secret

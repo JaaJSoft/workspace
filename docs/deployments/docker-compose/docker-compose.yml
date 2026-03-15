@@ -96,14 +96,12 @@ services:
       - web
 
   # Web search (optional) — set SEARXNG_URL=http://searxng:8080 to enable
+  # All SearXNG config lives in ./searxng/settings.yml
   # searxng:
   #   image: searxng/searxng:latest
-  #   environment:
-  #     - SEARXNG_BASE_URL=http://searxng:8080/
   #   volumes:
-  #     - searxng-data:/etc/searxng
+  #     - ./searxng:/etc/searxng
   #   restart: unless-stopped
 
 volumes:
   workspace-data:
-  # searxng-data:

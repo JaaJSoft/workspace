@@ -152,6 +152,9 @@ def build_chat_messages(
         "- The user asks about something outside your training data\n"
         "After searching, use read_webpage on relevant URLs if the snippets "
         "don't contain enough detail to answer the question.\n"
+        "IMPORTANT: Only state facts that come from the search results. "
+        "Do not invent, guess, or extrapolate information that is not present in the results. "
+        "If the search returns no relevant results, say so honestly instead of making something up.\n"
         "Always cite your sources by mentioning the page title or URL."
     )
 

@@ -15,6 +15,10 @@ _JSON_TOOL_RE = re.compile(
     r'\{[^{}]*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}[^{}]*\}',
 )
 _MD_IMAGE_RE = re.compile(r'!\[([^\]]*)\]\([^\)]+\)')
+_XML_IMAGE_RE = re.compile(
+    r'<image(?:\s+alt="([^"]*)")?\s*>([\s\S]*?)</image>',
+    re.IGNORECASE,
+)
 
 
 def _serialize_response(result):
@@ -127,6 +131,17 @@ def _extract_raw_tool_calls(content: str):
             prompt = alt.strip() or 'image'
             calls.append(('generate_image', json.dumps({'prompt': prompt})))
             logger.info('Converted markdown image to generate_image tool call: %s', prompt)
+        return calls, remaining
+
+    # Detect <image>prompt</image> or <image alt="...">prompt</image> tags
+    xml_images = _XML_IMAGE_RE.findall(cleaned)
+    if xml_images:
+        calls = []
+        remaining = _XML_IMAGE_RE.sub('', cleaned).strip()
+        for alt, body in xml_images:
+            prompt = (body.strip() or alt.strip() or 'image')
+            calls.append(('generate_image', json.dumps({'prompt': prompt})))
+            logger.info('Converted <image> tag to generate_image tool call: %s', prompt)
         return calls, remaining
 
     return None, content

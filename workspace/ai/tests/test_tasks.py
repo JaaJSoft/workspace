@@ -428,6 +428,63 @@ class EditImageToolTest(TestCase):
         self.assertIn('Error', result)
 
 
+class ExtractRawToolCallsTests(TestCase):
+    """Unit tests for _extract_raw_tool_calls."""
+
+    def test_xml_image_tag(self):
+        from workspace.ai.tasks import _extract_raw_tool_calls
+        calls, remaining = _extract_raw_tool_calls(
+            'Here you go: <image>a cute cat sitting on a couch</image>'
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], 'generate_image')
+        self.assertIn('a cute cat sitting on a couch', calls[0][1])
+        self.assertEqual(remaining, 'Here you go:')
+
+    def test_xml_image_tag_with_alt(self):
+        from workspace.ai.tasks import _extract_raw_tool_calls
+        calls, remaining = _extract_raw_tool_calls(
+            '<image alt="landscape">a mountain at sunset</image>'
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertIn('a mountain at sunset', calls[0][1])
+
+    def test_xml_image_tag_empty_body_uses_alt(self):
+        from workspace.ai.tasks import _extract_raw_tool_calls
+        calls, remaining = _extract_raw_tool_calls(
+            '<image alt="a dog playing fetch"></image>'
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertIn('a dog playing fetch', calls[0][1])
+
+    def test_xml_image_tag_empty_fallback(self):
+        from workspace.ai.tasks import _extract_raw_tool_calls
+        calls, remaining = _extract_raw_tool_calls('<image alt=""></image>')
+        self.assertEqual(len(calls), 1)
+        self.assertIn('image', calls[0][1])
+
+    def test_multiple_xml_image_tags(self):
+        from workspace.ai.tasks import _extract_raw_tool_calls
+        calls, remaining = _extract_raw_tool_calls(
+            'Two images: <image>a cat</image> and <image>a dog</image>'
+        )
+        self.assertEqual(len(calls), 2)
+
+    def test_markdown_image_still_works(self):
+        from workspace.ai.tasks import _extract_raw_tool_calls
+        calls, remaining = _extract_raw_tool_calls(
+            'Check this: ![a bird](https://example.com/bird.png)'
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertIn('a bird', calls[0][1])
+
+    def test_no_image_tags(self):
+        from workspace.ai.tasks import _extract_raw_tool_calls
+        calls, remaining = _extract_raw_tool_calls('Just some text')
+        self.assertIsNone(calls)
+        self.assertEqual(remaining, 'Just some text')
+
+
 @override_settings(
     AI_API_KEY='test-key',
     AI_MODEL='gpt-4o-mini',

@@ -607,7 +607,7 @@ class MailMessageListView(APIView):
         messages = (
             qs.annotate(attachments_count=Count('attachments'))
             .prefetch_related(
-                Prefetch('message_labels', queryset=MailMessageLabel.objects.select_related('label'))
+                Prefetch('message_labels', queryset=MailMessageLabel.objects.select_related('label').order_by('label__position', 'label__name'))
             )
             .order_by('-date')[offset:offset + page_size]
         )
@@ -631,7 +631,7 @@ class MailMessageDetailView(APIView):
                 .select_related('account', 'folder')
                 .prefetch_related(
                     'attachments',
-                    Prefetch('message_labels', queryset=MailMessageLabel.objects.select_related('label')),
+                    Prefetch('message_labels', queryset=MailMessageLabel.objects.select_related('label').order_by('label__position', 'label__name')),
                 )
                 .get(uuid=uuid)
             )

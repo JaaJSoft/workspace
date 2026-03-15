@@ -123,6 +123,7 @@ db.sqlite3*
 .claude/
 /thumbnails/
 /avatars/
+/mail/
 /chat/
 /mail/scripts/node_modules/
 /scripts/node_modules/

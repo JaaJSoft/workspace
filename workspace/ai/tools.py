@@ -86,6 +86,51 @@ Call this when the user asks what you look like, wants to see your avatar, or me
 
 
 
+class WebToolProvider(ToolProvider):
+    """Web search and page reading. Registered only when SEARXNG_URL is set."""
+
+    @tool(badge_icon='🔍', badge_label='Searched the web', detail_key='query', params={
+        'query': Param('The search query.'),
+    })
+    def web_search(self, args, user, bot, conversation_id, context):
+        """Search the web for current information. \
+Call this when the user asks about recent events, news, facts you're unsure about, \
+or anything that requires up-to-date information you don't have."""
+        from .web_service import search
+
+        query = args.get('query', '').strip()
+        if not query:
+            return 'Error: query is required'
+
+        results = search(query, max_results=5)
+        if not results:
+            return 'No results found.'
+
+        return json.dumps(results, ensure_ascii=False)
+
+    @tool(badge_icon='🌐', badge_label='Read webpage', detail_key='url', params={
+        'url': Param('The URL of the webpage to read.'),
+    })
+    def read_webpage(self, args, user, bot, conversation_id, context):
+        """Fetch and extract the main text content of a webpage. \
+Call this when you need to read the content of a specific URL shared by the user \
+or found via web_search to get more details."""
+        from .web_service import fetch_and_extract
+
+        url = args.get('url', '').strip()
+        if not url:
+            return 'Error: url is required'
+
+        try:
+            text = fetch_and_extract(url)
+        except ValueError as exc:
+            return f'Error: {exc}'
+
+        if not text:
+            return 'Could not extract text content from this page.'
+        return text
+
+
 class ImageToolProvider(ToolProvider):
     """Registered only when AI_IMAGE_MODEL is configured."""
 

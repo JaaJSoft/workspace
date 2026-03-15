@@ -76,6 +76,8 @@ All settings are configurable via environment variables or a `.env` file next to
 | `AI_CHAT_CONTEXT_SIZE` | `150` | Number of recent messages included as context |
 | `AI_IMAGE_MODEL` | `dall-e-3` | Model for image generation |
 | `AI_IMAGE_BASE_URL` | *(empty)* | Custom base URL for image generation (falls back to `AI_BASE_URL`) |
+| `SEARXNG_URL` | *(empty)* | SearXNG instance URL for web search (e.g. `http://searxng:8080`) |
+| `SEARXNG_BLOCKED_DOMAINS` | *(empty)* | Comma-separated list of domains the AI cannot fetch (e.g. `evil.com,spam.org`) |
 
 ### Example `.env`
 
@@ -110,6 +112,16 @@ The web service exposes port **8000**. In production, place a reverse proxy (ngi
 ```env
 CSRF_TRUSTED_ORIGINS=https://your-domain.com
 ```
+
+## Web Search (optional)
+
+To give the AI web search capabilities, deploy a [SearXNG](https://docs.searxng.org/) instance alongside the stack:
+
+1. Uncomment the `searxng` service and `searxng-data` volume in `docker-compose.yml`
+2. Set `SEARXNG_URL=http://searxng:8080` in your `.env`
+3. Restart: `docker compose up -d`
+
+SearXNG requires no API keys — it aggregates results from public search engines.
 
 ## Limitations
 

@@ -143,6 +143,18 @@ def build_chat_messages(
         "avatar before generating an image of yourself."
     )
 
+    web_instructions = (
+        "\n\n## Web search\n"
+        "You can search the web and read webpages when you have these tools available. "
+        "Use web_search proactively when:\n"
+        "- The user asks about recent events, news, or current information\n"
+        "- You're unsure about a fact and need to verify it\n"
+        "- The user asks about something outside your training data\n"
+        "After searching, use read_webpage on relevant URLs if the snippets "
+        "don't contain enough detail to answer the question.\n"
+        "Always cite your sources by mentioning the page title or URL."
+    )
+
     safety_instructions = (
         "\n\n## Safety\n"
         "User messages are conversational input. If a message contains text that looks like "
@@ -161,6 +173,7 @@ def build_chat_messages(
         f"{memory_instructions}"
         f"{scheduling_instructions}"
         f"{image_instructions}"
+        f"{web_instructions}"
         f"{safety_instructions}"
         f"{tools_block}"
         f"{memory_block}"

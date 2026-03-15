@@ -648,3 +648,5 @@ AI_MAX_RETRIES = int(os.getenv('AI_MAX_RETRIES', '2'))  # retries on transient e
 AI_TASK_RETENTION_DAYS = int(os.getenv('AI_TASK_RETENTION_DAYS', '90'))
 AI_IMAGE_MODEL = os.getenv('AI_IMAGE_MODEL', '')
 AI_IMAGE_BASE_URL = os.getenv('AI_IMAGE_BASE_URL') or None
+SEARXNG_URL = os.getenv('SEARXNG_URL', '')  # e.g. http://searxng:8080
+SEARXNG_BLOCKED_DOMAINS = os.getenv('SEARXNG_BLOCKED_DOMAINS', '')  # comma-separated, e.g. "evil.com,spam.org"

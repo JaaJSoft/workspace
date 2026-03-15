@@ -44,6 +44,9 @@ dependencies = [
     # ai
     "openai>=1.0",
     "ollama>=0.6.1",
+    # web search & scraping
+    "httpx>=0.28.0",
+    "trafilatura>=2.0.0",
 ]
 
 [build-system]

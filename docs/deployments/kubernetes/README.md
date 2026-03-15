@@ -36,6 +36,7 @@ An **initContainer** (`migrate`) runs database migrations before the pod starts.
 | `configmap.yaml` | Non-sensitive config: debug, allowed hosts, workers, log level |
 | `app.yaml`       | Deployment (all containers) + PVC + Service                    |
 | `ingress.yaml`   | Ingress (nginx) with TLS                                       |
+| `searxng.yaml`   | *(optional)* SearXNG deployment + service for AI web search    |
 
 ## Prerequisites
 
@@ -110,6 +111,8 @@ kubectl apply -f ingress.yaml
 | `AI_MAX_TOKENS`        | `2048`                          | Maximum tokens per AI response |
 | `AI_CHAT_CONTEXT_SIZE` | `150`                           | Number of recent messages included as context |
 | `AI_IMAGE_MODEL`       | `dall-e-3`                      | Model for image generation |
+| `SEARXNG_URL`          | *(empty)*                       | SearXNG instance URL for web search (e.g. `http://searxng.workspace.svc:8080`) |
+| `SEARXNG_BLOCKED_DOMAINS` | *(empty)*                    | Comma-separated list of domains the AI cannot fetch (e.g. `evil.com,spam.org`) |
 
 ## Storage
 
@@ -125,6 +128,24 @@ The web container exposes `/health/` with three probes:
 - **startupProbe**: polls every 2s, up to 30 failures (allows slow boot)
 - **livenessProbe**: every 15s
 - **readinessProbe**: every 5s
+
+## Web Search (optional)
+
+To give the AI web search capabilities, deploy [SearXNG](https://docs.searxng.org/) using the provided manifest:
+
+```bash
+# 1. Deploy SearXNG
+kubectl apply -f searxng.yaml
+
+# 2. Enable it in the ConfigMap — set SEARXNG_URL in configmap.yaml:
+#    SEARXNG_URL: "http://searxng.workspace.svc:8080"
+kubectl apply -f configmap.yaml
+
+# 3. Restart the workspace pod to pick up the change
+kubectl -n workspace rollout restart deployment workspace
+```
+
+SearXNG requires no API keys — it aggregates results from public search engines.
 
 ## Scaling Limitations
 

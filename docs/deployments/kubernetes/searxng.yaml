@@ -1,0 +1,46 @@
+# Optional: deploy SearXNG for AI web search capabilities.
+# After applying, set SEARXNG_URL in configmap.yaml:
+#   SEARXNG_URL: "http://searxng.workspace.svc:8080"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: searxng
+  namespace: workspace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: searxng
+  template:
+    metadata:
+      labels:
+        app: searxng
+    spec:
+      containers:
+        - name: searxng
+          image: searxng/searxng:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SEARXNG_BASE_URL
+              value: http://searxng.workspace.svc:8080/
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 1024Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: searxng
+  namespace: workspace
+spec:
+  selector:
+    app: searxng
+  ports:
+    - port: 8080
+      targetPort: 8080

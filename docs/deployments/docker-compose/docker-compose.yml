@@ -36,6 +36,7 @@ services:
       - AI_CHAT_CONTEXT_SIZE=${AI_CHAT_CONTEXT_SIZE:-150}
       - AI_IMAGE_MODEL=${AI_IMAGE_MODEL:-dall-e-3}
       - AI_IMAGE_BASE_URL=${AI_IMAGE_BASE_URL:-}
+      - SEARXNG_URL=${SEARXNG_URL:-}
     volumes:
       - workspace-data:/app/data
     restart: unless-stopped
@@ -73,6 +74,7 @@ services:
       - AI_CHAT_CONTEXT_SIZE=${AI_CHAT_CONTEXT_SIZE:-150}
       - AI_IMAGE_MODEL=${AI_IMAGE_MODEL:-dall-e-3}
       - AI_IMAGE_BASE_URL=${AI_IMAGE_BASE_URL:-}
+      - SEARXNG_URL=${SEARXNG_URL:-}
     volumes:
       - workspace-data:/app/data
     restart: unless-stopped
@@ -93,5 +95,15 @@ services:
     depends_on:
       - web
 
+  # Web search (optional) — set SEARXNG_URL=http://searxng:8080 to enable
+  # searxng:
+  #   image: searxng/searxng:latest
+  #   environment:
+  #     - SEARXNG_BASE_URL=http://searxng:8080/
+  #   volumes:
+  #     - searxng-data:/etc/searxng
+  #   restart: unless-stopped
+
 volumes:
   workspace-data:
+  # searxng-data:

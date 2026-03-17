@@ -3,6 +3,7 @@ import time
 import time as _time
 from unittest.mock import MagicMock, patch
 
+from authlib.integrations.base_client.errors import OAuthError
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase, override_settings
 
@@ -372,3 +373,151 @@ class OAuthCallbackTest(TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Invalid state')
+
+
+class RevokedTokenTests(TestCase):
+    """Tests for invalid_grant handling in _refresh_token."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='revokeuser', email='revoke@test.com', password='pass123',
+        )
+        self.account = MailAccount.objects.create(
+            owner=self.user,
+            email='revoke@gmail.com',
+            imap_host='imap.gmail.com',
+            smtp_host='smtp.gmail.com',
+            username='revoke@gmail.com',
+            auth_method='oauth2',
+            oauth2_provider='google',
+            is_active=True,
+        )
+        self.account.set_oauth2_data({
+            'access_token': 'old',
+            'refresh_token': 'expired_refresh',
+            'expires_at': time.time() - 100,
+        })
+        self.account.save()
+
+    @override_settings(
+        OAUTH_GOOGLE_CLIENT_ID='gid',
+        OAUTH_GOOGLE_CLIENT_SECRET='gsec',
+    )
+    @patch('workspace.mail.services.oauth2.OAuth2Session.fetch_token')
+    @patch('workspace.notifications.services.notify')
+    def test_invalid_grant_deactivates_account(self, mock_notify, mock_fetch):
+        from workspace.mail.services.oauth2 import _refresh_token
+
+        mock_fetch.side_effect = OAuthError(
+            error='invalid_grant',
+            description='Token has been expired or revoked.',
+        )
+
+        data = self.account.get_oauth2_data()
+        with self.assertRaises(OAuthError):
+            _refresh_token(self.account, data)
+
+        self.account.refresh_from_db()
+        self.assertFalse(self.account.is_active)
+        self.assertIn('reconnect', self.account.last_sync_error.lower())
+
+    @override_settings(
+        OAUTH_GOOGLE_CLIENT_ID='gid',
+        OAUTH_GOOGLE_CLIENT_SECRET='gsec',
+    )
+    @patch('workspace.mail.services.oauth2.OAuth2Session.fetch_token')
+    @patch('workspace.notifications.services.notify')
+    def test_invalid_grant_sends_notification(self, mock_notify, mock_fetch):
+        from workspace.mail.services.oauth2 import _refresh_token
+
+        mock_fetch.side_effect = OAuthError(
+            error='invalid_grant',
+            description='Token has been expired or revoked.',
+        )
+
+        data = self.account.get_oauth2_data()
+        with self.assertRaises(OAuthError):
+            _refresh_token(self.account, data)
+
+        mock_notify.assert_called_once()
+        call_kwargs = mock_notify.call_args[1]
+        self.assertEqual(call_kwargs['recipient'], self.user)
+        self.assertEqual(call_kwargs['origin'], 'mail')
+        self.assertEqual(call_kwargs['priority'], 'high')
+        self.assertIn('revoke@gmail.com', call_kwargs['title'])
+
+    @override_settings(
+        OAUTH_GOOGLE_CLIENT_ID='gid',
+        OAUTH_GOOGLE_CLIENT_SECRET='gsec',
+    )
+    @patch('workspace.mail.services.oauth2.OAuth2Session.fetch_token')
+    def test_other_oauth_errors_not_deactivated(self, mock_fetch):
+        from workspace.mail.services.oauth2 import _refresh_token
+
+        mock_fetch.side_effect = OAuthError(
+            error='server_error',
+            description='Internal server error',
+        )
+
+        data = self.account.get_oauth2_data()
+        with self.assertRaises(OAuthError):
+            _refresh_token(self.account, data)
+
+        self.account.refresh_from_db()
+        self.assertTrue(self.account.is_active)  # not deactivated
+
+
+class OAuthReconnectTest(TestCase):
+    """Tests for reconnecting an existing deactivated account via OAuth2."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='reconnuser', password='pass',
+        )
+        self.client.force_login(self.user)
+
+        # Existing deactivated account
+        self.account = MailAccount.objects.create(
+            owner=self.user,
+            email='reconnuser@gmail.com',
+            username='reconnuser@gmail.com',
+            imap_host='imap.gmail.com',
+            smtp_host='smtp.gmail.com',
+            auth_method='oauth2',
+            oauth2_provider='google',
+            is_active=False,
+            last_sync_error='Authorization expired or revoked.',
+        )
+
+    @patch('workspace.mail.views_oauth2.fetch_userinfo')
+    @patch('workspace.mail.views_oauth2.exchange_code')
+    def test_callback_reactivates_existing_account(self, mock_exchange, mock_userinfo):
+        mock_exchange.return_value = {
+            'access_token': 'new_tok',
+            'refresh_token': 'new_ref',
+            'expires_at': time.time() + 3600,
+        }
+        mock_userinfo.return_value = {'email': 'reconnuser@gmail.com'}
+
+        session = self.client.session
+        session['oauth2_state'] = 'state123'
+        session['oauth2_provider'] = 'google'
+        session.save()
+
+        response = self.client.get('/mail/oauth2/callback', {
+            'code': 'auth-code',
+            'state': 'state123',
+        })
+        self.assertEqual(response.status_code, 200)
+
+        self.account.refresh_from_db()
+        self.assertTrue(self.account.is_active)
+        self.assertEqual(self.account.last_sync_error, '')
+        self.assertIsNotNone(self.account.get_oauth2_data())
+        self.assertEqual(self.account.get_oauth2_data()['access_token'], 'new_tok')
+
+        # Should not have created a duplicate account
+        count = MailAccount.objects.filter(
+            owner=self.user, email='reconnuser@gmail.com',
+        ).count()
+        self.assertEqual(count, 1)

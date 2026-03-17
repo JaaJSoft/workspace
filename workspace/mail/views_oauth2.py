@@ -106,24 +106,38 @@ def oauth2_callback(request):
             'error': 'Could not determine email address from provider.',
         })
 
-    # Create the mail account
+    # Reconnect existing account or create a new one
     config = get_provider_config(provider)
-    account = MailAccount(
-        owner=request.user,
-        email=email,
-        username=email,
-        display_name='',
-        auth_method='oauth2',
-        oauth2_provider=provider,
-        imap_host=config['imap_host'],
-        imap_port=config['imap_port'],
-        imap_use_ssl=config['imap_use_ssl'],
-        smtp_host=config['smtp_host'],
-        smtp_port=config['smtp_port'],
-        smtp_use_tls=config['smtp_use_tls'],
-    )
-    account.set_oauth2_data(tokens)
-    account.save()
+    try:
+        account = MailAccount.objects.get(
+            owner=request.user, email=email, auth_method='oauth2',
+        )
+        # Reactivate and update tokens for existing account
+        account.is_active = True
+        account.last_sync_error = ''
+        account.oauth2_provider = provider
+        account.set_oauth2_data(tokens)
+        account.save(update_fields=[
+            'is_active', 'last_sync_error', 'oauth2_provider',
+            'oauth2_data_encrypted', 'updated_at',
+        ])
+    except MailAccount.DoesNotExist:
+        account = MailAccount(
+            owner=request.user,
+            email=email,
+            username=email,
+            display_name='',
+            auth_method='oauth2',
+            oauth2_provider=provider,
+            imap_host=config['imap_host'],
+            imap_port=config['imap_port'],
+            imap_use_ssl=config['imap_use_ssl'],
+            smtp_host=config['smtp_host'],
+            smtp_port=config['smtp_port'],
+            smtp_use_tls=config['smtp_use_tls'],
+        )
+        account.set_oauth2_data(tokens)
+        account.save()
 
     account_data = MailAccountSerializer(account).data
 

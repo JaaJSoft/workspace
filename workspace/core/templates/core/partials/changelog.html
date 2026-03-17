@@ -1,0 +1,36 @@
+<style>
+.changelog-body h3 { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.5; margin-top: 1rem; margin-bottom: 0.375rem; }
+.changelog-body ul { list-style: none; padding: 0; margin: 0; }
+.changelog-body li { font-size: 0.8125rem; opacity: 0.7; padding: 0.125rem 0; padding-left: 1rem; position: relative; }
+.changelog-body li::before { content: "·"; position: absolute; left: 0.25rem; opacity: 0.4; }
+.changelog-body p { font-size: 0.8125rem; opacity: 0.6; font-style: italic; margin-bottom: 0.25rem; }
+.changelog-body code { font-size: 0.75rem; padding: 0.1rem 0.3rem; border-radius: 0.25rem; background: oklch(var(--b2) / 0.5); }
+</style>
+{% for entry in entries %}
+<div class="border-b border-base-300/50 last:border-b-0" x-data="{ open: {{ forloop.first|yesno:'true,false' }} }">
+  <button
+    type="button"
+    @click="open = !open"
+    class="flex items-center gap-3 w-full px-4 py-3 text-left transition-colors hover:bg-base-200/50"
+  >
+    <span class="flex items-center gap-2 flex-1 min-w-0">
+      <span class="font-semibold text-sm text-base-content">{{ entry.version }}</span>
+      {% if forloop.first %}
+        <span class="badge badge-sm badge-primary">latest</span>
+      {% endif %}
+    </span>
+    <i data-lucide="chevron-down"
+       class="w-4 h-4 text-base-content/40 shrink-0 transition-transform duration-200"
+       :class="open && 'rotate-180'"></i>
+  </button>
+  <div x-show="open" x-collapse>
+    <div class="px-4 pb-4 changelog-body">
+      {{ entry.html|safe }}
+    </div>
+  </div>
+</div>
+{% empty %}
+<div class="px-4 py-8 text-center text-sm text-base-content/50">
+  No changelog available.
+</div>
+{% endfor %}

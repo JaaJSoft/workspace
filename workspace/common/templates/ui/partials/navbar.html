@@ -266,6 +266,19 @@
               </a>
             </li>
 
+            <!-- What's new -->
+            <li>
+              <button
+                type="button"
+                onclick="window.dispatchEvent(new CustomEvent('changelog-open'))"
+                class="gap-3 hover:bg-warning/10 hover:text-warning transition-colors"
+              >
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                <span class="font-medium">What's new</span>
+                <span class="badge badge-xs badge-ghost text-base-content/50 ml-auto">{{ APP_VERSION }}</span>
+              </button>
+            </li>
+
             {% if user.is_staff or user.is_superuser %}
               <div class="divider my-1">
                 <span class="text-xs text-base-content/40 uppercase tracking-wider">Admin</span>
@@ -326,6 +339,52 @@
 <form id="logout-form" method="post" action="{% url 'logout' %}" style="display: none;">
   {% csrf_token %}
 </form>
+{% endif %}
+
+<!-- Changelog modal -->
+{% if user.is_authenticated %}
+<dialog id="changelog-dialog" class="modal"
+        x-data="{ loaded: false, loading: false, content: '' }"
+        x-init="$watch('loaded', v => { if (v) $nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }); })"
+        @changelog-open.window="
+          $el.showModal();
+          if (!loaded && !loading) {
+            loading = true;
+            fetch('/changelog', { credentials: 'same-origin' })
+              .then(r => r.text())
+              .then(html => { content = html; loaded = true; loading = false; })
+              .catch(() => { loading = false; });
+          }
+        ">
+  <div class="modal-box max-w-2xl max-h-[80vh] p-0 flex flex-col">
+    <!-- Header -->
+    <div class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0">
+      <div class="rounded-lg bg-warning/10 p-2">
+        <i data-lucide="sparkles" class="w-5 h-5 text-warning"></i>
+      </div>
+      <div class="flex-1">
+        <h3 class="font-bold text-lg">What's new</h3>
+        <p class="text-xs text-base-content/50">Version {{ APP_VERSION }}</p>
+      </div>
+      <form method="dialog">
+        <button class="btn btn-ghost btn-sm btn-circle">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </form>
+    </div>
+
+    <!-- Body -->
+    <div class="flex-1 overflow-y-auto overscroll-contain">
+      <template x-if="loading">
+        <div class="flex items-center justify-center py-12">
+          <span class="loading loading-spinner loading-md text-base-content/30"></span>
+        </div>
+      </template>
+      <div x-show="loaded" x-html="content"></div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 {% endif %}
 
 {% include 'ui/partials/search/command_palette_dropdown_scripts.html' %}

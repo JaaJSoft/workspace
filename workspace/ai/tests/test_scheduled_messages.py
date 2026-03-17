@@ -445,6 +445,56 @@ class ScheduleToolTests(TestCase):
         self.assertEqual(schedule.recurrence_interval, 2)
         self.assertEqual(schedule.recurrence_unit, 'hours')
 
+    def test_schedule_recurring_daily_converts_to_utc(self):
+        """Regression: schedule_message used django.utils.timezone.utc which
+        does not exist — must use datetime.timezone.utc for the conversion."""
+        result = self._call('schedule_message', {
+            'prompt': 'Daily standup',
+            'every': 'days',
+            'interval': 1,
+            'at_time': '09:00',
+        })
+        self.assertIn('Scheduled recurring', result)
+        schedule = ScheduledMessage.objects.get(
+            conversation=self.conversation,
+            kind=ScheduledMessage.Kind.RECURRING,
+        )
+        self.assertEqual(schedule.recurrence_unit, 'days')
+        # next_run_at must be timezone-aware (UTC)
+        self.assertIsNotNone(schedule.next_run_at.tzinfo)
+
+    def test_schedule_recurring_weekly_converts_to_utc(self):
+        result = self._call('schedule_message', {
+            'prompt': 'Weekly sync',
+            'every': 'weeks',
+            'interval': 1,
+            'at_time': '14:00',
+            'on_day': 0,  # Monday
+        })
+        self.assertIn('Scheduled recurring', result)
+        schedule = ScheduledMessage.objects.get(
+            conversation=self.conversation,
+            kind=ScheduledMessage.Kind.RECURRING,
+        )
+        self.assertEqual(schedule.recurrence_unit, 'weeks')
+        self.assertIsNotNone(schedule.next_run_at.tzinfo)
+
+    def test_schedule_recurring_monthly_converts_to_utc(self):
+        result = self._call('schedule_message', {
+            'prompt': 'Monthly report',
+            'every': 'months',
+            'interval': 1,
+            'at_time': '10:00',
+            'on_day': 15,
+        })
+        self.assertIn('Scheduled recurring', result)
+        schedule = ScheduledMessage.objects.get(
+            conversation=self.conversation,
+            kind=ScheduledMessage.Kind.RECURRING,
+        )
+        self.assertEqual(schedule.recurrence_unit, 'months')
+        self.assertIsNotNone(schedule.next_run_at.tzinfo)
+
     def test_schedule_rejects_past_datetime(self):
         past = (timezone.now() - timedelta(hours=1)).isoformat()
         result = self._call('schedule_message', {

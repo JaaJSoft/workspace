@@ -20,6 +20,13 @@ class MailActivityProvider(ActivityProvider):
             return Q(account__owner_id=user_id, folder__folder_type='sent')
         return Q(folder__folder_type='inbox')
 
+    def _viewer_filter(self, user_id, viewer_id):
+        """Restrict results to mail accounts the viewer owns."""
+        if viewer_id is None or viewer_id == user_id:
+            return Q()
+        from workspace.mail.queries import user_account_ids
+        return Q(account_id__in=user_account_ids(viewer_id))
+
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
         from workspace.mail.models import MailMessage
 
@@ -27,7 +34,10 @@ class MailActivityProvider(ActivityProvider):
             deleted_at__isnull=True,
             date__date__gte=date_from,
             date__date__lte=date_to,
-        ).filter(self._base_filter(user_id))
+        ).filter(
+            self._base_filter(user_id),
+            self._viewer_filter(user_id, viewer_id),
+        )
 
         rows = qs.annotate(day=TruncDate('date')).values('day').annotate(
             count=Count('pk'),
@@ -44,6 +54,7 @@ class MailActivityProvider(ActivityProvider):
             deleted_at__isnull=True,
         ).filter(
             self._base_filter(user_id),
+            self._viewer_filter(user_id, viewer_id),
         ).select_related(
             'account__owner',
         ).order_by('-date')[offset:offset + limit]
@@ -78,6 +89,7 @@ class MailActivityProvider(ActivityProvider):
         msg_qs = MailMessage.objects.filter(deleted_at__isnull=True)
         if user_id is not None:
             msg_qs = msg_qs.filter(account__owner_id=user_id)
+        msg_qs = msg_qs.filter(self._viewer_filter(user_id, viewer_id))
 
         total_messages = msg_qs.count()
         unread_messages = msg_qs.filter(is_read=False).count()
@@ -85,6 +97,8 @@ class MailActivityProvider(ActivityProvider):
         acct_qs = MailAccount.objects.filter(is_active=True)
         if user_id is not None:
             acct_qs = acct_qs.filter(owner_id=user_id)
+        if viewer_id is not None and viewer_id != user_id:
+            acct_qs = acct_qs.filter(owner_id=viewer_id)
         total_accounts = acct_qs.count()
 
         return {

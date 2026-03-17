@@ -578,6 +578,14 @@
       es.onopen = function() { errorCount = 0; };
     }
     connect();
+
+    // Reconnect SSE when the page becomes visible again (mobile resume)
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) {
+        connect();
+        window.dispatchEvent(new CustomEvent('sse:reconnect'));
+      }
+    });
   })();
 
   // Presence store — reacts to SSE presence snapshots
@@ -720,6 +728,12 @@
 
     window.addEventListener('sse:notifications.count', function(e) {
       Alpine.store('notifications').setCount(e.detail.unread);
+    });
+
+    // Refresh notification count on SSE reconnect (mobile resume)
+    window.addEventListener('sse:reconnect', function() {
+      var store = Alpine.store('notifications');
+      if (store.loaded) store.fetchList();
     });
 
     // Web Push store

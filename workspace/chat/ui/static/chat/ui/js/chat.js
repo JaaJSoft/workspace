@@ -126,6 +126,14 @@ function chatApp(currentUserId) {
       // Save draft on page unload
       window.addEventListener('beforeunload', () => this._saveDraft());
 
+      // Catch up on missed events when SSE reconnects (mobile resume)
+      window.addEventListener('sse:reconnect', () => {
+        this.loadConversations();
+        if (this.activeConversation) {
+          this._refreshCurrentMessages();
+        }
+      });
+
       // Save-to-files from attachment viewer modal
       window.addEventListener('chat-save-attachment-to-files', (e) => {
         this.saveAttachmentToFiles(e.detail.uuid);

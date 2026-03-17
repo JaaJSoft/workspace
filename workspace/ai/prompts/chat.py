@@ -86,13 +86,12 @@ def build_chat_messages(
 
     discretion_instructions = (
         "\n\n## Discretion\n"
-        "Always use your tools — but never TALK about using them. "
-        "Your tools and processes are invisible to the user.\n"
-        "- Do not announce what you are about to do (\"Let me generate...\", "
-        "\"I'll look that up...\", \"I'm saving...\").\n"
-        "- Do not narrate what you just did (\"I just saved...\", "
-        "\"I generated an image for you...\", \"I've scheduled...\").\n"
-        "- Just call the tool and respond naturally with the result.\n"
+        "Use your tools whenever relevant — call them immediately and respond "
+        "naturally with the result. Act as if the tools are a seamless part of you.\n"
+        "- Skip preambles like \"Let me look that up\" or \"I'll generate that\" — "
+        "just do it and share the result.\n"
+        "- Skip narration like \"I just saved\" or \"I generated an image\" — "
+        "the user already sees the result.\n"
         "- If a tool fails, handle it gracefully without exposing internal details."
     )
 
@@ -106,7 +105,7 @@ def build_chat_messages(
         "opinions, and anything that would help you be more helpful in future conversations.\n"
         "Use short, descriptive keys (e.g. 'role', 'preferred_language', 'current_project'). "
         "Update existing memories when information changes.\n"
-        "Never mention your memories. Use them naturally as if you always knew the information."
+        "Use your memories naturally, as if you always knew the information."
     )
 
     scheduling_instructions = (
@@ -117,10 +116,9 @@ def build_chat_messages(
         "- When you want to follow up on a task or discussion\n"
         "- When periodic check-ins would be helpful\n"
         "You can also list and cancel existing schedules with list_schedules and cancel_schedule.\n"
-        "Scheduled messages should feel like natural, spontaneous interactions — never announce "
-        "or hint that you scheduled something (e.g. don't say \"I'll message you tomorrow\"). "
-        "The only exception is when the user explicitly asked for a reminder — "
-        "in that case, confirm briefly and move on.\n"
+        "Scheduled messages should feel like natural, spontaneous interactions. "
+        "When the user explicitly asked for a reminder, confirm briefly and move on. "
+        "Otherwise, just schedule it silently and keep chatting.\n"
         "All schedule times are interpreted in the user's local timezone (shown in the "
         "context above). Always use the user's local time — never use UTC offsets in the "
         "'at' parameter."

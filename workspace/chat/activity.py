@@ -50,18 +50,28 @@ class ChatActivityProvider(ActivityProvider):
 
     def get_stats(self, user_id, *, viewer_id=None):
         from workspace.chat.models import Message, ConversationMember
+        from workspace.chat.services import user_conversation_ids
 
         conv_filter = {}
         if user_id is not None:
             conv_filter['user_id'] = user_id
-        conv_count = ConversationMember.objects.filter(
+        conv_qs = ConversationMember.objects.filter(
             left_at__isnull=True,
             **conv_filter,
-        ).count()
+        )
+        if viewer_id is not None and viewer_id != user_id:
+            conv_qs = conv_qs.filter(
+                conversation_id__in=user_conversation_ids(viewer_id),
+            )
+        conv_count = conv_qs.count()
 
         msg_qs = Message.objects.filter(deleted_at__isnull=True)
         if user_id is not None:
             msg_qs = msg_qs.filter(author_id=user_id)
+        if viewer_id is not None and viewer_id != user_id:
+            msg_qs = msg_qs.filter(
+                conversation_id__in=user_conversation_ids(viewer_id),
+            )
         msg_count = msg_qs.count()
 
         return {

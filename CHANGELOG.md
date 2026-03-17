@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.12.0
+
+### AI & Bots
+
+Enhanced AI capabilities with web search, scheduling, and improved tool handling.
+
+- Web search and webpage reading via SearXNG integration
+- Scheduled messages with timezone-aware delivery
+- Dedicated search tools for calendar, chat, mail, and files
+- AI image editing service with OpenAI and Ollama fallback
+- Lightweight model support (`AI_LIGHT_MODEL`) for summaries and titles
+- Auto-retry for empty model responses
+- XML `<image>` tag support for tool calls
+- Improved raw tool call parsing and handling
+- Raw message storage and sanitization for task processing
+- Prompt refinements: factual accuracy, natural tool use, memory integration
+
+### Chat
+
+- Typing indicators with real-time synchronization
+- Bot conversation renaming with auto-title generation
+- Orphan attachment purge command and scheduler
+- SSE reconnection on mobile resume (visibility change detection)
+- Improved Markdown image handling for AI-generated images
+
+### Mail
+
+- Label management with AI-driven email classification
+- Unread count support for labels
+- Activity tracking split: sent mail for heatmap/profile, received for dashboard
+- OAuth2 revoked token handling with automatic account deactivation and user notification
+- OAuth2 account reconnection without duplicate creation
+- Improved AI summary rendering and folder/label UI
+- Message labels ordered by position and name
+
+### Dashboard & UI
+
+- Changelog viewer modal accessible from user menu ("What's new")
+- Redesigned inline alert component with subtle border styling
+- PWA support with offline caching and app icons
+- Workspace usage stats with count-up animations and storage quota
+- Improved search bar responsiveness
+- Session expiry handling for AJAX and fetch requests
+
+### Users
+
+- Timezone-aware scheduling and user settings
+
+### Infrastructure
+
+- SearXNG configuration for Docker Compose and Kubernetes
+- Centralized permission query helpers (`user_conversation_ids`, `user_account_ids`, `visible_calendar_ids`, `FileService.user_files_qs`)
+- `APP_VERSION` exposed to templates via context processor
+
+### Fixes
+
+- Scheduled message UTC conversion (`datetime.timezone` consistency)
+- AI badge layout for multiple tools
+- AI image edit error messages and logging
+- File context generation with missing `parent_id`
+- Duplicate files from trashed folders during sync
+- Web Push safety checks
+- Chat title generation threshold (2+ messages)
+- Calendar widget accent color consistency
+
+### Dependencies
+
+- cairosvg 2.9.0
+- redis 7.3.0
+
 ## 0.11.0
 
 ### AI & Bots

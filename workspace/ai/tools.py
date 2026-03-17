@@ -252,9 +252,9 @@ class ScheduleToolProvider(ToolProvider):
     def schedule_message(self, args, user, bot, conversation_id, context):
         """Schedule a message to be sent later, either once at a specific time or on a recurring basis. \
 Call this when the user asks you to send a message later, set a reminder, or create a recurring message."""
-        from datetime import datetime, time, timedelta, timezone as dt_timezone
+        from datetime import datetime, time, timedelta, timezone
         import calendar
-        from django.utils import timezone
+        from django.utils import timezone as dj_timezone
         from workspace.users.settings_service import get_user_timezone
         from .models import ScheduledMessage
 
@@ -271,7 +271,7 @@ Call this when the user asks you to send a message later, set a reminder, or cre
             return 'Error: provide either "at" (ISO datetime) for one-time or "every" (hours/days/weeks/months) for recurring'
 
         user_tz = get_user_timezone(user)
-        now = timezone.now()
+        now = dj_timezone.now()
 
         if at:
             # One-time schedule
@@ -336,7 +336,7 @@ Call this when the user asks you to send a message later, set a reminder, or cre
                     second=0,
                     microsecond=0,
                 )
-            next_run = candidate.astimezone(dt_timezone.utc)
+            next_run = candidate.astimezone(timezone.utc)
         elif every == 'weeks':
             candidate = now_local + timedelta(weeks=interval)
             if recurrence_day is not None:
@@ -350,7 +350,7 @@ Call this when the user asks you to send a message later, set a reminder, or cre
                     second=0,
                     microsecond=0,
                 )
-            next_run = candidate.astimezone(dt_timezone.utc)
+            next_run = candidate.astimezone(timezone.utc)
         elif every == 'months':
             year = now_local.year
             month = now_local.month + interval
@@ -369,7 +369,7 @@ Call this when the user asks you to send a message later, set a reminder, or cre
                     second=0,
                     microsecond=0,
                 )
-            next_run = candidate.astimezone(dt_timezone.utc)
+            next_run = candidate.astimezone(timezone.utc)
 
         schedule = ScheduledMessage.objects.create(
             conversation_id=conversation_id,

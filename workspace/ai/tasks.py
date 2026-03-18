@@ -953,6 +953,27 @@ def generate_scheduled_response(self, schedule_id: str):
             human_user, bot_user, str(conversation.pk),
         )
 
+        # Auto-retry once if the model returned an empty response
+        body_preview = _RAW_TOOL_CALL_RE.sub('', result.get('content') or '').strip()
+        if not body_preview and not tool_context.get('images'):
+            logger.warning('Empty scheduled response, retrying once: schedule=%s', schedule_id)
+            result, used_tools, tool_context, retry_rounds = _run_tool_loop(
+                messages, bot_profile.get_model(), bot_profile.supports_tools,
+                human_user, bot_user, str(conversation.pk),
+            )
+            rounds.extend(retry_rounds)
+            body_preview = _RAW_TOOL_CALL_RE.sub('', result.get('content') or '').strip()
+            if not body_preview and not tool_context.get('images'):
+                ai_task.status = ai_task.Status.COMPLETED
+                ai_task.result = '[EMPTY]'
+                ai_task.model_used = result.get('model', '')
+                ai_task.prompt_tokens = result.get('prompt_tokens')
+                ai_task.completion_tokens = result.get('completion_tokens')
+                ai_task.completed_at = timezone.now()
+                ai_task.save()
+                logger.warning('Scheduled response empty after retry: schedule=%s', schedule_id)
+                return {'status': 'skipped', 'reason': 'empty_response'}
+
         raw_messages = {'messages': initial_messages, 'rounds': rounds}
 
         # Let the bot skip if it judges the message is no longer relevant

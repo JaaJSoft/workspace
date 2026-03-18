@@ -291,6 +291,43 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertEqual(result['status'], 'skipped')
         mock_openai.assert_not_called()
 
+    @patch('workspace.ai.tasks._call_openai')
+    def test_empty_response_skips_message(self, mock_openai):
+        """Scheduled messages with empty AI responses should not post empty messages."""
+        mock_openai.return_value = {
+            'content': '',
+            'tool_calls': None,
+            'message': MagicMock(content='', tool_calls=None, to_dict=lambda: {}),
+            'model': 'gpt-4o-mini',
+            'prompt_tokens': 10,
+            'completion_tokens': 0,
+        }
+
+        schedule = ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt='Say hello',
+            kind=ScheduledMessage.Kind.ONCE,
+            next_run_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        from workspace.ai.tasks import generate_scheduled_response
+        result = generate_scheduled_response(str(schedule.uuid))
+
+        self.assertEqual(result['status'], 'skipped')
+        self.assertEqual(result['reason'], 'empty_response')
+
+        # No bot message should have been created
+        bot_msg = Message.objects.filter(
+            conversation=self.conversation,
+            author=self.bot_user,
+        ).first()
+        self.assertIsNone(bot_msg)
+
+        # OpenAI should have been called twice (initial + retry)
+        self.assertEqual(mock_openai.call_count, 2)
+
     def test_nonexistent_schedule(self):
         from workspace.ai.tasks import generate_scheduled_response
         result = generate_scheduled_response(str(uuid.uuid4()))

@@ -1,19 +1,23 @@
 """AI tools for the Calendar module."""
 import json
 
-from workspace.ai.tool_registry import Param, ToolProvider, tool
+from pydantic import BaseModel, Field
+
+from workspace.ai.tool_registry import ToolProvider, tool
+
+
+class SearchEventsParams(BaseModel):
+    query: str = Field(description="The search term to look for in event and poll titles.")
 
 
 class CalendarToolProvider(ToolProvider):
 
-    @tool(badge_icon='🔍', badge_label='Searched events', detail_key='query', params={
-        'query': Param('The search term to look for in event and poll titles.'),
-    })
+    @tool(badge_icon='🔍', badge_label='Searched events', detail_key='query', params=SearchEventsParams)
     def search_events(self, args, user, bot, conversation_id, context):
         """Search through your calendar events and scheduling polls by title. \
 Returns up to 20 matches with title, date, calendar, and location. \
 Call this when the user asks about upcoming events, meetings, or scheduling polls."""
-        query = args.get('query', '').strip()
+        query = args.query.strip()
         if not query:
             return 'Error: query is required'
 

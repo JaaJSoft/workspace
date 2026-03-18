@@ -9,6 +9,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.ai.models import BotProfile, ScheduledMessage
+from workspace.ai.tools import CancelScheduleParams, ScheduleMessageParams
 from workspace.chat.models import Conversation, ConversationMember, Message
 
 User = get_user_model()
@@ -201,9 +202,9 @@ class GenerateScheduledResponseTests(TestCase):
         ConversationMember.objects.create(conversation=self.conversation, user=self.user)
         ConversationMember.objects.create(conversation=self.conversation, user=self.bot_user)
 
-    @patch('workspace.ai.tasks._call_openai')
-    def test_generates_message_and_deactivates_once(self, mock_openai):
-        mock_openai.return_value = {
+    @patch('workspace.ai.tasks._call_llm')
+    def test_generates_message_and_deactivates_once(self, mock_llm):
+        mock_llm.return_value = {
             'content': 'Hello!',
             'tool_calls': None,
             'message': MagicMock(content='Hello!', tool_calls=None, to_dict=lambda: {}),
@@ -239,9 +240,9 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertFalse(schedule.is_active)
         self.assertIsNotNone(schedule.last_run_at)
 
-    @patch('workspace.ai.tasks._call_openai')
-    def test_recurring_stays_active(self, mock_openai):
-        mock_openai.return_value = {
+    @patch('workspace.ai.tasks._call_llm')
+    def test_recurring_stays_active(self, mock_llm):
+        mock_llm.return_value = {
             'content': 'Check-in time!',
             'tool_calls': None,
             'message': MagicMock(content='Check-in time!', tool_calls=None, to_dict=lambda: {}),
@@ -273,8 +274,8 @@ class GenerateScheduledResponseTests(TestCase):
         # next_run_at should have advanced (at least 1 hour in the future from last_run_at)
         self.assertGreater(schedule.next_run_at, schedule.last_run_at)
 
-    @patch('workspace.ai.tasks._call_openai')
-    def test_skips_inactive_schedule(self, mock_openai):
+    @patch('workspace.ai.tasks._call_llm')
+    def test_skips_inactive_schedule(self, mock_llm):
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
             bot=self.bot_user,
@@ -289,12 +290,12 @@ class GenerateScheduledResponseTests(TestCase):
         result = generate_scheduled_response(str(schedule.uuid))
 
         self.assertEqual(result['status'], 'skipped')
-        mock_openai.assert_not_called()
+        mock_llm.assert_not_called()
 
-    @patch('workspace.ai.tasks._call_openai')
-    def test_empty_response_skips_message(self, mock_openai):
+    @patch('workspace.ai.tasks._call_llm')
+    def test_empty_response_skips_message(self, mock_llm):
         """Scheduled messages with empty AI responses should not post empty messages."""
-        mock_openai.return_value = {
+        mock_llm.return_value = {
             'content': '',
             'tool_calls': None,
             'message': MagicMock(content='', tool_calls=None, to_dict=lambda: {}),
@@ -326,7 +327,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertIsNone(bot_msg)
 
         # OpenAI should have been called twice (initial + retry)
-        self.assertEqual(mock_openai.call_count, 2)
+        self.assertEqual(mock_llm.call_count, 2)
 
     def test_nonexistent_schedule(self):
         from workspace.ai.tasks import generate_scheduled_response
@@ -457,10 +458,10 @@ class ScheduleToolTests(TestCase):
 
     def test_schedule_once(self):
         future = (timezone.now() + timedelta(hours=2)).isoformat()
-        result = self._call('schedule_message', {
-            'prompt': 'Say hello later',
-            'at': future,
-        })
+        result = self._call('schedule_message', ScheduleMessageParams(
+            prompt='Say hello later',
+            at=future,
+        ))
         self.assertIn('Scheduled one-time', result)
         self.assertEqual(ScheduledMessage.objects.filter(
             conversation=self.conversation,
@@ -469,11 +470,11 @@ class ScheduleToolTests(TestCase):
         ).count(), 1)
 
     def test_schedule_recurring(self):
-        result = self._call('schedule_message', {
-            'prompt': 'Recurring check-in',
-            'every': 'hours',
-            'interval': 2,
-        })
+        result = self._call('schedule_message', ScheduleMessageParams(
+            prompt='Recurring check-in',
+            every='hours',
+            interval=2,
+        ))
         self.assertIn('Scheduled recurring', result)
         schedule = ScheduledMessage.objects.get(
             conversation=self.conversation,
@@ -485,12 +486,12 @@ class ScheduleToolTests(TestCase):
     def test_schedule_recurring_daily_converts_to_utc(self):
         """Regression: schedule_message used django.utils.timezone.utc which
         does not exist — must use datetime.timezone.utc for the conversion."""
-        result = self._call('schedule_message', {
-            'prompt': 'Daily standup',
-            'every': 'days',
-            'interval': 1,
-            'at_time': '09:00',
-        })
+        result = self._call('schedule_message', ScheduleMessageParams(
+            prompt='Daily standup',
+            every='days',
+            interval=1,
+            at_time='09:00',
+        ))
         self.assertIn('Scheduled recurring', result)
         schedule = ScheduledMessage.objects.get(
             conversation=self.conversation,
@@ -501,13 +502,13 @@ class ScheduleToolTests(TestCase):
         self.assertIsNotNone(schedule.next_run_at.tzinfo)
 
     def test_schedule_recurring_weekly_converts_to_utc(self):
-        result = self._call('schedule_message', {
-            'prompt': 'Weekly sync',
-            'every': 'weeks',
-            'interval': 1,
-            'at_time': '14:00',
-            'on_day': 0,  # Monday
-        })
+        result = self._call('schedule_message', ScheduleMessageParams(
+            prompt='Weekly sync',
+            every='weeks',
+            interval=1,
+            at_time='14:00',
+            on_day=0,
+        ))
         self.assertIn('Scheduled recurring', result)
         schedule = ScheduledMessage.objects.get(
             conversation=self.conversation,
@@ -517,13 +518,13 @@ class ScheduleToolTests(TestCase):
         self.assertIsNotNone(schedule.next_run_at.tzinfo)
 
     def test_schedule_recurring_monthly_converts_to_utc(self):
-        result = self._call('schedule_message', {
-            'prompt': 'Monthly report',
-            'every': 'months',
-            'interval': 1,
-            'at_time': '10:00',
-            'on_day': 15,
-        })
+        result = self._call('schedule_message', ScheduleMessageParams(
+            prompt='Monthly report',
+            every='months',
+            interval=1,
+            at_time='10:00',
+            on_day=15,
+        ))
         self.assertIn('Scheduled recurring', result)
         schedule = ScheduledMessage.objects.get(
             conversation=self.conversation,
@@ -534,20 +535,20 @@ class ScheduleToolTests(TestCase):
 
     def test_schedule_rejects_past_datetime(self):
         past = (timezone.now() - timedelta(hours=1)).isoformat()
-        result = self._call('schedule_message', {
-            'prompt': 'Too late',
-            'at': past,
-        })
+        result = self._call('schedule_message', ScheduleMessageParams(
+            prompt='Too late',
+            at=past,
+        ))
         self.assertIn('Error', result)
         self.assertIn('future', result)
 
     def test_schedule_rejects_both_at_and_every(self):
         future = (timezone.now() + timedelta(hours=2)).isoformat()
-        result = self._call('schedule_message', {
-            'prompt': 'Conflicting',
-            'at': future,
-            'every': 'hours',
-        })
+        result = self._call('schedule_message', ScheduleMessageParams(
+            prompt='Conflicting',
+            at=future,
+            every='hours',
+        ))
         self.assertIn('Error', result)
         self.assertIn('not both', result)
 
@@ -560,9 +561,9 @@ class ScheduleToolTests(TestCase):
             kind=ScheduledMessage.Kind.ONCE,
             next_run_at=timezone.now() + timedelta(hours=1),
         )
-        result = self._call('cancel_schedule', {
-            'schedule_id': str(schedule.uuid),
-        })
+        result = self._call('cancel_schedule', CancelScheduleParams(
+            schedule_id=str(schedule.uuid),
+        ))
         self.assertIn('Cancelled', result)
         schedule.refresh_from_db()
         self.assertFalse(schedule.is_active)

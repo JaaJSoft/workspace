@@ -3,26 +3,19 @@ import json
 import logging
 import re
 
+import litellm
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
-
+litellm._turn_on_debug()
 logger = logging.getLogger(__name__)
 
 _THINK_RE = re.compile(r'<think>[\s\S]*?</think>\s*', re.IGNORECASE)
 _RAW_TOOL_CALL_RE = re.compile(r'</?tool_call>', re.IGNORECASE)
-_JSON_TOOL_RE = re.compile(
-    r'\{[^{}]*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}[^{}]*\}',
-)
-_MD_IMAGE_RE = re.compile(r'!\[([^\]]*)\]\([^\)]+\)')
-_XML_IMAGE_RE = re.compile(
-    r'<image(?:\s+alt="([^"]*)")?\s*>([\s\S]*?)</image>',
-    re.IGNORECASE,
-)
 
 
 def _serialize_response(result):
-    """Serialize an _call_openai result dict for storage."""
+    """Serialize an _call_llm result dict for storage."""
     tc = result.get('tool_calls')
     return {
         'content': result.get('content', ''),
@@ -94,61 +87,8 @@ def _strip_thinking(content: str) -> str:
     return _THINK_RE.sub('', content).strip()
 
 
-def _extract_raw_tool_calls(content: str):
-    """Parse tool calls that a model emitted as plain text instead of structured output.
-
-    Some models output ``<tool_call>{"name": "...", "arguments": {...}}</tool_call>``
-    or just bare JSON in the message content.  Return a list of (name, arguments_json)
-    tuples and the remaining text, or (None, content) if nothing was found.
-
-    Also detects markdown images ``![prompt](url)`` and converts them to
-    ``generate_image`` tool calls (models that don't support native tool
-    calling sometimes "fake" image generation this way).
-    """
-    # Strip <tool_call> tags first
-    cleaned = _RAW_TOOL_CALL_RE.sub('', content).strip()
-
-    # Try to find a JSON object with "name" and "arguments" anywhere in the text
-    match = _JSON_TOOL_RE.search(cleaned)
-    if match:
-        try:
-            parsed = json.loads(match.group())
-        except json.JSONDecodeError:
-            parsed = None
-
-        if isinstance(parsed, dict) and 'name' in parsed and 'arguments' in parsed:
-            args = parsed['arguments']
-            args_json = args if isinstance(args, str) else json.dumps(args)
-            remaining = (cleaned[:match.start()] + cleaned[match.end():]).strip()
-            return [(parsed['name'], args_json)], remaining
-
-    # Detect markdown images as failed generate_image attempts
-    md_images = _MD_IMAGE_RE.findall(cleaned)
-    if md_images:
-        calls = []
-        remaining = _MD_IMAGE_RE.sub('', cleaned).strip()
-        for alt in md_images:
-            prompt = alt.strip() or 'image'
-            calls.append(('generate_image', json.dumps({'prompt': prompt})))
-            logger.info('Converted markdown image to generate_image tool call: %s', prompt)
-        return calls, remaining
-
-    # Detect <image>prompt</image> or <image alt="...">prompt</image> tags
-    xml_images = _XML_IMAGE_RE.findall(cleaned)
-    if xml_images:
-        calls = []
-        remaining = _XML_IMAGE_RE.sub('', cleaned).strip()
-        for alt, body in xml_images:
-            prompt = (body.strip() or alt.strip() or 'image')
-            calls.append(('generate_image', json.dumps({'prompt': prompt})))
-            logger.info('Converted <image> tag to generate_image tool call: %s', prompt)
-        return calls, remaining
-
-    return None, content
-
-
-def _call_openai(messages: list[dict], model: str | None = None, max_tokens: int | None = None, tools: list | None = None) -> dict:
-    """Call the OpenAI API and return a dict with content and usage info."""
+def _call_llm(messages: list[dict], model: str | None = None, max_tokens: int | None = None, tools: list | None = None) -> dict:
+    """Call an LLM via OpenAI SDK and return a dict with content and usage info."""
     from workspace.ai.client import get_ai_client
 
     client = get_ai_client()
@@ -228,7 +168,7 @@ def _render_tool_badges(used_tools):
     )
 
 
-def _run_tool_loop(messages, model, supports_tools, human_user, bot_user, conversation_id):
+def _run_tool_loop(messages, model, human_user, bot_user, conversation_id):
     """Run the tool call loop and return (result, used_tools, tool_context, rounds).
 
     Calls the AI model, executes any tool calls it returns, and re-calls
@@ -238,46 +178,14 @@ def _run_tool_loop(messages, model, supports_tools, human_user, bot_user, conver
     """
     from workspace.ai.tool_registry import tool_registry
 
-    tools = tool_registry.get_definitions() if supports_tools else None
-    result = _call_openai(messages, model=model, tools=tools)
+    tools = tool_registry.get_definitions()
+    result = _call_llm(messages, model=model, tools=tools)
 
     used_tools = []
     tool_context = {}
     rounds = []
     max_tool_rounds = 5
     for _ in range(max_tool_rounds):
-        # Some models emit tool calls as plain text — parse and convert them
-        if not result.get('tool_calls') and result.get('content'):
-            raw_calls, remaining = _extract_raw_tool_calls(result['content'])
-            if raw_calls:
-                import types
-                import uuid as _uuid
-                result['content'] = remaining
-                result['tool_calls'] = []
-                for name, args_json in raw_calls:
-                    call_id = f'call_{_uuid.uuid4().hex[:24]}'
-                    tc = types.SimpleNamespace(
-                        id=call_id,
-                        type='function',
-                        function=types.SimpleNamespace(name=name, arguments=args_json),
-                    )
-                    result['tool_calls'].append(tc)
-                _content = remaining or None
-                _tool_calls = result['tool_calls']
-                result['message'] = types.SimpleNamespace(
-                    content=_content,
-                    tool_calls=_tool_calls,
-                    role='assistant',
-                )
-                result['message'].to_dict = lambda: {
-                    'role': 'assistant',
-                    'content': _content or '',
-                    'tool_calls': [
-                        {'id': tc.id, 'type': 'function', 'function': {'name': tc.function.name, 'arguments': tc.function.arguments}}
-                        for tc in _tool_calls
-                    ],
-                }
-
         if not result.get('tool_calls'):
             rounds.append({'response': _serialize_response(result)})
             break
@@ -287,7 +195,18 @@ def _run_tool_loop(messages, model, supports_tools, human_user, bot_user, conver
             'tool_executions': [],
         }
 
-        messages.append(result['message'].to_dict())
+        msg = result['message']
+        msg_dict = {'role': 'assistant', 'content': msg.content or ''}
+        if msg.tool_calls:
+            msg_dict['tool_calls'] = [
+                {
+                    'id': tc.id,
+                    'type': 'function',
+                    'function': {'name': tc.function.name, 'arguments': tc.function.arguments},
+                }
+                for tc in msg.tool_calls
+            ]
+        messages.append(msg_dict)
 
         for tc in result['tool_calls']:
             tool_result = tool_registry.execute(
@@ -310,7 +229,7 @@ def _run_tool_loop(messages, model, supports_tools, human_user, bot_user, conver
             })
 
         rounds.append(round_data)
-        result = _call_openai(messages, model=model, tools=tools)
+        result = _call_llm(messages, model=model, tools=tools)
     else:
         # Max rounds reached — capture the final response
         rounds.append({'response': _serialize_response(result)})
@@ -504,7 +423,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         initial_messages = _sanitize_messages_for_storage(list(messages))
 
         result, used_tools, tool_context, rounds = _run_tool_loop(
-            messages, bot_profile.get_model(), bot_profile.supports_tools,
+            messages, bot_profile.get_model(),
             human_user, bot_user, conversation_id,
         )
 
@@ -513,7 +432,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         if not body_preview and not tool_context.get('images'):
             logger.warning('Empty response, retrying once: conversation=%s', conversation_id)
             result, used_tools, tool_context, retry_rounds = _run_tool_loop(
-                messages, bot_profile.get_model(), bot_profile.supports_tools,
+                messages, bot_profile.get_model(),
                 human_user, bot_user, conversation_id,
             )
             rounds.extend(retry_rounds)
@@ -582,7 +501,7 @@ def summarize(self, task_id: str):
     messages = build_summarize_messages(message.subject or '', body)
 
     try:
-        result = _call_openai(messages, model=settings.AI_SMALL_MODEL)
+        result = _call_llm(messages, model=settings.AI_SMALL_MODEL)
         ai_task.status = AITask.Status.COMPLETED
         ai_task.result = result['content']
         ai_task.model_used = result['model']
@@ -660,7 +579,7 @@ def editor_action(self, task_id: str):
 
     try:
         messages = builder()
-        result = _call_openai(messages)
+        result = _call_llm(messages)
         ai_task.status = AITask.Status.COMPLETED
         ai_task.result = result['content']
         ai_task.model_used = result['model']
@@ -743,7 +662,7 @@ def compose_email(self, task_id: str):
                 sender_name=sender_name, sender_email=sender_email,
             )
 
-        result = _call_openai(messages)
+        result = _call_llm(messages)
         ai_task.status = AITask.Status.COMPLETED
         ai_task.result = result['content']
         ai_task.model_used = result['model']
@@ -800,7 +719,7 @@ def generate_conversation_title(self, conversation_id: str):
     excerpt = '\n'.join(m for m in messages if m)
 
     try:
-        result = _call_openai(
+        result = _call_llm(
             [
                 {
                     'role': 'system',
@@ -949,7 +868,7 @@ def generate_scheduled_response(self, schedule_id: str):
         initial_messages = _sanitize_messages_for_storage(list(messages))
 
         result, used_tools, tool_context, rounds = _run_tool_loop(
-            messages, bot_profile.get_model(), bot_profile.supports_tools,
+            messages, bot_profile.get_model(),
             human_user, bot_user, str(conversation.pk),
         )
 
@@ -958,7 +877,7 @@ def generate_scheduled_response(self, schedule_id: str):
         if not body_preview and not tool_context.get('images'):
             logger.warning('Empty scheduled response, retrying once: schedule=%s', schedule_id)
             result, used_tools, tool_context, retry_rounds = _run_tool_loop(
-                messages, bot_profile.get_model(), bot_profile.supports_tools,
+                messages, bot_profile.get_model(),
                 human_user, bot_user, str(conversation.pk),
             )
             rounds.extend(retry_rounds)
@@ -1075,7 +994,7 @@ def classify_mail_messages(self, task_id: str):
                     })
 
                 messages = build_classify_messages(emails, label_names)
-                result = _call_openai(messages, model=settings.AI_SMALL_MODEL)
+                result = _call_llm(messages, model=settings.AI_SMALL_MODEL)
 
                 model_used = result['model']
                 total_prompt += result['prompt_tokens'] or 0

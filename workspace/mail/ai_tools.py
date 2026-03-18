@@ -1,19 +1,30 @@
 """AI tools for the Mail module."""
 import json
 
-from workspace.ai.tool_registry import Param, ToolProvider, tool
+from pydantic import BaseModel, Field
+
+from workspace.ai.tool_registry import ToolProvider, tool
+
+
+class ReadEmailParams(BaseModel):
+    uuid: str = Field(description="The UUID of the email message to read.")
+
+
+class SearchEmailsParams(BaseModel):
+    query: str = Field(description="The search term to look for in email subject, content, or sender.")
+    unread_only: bool = Field(default=False, description="If true, only return unread emails.")
+    starred_only: bool = Field(default=False, description="If true, only return starred emails.")
+    has_attachments: bool = Field(default=False, description="If true, only return emails with attachments.")
 
 
 class MailToolProvider(ToolProvider):
 
-    @tool(badge_icon='📧', badge_label='Read email', detail_key='uuid', params={
-        'uuid': Param('The UUID of the email message to read.'),
-    })
+    @tool(badge_icon='📧', badge_label='Read email', detail_key='uuid', params=ReadEmailParams)
     def read_email(self, args, user, bot, conversation_id, context):
         """Read the full content of an email by its UUID: subject, sender, recipients, date, and body text. \
 Call this after finding an email via search_emails to get its complete content, \
 or when the user asks to read, open, or see the details of a specific email."""
-        email_uuid = args.get('uuid', '').strip()
+        email_uuid = args.uuid.strip()
         if not email_uuid:
             return 'Error: uuid is required'
         from workspace.mail.models import MailMessage
@@ -50,18 +61,13 @@ or when the user asks to read, open, or see the details of a specific email."""
         parts.append(body[:3000])
         return '\n'.join(parts)
 
-    @tool(badge_icon='🔍', badge_label='Searched emails', detail_key='query', params={
-        'query': Param('The search term to look for in email subject, content, or sender.'),
-        'unread_only': Param('If true, only return unread emails.', type='boolean', required=False),
-        'starred_only': Param('If true, only return starred emails.', type='boolean', required=False),
-        'has_attachments': Param('If true, only return emails with attachments.', type='boolean', required=False),
-    })
+    @tool(badge_icon='🔍', badge_label='Searched emails', detail_key='query', params=SearchEmailsParams)
     def search_emails(self, args, user, bot, conversation_id, context):
         """Search through your emails by subject, content, or sender. \
 Returns up to 20 matches with subject, sender, date, and folder. \
 Call this when the user asks to find, look up, or locate an email. \
 Use read_email with the returned UUID to get the full content."""
-        query = args.get('query', '').strip()
+        query = args.query.strip()
         if not query:
             return 'Error: query is required'
 
@@ -82,11 +88,11 @@ Use read_email with the returned UUID to get the full content."""
             .select_related('folder')
         )
 
-        if args.get('unread_only'):
+        if args.unread_only:
             qs = qs.filter(is_read=False)
-        if args.get('starred_only'):
+        if args.starred_only:
             qs = qs.filter(is_starred=True)
-        if args.get('has_attachments'):
+        if args.has_attachments:
             qs = qs.filter(has_attachments=True)
 
         matches = qs.order_by('-date')[:20]

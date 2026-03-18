@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
 from workspace.ai.models import AITask, BotProfile
-from workspace.ai.tools import CoreToolProvider
+from workspace.ai.tools import CoreToolProvider, GenerateImageParams, EditImageParams
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
@@ -189,7 +189,6 @@ class GenerateChatResponseWithToolsTests(TestCase):
     @patch('workspace.ai.client.get_ai_client')
     def test_tool_call_saves_memory_then_responds(self, mock_get_client):
         mock_client = MagicMock()
-
         # First call: tool_calls response
         tool_call = MagicMock()
         tool_call.id = 'call_abc'
@@ -267,7 +266,7 @@ class GenerateImageToolTest(TestCase):
         mock_get_client.return_value = mock_client
 
         result = self.provider.generate_image(
-            {'prompt': 'a cat'}, user=None, bot=None,
+            GenerateImageParams(prompt='a cat'), user=None, bot=None,
             conversation_id=self.conv_id, context=self.context,
         )
 
@@ -278,7 +277,7 @@ class GenerateImageToolTest(TestCase):
 
     def test_generate_image_empty_prompt(self):
         result = self.provider.generate_image(
-            {'prompt': ''}, user=None, bot=None,
+            GenerateImageParams(prompt=''), user=None, bot=None,
             conversation_id=self.conv_id, context=self.context,
         )
         self.assertIn('Error', result)
@@ -286,7 +285,7 @@ class GenerateImageToolTest(TestCase):
 
     def test_generate_image_no_conversation(self):
         result = self.provider.generate_image(
-            {'prompt': 'a cat'}, user=None, bot=None,
+            GenerateImageParams(prompt='a cat'), user=None, bot=None,
             conversation_id=None, context=self.context,
         )
         self.assertIn('Error', result)
@@ -300,7 +299,7 @@ class GenerateImageToolTest(TestCase):
         mock_get_client.return_value = mock_client
 
         self.provider.generate_image(
-            {'prompt': 'a cat', 'size': '999x999'},
+            GenerateImageParams(prompt='a cat', size='999x999'),
             user=None, bot=None, conversation_id=self.conv_id,
             context=self.context,
         )
@@ -314,7 +313,7 @@ class GenerateImageToolTest(TestCase):
         mock_get_client.return_value = mock_client
 
         result = self.provider.generate_image(
-            {'prompt': 'a cat'}, user=None, bot=None,
+            GenerateImageParams(prompt='a cat'), user=None, bot=None,
             conversation_id=self.conv_id, context=self.context,
         )
         self.assertIn('Error', result)
@@ -355,7 +354,7 @@ class EditImageToolTest(TestCase):
         mock_get_client.return_value = mock_client
 
         result = self.provider.edit_image(
-            {'prompt': 'make it blue'}, user=self.user, bot=None,
+            EditImageParams(prompt='make it blue'), user=self.user, bot=None,
             conversation_id=str(self.conv.uuid), context=self.context,
         )
 
@@ -380,7 +379,7 @@ class EditImageToolTest(TestCase):
         with patch('workspace.ai.image_service._edit_via_ollama',
                    return_value=b'\x89PNG ollama') as mock_ollama:
             result = self.provider.edit_image(
-                {'prompt': 'make it red'}, user=self.user, bot=None,
+                EditImageParams(prompt='make it red'), user=self.user, bot=None,
                 conversation_id=str(self.conv.uuid), context=self.context,
             )
 
@@ -390,14 +389,14 @@ class EditImageToolTest(TestCase):
 
     def test_edit_image_empty_prompt(self):
         result = self.provider.edit_image(
-            {'prompt': ''}, user=None, bot=None,
+            EditImageParams(prompt=''), user=None, bot=None,
             conversation_id=str(self.conv.uuid), context=self.context,
         )
         self.assertIn('Error', result)
 
     def test_edit_image_no_image_in_conversation(self):
         result = self.provider.edit_image(
-            {'prompt': 'make it blue'}, user=self.user, bot=None,
+            EditImageParams(prompt='make it blue'), user=self.user, bot=None,
             conversation_id=str(self.conv.uuid), context=self.context,
         )
         self.assertIn('no image found', result)
@@ -413,7 +412,7 @@ class EditImageToolTest(TestCase):
         with patch('workspace.ai.image_service._edit_via_ollama',
                    side_effect=Exception('Ollama failed')):
             result = self.provider.edit_image(
-                {'prompt': 'make it blue'}, user=self.user, bot=None,
+                EditImageParams(prompt='make it blue'), user=self.user, bot=None,
                 conversation_id=str(self.conv.uuid), context=self.context,
             )
 
@@ -422,67 +421,10 @@ class EditImageToolTest(TestCase):
 
     def test_edit_image_no_conversation(self):
         result = self.provider.edit_image(
-            {'prompt': 'make it blue'}, user=None, bot=None,
+            EditImageParams(prompt='make it blue'), user=None, bot=None,
             conversation_id=None, context=self.context,
         )
         self.assertIn('Error', result)
-
-
-class ExtractRawToolCallsTests(TestCase):
-    """Unit tests for _extract_raw_tool_calls."""
-
-    def test_xml_image_tag(self):
-        from workspace.ai.tasks import _extract_raw_tool_calls
-        calls, remaining = _extract_raw_tool_calls(
-            'Here you go: <image>a cute cat sitting on a couch</image>'
-        )
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][0], 'generate_image')
-        self.assertIn('a cute cat sitting on a couch', calls[0][1])
-        self.assertEqual(remaining, 'Here you go:')
-
-    def test_xml_image_tag_with_alt(self):
-        from workspace.ai.tasks import _extract_raw_tool_calls
-        calls, remaining = _extract_raw_tool_calls(
-            '<image alt="landscape">a mountain at sunset</image>'
-        )
-        self.assertEqual(len(calls), 1)
-        self.assertIn('a mountain at sunset', calls[0][1])
-
-    def test_xml_image_tag_empty_body_uses_alt(self):
-        from workspace.ai.tasks import _extract_raw_tool_calls
-        calls, remaining = _extract_raw_tool_calls(
-            '<image alt="a dog playing fetch"></image>'
-        )
-        self.assertEqual(len(calls), 1)
-        self.assertIn('a dog playing fetch', calls[0][1])
-
-    def test_xml_image_tag_empty_fallback(self):
-        from workspace.ai.tasks import _extract_raw_tool_calls
-        calls, remaining = _extract_raw_tool_calls('<image alt=""></image>')
-        self.assertEqual(len(calls), 1)
-        self.assertIn('image', calls[0][1])
-
-    def test_multiple_xml_image_tags(self):
-        from workspace.ai.tasks import _extract_raw_tool_calls
-        calls, remaining = _extract_raw_tool_calls(
-            'Two images: <image>a cat</image> and <image>a dog</image>'
-        )
-        self.assertEqual(len(calls), 2)
-
-    def test_markdown_image_still_works(self):
-        from workspace.ai.tasks import _extract_raw_tool_calls
-        calls, remaining = _extract_raw_tool_calls(
-            'Check this: ![a bird](https://example.com/bird.png)'
-        )
-        self.assertEqual(len(calls), 1)
-        self.assertIn('a bird', calls[0][1])
-
-    def test_no_image_tags(self):
-        from workspace.ai.tasks import _extract_raw_tool_calls
-        calls, remaining = _extract_raw_tool_calls('Just some text')
-        self.assertIsNone(calls)
-        self.assertEqual(remaining, 'Just some text')
 
 
 @override_settings(

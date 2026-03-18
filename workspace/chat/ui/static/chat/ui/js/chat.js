@@ -381,17 +381,19 @@ function chatApp(currentUserId) {
     async loadMessages(conversationId) {
       this.loadingMessages = true;
       const container = document.getElementById('messages-container');
-      if (container) container.innerHTML = '';
+      if (container) container.innerHTML = ''; // safe: cleared to empty
 
       try {
         const resp = await fetch(
           `/chat/${conversationId}/messages`,
           { credentials: 'same-origin' }
         );
+        // Discard stale response if user already switched conversation
+        if (this.activeConversation?.uuid !== conversationId) return;
         if (resp.ok) {
           const html = await resp.text();
           if (container) {
-            container.innerHTML = html;
+            container.innerHTML = html; // server-rendered trusted HTML
             this._initMessagesDom(container);
             this._readPaginationState();
             // Scroll immediately after HTML injection, before images load

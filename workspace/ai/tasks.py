@@ -3,11 +3,10 @@ import json
 import logging
 import re
 
-import litellm
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
-litellm._turn_on_debug()
+
 logger = logging.getLogger(__name__)
 
 _THINK_RE = re.compile(r'<think>[\s\S]*?</think>\s*', re.IGNORECASE)

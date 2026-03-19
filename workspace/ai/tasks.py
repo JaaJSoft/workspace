@@ -86,6 +86,45 @@ def _strip_thinking(content: str) -> str:
     return _THINK_RE.sub('', content).strip()
 
 
+def _extract_text_tool_calls(content: str):
+    """Parse tool calls that a model emitted as plain text instead of structured output.
+
+    Handles two formats:
+    - ``{"tool": "name", "prompt": "...", ...}`` (shorthand some models use)
+    - ``{"name": "name", "arguments": {...}}`` (OpenAI-like)
+
+    Returns a list of (name, arguments_json) tuples and the remaining text,
+    or (None, content) if nothing was found.
+    """
+    cleaned = _RAW_TOOL_CALL_RE.sub('', content).strip()
+
+    calls = []
+    remaining = cleaned
+
+    for match in re.finditer(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', cleaned):
+        try:
+            parsed = json.loads(match.group())
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, dict):
+            continue
+
+        if 'tool' in parsed:
+            name = parsed.pop('tool')
+            calls.append((name, json.dumps(parsed)))
+            remaining = remaining.replace(match.group(), '').strip()
+        elif 'name' in parsed and 'arguments' in parsed:
+            args = parsed['arguments']
+            args_json = args if isinstance(args, str) else json.dumps(args)
+            calls.append((parsed['name'], args_json))
+            remaining = remaining.replace(match.group(), '').strip()
+
+    if calls:
+        logger.info('Parsed %d tool call(s) from text content', len(calls))
+        return calls, remaining
+    return None, content
+
+
 def _call_llm(messages: list[dict], model: str | None = None, max_tokens: int | None = None, tools: list | None = None) -> dict:
     """Call an LLM via OpenAI SDK and return a dict with content and usage info."""
     from workspace.ai.client import get_ai_client
@@ -185,6 +224,28 @@ def _run_tool_loop(messages, model, human_user, bot_user, conversation_id):
     rounds = []
     max_tool_rounds = 5
     for _ in range(max_tool_rounds):
+        # Fallback: parse tool calls from text if model didn't use native function calling
+        if not result.get('tool_calls') and result.get('content'):
+            raw_calls, remaining = _extract_text_tool_calls(result['content'])
+            if raw_calls:
+                import types
+                import uuid as _uuid
+                result['content'] = remaining
+                result['tool_calls'] = []
+                for name, args_json in raw_calls:
+                    call_id = f'call_{_uuid.uuid4().hex[:24]}'
+                    tc = types.SimpleNamespace(
+                        id=call_id,
+                        type='function',
+                        function=types.SimpleNamespace(name=name, arguments=args_json),
+                    )
+                    result['tool_calls'].append(tc)
+                result['message'] = types.SimpleNamespace(
+                    content=remaining or None,
+                    tool_calls=result['tool_calls'],
+                    role='assistant',
+                )
+
         if not result.get('tool_calls'):
             rounds.append({'response': _serialize_response(result)})
             break

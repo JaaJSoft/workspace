@@ -36,6 +36,7 @@ class MailConfig(AppConfig):
             from workspace.mail.models import MailMessage
             return MailMessage.objects.filter(
                 account__owner=user,
+                account__is_active=True,
                 is_read=False,
                 deleted_at__isnull=True,
             ).count()

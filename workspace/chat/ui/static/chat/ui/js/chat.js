@@ -472,6 +472,12 @@ function chatApp(currentUserId) {
       }
     },
 
+    _isNearBottom(threshold = 150) {
+      const container = this.$refs.messagesContainer;
+      if (!container) return true;
+      return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+    },
+
     scrollToBottom(waitForImages = false) {
       const container = this.$refs.messagesContainer;
       if (!container) return;
@@ -482,7 +488,9 @@ function chatApp(currentUserId) {
         images.forEach(img => {
           if (!img.complete) {
             img.addEventListener('load', () => {
-              container.scrollTop = container.scrollHeight;
+              if (this._isNearBottom()) {
+                container.scrollTop = container.scrollHeight;
+              }
             }, { once: true });
           }
         });
@@ -996,8 +1004,9 @@ function chatApp(currentUserId) {
         }
         // Check if message already exists in the DOM
         if (!document.getElementById(`msg-${detail.message.uuid}`)) {
+          const wasAtBottom = this._isNearBottom();
           await this._refreshCurrentMessages();
-          this.scrollToBottom();
+          if (wasAtBottom) this.scrollToBottom();
           await this.markAsRead(detail.conversation_id);
         }
       }

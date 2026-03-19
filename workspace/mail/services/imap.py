@@ -355,6 +355,10 @@ def sync_folder_messages(account, folder):
         # Update sync position
         if max_uid > folder.last_sync_uid:
             folder.last_sync_uid = max_uid
+
+        # ── Reconciliation: detect messages deleted/moved by other clients ──
+        _reconcile_folder(conn, folder)
+
         _update_folder_counts(folder)
 
         # Dispatch AI classification for new inbox messages
@@ -391,6 +395,71 @@ def sync_folder_messages(account, folder):
             conn.logout()
         except Exception:
             pass
+
+
+def _reconcile_folder(conn, folder):
+    """Remove local messages whose UIDs no longer exist on the IMAP server.
+
+    Also updates flags (read/starred) for messages that still exist.
+    """
+    from workspace.mail.models import MailMessage
+
+    local_msgs = MailMessage.objects.filter(
+        folder=folder, deleted_at__isnull=True,
+    ).values_list('imap_uid', flat=True)
+    local_uids = set(local_msgs)
+    if not local_uids:
+        return
+
+    # Ask the server for all UIDs currently in this folder
+    status, search_data = conn.uid('SEARCH', None, 'ALL')
+    if status != 'OK':
+        return
+    raw = search_data[0].split() if search_data[0] else []
+    remote_uids = {int(u.decode() if isinstance(u, bytes) else u) for u in raw if u}
+
+    # Soft-delete messages that are no longer on the server
+    gone = local_uids - remote_uids
+    if gone:
+        count = MailMessage.objects.filter(
+            folder=folder, imap_uid__in=gone, deleted_at__isnull=True,
+        ).update(deleted_at=timezone.now())
+        if count:
+            logger.info('Reconciled %s: soft-deleted %d messages no longer on server', folder.name, count)
+
+    # Update flags for remaining messages
+    present = local_uids & remote_uids
+    if not present:
+        return
+    uid_set = ','.join(str(u) for u in sorted(present))
+    status, flags_data = conn.uid('FETCH', uid_set, '(UID FLAGS)')
+    if status != 'OK':
+        return
+
+    updates = []
+    for response_part in flags_data:
+        if not isinstance(response_part, (tuple, bytes)):
+            continue
+        raw_line = response_part[0] if isinstance(response_part, tuple) else response_part
+        if not isinstance(raw_line, bytes):
+            continue
+        uid_match = re.search(rb'UID (\d+)', raw_line)
+        flags_match = re.search(rb'FLAGS \(([^)]*)\)', raw_line)
+        if not uid_match:
+            continue
+        uid = int(uid_match.group(1))
+        flags_str = flags_match.group(1).decode() if flags_match else ''
+        is_read = r'\Seen' in flags_str
+        is_starred = r'\Flagged' in flags_str
+        updates.append((uid, is_read, is_starred))
+
+    if updates:
+        for uid, is_read, is_starred in updates:
+            MailMessage.objects.filter(
+                folder=folder, imap_uid=uid, deleted_at__isnull=True,
+            ).exclude(
+                is_read=is_read, is_starred=is_starred,
+            ).update(is_read=is_read, is_starred=is_starred)
 
 
 def _update_folder_counts(folder):

@@ -81,6 +81,26 @@
       height: auto;
       width: auto;
     }
+
+    /* Theme-aware prose inside modals (fixes dark-theme text) */
+    .modal .prose {
+      --tw-prose-body: oklch(var(--bc));
+      --tw-prose-headings: oklch(var(--bc));
+      --tw-prose-bold: oklch(var(--bc));
+      --tw-prose-code: oklch(var(--bc));
+      --tw-prose-pre-bg: oklch(var(--b2));
+      --tw-prose-pre-code: oklch(var(--bc));
+      --tw-prose-bullets: oklch(var(--bc) / 0.5);
+      --tw-prose-counters: oklch(var(--bc) / 0.5);
+      --tw-prose-quotes: oklch(var(--bc) / 0.7);
+      --tw-prose-quote-borders: oklch(var(--bc) / 0.2);
+      --tw-prose-th-borders: oklch(var(--bc) / 0.2);
+      --tw-prose-td-borders: oklch(var(--bc) / 0.1);
+    }
+    /* Typography plugin sets a hardcoded dark color on kbd — override it */
+    .modal .prose kbd {
+      color: oklch(var(--bc));
+    }
   </style>
 
   {% block extra_head %}{% endblock %}

@@ -191,3 +191,35 @@ class CommandRegistryTests(TestCase):
     def test_search_commands_returns_empty_when_no_commands(self):
         results = self.registry.search_commands('anything')
         self.assertEqual(results, [])
+
+
+from unittest.mock import patch, MagicMock
+import orjson
+
+
+class InlineSSETests(TestCase):
+    @patch('workspace.core.sse_registry._get_redis')
+    def test_notify_sse_inline_publishes_with_inline_flag(self, mock_get_redis):
+        mock_redis = MagicMock()
+        mock_get_redis.return_value = mock_redis
+
+        from workspace.core.sse_registry import notify_sse_inline
+        notify_sse_inline(
+            event='chat.signal',
+            data={'call_id': 'abc', 'type': 'offer'},
+            user_id=42,
+        )
+
+        mock_redis.publish.assert_called_once()
+        channel, payload = mock_redis.publish.call_args[0]
+        assert channel == 'sse:user:42'
+        parsed = orjson.loads(payload)
+        assert parsed['inline'] is True
+        assert parsed['event'] == 'chat.signal'
+        assert parsed['data']['call_id'] == 'abc'
+
+    @patch('workspace.core.sse_registry._get_redis')
+    def test_notify_sse_inline_noop_without_redis(self, mock_get_redis):
+        mock_get_redis.return_value = None
+        from workspace.core.sse_registry import notify_sse_inline
+        notify_sse_inline(event='chat.signal', data={}, user_id=1)

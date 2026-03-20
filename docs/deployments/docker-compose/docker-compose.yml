@@ -37,6 +37,10 @@ services:
       - AI_IMAGE_MODEL=${AI_IMAGE_MODEL:-dall-e-3}
       - AI_IMAGE_BASE_URL=${AI_IMAGE_BASE_URL:-}
       - SEARXNG_URL=${SEARXNG_URL:-}
+      - TURN_SECRET=${TURN_SECRET:-}
+      - TURN_SERVER_URL=${TURN_SERVER_URL:-}
+      - STUN_SERVER_URL=${STUN_SERVER_URL:-stun:stun.l.google.com:19302}
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - workspace-data:/app/data
     restart: unless-stopped
@@ -75,6 +79,10 @@ services:
       - AI_IMAGE_MODEL=${AI_IMAGE_MODEL:-dall-e-3}
       - AI_IMAGE_BASE_URL=${AI_IMAGE_BASE_URL:-}
       - SEARXNG_URL=${SEARXNG_URL:-}
+      - TURN_SECRET=${TURN_SECRET:-}
+      - TURN_SERVER_URL=${TURN_SERVER_URL:-}
+      - STUN_SERVER_URL=${STUN_SERVER_URL:-stun:stun.l.google.com:19302}
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - workspace-data:/app/data
     restart: unless-stopped
@@ -103,5 +111,21 @@ services:
   #     - ./searxng:/etc/searxng
   #   restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  coturn:
+    image: coturn/coturn:latest
+    network_mode: host
+    volumes:
+      - ./coturn/turnserver.conf:/etc/turnserver.conf:ro
+    environment:
+      - TURN_SECRET=${TURN_SECRET:-}
+    restart: unless-stopped
+
 volumes:
   workspace-data:
+  redis-data:

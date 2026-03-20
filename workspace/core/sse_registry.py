@@ -100,3 +100,25 @@ def notify_sse(provider_slug: str, user_id: int):
         timezone.now().isoformat(),
         120,
     )
+
+
+def notify_sse_inline(event: str, data: dict, user_id: int):
+    """Publish an inline SSE event directly via Redis pub/sub.
+
+    Unlike notify_sse(), the event payload is embedded in the pub/sub message
+    and delivered immediately to the SSE stream without triggering a provider poll.
+    Requires Redis — silently ignored if Redis is unavailable.
+    """
+    redis = _get_redis()
+    if redis is None:
+        return
+    try:
+        redis.publish(
+            f'sse:user:{user_id}',
+            orjson.dumps({'inline': True, 'event': event, 'data': data}),
+        )
+    except Exception:
+        logger.warning(
+            "Redis publish failed for inline SSE event (event=%s, user=%s)",
+            event, user_id, exc_info=True,
+        )

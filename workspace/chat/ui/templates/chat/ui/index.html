@@ -161,6 +161,14 @@ x-init="init()"
         <div class="flex items-center gap-0.5">
           <button
             class="btn btn-ghost btn-sm btn-circle"
+            @click="$store.call.start(activeConversation.uuid)"
+            :disabled="$store.call.state !== 'idle'"
+            title="Start voice call"
+          >
+            <i data-lucide="phone" class="w-4 h-4"></i>
+          </button>
+          <button
+            class="btn btn-ghost btn-sm btn-circle"
             :class="showSearchPanel ? 'bg-base-200' : ''"
             @click="toggleSearchPanel()"
             title="Search in conversation (Ctrl+F)"
@@ -610,7 +618,174 @@ x-init="init()"
 {% if initial_conversation_uuid %}<script id="initial-conversation" type="application/json">"{{ initial_conversation_uuid }}"</script>{% endif %}
 {% endblock %}
 
+    <!-- Voice call overlay -->
+    <template x-if="$store.call.state !== 'idle'">
+      <div class="fixed bottom-4 right-4 z-50" x-init="$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); })">
+        <template x-if="$store.call.state === 'ringing_in'">
+          <div class="bg-base-100 border border-base-300 rounded-2xl shadow-2xl p-4 w-72 animate-bounce-slow">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center"><i data-lucide="phone-incoming" class="w-5 h-5 text-success"></i></div>
+              <div><p class="font-semibold text-sm" x-text="$store.call.incomingFrom?.name + ' vous appelle'"></p><p class="text-xs text-base-content/60">Appel vocal</p></div>
+            </div>
+            <div class="flex gap-2">
+              <button class="btn btn-success btn-sm flex-1" @click="$store.call.accept()"><i data-lucide="phone" class="w-4 h-4"></i> Accepter</button>
+              <button class="btn btn-error btn-sm flex-1" @click="$store.call.reject()"><i data-lucide="phone-off" class="w-4 h-4"></i> Refuser</button>
+            </div>
+          </div>
+        </template>
+        <template x-if="$store.call.state === 'ringing_out'">
+          <div class="bg-base-100 border border-base-300 rounded-full shadow-xl px-4 py-2 flex items-center gap-3">
+            <span class="loading loading-dots loading-xs text-success"></span>
+            <span class="text-sm">Appel en cours...</span>
+            <button class="btn btn-error btn-xs btn-circle" @click="$store.call.leave()"><i data-lucide="phone-off" class="w-3 h-3"></i></button>
+          </div>
+        </template>
+        <template x-if="$store.call.state === 'active' || $store.call.state === 'connecting'">
+          <div class="bg-base-100 border border-base-300 rounded-2xl shadow-xl transition-all" :class="$store.call.expanded ? 'w-72 p-4' : 'px-4 py-2 rounded-full cursor-pointer'" @click="if (!$store.call.expanded) $store.call.toggle()">
+            <template x-if="!$store.call.expanded">
+              <div class="flex items-center gap-3">
+                <span class="w-2 h-2 rounded-full bg-success animate-pulse"></span>
+                <span class="text-sm font-medium" x-text="$store.call.durationDisplay"></span>
+                <span class="text-xs text-base-content/60" x-text="$store.call.participants.length + ' pers.'"></span>
+                <button class="btn btn-ghost btn-xs btn-circle" :class="$store.call.muted ? 'text-error' : ''" @click.stop="$store.call.toggleMute()"><i :data-lucide="$store.call.muted ? 'mic-off' : 'mic'" class="w-3 h-3"></i></button>
+                <button class="btn btn-error btn-xs btn-circle" @click.stop="$store.call.leave()"><i data-lucide="phone-off" class="w-3 h-3"></i></button>
+              </div>
+            </template>
+            <template x-if="$store.call.expanded">
+              <div>
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-success animate-pulse"></span><span class="text-sm font-semibold" x-text="$store.call.durationDisplay"></span></div>
+                  <button class="btn btn-ghost btn-xs btn-circle" @click="$store.call.toggle()"><i data-lucide="minimize-2" class="w-3 h-3"></i></button>
+                </div>
+                <template x-if="$store.call.qualityWarning || $store.call.participants.length > 6">
+                  <div class="text-xs text-warning bg-warning/10 rounded px-2 py-1 mb-2">Qualit&eacute; possiblement d&eacute;grad&eacute;e</div>
+                </template>
+                <div class="space-y-1 mb-3">
+                  <template x-for="p in $store.call.participants" :key="p.id">
+                    <div class="flex items-center gap-2 px-2 py-1 bg-base-200 rounded-lg">
+                      <div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs" x-text="p.name?.[0]?.toUpperCase()"></div>
+                      <span class="text-xs flex-1 truncate" x-text="p.name"></span>
+                      <template x-if="p.muted"><i data-lucide="mic-off" class="w-3 h-3 text-error"></i></template>
+                    </div>
+                  </template>
+                </div>
+                <div class="flex justify-center gap-3">
+                  <button class="btn btn-sm btn-circle" :class="$store.call.muted ? 'btn-error' : 'btn-ghost'" @click="$store.call.toggleMute()"><i :data-lucide="$store.call.muted ? 'mic-off' : 'mic'" class="w-4 h-4"></i></button>
+                  <button class="btn btn-error btn-sm btn-circle" @click="$store.call.leave()"><i data-lucide="phone-off" class="w-4 h-4"></i></button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </template>
+    <template x-if="$store.call.error">
+      <div class="toast toast-end toast-bottom z-50"><div class="alert alert-error"><span x-text="$store.call.error.message || 'Erreur micro'"></span></div></div>
+    </template>
+
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
 <script src="{% static 'chat/ui/js/chat.js' %}"></script>
+    <script src="{% static 'chat/ui/js/call-manager.js' %}"></script>
+    <script>
+    (function() {
+      var CURRENT_USER_ID = {{ user.id }};
+
+      document.addEventListener('alpine:init', function() {
+        Alpine.store('call', {
+          state: 'idle',
+          callId: null,
+          conversationId: null,
+          participants: [],
+          muted: false,
+          duration: 0,
+          durationDisplay: '00:00',
+          qualityWarning: null,
+          expanded: false,
+          incomingFrom: null,
+          error: null,
+          _manager: null,
+          _timer: null,
+          _ringtone: null,
+
+          init() {
+            var csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
+            var csrfCookie = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+            this._manager = new CallManager({
+              csrfToken: csrfEl ? csrfEl.value : csrfCookie,
+              currentUserId: CURRENT_USER_ID,
+            });
+            var self = this;
+            window.addEventListener('call:state-changed', function(e) {
+              self.state = e.detail.state;
+              if (self.state === 'active') self._startTimer();
+              if (self.state === 'idle') self._stopTimer();
+            });
+            window.addEventListener('call:participants-changed', function(e) { self.participants = e.detail.participants; });
+            window.addEventListener('call:quality-warning', function(e) { self.qualityWarning = e.detail; });
+            window.addEventListener('call:error', function(e) { self.error = e.detail; setTimeout(function() { self.error = null; }, 5000); });
+            window.addEventListener('call:ended', function() {
+              self._stopRingtone(); self._stopTimer();
+              self.state = 'idle'; self.callId = null; self.conversationId = null;
+              self.participants = []; self.muted = false; self.expanded = false; self.qualityWarning = null;
+            });
+            window.addEventListener('beforeunload', function() {
+              if (self.state === 'active' || self.state === 'connecting') self._manager.leaveCall();
+            });
+
+            // Hook SSE call events
+            window.addEventListener('sse:chat.call.incoming', function(e) { self.handleSSE('chat.call.incoming', e.detail); });
+            window.addEventListener('sse:chat.call.signal', function(e) { self.handleSSE('chat.call.signal', e.detail); });
+            window.addEventListener('sse:chat.call.participant_joined', function(e) { self.handleSSE('chat.call.participant_joined', e.detail); });
+            window.addEventListener('sse:chat.call.participant_left', function(e) { self.handleSSE('chat.call.participant_left', e.detail); });
+            window.addEventListener('sse:chat.call.ended', function(e) { self.handleSSE('chat.call.ended', e.detail); });
+            window.addEventListener('sse:chat.call.missed', function(e) { self.handleSSE('chat.call.missed', e.detail); });
+            window.addEventListener('sse:chat.call.mute_changed', function(e) { self.handleSSE('chat.call.mute_changed', e.detail); });
+            window.addEventListener('sse:chat.call.rejected', function(e) { self.handleSSE('chat.call.rejected', e.detail); });
+          },
+          start(conversationId) {
+            var self = this;
+            this._manager.startCall(conversationId).then(function(data) {
+              if (data) { self.callId = data.call_id; self.conversationId = conversationId; }
+            });
+          },
+          accept() { this._stopRingtone(); this._manager.joinCall(this.conversationId); },
+          reject() { this._stopRingtone(); this._manager.rejectCall(this.conversationId); this.state = 'idle'; this.incomingFrom = null; },
+          leave() { this._manager.leaveCall(); },
+          toggleMute() { this.muted = this._manager.toggleMute(); },
+          toggle() { this.expanded = !this.expanded; },
+          handleSSE(event, data) {
+            if (event === 'chat.call.incoming') {
+              this.state = 'ringing_in'; this.callId = data.call_id; this.conversationId = data.conversation_id;
+              this.incomingFrom = { id: data.initiator_id, name: data.initiator_name }; this._playRingtone();
+            } else if (event === 'chat.call.signal') { this._manager.handleSignal(data);
+            } else if (event === 'chat.call.participant_joined') {
+              this._manager.onParticipantJoined(data.user_id);
+              if (!this.participants.find(function(p) { return p.id === data.user_id; })) this.participants.push({ id: data.user_id, name: data.user_name });
+            } else if (event === 'chat.call.participant_left') {
+              this._manager.onParticipantLeft(data.user_id);
+              this.participants = this.participants.filter(function(p) { return p.id !== data.user_id; });
+            } else if (event === 'chat.call.ended' || event === 'chat.call.missed') {
+              this._manager._cleanup(); this._stopRingtone();
+            } else if (event === 'chat.call.mute_changed') {
+              var p = this.participants.find(function(pp) { return pp.id === data.user_id; });
+              if (p) p.muted = data.muted;
+            }
+          },
+          _startTimer() {
+            this.duration = 0; var self = this;
+            this._timer = setInterval(function() {
+              self.duration++; var m = Math.floor(self.duration / 60); var s = self.duration % 60;
+              self.durationDisplay = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+            }, 1000);
+          },
+          _stopTimer() { if (this._timer) { clearInterval(this._timer); this._timer = null; } this.duration = 0; this.durationDisplay = '00:00'; },
+          _playRingtone() {
+            try { this._ringtone = new Audio('/static/chat/ui/sounds/ringtone.mp3'); this._ringtone.loop = true; this._ringtone.play().catch(function(){}); var self = this; setTimeout(function() { self._stopRingtone(); }, 30000); } catch(e) {}
+          },
+          _stopRingtone() { if (this._ringtone) { this._ringtone.pause(); this._ringtone = null; } },
+        });
+      });
+    })();
+    </script>
 {% endblock %}

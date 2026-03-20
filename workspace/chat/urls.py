@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import call_views, views
 
 urlpatterns = [
     # Conversations
@@ -147,5 +147,36 @@ urlpatterns = [
         'api/v1/chat/attachments/<uuid:attachment_id>/save-to-files',
         views.AttachmentSaveToFilesView.as_view(),
         name='chat-attachment-save-to-files',
+    ),
+    # Voice calls
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/call/start',
+        call_views.CallStartView.as_view(),
+        name='chat-call-start',
+    ),
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/call/join',
+        call_views.CallJoinView.as_view(),
+        name='chat-call-join',
+    ),
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/call/leave',
+        call_views.CallLeaveView.as_view(),
+        name='chat-call-leave',
+    ),
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/call/reject',
+        call_views.CallRejectView.as_view(),
+        name='chat-call-reject',
+    ),
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/call/signal',
+        call_views.CallSignalView.as_view(),
+        name='chat-call-signal',
+    ),
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/call/mute',
+        call_views.CallMuteView.as_view(),
+        name='chat-call-mute',
     ),
 ]

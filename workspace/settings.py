@@ -600,6 +600,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'chat.purge_orphan_attachments',
         'schedule': crontab(hour=4, minute=0),  # Every day at 4:00 AM
     },
+    'cleanup-stale-call-participants': {
+        'task': 'chat.cleanup_stale_participants',
+        'schedule': 15.0,
+    },
 }
 
 # --------------------------------------------------
@@ -608,6 +612,13 @@ CELERY_BEAT_SCHEDULE = {
 WEBPUSH_VAPID_PRIVATE_KEY = os.getenv('WEBPUSH_VAPID_PRIVATE_KEY', '')
 WEBPUSH_VAPID_PUBLIC_KEY = os.getenv('WEBPUSH_VAPID_PUBLIC_KEY', '')
 WEBPUSH_VAPID_CLAIMS = {'sub': os.getenv('WEBPUSH_VAPID_MAILTO', '')}
+
+# --------------------------------------------------
+# Voice Calls (WebRTC / TURN)
+# --------------------------------------------------
+STUN_SERVER_URL = os.getenv('STUN_SERVER_URL', 'stun:stun.l.google.com:19302')
+TURN_SERVER_URL = os.getenv('TURN_SERVER_URL', '')
+TURN_SECRET = os.getenv('TURN_SECRET', '')
 
 # --------------------------------------------------
 # OAuth2 Mail Providers

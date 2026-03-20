@@ -234,3 +234,12 @@ emoji-picker {
 .msg-body.prose table {
   font-size: 0.85em;
 }
+
+/* Voice call overlay */
+@keyframes bounce-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.animate-bounce-slow {
+  animation: bounce-slow 2s ease-in-out infinite;
+}

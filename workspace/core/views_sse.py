@@ -143,13 +143,17 @@ def _event_stream_pubsub(request, redis):
                     yield from _poll_provider(slug, provider, None, user_id)
             elif message['type'] == 'message':
                 try:
-                    # Targeted: only poll the provider that published
                     data = orjson.loads(message['data'])
-                    slug = data['provider']
-                    if slug in providers:
-                        yield from _poll_provider(
-                            slug, providers[slug], time.monotonic(), user_id,
-                        )
+                    if data.get('inline'):
+                        # Inline event: yield immediately, no provider poll
+                        yield _format_sse(data['event'], data['data'])
+                    else:
+                        # Targeted: only poll the provider that published
+                        slug = data['provider']
+                        if slug in providers:
+                            yield from _poll_provider(
+                                slug, providers[slug], time.monotonic(), user_id,
+                            )
                 except Exception:
                     logger.exception(
                         "Failed to process Pub/Sub message for user %s",

@@ -205,3 +205,6 @@ class MessageAttachment(models.Model):
 
     def __str__(self):
         return f'{self.original_name} ({self.message_id})'
+
+
+from .call_models import Call, CallParticipant  # noqa: F401

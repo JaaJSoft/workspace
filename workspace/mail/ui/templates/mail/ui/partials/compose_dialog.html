@@ -45,7 +45,7 @@
                      @input="_acSearch('to')"
                      autocomplete="off"
                      class="input input-ghost input-sm flex-1 min-w-[8rem] focus:outline-none focus:bg-transparent"
-                     placeholder="recipient@example.com" />
+                     :placeholder="compose.to.length ? '' : 'recipient@example.com'" />
             </div>
             {% include "mail/ui/partials/autocomplete_dropdown.html" with field="to" %}
           </div>
@@ -76,7 +76,7 @@
                      @input="_acSearch('cc')"
                      autocomplete="off"
                      class="input input-ghost input-sm flex-1 min-w-[8rem] focus:outline-none focus:bg-transparent"
-                     placeholder="cc@example.com" />
+                     :placeholder="compose.cc.length ? '' : 'cc@example.com'" />
             </div>
             {% include "mail/ui/partials/autocomplete_dropdown.html" with field="cc" %}
           </div>
@@ -102,7 +102,7 @@
                      @input="_acSearch('bcc')"
                      autocomplete="off"
                      class="input input-ghost input-sm flex-1 min-w-[8rem] focus:outline-none focus:bg-transparent"
-                     placeholder="bcc@example.com" />
+                     :placeholder="compose.bcc.length ? '' : 'bcc@example.com'" />
             </div>
             {% include "mail/ui/partials/autocomplete_dropdown.html" with field="bcc" %}
           </div>

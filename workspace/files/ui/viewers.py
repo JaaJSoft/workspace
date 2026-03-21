@@ -195,12 +195,14 @@ class ImageViewer(BaseViewer):
 
     def get_context(self, request) -> dict:
         from django.conf import settings
+        from workspace.files.models import FileFavorite
         context = super().get_context(request)
         parent_id = getattr(self.file, 'parent_id', None)
         context['ai_edit_available'] = getattr(self, '_user_can_edit', True) and bool(getattr(settings, 'AI_IMAGE_MODEL', ''))
         context['file_uuid'] = str(self.file.uuid)
         context['file_parent'] = str(parent_id) if parent_id else ''
         context['file_name'] = self.file.name
+        context['is_favorite'] = FileFavorite.objects.filter(owner=request.user, file=self.file).exists()
         return context
 
     def render(self, request) -> str:

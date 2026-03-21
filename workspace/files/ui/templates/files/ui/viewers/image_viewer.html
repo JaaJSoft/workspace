@@ -16,6 +16,18 @@
     <button type="button" class="btn btn-sm btn-ghost" @click="reset()" title="Reset (0)">
       <i data-lucide="refresh-cw" class="w-4 h-4"></i>
     </button>
+    {% if can_edit %}
+    <div class="divider divider-horizontal mx-2"></div>
+    <button
+      type="button"
+      class="btn btn-sm btn-ghost"
+      :class="isFavorite ? 'text-warning' : ''"
+      @click="toggleFavorite()"
+      :title="isFavorite ? 'Remove from favorites' : 'Add to favorites'"
+    >
+      <i :data-lucide="isFavorite ? 'star' : 'star'" class="w-4 h-4" :class="isFavorite ? 'fill-current' : ''"></i>
+    </button>
+    {% endif %}
     {% if ai_edit_available %}
     <div class="divider divider-horizontal mx-2"></div>
     <button
@@ -226,6 +238,7 @@ window.imageViewerData = function imageViewerData() {
   return {
     zoomLevel: 1,
     rotation: 0,
+    isFavorite: {{ is_favorite|yesno:"true,false" }},
 
     editMode: false,
     editPrompt: '',
@@ -268,6 +281,21 @@ window.imageViewerData = function imageViewerData() {
     reset() {
       this.zoomLevel = 1;
       this.rotation = 0;
+    },
+
+    async toggleFavorite() {
+      var method = this.isFavorite ? 'DELETE' : 'POST';
+      try {
+        var resp = await fetch('/api/v1/files/' + fileUuid + '/favorite', {
+          method: method,
+          headers: { 'X-CSRFToken': getCSRFToken() },
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          this.isFavorite = !this.isFavorite;
+          window.dispatchEvent(new CustomEvent('files-changed'));
+        }
+      } catch (e) {}
     },
 
     toggleEditMode() {

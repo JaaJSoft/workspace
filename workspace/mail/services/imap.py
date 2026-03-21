@@ -351,8 +351,8 @@ def sync_folder_messages(account, folder):
 
         _update_folder_counts(folder)
 
-        # Dispatch AI classification for new inbox messages
-        if new_message_uuids and folder.folder_type == 'inbox':
+        # Dispatch AI classification for new messages
+        if new_message_uuids:
             try:
                 from workspace.ai.client import is_ai_enabled
                 from workspace.users.settings_service import get_setting

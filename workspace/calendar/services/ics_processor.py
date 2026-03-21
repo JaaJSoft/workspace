@@ -69,12 +69,13 @@ def _handle_cancel(vevent, uid, mail_message):
     event.is_cancelled = True
     event.save(update_fields=['is_cancelled'])
 
-    notify(
-        recipient=user,
-        origin='calendar',
-        title=f'Cancelled: {event.title}',
-        url=f'/calendar?event={event.pk}',
-    )
+    if _is_future_event(event):
+        notify(
+            recipient=user,
+            origin='calendar',
+            title=f'Cancelled: {event.title}',
+            url=f'/calendar?event={event.pk}',
+        )
 
 
 def _create_event(vevent, uid, sequence, mail_message):
@@ -113,13 +114,14 @@ def _create_event(vevent, uid, sequence, mail_message):
         status=EventMember.Status.PENDING,
     )
 
-    notify(
-        recipient=user,
-        origin='calendar',
-        title=f'Invitation: {title}',
-        body=f'From {organizer_email}',
-        url=f'/calendar?event={event.pk}',
-    )
+    if _is_future_event(event):
+        notify(
+            recipient=user,
+            origin='calendar',
+            title=f'Invitation: {title}',
+            body=f'From {organizer_email}',
+            url=f'/calendar?event={event.pk}',
+        )
 
     return event
 
@@ -140,13 +142,14 @@ def _update_event(event, vevent, sequence, mail_message):
         'location', 'ical_sequence', 'source_message',
     ])
 
-    notify(
-        recipient=event.owner,
-        origin='calendar',
-        title=f'Updated: {event.title}',
-        body='The event has been updated',
-        url=f'/calendar?event={event.pk}',
-    )
+    if _is_future_event(event):
+        notify(
+            recipient=event.owner,
+            origin='calendar',
+            title=f'Updated: {event.title}',
+            body='The event has been updated',
+            url=f'/calendar?event={event.pk}',
+        )
 
 
 def _get_or_create_invitation_calendar(account):
@@ -165,6 +168,14 @@ def _get_or_create_invitation_calendar(account):
         owner=account.owner,
         mail_account=account,
     )
+
+
+def _is_future_event(event):
+    """Return True if the event ends (or starts) in the future."""
+    ref = event.end or event.start
+    if ref is None:
+        return True
+    return ref > datetime.now(timezone.utc)
 
 
 def _extract_email(organizer_prop):

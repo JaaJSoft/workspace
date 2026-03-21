@@ -12,7 +12,7 @@
 {% include 'ui/partials/navbar.html' with navbar_full_width=True %}
 {% endblock %}
 
-{% block drawer_class %}drawer-open{% endblock %}
+{% block drawer_class %}lg:drawer-open{% endblock %}
 {% block drawer_id %}mail-drawer{% endblock %}
 
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
@@ -98,7 +98,7 @@ x-init="init()"
   <template x-if="accounts.length > 0 || selectedFolder">
     <div class="flex h-full min-w-0 w-full">
       <!-- Message list panel -->
-      <div class="w-96 border-r border-base-300 flex flex-col min-h-0"
+      <div class="w-full lg:w-96 border-r border-base-300 flex flex-col min-h-0"
            :class="selectedMessage && isMobile() ? 'hidden' : ''"
            x-show="selectedFolder || selectedLabel">
         {% include "mail/ui/partials/message_list.html" %}
@@ -115,10 +115,23 @@ x-init="init()"
         <div class="text-center text-base-content/40">
           <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
           <p class="text-lg font-medium">Select a folder to view messages</p>
+          <!-- Mobile: open sidebar button -->
+          <label for="mail-drawer" class="btn btn-warning btn-sm mt-4 lg:hidden cursor-pointer">
+            <i data-lucide="menu" class="w-4 h-4"></i>
+            Open folders
+          </label>
         </div>
       </div>
     </div>
   </template>
+
+  <!-- Mobile compose FAB -->
+  <button class="btn btn-warning btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden"
+          @click="showCompose()"
+          x-show="!selectedMessage"
+          x-cloak>
+    <i data-lucide="pencil" class="w-5 h-5"></i>
+  </button>
 </div>
 
 <!-- Account context menu -->

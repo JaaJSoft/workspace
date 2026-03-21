@@ -491,6 +491,7 @@ function mailApp() {
       this.selectedMessages = [];
       this.currentPage = 1;
       this._resetFilters();
+      this._closeDrawerOnMobile();
       await this.loadMessages();
     },
 
@@ -2194,6 +2195,13 @@ function mailApp() {
       return window.innerWidth < 1024;
     },
 
+    _closeDrawerOnMobile() {
+      if (this.isMobile()) {
+        const toggle = document.getElementById('mail-drawer');
+        if (toggle) toggle.checked = false;
+      }
+    },
+
     formatDate(dateStr) {
       if (!dateStr) return '';
       const d = new Date(dateStr);
@@ -2274,6 +2282,7 @@ function mailApp() {
       this.selectedMessage = null;
       this.messageDetail = null;
       this.currentPage = 1;
+      this._closeDrawerOnMobile();
       this.loadMessages();
     },
 

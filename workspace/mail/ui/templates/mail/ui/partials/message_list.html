@@ -1,5 +1,9 @@
 <!-- Message list header -->
 <div class="px-4 py-3 border-b border-base-300 flex items-center gap-2 bg-base-100">
+  <!-- Mobile sidebar toggle -->
+  <label for="mail-drawer" class="btn btn-ghost btn-sm btn-square lg:hidden cursor-pointer">
+    <i data-lucide="menu" class="w-5 h-5"></i>
+  </label>
   <h3 class="font-semibold text-sm flex-1 truncate"
       x-text="selectedLabel?.name || selectedFolder?.display_name || 'Messages'"></h3>
   <button class="btn btn-ghost btn-xs btn-circle" @click="classifyFolder()"

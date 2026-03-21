@@ -767,7 +767,7 @@
       async init() {
         if (!this.supported) return;
         try {
-          var reg = await navigator.serviceWorker.register('/sw.js');
+          var reg = await navigator.serviceWorker.register('/sw.js?v={{ APP_VERSION }}');
           this.subscription = await reg.pushManager.getSubscription();
         } catch (e) {
           console.warn('SW registration failed:', e);

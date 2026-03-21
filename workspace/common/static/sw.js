@@ -1,6 +1,6 @@
 /* Service Worker — PWA caching + Web Push Notifications */
 
-var CACHE_VERSION = 'v1';
+var CACHE_VERSION = new URL(self.location).searchParams.get('v') || 'dev';
 var CACHE_NAME = 'workspace-' + CACHE_VERSION;
 var OFFLINE_URL = '/static/offline.html';
 
@@ -52,9 +52,9 @@ self.addEventListener('fetch', function (event) {
     return;
   }
 
-  // Local static assets — cache first
+  // Local static assets — dev: always fresh, prod: cache first (invalidated by version bump)
   if (url.pathname.startsWith('/static/')) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(CACHE_VERSION === 'dev' ? staleWhileRevalidate(request) : cacheFirst(request));
     return;
   }
 

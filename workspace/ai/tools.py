@@ -170,7 +170,7 @@ class ImageToolProvider(ToolProvider):
     @tool(badge_icon='🎨', badge_label='Generated image', detail_key='prompt', params=GenerateImageParams)
     def generate_image(self, args, user, bot, conversation_id, context):
         """Generate a brand-new image from a text description. \
-Call this when the user asks you to create, draw, generate, or make an image from scratch. \
+Call this when the user asks you to create, draw, generate, make an image from scratch, send a picture or a photo of itself, or any other image-related request. \
 Do NOT use this to modify an existing image — use edit_image instead."""
         prompt = args.prompt.strip()
         if not prompt:

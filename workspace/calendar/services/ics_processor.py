@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timezone
 
 import icalendar
+from django.utils import timezone as django_tz
 
 from workspace.calendar.models import Calendar, Event, EventMember
 from workspace.notifications.services import notify
@@ -175,7 +176,7 @@ def _is_future_event(event):
     ref = event.end or event.start
     if ref is None:
         return True
-    return ref > datetime.now(timezone.utc)
+    return ref > django_tz.now()
 
 
 def _extract_email(organizer_prop):

@@ -72,7 +72,6 @@ window.pollDetail = function(pollId, csrfToken) {
         console.error('Failed to load poll', e);
       }
       this.loading = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     _initMyVotes() {
@@ -92,7 +91,6 @@ window.pollDetail = function(pollId, csrfToken) {
       const current = this.myVotes[slotId];
       const idx = current ? order.indexOf(current) : -1;
       this.myVotes[slotId] = order[(idx + 1) % order.length];
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     voteClass(choice) { return pollUtils.voteClass(choice); },
@@ -154,7 +152,6 @@ window.pollDetail = function(pollId, csrfToken) {
         console.error('Failed to submit votes', e);
       }
       this.submitting = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     async finalize() {
@@ -177,7 +174,6 @@ window.pollDetail = function(pollId, csrfToken) {
         console.error('Failed to finalize', e);
       }
       this.submitting = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     copyShareLink() {

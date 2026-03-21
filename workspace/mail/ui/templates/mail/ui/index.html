@@ -63,7 +63,7 @@ x-init="init()"
     <!-- Help button -->
     <div class="px-3 pb-2">
       <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="warning" onclick="document.getElementById('mail-help-dialog').showModal(); lucide?.createIcons()" tooltip="Help (?)" %}
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="warning" onclick="document.getElementById('mail-help-dialog').showModal()" tooltip="Help (?)" %}
       </ul>
     </div>
 
@@ -180,12 +180,12 @@ x-init="init()"
         selectIcon(icon) {
           this.selectedIcon = icon;
           labelModal.icon = icon;
-          this.$nextTick(() => lucide.createIcons({nodes: [this.$el.closest('.modal-box')]}));
+
         },
         selectColor(cls) {
           this.selectedColor = cls;
           labelModal.color = this._classToColor[cls] || cls.replace('text-', '');
-          this.$nextTick(() => lucide.createIcons({nodes: [this.$el.closest('.modal-box').querySelector('h3')]}));
+
         },
         saving: false,
         saved: false,

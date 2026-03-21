@@ -38,14 +38,3 @@
   {% endif %}
 </div>
 
-<script>
-(function() {
-  var FILE_UUID = '{{ file.uuid }}';
-  setTimeout(function() {
-    var root = document.querySelector('[src$="' + FILE_UUID + '/content"]');
-    if (root && typeof lucide !== 'undefined') {
-      lucide.createIcons({ nodes: [root.closest('.flex.flex-col')] });
-    }
-  }, 50);
-})();
-</script>

@@ -218,7 +218,6 @@ window._userCardShow = function(wrapper, userId) {
     var cacheValid = cached && (_userCardCacheTimes[userId] || 0) + _USER_CARD_CACHE_TTL > Date.now();
     if (cacheValid) {
       _setPopoverContent(popover, cached);
-      lucide?.createIcons({ nodes: popover.querySelectorAll('[data-lucide]') });
       _patchCardStatus(popover);
     } else if (!wrapper._fetching) {
       wrapper._fetching = true;
@@ -230,7 +229,6 @@ window._userCardShow = function(wrapper, userId) {
           wrapper._fetching = false;
           if (wrapper._userCardPopover) {
             _setPopoverContent(wrapper._userCardPopover, html);
-            lucide?.createIcons({ nodes: wrapper._userCardPopover.querySelectorAll('[data-lucide]') });
             _patchCardStatus(wrapper._userCardPopover);
           }
         })

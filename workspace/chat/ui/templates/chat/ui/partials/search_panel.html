@@ -34,7 +34,7 @@
     <button
       class="btn btn-xs btn-ghost gap-1"
       :class="searchFiltersExpanded ? 'btn-active' : ''"
-      @click="searchFiltersExpanded = !searchFiltersExpanded; $nextTick(() => lucide.createIcons())"
+      @click="searchFiltersExpanded = !searchFiltersExpanded"
     >
       <i data-lucide="sliders-horizontal" class="w-3 h-3"></i>
       Filters

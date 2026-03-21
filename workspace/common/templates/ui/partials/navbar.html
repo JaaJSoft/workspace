@@ -345,7 +345,6 @@
 {% if user.is_authenticated %}
 <dialog id="changelog-dialog" class="modal"
         x-data="{ loaded: false, loading: false, content: '' }"
-        x-init="$watch('loaded', v => { if (v) $nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }); })"
         @changelog-open.window="
           $el.showModal();
           if (!loaded && !loading) {

@@ -170,37 +170,14 @@ window.sidebarCollapse = function sidebarCollapse() {
         }
       });
 
-      // Initialize Lucide icons on load
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') {
-          lucide.createIcons();
-        }
-      });
-      
-      // Re-initialize Lucide icons when state changes
-      this.$watch('collapsed', () => {
-        // Wait for transition to complete before recreating icons
-        setTimeout(() => {
-          if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-          }
-        }, 350); // Slightly longer than transition duration (300ms)
-      });
     },
-    
+
     toggleCollapse() {
       if (this.isMobile()) {
         return;
       }
       this.collapsed = !this.collapsed;
       localStorage.setItem('sidebarCollapsed', this.collapsed);
-      
-      // Immediate icon refresh for visible elements
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') {
-          lucide.createIcons();
-        }
-      });
     },
 
     syncActiveView() {
@@ -340,7 +317,6 @@ window.fileBrowser = function fileBrowser() {
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
         this.$refs.propertiesContent.replaceChildren(...doc.body.children);
-        this.$nextTick(() => lucide.createIcons());
       } catch (err) {
         this.propertiesError = err.message;
       } finally {
@@ -1457,9 +1433,6 @@ window.fileBrowser = function fileBrowser() {
           if (window.Alpine?.initTree) {
             window.Alpine.initTree(fresh);
           }
-          if (window.lucide?.createIcons) {
-            window.lucide.createIcons({ nodes: [fresh] });
-          }
         })
         .catch(() => this.showAlert('error', 'Failed to refresh items'));
     },
@@ -1607,12 +1580,6 @@ window.fileTableControls = function fileTableControls() {
       this.ready = true;
       this.applyAll();
       this._initializing = false;
-
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') {
-          lucide.createIcons({ nodes: [this.$el] });
-        }
-      });
 
       this.$watch('searchQuery', () => this.applyRows());
       this.$watch('typeFilter', () => this.applyRows());
@@ -1871,10 +1838,6 @@ window.fileTableControls = function fileTableControls() {
 
       const catOrder = ['transfer', 'organize', 'edit', 'danger', 'trash'];
       this.bulkActions = common.sort((a, b) => catOrder.indexOf(a.category) - catOrder.indexOf(b.category));
-
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [this.$el] });
-      });
     },
 
     executeBulkAction(action) {
@@ -2543,11 +2506,6 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
         });
       });
 
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') {
-          lucide.createIcons({ nodes: [this.$el] });
-        }
-      });
     },
 
     getCsrfToken() {
@@ -2621,10 +2579,6 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
         currentList.replaceChildren(...newItems);
         this.pinnedCount = currentList.querySelectorAll('li').length;
 
-        // Re-initialize Lucide icons
-        if (typeof lucide !== 'undefined') {
-          lucide.createIcons({ nodes: [currentList] });
-        }
         // Re-init Alpine on new content
         if (window.Alpine?.initTree) {
           window.Alpine.initTree(currentList);
@@ -2794,7 +2748,6 @@ window.shareModal = function shareModal() {
         this.$nextTick(() => {
           const dlg = this.$refs.shareDialog;
           if (dlg && !dlg.open) dlg.showModal();
-          if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [this.$el] });
         });
       });
 
@@ -2966,7 +2919,6 @@ window.shareModal = function shareModal() {
         this.shareLinks = [];
       }
       this.linksLoading = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     async createShareLink() {
@@ -3002,7 +2954,6 @@ window.shareModal = function shareModal() {
           credentials: 'same-origin',
         });
         this.shareLinks = this.shareLinks.filter(l => l.uuid !== linkUuid);
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
       } catch (e) {}
     },
 
@@ -3085,14 +3036,6 @@ window.viewToggle = function viewToggle() {
         }
       });
 
-      // Re-init Lucide icons after view switch
-      this.$watch('viewMode', () => {
-        this.$nextTick(() => {
-          if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-          }
-        });
-      });
     },
 
     // Tile size computed helpers
@@ -3212,11 +3155,6 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
         }
       } catch (e) { /* ignore */ }
       this.loading = false;
-      this.$nextTick(() => {
-        if (this.$refs.commentsList) {
-          lucide.createIcons({ nodes: this.$refs.commentsList.querySelectorAll('[data-lucide]') });
-        }
-      });
     },
 
     async addComment() {
@@ -3238,11 +3176,6 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
     },
 
     _refreshIcons() {
-      this.$nextTick(() => {
-        if (this.$refs.commentsList) {
-          lucide.createIcons({ nodes: this.$refs.commentsList.querySelectorAll('[data-lucide]') });
-        }
-      });
     },
 
     startEdit(comment) {

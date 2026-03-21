@@ -46,9 +46,7 @@ window.iconPicker = function iconPicker(uuid, initialIcon, initialColor, apiEndp
     saved: false,
     saveTimeout: null,
 
-    init() {
-      setTimeout(() => lucide.createIcons(), 100);
-    },
+    init() {},
 
     icons: window.ICON_PICKER_ICONS,
 
@@ -79,9 +77,6 @@ window.iconPicker = function iconPicker(uuid, initialIcon, initialColor, apiEndp
       icon.className = 'w-8 h-8 ' + this.selectedColor;
       container.appendChild(icon);
 
-      this.$nextTick(() => {
-        lucide.createIcons({ nodes: container.querySelectorAll('[data-lucide]') });
-      });
     },
 
     async save() {

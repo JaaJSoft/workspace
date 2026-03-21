@@ -13,7 +13,6 @@
     if (this.notificationsOpen && !$store.notifications.loaded) {
       $store.notifications.fetchList().then(() => {
         this._refreshOrigins();
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
       });
     }
   },
@@ -26,15 +25,11 @@
 
   applyFilter(f) {
     this.filter = f;
-    $store.notifications.fetchList({ filter: f, search: this.search }).then(() => {
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
-    });
+    $store.notifications.fetchList({ filter: f, search: this.search });
   },
 
   applySearch() {
-    $store.notifications.fetchList({ filter: this.filter, search: this.search }).then(() => {
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
-    });
+    $store.notifications.fetchList({ filter: this.filter, search: this.search });
   },
 
   clearSearch() {
@@ -216,7 +211,7 @@
       <button
         x-cloak
         x-show="$store.notifications.hasMore"
-        @click="$store.notifications.loadMore().then(() => $nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }))"
+        @click="$store.notifications.loadMore()"
         class="btn btn-ghost btn-xs btn-block mt-1 text-base-content/50"
         :disabled="$store.notifications.loadingMore"
       >

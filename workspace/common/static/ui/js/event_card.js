@@ -70,7 +70,6 @@ window._eventCardShow = function(wrapper, eventId) {
     var cacheValid = cached && (_eventCardCacheTimes[cacheKey] || 0) + _EVENT_CARD_CACHE_TTL > Date.now();
     if (cacheValid) {
       window._setPopoverContent(popover, cached);
-      lucide?.createIcons({ nodes: popover.querySelectorAll('[data-lucide]') });
       _formatEventCardTimes(popover);
       if (typeof Alpine !== 'undefined') Alpine.initTree(popover);
     } else if (!wrapper._fetching) {
@@ -85,7 +84,6 @@ window._eventCardShow = function(wrapper, eventId) {
           wrapper._fetching = false;
           if (wrapper._eventCardPopover) {
             window._setPopoverContent(wrapper._eventCardPopover, html);
-            lucide?.createIcons({ nodes: wrapper._eventCardPopover.querySelectorAll('[data-lucide]') });
             _formatEventCardTimes(wrapper._eventCardPopover);
             if (typeof Alpine !== 'undefined') Alpine.initTree(wrapper._eventCardPopover);
           }

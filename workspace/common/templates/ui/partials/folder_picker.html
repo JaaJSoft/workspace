@@ -45,7 +45,6 @@
         }
       } catch (e) { /* ignore */ }
       this.loading = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     navigateToFolder(folder) {

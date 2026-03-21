@@ -69,9 +69,6 @@ window.commandPaletteDropdown = function () {
           this.commands = data.commands || [];
           this.results = data.results || [];
           this.loading = false;
-          if (window.lucide?.createIcons) {
-            this.$nextTick(() => window.lucide.createIcons());
-          }
         })
         .catch(() => {
           this.commands = [];

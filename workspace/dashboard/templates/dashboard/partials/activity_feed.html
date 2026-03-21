@@ -1,4 +1,4 @@
-<div id="dashboard-activity" class="space-y-3" x-init="$nextTick(() => lucide.createIcons())">
+<div id="dashboard-activity" class="space-y-3">
   {% if activity_events %}
     <ul id="activity-list" class="divide-y divide-base-200" x-merge="append">
       {% for event in activity_events %}

@@ -483,7 +483,6 @@
         if (!container) return;
         container.replaceChildren();
         container.appendChild(InlineAlert.create({ type, message }));
-        this.$nextTick(() => { lucide.createIcons(); });
       },
     };
   }

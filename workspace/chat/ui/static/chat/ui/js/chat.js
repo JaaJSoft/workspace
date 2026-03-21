@@ -172,10 +172,6 @@ function chatApp(currentUserId) {
         }
       }
 
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      });
-
       // Fetch available AI bots
       this.fetchBots();
 
@@ -207,9 +203,6 @@ function chatApp(currentUserId) {
     toggleCollapse() {
       this.collapsed = !this.collapsed;
       localStorage.setItem('chatSidebarCollapsed', JSON.stringify(this.collapsed));
-      setTimeout(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      }, 300);
     },
 
     isMobile() {
@@ -259,9 +252,6 @@ function chatApp(currentUserId) {
                 if (img) img.src = `/api/v1/chat/conversations/${conv.uuid}/avatar/image?t=${conv._avatar_bust}`;
               }
             }
-            this.$nextTick(() => {
-              if (typeof lucide !== 'undefined') lucide.createIcons();
-            });
           }
         }
       } catch (e) {
@@ -365,9 +355,8 @@ function chatApp(currentUserId) {
 
     // ── Messages (server-rendered HTML) ─────────────────────
     _initMessagesDom(container) {
-      // Initialize Alpine on dynamically injected HTML and refresh Lucide icons
+      // Initialize Alpine on dynamically injected HTML
       if (typeof Alpine !== 'undefined') Alpine.initTree(container);
-      if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [container] });
       // Attach hover card listeners on @mention badges
       this._initMentionCards(container);
     },
@@ -666,7 +655,6 @@ function chatApp(currentUserId) {
         </div>`;
 
       container.insertAdjacentHTML('beforeend', html);
-      if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [container.lastElementChild] });
     },
 
     _removeOptimisticMessage(tempId) {
@@ -848,7 +836,6 @@ function chatApp(currentUserId) {
       this.userSearchShowDropdown = false;
       this.$refs.newConvDialog.showModal();
       this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
         this.$refs.userSearchInput?.focus();
       });
     },
@@ -924,9 +911,6 @@ function chatApp(currentUserId) {
       if (user.id === this.currentUserId) return;
       if (this.selectedUsers.find(u => u.id === user.id)) return;
       this.selectedUsers.push(user);
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      });
     },
 
     removeSelectedUser(userId) {
@@ -1146,9 +1130,6 @@ function chatApp(currentUserId) {
       this.showInfoPanel = !this.showInfoPanel;
       if (this.showInfoPanel) {
         this.closeSearchPanel();
-        this.$nextTick(() => {
-          if (typeof lucide !== 'undefined') lucide.createIcons();
-        });
         if (this.activeConversation) {
           this.loadConversationStats(this.activeConversation.uuid);
           this.loadPinnedMessages(this.activeConversation.uuid);
@@ -1183,7 +1164,6 @@ function chatApp(currentUserId) {
         this.showInfoPanel = false;
         this.$nextTick(() => {
           this.$refs.searchInput?.focus();
-          if (typeof lucide !== 'undefined') lucide.createIcons();
         });
       } else {
         this.closeSearchPanel();
@@ -1387,7 +1367,6 @@ function chatApp(currentUserId) {
           this.activeConversation.description = trimmed;
           const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
           if (conv) conv.description = trimmed;
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
         }
       } catch (e) {
         console.error('Failed to update description', e);
@@ -1457,7 +1436,6 @@ function chatApp(currentUserId) {
       this.addMemberHighlight = -1;
       this.$refs.addMemberDialog.showModal();
       this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
         this.$refs.addMemberSearchInput?.focus();
       });
     },
@@ -1519,9 +1497,6 @@ function chatApp(currentUserId) {
       this.addMemberResults = [];
       this.addMemberHighlight = -1;
       this.addMemberShowDropdown = false;
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      });
     },
 
     removeAddMember(userId) {
@@ -1545,9 +1520,6 @@ function chatApp(currentUserId) {
           if (conv) conv.members = updated.members;
           this.$refs.addMemberDialog.close();
           this.refreshConversationList();
-          this.$nextTick(() => {
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-          });
         }
       } catch (e) {
         console.error('Failed to add members', e);
@@ -1578,9 +1550,6 @@ function chatApp(currentUserId) {
           const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
           if (conv) conv.members = this.activeConversation.members;
           this.refreshConversationList();
-          this.$nextTick(() => {
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-          });
         }
       } catch (e) {
         console.error('Failed to remove member', e);
@@ -1756,9 +1725,6 @@ function chatApp(currentUserId) {
         });
         if (resp.ok) {
           this.pinnedMessages = await resp.json();
-          this.$nextTick(() => {
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-          });
         }
       } catch (e) {
         console.error('Failed to load pinned messages', e);
@@ -1926,7 +1892,6 @@ function chatApp(currentUserId) {
         if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
         this.ctxMenu.x = x;
         this.ctxMenu.y = y;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
       });
     },
 
@@ -1945,9 +1910,6 @@ function chatApp(currentUserId) {
       switch (action) {
         case 'info':
           this.showInfoPanel = true;
-          this.$nextTick(() => {
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-          });
           if (this.activeConversation) {
             this.loadConversationStats(this.activeConversation.uuid);
           }
@@ -2311,9 +2273,6 @@ function chatApp(currentUserId) {
         }
         this.pendingFiles.push(f);
       }
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      });
     },
 
     removeFile(idx) {
@@ -2560,10 +2519,6 @@ function chatApp(currentUserId) {
         console.error('Failed to load bot memories', e);
       }
       this.loadingBotMemories = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
-      this.$watch('memorySearch', () => {
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
-      });
     },
 
     async editMemory(mem) {
@@ -2626,7 +2581,6 @@ function chatApp(currentUserId) {
         console.error('Failed to load schedules', e);
       }
       this.loadingSchedules = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     scheduleTimingLabel(sched) {

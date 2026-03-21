@@ -38,7 +38,7 @@
   </section>
 
   {# ── Search bar ── #}
-  <section id="dashboard-search" class="hidden sm:block max-w-2xl mx-auto w-full" x-data="commandPaletteDropdown()" x-init="$nextTick(() => lucide.createIcons())">
+  <section id="dashboard-search" class="hidden sm:block max-w-2xl mx-auto w-full" x-data="commandPaletteDropdown()">
     <div class="relative">
       {% include 'ui/partials/search/search_input.html' with input_class='input-md text-base shadow-sm' show_kbd=True size='lg' %}
 
@@ -92,7 +92,7 @@
   {# ── Activity feed ── #}
   <section class="max-w-4xl mx-auto w-full">
     <div>
-      <div class="card bg-base-100 shadow border border-base-300" x-data="{ activityTab: '{{ activity_tab|default:"all" }}', activitySearch: '', searchOpen: false, loading: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }" @ajax:before="loading = true" @ajax:after="loading = false; $nextTick(() => lucide.createIcons())">
+      <div class="card bg-base-100 shadow border border-base-300" x-data="{ activityTab: '{{ activity_tab|default:"all" }}', activitySearch: '', searchOpen: false, loading: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }" @ajax:before="loading = true" @ajax:after="loading = false">
         <div class="card-body gap-4">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div class="space-y-1">
@@ -213,7 +213,6 @@ function usagePopover() {
       this.open = !this.open;
       if (this.open) {
         this.$nextTick(() => {
-          lucide.createIcons();
           if (!this.animated) {
             this.animated = true;
             this._animateCounts();
@@ -306,7 +305,6 @@ function weatherWidget() {
         span.setAttribute('data-weather-icon', '');
         span.className = 'inline-block w-4 h-4 ml-1 -translate-y-px';
         this.$el.querySelector('span').appendChild(span);
-        lucide?.createIcons({ nodes: [span] });
       });
     },
   };

@@ -119,10 +119,6 @@
             while (temp.content.firstChild) {
               container.appendChild(temp.content.firstChild);
             }
-
-            this.$nextTick(function() {
-              if (typeof lucide !== 'undefined') lucide.createIcons();
-            });
           } catch (err) {
             this.error = err.message;
           } finally {

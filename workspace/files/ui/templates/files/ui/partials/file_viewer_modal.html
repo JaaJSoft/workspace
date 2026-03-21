@@ -256,12 +256,6 @@
               container.appendChild(temp.content.firstChild);
             }
 
-            // Reinitialize Lucide icons after content is added
-            this.$nextTick(function() {
-              if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-              }
-            });
           } catch (err) {
             this.error = err.message;
           } finally {

@@ -297,7 +297,6 @@
         }
         this.loading = false;
         if (this.poll) document.title = this.poll.title + ' — Workspace';
-        this.$nextTick(() => lucide.createIcons());
       },
 
       cycleVote(slotId) {
@@ -306,7 +305,6 @@
         const current = this.myVotes[slotId];
         const idx = current ? order.indexOf(current) : -1;
         this.myVotes[slotId] = order[(idx + 1) % order.length];
-        this.$nextTick(() => lucide.createIcons());
       },
 
       voteClass(choice) { return pollUtils.voteClass(choice); },
@@ -375,7 +373,6 @@
           console.error('Failed to submit votes', e);
         }
         this.submitting = false;
-        this.$nextTick(() => lucide.createIcons());
       },
     };
   };

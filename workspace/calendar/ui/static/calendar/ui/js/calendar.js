@@ -103,17 +103,12 @@ window.calendarApp = function calendarApp(calendarsData) {
         if (e.matches) this.collapsed = true;
       });
 
-      this.$watch('collapsed', () => {
-        setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 350);
-      });
-
       this.$watch('showPanel', () => {
         setTimeout(() => { if (this.calendar) this.calendar.updateSize(); }, 250);
       });
 
       this.$nextTick(() => {
         this.initCalendar();
-        if (typeof lucide !== 'undefined') lucide.createIcons();
       });
     },
 
@@ -280,7 +275,6 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.$nextTick(() => {
         const input = document.getElementById('calendar-form-name');
         if (input) { input.focus(); input.select(); }
-        if (typeof lucide !== 'undefined') lucide.createIcons();
       });
     },
 
@@ -291,7 +285,6 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.$nextTick(() => {
         const input = document.getElementById('calendar-form-name');
         if (input) { input.focus(); input.select(); }
-        if (typeof lucide !== 'undefined') lucide.createIcons();
       });
     },
 
@@ -312,7 +305,6 @@ window.calendarApp = function calendarApp(calendarsData) {
           this.visibleCalendars[cal.uuid] = true;
           this._saveVisibility();
           this.showCalendarModal = false;
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
         }
       } else {
         const resp = await fetch(`/api/v1/calendar/calendars/${uuid}`, {
@@ -601,7 +593,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.eventMembers = [];
       this.myInviteStatus = null;
       this.showModal = true;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     openViewPanel(event) {
@@ -631,7 +623,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.myInviteStatus = isOwner ? null : ((event.members || []).find(m => String(m.user.id) === currentUserId)?.status || null);
       this.showPanel = true;
       this._pushUrl();
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     closePanel() {
@@ -673,7 +665,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.form.recurrence_interval = this._panelRaw?.recurrence_interval || 1;
       this.form.recurrence_end = this._panelRaw?.recurrence_end ? this.toLocalDate(this._panelRaw.recurrence_end) : '';
       this.showModal = true;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     isOwner() {
@@ -755,7 +747,7 @@ window.calendarApp = function calendarApp(calendarsData) {
             this.eventOwner = saved.owner;
             this.eventMembers = saved.members;
             this.selectedMembers = saved.members.map(m => m.user);
-            this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      
           }
         }
       } catch (e) {}
@@ -905,7 +897,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (key === '?') {
         e.preventDefault();
         const dlg = document.getElementById('calendar-help-dialog');
-        if (dlg) { dlg.showModal(); lucide?.createIcons(); }
+        if (dlg) { dlg.showModal(); }
       }
     },
 
@@ -938,8 +930,6 @@ window.calendarApp = function calendarApp(calendarsData) {
 
         this.ctxMenu.x = x;
         this.ctxMenu.y = y;
-
-        if (typeof lucide !== 'undefined') lucide.createIcons();
       });
     },
 
@@ -1100,7 +1090,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         this.scopeAction = action;
         this.scopeResolve = resolve;
         this.showScopeDialog = true;
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       });
     },
 
@@ -1125,7 +1115,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.showPollListModal = true;
       this.pollSearch = '';
       this.loadPolls();
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async loadPolls() {
@@ -1136,7 +1126,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         if (resp.ok) this.polls = await resp.json();
       } catch (e) {}
       this.pollsLoading = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     setPollFilter(filter) {
@@ -1154,18 +1144,18 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.showPollCreateModal = true;
       this.pollForm = { title: '', description: '', slots: [{ start: '', end: '', showEnd: false }, { start: '', end: '', showEnd: false }] };
       this.pollFormError = null;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     addPollSlot() {
       this.pollForm.slots.push({ start: '', end: '', showEnd: false });
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     removePollSlot(i) {
       if (this.pollForm.slots.length > 2) {
         this.pollForm.slots.splice(i, 1);
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       }
     },
 
@@ -1215,7 +1205,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.pollFinalizeSlotId = null;
       this._setPollUrl(uuid);
       await this.loadPoll(uuid);
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     closePollDetail() {
@@ -1250,7 +1240,7 @@ window.calendarApp = function calendarApp(calendarsData) {
             }
           }
           this.pollMyVotes = myVotes;
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    
         }
       } catch (e) {}
       this.currentPollLoading = false;
@@ -1262,7 +1252,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       const idx = cycle.indexOf(current);
       const next = cycle[(idx + 1) % cycle.length];
       this.pollMyVotes = { ...this.pollMyVotes, [slotId]: next };
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async submitPollVotes() {
@@ -1280,7 +1270,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         if (resp.ok) {
           this.currentPoll = await resp.json();
           if (window.AppAlert) window.AppAlert.success('Votes saved!', { duration: 2000 });
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    
         }
       } catch (e) {}
       this.pollSubmitting = false;
@@ -1384,7 +1374,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         if (resp.ok) {
           this.currentPoll = await resp.json();
           if (window.AppAlert) window.AppAlert.success(`${user.username} invited!`, { duration: 2000 });
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    
         }
       } catch (e) {}
     },
@@ -1401,7 +1391,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         if (resp.ok) {
           this.currentPoll = await resp.json();
           if (window.AppAlert) window.AppAlert.success('Invitation removed', { duration: 2000 });
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    
         }
       } catch (e) {}
     },
@@ -1430,7 +1420,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       }
       this.pollFormError = null;
       this.showPollEditModal = true;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async savePollEdit() {
@@ -1471,7 +1461,7 @@ window.calendarApp = function calendarApp(calendarsData) {
           }
           this.pollMyVotes = myVotes;
           if (window.AppAlert) window.AppAlert.success('Poll updated!', { duration: 2000 });
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    
         } else {
           const data = await resp.json().catch(() => null);
           this.pollFormError = data?.detail || data?.slots?.[0] || 'Failed to update poll.';

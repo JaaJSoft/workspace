@@ -210,11 +210,6 @@ function contextMenu() {
       }
 
       this.position = { x, y };
-
-      // Reinitialize Lucide icons
-      if (typeof lucide !== 'undefined') {
-        this.$nextTick(() => lucide.createIcons());
-      }
     },
 
     close() {

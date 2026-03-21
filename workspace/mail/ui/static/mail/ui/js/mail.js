@@ -69,7 +69,6 @@ function _buildMailCard(name, email) {
       copyBtn.textContent = '';
       copyBtn.appendChild(copyIcon);
       copyBtn.appendChild(document.createTextNode(' Copy email'));
-      lucide?.createIcons({ nodes: [copyIcon] });
     }, 1500);
   });
   actions.appendChild(copyBtn);
@@ -143,7 +142,6 @@ window._mailCardShow = function(wrapper, nameOrAddr, email) {
     void popover.offsetHeight;
     popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
     _applyPopoverTransform(popover, pos.placement, true);
-    lucide?.createIcons({ nodes: popover.querySelectorAll('[data-lucide]') });
   }, 500);
 };
 
@@ -312,7 +310,7 @@ function mailApp() {
           await this.fetchLabels(data.account.uuid);
           this.closeAddAccount();
           this.syncAccount(data.account.uuid);
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    
         } else if (data?.type === 'oauth2-error') {
           this.accountError = data.error || 'OAuth2 connection failed';
         }
@@ -358,7 +356,7 @@ function mailApp() {
         const data = await res.json();
         this.folders[accountUuid] = data;
       }
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     getFolders(accountUuid) {
@@ -375,7 +373,7 @@ function mailApp() {
 
     toggleAccountExpanded(uuid) {
       this.expandedAccounts[uuid] = !this.expandedAccounts[uuid];
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     folderIcon(type) {
@@ -472,7 +470,7 @@ function mailApp() {
       // Default is expanded (true), so toggling undefined -> false
       const current = this.expandedFolders[folderName] === undefined ? true : this.expandedFolders[folderName];
       this.expandedFolders[folderName] = !current;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     getSubtreeUnreadCount(node) {
@@ -524,7 +522,7 @@ function mailApp() {
         this.hasMoreMessages = data.count > this.currentPage * data.page_size;
       }
       this.loadingMessages = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async loadMoreMessages() {
@@ -537,7 +535,7 @@ function mailApp() {
         this.hasMoreMessages = data.count > this.currentPage * data.page_size;
       }
       this.loadingMoreMessages = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async refreshFolder() {
@@ -627,7 +625,7 @@ function mailApp() {
         }
       }
       this.loadingDetail = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async _openMessageById(uuid) {
@@ -692,7 +690,7 @@ function mailApp() {
       const listMsg = this.messages.find(m => m.uuid === msg.uuid);
       if (listMsg) listMsg.is_starred = newVal;
       this.actionInProgress = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async deleteMessage(msg) {
@@ -896,7 +894,7 @@ function mailApp() {
             this.aiSummary = task.result_html || task.result;
             this.aiSummarizing = false;
             clearInterval(this._aiPollInterval);
-            this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      
           } else if (task.status === 'failed') {
             AppDialog.error({ message: task.error || 'AI task failed' });
             this.aiSummarizing = false;
@@ -1296,7 +1294,7 @@ function mailApp() {
       }
 
       this.autoDiscovering = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     closeAddAccount() {
@@ -1351,7 +1349,7 @@ function mailApp() {
       } finally {
         this.syncingAccounts[uuid] = false;
       }
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async testAccount(uuid) {
@@ -1460,7 +1458,7 @@ function mailApp() {
         if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
         this.accountCtx.x = x;
         this.accountCtx.y = y;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+
       });
     },
 
@@ -1505,7 +1503,7 @@ function mailApp() {
         if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
         this.folderCtx.x = x;
         this.folderCtx.y = y;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+
       });
     },
 
@@ -1561,7 +1559,7 @@ function mailApp() {
         if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
         this.msgCtx.x = x;
         this.msgCtx.y = y;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+
       });
     },
 
@@ -1689,7 +1687,7 @@ function mailApp() {
         if (updated) this.selectedFolder = updated;
       }
       this.batchInProgress = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     // ----- Drag & drop -----
@@ -1861,7 +1859,7 @@ function mailApp() {
           this.expandedFolders[parentFolder.name] = true;
         }
         await this.loadFolders(accountUuid);
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to create folder' });
@@ -1895,7 +1893,7 @@ function mailApp() {
         if (this.selectedFolder?.uuid === folder.uuid) {
           Object.assign(this.selectedFolder, updated);
         }
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to rename folder' });
@@ -1932,7 +1930,7 @@ function mailApp() {
           this.messageDetail = null;
           this._updateUrl(null);
         }
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to delete folder' });
@@ -1999,7 +1997,7 @@ function mailApp() {
           const updated = flds.find(f => f.uuid === folder.uuid);
           if (updated) this.selectedFolder = updated;
         }
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to move folder' });
@@ -2037,7 +2035,7 @@ function mailApp() {
           this.messageDetail = null;
           this._updateUrl(null);
         }
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to hide folder' });
@@ -2057,7 +2055,7 @@ function mailApp() {
       this.hiddenFolders = allFolders.filter(f => f.is_hidden);
       this.hiddenFoldersSearch = '';
       document.getElementById('mail-hidden-folders-dialog').showModal();
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async restoreFolder(folder) {
@@ -2068,7 +2066,7 @@ function mailApp() {
       if (res.ok) {
         this.hiddenFolders = this.hiddenFolders.filter(f => f.uuid !== folder.uuid);
         await this.loadFolders(folder.account_id);
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
         if (this.hiddenFolders.length === 0) {
           document.getElementById('mail-hidden-folders-dialog').close();
         }
@@ -2087,7 +2085,7 @@ function mailApp() {
         color: folder.color || null,
       };
       document.getElementById('mail-folder-icon-dialog').showModal();
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     onFolderIconSaved(icon, color) {
@@ -2106,10 +2104,6 @@ function mailApp() {
         this.selectedFolder.icon = icon;
         this.selectedFolder.color = color;
       }
-      // Key change in x-for triggers element recreation; wait for Alpine + DOM before Lucide
-      this.$nextTick(() => {
-        setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50);
-      });
     },
 
     // ----- Keyboard -----
@@ -2153,7 +2147,7 @@ function mailApp() {
         case '?':
           e.preventDefault();
           const dlg = document.getElementById('mail-help-dialog');
-          if (dlg) { dlg.showModal(); lucide?.createIcons(); }
+          if (dlg) { dlg.showModal(); }
           break;
       }
     },
@@ -2378,7 +2372,7 @@ function mailApp() {
         if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
         this.labelCtx.x = x;
         this.labelCtx.y = y;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+
       });
     },
 

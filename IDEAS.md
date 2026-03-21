@@ -29,6 +29,7 @@ Quick improvements with high impact on existing features.
 - [x] **Thumbnails** - Automatic thumbnail generation for images and SVGs (WebP, Pillow, cairosvg)
 - [x] **Mosaic/grid view** - Card-based grid layout with adjustable tile size slider
 - [x] **File sharing** - Share files with RO/RW permissions per user
+- [x] **Shareable file links** - Public links with password protection and expiration
 - [x] **File comments** - Comments on files with edit and soft-delete
 - [x] **File actions registry** - Extensible action system with categories (open, transfer, organize, edit, etc.)
 - [x] **File viewer navigation** - Previous/Next controls with keyboard arrows
@@ -92,7 +93,7 @@ Integrated email client to centralize communication.
 - [x] Compose, reply, forward
 - [x] Attachments -> direct save to Files
 - [x] iCalendar integration — parse incoming .ics invitations (REQUEST/CANCEL), auto-create calendar events, send METHOD:REPLY on accept/decline
-- [ ] Custom labels / tags
+- [x] Custom labels / tags (with AI-driven email classification)
 - [ ] Full-text search in emails
 - [ ] HTML signatures per account
 - [ ] Snooze / reminders
@@ -163,7 +164,7 @@ Real-time internal communication. **Module shipped in v0.4.0.**
 - [x] Member management and context menus
 - [x] Keyboard shortcuts and help dialog
 - [x] Markdown message rendering — rich formatting with Pygments syntax highlighting, tables, task lists
-- [ ] Typing indicators — "X is typing..." via SSE (cache key + short TTL)
+- [x] Typing indicators — "X is typing..." via SSE (cache key + short TTL)
 - [x] Message replies — quote a specific message when replying (parent_id FK)
 - [ ] Link previews — auto-unfurl URLs with OpenGraph metadata (title, image, description)
 - [x] Read receipts — show who has read messages in group conversations
@@ -325,7 +326,7 @@ Features shared across all modules.
 - [ ] **E2E tests** — Playwright test suite for critical flows (login, file upload, chat send, mail compose)
 
 ### UI/UX
-- [ ] PWA (Progressive Web App) — service worker + push notifications done, missing manifest.json for installability
+- [x] PWA (Progressive Web App) — service worker, push notifications, offline caching, app icons
 - [x] Mobile responsive design — Tailwind responsive classes across all modules
 - [x] Modular sidebar (each module = one section)
 - [x] Customizable themes (12 themes: light, dark, cupcake, emerald, corporate, forest, dracula, night, winter, nord, sunset, autumn)

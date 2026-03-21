@@ -39,6 +39,36 @@ class DashboardConfig(AppConfig):
                 active=False,
                 order=50,
             ),
+            ModuleInfo(
+                name='Contacts',
+                slug='contacts',
+                description='Manage contacts and interactions.',
+                icon='contact',
+                color='info',
+                url=None,
+                active=False,
+                order=60,
+            ),
+            ModuleInfo(
+                name='Bookmarks',
+                slug='bookmarks',
+                description='Save and organize links.',
+                icon='bookmark',
+                color='primary',
+                url=None,
+                active=False,
+                order=70,
+            ),
+            ModuleInfo(
+                name='Passwords',
+                slug='passwords',
+                description='Encrypted password vault.',
+                icon='lock',
+                color='error',
+                url=None,
+                active=False,
+                order=80,
+            ),
         ]
         for module in planned_modules:
             registry.register(module)

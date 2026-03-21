@@ -4,6 +4,7 @@ from django.core import signing
 from django.contrib.auth.hashers import check_password
 from django.http import FileResponse, HttpResponse
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -79,6 +80,7 @@ def _record_access(link):
     )
 
 
+@extend_schema(tags=['Files - Shared Links'])
 class SharedFileMetaView(APIView):
     """GET /api/v1/files/shared/{token} — public file metadata."""
     permission_classes = [AllowAny]
@@ -102,6 +104,7 @@ class SharedFileMetaView(APIView):
         })
 
 
+@extend_schema(tags=['Files - Shared Links'])
 class SharedFileVerifyView(APIView):
     """POST /api/v1/files/shared/{token}/verify — verify password."""
     permission_classes = [AllowAny]
@@ -130,6 +133,7 @@ class SharedFileVerifyView(APIView):
         return Response({'access_token': access_token})
 
 
+@extend_schema(tags=['Files - Shared Links'])
 class SharedFileContentView(APIView):
     """GET /api/v1/files/shared/{token}/content — serve file inline."""
     permission_classes = [AllowAny]
@@ -178,6 +182,7 @@ class SharedFileContentView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
 
+@extend_schema(tags=['Files - Shared Links'])
 class SharedFileDownloadView(APIView):
     """GET /api/v1/files/shared/{token}/download — download file."""
     permission_classes = [AllowAny]

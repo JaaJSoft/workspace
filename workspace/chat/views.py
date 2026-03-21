@@ -1587,6 +1587,7 @@ class ConversationClearView(APIView):
         return Response({'deleted': count}, status=status.HTTP_200_OK)
 
 
+@extend_schema(tags=['Chat'])
 class BotCancelView(APIView):
     permission_classes = [IsAuthenticated]
 

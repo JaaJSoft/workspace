@@ -202,6 +202,7 @@ class ImageViewer(BaseViewer):
         context['file_uuid'] = str(self.file.uuid)
         context['file_parent'] = str(parent_id) if parent_id else ''
         context['file_name'] = self.file.name
+        context['user_can_edit'] = getattr(self, '_user_can_edit', True)
         context['is_favorite'] = FileFavorite.objects.filter(owner=request.user, file=self.file).exists()
         return context
 

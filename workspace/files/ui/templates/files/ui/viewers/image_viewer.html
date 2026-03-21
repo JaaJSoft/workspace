@@ -16,7 +16,7 @@
     <button type="button" class="btn btn-sm btn-ghost" @click="reset()" title="Reset (0)">
       <i data-lucide="refresh-cw" class="w-4 h-4"></i>
     </button>
-    {% if can_edit %}
+    {% if user_can_edit %}
     <div class="divider divider-horizontal mx-2"></div>
     <button
       type="button"

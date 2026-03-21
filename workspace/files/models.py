@@ -1,4 +1,5 @@
 import os
+import secrets
 from django.db import models, transaction
 from django.db.models import Value
 from django.db.models.functions import Concat, Substr
@@ -492,3 +493,40 @@ def delete_file_on_delete(sender, instance, **kwargs):
                     logger.info(f"Signal: Deleted folder and contents: {full_path}")
         except Exception as e:
             logger.warning(f"Signal: Could not delete folder {instance.name}: {e}")
+
+
+def _generate_share_link_token():
+    return secrets.token_urlsafe(24)
+
+
+class FileShareLink(models.Model):
+    """A public share link for a file, allowing unauthenticated access."""
+
+    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name='share_links')
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='+'
+    )
+    token = models.CharField(max_length=44, unique=True, db_index=True, default=_generate_share_link_token)
+    password = models.CharField(max_length=128, blank=True, default='')
+    expires_at = models.DateTimeField(null=True, blank=True)
+    view_count = models.PositiveIntegerField(default=0)
+    last_accessed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"ShareLink({self.token[:8]}... -> {self.file.name})"
+
+    @property
+    def is_expired(self):
+        if self.expires_at is None:
+            return False
+        from django.utils import timezone
+        return self.expires_at <= timezone.now()
+
+    @property
+    def has_password(self):
+        return bool(self.password)

@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, render
 from django.http import HttpResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from ..models import File, FileFavorite, FileShare, PinnedFolder
+from ..models import File, FileFavorite, FileShare, FileShareLink, PinnedFolder
 from .viewers import ViewerRegistry
 from workspace.users.settings_service import get_setting
 
@@ -313,6 +313,13 @@ def properties(request, uuid):
             .order_by('created_at')
         )
 
+    # Share links (files only, owner sees stats)
+    share_links = []
+    if is_owner and file_obj.node_type == File.NodeType.FILE:
+        share_links = list(
+            FileShareLink.objects.filter(file=file_obj).order_by('-created_at')
+        )
+
     return render(request, 'files/ui/partials/properties_content.html', {
         'file': file_obj,
         'is_owner': is_owner,
@@ -322,6 +329,7 @@ def properties(request, uuid):
         'total_size': total_size,
         'shares': shares,
         'share_permission': share_permission,
+        'share_links': share_links,
     })
 
 
@@ -417,3 +425,59 @@ def view_file(request, uuid):
     html = viewer.render(request)
 
     return HttpResponse(html)
+
+
+@ensure_csrf_cookie
+def shared_file_view(request, token):
+    """Public standalone page for viewing a shared file."""
+    link = (
+        FileShareLink.objects
+        .select_related('file', 'created_by')
+        .filter(token=token, file__deleted_at__isnull=True)
+        .first()
+    )
+    if not link:
+        from django.http import Http404
+        raise Http404
+
+    if link.is_expired:
+        return render(request, 'files/ui/shared_file.html', {
+            'expired': True,
+            'share_token': token,
+        })
+
+    # Password check via query param
+    access_token = request.GET.get('access_token', '')
+    password_verified = False
+    if link.has_password and access_token:
+        from django.core import signing
+        signer = signing.TimestampSigner(salt='file-share-link')
+        try:
+            value = signer.unsign(access_token, max_age=3600)
+            password_verified = (value == link.token)
+        except (signing.BadSignature, signing.SignatureExpired):
+            pass
+
+    # Render viewer HTML if accessible
+    viewer_html = ''
+    if not link.has_password or password_verified:
+        from workspace.files.ui.viewers import ViewerRegistry
+        ViewerClass = ViewerRegistry.get_viewer(link.file.mime_type) if link.file.mime_type else None
+        if ViewerClass:
+            viewer = ViewerClass(link.file)
+            viewer._user_can_edit = False
+            content_url = f'/api/v1/files/shared/{token}/content'
+            if access_token and password_verified:
+                content_url += f'?access_token={access_token}'
+            viewer._content_url = content_url
+            viewer_html = viewer.render(request)
+
+    return render(request, 'files/ui/shared_file.html', {
+        'share_token': token,
+        'file': link.file,
+        'link': link,
+        'viewer_html': viewer_html,
+        'needs_password': link.has_password and not password_verified,
+        'expired': False,
+        'download_url': f'/api/v1/files/shared/{token}/download' + (f'?access_token={access_token}' if access_token and password_verified else ''),
+    })

@@ -24,7 +24,7 @@ User = get_user_model()
 
 from django.http import Http404
 
-from .models import File, FileComment, FileFavorite, FileShare, PinnedFolder
+from .models import File, FileComment, FileFavorite, FileShare, FileShareLink, PinnedFolder
 from .serializers import (
     FileCommentCreateSerializer,
     FileCommentEditSerializer,
@@ -1581,3 +1581,69 @@ class FileViewSet(viewsets.ModelViewSet):
             return Response({'error': 'image editing failed'}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({'image': base64.b64encode(image_data).decode()})
+
+    @action(detail=True, methods=['get', 'post'], url_path='share-links')
+    def share_links(self, request, uuid=None):
+        """List or create share links for a file (owner only)."""
+        file_obj = self.get_object()  # get_queryset filters by owner, so 404 for non-owners
+
+        if request.method == 'GET':
+            links = FileShareLink.objects.filter(file=file_obj)
+            data = [self._serialize_share_link(link, request) for link in links]
+            return Response(data)
+
+        # POST — create
+        if file_obj.node_type != File.NodeType.FILE:
+            return Response(
+                {'detail': 'Share links can only be created for files.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from django.contrib.auth.hashers import make_password
+
+        raw_password = request.data.get('password', '')
+        link = FileShareLink.objects.create(
+            file=file_obj,
+            created_by=request.user,
+            password=make_password(raw_password) if raw_password else '',
+            expires_at=request.data.get('expires_at'),
+        )
+        return Response(
+            self._serialize_share_link(link, request),
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=['delete'], url_path=r'share-links/(?P<link_uuid>[^/.]+)')
+    def delete_share_link(self, request, uuid=None, link_uuid=None):
+        """Revoke (delete) a share link (owner only)."""
+        file_obj = self.get_object()  # get_queryset filters by owner, so 404 for non-owners
+
+        deleted, _ = FileShareLink.objects.filter(
+            uuid=link_uuid, file=file_obj,
+        ).delete()
+        if not deleted:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @staticmethod
+    def _format_dt(value):
+        """Format a datetime value for API responses, handling both datetime objects and strings."""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        return value.isoformat()
+
+    def _serialize_share_link(self, link, request):
+        """Serialize a FileShareLink for API responses."""
+        url = request.build_absolute_uri(f'/files/shared/{link.token}')
+        return {
+            'uuid': str(link.uuid),
+            'token': link.token,
+            'url': url,
+            'has_password': link.has_password,
+            'expires_at': self._format_dt(link.expires_at),
+            'view_count': link.view_count,
+            'last_accessed_at': self._format_dt(link.last_accessed_at),
+            'created_at': self._format_dt(link.created_at),
+        }

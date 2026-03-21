@@ -2749,6 +2749,13 @@ window.shareModal = function shareModal() {
     pendingPermissionChanges: new Map(), // userId → newPermission for existing shares
     loading: false,
     saving: false,
+    // Share links state
+    shareLinks: [],
+    linksLoading: false,
+    creatingLink: false,
+    showLinkForm: false,
+    newLinkExpiry: '',
+    newLinkPassword: '',
 
     get displayList() {
       const permChanges = this.pendingPermissionChanges;
@@ -2783,6 +2790,7 @@ window.shareModal = function shareModal() {
         this.pendingRemovals = new Set();
         this.pendingPermissionChanges = new Map();
         this.loadShares();
+        this.loadShareLinks();
         this.$nextTick(() => {
           const dlg = this.$refs.shareDialog;
           if (dlg && !dlg.open) dlg.showModal();
@@ -2938,6 +2946,76 @@ window.shareModal = function shareModal() {
       this.pendingAdds = [];
       this.pendingRemovals = new Set();
       this.pendingPermissionChanges = new Map();
+      this.shareLinks = [];
+      this.showLinkForm = false;
+      this.newLinkExpiry = '';
+      this.newLinkPassword = '';
+    },
+
+    // --- Share Links ---
+
+    async loadShareLinks() {
+      if (!this.fileUuid) return;
+      this.linksLoading = true;
+      try {
+        const resp = await fetch(`/api/v1/files/${this.fileUuid}/share-links`, {
+          credentials: 'same-origin',
+        });
+        if (resp.ok) this.shareLinks = await resp.json();
+      } catch (e) {
+        this.shareLinks = [];
+      }
+      this.linksLoading = false;
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+
+    async createShareLink() {
+      if (!this.fileUuid) return;
+      this.creatingLink = true;
+      const csrfToken = document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+      const body = {};
+      if (this.newLinkExpiry) body.expires_at = new Date(this.newLinkExpiry).toISOString();
+      if (this.newLinkPassword) body.password = this.newLinkPassword;
+      try {
+        const resp = await fetch(`/api/v1/files/${this.fileUuid}/share-links`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(body),
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          this.showLinkForm = false;
+          this.newLinkExpiry = '';
+          this.newLinkPassword = '';
+          await this.loadShareLinks();
+        }
+      } catch (e) {}
+      this.creatingLink = false;
+    },
+
+    async deleteShareLink(linkUuid) {
+      const csrfToken = document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+      try {
+        await fetch(`/api/v1/files/${this.fileUuid}/share-links/${linkUuid}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': csrfToken },
+          credentials: 'same-origin',
+        });
+        this.shareLinks = this.shareLinks.filter(l => l.uuid !== linkUuid);
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      } catch (e) {}
+    },
+
+    copyShareLink(url) {
+      navigator.clipboard.writeText(url).then(() => {
+        if (window.AppAlert) window.AppAlert.success('Link copied to clipboard');
+      });
+    },
+
+    formatLinkExpiry(expiresAt) {
+      if (!expiresAt) return 'Permanent';
+      const d = new Date(expiresAt);
+      return d.toLocaleDateString();
     },
   };
 };

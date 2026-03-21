@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.13.0
+
+### Files
+
+- Shareable file links with password protection and expiration
+
+### AI & Bots
+
+- Fallback for parsing tool calls from text content
+- Pydantic models for standardizing tool parameters
+- Clarified `generate_image` usage for broader image-related requests
+
+### Mail
+
+- Folder reconciliation to detect deleted/moved messages
+- Pending actions now exclude inactive accounts
+- Skip AI classification for messages in sent and drafts folders
+
+### UI
+
+- Dark theme compatibility for modal typography
+- Fixed auto-scroll interruptions when messages load
+- Fixed stale message injection during conversation switch
+
+### Infrastructure
+
+- Versioned service worker registration with improved cache logic
+- Excluded Markdown files (except `CHANGELOG.md`) from `.dockerignore`
+- Removed unnecessary Lucide.js initialization calls across the codebase
+
+### Fixes
+
+- IMAP flag sync with precise state diffs
+- IMAP UID search edge cases for folder synchronization
+- IMAP optimized message flag updates with targeted queries
+- Prevented scheduled messages from posting empty responses
+
+### Dependencies
+
+- openai 2.26.0 → 2.29.0
+- djangorestframework 3.16.1 → 3.17.0
+
 ## 0.12.0
 
 ### AI & Bots
@@ -10,7 +52,7 @@ Enhanced AI capabilities with web search, scheduling, and improved tool handling
 - Scheduled messages with timezone-aware delivery
 - Dedicated search tools for calendar, chat, mail, and files
 - AI image editing service with OpenAI and Ollama fallback
-- Lightweight model support (`AI_LIGHT_MODEL`) for summaries and titles
+- Lightweight model support (`AI_SMALL_MODEL`) for summaries and titles
 - Auto-retry for empty model responses
 - XML `<image>` tag support for tool calls
 - Improved raw tool call parsing and handling

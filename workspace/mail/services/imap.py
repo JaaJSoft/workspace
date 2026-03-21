@@ -291,34 +291,24 @@ def sync_folder_messages(account, folder):
         folder.save(update_fields=['uid_validity', 'updated_at'])
 
         # Search for new UIDs (always use UID SEARCH to get real UIDs)
+        uid_list = []
         if folder.last_sync_uid > 0:
             status, search_data = conn.uid('SEARCH', None, f'UID {folder.last_sync_uid + 1}:*')
-            if status != 'OK':
-                _update_folder_counts(folder)
-                return
-            uid_list = search_data[0].split()
-            uid_list = [u.decode() if isinstance(u, bytes) else u for u in uid_list if u]
-            # Filter out the already-synced UID (server may include it)
-            uid_list = [u for u in uid_list if int(u) > folder.last_sync_uid]
+            if status == 'OK':
+                uid_list = search_data[0].split()
+                uid_list = [u.decode() if isinstance(u, bytes) else u for u in uid_list if u]
+                # Filter out the already-synced UID (server may include it)
+                uid_list = [u for u in uid_list if int(u) > folder.last_sync_uid]
         else:
             # Initial sync: get all UIDs then take last N
             status, search_data = conn.uid('SEARCH', None, 'ALL')
-            if status != 'OK':
-                _update_folder_counts(folder)
-                return
-            all_uids = search_data[0].split()
-            all_uids = [u.decode() if isinstance(u, bytes) else u for u in all_uids if u]
-            if not all_uids:
-                _update_folder_counts(folder)
-                return
-            # Limit initial sync
-            if len(all_uids) > INITIAL_SYNC_LIMIT:
-                all_uids = all_uids[-INITIAL_SYNC_LIMIT:]
-            uid_list = all_uids
-
-        if not uid_list:
-            _update_folder_counts(folder)
-            return
+            if status == 'OK':
+                all_uids = search_data[0].split()
+                all_uids = [u.decode() if isinstance(u, bytes) else u for u in all_uids if u]
+                # Limit initial sync
+                if len(all_uids) > INITIAL_SYNC_LIMIT:
+                    all_uids = all_uids[-INITIAL_SYNC_LIMIT:]
+                uid_list = all_uids
 
         max_uid = folder.last_sync_uid
         new_message_uuids = []
@@ -423,7 +413,7 @@ def _reconcile_folder(conn, folder):
     if gone:
         count = MailMessage.objects.filter(
             folder=folder, imap_uid__in=gone, deleted_at__isnull=True,
-        ).update(deleted_at=timezone.now())
+        ).update(deleted_at=dj_timezone.now())
         if count:
             logger.info('Reconciled %s: soft-deleted %d messages no longer on server', folder.name, count)
 

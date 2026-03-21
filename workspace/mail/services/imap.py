@@ -426,7 +426,8 @@ def _reconcile_folder(conn, folder):
     if status != 'OK':
         return
 
-    updates = []
+    read_uids = set()
+    starred_uids = set()
     for response_part in flags_data:
         if not isinstance(response_part, (tuple, bytes)):
             continue
@@ -439,17 +440,27 @@ def _reconcile_folder(conn, folder):
             continue
         uid = int(uid_match.group(1))
         flags_str = flags_match.group(1).decode() if flags_match else ''
-        is_read = r'\Seen' in flags_str
-        is_starred = r'\Flagged' in flags_str
-        updates.append((uid, is_read, is_starred))
+        if r'\Seen' in flags_str:
+            read_uids.add(uid)
+        if r'\Flagged' in flags_str:
+            starred_uids.add(uid)
 
-    if updates:
-        for uid, is_read, is_starred in updates:
-            MailMessage.objects.filter(
-                folder=folder, imap_uid=uid, deleted_at__isnull=True,
-            ).exclude(
-                is_read=is_read, is_starred=is_starred,
-            ).update(is_read=is_read, is_starred=is_starred)
+    if not read_uids and not starred_uids:
+        return
+
+    base = MailMessage.objects.filter(folder=folder, imap_uid__in=present, deleted_at__isnull=True)
+    # Mark read
+    if read_uids:
+        base.filter(imap_uid__in=read_uids, is_read=False).update(is_read=True)
+    unread_uids = present - read_uids
+    if unread_uids:
+        base.filter(imap_uid__in=unread_uids, is_read=True).update(is_read=False)
+    # Mark starred
+    if starred_uids:
+        base.filter(imap_uid__in=starred_uids, is_starred=False).update(is_starred=True)
+    unstarred_uids = present - starred_uids
+    if unstarred_uids:
+        base.filter(imap_uid__in=unstarred_uids, is_starred=True).update(is_starred=False)
 
 
 def _update_folder_counts(folder):

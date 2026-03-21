@@ -52,7 +52,7 @@ No build steps, no frontend framework complexity, no microservices. Just Python 
 
 ### Simple by Default
 
-At its core, Workspace is Django + SQLite. One Docker container, one process, done. No database servers to manage, no infrastructure lock-in.
+At its core, Workspace is Django + SQLite. One Docker container, done. No database servers to manage, no infrastructure lock-in.
 
 ### Scales When You Need It
 

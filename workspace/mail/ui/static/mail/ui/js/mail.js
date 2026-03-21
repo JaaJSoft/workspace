@@ -242,6 +242,7 @@ function mailApp() {
     // Labels
     labels: {},
     selectedLabel: null,
+    unifiedInbox: false,
     labelModal: { accountId: null, uuid: null, name: '', color: 'ghost', icon: '', saving: false, error: '' },
     labelCtx: { open: false, x: 0, y: 0, label: null },
     dragOverLabel: null,
@@ -278,6 +279,9 @@ function mailApp() {
       const msgId = params.get('message');
       if (msgId) {
         this._openMessageById(msgId);
+      } else if (this.accounts.length > 0) {
+        // Auto-select unified inbox as default landing page
+        this.selectUnifiedInbox();
       }
 
       // ?compose=email@example.com — open compose with pre-filled "to"
@@ -482,7 +486,37 @@ function mailApp() {
     },
 
     // ----- Messages -----
+    async selectUnifiedInbox() {
+      this.unifiedInbox = true;
+      this.selectedFolder = null;
+      this.selectedLabel = null;
+      this.selectedMessage = null;
+      this.messageDetail = null;
+      this._updateUrl(null);
+      this.selectedMessages = [];
+      this.currentPage = 1;
+      this._resetFilters();
+      this._closeDrawerOnMobile();
+      await this.loadMessages();
+    },
+
+    getTotalInboxUnread() {
+      let total = 0;
+      for (const accId in this.folders) {
+        for (const f of this.folders[accId]) {
+          if (f.folder_type === 'inbox') total += (f.unread_count || 0);
+        }
+      }
+      return total;
+    },
+
+    _getAccountEmail(accountId) {
+      const acc = this.accounts.find(a => a.uuid === accountId);
+      return acc ? (acc.display_name || acc.email) : '';
+    },
+
     async selectFolder(folder) {
+      this.unifiedInbox = false;
       this.selectedFolder = folder;
       this.selectedLabel = null;
       this.selectedMessage = null;
@@ -496,15 +530,14 @@ function mailApp() {
     },
 
     _buildMessagesUrl() {
-      if (this.selectedLabel) {
-        let url = `/api/v1/mail/messages?label=${this.selectedLabel.uuid}&page=${this.currentPage}`;
-        if (this.filters.search) url += `&search=${encodeURIComponent(this.filters.search)}`;
-        if (this.filters.unread) url += '&unread=true';
-        if (this.filters.starred) url += '&starred=true';
-        if (this.filters.attachments) url += '&attachments=true';
-        return url;
+      let url;
+      if (this.unifiedInbox) {
+        url = `/api/v1/mail/messages?inbox=all&page=${this.currentPage}`;
+      } else if (this.selectedLabel) {
+        url = `/api/v1/mail/messages?label=${this.selectedLabel.uuid}&page=${this.currentPage}`;
+      } else {
+        url = `/api/v1/mail/messages?folder=${this.selectedFolder.uuid}&page=${this.currentPage}`;
       }
-      let url = `/api/v1/mail/messages?folder=${this.selectedFolder.uuid}&page=${this.currentPage}`;
       if (this.filters.search) url += `&search=${encodeURIComponent(this.filters.search)}`;
       if (this.filters.unread) url += '&unread=1';
       if (this.filters.starred) url += '&starred=1';
@@ -513,7 +546,7 @@ function mailApp() {
     },
 
     async loadMessages() {
-      if (!this.selectedFolder && !this.selectedLabel) return;
+      if (!this.selectedFolder && !this.selectedLabel && !this.unifiedInbox) return;
       this.loadingMessages = true;
       const res = await this._fetch(this._buildMessagesUrl());
       if (res.ok) {
@@ -540,6 +573,12 @@ function mailApp() {
     },
 
     async refreshFolder() {
+      if (this.unifiedInbox) {
+        // Sync all accounts in parallel
+        await Promise.all(this.accounts.map(acc => this.syncAccount(acc.uuid)));
+        this.loadMessages();
+        return;
+      }
       const accountUuid = this.selectedFolder?.account_id || this.selectedLabel?.account_id;
       if (!accountUuid) return;
       await this.syncAccount(accountUuid);
@@ -2277,6 +2316,7 @@ function mailApp() {
     },
 
     selectLabel(label) {
+      this.unifiedInbox = false;
       this.selectedLabel = label;
       this.selectedFolder = null;
       this.selectedMessage = null;

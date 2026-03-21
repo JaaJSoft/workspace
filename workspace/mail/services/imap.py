@@ -426,8 +426,8 @@ def _reconcile_folder(conn, folder):
     if status != 'OK':
         return
 
-    read_uids = set()
-    starred_uids = set()
+    remote_read = set()
+    remote_starred = set()
     for response_part in flags_data:
         if not isinstance(response_part, (tuple, bytes)):
             continue
@@ -441,23 +441,40 @@ def _reconcile_folder(conn, folder):
         uid = int(uid_match.group(1))
         flags_str = flags_match.group(1).decode() if flags_match else ''
         if r'\Seen' in flags_str:
-            read_uids.add(uid)
+            remote_read.add(uid)
         if r'\Flagged' in flags_str:
-            starred_uids.add(uid)
+            remote_starred.add(uid)
+
+    # Load current local state to diff against remote
+    local_state = MailMessage.objects.filter(
+        folder=folder, imap_uid__in=present, deleted_at__isnull=True,
+    ).values_list('imap_uid', 'is_read', 'is_starred')
+
+    need_read = set()
+    need_unread = set()
+    need_starred = set()
+    need_unstarred = set()
+    for uid, is_read, is_starred in local_state:
+        should_read = uid in remote_read
+        should_star = uid in remote_starred
+        if should_read and not is_read:
+            need_read.add(uid)
+        elif not should_read and is_read:
+            need_unread.add(uid)
+        if should_star and not is_starred:
+            need_starred.add(uid)
+        elif not should_star and is_starred:
+            need_unstarred.add(uid)
 
     base = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
-    # Mark read
-    if read_uids:
-        base.filter(imap_uid__in=read_uids, is_read=False).update(is_read=True)
-    unread_uids = present - read_uids
-    if unread_uids:
-        base.filter(imap_uid__in=unread_uids, is_read=True).update(is_read=False)
-    # Mark starred
-    if starred_uids:
-        base.filter(imap_uid__in=starred_uids, is_starred=False).update(is_starred=True)
-    unstarred_uids = present - starred_uids
-    if unstarred_uids:
-        base.filter(imap_uid__in=unstarred_uids, is_starred=True).update(is_starred=False)
+    if need_read:
+        base.filter(imap_uid__in=need_read).update(is_read=True)
+    if need_unread:
+        base.filter(imap_uid__in=need_unread).update(is_read=False)
+    if need_starred:
+        base.filter(imap_uid__in=need_starred).update(is_starred=True)
+    if need_unstarred:
+        base.filter(imap_uid__in=need_unstarred).update(is_starred=False)
 
 
 def _update_folder_counts(folder):

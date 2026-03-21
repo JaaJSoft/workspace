@@ -574,20 +574,24 @@
   {% endfor %}
 
   (function() {
-    let es = null, errorCount = 0;
+    let es = null, errorCount = 0, retryTimer = null;
+
+    function onMessage(e) {
+      const payload = JSON.parse(e.data);
+      window.dispatchEvent(new CustomEvent('sse:' + payload.event, { detail: payload.data }));
+      if (payload.event.startsWith('chat.')) {
+        window.dispatchEvent(new CustomEvent('chat-' + payload.event.substring(5), { detail: payload.data }));
+      }
+    }
+
     function connect() {
-      if (es) es.close();
+      if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+      if (es) { es.close(); es = null; }
       es = new EventSource('/api/v1/stream');
       errorCount = 0;
-      es.addEventListener('sse', function(e) {
-        const payload = JSON.parse(e.data);
-        window.dispatchEvent(new CustomEvent('sse:' + payload.event, { detail: payload.data }));
-        if (payload.event.startsWith('chat.')) {
-          window.dispatchEvent(new CustomEvent('chat-' + payload.event.substring(5), { detail: payload.data }));
-        }
-      });
+      es.addEventListener('sse', onMessage);
       es.onerror = function() {
-        if (++errorCount > 5) { es.close(); setTimeout(connect, 30000); }
+        if (++errorCount > 5) { es.close(); es = null; retryTimer = setTimeout(connect, 30000); }
       };
       es.onopen = function() { errorCount = 0; };
     }
@@ -595,7 +599,7 @@
 
     // Reconnect SSE when the page becomes visible again (mobile resume)
     document.addEventListener('visibilitychange', function() {
-      if (!document.hidden) {
+      if (!document.hidden && (!es || es.readyState === EventSource.CLOSED)) {
         connect();
         window.dispatchEvent(new CustomEvent('sse:reconnect'));
       }

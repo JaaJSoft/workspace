@@ -99,7 +99,7 @@ class MailMessageListSerializer(serializers.ModelSerializer):
     class Meta:
         model = MailMessage
         fields = [
-            'uuid', 'folder_id', 'message_id', 'subject',
+            'uuid', 'account_id', 'folder_id', 'message_id', 'subject',
             'from_address', 'to_addresses', 'date', 'snippet',
             'is_read', 'is_starred', 'is_draft', 'has_attachments',
             'has_calendar_event', 'attachments_count', 'labels',

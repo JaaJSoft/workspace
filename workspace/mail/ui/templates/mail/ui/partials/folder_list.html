@@ -1,3 +1,33 @@
+<!-- All Inboxes (unified view) — expanded -->
+<div x-show="accounts.length > 0 && !collapsed" class="mb-2">
+  <button
+    class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
+    :class="unifiedInbox ? 'bg-warning/10 text-warning' : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
+    @click="selectUnifiedInbox()"
+  >
+    <span class="flex-shrink-0 text-warning">
+      <i data-lucide="inbox" class="w-4 h-4"></i>
+    </span>
+    <span class="flex-1 text-left truncate">All Inboxes</span>
+    <span
+      x-show="getTotalInboxUnread() > 0"
+      class="badge badge-xs badge-warning"
+      x-text="getTotalInboxUnread()"
+    ></span>
+  </button>
+</div>
+<!-- All Inboxes (unified view) — collapsed -->
+<div x-show="accounts.length > 0 && collapsed" x-cloak class="mb-2">
+  <button
+    class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
+    :class="unifiedInbox ? 'bg-warning/10 text-warning' : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
+    title="All Inboxes"
+    @click="selectUnifiedInbox()"
+  >
+    <i data-lucide="inbox" class="w-5 h-5"></i>
+  </button>
+</div>
+
 <!-- Folder list per account -->
 <template x-for="account in accounts" :key="account.uuid">
   <div class="mb-2">

@@ -100,7 +100,7 @@ x-init="init()"
       <!-- Message list panel -->
       <div class="w-full lg:w-96 border-r border-base-300 flex flex-col min-h-0"
            :class="selectedMessage && isMobile() ? 'hidden' : ''"
-           x-show="selectedFolder || selectedLabel">
+           x-show="selectedFolder || selectedLabel || unifiedInbox">
         {% include "mail/ui/partials/message_list.html" %}
       </div>
 
@@ -111,7 +111,7 @@ x-init="init()"
       </div>
 
       <!-- Empty state: has accounts but no folder/label selected -->
-      <div class="flex-1 flex items-center justify-center" x-show="!selectedFolder && !selectedLabel">
+      <div class="flex-1 flex items-center justify-center" x-show="!selectedFolder && !selectedLabel && !unifiedInbox">
         <div class="text-center text-base-content/40">
           <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
           <p class="text-lg font-medium">Select a folder to view messages</p>

@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import MailAccount, MailAttachment, MailFolder, MailLabel, MailMessage, MailMessageLabel
+from .queries import user_account_ids
 from .serializers import (
     BatchActionSerializer,
     DraftSaveSerializer,
@@ -538,6 +539,7 @@ class MailMessageListView(APIView):
         parameters=[
             OpenApiParameter('folder', str, required=False),
             OpenApiParameter('label', str, required=False),
+            OpenApiParameter('inbox', str, required=False, description='Pass "all" to get messages from all inbox folders'),
             OpenApiParameter('page', int, required=False),
             OpenApiParameter('search', str, required=False),
             OpenApiParameter('unread', bool, required=False),
@@ -548,10 +550,11 @@ class MailMessageListView(APIView):
     def get(self, request):
         folder_id = request.query_params.get('folder')
         label_id = request.query_params.get('label')
+        inbox_mode = request.query_params.get('inbox')
 
-        if not folder_id and not label_id:
+        if not folder_id and not label_id and inbox_mode != 'all':
             return Response(
-                {'detail': 'folder or label query parameter is required'},
+                {'detail': 'folder, label, or inbox=all query parameter is required'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -575,7 +578,13 @@ class MailMessageListView(APIView):
                 return Response(status=status.HTTP_404_NOT_FOUND)
 
         # Build base queryset
-        if folder:
+        if inbox_mode == 'all' and not folder and not label:
+            qs = MailMessage.objects.filter(
+                account_id__in=user_account_ids(request.user),
+                folder__folder_type=MailFolder.FolderType.INBOX,
+                deleted_at__isnull=True,
+            )
+        elif folder:
             qs = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
         else:
             # label-only: cross-folder for the label's account

@@ -445,9 +445,6 @@ def _reconcile_folder(conn, folder):
         if r'\Flagged' in flags_str:
             starred_uids.add(uid)
 
-    if not read_uids and not starred_uids:
-        return
-
     base = MailMessage.objects.filter(folder=folder, imap_uid__in=present, deleted_at__isnull=True)
     # Mark read
     if read_uids:

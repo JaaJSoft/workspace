@@ -44,6 +44,12 @@
   min-height: 100%;
 }
 
+@media (max-width: 1023px) {
+  .milkdown .ProseMirror {
+    padding: 32px 16px;
+  }
+}
+
 /* ========================================================
    Icons — force inline SVGs to follow theme colors.
    Milkdown injects SVGs with hardcoded fill="" attributes,

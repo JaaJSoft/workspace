@@ -216,6 +216,7 @@ class FileViewSet(viewsets.ModelViewSet):
         'node_type': ['exact'],
         'parent': ['exact'],
         'owner': ['exact'],
+        'mime_type': ['exact'],
     }
     search_fields = ['name', 'mime_type']
     ordering_fields = ['name', 'created_at', 'updated_at', 'size']
@@ -298,9 +299,9 @@ class FileViewSet(viewsets.ModelViewSet):
                 is_pinned=Exists(pinned_subquery),
                 is_shared=Exists(is_shared_subquery),
                 user_share_permission=Subquery(user_share_subquery),
-            ).distinct()
+            ).prefetch_related('file_tags__tag').distinct()
 
-        queryset = File.objects.filter(owner=self.request.user)
+        queryset = File.objects.filter(owner=self.request.user).prefetch_related('file_tags__tag')
         queryset = queryset.annotate(
             is_favorite=Exists(favorite_subquery),
             is_pinned=Exists(pinned_subquery),
@@ -321,6 +322,19 @@ class FileViewSet(viewsets.ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
+
+        # Filter by tags (comma-separated UUIDs)
+        tags_param = request.query_params.get('tags')
+        if tags_param:
+            tag_uuids = [u.strip() for u in tags_param.split(',') if u.strip()]
+            if tag_uuids:
+                queryset = queryset.filter(file_tags__tag__uuid__in=tag_uuids).distinct()
+
+        # Filter by tag name (case-insensitive contains)
+        tag_name_param = request.query_params.get('tag_name')
+        if tag_name_param:
+            queryset = queryset.filter(file_tags__tag__name__icontains=tag_name_param.strip()).distinct()
+
         if self._is_recent_query():
             queryset = queryset.order_by('-updated_at')
             limit = self._get_recent_limit()

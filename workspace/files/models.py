@@ -97,7 +97,7 @@ class File(models.Model):
         max_length=1024
     )
     size = models.BigIntegerField(null=True, blank=True, help_text="File size in bytes")
-    mime_type = models.CharField(max_length=100, null=True, blank=True)
+    mime_type = models.CharField(max_length=100, null=True, blank=True, db_index=True)
 
     has_thumbnail = models.BooleanField(default=False)
 
@@ -530,3 +530,35 @@ class FileShareLink(models.Model):
     @property
     def has_password(self):
         return bool(self.password)
+
+
+class Tag(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tags')
+    name = models.CharField(max_length=100)
+    color = models.CharField(max_length=20, default='ghost')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(fields=['owner', 'name'], name='unique_tag_per_user'),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class FileTag(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name='file_tags')
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name='file_tags')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['file', 'tag'], name='unique_file_tag'),
+        ]
+
+    def __str__(self):
+        return f'{self.file.name} — {self.tag.name}'

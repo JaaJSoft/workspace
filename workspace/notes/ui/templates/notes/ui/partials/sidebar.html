@@ -1,0 +1,63 @@
+<!-- Quick Access -->
+<div class="mb-2">
+  <div class="pl-3 pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider"
+       x-show="!collapsed">
+    Quick Access
+  </div>
+  <ul class="space-y-1">
+    {% include "ui/partials/drawer_item.html" with icon="notebook-pen" label="All notes" color="success" active_binding="activeView === 'all'" onclick="setView('all')" tooltip="All notes" %}
+    {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" color="success" active_binding="activeView === 'recent'" onclick="setView('recent')" tooltip="Recent" %}
+    {% include "ui/partials/drawer_item.html" with icon="book-open" label="Journal" color="success" active_binding="activeView === 'journal'" onclick="openJournal()" tooltip="Journal" %}
+  </ul>
+</div>
+
+<!-- Tags -->
+{% if tags %}
+<div class="mb-2" x-show="!collapsed">
+  <div class="pl-3 pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider">
+    Tags
+  </div>
+  <ul class="menu p-0 space-y-1">
+    {% for tag in tags %}
+    <li class="list-none">
+      <button
+        type="button"
+        class="flex items-center w-full text-left gap-3 p-2 text-base rounded-lg transition-colors"
+        :class="activeView === 'tag' && activeId === '{{ tag.uuid }}' ? 'bg-{{ tag.color }}/10 text-{{ tag.color }} hover:bg-{{ tag.color }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-success'"
+        data-tag-uuid="{{ tag.uuid }}"
+        data-tag-name="{{ tag.name }}"
+        @click="setView('tag', '{{ tag.uuid }}', '{{ tag.name }}')"
+      >
+        <i data-lucide="tag" class="w-5 h-5 flex-shrink-0 text-{{ tag.color }}"></i>
+        <span class="flex items-center gap-2 flex-1">{{ tag.name }}</span>
+      </button>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<!-- Folders -->
+<div x-show="!collapsed">
+  <div class="pl-3 pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider">
+    Folders
+  </div>
+  <ul class="menu p-0 space-y-1">
+    {% for folder in folders %}
+    <li class="list-none">
+      <button
+        type="button"
+        class="flex items-center w-full text-left gap-3 p-2 text-base rounded-lg transition-colors"
+        {% if folder.parent_id %}style="padding-left: 1.75rem"{% endif %}
+        :class="activeView === 'folder' && activeId === '{{ folder.uuid }}' ? 'bg-success/10 text-success hover:bg-success/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-success'"
+        data-folder-uuid="{{ folder.uuid }}"
+        data-folder-name="{{ folder.name }}"
+        @click="setView('folder', '{{ folder.uuid }}', '{{ folder.name }}')"
+      >
+        <i data-lucide="{{ folder.icon|default:'folder' }}" class="w-5 h-5 flex-shrink-0{% if folder.color %} {{ folder.color }}{% endif %}"></i>
+        <span class="flex items-center gap-2 flex-1">{{ folder.name }}</span>
+      </button>
+    </li>
+    {% endfor %}
+  </ul>
+</div>

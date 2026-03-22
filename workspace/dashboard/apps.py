@@ -20,16 +20,6 @@ class DashboardConfig(AppConfig):
 
         planned_modules = [
             ModuleInfo(
-                name='Notes',
-                slug='notes',
-                description='Write and collaborate on documents.',
-                icon='notebook-pen',
-                color='accent',
-                url=None,
-                active=False,
-                order=30,
-            ),
-            ModuleInfo(
                 name='Tasks',
                 slug='tasks',
                 description='Track projects and to-dos.',

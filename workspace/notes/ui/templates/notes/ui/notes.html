@@ -1,0 +1,167 @@
+{% extends "base_with_navbar.html" %}
+{% load static %}
+
+{% block title %}Notes{% endblock %}
+
+{% block extra_head %}
+<!-- Milkdown Crepe - External dependency CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prosemirror-view@1/style/prosemirror.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prosemirror-gapcursor@1/style/gapcursor.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prosemirror-virtual-cursor@0/style/virtual-cursor.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prosemirror-tables@1/style/tables.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0/dist/katex.min.css">
+<!-- Milkdown Crepe - Common feature styles -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/reset.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/block-edit.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/code-mirror.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/image-block.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/link-tooltip.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/list-item.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/placeholder.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/toolbar.css">
+<!-- Milkdown Crepe - DaisyUI theme bridge + custom rules -->
+<link rel="stylesheet" href="{% static 'files/ui/css/milkdown-overrides.css' %}">
+{% endblock %}
+
+{% block navbar %}
+{% include 'ui/partials/navbar.html' with navbar_full_width=True %}
+{% endblock %}
+
+{% block drawer_class %}lg:drawer-open{% endblock %}
+{% block drawer_id %}notes-drawer{% endblock %}
+
+{% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
+
+{% block drawer_attrs %}
+x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{ initial_file }}' })"
+x-init="init()"
+{% endblock %}
+
+{% block drawer_sidebar %}
+<div class="drawer-side z-40 h-full">
+  <label for="notes-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+
+  <!-- Sidebar -->
+  <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
+         :class="collapsed ? 'w-16' : 'w-72'">
+    <!-- Sidebar header -->
+    <div class="lg:border-b border-base-300 py-4 px-3">
+      <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
+        <h2 class="text-xl font-semibold flex items-center gap-2" :class="collapsed ? '' : 'pl-2'">
+          <i data-lucide="notebook-pen" class="w-6 h-6 text-success"></i>
+          <span x-show="!collapsed" x-transition>Notes</span>
+        </h2>
+        <button
+          x-show="!collapsed" x-transition
+          class="btn btn-ghost btn-sm btn-square mr-1 hover:text-success"
+          @click="createNote()"
+          title="New note"
+        >
+          <i data-lucide="plus" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Sidebar content -->
+    <div class="flex-1 overflow-y-auto py-2 px-3" id="notes-sidebar" x-target="notes-sidebar">
+      {% include "notes/ui/partials/sidebar.html" %}
+    </div>
+
+    <!-- New note button (collapsed) -->
+    <div class="px-3 pb-2" x-show="collapsed" x-cloak>
+      <ul class="menu p-0">
+        {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="success" onclick="createNote()" tooltip="New note" %}
+      </ul>
+    </div>
+
+    <!-- Collapse toggle -->
+    <div class="border-t border-base-300 py-4 px-3">
+      <ul class="menu p-0" x-show="!isMobile()">
+        {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" color="success" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+      </ul>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="h-full flex min-w-0 bg-base-100">
+
+  <!-- Note List (middle panel) -->
+  <div class="w-full lg:w-80 border-r border-base-300 flex flex-col min-h-0"
+       :class="selectedNote && isMobile() ? 'hidden' : ''">
+    {% include "notes/ui/partials/note_list.html" %}
+  </div>
+
+  <!-- Editor (right panel) -->
+  <div class="flex-1 flex flex-col min-h-0 min-w-0"
+       :class="!selectedNote && isMobile() ? 'hidden' : ''">
+
+    <!-- Editor Toolbar -->
+    <div x-show="selectedNote" x-cloak class="flex items-center justify-between p-3 border-b border-base-300">
+      <div class="flex items-center gap-2 min-w-0">
+        <!-- Mobile: back to list -->
+        <button class="btn btn-ghost btn-sm btn-square lg:hidden" @click="selectedNote = null">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        </button>
+        <i data-lucide="notebook-pen" class="w-4 h-4 text-success flex-shrink-0"></i>
+        <input
+          type="text"
+          class="input input-ghost input-sm font-semibold flex-1 min-w-0"
+          :value="selectedNote ? noteName(selectedNote) : ''"
+          @change="renameNote($event.target.value)"
+        >
+      </div>
+      <div class="flex items-center gap-1 flex-shrink-0">
+        <!-- Tag management -->
+        <div class="dropdown dropdown-end">
+          <div tabindex="0" role="button" class="btn btn-ghost btn-sm">
+            <i data-lucide="tag" class="w-4 h-4"></i>
+          </div>
+          <div tabindex="0" class="dropdown-content z-10 p-3 shadow-lg bg-base-200 rounded-box w-52">
+            <p class="text-xs font-semibold uppercase text-base-content/50 mb-2">Tags</p>
+            <template x-for="tag in allTags" :key="tag.uuid">
+              <label class="flex items-center gap-2 py-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-xs"
+                  :checked="noteHasTag(tag.uuid)"
+                  @change="toggleNoteTag(tag)"
+                >
+                <span class="badge badge-sm" :class="'badge-' + tag.color" x-text="tag.name"></span>
+              </label>
+            </template>
+            <div x-show="allTags.length === 0" class="text-xs text-base-content/40">No tags yet</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm text-error" @click="deleteNote()">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Editor Container -->
+    <div class="flex-1 flex flex-col min-h-0">
+      <div x-show="selectedNote && loadingEditor" x-cloak class="flex-1 flex items-center justify-center">
+        <span class="loading loading-spinner loading-lg"></span>
+      </div>
+      <div x-ref="editorContainer" x-show="selectedNote && !loadingEditor" class="flex-1 min-h-0 overflow-auto flex flex-col bg-base-200"></div>
+      <div x-show="!selectedNote" class="flex items-center justify-center h-full text-base-content/30">
+        <div class="text-center">
+          <i data-lucide="notebook-pen" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
+          <p class="text-lg font-medium">Select or create a note</p>
+          <label for="notes-drawer" class="btn btn-success btn-sm mt-4 lg:hidden cursor-pointer">
+            <i data-lucide="menu" class="w-4 h-4"></i>
+            Open notes
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'files/ui/js/file_lock.js' %}"></script>
+<script src="{% static 'notes/ui/js/notes.js' %}"></script>
+{% endblock %}

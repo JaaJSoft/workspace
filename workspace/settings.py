@@ -88,6 +88,8 @@ INSTALLED_APPS = [
     'workspace.common',
     'workspace.files',
     'workspace.files.ui',
+    'workspace.notes',
+    'workspace.notes.ui',
     'workspace.dashboard',
     'workspace.users',
     'workspace.users.ui',

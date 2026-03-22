@@ -52,9 +52,10 @@ self.addEventListener('fetch', function (event) {
     return;
   }
 
-  // Local static assets — dev: always fresh, prod: cache first (invalidated by version bump)
+  // Local static assets — dev: skip SW (always fresh), prod: cache first (invalidated by version bump)
   if (url.pathname.startsWith('/static/')) {
-    event.respondWith(CACHE_VERSION === 'dev' ? staleWhileRevalidate(request) : cacheFirst(request));
+    if (CACHE_VERSION === 'dev') return;
+    event.respondWith(cacheFirst(request));
     return;
   }
 

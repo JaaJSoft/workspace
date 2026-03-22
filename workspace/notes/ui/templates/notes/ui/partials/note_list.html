@@ -5,7 +5,8 @@
     <i data-lucide="menu" class="w-5 h-5"></i>
   </label>
   <h3 class="text-sm font-semibold text-base-content/60 truncate flex-1" x-text="viewTitle"></h3>
-  <button class="btn btn-ghost btn-xs hover:text-success" @click="createNote()" title="New note">
+  <button class="btn btn-ghost btn-xs hover:text-success" @click="createNote()" title="New note"
+          x-show="['all', 'folder'].includes(activeView)">
     <i data-lucide="plus" class="w-4 h-4"></i>
   </button>
 </div>
@@ -18,7 +19,10 @@
       :class="selectedNote?.uuid === note.uuid ? 'bg-success/5 border-l-2 border-l-success' : ''"
       @click="selectNote(note)"
     >
-      <div class="font-medium text-sm truncate" x-text="noteName(note)"></div>
+      <div class="flex items-center gap-1">
+        <div class="font-medium text-sm truncate flex-1" x-text="noteName(note)"></div>
+        <i data-lucide="star" class="w-3 h-3 text-warning fill-warning flex-shrink-0" x-show="note.is_favorite" x-cloak></i>
+      </div>
       <div class="text-xs text-base-content/50 mt-0.5" x-text="formatDate(note.updated_at)"></div>
       <div class="flex gap-1 mt-1" x-show="note.tags && note.tags.length">
         <template x-for="t in note.tags" :key="t.uuid">

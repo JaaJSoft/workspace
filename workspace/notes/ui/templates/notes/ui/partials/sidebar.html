@@ -6,6 +6,7 @@
   </div>
   <ul class="space-y-1">
     {% include "ui/partials/drawer_item.html" with icon="notebook-pen" label="All notes" color="success" active_binding="activeView === 'all'" onclick="setView('all')" tooltip="All notes" %}
+    {% include "ui/partials/drawer_item.html" with icon="star" label="Favorites" color="warning" active_binding="activeView === 'favorites'" onclick="setView('favorites')" tooltip="Favorites" %}
     {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" color="success" active_binding="activeView === 'recent'" onclick="setView('recent')" tooltip="Recent" %}
     <template x-if="notePrefs.showJournal">
       {% include "ui/partials/drawer_item.html" with icon="book-open" label="Journal" color="success" active_binding="activeView === 'journal'" onclick="openJournal()" tooltip="Journal" %}

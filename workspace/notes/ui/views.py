@@ -52,7 +52,7 @@ def index(request):
         return render(request, 'notes/ui/partials/sidebar.html', context)
 
     view = request.GET.get('view', 'all')
-    if view not in ('all', 'recent', 'journal', 'folder', 'tag'):
+    if view not in ('all', 'favorites', 'recent', 'journal', 'folder', 'tag'):
         view = 'all'
     context['initial_view'] = view
     context['initial_id'] = request.GET.get('folder') or request.GET.get('tag') or ''

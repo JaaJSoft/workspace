@@ -138,7 +138,7 @@ x-init="init()"
     </div>
 
     <!-- New note button (collapsed) -->
-    <div class="px-3 pb-2" x-show="collapsed" x-cloak>
+    <div class="px-3 pb-2" x-show="collapsed && ['all', 'folder'].includes(activeView)" x-cloak>
       <ul class="menu p-0">
         {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="success" onclick="createNote()" tooltip="New note" %}
       </ul>
@@ -183,8 +183,15 @@ x-init="init()"
         >
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
+        <button class="btn btn-ghost btn-sm btn-square" @click="toggleFavorite(selectedNote)"
+                :disabled="togglingFavorite"
+                :title="selectedNote?.is_favorite ? 'Remove from favorites' : 'Add to favorites'">
+          <span class="loading loading-spinner loading-xs" x-show="togglingFavorite" x-cloak></span>
+          <i data-lucide="star" class="w-4 h-4 transition-colors" x-show="!togglingFavorite"
+             :class="selectedNote?.is_favorite ? 'text-warning fill-warning' : ''"></i>
+        </button>
         {% include "files/ui/partials/tag_manager.html" %}
-        <button class="btn btn-ghost btn-sm text-error" @click="deleteNote()">
+        <button class="btn btn-ghost btn-sm btn-square text-error" @click="deleteNote()">
           <i data-lucide="trash-2" class="w-4 h-4"></i>
         </button>
       </div>

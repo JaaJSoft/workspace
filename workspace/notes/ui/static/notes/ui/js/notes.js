@@ -67,7 +67,7 @@ window.notesApp = function notesApp(config) {
     config = config || {};
     var prefs = window._notesPrefsCache;
     var initialView = config.view || prefs.defaultView || 'all';
-    var titleMap = { all: 'All notes', recent: 'Recent', journal: 'Journal' };
+    var titleMap = { all: 'All notes', favorites: 'Favorites', recent: 'Recent', journal: 'Journal' };
 
     return {
         // Sidebar
@@ -85,6 +85,7 @@ window.notesApp = function notesApp(config) {
         // Note list
         notes: [],
         loadingNotes: false,
+        togglingFavorite: false,
 
         // Tags (from shared mixin)
         ...window.tagsMixin(),
@@ -175,6 +176,9 @@ window.notesApp = function notesApp(config) {
             if (view === 'all') {
                 this.viewTitle = 'All notes';
                 url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=200' + sort;
+            } else if (view === 'favorites') {
+                this.viewTitle = 'Favorites';
+                url = '/api/v1/files?mime_type=text/markdown&favorites=1' + sort;
             } else if (view === 'recent') {
                 this.viewTitle = 'Recent';
                 url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=50' + sort;
@@ -397,6 +401,23 @@ window.notesApp = function notesApp(config) {
                 this.selectedNote = null;
                 this.updateUrl();
             }
+        },
+
+        async toggleFavorite(note) {
+            if (!note || this.togglingFavorite) return;
+            this.togglingFavorite = true;
+            var isFav = note.is_favorite;
+            var resp = await fetch('/api/v1/files/' + note.uuid + '/favorite', {
+                method: isFav ? 'DELETE' : 'POST',
+                headers: { 'X-CSRFToken': getCSRFToken() },
+            });
+            if (resp.ok) {
+                note.is_favorite = !isFav;
+                if (this.activeView === 'favorites' && isFav) {
+                    this.notes = this.notes.filter(function(n) { return n.uuid !== note.uuid; });
+                }
+            }
+            this.togglingFavorite = false;
         },
 
         // ── File actions (delegate to shared helpers) ───────

@@ -167,6 +167,7 @@ window.notesApp = function notesApp(config) {
         async setView(view, id, name, skipUrl) {
             this.activeView = view;
             this.activeId = id || null;
+            this._closeDrawerOnMobile();
 
             var sort = '&ordering=' + this._sortParam();
             var url;
@@ -220,6 +221,7 @@ window.notesApp = function notesApp(config) {
             this.activeView = 'journal';
             this.activeId = null;
             this.viewTitle = 'Journal';
+            this._closeDrawerOnMobile();
 
             // Find or create the Journal folder
             var resp = await fetch('/api/v1/files?node_type=folder&parent=&search=Journal');
@@ -577,6 +579,13 @@ window.notesApp = function notesApp(config) {
 
         isMobile() {
             return window.innerWidth < 1024;
+        },
+
+        _closeDrawerOnMobile() {
+            if (this.isMobile()) {
+                var toggle = document.getElementById('notes-drawer');
+                if (toggle) toggle.checked = false;
+            }
         },
 
         destroy() {

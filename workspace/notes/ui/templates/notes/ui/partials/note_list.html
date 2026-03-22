@@ -1,6 +1,10 @@
 <!-- Note list header -->
-<div class="flex items-center justify-between p-3 border-b border-base-300">
-  <h3 class="text-sm font-semibold text-base-content/60 truncate" x-text="viewTitle"></h3>
+<div class="flex items-center gap-2 p-3 border-b border-base-300">
+  <!-- Mobile sidebar toggle -->
+  <label for="notes-drawer" class="btn btn-ghost btn-sm btn-square lg:hidden cursor-pointer">
+    <i data-lucide="menu" class="w-5 h-5"></i>
+  </label>
+  <h3 class="text-sm font-semibold text-base-content/60 truncate flex-1" x-text="viewTitle"></h3>
   <button class="btn btn-ghost btn-xs hover:text-success" @click="createNote()" title="New note">
     <i data-lucide="plus" class="w-4 h-4"></i>
   </button>

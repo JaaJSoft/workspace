@@ -171,7 +171,7 @@ x-init="init()"
     <div x-show="selectedNote" x-cloak class="flex items-center justify-between p-3 border-b border-base-300">
       <div class="flex items-center gap-2 min-w-0">
         <!-- Mobile: back to list -->
-        <button class="btn btn-ghost btn-sm btn-square lg:hidden" @click="selectedNote = null">
+        <button class="btn btn-ghost btn-sm btn-square lg:hidden" @click="selectedNote = null; updateUrl()">
           <i data-lucide="arrow-left" class="w-4 h-4"></i>
         </button>
         <i data-lucide="notebook-pen" class="w-4 h-4 text-success flex-shrink-0"></i>

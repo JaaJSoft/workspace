@@ -15,7 +15,7 @@
     <template x-for="(cmd, index) in commands" :key="cmd.name + cmd.url">
       <a
         :href="cmd.url"
-        {% if on_click %}@click="{{ on_click }}"{% endif %}
+        @click="trackCommand(cmd.url){% if on_click %}; {{ on_click }}{% endif %}"
         @mouseenter="activeIndex = index"
         :class="isCommandActive(index) ? 'bg-base-300' : 'bg-transparent'"
         class="flex items-center gap-3 px-3 {% if size == 'lg' %}py-3{% else %}py-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"

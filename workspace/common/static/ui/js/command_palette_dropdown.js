@@ -1,4 +1,44 @@
 window.commandPaletteDropdown = function () {
+  const STORAGE_KEY = 'workspace:recentCommands';
+  const MAX_QUICK_ACTIONS = 5;
+  const allCommands = JSON.parse(
+    document.getElementById('workspace-commands')?.textContent || '[]'
+  );
+
+  function getRecentCommands() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+        .sort((a, b) => b.ts - a.ts);
+    } catch {
+      return [];
+    }
+  }
+
+  function computeQuickActions() {
+    const recent = getRecentCommands();
+    const seen = new Set();
+    const result = [];
+
+    for (const entry of recent) {
+      const cmd = allCommands.find(c => c.url === entry.url);
+      if (cmd && !seen.has(cmd.url)) {
+        result.push(cmd);
+        seen.add(cmd.url);
+      }
+      if (result.length >= MAX_QUICK_ACTIONS) break;
+    }
+
+    for (const cmd of allCommands) {
+      if (result.length >= MAX_QUICK_ACTIONS) break;
+      if (!seen.has(cmd.url)) {
+        result.push(cmd);
+        seen.add(cmd.url);
+      }
+    }
+
+    return result;
+  }
+
   return {
     open: false,
     query: '',
@@ -9,10 +49,13 @@ window.commandPaletteDropdown = function () {
     loadingMore: false,
     searchQuery: '',
     activeIndex: -1,
+    quickActions: [],
     _cachedItems: null,
     _cacheKey: '',
 
     init() {
+      this.quickActions = computeQuickActions();
+
       if (!window.__commandPaletteShortcutBound) {
         document.addEventListener('keydown', (e) => {
           if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -31,6 +74,7 @@ window.commandPaletteDropdown = function () {
         this._cacheKey = '';
         if (value) {
           this.activeIndex = -1;
+          this.quickActions = computeQuickActions();
         }
       });
 
@@ -50,6 +94,16 @@ window.commandPaletteDropdown = function () {
         this._cacheKey = '';
         this.activeIndex = -1;
       });
+    },
+
+    trackCommand(url) {
+      try {
+        let recent = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        recent = recent.filter(e => e.url !== url);
+        recent.unshift({ url, ts: Date.now() });
+        recent = recent.slice(0, 20);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(recent));
+      } catch {}
     },
 
     search() {
@@ -187,11 +241,7 @@ window.commandPaletteDropdown = function () {
         return this.commands.length + this.results.length;
       }
       if (this.query.length === 0) {
-        const quickActionsContainer = this.$root.querySelector('[x-show="query.length === 0"]');
-        if (quickActionsContainer) {
-          return quickActionsContainer.querySelectorAll('a[href]').length;
-        }
-        return 3;
+        return this.quickActions.length;
       }
       return 0;
     },

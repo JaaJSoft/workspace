@@ -259,28 +259,49 @@ function mailApp() {
     // Autocomplete
     _autocomplete: { results: [], highlight: -1, show: false, loading: false, field: null, _timer: null },
 
-    init() {
+    async init() {
       // Load accounts from embedded data
       try {
         const el = document.getElementById('accounts-data');
         if (el) this.accounts = JSON.parse(el.textContent);
       } catch (e) {}
 
-      // Auto-expand all accounts and load folders
+      // Load all folders and labels, then restore URL state
+      const folderLoads = [];
+      const labelLoads = [];
       for (const acc of this.accounts) {
         this.expandedAccounts[acc.uuid] = true;
         this.syncingAccounts[acc.uuid] = false;
-        this.loadFolders(acc.uuid);
-        this.fetchLabels(acc.uuid);
+        folderLoads.push(this.loadFolders(acc.uuid));
+        labelLoads.push(this.fetchLabels(acc.uuid));
       }
+      await Promise.all([...folderLoads, ...labelLoads]);
 
-      // Check URL params for deep linking
+      // Restore state from URL params
       const params = new URLSearchParams(window.location.search);
+      const folderId = params.get('folder');
+      const labelId = params.get('label');
       const msgId = params.get('message');
-      if (msgId) {
+
+      if (folderId) {
+        const folder = this._findFolderById(folderId);
+        if (folder) {
+          await this.selectFolder(folder);
+          if (msgId) this._openMessageById(msgId);
+        } else {
+          this.selectUnifiedInbox();
+        }
+      } else if (labelId) {
+        const label = this._findLabelById(labelId);
+        if (label) {
+          this.selectLabel(label);
+          if (msgId) this._openMessageById(msgId);
+        } else {
+          this.selectUnifiedInbox();
+        }
+      } else if (msgId) {
         this._openMessageById(msgId);
       } else if (this.accounts.length > 0) {
-        // Auto-select unified inbox as default landing page
         this.selectUnifiedInbox();
       }
 
@@ -2204,12 +2225,36 @@ function mailApp() {
     // ----- URL -----
     _updateUrl(messageUuid) {
       const url = new URL(window.location);
+      url.search = '';
+
+      if (this.selectedFolder) {
+        url.searchParams.set('folder', this.selectedFolder.uuid);
+      } else if (this.selectedLabel) {
+        url.searchParams.set('label', this.selectedLabel.uuid);
+      }
+      // unified inbox = no folder/label params (default)
+
       if (messageUuid) {
         url.searchParams.set('message', messageUuid);
-      } else {
-        url.searchParams.delete('message');
       }
+
       history.replaceState(null, '', url);
+    },
+
+    _findFolderById(uuid) {
+      for (const accId in this.folders) {
+        const found = (this.folders[accId] || []).find(f => f.uuid === uuid);
+        if (found) return found;
+      }
+      return null;
+    },
+
+    _findLabelById(uuid) {
+      for (const accId in this.labels) {
+        const found = (this.labels[accId] || []).find(l => l.uuid === uuid);
+        if (found) return found;
+      }
+      return null;
     },
 
     // ----- UI helpers -----
@@ -2321,6 +2366,7 @@ function mailApp() {
       this.selectedFolder = null;
       this.selectedMessage = null;
       this.messageDetail = null;
+      this._updateUrl(null);
       this.currentPage = 1;
       this._closeDrawerOnMobile();
       this.loadMessages();

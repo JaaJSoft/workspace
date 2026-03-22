@@ -23,6 +23,13 @@
       </li>
       <hr class="my-1 border-base-300">
       <li>
+        <a :href="'/files/' + ctxMenu.data?.uuid" class="gap-3 rounded" @click="closeCtxMenu()">
+          <i data-lucide="hard-drive" class="w-4 h-4"></i>
+          <span>Open in Files</span>
+        </a>
+      </li>
+      <hr class="my-1 border-base-300">
+      <li>
         <button type="button" class="gap-3 rounded text-error" @click="ctxAction('delete')">
           <i data-lucide="trash-2" class="w-4 h-4"></i>
           <span>Delete</span>

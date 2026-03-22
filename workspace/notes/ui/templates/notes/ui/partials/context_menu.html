@@ -7,59 +7,57 @@
   @keydown.escape.window="closeCtxMenu()"
 >
   <!-- Folder actions -->
-  <template x-if="ctxMenu.type === 'folder'">
-    <ul class="menu menu-sm p-0">
-      <li>
-        <button type="button" class="gap-3 rounded" @click="ctxAction('rename')">
-          <i data-lucide="pencil" class="w-4 h-4"></i>
-          <span>Rename</span>
-        </button>
-      </li>
-      <li>
-        <button type="button" class="gap-3 rounded" @click="ctxAction('hide')">
-          <i data-lucide="eye-off" class="w-4 h-4"></i>
-          <span>Hide from sidebar</span>
-        </button>
-      </li>
-      <hr class="my-1 border-base-300">
-      <li>
-        <a :href="'/files/' + ctxMenu.data?.uuid" class="gap-3 rounded" @click="closeCtxMenu()">
-          <i data-lucide="hard-drive" class="w-4 h-4"></i>
-          <span>Open in Files</span>
-        </a>
-      </li>
-      <hr class="my-1 border-base-300">
-      <li>
-        <button type="button" class="gap-3 rounded text-error" @click="ctxAction('delete')">
-          <i data-lucide="trash-2" class="w-4 h-4"></i>
-          <span>Delete</span>
-        </button>
-      </li>
-    </ul>
-  </template>
+  <ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'folder'">
+    <li>
+      <button type="button" class="gap-3 rounded" @click="ctxAction('rename')">
+        <i data-lucide="pencil" class="w-4 h-4"></i>
+        <span>Rename</span>
+      </button>
+    </li>
+    <li>
+      <button type="button" class="gap-3 rounded" @click="ctxAction('hide')">
+        <i data-lucide="eye" class="w-4 h-4" x-show="isHidden(ctxMenu.data?.uuid)" x-cloak></i>
+        <i data-lucide="eye-off" class="w-4 h-4" x-show="!isHidden(ctxMenu.data?.uuid)"></i>
+        <span x-text="isHidden(ctxMenu.data?.uuid) ? 'Show in sidebar' : 'Hide from sidebar'"></span>
+      </button>
+    </li>
+    <hr class="my-1 border-base-300">
+    <li>
+      <a :href="'/files/' + ctxMenu.data?.uuid" class="gap-3 rounded" @click="closeCtxMenu()">
+        <i data-lucide="hard-drive" class="w-4 h-4"></i>
+        <span>Open in Files</span>
+      </a>
+    </li>
+    <hr class="my-1 border-base-300">
+    <li>
+      <button type="button" class="gap-3 rounded text-error" @click="ctxAction('delete')">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+        <span>Delete</span>
+      </button>
+    </li>
+  </ul>
 
   <!-- Tag actions -->
-  <template x-if="ctxMenu.type === 'tag'">
-    <ul class="menu menu-sm p-0">
-      <li>
-        <button type="button" class="gap-3 rounded" @click="ctxAction('edit')">
-          <i data-lucide="pencil" class="w-4 h-4"></i>
-          <span>Edit</span>
-        </button>
-      </li>
-      <li>
-        <button type="button" class="gap-3 rounded" @click="ctxAction('hide')">
-          <i data-lucide="eye-off" class="w-4 h-4"></i>
-          <span>Hide from sidebar</span>
-        </button>
-      </li>
-      <hr class="my-1 border-base-300">
-      <li>
-        <button type="button" class="gap-3 rounded text-error" @click="ctxAction('delete')">
-          <i data-lucide="trash-2" class="w-4 h-4"></i>
-          <span>Delete</span>
-        </button>
-      </li>
-    </ul>
-  </template>
+  <ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'tag'">
+    <li>
+      <button type="button" class="gap-3 rounded" @click="ctxAction('edit')">
+        <i data-lucide="pencil" class="w-4 h-4"></i>
+        <span>Edit</span>
+      </button>
+    </li>
+    <li>
+      <button type="button" class="gap-3 rounded" @click="ctxAction('hide')">
+        <i data-lucide="eye" class="w-4 h-4" x-show="isHidden(ctxMenu.data?.uuid)" x-cloak></i>
+        <i data-lucide="eye-off" class="w-4 h-4" x-show="!isHidden(ctxMenu.data?.uuid)"></i>
+        <span x-text="isHidden(ctxMenu.data?.uuid) ? 'Show in sidebar' : 'Hide from sidebar'"></span>
+      </button>
+    </li>
+    <hr class="my-1 border-base-300">
+    <li>
+      <button type="button" class="gap-3 rounded text-error" @click="ctxAction('delete')">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+        <span>Delete</span>
+      </button>
+    </li>
+  </ul>
 </div>

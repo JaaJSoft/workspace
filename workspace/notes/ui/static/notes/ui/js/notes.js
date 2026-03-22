@@ -8,6 +8,7 @@ window._notesPrefsDefaults = {
     confirmBeforeDelete: true,
     hiddenItems: [],
     showHidden: false,
+    expandedFolders: [],
 };
 window._notesPrefsCache = { ...window._notesPrefsDefaults };
 
@@ -468,6 +469,42 @@ window.notesApp = function notesApp(config) {
 
         isHidden(uuid) {
             return (this.notePrefs.hiddenItems || []).indexOf(uuid) !== -1;
+        },
+
+        isTreeHidden(uuid, ancestorsStr) {
+            var hidden = this.notePrefs.hiddenItems || [];
+            if (hidden.indexOf(uuid) !== -1) return true;
+            if (!ancestorsStr) return false;
+            var ancestors = ancestorsStr.split(',');
+            for (var i = 0; i < ancestors.length; i++) {
+                if (hidden.indexOf(ancestors[i]) !== -1) return true;
+            }
+            return false;
+        },
+
+        isFolderExpanded(uuid) {
+            return (this.notePrefs.expandedFolders || []).indexOf(uuid) !== -1;
+        },
+
+        toggleFolderExpand(uuid) {
+            var list = (this.notePrefs.expandedFolders || []).slice();
+            var idx = list.indexOf(uuid);
+            if (idx === -1) {
+                list.push(uuid);
+            } else {
+                list.splice(idx, 1);
+            }
+            this._updatePref('expandedFolders', list);
+        },
+
+        isAncestorCollapsed(ancestorsStr) {
+            if (!ancestorsStr) return false;
+            var expanded = this.notePrefs.expandedFolders || [];
+            var ancestors = ancestorsStr.split(',');
+            for (var i = 0; i < ancestors.length; i++) {
+                if (expanded.indexOf(ancestors[i]) === -1) return true;
+            }
+            return false;
         },
 
         toggleHidden(uuid) {

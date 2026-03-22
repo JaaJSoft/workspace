@@ -1,10 +1,65 @@
-function getCSRFToken() {
-    return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
-}
+// ── Notes Preferences ────────────────────────────────────
+window._notesPrefsDefaults = {
+    showTags: true,
+    showFolders: true,
+    showJournal: true,
+    defaultView: 'all',
+    sortBy: 'modified',
+    confirmBeforeDelete: true,
+};
+window._notesPrefsCache = { ...window._notesPrefsDefaults };
 
+// Eagerly fetch prefs so they're ready before Alpine init
+window._notesPrefsReady = fetch('/api/v1/settings/notes/preferences', { credentials: 'same-origin' })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+        if (data && data.value && typeof data.value === 'object') {
+            window._notesPrefsCache = { ...window._notesPrefsDefaults, ...data.value };
+        }
+    })
+    .catch(function() {});
+
+window.notesPreferences = function notesPreferences() {
+    var API_URL = '/api/v1/settings/notes/preferences';
+    var _saveTimer = null;
+
+    return {
+        prefs: { ...window._notesPrefsCache },
+
+        init() {
+            // Sync from eagerly loaded cache (no extra fetch needed)
+            this.prefs = { ...window._notesPrefsCache };
+        },
+
+        update(key, value) {
+            this.prefs[key] = value;
+            this._saveRemote();
+            this._broadcast();
+        },
+
+        _broadcast() {
+            window._notesPrefsCache = { ...this.prefs };
+            window.dispatchEvent(new CustomEvent('notes:preferences-changed', { detail: this.prefs }));
+        },
+
+        _saveRemote() {
+            clearTimeout(_saveTimer);
+            _saveTimer = setTimeout(function() {
+                fetch(API_URL, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    body: JSON.stringify({ value: this.prefs }),
+                }).catch(function() {});
+            }.bind(this), 500);
+        },
+    };
+};
+
+// ── Notes App ────────────────────────────────────────────
 window.notesApp = function notesApp(config) {
     config = config || {};
-    var initialView = config.view || 'all';
+    var prefs = window._notesPrefsCache;
+    var initialView = config.view || prefs.defaultView || 'all';
     var titleMap = { all: 'All notes', recent: 'Recent', journal: 'Journal' };
 
     return {
@@ -14,12 +69,15 @@ window.notesApp = function notesApp(config) {
         activeId: config.id || null,
         viewTitle: titleMap[initialView] || 'All notes',
 
+        // Preferences (reactive copy)
+        notePrefs: { ...window._notesPrefsCache },
+
         // Note list
         notes: [],
         loadingNotes: false,
 
-        // Tags (for editor tag dropdown)
-        allTags: [],
+        // Tags (from shared mixin)
+        ...window.tagsMixin(),
 
         // Editor
         selectedNote: null,
@@ -30,14 +88,47 @@ window.notesApp = function notesApp(config) {
         async init() {
             this.collapsed = localStorage.getItem('notes-sidebar-collapsed') === 'true';
 
+            // Wait for preferences to be loaded
+            await window._notesPrefsReady;
+            this.notePrefs = { ...window._notesPrefsCache };
+
+            // Resolve initial view: URL param takes priority, then saved pref
+            var savedPrefs = window._notesPrefsCache;
+            if (!config.view && savedPrefs.defaultView && savedPrefs.defaultView !== 'all') {
+                initialView = savedPrefs.defaultView;
+                this.activeView = initialView;
+                this.viewTitle = titleMap[initialView] || 'All notes';
+            }
+
             // Listen for sidebar refresh events
             window.addEventListener('notes:refresh-sidebar', this.refreshSidebar.bind(this));
 
-            // Load tags for the editor dropdown
-            var resp = await fetch('/api/v1/tags');
-            if (resp.ok) {
-                this.allTags = await resp.json();
+            // Listen for file action dialog events (use named functions to prevent duplicates)
+            var self = this;
+            if (!window._notesFileActionsRegistered) {
+                window._notesFileActionsRegistered = true;
+                window.addEventListener('create-folder', function(e) {
+                    window.fileActions.createFolder(e.detail.name, null)
+                        .then(function() { self.refreshSidebar(); })
+                        .catch(function() {});
+                });
+                window.addEventListener('rename-item', function(e) {
+                    window.fileActions.renameItem(e.detail.uuid, e.detail.name)
+                        .then(function() { self.refreshSidebar(); })
+                        .catch(function() {});
+                });
             }
+
+            // Sync reactive prefs and re-sort when preferences change
+            window.addEventListener('notes:preferences-changed', function(e) {
+                this.notePrefs = { ...e.detail };
+                if (this.activeView && this.activeView !== 'journal') {
+                    this.setView(this.activeView, this.activeId, this.viewTitle, true);
+                }
+            }.bind(this));
+
+            // Load tags for the editor dropdown
+            await this.loadTags();
 
             // Load initial notes based on SSR state
             if (initialView === 'journal') {
@@ -59,35 +150,41 @@ window.notesApp = function notesApp(config) {
 
         // ── Sidebar navigation ──────────────────────────────
 
+        _sortParam() {
+            var sortMap = { name: 'name', modified: '-updated_at', created: '-created_at' };
+            return sortMap[window._notesPrefsCache.sortBy] || '-updated_at';
+        },
+
         async setView(view, id, name, skipUrl) {
             this.activeView = view;
             this.activeId = id || null;
 
+            var sort = '&ordering=' + this._sortParam();
             var url;
             if (view === 'all') {
                 this.viewTitle = 'All notes';
-                url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=200';
+                url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=200' + sort;
             } else if (view === 'recent') {
                 this.viewTitle = 'Recent';
-                url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=50';
+                url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=50' + sort;
             } else if (view === 'tag') {
                 if (!name && id) {
                     var tagEl = document.querySelector('[data-tag-uuid="' + id + '"]');
                     if (tagEl) name = tagEl.dataset.tagName;
                 }
                 this.viewTitle = name || 'Tag';
-                url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=200&tags=' + id;
+                url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=200&tags=' + id + sort;
             } else if (view === 'folder') {
                 if (!name && id) {
                     var folderEl = document.querySelector('[data-folder-uuid="' + id + '"]');
                     if (folderEl) name = folderEl.dataset.folderName;
                 }
                 this.viewTitle = name || 'Folder';
-                url = '/api/v1/files?mime_type=text/markdown&parent=' + id;
+                url = '/api/v1/files?mime_type=text/markdown&parent=' + id + sort;
             } else {
                 this.viewTitle = 'All notes';
                 this.activeView = 'all';
-                url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=200';
+                url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=200' + sort;
             }
 
             await this.loadNotes(url);
@@ -267,7 +364,9 @@ window.notesApp = function notesApp(config) {
 
         async deleteNote() {
             if (!this.selectedNote) return;
-            if (!confirm('Delete "' + this.noteName(this.selectedNote) + '"?')) return;
+            if (window._notesPrefsCache.confirmBeforeDelete) {
+                if (!confirm('Delete "' + this.noteName(this.selectedNote) + '"?')) return;
+            }
 
             window.dispatchEvent(new CustomEvent('viewer-cleanup'));
 
@@ -288,37 +387,14 @@ window.notesApp = function notesApp(config) {
             }
         },
 
-        // ── Tags on notes ───────────────────────────────────
+        // ── File actions (delegate to shared helpers) ───────
 
-        noteHasTag(tagUuid) {
-            if (!this.selectedNote || !this.selectedNote.tags) return false;
-            return this.selectedNote.tags.some(function(t) { return t.uuid === tagUuid; });
+        showCreateFolderDialog: function() {
+            window.fileActions.showCreateFolderDialog();
         },
 
-        async toggleNoteTag(tag) {
-            if (!this.selectedNote) return;
-            var hasIt = this.noteHasTag(tag.uuid);
-            if (hasIt) {
-                await fetch('/api/v1/files/' + this.selectedNote.uuid + '/tags/' + tag.uuid, {
-                    method: 'DELETE',
-                    headers: { 'X-CSRFToken': getCSRFToken() },
-                });
-                this.selectedNote.tags = this.selectedNote.tags.filter(function(t) {
-                    return t.uuid !== tag.uuid;
-                });
-            } else {
-                var resp = await fetch('/api/v1/files/' + this.selectedNote.uuid + '/tags', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCSRFToken(),
-                    },
-                    body: JSON.stringify({ tag: tag.uuid }),
-                });
-                if (resp.ok) {
-                    this.selectedNote.tags.push({ uuid: tag.uuid, name: tag.name, color: tag.color });
-                }
-            }
+        showRenameDialog: function(uuid, name) {
+            window.fileActions.showRenameDialog(uuid, name);
         },
 
         // ── URL state ────────────────────────────────────────

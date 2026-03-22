@@ -51,14 +51,77 @@ x-init="init()"
           <i data-lucide="notebook-pen" class="w-6 h-6 text-success"></i>
           <span x-show="!collapsed" x-transition>Notes</span>
         </h2>
-        <button
-          x-show="!collapsed" x-transition
-          class="btn btn-ghost btn-sm btn-square mr-1 hover:text-success"
-          @click="createNote()"
-          title="New note"
-        >
-          <i data-lucide="plus" class="w-4 h-4"></i>
-        </button>
+        <div class="flex items-center gap-0.5" x-show="!collapsed" x-transition>
+          <div class="dropdown dropdown-end" x-data="notesPreferences()">
+            <button
+              type="button"
+              tabindex="0"
+              class="btn btn-ghost btn-sm btn-square hover:text-success"
+              aria-label="Settings"
+              title="Settings"
+            >
+              <i data-lucide="settings" class="w-4 h-4"></i>
+            </button>
+            <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1">
+              <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+                <i data-lucide="settings" class="w-4 h-4 text-success"></i>
+                Preferences
+              </h4>
+              <div class="space-y-3">
+                <!-- Sidebar sections -->
+                <label class="flex items-center justify-between gap-2 cursor-pointer">
+                  <span class="text-sm">Show journal</span>
+                  <input type="checkbox" class="toggle toggle-sm toggle-success"
+                    :checked="prefs.showJournal"
+                    @change="update('showJournal', $event.target.checked)">
+                </label>
+                <label class="flex items-center justify-between gap-2 cursor-pointer">
+                  <span class="text-sm">Show tags</span>
+                  <input type="checkbox" class="toggle toggle-sm toggle-success"
+                    :checked="prefs.showTags"
+                    @change="update('showTags', $event.target.checked)">
+                </label>
+                <label class="flex items-center justify-between gap-2 cursor-pointer">
+                  <span class="text-sm">Show folders</span>
+                  <input type="checkbox" class="toggle toggle-sm toggle-success"
+                    :checked="prefs.showFolders"
+                    @change="update('showFolders', $event.target.checked)">
+                </label>
+                <hr class="border-base-300">
+                <!-- Default view -->
+                <div>
+                  <label class="text-sm text-base-content/60 block mb-1">Default view</label>
+                  <select class="select select-bordered select-sm w-full"
+                    :value="prefs.defaultView"
+                    @change="update('defaultView', $event.target.value)">
+                    <option value="all">All notes</option>
+                    <option value="recent">Recent</option>
+                    <option value="journal">Journal</option>
+                  </select>
+                </div>
+                <!-- Sort by -->
+                <div>
+                  <label class="text-sm text-base-content/60 block mb-1">Sort notes by</label>
+                  <select class="select select-bordered select-sm w-full"
+                    :value="prefs.sortBy"
+                    @change="update('sortBy', $event.target.value)">
+                    <option value="modified">Last modified</option>
+                    <option value="created">Date created</option>
+                    <option value="name">Name</option>
+                  </select>
+                </div>
+                <hr class="border-base-300">
+                <!-- Confirm before delete -->
+                <label class="flex items-center justify-between gap-2 cursor-pointer">
+                  <span class="text-sm">Confirm before delete</span>
+                  <input type="checkbox" class="toggle toggle-sm toggle-success"
+                    :checked="prefs.confirmBeforeDelete"
+                    @change="update('confirmBeforeDelete', $event.target.checked)">
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -113,27 +176,7 @@ x-init="init()"
         >
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
-        <!-- Tag management -->
-        <div class="dropdown dropdown-end">
-          <div tabindex="0" role="button" class="btn btn-ghost btn-sm">
-            <i data-lucide="tag" class="w-4 h-4"></i>
-          </div>
-          <div tabindex="0" class="dropdown-content z-10 p-3 shadow-lg bg-base-200 rounded-box w-52">
-            <p class="text-xs font-semibold uppercase text-base-content/50 mb-2">Tags</p>
-            <template x-for="tag in allTags" :key="tag.uuid">
-              <label class="flex items-center gap-2 py-1 cursor-pointer">
-                <input
-                  type="checkbox"
-                  class="checkbox checkbox-xs"
-                  :checked="noteHasTag(tag.uuid)"
-                  @change="toggleNoteTag(tag)"
-                >
-                <span class="badge badge-sm" :class="'badge-' + tag.color" x-text="tag.name"></span>
-              </label>
-            </template>
-            <div x-show="allTags.length === 0" class="text-xs text-base-content/40">No tags yet</div>
-          </div>
-        </div>
+        {% include "files/ui/partials/tag_manager.html" %}
         <button class="btn btn-ghost btn-sm text-error" @click="deleteNote()">
           <i data-lucide="trash-2" class="w-4 h-4"></i>
         </button>
@@ -159,9 +202,15 @@ x-init="init()"
     </div>
   </div>
 </div>
+{% include "files/ui/partials/tag_dialog.html" %}
+{% include "files/ui/partials/folder_dialog.html" %}
+{% include "files/ui/partials/rename_dialog.html" %}
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{% static 'ui/js/icon_picker.js' %}"></script>
 <script src="{% static 'files/ui/js/file_lock.js' %}"></script>
+<script src="{% static 'files/ui/js/file_actions.js' %}"></script>
+<script src="{% static 'files/ui/js/tags.js' %}"></script>
 <script src="{% static 'notes/ui/js/notes.js' %}"></script>
 {% endblock %}

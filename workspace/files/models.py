@@ -536,6 +536,7 @@ class Tag(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tags')
     name = models.CharField(max_length=100)
+    icon = models.CharField(max_length=50, blank=True, default='')
     color = models.CharField(max_length=20, default='ghost')
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -1,0 +1,27 @@
+<!-- Create Folder Dialog -->
+<dialog id="create-folder-dialog" class="modal">
+  <div class="modal-box" x-data="{ folderName: '' }">
+    <h3 class="font-bold text-lg mb-4">Create New Folder</h3>
+    <form @submit.prevent="window.dispatchEvent(new CustomEvent('create-folder', { detail: { name: folderName } }))">
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">Folder name</span>
+        </label>
+        <input
+          x-model="folderName"
+          type="text"
+          placeholder="New folder"
+          class="input input-bordered w-full"
+          required
+        />
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('create-folder-dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Create</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

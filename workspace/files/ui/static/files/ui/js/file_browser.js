@@ -456,11 +456,7 @@ window.fileBrowser = function fileBrowser() {
     },
 
     showCreateFolderDialog() {
-      const dialog = document.getElementById('create-folder-dialog');
-      const input = dialog.querySelector('input');
-      input.value = '';
-      dialog.showModal();
-      setTimeout(() => input.focus(), 100);
+      window.fileActions.showCreateFolderDialog();
     },
 
     showCreateFileDialog(defaultType = 'txt') {
@@ -484,10 +480,7 @@ window.fileBrowser = function fileBrowser() {
     },
 
     showRenameDialog(uuid, name) {
-      const dialog = document.getElementById('rename-dialog');
-      window.dispatchEvent(new CustomEvent('open-rename', { detail: { uuid, name } }));
-      dialog.showModal();
-      setTimeout(() => dialog.querySelector('input').focus(), 100);
+      window.fileActions.showRenameDialog(uuid, name);
     },
 
     async confirmDelete(uuid, name, nodeType) {
@@ -505,27 +498,10 @@ window.fileBrowser = function fileBrowser() {
 
     async createFolder(name) {
       try {
-        const response = await fetch('/api/v1/files', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.getCsrfToken()
-          },
-          body: JSON.stringify({
-            name: name,
-            node_type: 'folder',
-            parent: this.currentFolder || null
-          })
-        });
-        if (response.ok) {
-          document.getElementById('create-folder-dialog').close();
-          this.refreshFolderBrowser();
-        } else {
-          const data = await response.json();
-          this.showAlert('error', data.detail || 'Failed to create folder');
-        }
+        await window.fileActions.createFolder(name, this.currentFolder || null);
+        this.refreshFolderBrowser();
       } catch (error) {
-        this.showAlert('error', 'Failed to create folder');
+        this.showAlert('error', error.message || 'Failed to create folder');
       }
     },
 
@@ -831,24 +807,11 @@ window.fileBrowser = function fileBrowser() {
     async renameItem(uuid, newName) {
       this._startLoading(uuid);
       try {
-        const response = await fetch(`/api/v1/files/${uuid}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.getCsrfToken()
-          },
-          body: JSON.stringify({ name: newName })
-        });
-        if (response.ok) {
-          document.getElementById('rename-dialog').close();
-          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-          this.refreshFolderBrowser();
-        } else {
-          const data = await response.json();
-          this.showAlert('error', data.detail || 'Failed to rename');
-        }
+        await window.fileActions.renameItem(uuid, newName);
+        window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+        this.refreshFolderBrowser();
       } catch (error) {
-        this.showAlert('error', 'Failed to rename');
+        this.showAlert('error', error.message || 'Failed to rename');
       } finally {
         this._stopLoading(uuid);
       }

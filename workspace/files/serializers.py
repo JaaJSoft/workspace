@@ -198,19 +198,25 @@ class FileSerializer(serializers.ModelSerializer):
         return super().validate(attrs)
 
     def create(self, validated_data):
-        validated_data['owner'] = self.context['request'].user
-        if validated_data.get('node_type') == File.NodeType.FILE:
-            uploaded = validated_data.get('content')
-            if uploaded is not None:
-                validated_data['size'] = uploaded.size
-                if not validated_data.get('mime_type'):
-                    validated_data['mime_type'] = FileService.infer_mime_type(
-                        validated_data.get('name'),
-                        uploaded=uploaded,
-                    )
-        else:
-            validated_data['size'] = None
-        return super().create(validated_data)
+        owner = self.context['request'].user
+        node_type = validated_data.get('node_type')
+
+        if node_type == File.NodeType.FOLDER:
+            return FileService.create_folder(
+                owner=owner,
+                name=validated_data['name'],
+                parent=validated_data.get('parent'),
+                icon=validated_data.get('icon'),
+                color=validated_data.get('color'),
+            )
+
+        return FileService.create_file(
+            owner=owner,
+            name=validated_data['name'],
+            parent=validated_data.get('parent'),
+            content=validated_data.get('content'),
+            mime_type=validated_data.get('mime_type'),
+        )
 
     def update(self, instance, validated_data):
         # Handle content update

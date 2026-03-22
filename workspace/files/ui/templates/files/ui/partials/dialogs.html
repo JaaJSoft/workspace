@@ -3,7 +3,12 @@
 <!-- Create File Dialog -->
 <dialog id="create-file-dialog" class="modal">
   <div class="modal-box" x-data="{ fileType: 'txt' }">
-    <h3 class="font-bold text-lg mb-4">Create New File</h3>
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
+      <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-primary/10 text-primary">
+        <i data-lucide="file-plus" class="w-5 h-5"></i>
+      </div>
+      Create New File
+    </h3>
     <form @submit.prevent="$dispatch('create-file', { name: $refs.fileName.value, fileType, customExt: $refs.customExt ? $refs.customExt.value : '' })">
       <div class="form-control mb-3">
         <label class="label">

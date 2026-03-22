@@ -56,7 +56,7 @@ ui_urlpatterns = [
 urlpatterns = [
     path('admin/', admin.site.urls),
     # Authentication
-    path('login', auth_views.LoginView.as_view(template_name='users/auth/login.html'), name='login'),
+    path('login', auth_views.LoginView.as_view(template_name='users/ui/auth/login.html'), name='login'),
     path('logout', auth_views.LogoutView.as_view(), name='logout'),
     # Service Worker (must be at root scope for push notifications)
     path('sw.js', serve, {'path': 'sw.js', 'document_root': Path(__file__).resolve().parent / 'common' / 'static'}, name='service-worker'),

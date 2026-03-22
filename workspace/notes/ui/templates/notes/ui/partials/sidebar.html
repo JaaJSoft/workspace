@@ -25,17 +25,21 @@
   <ul class="menu p-0 space-y-1">
     {% for tag in tags %}
     <li class="list-none">
-      <button
-        type="button"
-        class="flex items-center w-full text-left gap-3 p-2 text-base rounded-lg transition-colors"
+      <div
+        class="group flex items-center w-full gap-3 p-2 text-base rounded-lg transition-colors cursor-pointer"
         :class="activeView === 'tag' && activeId === '{{ tag.uuid }}' ? 'bg-{{ tag.color }}/10 text-{{ tag.color }} hover:bg-{{ tag.color }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-success'"
         data-tag-uuid="{{ tag.uuid }}"
         data-tag-name="{{ tag.name }}"
         @click="setView('tag', '{{ tag.uuid }}', '{{ tag.name }}')"
+        @contextmenu="openCtxMenu($event, 'tag', { uuid: '{{ tag.uuid }}', name: '{{ tag.name|escapejs }}', icon: '{{ tag.icon }}', color: '{{ tag.color }}' })"
       >
         <i data-lucide="{{ tag.icon|default:'tag' }}" class="w-5 h-5 flex-shrink-0 text-{{ tag.color }}"></i>
-        <span class="flex items-center gap-2 flex-1">{{ tag.name }}</span>
-      </button>
+        <span class="truncate flex-1">{{ tag.name }}</span>
+        <button type="button" class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity"
+                @click.stop="openCtxMenu($event, 'tag', { uuid: '{{ tag.uuid }}', name: '{{ tag.name|escapejs }}', icon: '{{ tag.icon }}', color: '{{ tag.color }}' })">
+          <i data-lucide="ellipsis-vertical" class="w-4 h-4"></i>
+        </button>
+      </div>
     </li>
     {% endfor %}
   </ul>
@@ -53,18 +57,22 @@
   <ul class="menu p-0 space-y-1">
     {% for folder in folders %}
     <li class="list-none">
-      <button
-        type="button"
-        class="flex items-center w-full text-left gap-3 p-2 text-base rounded-lg transition-colors"
+      <div
+        class="group flex items-center w-full gap-3 p-2 text-base rounded-lg transition-colors cursor-pointer"
         {% if folder.parent_id %}style="padding-left: 1.75rem"{% endif %}
         :class="activeView === 'folder' && activeId === '{{ folder.uuid }}' ? 'bg-success/10 text-success hover:bg-success/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-success'"
         data-folder-uuid="{{ folder.uuid }}"
         data-folder-name="{{ folder.name }}"
         @click="setView('folder', '{{ folder.uuid }}', '{{ folder.name }}')"
+        @contextmenu="openCtxMenu($event, 'folder', { uuid: '{{ folder.uuid }}', name: '{{ folder.name|escapejs }}' })"
       >
         <i data-lucide="{{ folder.icon|default:'folder' }}" class="w-5 h-5 flex-shrink-0{% if folder.color %} {{ folder.color }}{% endif %}"></i>
-        <span class="flex items-center gap-2 flex-1">{{ folder.name }}</span>
-      </button>
+        <span class="truncate flex-1">{{ folder.name }}</span>
+        <button type="button" class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity"
+                @click.stop="openCtxMenu($event, 'folder', { uuid: '{{ folder.uuid }}', name: '{{ folder.name|escapejs }}' })">
+          <i data-lucide="ellipsis-vertical" class="w-4 h-4"></i>
+        </button>
+      </div>
     </li>
     {% endfor %}
   </ul>

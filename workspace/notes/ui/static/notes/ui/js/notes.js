@@ -26,8 +26,8 @@ window.notesPreferences = function notesPreferences() {
     return {
         prefs: { ...window._notesPrefsCache },
 
-        init() {
-            // Sync from eagerly loaded cache (no extra fetch needed)
+        async init() {
+            await window._notesPrefsReady;
             this.prefs = { ...window._notesPrefsCache };
         },
 
@@ -71,6 +71,9 @@ window.notesApp = function notesApp(config) {
 
         // Preferences (reactive copy)
         notePrefs: { ...window._notesPrefsCache },
+
+        // Context menu
+        ctxMenu: { open: false, x: 0, y: 0, type: null, data: null },
 
         // Note list
         notes: [],
@@ -395,6 +398,60 @@ window.notesApp = function notesApp(config) {
 
         showRenameDialog: function(uuid, name) {
             window.fileActions.showRenameDialog(uuid, name);
+        },
+
+        // ── Context menu ─────────────────────────────────────
+
+        openCtxMenu(e, type, data) {
+            e.preventDefault();
+            var x = e.clientX;
+            var y = e.clientY;
+            // Prevent overflow
+            var menuW = 200, menuH = 160;
+            if (x + menuW > window.innerWidth) x = window.innerWidth - menuW;
+            if (y + menuH > window.innerHeight) y = window.innerHeight - menuH;
+            this.ctxMenu = { open: true, x: x, y: y, type: type, data: data };
+        },
+
+        closeCtxMenu() {
+            this.ctxMenu.open = false;
+        },
+
+        ctxAction(action) {
+            var m = this.ctxMenu;
+            this.closeCtxMenu();
+            if (!m.data) return;
+
+            if (m.type === 'folder') {
+                if (action === 'rename') {
+                    this.showRenameDialog(m.data.uuid, m.data.name);
+                } else if (action === 'delete') {
+                    if (!confirm('Delete folder "' + m.data.name + '"? Notes inside will be moved to trash.')) return;
+                    var self = this;
+                    fetch('/api/v1/files/' + m.data.uuid, {
+                        method: 'DELETE',
+                        headers: { 'X-CSRFToken': getCSRFToken() },
+                    }).then(function(resp) {
+                        if (resp.ok) self.refreshSidebar();
+                    });
+                }
+            } else if (m.type === 'tag') {
+                if (action === 'edit') {
+                    this.showTagModal(m.data);
+                } else if (action === 'delete') {
+                    if (!confirm('Delete tag "' + m.data.name + '"?')) return;
+                    var self = this;
+                    fetch('/api/v1/tags/' + m.data.uuid, {
+                        method: 'DELETE',
+                        headers: { 'X-CSRFToken': getCSRFToken() },
+                    }).then(function(resp) {
+                        if (resp.ok || resp.status === 204) {
+                            self.allTags = self.allTags.filter(function(t) { return t.uuid !== m.data.uuid; });
+                            self.refreshSidebar();
+                        }
+                    });
+                }
+            }
         },
 
         // ── URL state ────────────────────────────────────────

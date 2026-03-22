@@ -6,6 +6,8 @@ window._notesPrefsDefaults = {
     defaultView: 'all',
     sortBy: 'modified',
     confirmBeforeDelete: true,
+    hiddenItems: [],
+    showHidden: false,
 };
 window._notesPrefsCache = { ...window._notesPrefsDefaults };
 
@@ -29,6 +31,10 @@ window.notesPreferences = function notesPreferences() {
         async init() {
             await window._notesPrefsReady;
             this.prefs = { ...window._notesPrefsCache };
+            // Sync when prefs change from other components
+            window.addEventListener('notes:preferences-changed', function(e) {
+                this.prefs = { ...e.detail };
+            }.bind(this));
         },
 
         update(key, value) {
@@ -452,6 +458,41 @@ window.notesApp = function notesApp(config) {
                     });
                 }
             }
+
+            if (action === 'hide') {
+                this.toggleHidden(m.data.uuid);
+            }
+        },
+
+        isHidden(uuid) {
+            return (this.notePrefs.hiddenItems || []).indexOf(uuid) !== -1;
+        },
+
+        toggleHidden(uuid) {
+            var list = (this.notePrefs.hiddenItems || []).slice();
+            var idx = list.indexOf(uuid);
+            if (idx === -1) {
+                list.push(uuid);
+            } else {
+                list.splice(idx, 1);
+            }
+            this._updatePref('hiddenItems', list);
+        },
+
+        _updatePref(key, value) {
+            this.notePrefs[key] = value;
+            window._notesPrefsCache[key] = value;
+            // Notify other components (e.g. preferences dropdown)
+            window.dispatchEvent(new CustomEvent('notes:preferences-changed', {
+                detail: { ...window._notesPrefsCache }
+            }));
+            // Persist to server
+            var prefs = { ...window._notesPrefsCache };
+            fetch('/api/v1/settings/notes/preferences', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                body: JSON.stringify({ value: prefs }),
+            }).catch(function() {});
         },
 
         // ── URL state ────────────────────────────────────────

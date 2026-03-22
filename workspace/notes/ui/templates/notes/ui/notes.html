@@ -118,6 +118,13 @@ x-init="init()"
                     :checked="prefs.confirmBeforeDelete"
                     @change="update('confirmBeforeDelete', $event.target.checked)">
                 </label>
+                <!-- Show hidden items -->
+                <label class="flex items-center justify-between gap-2 cursor-pointer">
+                  <span class="text-sm">Show hidden items</span>
+                  <input type="checkbox" class="toggle toggle-sm toggle-success"
+                    :checked="prefs.showHidden"
+                    @change="update('showHidden', $event.target.checked)">
+                </label>
               </div>
             </div>
           </div>

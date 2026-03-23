@@ -354,7 +354,15 @@ window.notesApp = function notesApp(config) {
         // ── Note CRUD ───────────────────────────────────────
 
         async createNote() {
-            var name = prompt('Note name:');
+            var name = await AppDialog.prompt({
+                title: 'New note',
+                message: 'Enter a name for the note',
+                placeholder: 'My note',
+                okLabel: 'Create',
+                okClass: 'btn-success',
+                icon: 'file-plus',
+                iconClass: 'bg-success/10 text-success',
+            });
             if (!name) return;
             if (!name.endsWith('.md')) name += '.md';
 
@@ -388,7 +396,15 @@ window.notesApp = function notesApp(config) {
         async deleteNote() {
             if (!this.selectedNote) return;
             if (window._notesPrefsCache.confirmBeforeDelete) {
-                if (!confirm('Delete "' + this.noteName(this.selectedNote) + '"?')) return;
+                var ok = await AppDialog.confirm({
+                    title: 'Delete note',
+                    message: 'Are you sure you want to delete "' + this.noteName(this.selectedNote) + '"?',
+                    okLabel: 'Delete',
+                    okClass: 'btn-error',
+                    icon: 'trash-2',
+                    iconClass: 'bg-error/10 text-error',
+                });
+                if (!ok) return;
             }
 
             window.dispatchEvent(new CustomEvent('viewer-cleanup'));

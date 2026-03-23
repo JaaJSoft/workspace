@@ -87,6 +87,15 @@ window.notesApp = function notesApp(config) {
         loadingNotes: false,
         togglingFavorite: false,
 
+        // Filters
+        filters: {
+            search: '',
+            favorites: false,
+            tags: [],
+        },
+        _searchTimer: null,
+        showTagDropdown: false,
+
         // Tags (from shared mixin)
         ...window.tagsMixin(),
 
@@ -167,42 +176,40 @@ window.notesApp = function notesApp(config) {
         },
 
         async setView(view, id, name, skipUrl) {
+            id = id || null;
+            var viewChanged = (view !== this.activeView || id !== this.activeId);
             this.activeView = view;
-            this.activeId = id || null;
+            this.activeId = id;
             this._closeDrawerOnMobile();
 
-            var sort = '&ordering=' + this._sortParam();
-            var url;
             if (view === 'all') {
                 this.viewTitle = 'All notes';
-                url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=200' + sort;
             } else if (view === 'favorites') {
                 this.viewTitle = 'Favorites';
-                url = '/api/v1/files?mime_type=text/markdown&favorites=1' + sort;
             } else if (view === 'recent') {
                 this.viewTitle = 'Recent';
-                url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=50' + sort;
             } else if (view === 'tag') {
                 if (!name && id) {
                     var tagEl = document.querySelector('[data-tag-uuid="' + id + '"]');
                     if (tagEl) name = tagEl.dataset.tagName;
                 }
                 this.viewTitle = name || 'Tag';
-                url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=200&tags=' + id + sort;
             } else if (view === 'folder') {
                 if (!name && id) {
                     var folderEl = document.querySelector('[data-folder-uuid="' + id + '"]');
                     if (folderEl) name = folderEl.dataset.folderName;
                 }
                 this.viewTitle = name || 'Folder';
-                url = '/api/v1/files?mime_type=text/markdown&parent=' + id + sort;
             } else {
                 this.viewTitle = 'All notes';
                 this.activeView = 'all';
-                url = '/api/v1/files?mime_type=text/markdown&recent=1&recent_limit=200' + sort;
             }
 
-            await this.loadNotes(url);
+            if (viewChanged) {
+                this._resetFilters();
+            }
+
+            await this.loadNotes(this._buildNotesUrl());
 
             if (!skipUrl) {
                 this.selectedNote = null;
@@ -595,6 +602,109 @@ window.notesApp = function notesApp(config) {
         },
 
         // ── Helpers ─────────────────────────────────────────
+
+        _buildNotesUrl() {
+            var sort = '&ordering=' + this._sortParam();
+            var base = '/api/v1/files?mime_type=text/markdown';
+            var hasSearch = this.filters.search.trim();
+
+            if (this.activeView === 'all') {
+                if (!hasSearch) base += '&recent=1&recent_limit=200';
+                base += sort;
+            } else if (this.activeView === 'favorites') {
+                base += '&favorites=1' + sort;
+            } else if (this.activeView === 'recent') {
+                if (!hasSearch) base += '&recent=1&recent_limit=50';
+                base += sort;
+            } else if (this.activeView === 'tag') {
+                if (!hasSearch) base += '&recent=1&recent_limit=200';
+                base += '&tags=' + this.activeId + sort;
+            } else if (this.activeView === 'folder') {
+                base += '&parent=' + this.activeId + sort;
+            } else if (this.activeView === 'journal') {
+                base += '&parent=' + this.activeId + '&ordering=-name';
+            } else {
+                if (!hasSearch) base += '&recent=1&recent_limit=200';
+                base += sort;
+            }
+
+            // Append filter params
+            if (hasSearch) {
+                base += '&search=' + encodeURIComponent(this.filters.search.trim());
+            }
+            if (this.filters.favorites && this.activeView !== 'favorites') {
+                base += '&favorites=1';
+            }
+            if (this.filters.tags.length > 0) {
+                var filterTags = this.filters.tags;
+                if (this.activeView === 'tag' && this.activeId) {
+                    filterTags = filterTags.filter(function(t) { return t !== this.activeId; }.bind(this));
+                }
+                if (filterTags.length > 0) {
+                    base += (base.indexOf('&tags=') === -1 ? '&tags=' : ',') + filterTags.join(',');
+                }
+            }
+
+            return base;
+        },
+
+        _hasActiveFilters() {
+            return !!(this.filters.search || this.filters.favorites || this.filters.tags.length);
+        },
+
+        _resetFilters() {
+            this.filters = { search: '', favorites: false, tags: [] };
+            if (this._searchTimer) { clearTimeout(this._searchTimer); this._searchTimer = null; }
+            this.showTagDropdown = false;
+        },
+
+        applyFilters() {
+            this.loadNotes(this._buildNotesUrl());
+        },
+
+        toggleFilter(name) {
+            this.filters[name] = !this.filters[name];
+            this.applyFilters();
+        },
+
+        toggleTagFilter(tagUuid) {
+            var idx = this.filters.tags.indexOf(tagUuid);
+            if (idx === -1) {
+                this.filters.tags.push(tagUuid);
+            } else {
+                this.filters.tags.splice(idx, 1);
+            }
+            this.applyFilters();
+        },
+
+        onSearchInput() {
+            if (this._searchTimer) clearTimeout(this._searchTimer);
+            this._searchTimer = setTimeout(function() { this.applyFilters(); }.bind(this), 400);
+        },
+
+        clearFilters() {
+            this._resetFilters();
+            this.applyFilters();
+        },
+
+        highlightSearch(text) {
+            if (!text) return '';
+            var escaped = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            var q = this.filters.search.trim();
+            if (!q) return escaped;
+            var re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+            return escaped.replace(re, '<mark class="bg-warning/40 text-inherit rounded-sm px-0.5">$1</mark>');
+        },
+
+        selectedTagNames() {
+            var selected = this.filters.tags;
+            if (!selected.length) return '';
+            var names = this.allTags
+                .filter(function(t) { return selected.indexOf(t.uuid) !== -1; })
+                .map(function(t) { return t.name; });
+            if (names.length <= 2) return names.join(', ');
+            return names.slice(0, 2).join(', ') + ' +' + (names.length - 2);
+        },
 
         async _createMdFile(name, parentUuid) {
             var formData = new FormData();

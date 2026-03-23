@@ -31,29 +31,31 @@ x-init="init()"
   <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
          :class="collapsed ? 'w-16' : 'w-72'">
     <!-- Sidebar header -->
-    <div class="lg:border-b border-base-300 py-4 px-3">
+    <div class="lg:border-b border-base-300 py-4 px-3 relative" x-data="{ ...mailPreferences(), prefsOpen: false }">
       <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
         <h2 class="text-xl font-semibold flex items-center gap-2" :class="collapsed ? '' : 'pl-2'">
           <i data-lucide="mail" class="w-6 h-6 text-warning"></i>
           <span x-show="!collapsed" x-transition>Mail</span>
         </h2>
         <div class="flex items-center gap-0.5" x-show="!collapsed" x-transition>
-          <div class="dropdown dropdown-end" x-data="mailPreferences()">
-            <button type="button" tabindex="0" class="btn btn-ghost btn-sm btn-square hover:text-warning" aria-label="Settings" title="Settings">
-              <i data-lucide="settings" class="w-4 h-4"></i>
-            </button>
-            <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1">
-              <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-                <i data-lucide="settings" class="w-4 h-4 text-warning"></i>
-                Preferences
-              </h4>
-              {% include "mail/ui/partials/_preferences_content.html" %}
-            </div>
-          </div>
+          <button type="button" class="btn btn-ghost btn-sm btn-square hover:text-warning" aria-label="Settings" title="Settings"
+                  @click="prefsOpen = !prefsOpen">
+            <i data-lucide="settings" class="w-4 h-4"></i>
+          </button>
           <button class="btn btn-ghost btn-sm btn-square mr-1 hover:text-warning" @click="showCompose()" title="Compose (C)">
             <i data-lucide="plus" class="w-4 h-4"></i>
           </button>
         </div>
+      </div>
+      <!-- Preferences popover -->
+      <div x-show="prefsOpen" x-cloak x-transition
+           @click.outside="prefsOpen = false"
+           class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4">
+        <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+          <i data-lucide="settings" class="w-4 h-4 text-warning"></i>
+          Preferences
+        </h4>
+        {% include "mail/ui/partials/_preferences_content.html" %}
       </div>
     </div>
 

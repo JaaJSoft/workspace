@@ -79,13 +79,6 @@ x-init="init()"
       {% include "notes/ui/partials/sidebar.html" %}
     </div>
 
-    <!-- New note button (collapsed) -->
-    <div class="px-3 pb-2" x-show="collapsed && ['all', 'folder'].includes(activeView)" x-cloak>
-      <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="success" onclick="createNote()" tooltip="New note" %}
-      </ul>
-    </div>
-
     <!-- Bottom action: settings on mobile, collapse on desktop -->
     <div class="border-t border-base-300 py-4 px-3">
       <ul class="menu p-0 hidden lg:block">

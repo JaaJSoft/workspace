@@ -1,0 +1,54 @@
+<div class="space-y-3">
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Show journal</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-success"
+      :checked="prefs.showJournal"
+      @change="update('showJournal', $event.target.checked)">
+  </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Show tags</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-success"
+      :checked="prefs.showTags"
+      @change="update('showTags', $event.target.checked)">
+  </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Show folders</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-success"
+      :checked="prefs.showFolders"
+      @change="update('showFolders', $event.target.checked)">
+  </label>
+  <hr class="border-base-300">
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">Default view</label>
+    <select class="select select-bordered select-sm w-full"
+      :value="prefs.defaultView"
+      @change="update('defaultView', $event.target.value)">
+      <option value="all">All notes</option>
+      <option value="recent">Recent</option>
+      <option value="journal">Journal</option>
+    </select>
+  </div>
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">Sort notes by</label>
+    <select class="select select-bordered select-sm w-full"
+      :value="prefs.sortBy"
+      @change="update('sortBy', $event.target.value)">
+      <option value="modified">Last modified</option>
+      <option value="created">Date created</option>
+      <option value="name">Name</option>
+    </select>
+  </div>
+  <hr class="border-base-300">
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Confirm before delete</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-success"
+      :checked="prefs.confirmBeforeDelete"
+      @change="update('confirmBeforeDelete', $event.target.checked)">
+  </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Show hidden items</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-success"
+      :checked="prefs.showHidden"
+      @change="update('showHidden', $event.target.checked)">
+  </label>
+</div>

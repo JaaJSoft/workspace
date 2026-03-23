@@ -67,65 +67,7 @@ x-init="init()"
                 <i data-lucide="settings" class="w-4 h-4 text-success"></i>
                 Preferences
               </h4>
-              <div class="space-y-3">
-                <!-- Sidebar sections -->
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                  <span class="text-sm">Show journal</span>
-                  <input type="checkbox" class="toggle toggle-sm toggle-success"
-                    :checked="prefs.showJournal"
-                    @change="update('showJournal', $event.target.checked)">
-                </label>
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                  <span class="text-sm">Show tags</span>
-                  <input type="checkbox" class="toggle toggle-sm toggle-success"
-                    :checked="prefs.showTags"
-                    @change="update('showTags', $event.target.checked)">
-                </label>
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                  <span class="text-sm">Show folders</span>
-                  <input type="checkbox" class="toggle toggle-sm toggle-success"
-                    :checked="prefs.showFolders"
-                    @change="update('showFolders', $event.target.checked)">
-                </label>
-                <hr class="border-base-300">
-                <!-- Default view -->
-                <div>
-                  <label class="text-sm text-base-content/60 block mb-1">Default view</label>
-                  <select class="select select-bordered select-sm w-full"
-                    :value="prefs.defaultView"
-                    @change="update('defaultView', $event.target.value)">
-                    <option value="all">All notes</option>
-                    <option value="recent">Recent</option>
-                    <option value="journal">Journal</option>
-                  </select>
-                </div>
-                <!-- Sort by -->
-                <div>
-                  <label class="text-sm text-base-content/60 block mb-1">Sort notes by</label>
-                  <select class="select select-bordered select-sm w-full"
-                    :value="prefs.sortBy"
-                    @change="update('sortBy', $event.target.value)">
-                    <option value="modified">Last modified</option>
-                    <option value="created">Date created</option>
-                    <option value="name">Name</option>
-                  </select>
-                </div>
-                <hr class="border-base-300">
-                <!-- Confirm before delete -->
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                  <span class="text-sm">Confirm before delete</span>
-                  <input type="checkbox" class="toggle toggle-sm toggle-success"
-                    :checked="prefs.confirmBeforeDelete"
-                    @change="update('confirmBeforeDelete', $event.target.checked)">
-                </label>
-                <!-- Show hidden items -->
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                  <span class="text-sm">Show hidden items</span>
-                  <input type="checkbox" class="toggle toggle-sm toggle-success"
-                    :checked="prefs.showHidden"
-                    @change="update('showHidden', $event.target.checked)">
-                </label>
-              </div>
+              {% include "notes/ui/partials/_preferences_content.html" %}
             </div>
           </div>
         </div>
@@ -144,10 +86,13 @@ x-init="init()"
       </ul>
     </div>
 
-    <!-- Collapse toggle -->
+    <!-- Bottom action: settings on mobile, collapse on desktop -->
     <div class="border-t border-base-300 py-4 px-3">
-      <ul class="menu p-0" x-show="!isMobile()">
+      <ul class="menu p-0 hidden lg:block">
         {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" color="success" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+      </ul>
+      <ul class="menu p-0 lg:hidden">
+        {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="success" onclick="document.getElementById('notes-prefs-dialog').showModal()" tooltip="Preferences" %}
       </ul>
     </div>
   </aside>
@@ -220,6 +165,25 @@ x-init="init()"
 {% include "files/ui/partials/folder_dialog.html" %}
 {% include "files/ui/partials/rename_dialog.html" %}
 {% include "notes/ui/partials/context_menu.html" %}
+
+<!-- Mobile preferences dialog -->
+<dialog id="notes-prefs-dialog" class="modal" x-data="notesPreferences()">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg flex items-center gap-2">
+      <i data-lucide="settings" class="w-5 h-5 text-success"></i>
+      Preferences
+    </h3>
+    <div class="mt-4">
+      {% include "notes/ui/partials/_preferences_content.html" %}
+    </div>
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 {% endblock %}
 
 {% block extra_scripts %}

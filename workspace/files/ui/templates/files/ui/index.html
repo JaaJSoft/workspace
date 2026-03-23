@@ -61,51 +61,7 @@
               <i data-lucide="settings" class="w-4 h-4 text-primary"></i>
               Preferences
             </h4>
-            <div class="space-y-3">
-              <!-- Show hidden files -->
-              <label class="flex items-center justify-between gap-2 cursor-pointer">
-                <span class="text-sm">Show hidden files</span>
-                <input type="checkbox" class="toggle toggle-sm toggle-primary"
-                  :checked="prefs.showHiddenFiles"
-                  @change="update('showHiddenFiles', $event.target.checked)">
-              </label>
-              <!-- Confirm before delete -->
-              <label class="flex items-center justify-between gap-2 cursor-pointer">
-                <span class="text-sm">Confirm before delete</span>
-                <input type="checkbox" class="toggle toggle-sm toggle-primary"
-                  :checked="prefs.confirmBeforeDelete"
-                  @change="update('confirmBeforeDelete', $event.target.checked)">
-              </label>
-              <hr class="border-base-300">
-              <!-- Default sort -->
-              <div>
-                <label class="text-sm text-base-content/60 block mb-1">Default sort</label>
-                <select class="select select-bordered select-sm w-full"
-                  :value="prefs.defaultSort"
-                  @change="update('defaultSort', $event.target.value)">
-                  <option value="default">Default</option>
-                  <option value="name">Name</option>
-                  <option value="modified">Modified</option>
-                  <option value="created">Created</option>
-                  <option value="size">Size</option>
-                  <option value="type">Type</option>
-                </select>
-              </div>
-              <hr class="border-base-300">
-              <!-- Breadcrumb collapse threshold -->
-              <div>
-                <label class="text-sm text-base-content/60 block mb-1">
-                  Breadcrumb collapse after
-                </label>
-                <div class="flex items-center gap-2">
-                  <input type="range" min="2" max="8" step="1"
-                    class="range range-sm range-primary flex-1"
-                    :value="prefs.breadcrumbCollapse"
-                    @input="update('breadcrumbCollapse', parseInt($event.target.value))">
-                  <span class="text-sm font-mono w-5 text-center" x-text="prefs.breadcrumbCollapse"></span>
-                </div>
-              </div>
-            </div>
+            {% include "files/ui/partials/_preferences_content.html" %}
           </div>
         </div>
       </div>
@@ -174,10 +130,13 @@
       </ul>
     </div>
 
-    <!-- Toggle Button (Always at bottom) -->
+    <!-- Bottom action: settings on mobile, collapse on desktop -->
     <div class="border-t border-base-300 py-4 px-3">
-      <ul class="menu p-0" x-show="!isMobile()">
+      <ul class="menu p-0 hidden lg:block">
         {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" color="primary" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+      </ul>
+      <ul class="menu p-0 lg:hidden">
+        {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="primary" onclick="document.getElementById('files-prefs-dialog').showModal()" tooltip="Preferences" %}
       </ul>
     </div>
   </aside>
@@ -306,6 +265,25 @@
 {% include 'files/ui/partials/file_viewer_modal.html' %}
 {% include 'files/ui/partials/context_menu.html' %}
 {% include 'files/ui/partials/share_modal.html' %}
+
+<!-- Mobile preferences dialog -->
+<dialog id="files-prefs-dialog" class="modal" x-data="filePreferences()">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg flex items-center gap-2">
+      <i data-lucide="settings" class="w-5 h-5 text-primary"></i>
+      Preferences
+    </h3>
+    <div class="mt-4">
+      {% include "files/ui/partials/_preferences_content.html" %}
+    </div>
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 {% endblock %}
 
 {% block extra_scripts %}

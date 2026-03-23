@@ -43,72 +43,7 @@
                 <i data-lucide="settings" class="w-4 h-4 text-accent"></i>
                 Preferences
               </h4>
-              <div class="space-y-3">
-                <!-- Default view -->
-                <div>
-                  <label class="text-sm text-base-content/60 block mb-1">Default view</label>
-                  <select class="select select-bordered select-sm w-full"
-                    :value="prefs.defaultView"
-                    @change="updatePref('defaultView', $event.target.value)">
-                    <option value="dayGridMonth">Month</option>
-                    <option value="timeGridWeek">Week</option>
-                    <option value="timeGridDay">Day</option>
-                    <option value="listWeek">Agenda</option>
-                  </select>
-                </div>
-                <hr class="border-base-300">
-                <!-- First day of week -->
-                <div>
-                  <label class="text-sm text-base-content/60 block mb-1">First day of week</label>
-                  <select class="select select-bordered select-sm w-full"
-                    :value="prefs.firstDay"
-                    @change="updatePref('firstDay', parseInt($event.target.value))">
-                    <option value="1">Monday</option>
-                    <option value="0">Sunday</option>
-                    <option value="6">Saturday</option>
-                  </select>
-                </div>
-                <hr class="border-base-300">
-                <!-- Time format -->
-                <div>
-                  <label class="text-sm text-base-content/60 block mb-1">Time format</label>
-                  <select class="select select-bordered select-sm w-full"
-                    :value="prefs.timeFormat"
-                    @change="updatePref('timeFormat', $event.target.value)">
-                    <option value="24h">24h (14:00)</option>
-                    <option value="12h">12h (2:00 PM)</option>
-                  </select>
-                </div>
-                <hr class="border-base-300">
-                <!-- Week numbers -->
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                  <span class="text-sm">Show week numbers</span>
-                  <input type="checkbox" class="toggle toggle-sm toggle-accent"
-                    :checked="prefs.weekNumbers"
-                    @change="updatePref('weekNumbers', $event.target.checked)">
-                </label>
-                <!-- Default all day -->
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                  <span class="text-sm">Default to all day</span>
-                  <input type="checkbox" class="toggle toggle-sm toggle-accent"
-                    :checked="prefs.defaultAllDay"
-                    @change="updatePref('defaultAllDay', $event.target.checked)">
-                </label>
-                <!-- Show declined events -->
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                  <span class="text-sm">Show declined events</span>
-                  <input type="checkbox" class="toggle toggle-sm toggle-accent"
-                    :checked="prefs.showDeclined"
-                    @change="updatePref('showDeclined', $event.target.checked)">
-                </label>
-                <!-- Poll vote notifications -->
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                  <span class="text-sm">Poll vote notifications</span>
-                  <input type="checkbox" class="toggle toggle-sm toggle-accent"
-                    :checked="prefs.notifyPollVotes"
-                    @change="updatePref('notifyPollVotes', $event.target.checked)">
-                </label>
-              </div>
+              {% include "calendar/ui/partials/_preferences_content.html" %}
             </div>
           </div>
         </div>
@@ -248,10 +183,13 @@
       </ul>
     </div>
 
-    <!-- Collapse toggle -->
+    <!-- Bottom action: settings on mobile, collapse on desktop -->
     <div class="border-t border-base-300 py-4 px-3">
-      <ul class="menu p-0" x-show="!isMobile()">
+      <ul class="menu p-0 hidden lg:block">
         {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" color="accent" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+      </ul>
+      <ul class="menu p-0 lg:hidden">
+        {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="accent" onclick="document.getElementById('calendar-prefs-dialog').showModal()" tooltip="Preferences" %}
       </ul>
     </div>
   </aside>
@@ -1232,6 +1170,25 @@
 
 {% include "calendar/ui/partials/event_context_menu.html" %}
 {% include "calendar/ui/partials/help_dialog.html" %}
+
+<!-- Mobile preferences dialog -->
+<dialog id="calendar-prefs-dialog" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg flex items-center gap-2">
+      <i data-lucide="settings" class="w-5 h-5 text-accent"></i>
+      Preferences
+    </h3>
+    <div class="mt-4">
+      {% include "calendar/ui/partials/_preferences_content.html" %}
+    </div>
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 {% endblock %}
 
 {% block extra_scripts %}

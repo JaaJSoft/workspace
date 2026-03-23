@@ -28,10 +28,6 @@
       });
     },
 
-    _csrf() {
-      return document.cookie.split('; ')
-        .find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
-    },
 
     async fetchFolders(parentUuid) {
       this.loading = true;
@@ -84,7 +80,7 @@
           credentials: 'same-origin',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           body: JSON.stringify(body),
         });

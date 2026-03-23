@@ -192,12 +192,6 @@ function chatApp(currentUserId) {
       });
     },
 
-    // ── CSRF ───────────────────────────────────────────────
-    _csrf() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value
-        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-        || '';
-    },
 
     // ── Sidebar collapse ───────────────────────────────────
     toggleCollapse() {
@@ -535,7 +529,7 @@ function chatApp(currentUserId) {
             `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
             {
               method: 'POST',
-              headers: { 'X-CSRFToken': this._csrf() },
+              headers: { 'X-CSRFToken': getCSRFToken() },
               credentials: 'same-origin',
               body: formData,
             }
@@ -549,7 +543,7 @@ function chatApp(currentUserId) {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': this._csrf(),
+                'X-CSRFToken': getCSRFToken(),
               },
               credentials: 'same-origin',
               body: JSON.stringify(payload),
@@ -720,7 +714,7 @@ function chatApp(currentUserId) {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
-              'X-CSRFToken': this._csrf(),
+              'X-CSRFToken': getCSRFToken(),
             },
             credentials: 'same-origin',
             body: JSON.stringify({ body }),
@@ -766,7 +760,7 @@ function chatApp(currentUserId) {
           `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/${msgUuid}`,
           {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': this._csrf() },
+            headers: { 'X-CSRFToken': getCSRFToken() },
             credentials: 'same-origin',
           }
         );
@@ -798,7 +792,7 @@ function chatApp(currentUserId) {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'X-CSRFToken': this._csrf(),
+              'X-CSRFToken': getCSRFToken(),
             },
             credentials: 'same-origin',
             body: JSON.stringify({ emoji }),
@@ -819,7 +813,7 @@ function chatApp(currentUserId) {
       try {
         await fetch(`/api/v1/chat/conversations/${conversationId}/read`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
       } catch (e) {
@@ -932,7 +926,7 @@ function chatApp(currentUserId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           credentials: 'same-origin',
           body: JSON.stringify(payload),
@@ -958,7 +952,7 @@ function chatApp(currentUserId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           credentials: 'same-origin',
           body: JSON.stringify({ member_ids: [userId] }),
@@ -1326,7 +1320,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
           body: JSON.stringify({ title: trimmed }),
         });
@@ -1359,7 +1353,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
           body: JSON.stringify({ description: trimmed }),
         });
@@ -1387,7 +1381,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/clear`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok) {
@@ -1412,7 +1406,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 204) {
@@ -1509,7 +1503,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/members`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
           body: JSON.stringify({ user_ids: this.addMemberSelected.map(u => u.id) }),
         });
@@ -1542,7 +1536,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/members/${userId}`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 204) {
@@ -1609,7 +1603,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/avatar`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
           body: formData,
         });
@@ -1657,7 +1651,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/avatar`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 200) {
@@ -1687,7 +1681,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${uuid}/pin`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 201) {
@@ -1704,7 +1698,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${uuid}/pin`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 204) {
@@ -1736,7 +1730,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/messages/${messageId}/pin`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok) {
@@ -1753,7 +1747,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/messages/${messageId}/pin`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 204) {
@@ -1794,7 +1788,7 @@ function chatApp(currentUserId) {
       this._lastTypingSent = now;
       fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/typing`, {
         method: 'POST',
-        headers: { 'X-CSRFToken': this._csrf() },
+        headers: { 'X-CSRFToken': getCSRFToken() },
         credentials: 'same-origin',
       }).catch(() => {});
     },
@@ -1860,7 +1854,7 @@ function chatApp(currentUserId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           credentials: 'same-origin',
           body: JSON.stringify({ order }),
@@ -2339,7 +2333,7 @@ function chatApp(currentUserId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           credentials: 'same-origin',
           body: JSON.stringify(body),
@@ -2408,7 +2402,7 @@ function chatApp(currentUserId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           credentials: 'same-origin',
           body: JSON.stringify({
@@ -2463,7 +2457,7 @@ function chatApp(currentUserId) {
       try {
         const res = await fetch(`/api/v1/chat/conversations/${convId}/messages/${errorMsgUuid}/retry`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
         });
         if (!res.ok) throw new Error('Retry failed');
       } catch (e) {
@@ -2480,7 +2474,7 @@ function chatApp(currentUserId) {
       try {
         await fetch(`/api/v1/chat/conversations/${convId}/bot-cancel`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
       } catch (e) {
@@ -2537,7 +2531,7 @@ function chatApp(currentUserId) {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRFToken': this._csrf(),
+          'X-CSRFToken': getCSRFToken(),
         },
         credentials: 'same-origin',
         body: JSON.stringify({ content: content.trim() }),
@@ -2557,7 +2551,7 @@ function chatApp(currentUserId) {
       if (!ok) return;
       const resp = await fetch(`/api/v1/ai/memories/${mem.id}`, {
         method: 'DELETE',
-        headers: { 'X-CSRFToken': this._csrf() },
+        headers: { 'X-CSRFToken': getCSRFToken() },
         credentials: 'same-origin',
       });
       if (resp.ok) {
@@ -2613,7 +2607,7 @@ function chatApp(currentUserId) {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
-              'X-CSRFToken': this._csrf(),
+              'X-CSRFToken': getCSRFToken(),
             },
             credentials: 'same-origin',
             body: JSON.stringify({ prompt: prompt.trim() }),
@@ -2642,7 +2636,7 @@ function chatApp(currentUserId) {
           `/api/v1/chat/conversations/${this.activeConversation.uuid}/schedules/${sched.uuid}`,
           {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': this._csrf() },
+            headers: { 'X-CSRFToken': getCSRFToken() },
             credentials: 'same-origin',
           },
         );

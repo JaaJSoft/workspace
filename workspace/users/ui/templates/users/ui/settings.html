@@ -454,9 +454,7 @@
       setSetting(module, key, value) {
         if (!this.settings[module]) this.settings[module] = {};
         this.settings[module][key] = value;
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-          || document.cookie.split('; ').find(function(c) { return c.startsWith('csrftoken='); })?.split('=')[1]
-          || '';
+        const csrfToken = getCSRFToken();
         fetch('/api/v1/settings/' + module + '/' + key, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -528,9 +526,7 @@
         formData.append('crop_w', data.width);
         formData.append('crop_h', data.height);
 
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-          || document.cookie.split('; ').find(function(c) { return c.startsWith('csrftoken='); })?.split('=')[1]
-          || '';
+        const csrfToken = getCSRFToken();
 
         try {
           const res = await fetch('/api/v1/users/me/avatar', {
@@ -566,9 +562,7 @@
 
       async removeAvatar() {
         this.loading = true;
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-          || document.cookie.split('; ').find(function(c) { return c.startsWith('csrftoken='); })?.split('=')[1]
-          || '';
+        const csrfToken = getCSRFToken();
 
         try {
           const res = await fetch('/api/v1/users/me/avatar', {
@@ -625,9 +619,7 @@
         localStorage.setItem('theme', id);
         const toggle = document.getElementById('themeToggle');
         if (toggle) toggle.checked = (id === 'dark');
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-          || '';
+        const csrfToken = getCSRFToken();
         fetch('/api/v1/settings/core/theme', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -724,9 +716,7 @@
         if (this.$refs.feedbackContainer) this.$refs.feedbackContainer.replaceChildren();
         this.loading = true;
         try {
-          const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-            || document.cookie.split('; ').find(function(c) { return c.startsWith('csrftoken='); })?.split('=')[1]
-            || '';
+          const csrfToken = getCSRFToken();
           const res = await fetch('/api/v1/users/me/password', {
             method: 'POST',
             headers: {

@@ -73,11 +73,6 @@ window.calendarApp = function calendarApp(calendarsData) {
     pollSubmitting: false,
     pollFinalizeSlotId: null,
 
-    csrfToken() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value
-        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-        || '';
-    },
 
     init() {
       // Initialize visible calendars (all visible by default)
@@ -130,7 +125,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       fetch(this._prefsUrl, {
         method: 'PUT',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify({ value: this.prefs }),
       }).catch(() => {});
     },
@@ -296,7 +291,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch('/api/v1/calendar/calendars', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ name: name.trim(), color }),
         });
         if (resp.ok) {
@@ -310,7 +305,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/calendars/${uuid}`, {
           method: 'PUT',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ name: name.trim(), color }),
         });
         if (resp.ok) {
@@ -337,7 +332,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       const resp = await fetch(`/api/v1/calendar/calendars/${cal.uuid}`, {
         method: 'DELETE',
         credentials: 'same-origin',
-        headers: { 'X-CSRFToken': this.csrfToken() },
+        headers: { 'X-CSRFToken': getCSRFToken() },
       });
       if (resp.ok || resp.status === 204) {
         this.ownedCalendars = this.ownedCalendars.filter(c => c.uuid !== cal.uuid);
@@ -722,7 +717,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(url, {
           method,
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify(payload),
         });
         if (resp.ok) {
@@ -773,7 +768,7 @@ window.calendarApp = function calendarApp(calendarsData) {
           const resp = await fetch(url, {
             method: 'DELETE',
             credentials: 'same-origin',
-            headers: { 'X-CSRFToken': this.csrfToken() },
+            headers: { 'X-CSRFToken': getCSRFToken() },
           });
           if (resp.ok || resp.status === 204) {
             this.showPanel = false;
@@ -799,7 +794,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/events/${this.form.uuid}`, {
           method: 'DELETE',
           credentials: 'same-origin',
-          headers: { 'X-CSRFToken': this.csrfToken() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
         });
         if (resp.ok || resp.status === 204) {
           this.showPanel = false;
@@ -816,7 +811,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/events/${targetUuid}/respond`, {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ status: newStatus }),
         });
         if (resp.ok) {
@@ -1172,7 +1167,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch('/api/v1/calendar/polls', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({
             title: this.pollForm.title.trim(),
             description: this.pollForm.description,
@@ -1264,7 +1259,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/vote`, {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ votes }),
         });
         if (resp.ok) {
@@ -1283,7 +1278,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/finalize`, {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ slot_id: this.pollFinalizeSlotId }),
         });
         if (resp.ok) {
@@ -1309,7 +1304,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/polls/${uuid}`, {
           method: 'DELETE',
           credentials: 'same-origin',
-          headers: { 'X-CSRFToken': this.csrfToken() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
         });
         if (resp.ok || resp.status === 204) {
           if (this.showPollDetailModal) {
@@ -1368,7 +1363,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/invite`, {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ user_ids: [user.id] }),
         });
         if (resp.ok) {
@@ -1385,7 +1380,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/invite`, {
           method: 'DELETE',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ user_ids: [userId] }),
         });
         if (resp.ok) {
@@ -1436,7 +1431,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}`, {
           method: 'PATCH',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({
             title: this.pollForm.title.trim(),
             description: this.pollForm.description,

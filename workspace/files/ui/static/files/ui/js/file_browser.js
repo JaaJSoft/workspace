@@ -135,9 +135,7 @@ window.filePreferences = function filePreferences() {
     _saveRemote() {
       clearTimeout(this._saveTimer);
       this._saveTimer = setTimeout(() => {
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-          || '';
+        const csrfToken = getCSRFToken();
         fetch(API_URL, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -562,7 +560,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch('/api/v1/files', {
           method: 'POST',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           },
           body: formData
         });
@@ -694,7 +692,7 @@ window.fileBrowser = function fileBrowser() {
         xhr.onerror = () => reject(new Error('Network error'));
 
         xhr.open('POST', '/api/v1/files');
-        xhr.setRequestHeader('X-CSRFToken', this.getCsrfToken());
+        xhr.setRequestHeader('X-CSRFToken', getCSRFToken());
         xhr.send(formData);
       });
     },
@@ -823,7 +821,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(`/api/v1/files/${uuid}`, {
           method: 'DELETE',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -857,7 +855,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(`/api/v1/files/${uuid}/restore`, {
           method: 'POST',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -891,7 +889,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(`/api/v1/files/${uuid}/purge`, {
           method: 'DELETE',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -926,7 +924,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(url, {
           method: 'DELETE',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -949,7 +947,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(`/api/v1/files/${uuid}/favorite`, {
           method: isFavorite ? 'DELETE' : 'POST',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -977,7 +975,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(`/api/v1/files/${uuid}/pin`, {
           method: isPinned ? 'DELETE' : 'POST',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -1022,7 +1020,7 @@ window.fileBrowser = function fileBrowser() {
         try {
           const response = await fetch(`/api/v1/files/${uuid}`, {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': this.getCsrfToken() }
+            headers: { 'X-CSRFToken': getCSRFToken() }
           });
           if (response.ok) {
             successCount++;
@@ -1057,7 +1055,7 @@ window.fileBrowser = function fileBrowser() {
         try {
           const response = await fetch(`/api/v1/files/${uuid}/favorite`, {
             method: add ? 'POST' : 'DELETE',
-            headers: { 'X-CSRFToken': this.getCsrfToken() }
+            headers: { 'X-CSRFToken': getCSRFToken() }
           });
           if (response.ok) {
             successCount++;
@@ -1101,7 +1099,7 @@ window.fileBrowser = function fileBrowser() {
         try {
           const response = await fetch(`/api/v1/files/${uuid}/restore`, {
             method: 'POST',
-            headers: { 'X-CSRFToken': this.getCsrfToken() }
+            headers: { 'X-CSRFToken': getCSRFToken() }
           });
           if (response.ok) {
             successCount++;
@@ -1145,7 +1143,7 @@ window.fileBrowser = function fileBrowser() {
         try {
           const response = await fetch(`/api/v1/files/${uuid}/purge`, {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': this.getCsrfToken() }
+            headers: { 'X-CSRFToken': getCSRFToken() }
           });
           if (response.ok) {
             successCount++;
@@ -1180,7 +1178,7 @@ window.fileBrowser = function fileBrowser() {
         try {
           const response = await fetch(`/api/v1/files/${uuid}/pin`, {
             method: add ? 'POST' : 'DELETE',
-            headers: { 'X-CSRFToken': this.getCsrfToken() }
+            headers: { 'X-CSRFToken': getCSRFToken() }
           });
           if (response.ok) {
             successCount++;
@@ -1268,7 +1266,7 @@ window.fileBrowser = function fileBrowser() {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': this.getCsrfToken()
+                'X-CSRFToken': getCSRFToken()
               },
               body: JSON.stringify({ parent: targetFolderId })
             });
@@ -1278,7 +1276,7 @@ window.fileBrowser = function fileBrowser() {
               method: 'PATCH',
               headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': this.getCsrfToken()
+                'X-CSRFToken': getCSRFToken()
               },
               body: JSON.stringify({ parent: targetFolderId })
             });
@@ -1316,7 +1314,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(`/api/v1/files/${uuid}/pin`, {
           method: 'POST',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -1348,7 +1346,7 @@ window.fileBrowser = function fileBrowser() {
         await fetch(syncUrl, {
           method: 'POST',
           headers: {
-            'X-CSRFToken': this.getCsrfToken(),
+            'X-CSRFToken': getCSRFToken(),
           },
         });
       } catch (error) {
@@ -1412,10 +1410,6 @@ window.fileBrowser = function fileBrowser() {
       console.warn('AppAlert is not available:', message);
     },
 
-    getCsrfToken() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-             document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-    },
 
     init() {
       // Create reactive backing for the global isActionLoading() function.
@@ -1758,9 +1752,7 @@ window.fileTableControls = function fileTableControls() {
 
       this.actionsLoading = true;
       try {
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-          || '';
+        const csrfToken = getCSRFToken();
         const resp = await fetch('/api/v1/files/actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -1861,9 +1853,7 @@ window.fileTableControls = function fileTableControls() {
 
     async _bulkDownload(uuids) {
       try {
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-          || '';
+        const csrfToken = getCSRFToken();
         const resp = await fetch('/api/v1/files/bulk-download', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -2189,9 +2179,7 @@ window.fileTableControls = function fileTableControls() {
         const payload = this._getStatePayload();
         const serialized = JSON.stringify(payload);
         if (serialized === this._lastSyncedState) return;
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-          || '';
+        const csrfToken = getCSRFToken();
         fetch('/api/v1/settings/files/table_controls', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -2471,10 +2459,6 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
 
     },
 
-    getCsrfToken() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-             document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-    },
 
     onDragOver(event) {
       if (!event.dataTransfer.types.includes('application/x-pin-folder')) return;
@@ -2505,7 +2489,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
         if (!data.uuid) return;
         const response = await fetch(`/api/v1/files/${data.uuid}/pin`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this.getCsrfToken() }
+          headers: { 'X-CSRFToken': getCSRFToken() }
         });
         if (response.ok) {
           window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
@@ -2556,7 +2540,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
 
       // Load actions for the pinned folder
       try {
-        const csrfToken = this.getCsrfToken();
+        const csrfToken = getCSRFToken();
         const resp = await fetch('/api/v1/files/actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -2637,7 +2621,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           },
           body: JSON.stringify({ order: uuids })
         });
@@ -2790,9 +2774,7 @@ window.shareModal = function shareModal() {
     async save() {
       if (!this.fileUuid || !this.hasChanges) return;
       this.saving = true;
-      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-        || '';
+      const csrfToken = getCSRFToken();
       const headers = {
         'Content-Type': 'application/json',
         'X-CSRFToken': csrfToken,
@@ -2887,7 +2869,7 @@ window.shareModal = function shareModal() {
     async createShareLink() {
       if (!this.fileUuid) return;
       this.creatingLink = true;
-      const csrfToken = document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+      const csrfToken = getCSRFToken();
       const body = {};
       if (this.newLinkExpiry) body.expires_at = new Date(this.newLinkExpiry).toISOString();
       if (this.newLinkPassword) body.password = this.newLinkPassword;
@@ -2909,7 +2891,7 @@ window.shareModal = function shareModal() {
     },
 
     async deleteShareLink(linkUuid) {
-      const csrfToken = document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+      const csrfToken = getCSRFToken();
       try {
         await fetch(`/api/v1/files/${this.fileUuid}/share-links/${linkUuid}`, {
           method: 'DELETE',
@@ -3025,9 +3007,7 @@ window.viewToggle = function viewToggle() {
 
     _saveFilePrefs() {
       const API_URL = '/api/v1/settings/files/preferences';
-      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-        || '';
+      const csrfToken = getCSRFToken();
 
       fetch(API_URL, {
         method: 'PUT',
@@ -3097,11 +3077,6 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
     editingId: null,
     editBody: '',
 
-    _csrf() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value
-        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-        || '';
-    },
 
     async init() {
       await this.loadComments();
@@ -3126,7 +3101,7 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
       try {
         const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
           body: JSON.stringify({ body: this.newBody.trim() }),
         });
@@ -3158,7 +3133,7 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
       try {
         const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments/${commentUuid}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
           body: JSON.stringify({ body: this.editBody.trim() }),
         });
@@ -3174,7 +3149,7 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
       try {
         const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments/${commentUuid}`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok) {

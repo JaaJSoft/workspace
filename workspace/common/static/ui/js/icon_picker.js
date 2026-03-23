@@ -90,7 +90,7 @@ window.iconPicker = function iconPicker(uuid, initialIcon, initialColor, apiEndp
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
-              'X-CSRFToken': this.getCsrfToken()
+              'X-CSRFToken': getCSRFToken()
             },
             body: JSON.stringify({
               icon: this.selectedIcon,
@@ -113,9 +113,5 @@ window.iconPicker = function iconPicker(uuid, initialIcon, initialColor, apiEndp
       }, 300);
     },
 
-    getCsrfToken() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-             document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-    }
   };
 };

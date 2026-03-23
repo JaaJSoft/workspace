@@ -195,12 +195,10 @@
                   if (s === 'online') p.online.add(uid);
                   else if (s === 'away') p.away.add(uid);
                   else if (s === 'busy') p.busy.add(uid);
-                  const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-                    || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
                   await fetch('/api/v1/users/me/status', {
                     method: 'PUT',
                     credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
                     body: JSON.stringify({ status: s === 'online' ? 'auto' : s }),
                   });
                 },

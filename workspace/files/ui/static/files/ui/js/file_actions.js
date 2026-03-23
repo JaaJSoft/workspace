@@ -1,7 +1,3 @@
-function getCSRFToken() {
-    return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
-}
-
 /**
  * Shared file actions — dialog helpers and API calls.
  *

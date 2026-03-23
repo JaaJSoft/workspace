@@ -23,6 +23,7 @@
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="{% static 'ui/js/lucide.js' %}"></script>
+  <script src="{% static 'ui/js/csrf.js' %}"></script>
   <style>.lucide { pointer-events: none; }</style>
 
   <!-- Favicon -->
@@ -204,12 +205,9 @@
           document.documentElement.setAttribute('data-theme', newTheme);
           localStorage.setItem('theme', newTheme);
           // Persist to user settings API
-          const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-            || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-            || '';
           fetch('/api/v1/settings/core/theme', {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
             body: JSON.stringify({ value: newTheme }),
           }).catch(() => {});
         });
@@ -237,9 +235,7 @@
     (function () {
       var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (!tz) return;
-      var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-        || document.cookie.split('; ').find(function(c) { return c.startsWith('csrftoken='); })?.split('=')[1]
-        || '';
+      var csrfToken = getCSRFToken();
       fetch('/api/v1/settings/core/timezone')
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
@@ -717,7 +713,7 @@
         await fetch('/api/v1/notifications/' + uuid, {
           method: 'PATCH',
           credentials: 'same-origin',
-          headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '' },
+          headers: { 'X-CSRFToken': getCSRFToken() },
         });
         var item = this.items.find(n => n.uuid === uuid);
         if (item) item.is_read = true;
@@ -728,7 +724,7 @@
         await fetch('/api/v1/notifications/read-all', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '' },
+          headers: { 'X-CSRFToken': getCSRFToken() },
         });
         this.items.forEach(n => n.is_read = true);
         this.unread = 0;
@@ -738,7 +734,7 @@
         await fetch('/api/v1/notifications/' + uuid, {
           method: 'DELETE',
           credentials: 'same-origin',
-          headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '' },
+          headers: { 'X-CSRFToken': getCSRFToken() },
         });
         this.items = this.items.filter(n => n.uuid !== uuid);
       }
@@ -799,7 +795,7 @@
         });
         this.subscription = sub;
         var json = sub.toJSON();
-        var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        var csrfToken = getCSRFToken();
         await fetch('/api/v1/notifications/push/subscribe', {
           method: 'POST', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -812,7 +808,7 @@
         var endpoint = this.subscription.endpoint;
         await this.subscription.unsubscribe();
         this.subscription = null;
-        var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        var csrfToken = getCSRFToken();
         await fetch('/api/v1/notifications/push/subscribe', {
           method: 'DELETE', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },

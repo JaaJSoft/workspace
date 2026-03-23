@@ -429,16 +429,10 @@ function mailApp() {
       });
     },
 
-    // ----- CSRF -----
-    _csrf() {
-      return document.cookie.split('; ')
-        .find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
-    },
-
     async _fetch(url, opts = {}) {
       opts.headers = {
         ...opts.headers,
-        'X-CSRFToken': this._csrf(),
+        'X-CSRFToken': getCSRFToken(),
       };
       if (opts.body && !(opts.body instanceof FormData)) {
         opts.headers['Content-Type'] = 'application/json';
@@ -688,7 +682,7 @@ function mailApp() {
       if (this.classifyingFolder) return;
       this.classifyingFolder = true;
       try {
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        const csrfToken = getCSRFToken();
         const body = {};
         if (this.selectedFolder) body.folder_id = this.selectedFolder.uuid;
         const resp = await fetch('/api/v1/ai/tasks/mail/classify', {
@@ -996,7 +990,7 @@ function mailApp() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           body: JSON.stringify({ message_id: message.uuid }),
         });
@@ -1049,7 +1043,7 @@ function mailApp() {
       try {
         await fetch(`/api/v1/mail/messages/${message.uuid}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ ai_summary: '' }),
         });
       } catch (e) {
@@ -1072,7 +1066,7 @@ function mailApp() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           body: JSON.stringify(body),
         });
@@ -1263,7 +1257,7 @@ function mailApp() {
 
       const res = await fetch('/api/v1/mail/messages/send', {
         method: 'POST',
-        headers: { 'X-CSRFToken': this._csrf() },
+        headers: { 'X-CSRFToken': getCSRFToken() },
         credentials: 'same-origin',
         body: formData,
       });
@@ -1758,7 +1752,7 @@ function mailApp() {
       if (!ids.length) return;
       const hasLabel = this._msgCtxHasLabel(label.uuid);
       const method = hasLabel ? 'DELETE' : 'POST';
-      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+      const csrfToken = getCSRFToken();
       try {
         await Promise.all(ids.map(msgId =>
           fetch(`/api/v1/mail/messages/${msgId}/labels`, {
@@ -1902,7 +1896,7 @@ function mailApp() {
         const raw = event.dataTransfer.getData('text/plain');
         const ids = JSON.parse(raw);
         if (!Array.isArray(ids) || !ids.length) return;
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        const csrfToken = getCSRFToken();
         await Promise.all(ids.map(msgId =>
           fetch(`/api/v1/mail/messages/${msgId}/labels`, {
             method: 'POST',
@@ -2477,7 +2471,7 @@ function mailApp() {
       m.saving = true;
       m.error = '';
       try {
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        const csrfToken = getCSRFToken();
         const isEdit = !!m.uuid;
         const url = isEdit ? `/api/v1/mail/labels/${m.uuid}` : '/api/v1/mail/labels';
         const resp = await fetch(url, {
@@ -2508,7 +2502,7 @@ function mailApp() {
       if (!m.uuid) return;
       if (!confirm(`Delete label "${m.name}"? Messages won't be deleted.`)) return;
       try {
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        const csrfToken = getCSRFToken();
         const resp = await fetch(`/api/v1/mail/labels/${m.uuid}`, {
           method: 'DELETE',
           credentials: 'same-origin',

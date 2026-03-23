@@ -124,11 +124,6 @@
       var VIEWER_PREFS_URL = '/api/v1/settings/files/viewer';
       var _prefsSaveTimer = null;
 
-      function getCSRFToken() {
-        var match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
-        return match ? match.split('=')[1] : '';
-      }
-
       return {
         open: false,
         loading: false,

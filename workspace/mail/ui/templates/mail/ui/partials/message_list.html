@@ -104,8 +104,11 @@
 
   <template x-for="msg in messages" :key="msg.uuid">
     <div
-      class="flex items-start gap-2 px-3 py-2.5 border-b border-base-200 cursor-pointer transition-colors"
+      class="flex items-start gap-2 px-3 border-b border-base-200 cursor-pointer transition-colors"
       :class="{
+        'py-1.5': mailPrefs.density === 'compact',
+        'py-2.5': mailPrefs.density === 'normal' || !mailPrefs.density,
+        'py-3.5': mailPrefs.density === 'spacious',
         'bg-warning/5': selectedMessage?.uuid === msg.uuid,
         'hover:bg-base-200/50': selectedMessage?.uuid !== msg.uuid,
         'font-normal opacity-70': msg.is_read,
@@ -136,7 +139,7 @@
         <!-- Subject -->
         <div class="text-sm truncate" :class="msg.is_read ? 'text-base-content/60' : ''" x-html="highlightSearch(msg.subject || '(no subject)')"></div>
         <!-- Label badges -->
-        <div class="flex items-center gap-1 mt-0.5 flex-wrap" x-show="msg.labels?.length" x-cloak>
+        <div class="flex items-center gap-1 mt-0.5 flex-wrap" x-show="mailPrefs.showLabels && msg.labels?.length" x-cloak>
           <template x-for="lbl in msg.labels.slice(0, 3)" :key="lbl.uuid">
             <span class="badge badge-xs gap-0.5"
                   :class="lbl.color ? ('badge-' + lbl.color) : 'badge-ghost'"
@@ -150,7 +153,10 @@
           <span class="badge badge-ghost badge-xs truncate max-w-[10rem]" x-text="_getAccountEmail(msg.account_id)"></span>
         </div>
         <!-- Snippet -->
-        <div class="text-xs text-base-content/50 truncate mt-0.5" x-html="highlightSearch(msg.snippet)"></div>
+        <div class="text-xs text-base-content/50 mt-0.5"
+             :class="mailPrefs.previewLines === 2 ? 'line-clamp-2' : 'truncate'"
+             x-show="mailPrefs.previewLines > 0"
+             x-html="highlightSearch(msg.snippet)"></div>
       </div>
 
       <!-- Indicators -->

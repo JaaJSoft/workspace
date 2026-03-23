@@ -37,14 +37,23 @@ x-init="init()"
           <i data-lucide="mail" class="w-6 h-6 text-warning"></i>
           <span x-show="!collapsed" x-transition>Mail</span>
         </h2>
-        <button
-          x-show="!collapsed" x-transition
-          class="btn btn-ghost btn-sm btn-square mr-1 hover:text-warning"
-          @click="showCompose()"
-          title="Compose (C)"
-        >
-          <i data-lucide="plus" class="w-4 h-4"></i>
-        </button>
+        <div class="flex items-center gap-0.5" x-show="!collapsed" x-transition>
+          <div class="dropdown dropdown-end" x-data="mailPreferences()">
+            <button type="button" tabindex="0" class="btn btn-ghost btn-sm btn-square hover:text-warning" aria-label="Settings" title="Settings">
+              <i data-lucide="settings" class="w-4 h-4"></i>
+            </button>
+            <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1">
+              <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+                <i data-lucide="settings" class="w-4 h-4 text-warning"></i>
+                Preferences
+              </h4>
+              {% include "mail/ui/partials/_preferences_content.html" %}
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm btn-square mr-1 hover:text-warning" @click="showCompose()" title="Compose (C)">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -67,10 +76,13 @@ x-init="init()"
       </ul>
     </div>
 
-    <!-- Collapse toggle -->
+    <!-- Bottom action: settings on mobile, collapse on desktop -->
     <div class="border-t border-base-300 py-4 px-3">
-      <ul class="menu p-0" x-show="!isMobile()">
+      <ul class="menu p-0 hidden lg:block">
         {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" color="warning" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+      </ul>
+      <ul class="menu p-0 lg:hidden">
+        {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="warning" onclick="document.getElementById('mail-prefs-dialog').showModal()" tooltip="Preferences" %}
       </ul>
     </div>
   </aside>
@@ -110,18 +122,6 @@ x-init="init()"
         {% include "mail/ui/partials/message_detail.html" %}
       </div>
 
-      <!-- Empty state: has accounts but no folder/label selected -->
-      <div class="flex-1 flex items-center justify-center" x-show="!selectedFolder && !selectedLabel && !unifiedInbox">
-        <div class="text-center text-base-content/40">
-          <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
-          <p class="text-lg font-medium">Select a folder to view messages</p>
-          <!-- Mobile: open sidebar button -->
-          <label for="mail-drawer" class="btn btn-warning btn-sm mt-4 lg:hidden cursor-pointer">
-            <i data-lucide="menu" class="w-4 h-4"></i>
-            Open folders
-          </label>
-        </div>
-      </div>
     </div>
   </template>
 
@@ -266,6 +266,25 @@ x-init="init()"
 
 <!-- Help dialog -->
 {% include "mail/ui/partials/help_dialog.html" %}
+
+<!-- Mobile preferences dialog -->
+<dialog id="mail-prefs-dialog" class="modal" x-data="mailPreferences()">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg flex items-center gap-2">
+      <i data-lucide="settings" class="w-5 h-5 text-warning"></i>
+      Preferences
+    </h3>
+    <div class="mt-4">
+      {% include "mail/ui/partials/_preferences_content.html" %}
+    </div>
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 
 <!-- Compose dialog -->
 {% include "mail/ui/partials/compose_dialog.html" %}

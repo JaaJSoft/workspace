@@ -203,7 +203,7 @@ x-init="init()"
         <span class="loading loading-spinner loading-lg"></span>
       </div>
       <div x-ref="editorContainer" x-show="selectedNote && !loadingEditor" class="flex-1 min-h-0 overflow-auto flex flex-col bg-base-200"></div>
-      <div x-show="!selectedNote" class="flex items-center justify-center h-full text-base-content/30">
+      <div x-show="!selectedNote" x-cloak class="flex items-center justify-center h-full text-base-content/30">
         <div class="text-center">
           <i data-lucide="notebook-pen" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
           <p class="text-lg font-medium">Select or create a note</p>

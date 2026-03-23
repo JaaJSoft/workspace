@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.14.0
+
+### New: Notes
+
+Markdown-based note-taking app with rich organization features.
+
+- Notes app with tagging and activity tracking
+- Advanced filters and search highlighting
+- Context menu for folders and tags with "hide from sidebar" option
+- Folder tree structure with expand/collapse in sidebar
+- Refresh button and AppDialog for note actions
+
+### Mail
+
+- Unified inbox view as the default landing page
+- Customizable mail preferences: density, preview lines, and label visibility
+- Improved mobile support and responsiveness
+
+### Calendar
+
+- Availability check AI tool
+- Notifications sent only for future events
+- Timezone-aware datetime for event comparisons
+
+### Dashboard
+
+- Improved tab layout and responsiveness
+
+### UI
+
+- Dynamic quick actions and recent commands tracking
+- "Favorites" view across modules
+- "Open in Files" option in context menu
+- Improved folder and label selection with URL state handling
+- Mobile navigation with sidebar toggle and URL updates
+- Reusable preferences UI partials
+- Favorite toggle for images
+- Responsive button sizing in note and message lists
+
+### Infrastructure
+
+- Centralized CSRF token handling with `getCSRFToken` helper
+- Removed unused profile and settings templates
+- OpenAPI schema tags for shared links views
+
+### Fixes
+
+- Poll icons update dynamically after voting
+- SVG processing no longer causes infinite loop
+- `format_size` filter handles invalid inputs
+- `is_favorite` respects `user_can_edit` permissions
+- SSE reconnection and error handling improvements
+- Milkdown editor padding on smaller screens
+- Changelog modal width on smaller screens
+
 ## 0.13.0
 
 ### Files

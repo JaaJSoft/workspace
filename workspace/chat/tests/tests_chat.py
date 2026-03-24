@@ -954,6 +954,23 @@ class UnreadCountModelTests(ChatTestMixin, APITestCase):
 
         self.assertEqual(self._get_unread(self.member, self.group), 0)
 
+    def test_mark_read_preserves_last_read_at_when_no_unread(self):
+        """POST /read should NOT overwrite last_read_at when there are no unread messages."""
+        self.client.force_authenticate(self.creator)
+        self.client.post(self._msg_url(self.group.uuid), {'body': 'msg1'}, format='json')
+
+        # Member marks as read
+        self.client.force_authenticate(self.member)
+        self.client.post(self._read_url(self.group.uuid))
+        membership = ConversationMember.objects.get(conversation=self.group, user=self.member)
+        original_read_at = membership.last_read_at
+        self.assertIsNotNone(original_read_at)
+
+        # Call mark read again with no new messages
+        self.client.post(self._read_url(self.group.uuid))
+        membership.refresh_from_db()
+        self.assertEqual(membership.last_read_at, original_read_at)
+
     def test_mark_read_does_not_affect_other_members(self):
         """Marking read for one user doesn't affect another's count."""
         # Add extra_user to the group

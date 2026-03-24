@@ -67,9 +67,10 @@ class BotProfile(models.Model):
     @classmethod
     def accessible_by(cls, user):
         """Return a queryset of BotProfiles accessible by the given user."""
+        qs = cls.objects.filter(user__is_active=True)
         if user.is_superuser:
-            return cls.objects.all()
-        return cls.objects.filter(
+            return qs
+        return qs.filter(
             Q(is_public=True)
             | Q(created_by=user)
             | Q(allowed_users=user)

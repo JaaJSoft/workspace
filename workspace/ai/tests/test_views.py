@@ -51,6 +51,64 @@ class BotListTests(APITestCase):
         usernames = [b['username'] for b in resp.data]
         self.assertIn('test-assistant', usernames)
 
+    def test_inactive_bot_user_hidden(self):
+        self.bot_user.is_active = False
+        self.bot_user.save()
+        self.client.force_authenticate(self.user)
+        resp = self.client.get('/api/v1/ai/bots')
+        usernames = [b['username'] for b in resp.data]
+        self.assertNotIn('test-assistant', usernames)
+
+    def test_inactive_bot_user_hidden_even_for_superuser(self):
+        admin = User.objects.create_superuser(username='admin', password='pass123')
+        self.bot_user.is_active = False
+        self.bot_user.save()
+        self.client.force_authenticate(admin)
+        resp = self.client.get('/api/v1/ai/bots')
+        usernames = [b['username'] for b in resp.data]
+        self.assertNotIn('test-assistant', usernames)
+
+    def test_inactive_bot_user_hidden_even_if_allowed(self):
+        self.bot.is_public = False
+        self.bot.save()
+        self.bot.allowed_users.add(self.user)
+        self.bot_user.is_active = False
+        self.bot_user.save()
+        self.client.force_authenticate(self.user)
+        resp = self.client.get('/api/v1/ai/bots')
+        usernames = [b['username'] for b in resp.data]
+        self.assertNotIn('test-assistant', usernames)
+
+    def test_private_bot_visible_to_creator(self):
+        self.bot.is_public = False
+        self.bot.created_by = self.user
+        self.bot.save()
+        self.client.force_authenticate(self.user)
+        resp = self.client.get('/api/v1/ai/bots')
+        usernames = [b['username'] for b in resp.data]
+        self.assertIn('test-assistant', usernames)
+
+    def test_private_bot_visible_to_allowed_group(self):
+        from django.contrib.auth.models import Group
+        group = Group.objects.create(name='testers')
+        group.user_set.add(self.user)
+        self.bot.is_public = False
+        self.bot.save()
+        self.bot.allowed_groups.add(group)
+        self.client.force_authenticate(self.user)
+        resp = self.client.get('/api/v1/ai/bots')
+        usernames = [b['username'] for b in resp.data]
+        self.assertIn('test-assistant', usernames)
+
+    def test_superuser_sees_all_active_bots(self):
+        admin = User.objects.create_superuser(username='admin', password='pass123')
+        self.bot.is_public = False
+        self.bot.save()
+        self.client.force_authenticate(admin)
+        resp = self.client.get('/api/v1/ai/bots')
+        usernames = [b['username'] for b in resp.data]
+        self.assertIn('test-assistant', usernames)
+
 
 @override_settings(AI_API_KEY='test-key')
 class SummarizeViewTests(APITestCase):

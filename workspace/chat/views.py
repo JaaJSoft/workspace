@@ -849,9 +849,14 @@ class MarkReadView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        membership.last_read_at = timezone.now()
-        membership.unread_count = 0
-        membership.save(update_fields=['last_read_at', 'unread_count'])
+        update_fields = []
+        if membership.unread_count > 0 or membership.last_read_at is None:
+            membership.last_read_at = timezone.now()
+            membership.unread_count = 0
+            update_fields = ['last_read_at', 'unread_count']
+
+        if update_fields:
+            membership.save(update_fields=update_fields)
 
         # Mark any unread chat notification for this conversation as read
         from workspace.notifications.models import Notification

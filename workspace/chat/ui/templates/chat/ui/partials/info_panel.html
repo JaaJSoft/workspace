@@ -154,6 +154,11 @@
             x-show="memberDisplayName(member) !== member.user.username"
             x-text="'@' + member.user.username"
           ></p>
+          <p
+            class="text-[0.65rem] text-base-content/40 truncate"
+            x-show="member.last_read_at && member.user.id !== currentUserId"
+            x-html="'Read <time datetime=&quot;' + member.last_read_at + '&quot; data-localtime=&quot;smart&quot;></time>'"
+          ></p>
         </div>
         <!-- Remove button (visible to creator, not on self) -->
         <button

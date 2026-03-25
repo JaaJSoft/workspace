@@ -14,6 +14,8 @@
    ======================================================== */
 
 .milkdown {
+  --crepe-font-default: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --crepe-font-title: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --crepe-color-background: oklch(var(--b1));
   --crepe-color-on-background: oklch(var(--bc));
   --crepe-color-surface: oklch(var(--b2));
@@ -81,6 +83,33 @@
   fill: none !important;
 }
 
+/* Milkdown icon elements (slash menu, toolbar items, etc.)
+   Crepe injects .milkdown-icon with hardcoded colors.
+   Use a softer color than full text — 60% opacity base content.
+   Target both inside .milkdown and portals on document.body. */
+.milkdown .milkdown-icon,
+.milkdown-icon {
+  color: oklch(var(--bc) / 0.6) !important;
+}
+
+.milkdown .milkdown-icon svg,
+.milkdown-icon svg {
+  color: inherit !important;
+}
+
+/* Filled icons */
+.milkdown .milkdown-icon svg:not([fill="none"]),
+.milkdown-icon svg:not([fill="none"]) {
+  fill: currentColor !important;
+}
+
+/* Stroke-based (outlined) icons — fill must stay none */
+.milkdown .milkdown-icon svg[fill="none"],
+.milkdown-icon svg[fill="none"] {
+  fill: none !important;
+  stroke: currentColor !important;
+}
+
 /* --- cursor.css (custom rules) --- */
 
 .milkdown .crepe-drop-cursor {
@@ -100,7 +129,11 @@
   }
 
 .milkdown .ProseMirror-focused {
-    --prosemirror-virtual-cursor-color: var(--crepe-color-outline);
+    --prosemirror-virtual-cursor-color: oklch(var(--bc) / 0.5);
+  }
+
+.milkdown .ProseMirror-focused .prosemirror-virtual-cursor-animation {
+    animation-duration: 1.5s;
   }
 
 /* --- table.css (custom rules) --- */

@@ -28,7 +28,11 @@
     <li class="list-none" x-show="notePrefs.showHidden || !isHidden('{{ tag.uuid }}')">
       <div
         class="group flex items-center w-full gap-3 p-2 text-base rounded-lg transition-colors cursor-pointer"
+        {% if tag.color == 'ghost' or tag.color == 'neutral' %}
+        :class="activeView === 'tag' && activeId === '{{ tag.uuid }}' ? 'bg-success/10 text-success hover:bg-success/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-success'"
+        {% else %}
         :class="activeView === 'tag' && activeId === '{{ tag.uuid }}' ? 'bg-{{ tag.color }}/10 text-{{ tag.color }} hover:bg-{{ tag.color }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-success'"
+        {% endif %}
         data-tag-uuid="{{ tag.uuid }}"
         data-tag-name="{{ tag.name }}"
         @click="setView('tag', '{{ tag.uuid }}', '{{ tag.name }}')"

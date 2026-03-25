@@ -792,6 +792,11 @@ function mailApp() {
         const delta = newVal ? -1 : 1;
         if (this.selectedFolder) {
           this.selectedFolder.unread_count = Math.max(0, (this.selectedFolder.unread_count || 0) + delta);
+        } else if (this.unifiedInbox) {
+          // In unified inbox mode, find the actual folder object and update its count
+          const accFolders = this.folders[msg.account_id] || [];
+          const folder = accFolders.find(f => f.uuid === msg.folder_id);
+          if (folder) folder.unread_count = Math.max(0, (folder.unread_count || 0) + delta);
         }
         // Update label unread counts for labels on this message
         const msgLabels = listMsg?.labels || msg.labels || [];

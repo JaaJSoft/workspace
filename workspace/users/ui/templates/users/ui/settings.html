@@ -184,14 +184,11 @@
               Change Password
             </h2>
 
-            <!-- Password rules -->
-            <div x-ref="rulesContainer" class="mt-4"></div>
-
             <!-- Success/error feedback -->
             <div x-ref="feedbackContainer"></div>
 
             <!-- Form -->
-            <form @submit.prevent="submit()" class="mt-4 space-y-4">
+            <form @submit.prevent="submit()" class="mt-2 space-y-4">
               {% csrf_token %}
 
               <!-- Current password -->
@@ -232,6 +229,27 @@
                     <i x-show="showNew" data-lucide="eye-off" class="w-4 h-4 text-base-content/40"></i>
                   </button>
                 </label>
+                <!-- Password rules (inline) -->
+                <template x-if="rules.length > 0">
+                  <ul class="mt-2 space-y-0.5 text-xs">
+                    <template x-for="rule in rules" :key="rule.code">
+                      <li class="flex items-center gap-1.5 transition-colors duration-200"
+                          :class="{
+                            'text-success': ruleStatus(rule) === 'pass',
+                            'text-error': ruleStatus(rule) === 'fail',
+                            'text-base-content/40': ruleStatus(rule) === 'neutral'
+                          }">
+                        <!-- Pass icon -->
+                        <svg x-show="ruleStatus(rule) === 'pass'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                        <!-- Fail icon -->
+                        <svg x-show="ruleStatus(rule) === 'fail'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                        <!-- Neutral icon -->
+                        <svg x-show="ruleStatus(rule) === 'neutral'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/></svg>
+                        <span x-text="rule.text"></span>
+                      </li>
+                    </template>
+                  </ul>
+                </template>
               </div>
 
               <!-- Confirm password -->
@@ -678,33 +696,20 @@
           const res = await fetch('/api/v1/users/password-rules');
           const data = await res.json();
           this.rules = data.rules || [];
-          if (this.rules.length > 0) {
-            this.renderRules();
-          }
         } catch (e) {
           this.rules = [];
         }
       },
-      renderRules() {
-        const container = this.$refs.rulesContainer;
-        if (!container) return;
-        // Rules come from Django's password_validators_help_texts() - trusted server content
-        const list = this.rules.map(r => {
-          const el = document.createElement('li');
-          el.textContent = r;
-          return el;
-        });
-        const wrapper = document.createElement('div');
-        const title = document.createElement('div');
-        title.className = 'font-medium text-sm mb-1';
-        title.textContent = 'Password requirements:';
-        const ul = document.createElement('ul');
-        ul.className = 'list-disc list-inside text-sm space-y-0.5';
-        list.forEach(li => ul.appendChild(li));
-        wrapper.appendChild(title);
-        wrapper.appendChild(ul);
-        container.replaceChildren();
-        container.appendChild(InlineAlert.create({ type: 'info', message: wrapper.outerHTML }));
+      ruleStatus(rule) {
+        if (!this.newPassword) return 'neutral';
+        switch (rule.code) {
+          case 'min_length':
+            return this.newPassword.length >= rule.value ? 'pass' : 'fail';
+          case 'numeric':
+            return /[^0-9]/.test(this.newPassword) ? 'pass' : 'fail';
+          default:
+            return 'neutral';
+        }
       },
       get confirmMismatch() {
         return this.confirmPassword && this.newPassword !== this.confirmPassword;

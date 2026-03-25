@@ -1,3 +1,4 @@
+from django.conf import settings as django_settings
 from django.contrib.auth import password_validation, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
@@ -126,13 +127,40 @@ class PasswordRulesView(APIView):
             200: inline_serializer(
                 name='PasswordRules',
                 fields={
-                    'rules': serializers.ListField(child=serializers.CharField()),
+                    'rules': serializers.ListField(
+                        child=inline_serializer(
+                            name='PasswordRule',
+                            fields={
+                                'text': serializers.CharField(),
+                                'code': serializers.CharField(),
+                                'value': serializers.IntegerField(required=False),
+                            },
+                        )
+                    ),
                 },
             ),
         },
     )
     def get(self, request):
-        rules = password_validation.password_validators_help_texts()
+        validators = password_validation.get_password_validators(
+            django_settings.AUTH_PASSWORD_VALIDATORS
+        )
+        code_map = {
+            'MinimumLengthValidator': 'min_length',
+            'NumericPasswordValidator': 'numeric',
+            'CommonPasswordValidator': 'common',
+            'UserAttributeSimilarityValidator': 'similarity',
+        }
+        rules = []
+        for v in validators:
+            class_name = v.__class__.__name__
+            rule = {
+                'text': v.get_help_text(),
+                'code': code_map.get(class_name, 'custom'),
+            }
+            if class_name == 'MinimumLengthValidator':
+                rule['value'] = v.min_length
+            rules.append(rule)
         return Response({'rules': rules})
 
 

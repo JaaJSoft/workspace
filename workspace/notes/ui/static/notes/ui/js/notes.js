@@ -437,7 +437,17 @@ window.notesApp = function notesApp(config) {
             if (resp.ok) {
                 note.is_favorite = !isFav;
                 if (this.activeView === 'favorites' && isFav) {
+                    var idx = this.notes.findIndex(function(n) { return n.uuid === note.uuid; });
                     this.notes = this.notes.filter(function(n) { return n.uuid !== note.uuid; });
+                    if (this.selectedNote && this.selectedNote.uuid === note.uuid) {
+                        var next = this.notes[idx] || this.notes[idx - 1] || null;
+                        if (next) {
+                            this.selectNote(next);
+                        } else {
+                            this.selectedNote = null;
+                            this.updateUrl();
+                        }
+                    }
                 }
             }
             this.togglingFavorite = false;

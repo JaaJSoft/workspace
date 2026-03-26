@@ -90,7 +90,7 @@ window.isActionLoading = function (uuid) {
 };
 
 // --- File browser preferences ---
-window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list', mosaicTileSize: 3 };
+window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list', mosaicTileSize: 3, showPinned: true, showGroups: true };
 window._filePrefsCache = { ...window._filePrefsDefaults };
 
 window.getFilePrefs = function() {
@@ -150,11 +150,13 @@ window.sidebarCollapse = function sidebarCollapse() {
   return {
     collapsed: localStorage.getItem('sidebarCollapsed') === 'true',
     activeView: null,
+    showPinned: window._filePrefsCache.showPinned !== false,
+    showGroups: window._filePrefsCache.showGroups !== false,
 
     isMobile() {
       return window.matchMedia('(max-width: 1023px)').matches;
     },
-    
+
     init() {
       if (this.isMobile()) {
         this.collapsed = true;
@@ -162,6 +164,10 @@ window.sidebarCollapse = function sidebarCollapse() {
       this.syncActiveView();
       window.addEventListener('popstate', () => this.syncActiveView());
       window.addEventListener('nav-state-changed', () => this.syncActiveView());
+      window.addEventListener('preferences-changed', (e) => {
+        this.showPinned = e.detail.showPinned !== false;
+        this.showGroups = e.detail.showGroups !== false;
+      });
       window.matchMedia('(max-width: 1023px)').addEventListener('change', (event) => {
         if (event.matches) {
           this.collapsed = true;

@@ -9,7 +9,7 @@ Context variables:
 {% endcomment %}
 
 {% for pin in pinned_folders %}
-<li class="list-none pinned-folder-item"
+<li class="list-none pinned-folder-item" :class="collapsed ? 'flex justify-center' : ''"
     draggable="true"
     data-pinned-uuid="{{ pin.folder.uuid }}"
     :class="[

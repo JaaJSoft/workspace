@@ -9,11 +9,9 @@ Context variables:
 {% endcomment %}
 
 {% if group_folders or available_groups %}
-<hr class="my-3 border-base-300 transition-all duration-200"
-    :class="collapsed ? 'opacity-0' : 'opacity-100'">
-<div class="flex items-center overflow-hidden transition-all duration-200"
-     :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-1 opacity-100'"
-     :aria-hidden="collapsed">
+<hr class="my-2 border-base-300" x-show="!collapsed">
+<!-- Expanded: title + create button -->
+<div class="flex items-center mb-1" x-show="!collapsed" x-transition>
   <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider flex-1">
     <span class="flex items-center gap-2">
       <i data-lucide="users" class="w-3 h-3"></i>
@@ -27,15 +25,19 @@ Context variables:
     <i data-lucide="plus" class="w-3.5 h-3.5"></i>
   </button>
 </div>
+<!-- Collapsed: thin separator if there are folders -->
+{% if group_folders %}
+<hr class="my-1 border-base-300" x-show="collapsed">
+{% endif %}
 <ul class="space-y-0.5">
   {% for folder in group_folders %}
-  <li class="list-none"
+  <li class="list-none" :class="collapsed ? 'flex justify-center' : ''"
       @contextmenu.prevent="window.dispatchEvent(new CustomEvent('open-group-folder-context-menu', { detail: { event: $event, uuid: '{{ folder.uuid }}', name: '{{ folder.name|escapejs }}', isFavorite: false } }))">
     {% include "files/ui/partials/_sidebar_folder_item.html" with folder=folder default_icon="folder" default_color="text-warning" active_id="group:"|add:folder.uuid %}
   </li>
   {% endfor %}
   {% if not group_folders %}
-  <li class="list-none px-2 py-3 text-sm text-base-content/40" x-show="!collapsed">
+  <li class="list-none px-2 py-2 text-sm text-base-content/40" x-show="!collapsed">
     <span class="flex items-center gap-2 justify-center">
       <i data-lucide="users" class="w-4 h-4"></i>
       No group folders

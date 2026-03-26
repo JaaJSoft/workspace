@@ -12,6 +12,20 @@
       @change="update('confirmBeforeDelete', $event.target.checked)">
   </label>
   <hr class="border-base-300">
+  <label class="text-sm text-base-content/60 block mb-1">Sidebar sections</label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Show pinned folders</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-primary"
+      :checked="prefs.showPinned"
+      @change="update('showPinned', $event.target.checked)">
+  </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Show group folders</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-primary"
+      :checked="prefs.showGroups"
+      @change="update('showGroups', $event.target.checked)">
+  </label>
+  <hr class="border-base-300">
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Default sort</label>
     <select class="select select-bordered select-sm w-full"

@@ -166,6 +166,17 @@ window.notesApp = function notesApp(config) {
                     await this.selectNoteById(config.file);
                 }
             }
+
+            // Handle browser back/forward on mobile
+            window.addEventListener('popstate', function() {
+                var p = new URLSearchParams(window.location.search);
+                var fileId = p.get('file');
+                if (fileId) {
+                    this.selectNoteById(fileId);
+                } else {
+                    this.selectedNote = null;
+                }
+            }.bind(this));
         },
 
         // ── Sidebar navigation ──────────────────────────────
@@ -287,7 +298,7 @@ window.notesApp = function notesApp(config) {
 
         async selectNote(note) {
             this.selectedNote = note;
-            this.updateUrl();
+            this.updateUrl({push: this.isMobile()});
             await this.$nextTick();
             await this.loadViewer(note);
         },
@@ -590,7 +601,9 @@ window.notesApp = function notesApp(config) {
 
         // ── URL state ────────────────────────────────────────
 
-        updateUrl() {
+        updateUrl(options) {
+            options = options || {};
+            var push = options.push || false;
             var url = new URL(window.location);
             url.search = '';
 
@@ -607,7 +620,11 @@ window.notesApp = function notesApp(config) {
                 url.searchParams.set('file', this.selectedNote.uuid);
             }
 
-            window.history.replaceState({}, '', url);
+            if (push) {
+                window.history.pushState({}, '', url);
+            } else {
+                window.history.replaceState({}, '', url);
+            }
         },
 
         // ── Sidebar refresh ──────────────────────────────────

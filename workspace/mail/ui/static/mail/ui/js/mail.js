@@ -380,6 +380,18 @@ function mailApp() {
         this.selectUnifiedInbox();
       }
 
+      // Handle browser back/forward on mobile
+      window.addEventListener('popstate', () => {
+        const p = new URLSearchParams(window.location.search);
+        const msgId = p.get('message');
+        if (msgId) {
+          this._openMessageById(msgId);
+        } else {
+          this.selectedMessage = null;
+          this.messageDetail = null;
+        }
+      });
+
       // ?compose=email@example.com — open compose with pre-filled "to"
       const composeTo = params.get('compose');
       if (composeTo) {
@@ -741,7 +753,7 @@ function mailApp() {
 
       this.selectedMessage = msg;
       this.loadingDetail = true;
-      this._updateUrl(msg.uuid);
+      this._updateUrl(msg.uuid, {push: this.isMobile()});
       const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`);
       if (res.ok) {
         this.messageDetail = await res.json();
@@ -2274,9 +2286,13 @@ function mailApp() {
           break;
         case 'Escape':
           if (this.selectedMessage) {
-            this.selectedMessage = null;
-            this.messageDetail = null;
-            this._updateUrl(null);
+            if (this.isMobile()) {
+              history.back();
+            } else {
+              this.selectedMessage = null;
+              this.messageDetail = null;
+              this._updateUrl(null);
+            }
           }
           break;
         case '?':
@@ -2297,7 +2313,7 @@ function mailApp() {
     },
 
     // ----- URL -----
-    _updateUrl(messageUuid) {
+    _updateUrl(messageUuid, {push = false} = {}) {
       const url = new URL(window.location);
       url.search = '';
 
@@ -2312,7 +2328,11 @@ function mailApp() {
         url.searchParams.set('message', messageUuid);
       }
 
-      history.replaceState(null, '', url);
+      if (push) {
+        history.pushState(null, '', url);
+      } else {
+        history.replaceState(null, '', url);
+      }
     },
 
     _findFolderById(uuid) {

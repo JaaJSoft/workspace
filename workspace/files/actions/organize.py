@@ -44,6 +44,9 @@ class TogglePinAction(BaseAction):
     def is_available(self, user, file_obj, *, is_owner, share_permission=None):
         if file_obj.deleted_at is not None:
             return False
+        # Group root folders are already shown in the sidebar Groups section
+        if file_obj.group_id and file_obj.parent_id is None:
+            return False
         return is_owner
 
     def get_label(self, file_obj):

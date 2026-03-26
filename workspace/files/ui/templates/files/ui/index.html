@@ -70,14 +70,14 @@
     <!-- Quick Access -->
     <div class="flex-1 overflow-y-auto py-4 px-3">
       <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
-          :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-4 opacity-100'"
+          :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-1 opacity-100'"
           :aria-hidden="collapsed">
         <span class="flex items-center gap-2">
           <i data-lucide="zap" class="w-3 h-3"></i>
           Quick Access
         </span>
       </h3>
-      <ul class="space-y-2">
+      <ul class="space-y-0.5">
         {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="All Files" color="primary" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" color="warning" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" %}
         {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" %}
@@ -91,7 +91,7 @@
             :class="collapsed ? 'opacity-0' : 'opacity-100'"
             x-show="!collapsed || pinnedCount > 0">
         <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider overflow-hidden transition-all duration-200"
-            :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'"
+            :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-1 opacity-100'"
             :aria-hidden="collapsed"
             x-show="!collapsed || pinnedCount > 0">
           <span class="flex items-center gap-2">
@@ -106,9 +106,9 @@
           @dragleave="onDragLeave($event)"
           @drop.prevent="onDrop($event)"
           :class="dragOver ? 'bg-primary/10 ring-2 ring-primary/40 ring-inset rounded-lg scale-[1.02]' : ''"
-          class="transition-all duration-200 -mx-1 px-1 py-2 min-h-[60px]"
+          class="transition-all duration-200 -mx-1 px-1 py-1 min-h-[40px]"
         >
-          <ul class="space-y-2" id="pinned-folders-list" x-target="pinned-folders-list">
+          <ul class="space-y-0.5" id="pinned-folders-list" x-target="pinned-folders-list">
             {% include 'files/ui/partials/pinned_folders.html' %}
           </ul>
           <!-- Drop hint when dragging -->
@@ -121,6 +121,9 @@
           </div>
         </div>
       </div>
+
+      <!-- Group Folders -->
+      {% include 'files/ui/partials/group_folders_section.html' %}
     </div>
 
     <!-- Help Button -->
@@ -152,7 +155,7 @@
     <!-- Folder browser (replaced on navigation) -->
     <div class="flex-1 flex flex-col min-w-0">
       {% partialdef folder-browser inline %}
-      <div class="h-full flex flex-col" id="folder-browser" data-folder="{{ current_folder.uuid|default:'' }}" data-view-url="{{ current_view_url }}" data-parent-url="{{ parent_url|default:'' }}" x-init="$nextTick(() => { window.folderNav.onNavigate($el.dataset.viewUrl); window.dispatchEvent(new CustomEvent('folder-browser-replaced', { detail: { viewUrl: $el.dataset.viewUrl } })); })">
+      <div class="h-full flex flex-col" id="folder-browser" data-folder="{{ current_folder.uuid|default:'' }}" data-view-url="{{ current_view_url }}" data-parent-url="{{ parent_url|default:'' }}" data-sidebar-active="{{ sidebar_active }}" x-init="$nextTick(() => { window.folderNav.onNavigate($el.dataset.viewUrl); window.dispatchEvent(new CustomEvent('folder-browser-replaced', { detail: { viewUrl: $el.dataset.viewUrl } })); })">
 
         <!-- Top Header Bar -->
         <div class="bg-base-100 border-b border-base-300 p-4 lg:p-6">
@@ -239,6 +242,7 @@
               <p class="text-sm text-base-content/60">Files will be added to the current folder</p>
             </div>
           </div>
+          {% comment %}Group folders are shown in the sidebar{% endcomment %}
           {% include 'files/ui/partials/folder_content.html' with nodes=nodes folder_stats=folder_stats empty_title=empty_title empty_message=empty_message %}
         </div>
       </div>
@@ -262,6 +266,7 @@
 </div>
 
 {% include 'files/ui/partials/dialogs.html' %}
+{% include 'files/ui/partials/group_folder_dialog.html' %}
 {% include 'files/ui/partials/file_viewer_modal.html' %}
 {% include 'files/ui/partials/context_menu.html' %}
 {% include 'files/ui/partials/share_modal.html' %}

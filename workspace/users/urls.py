@@ -11,6 +11,7 @@ urlpatterns = [
     path('api/v1/users/me/status', views.UserStatusView.as_view(), name='user-status'),
     path('api/v1/users/<int:user_id>/avatar', views.UserAvatarRetrieveView.as_view(), name='user-avatar-retrieve'),
     path('api/v1/users/password-rules', views.PasswordRulesView.as_view(), name='user-password-rules'),
+    path('api/v1/users/groups', views.UserGroupsView.as_view(), name='user-groups'),
     # Settings
     path('api/v1/settings', views.SettingsListView.as_view(), name='settings-list'),
     path('api/v1/settings/<str:module>/<str:key>', views.SettingDetailView.as_view(), name='setting-detail'),

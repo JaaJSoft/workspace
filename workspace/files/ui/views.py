@@ -2,7 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.db.models import Exists, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404, render
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from ..models import File, FileFavorite, FileShare, FileShareLink, PinnedFolder
@@ -12,7 +12,7 @@ from workspace.users.settings_service import get_setting
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
 
 
-def build_breadcrumbs(folder):
+def build_breadcrumbs(folder, user=None):
     """Build breadcrumb trail from current folder to root."""
     breadcrumbs = []
     current = folder
@@ -24,12 +24,21 @@ def build_breadcrumbs(folder):
             'icon_color': current.color or 'text-warning',
         })
         current = current.parent
-    # Add root "Files" at the beginning
-    breadcrumbs.insert(0, {
-        'label': 'Files',
-        'url': '/files',
-        'icon': 'hard-drive',
-    })
+
+    # Group folders: prepend "Groups" as root
+    # Personal folders: prepend user's name as root
+    if folder.group_id:
+        breadcrumbs.insert(0, {
+            'label': 'Groups',
+            'icon': 'users',
+        })
+    else:
+        label = user.get_full_name() or user.username if user else 'My Files'
+        breadcrumbs.insert(0, {
+            'label': label,
+            'url': '/files',
+            'icon': 'hard-drive',
+        })
     return breadcrumbs
 
 
@@ -50,37 +59,37 @@ def _build_context(request, folder=None, is_trash_view=False):
         not is_shared_view and
         str(request.GET.get('recent', '')).lower() in {'1', 'true', 'yes'}
     )
-    breadcrumbs = [{'label': 'Files', 'url': '/files', 'icon': 'hard-drive'}]
+    user_label = request.user.get_full_name() or request.user.username
+    files_root = {'label': user_label, 'url': '/files', 'icon': 'hard-drive'}
+    breadcrumbs = [files_root]
 
-    if is_shared_view:
-        breadcrumbs = [
-            {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
-            {'label': 'Shared with me', 'icon': 'share-2'},
-        ]
-    elif is_trash_view:
-        breadcrumbs = [
-            {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
-            {'label': 'Trash', 'icon': 'trash-2'},
-        ]
-    elif is_favorites_view:
-        breadcrumbs = [
-            {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
-            {'label': 'Favorites', 'icon': 'star'},
-        ]
-    elif is_recent_view:
-        breadcrumbs = [
-            {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
-            {'label': 'Recent', 'icon': 'clock'},
-        ]
+    SPECIAL_VIEWS = {
+        'shared': {'label': 'Shared with me', 'icon': 'share-2'},
+        'trash': {'label': 'Trash', 'icon': 'trash-2'},
+        'favorites': {'label': 'Favorites', 'icon': 'star'},
+        'recent': {'label': 'Recent', 'icon': 'clock'},
+    }
+    active_special = (
+        'shared' if is_shared_view else
+        'trash' if is_trash_view else
+        'favorites' if is_favorites_view else
+        'recent' if is_recent_view else
+        None
+    )
+    if active_special:
+        breadcrumbs = [files_root, SPECIAL_VIEWS[active_special]]
     elif folder:
-        current_folder = get_object_or_404(
-            File,
+        current_folder = File.objects.filter(
             uuid=folder,
-            owner=request.user,
             node_type=File.NodeType.FOLDER,
             deleted_at__isnull=True,
-        )
-        breadcrumbs = build_breadcrumbs(current_folder)
+        ).filter(
+            Q(owner=request.user, group__isnull=True)
+            | Q(group__in=request.user.groups.all())
+        ).first()
+        if not current_folder:
+            raise Http404
+        breadcrumbs = build_breadcrumbs(current_folder, user=request.user)
 
     if is_shared_view:
         shared_file_ids = FileShare.objects.filter(
@@ -111,14 +120,22 @@ def _build_context(request, folder=None, is_trash_view=False):
             deleted_at__isnull=True,
         ).order_by('-updated_at', 'name')
     elif current_folder:
-        nodes = File.objects.filter(
-            owner=request.user,
-            deleted_at__isnull=True,
-            parent=current_folder,
-        ).order_by('-node_type', 'name')
+        if current_folder.group_id:
+            nodes = File.objects.filter(
+                group=current_folder.group,
+                deleted_at__isnull=True,
+                parent=current_folder,
+            ).order_by('-node_type', 'name')
+        else:
+            nodes = File.objects.filter(
+                owner=request.user,
+                deleted_at__isnull=True,
+                parent=current_folder,
+            ).order_by('-node_type', 'name')
     else:
         nodes = File.objects.filter(
             owner=request.user,
+            group__isnull=True,
             deleted_at__isnull=True,
             parent__isnull=True,
         ).order_by('-node_type', 'name')
@@ -159,26 +176,14 @@ def _build_context(request, folder=None, is_trash_view=False):
         else:
             folder_stats['folder_count'] += 1
 
-    if is_shared_view:
-        page_title = 'Shared with me'
-        current_view_url = '/files?shared=1'
-        empty_title = 'Nothing shared with you'
-        empty_message = 'Files others share with you will appear here.'
-    elif is_trash_view:
-        page_title = 'Trash'
-        current_view_url = '/files/trash'
-        empty_title = 'Trash is empty'
-        empty_message = 'Items you delete stay here for a while.'
-    elif is_favorites_view:
-        page_title = 'Favorites'
-        current_view_url = '/files?favorites=1'
-        empty_title = 'No favorites yet'
-        empty_message = 'Star files or folders to see them here.'
-    elif is_recent_view:
-        page_title = 'Recent'
-        current_view_url = '/files?recent=1'
-        empty_title = 'No recent files'
-        empty_message = 'Files you create or edit will show up here.'
+    VIEW_META = {
+        'shared': ('Shared with me', '/files?shared=1', 'Nothing shared with you', 'Files others share with you will appear here.'),
+        'trash': ('Trash', '/files/trash', 'Trash is empty', 'Items you delete stay here for a while.'),
+        'favorites': ('Favorites', '/files?favorites=1', 'No favorites yet', 'Star files or folders to see them here.'),
+        'recent': ('Recent', '/files?recent=1', 'No recent files', 'Files you create or edit will show up here.'),
+    }
+    if active_special:
+        page_title, current_view_url, empty_title, empty_message = VIEW_META[active_special]
     elif current_folder:
         page_title = current_folder.name
         current_view_url = f'/files/{current_folder.uuid}'
@@ -189,6 +194,18 @@ def _build_context(request, folder=None, is_trash_view=False):
         current_view_url = '/files'
         empty_title = None
         empty_message = None
+
+    # Group folders the user has access to
+    group_folders = File.objects.filter(
+        group__in=request.user.groups.all(),
+        parent__isnull=True,
+        deleted_at__isnull=True,
+        node_type=File.NodeType.FOLDER,
+    ).select_related('group').order_by('name')
+
+    # Groups without a folder yet (for "Create group folder" action)
+    groups_with_folders = group_folders.values_list('group_id', flat=True)
+    available_groups = request.user.groups.exclude(id__in=groups_with_folders).order_by('name')
 
     pinned_folders_qs = PinnedFolder.objects.filter(
         owner=request.user,
@@ -208,6 +225,28 @@ def _build_context(request, folder=None, is_trash_view=False):
             pin.folder.is_favorite = pinned_favorites.get(pin.folder_id, False)
 
     parent_url = breadcrumbs[-2].get('url', '/files') if len(breadcrumbs) >= 2 else None
+
+    # Determine which sidebar item should be active
+    if active_special:
+        sidebar_active = active_special
+    elif current_folder and current_folder.group_id:
+        # Find the group root folder UUID
+        group_root = current_folder
+        while group_root.parent_id:
+            group_root = group_root.parent
+        sidebar_active = f'group:{group_root.uuid}'
+    elif current_folder:
+        # Check if we're inside a pinned folder
+        pinned_ids = set(pinned_folder_ids) if pinned_folder_ids else set()
+        ancestor = current_folder
+        sidebar_active = 'root'
+        while ancestor:
+            if ancestor.pk in pinned_ids:
+                sidebar_active = f'pinned:{ancestor.uuid}'
+                break
+            ancestor = ancestor.parent
+    else:
+        sidebar_active = 'root'
 
     file_prefs = get_setting(request.user, 'files', 'preferences', default={})
     breadcrumb_collapse = file_prefs.get('breadcrumbCollapse', 4) if isinstance(file_prefs, dict) else 4
@@ -233,8 +272,11 @@ def _build_context(request, folder=None, is_trash_view=False):
         'empty_title': empty_title,
         'empty_message': empty_message,
         'parent_url': parent_url,
+        'sidebar_active': sidebar_active,
         'pinned_folders': pinned_folders_qs,
         'breadcrumb_collapse': breadcrumb_collapse,
+        'group_folders': group_folders,
+        'available_groups': available_groups,
     }
 
 

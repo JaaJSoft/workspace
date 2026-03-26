@@ -1,0 +1,29 @@
+{% comment %}
+Sidebar Folder Item
+===================
+Reusable row for a folder in the sidebar (pinned, group, etc.).
+
+Parameters:
+- folder: File object (must have .uuid, .name, .icon, .color)
+- default_icon: Lucide icon name fallback (default: 'folder')
+- default_color: CSS color class fallback (default: 'text-warning')
+- active_id: Value to match against activeView for active state (optional)
+- show_grip: Show drag grip handle (default: False)
+- extra_attrs: Additional Alpine attributes on the <a> tag (optional)
+{% endcomment %}
+
+<a href="/files/{{ folder.uuid }}"
+   class="group flex items-center hover:bg-base-300/50 p-2 text-base rounded-lg transition-colors"
+   :class="[
+     collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3',
+     {% if active_id %}activeView === '{{ active_id }}' ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'text-base-content/70'{% else %}'text-base-content/70'{% endif %}
+   ]"
+   x-target.push="folder-browser"
+   :title="collapsed ? '{{ folder.name|escapejs }}' : ''"
+   {{ extra_attrs }}>
+  <i data-lucide="{{ folder.icon|default:default_icon }}" class="w-5 h-5 flex-shrink-0 {{ folder.color|default:default_color }}"></i>
+  <span x-show="!collapsed" x-transition class="truncate flex-1">{{ folder.name }}</span>
+  {% if show_grip %}
+  <i data-lucide="grip-vertical" class="w-4 h-4 flex-shrink-0 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab" x-show="!collapsed"></i>
+  {% endif %}
+</a>

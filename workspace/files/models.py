@@ -1,4 +1,5 @@
 import os
+import posixpath
 import secrets
 from django.db import models, transaction
 from django.db.models import Value
@@ -19,14 +20,18 @@ def file_upload_path(instance, filename):
 
     Uses ``instance.path`` (set by ``File.save()`` before
     ``super().save()`` runs) to avoid walking the parent FK chain.
+    Group files are stored under ``files/groups/<group_name>/...``.
+    Personal files are stored under ``files/users/<username>/...``.
     """
+    if instance.group_id:
+        root = 'files/groups/' + instance.group.name
+    else:
+        root = 'files/users/' + instance.owner.username
+
     if instance.path:
-        # instance.path = "A/B/myfile.txt" — drop the last segment
         parent_parts = instance.path.split('/')[:-1]
-        return os.path.join(
-            'files', instance.owner.username, *parent_parts, filename,
-        )
-    return os.path.join('files', instance.owner.username, filename)
+        return posixpath.join(root, *parent_parts, filename)
+    return posixpath.join(root, filename)
 
 
 class MimeTypeRule(models.Model):
@@ -123,6 +128,13 @@ class File(models.Model):
 
     # Metadata
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='files')
+    group = models.ForeignKey(
+        'auth.Group',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='group_files',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -144,6 +156,7 @@ class File(models.Model):
             models.Index(fields=['parent', 'node_type']),
             models.Index(fields=['owner', 'created_at']),
             models.Index(fields=['owner', 'deleted_at'], name='file_owner_del_idx'),
+            models.Index(fields=['group', 'deleted_at'], name='file_group_del_idx'),
             models.Index(fields=['locked_by', 'lock_expires_at'], name='file_lock_idx'),
         ]
         constraints = [
@@ -156,6 +169,15 @@ class File(models.Model):
                     models.Q(node_type='file')
                 ),
                 name='folder_has_no_content'
+            ),
+            models.UniqueConstraint(
+                fields=['group'],
+                condition=models.Q(
+                    group__isnull=False,
+                    parent__isnull=True,
+                    deleted_at__isnull=True,
+                ),
+                name='unique_group_root_folder',
             ),
         ]
 
@@ -493,6 +515,15 @@ def delete_file_on_delete(sender, instance, **kwargs):
                     logger.info(f"Signal: Deleted folder and contents: {full_path}")
         except Exception as e:
             logger.warning(f"Signal: Could not delete folder {instance.name}: {e}")
+
+
+@receiver(pre_delete, sender='auth.Group')
+def soft_delete_group_files(sender, instance, **kwargs):
+    """Soft-delete all files belonging to this group before it is deleted."""
+    File.objects.filter(
+        group=instance,
+        deleted_at__isnull=True,
+    ).update(deleted_at=timezone.now())
 
 
 def _generate_share_link_token():

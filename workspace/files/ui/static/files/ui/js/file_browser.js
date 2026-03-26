@@ -179,32 +179,9 @@ window.sidebarCollapse = function sidebarCollapse() {
     },
 
     syncActiveView() {
-      const path = window.location.pathname.replace(/\/+$/, '');
-      const params = new URLSearchParams(window.location.search);
-      const favorites = (params.get('favorites') || '').toLowerCase();
-      const recent = (params.get('recent') || '').toLowerCase();
-      const shared = (params.get('shared') || '').toLowerCase();
-      if (['1', 'true', 'yes'].includes(shared)) {
-        this.activeView = 'shared';
-        return;
-      }
-      if (['1', 'true', 'yes'].includes(favorites)) {
-        this.activeView = 'favorites';
-        return;
-      }
-      if (['1', 'true', 'yes'].includes(recent)) {
-        this.activeView = 'recent';
-        return;
-      }
-      if (path === '/files/trash') {
-        this.activeView = 'trash';
-        return;
-      }
-      if (path === '/files' || path.startsWith('/files/')) {
-        this.activeView = 'root';
-        return;
-      }
-      this.activeView = null;
+      const browser = document.getElementById('folder-browser');
+      const sidebarActive = browser ? browser.dataset.sidebarActive : null;
+      this.activeView = sidebarActive || 'root';
     },
 
     setActiveView(view) {
@@ -500,6 +477,34 @@ window.fileBrowser = function fileBrowser() {
         this.refreshFolderBrowser();
       } catch (error) {
         this.showAlert('error', error.message || 'Failed to create folder');
+      }
+    },
+
+    async createGroupFolder(groupId, groupName) {
+      try {
+        const response = await fetch('/api/v1/files', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          body: JSON.stringify({
+            name: groupName,
+            node_type: 'folder',
+            group: groupId,
+          }),
+        });
+        if (response.ok) {
+          window.location.reload();
+        } else {
+          let data = {};
+          try {
+            data = await response.json();
+          } catch (_) {}
+          this.showAlert('error', data.detail || 'Failed to create group folder');
+        }
+      } catch (error) {
+        this.showAlert('error', 'Failed to create group folder');
       }
     },
 
@@ -2454,6 +2459,20 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
           isViewable: false,
           isTrash: false,
           isPinned: true
+        });
+      });
+
+      // Listen for group folder context menu events
+      window.addEventListener('open-group-folder-context-menu', (e) => {
+        this.openContextMenu(e.detail.event, {
+          uuid: e.detail.uuid,
+          name: e.detail.name,
+          nodeType: 'folder',
+          mimeType: '',
+          isFavorite: e.detail.isFavorite,
+          isViewable: false,
+          isTrash: false,
+          isPinned: false
         });
       });
 

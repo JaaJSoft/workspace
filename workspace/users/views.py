@@ -15,8 +15,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 
+from workspace.files.models import File
 from workspace.users import avatar_service, presence_service
 from workspace.users.models import UserSetting
 
@@ -505,3 +506,30 @@ class SettingDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UserGroupsView(APIView):
+    """List the current user's Django groups with folder status."""
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="List current user's groups",
+        tags=['Users'],
+    )
+    def get(self, request):
+        groups = request.user.groups.all()
+        folder_subquery = File.objects.filter(
+            group_id=OuterRef('pk'),
+            parent__isnull=True,
+            deleted_at__isnull=True,
+        )
+        groups = groups.annotate(has_folder=Exists(folder_subquery))
+        data = [
+            {
+                'id': g.id,
+                'name': g.name,
+                'has_folder': g.has_folder,
+            }
+            for g in groups
+        ]
+        return Response(data)

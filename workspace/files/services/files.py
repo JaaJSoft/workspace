@@ -8,6 +8,7 @@ import gc
 import logging
 import mimetypes
 import os
+import posixpath
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -26,15 +27,23 @@ class FileService:
 
     @staticmethod
     def user_files_qs(user):
-        """Return a queryset of active (non-deleted) files owned by the user."""
-        return File.objects.filter(owner=user, deleted_at__isnull=True)
+        """Return a queryset of active (non-deleted) personal files owned by the user."""
+        return File.objects.filter(owner=user, group__isnull=True, deleted_at__isnull=True)
+
+    @staticmethod
+    def user_group_files_qs(user):
+        """Return a queryset of active group files the user can access."""
+        return File.objects.filter(
+            group__in=user.groups.all(),
+            deleted_at__isnull=True,
+        )
 
     # ------------------------------------------------------------------
     # Creation
     # ------------------------------------------------------------------
 
     @staticmethod
-    def create_file(owner, name, parent=None, *, content=None, mime_type=None):
+    def create_file(owner, name, parent=None, *, content=None, mime_type=None, group=None):
         """Create a new file record, optionally with uploaded content.
 
         Args:
@@ -43,10 +52,15 @@ class FileService:
             parent: Parent File (folder) or None for root.
             content: An uploaded file object (UploadedFile / ContentFile) or None.
             mime_type: Explicit MIME type. Inferred from *content* / *name* when omitted.
+            group: Group instance to associate with the file, or None. Auto-inherited
+                from *parent* when not provided.
 
         Returns:
             The saved File instance.
         """
+        if group is None and parent and parent.group_id:
+            group = parent.group
+
         if not mime_type and content is not None:
             mime_type = FileService.infer_mime_type(name, uploaded=content)
 
@@ -59,6 +73,7 @@ class FileService:
             parent=parent,
             mime_type=mime_type or 'application/octet-stream',
             size=size,
+            group=group,
         )
         if content is not None:
             file_obj.content = content
@@ -66,15 +81,22 @@ class FileService:
         return file_obj
 
     @staticmethod
-    def create_folder(owner, name, parent=None, *, icon=None, color=None):
+    def create_folder(owner, name, parent=None, *, icon=None, color=None, group=None):
         """Create a new folder record.
 
         Also creates the directory on the storage backend when supported
         (e.g. ``FileSystemStorage``).
 
+        Args:
+            group: Group instance to associate with the folder, or None. Auto-inherited
+                from *parent* when not provided.
+
         Returns:
             The saved File instance (node_type=FOLDER).
         """
+        if group is None and parent and parent.group_id:
+            group = parent.group
+
         folder = File(
             owner=owner,
             name=name,
@@ -82,6 +104,7 @@ class FileService:
             parent=parent,
             icon=icon,
             color=color,
+            group=group,
         )
         folder.save()
         FileService._ensure_folder_on_storage(folder)
@@ -118,7 +141,7 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def move(file_obj, new_parent):
+    def move(file_obj, new_parent, *, acting_user=None):
         """Move a file or folder to a new parent, handling physical storage.
 
         Must be called BEFORE the parent is updated on the instance.
@@ -129,11 +152,37 @@ class FileService:
         if old_parent_id == new_parent_id:
             return
 
+        new_group = new_parent.group if new_parent else None
+        old_group = file_obj.group
+
+        # Determine new owner for storage path computation
+        new_owner = acting_user if (old_group and not new_group and acting_user) else None
+
         if file_obj.node_type == File.NodeType.FOLDER:
-            FileService._move_folder_storage(file_obj, new_parent)
+            FileService._move_folder_storage(file_obj, new_parent, new_owner=new_owner)
         else:
             if file_obj.content and file_obj.content.name:
-                FileService._move_file_storage(file_obj, new_parent)
+                FileService._move_file_storage(file_obj, new_parent, new_owner=new_owner)
+
+        # Update parent in DB before propagating group to avoid unique constraint
+        # violations (e.g. unique_group_root_folder).
+        file_obj.parent = new_parent
+        file_obj.save()
+
+        # Propagate group change
+        if (old_group and old_group != new_group) or (not old_group and new_group):
+            FileService.propagate_group(file_obj, new_group)
+
+        # Update owner when moving from group to personal
+        if old_group and not new_group and new_owner:
+            File.objects.filter(file_obj._descendant_filter()).update(owner=new_owner)
+            file_obj.owner = new_owner
+
+    @staticmethod
+    def propagate_group(file_obj, group):
+        """Set group on file_obj and all its descendants."""
+        File.objects.filter(file_obj._descendant_filter()).update(group=group)
+        file_obj.group = group
 
     @staticmethod
     def rename(file_obj, new_name):
@@ -198,9 +247,9 @@ class FileService:
     def can_access(user, file_obj):
         """Check whether *user* can access *file_obj*.
 
-        Access is granted when the user owns the file **or** has been
-        granted a share (``FileShare``).  Only non-deleted files are
-        considered accessible.
+        Access is granted when the user owns the file, is a member of the
+        file's group, or has been granted a share (``FileShare``).  Only
+        non-deleted files are considered accessible.
 
         Returns:
             ``True`` if the user has at least read access, ``False`` otherwise.
@@ -211,8 +260,8 @@ class FileService:
             return False
         if file_obj.owner_id == user.id:
             return True
-        if file_obj.node_type != File.NodeType.FILE:
-            return False
+        if file_obj.group_id and user.groups.filter(id=file_obj.group_id).exists():
+            return True
         return FileShare.objects.filter(
             file=file_obj, shared_with=user,
         ).exists()
@@ -226,46 +275,56 @@ class FileService:
         """Raise ``ValueError`` if a file with the same name already exists.
 
         Only enforced for *files* (not folders), case-insensitive, ignoring
-        soft-deleted records.
+        soft-deleted records.  For group folders, uniqueness is scoped to
+        the group rather than the owner.
         """
         if node_type != File.NodeType.FILE:
             return
 
         qs = File.objects.filter(
-            owner=owner,
             parent=parent,
             node_type=File.NodeType.FILE,
             name__iexact=name,
             deleted_at__isnull=True,
         )
+        if parent and parent.group_id:
+            qs = qs.filter(group=parent.group)
+        else:
+            qs = qs.filter(owner=owner)
+
         if exclude_pk is not None:
             qs = qs.exclude(pk=exclude_pk)
         if qs.exists():
             raise ValueError('A file with the same name already exists in this folder.')
 
     @staticmethod
-    def validate_move_target(file_obj, new_parent):
+    def validate_move_target(file_obj, new_parent, user=None):
         """Raise ``ValueError`` if *new_parent* is an invalid move target.
 
         Checks:
-        - Cannot move to a folder owned by another user.
+        - Cannot move to a folder owned by another user (unless group folder).
         - Cannot move a folder into itself.
         - Cannot move a folder into one of its descendants.
+        - Must be a member of the target group folder.
         """
         if new_parent is None:
             return
 
-        if new_parent.owner_id != file_obj.owner_id:
-            raise ValueError('Cannot move to a folder owned by another user.')
-
         if file_obj.node_type == File.NodeType.FOLDER:
             if new_parent.pk == file_obj.pk:
                 raise ValueError('Cannot move a folder into itself.')
-
             file_path = file_obj.path or file_obj.get_path()
             parent_path = new_parent.path or new_parent.get_path()
             if parent_path.startswith(f"{file_path}/"):
                 raise ValueError('Cannot move a folder into one of its descendants.')
+
+        if new_parent.group_id:
+            if user and not user.groups.filter(id=new_parent.group_id).exists():
+                raise ValueError('You are not a member of this group.')
+        else:
+            effective_user_id = user.id if user else file_obj.owner_id
+            if new_parent.owner_id != effective_user_id:
+                raise ValueError('Cannot move to a folder owned by another user.')
 
     # ------------------------------------------------------------------
     # Utility
@@ -360,14 +419,14 @@ class FileService:
     def _rename_file_storage(file_obj, new_name):
         """Rename a single file on disk."""
         old_path = file_obj.content.name
-        dir_path = os.path.dirname(old_path)
+        dir_path = posixpath.dirname(old_path)
 
-        _, ext = os.path.splitext(old_path)
+        _, ext = posixpath.splitext(old_path)
         if '.' not in new_name and ext:
             new_filename = f"{new_name}{ext}"
         else:
             new_filename = new_name
-        new_path = os.path.join(dir_path, new_filename)
+        new_path = posixpath.join(dir_path, new_filename)
 
         if not default_storage.exists(old_path):
             logger.warning("Old file does not exist: '%s'", old_path)
@@ -401,7 +460,7 @@ class FileService:
         physical files were already moved.
         """
         storage_path = FileService._folder_storage_path(folder)
-        new_storage_path = os.path.join(os.path.dirname(storage_path), new_folder_name)
+        new_storage_path = posixpath.join(posixpath.dirname(storage_path), new_folder_name)
 
         try:
             old_full = default_storage.path(storage_path)
@@ -424,10 +483,13 @@ class FileService:
         """Return the storage-relative directory path for *folder*.
 
         Uses the pre-computed ``folder.path`` to avoid walking the parent
-        chain (which would trigger one lazy query per ancestor).
+        chain.  Group folders are stored under ``files/groups/<group_name>/...``.
+        Personal folders are stored under ``files/users/<username>/...``.
         """
         path = folder.path or folder.get_path()
-        return os.path.join('files', folder.owner.username, *path.split('/'))
+        if folder.group_id:
+            return posixpath.join('files', 'groups', folder.group.name, *path.split('/'))
+        return posixpath.join('files', 'users', folder.owner.username, *path.split('/'))
 
     @staticmethod
     def _update_descendant_content_names(folder, old_seg, new_seg):
@@ -535,14 +597,15 @@ class FileService:
         """Return the storage-relative directory for *parent* (or user root)."""
         if parent:
             return FileService._folder_storage_path(parent)
-        return os.path.join('files', owner.username)
+        return posixpath.join('files', 'users', owner.username)
 
     @staticmethod
-    def _move_folder_storage(folder, new_parent):
+    def _move_folder_storage(folder, new_parent, *, new_owner=None):
         """Move a folder directory on storage and update descendant content paths."""
         old_storage_path = FileService._folder_storage_path(folder)
-        new_parent_storage = FileService._parent_storage_path(folder.owner, new_parent)
-        new_storage_path = os.path.join(new_parent_storage, folder.name)
+        effective_owner = new_owner or folder.owner
+        new_parent_storage = FileService._parent_storage_path(effective_owner, new_parent)
+        new_storage_path = posixpath.join(new_parent_storage, folder.name)
 
         if old_storage_path == new_storage_path:
             return
@@ -585,11 +648,12 @@ class FileService:
             File.objects.bulk_update(updated, ['content'], batch_size=500)
 
     @staticmethod
-    def _move_file_storage(file_obj, new_parent):
+    def _move_file_storage(file_obj, new_parent, *, new_owner=None):
         """Move a single file on storage to a new parent directory."""
         old_path = file_obj.content.name
-        new_parent_storage = FileService._parent_storage_path(file_obj.owner, new_parent)
-        new_path = os.path.join(new_parent_storage, os.path.basename(old_path)).replace('\\', '/')
+        effective_owner = new_owner or file_obj.owner
+        new_parent_storage = FileService._parent_storage_path(effective_owner, new_parent)
+        new_path = posixpath.join(new_parent_storage, posixpath.basename(old_path))
 
         if old_path == new_path:
             return

@@ -143,7 +143,7 @@ class TestCreateFolderOnStorage(TestCase):
     def test_root_folder_created_on_disk(self):
         with self.settings(MEDIA_ROOT=self.media_root):
             folder = FileService.create_folder(self.user, 'Photos')
-            expected = os.path.join(self.media_root, 'files', self.user.username, 'Photos')
+            expected = os.path.join(self.media_root, 'files', 'users', self.user.username, 'Photos')
             self.assertTrue(os.path.isdir(expected))
 
     @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.FileSystemStorage')
@@ -152,7 +152,7 @@ class TestCreateFolderOnStorage(TestCase):
             parent = FileService.create_folder(self.user, 'Documents')
             child = FileService.create_folder(self.user, 'Work', parent=parent)
             expected = os.path.join(
-                self.media_root, 'files', self.user.username, 'Documents', 'Work'
+                self.media_root, 'files', 'users', self.user.username, 'Documents', 'Work'
             )
             self.assertTrue(os.path.isdir(expected))
 
@@ -163,7 +163,7 @@ class TestCreateFolderOnStorage(TestCase):
             b = FileService.create_folder(self.user, 'B', parent=a)
             c = FileService.create_folder(self.user, 'C', parent=b)
             expected = os.path.join(
-                self.media_root, 'files', self.user.username, 'A', 'B', 'C'
+                self.media_root, 'files', 'users', self.user.username, 'A', 'B', 'C'
             )
             self.assertTrue(os.path.isdir(expected))
 
@@ -185,16 +185,16 @@ class TestRegisterDiskFile(TestCase):
     def test_sets_content_name_directly(self):
         f = FileService.register_disk_file(
             self.user, 'report.pdf', None,
-            'files/svcuser3/report.pdf',
+            'files/users/svcuser3/report.pdf',
             mime_type='application/pdf', size=1024,
         )
-        self.assertEqual(f.content.name, 'files/svcuser3/report.pdf')
+        self.assertEqual(f.content.name, 'files/users/svcuser3/report.pdf')
         self.assertEqual(f.size, 1024)
         self.assertEqual(f.mime_type, 'application/pdf')
 
     def test_infers_mime_when_not_provided(self):
         f = FileService.register_disk_file(
-            self.user, 'photo.jpg', None, 'files/svcuser3/photo.jpg',
+            self.user, 'photo.jpg', None, 'files/users/svcuser3/photo.jpg',
         )
         self.assertIn('image', f.mime_type)
 
@@ -420,7 +420,7 @@ class TestMoveOnStorage(TestCase):
         shutil.rmtree(self.media_root, ignore_errors=True)
 
     def _storage_path(self, *parts):
-        return os.path.join(self.media_root, 'files', self.user.username, *parts)
+        return os.path.join(self.media_root, 'files', 'users', self.user.username, *parts)
 
     @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.FileSystemStorage')
     def test_move_folder_moves_directory_on_disk(self):
@@ -464,7 +464,7 @@ class TestMoveOnStorage(TestCase):
             )
 
             old_content_name = f.content.name.replace('\\', '/')
-            self.assertTrue(old_content_name.startswith('files/moveuser/Src/'))
+            self.assertTrue(old_content_name.startswith('files/users/moveuser/Src/'))
 
             FileService.move(src, dest)
             src.parent = dest
@@ -473,8 +473,8 @@ class TestMoveOnStorage(TestCase):
             f.refresh_from_db()
             new_content_name = f.content.name.replace('\\', '/')
             self.assertTrue(
-                new_content_name.startswith('files/moveuser/Dest/Src/'),
-                f'Expected path starting with files/moveuser/Dest/Src/, got {new_content_name}',
+                new_content_name.startswith('files/users/moveuser/Dest/Src/'),
+                f'Expected path starting with files/users/moveuser/Dest/Src/, got {new_content_name}',
             )
 
     @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.FileSystemStorage')

@@ -48,6 +48,7 @@ class FileSerializer(serializers.ModelSerializer):
             'icon',
             'color',
             'owner',
+            'group',
             'created_at',
             'updated_at',
             'deleted_at',
@@ -166,6 +167,9 @@ class FileSerializer(serializers.ModelSerializer):
                 if str(initial_data.get('node_type')) != self.instance.node_type:
                     errors['node_type'] = 'This field is immutable.'
 
+            if 'group' in initial_data:
+                errors['group'] = 'Group cannot be changed directly.'
+
             if errors:
                 raise serializers.ValidationError(errors)
 
@@ -177,7 +181,7 @@ class FileSerializer(serializers.ModelSerializer):
         # Validate parent assignment via FileService
         if 'parent' in attrs and instance is not None:
             try:
-                FileService.validate_move_target(instance, attrs['parent'])
+                FileService.validate_move_target(instance, attrs['parent'], user=self.context['request'].user)
             except ValueError as e:
                 raise serializers.ValidationError({'parent': e.args[0]})
 
@@ -200,6 +204,7 @@ class FileSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         owner = self.context['request'].user
         node_type = validated_data.get('node_type')
+        group = validated_data.get('group')
 
         if node_type == File.NodeType.FOLDER:
             return FileService.create_folder(
@@ -208,6 +213,7 @@ class FileSerializer(serializers.ModelSerializer):
                 parent=validated_data.get('parent'),
                 icon=validated_data.get('icon'),
                 color=validated_data.get('color'),
+                group=group,
             )
 
         return FileService.create_file(
@@ -216,6 +222,7 @@ class FileSerializer(serializers.ModelSerializer):
             parent=validated_data.get('parent'),
             content=validated_data.get('content'),
             mime_type=validated_data.get('mime_type'),
+            group=group,
         )
 
     def update(self, instance, validated_data):
@@ -247,7 +254,7 @@ class FileSerializer(serializers.ModelSerializer):
             old_parent_id = instance.parent_id
             new_parent_id = new_parent.pk if new_parent else None
             if old_parent_id != new_parent_id:
-                FileService.move(instance, new_parent)
+                FileService.move(instance, new_parent, acting_user=self.context['request'].user)
 
         return super().update(instance, validated_data)
 

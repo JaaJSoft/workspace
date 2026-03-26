@@ -12,28 +12,17 @@ Context variables:
 <li class="list-none pinned-folder-item"
     draggable="true"
     data-pinned-uuid="{{ pin.folder.uuid }}"
+    :class="[
+      draggingPinned === '{{ pin.folder.uuid }}' ? 'opacity-50' : '',
+      dragOverPinned === '{{ pin.folder.uuid }}' ? 'ring-2 ring-primary/50 ring-offset-1 rounded-lg' : ''
+    ]"
     @dragstart="onPinnedDragStart($event, '{{ pin.folder.uuid }}')"
     @dragend="onPinnedDragEnd($event)"
     @dragover.prevent="onPinnedDragOver($event, '{{ pin.folder.uuid }}')"
     @drop.prevent="onPinnedDrop($event, '{{ pin.folder.uuid }}')"
     @contextmenu.prevent="window.dispatchEvent(new CustomEvent('open-pinned-folder-context-menu', { detail: { event: $event, uuid: '{{ pin.folder.uuid }}', name: '{{ pin.folder.name|escapejs }}', isFavorite: {{ pin.folder.is_favorite|yesno:'true,false' }} } }))"
 >
-  <a
-    href="/files/{{ pin.folder.uuid }}"
-    class="group flex items-center hover:bg-base-300/50 p-2 text-base rounded-lg transition-colors"
-    :class="[
-      collapsed ? 'justify-center w-10 h-10 px-0' : 'gap-3',
-      draggingPinned === '{{ pin.folder.uuid }}' ? 'opacity-50' : '',
-      dragOverPinned === '{{ pin.folder.uuid }}' ? 'ring-2 ring-primary/50 ring-offset-1' : ''
-    ]"
-    x-target.push="folder-browser"
-    :title="collapsed ? '{{ pin.folder.name|escapejs }}' : ''"
-    @click="if (draggingPinned) $event.preventDefault()"
-  >
-    <i data-lucide="{{ pin.folder.icon|default:'folder' }}" class="w-5 h-5 flex-shrink-0 {{ pin.folder.color|default:'text-warning' }}"></i>
-    <span x-show="!collapsed" x-transition class="truncate flex-1">{{ pin.folder.name }}</span>
-    <i data-lucide="grip-vertical" class="w-4 h-4 flex-shrink-0 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab" x-show="!collapsed"></i>
-  </a>
+  {% include "files/ui/partials/_sidebar_folder_item.html" with folder=pin.folder default_icon="folder" default_color="text-warning" active_id="pinned:"|add:pin.folder.uuid show_grip=True extra_attrs='@click="if (draggingPinned) $event.preventDefault()"' %}
 </li>
 {% empty %}
 <li class="list-none px-2 py-3 text-sm text-base-content/40" x-show="!collapsed && !dragOver">

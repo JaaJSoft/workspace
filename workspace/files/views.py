@@ -287,13 +287,15 @@ class FileViewSet(viewsets.ModelViewSet):
             shared_with=self.request.user,
         ).values('permission')[:1]
 
-        # Favorites: include both owned and shared-with-me files
+        # Favorites: include owned, shared-with-me, and group files
         if self.action == 'list' and self._is_favorites_query():
             return File.objects.filter(
                 deleted_at__isnull=True,
                 favorites__owner=self.request.user,
             ).filter(
-                Q(owner=self.request.user) | Q(shares__shared_with=self.request.user)
+                Q(owner=self.request.user)
+                | Q(shares__shared_with=self.request.user)
+                | Q(group__in=self.request.user.groups.all())
             ).annotate(
                 is_favorite=Exists(favorite_subquery),
                 is_pinned=Exists(pinned_subquery),
@@ -301,7 +303,22 @@ class FileViewSet(viewsets.ModelViewSet):
                 user_share_permission=Subquery(user_share_subquery),
             ).prefetch_related('file_tags__tag').distinct()
 
-        queryset = File.objects.filter(owner=self.request.user).prefetch_related('file_tags__tag')
+        # Group filter: return group files when ?group=<id> is present
+        group_id = self.request.query_params.get('group')
+        if self.action == 'list' and group_id:
+            if not self.request.user.groups.filter(id=group_id).exists():
+                return File.objects.none()
+            return File.objects.filter(
+                group_id=group_id,
+                deleted_at__isnull=True,
+            ).annotate(
+                is_favorite=Exists(favorite_subquery),
+                is_pinned=Exists(pinned_subquery),
+                is_shared=Exists(is_shared_subquery),
+                user_share_permission=Subquery(user_share_subquery),
+            ).prefetch_related('file_tags__tag')
+
+        queryset = File.objects.filter(owner=self.request.user, group__isnull=True).prefetch_related('file_tags__tag')
         queryset = queryset.annotate(
             is_favorite=Exists(favorite_subquery),
             is_pinned=Exists(pinned_subquery),
@@ -319,6 +336,27 @@ class FileViewSet(viewsets.ModelViewSet):
             if not self._is_recent_query() and 'parent' not in self.request.query_params:
                 return queryset.filter(parent__isnull=True)
         return queryset
+
+    def get_object(self):
+        uuid = self.kwargs.get('uuid')
+        try:
+            return super().get_object()
+        except Http404:
+            file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
+            if file_obj and file_obj.group_id:
+                if self.request.user.groups.filter(id=file_obj.group_id).exists():
+                    return file_obj
+            raise
+
+    def create(self, request, *args, **kwargs):
+        group_id = request.data.get('group')
+        if group_id:
+            if not request.user.groups.filter(id=group_id).exists():
+                return Response(
+                    {'group': 'You are not a member of this group.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        return super().create(request, *args, **kwargs)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -1367,7 +1405,9 @@ class FileViewSet(viewsets.ModelViewSet):
             File.objects.filter(
                 uuid__in=uuids,
             ).filter(
-                Q(owner=request.user) | Q(shares__shared_with=request.user)
+                Q(owner=request.user)
+                | Q(shares__shared_with=request.user)
+                | Q(group__in=request.user.groups.all())
             ).annotate(
                 is_favorite=Exists(favorite_subquery),
                 is_pinned=Exists(pinned_subquery),
@@ -1381,9 +1421,13 @@ class FileViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        user_group_ids = set(request.user.groups.values_list('id', flat=True))
         result = {}
         for file_obj in file_objects:
-            is_owner = file_obj.owner_id == request.user.pk
+            is_owner = (
+                file_obj.owner_id == request.user.pk
+                or (file_obj.group_id and file_obj.group_id in user_group_ids)
+            )
             share_perm = getattr(file_obj, 'user_share_permission', None)
             result[str(file_obj.uuid)] = ActionRegistry.get_available_actions(
                 request.user, file_obj, is_owner=is_owner, share_permission=share_perm,

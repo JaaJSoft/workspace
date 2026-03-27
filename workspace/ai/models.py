@@ -130,6 +130,22 @@ class AITask(models.Model):
         return f'AITask {self.uuid} ({self.task_type} - {self.status})'
 
 
+class ConversationSummary(models.Model):
+    """Rolling AI summary of older messages in a bot conversation."""
+    conversation = models.OneToOneField(
+        'chat.Conversation',
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='ai_summary_obj',
+    )
+    content = models.TextField(blank=True, default='')
+    up_to = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Summary: {self.conversation_id}'
+
+
 class UserMemory(models.Model):
     """Persistent memory that a bot stores about a user."""
     user = models.ForeignKey(

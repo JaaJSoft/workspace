@@ -109,7 +109,7 @@ kubectl apply -f ingress.yaml
 | `WEBPUSH_VAPID_MAILTO` | *(empty)*                       | Contact email for VAPID claims (`mailto:…`) |
 | `AI_MODEL`             | `gpt-5`                        | Default LLM model for chat and tasks |
 | `AI_MAX_TOKENS`        | `2048`                          | Maximum tokens per AI response |
-| `AI_CHAT_CONTEXT_SIZE` | `150`                           | Number of recent messages included as context |
+| `AI_CHAT_CONTEXT_SIZE` | `30`                            | Recent messages kept in full; older ones are summarized |
 | `AI_IMAGE_MODEL`       | `dall-e-3`                      | Model for image generation |
 | `SEARXNG_URL`          | *(empty)*                       | SearXNG instance URL for web search (e.g. `http://searxng.workspace.svc:8080`) |
 | `SEARXNG_BLOCKED_DOMAINS` | *(empty)*                    | Comma-separated list of domains the AI cannot fetch (e.g. `evil.com,spam.org`) |

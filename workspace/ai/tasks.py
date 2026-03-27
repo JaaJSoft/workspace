@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 _THINK_RE = re.compile(r'<think>[\s\S]*?</think>\s*', re.IGNORECASE)
 _RAW_TOOL_CALL_RE = re.compile(r'</?tool_call>', re.IGNORECASE)
+_TRUNCATE_BODY_LIMIT = 500  # max chars for old messages outside the recent window
+_SUMMARY_BUFFER = 10  # re-summarise when unsummarised old messages exceed window by this many
 
 
 def _serialize_response(result):
@@ -412,7 +414,13 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         logger.error('Bot response failed: conversation=%s bot=%s not found', conversation_id, bot_user_id)
         return {'status': 'error', 'error': 'Not found'}
 
-    recent_messages = (
+    from workspace.ai.models import ConversationSummary
+
+    recent_window = settings.AI_CHAT_CONTEXT_SIZE
+    conv_summary = ConversationSummary.objects.filter(conversation_id=conversation_id).first()
+    summary_text = conv_summary.content if conv_summary else ''
+
+    all_msgs = list(
         Message.objects.filter(
             conversation_id=conversation_id,
             deleted_at__isnull=True,
@@ -421,19 +429,34 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         .prefetch_related('attachments')
         .order_by('-created_at')[:settings.AI_CHAT_CONTEXT_SIZE]
     )
+
+    # If we have a summary, only send messages created after the summary cutoff
+    if summary_text and conv_summary.up_to:
+        msgs_to_use = [m for m in all_msgs if m.created_at > conv_summary.up_to]
+    else:
+        msgs_to_use = all_msgs
+
     # Find the most recent user message that has image attachments
     last_image_msg_uuid = None
     if bot_profile.supports_vision:
-        for msg in recent_messages:  # newest first
+        for msg in msgs_to_use:  # newest first
             is_bot = hasattr(msg.author, 'bot_profile')
             if not is_bot and any(att.is_image for att in msg.attachments.all()):
                 last_image_msg_uuid = str(msg.uuid)
                 break
 
+    # Number of old messages (outside recent window) not covered by a summary
+    truncate_count = max(0, len(msgs_to_use) - recent_window) if not summary_text else 0
+
     history = []
-    for msg in reversed(recent_messages):
+    for idx, msg in enumerate(reversed(msgs_to_use)):
         is_bot = hasattr(msg.author, 'bot_profile')
         role = 'assistant' if is_bot else 'user'
+        body = msg.body
+
+        # Truncate verbose old messages when no summary covers them
+        if idx < truncate_count and len(body) > _TRUNCATE_BODY_LIMIT:
+            body = body[:_TRUNCATE_BODY_LIMIT] + '…'
 
         # Include images only from the most recent message that has images
         image_parts = []
@@ -454,12 +477,12 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
 
         if image_parts:
             content = []
-            if msg.body:
-                content.append({'type': 'text', 'text': msg.body})
+            if body:
+                content.append({'type': 'text', 'text': body})
             content.extend(image_parts)
             history.append({'role': role, 'content': content})
         else:
-            history.append({'role': role, 'content': msg.body})
+            history.append({'role': role, 'content': body})
 
     bot_name = bot_user.get_full_name() or bot_user.username
 
@@ -469,7 +492,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
 
     messages = build_chat_messages(
         bot_profile.system_prompt, history, bot_name=bot_name,
-        user=human_user, bot=bot_user,
+        user=human_user, bot=bot_user, summary=summary_text,
     )
 
     ai_task = AITask.objects.create(
@@ -513,10 +536,24 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         )
 
         # Auto-generate title if the conversation doesn't have one yet
-        if not conversation.title and Message.objects.filter(
+        msg_count = Message.objects.filter(
             conversation_id=conversation_id, deleted_at__isnull=True,
-        ).count() >= 2:
+        ).count()
+        if not conversation.title and msg_count >= 2:
             generate_conversation_title.delay(str(conversation_id))
+
+        # Trigger rolling summary update when old messages exceed the recent window
+        if msg_count > recent_window:
+            needs_summary = not summary_text
+            if not needs_summary and conv_summary and conv_summary.up_to:
+                unsummarized = Message.objects.filter(
+                    conversation_id=conversation_id,
+                    deleted_at__isnull=True,
+                    created_at__gt=conv_summary.up_to,
+                ).count()
+                needs_summary = unsummarized > recent_window + _SUMMARY_BUFFER
+            if needs_summary:
+                update_conversation_summary.delay(str(conversation_id))
 
         logger.info('Bot response generated: conversation=%s tokens=%s+%s',
                      conversation_id, result['prompt_tokens'], result['completion_tokens'])
@@ -525,6 +562,111 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
     except Exception as e:
         logger.exception('Bot response failed: conversation=%s', conversation_id)
         _handle_generation_error(conversation, bot_user, ai_task, e)
+        return {'status': 'error', 'error': str(e)}
+
+
+@shared_task(name='ai.update_conversation_summary', bind=True, max_retries=0)
+def update_conversation_summary(self, conversation_id: str):
+    """Update the rolling summary for a bot conversation.
+
+    Summarises messages that fall outside the recent window using the small
+    model, then stores the result on the ``ConversationSummary`` so future
+    responses can include the condensed context instead of raw old messages.
+    """
+    from workspace.ai.models import ConversationSummary
+    from workspace.chat.models import Conversation, Message
+
+    if not Conversation.objects.filter(pk=conversation_id).exists():
+        return {'status': 'error', 'error': 'Conversation not found'}
+
+    recent_window = settings.AI_CHAT_CONTEXT_SIZE
+
+    msg_qs = Message.objects.filter(
+        conversation_id=conversation_id,
+        deleted_at__isnull=True,
+    )
+    total = msg_qs.count()
+    if total <= recent_window:
+        return {'status': 'skipped', 'reason': 'not enough messages'}
+
+    # The cutoff is the newest message outside the recent window (i.e. the
+    # first one that should be summarised rather than kept verbatim).
+    cutoff_msg = (
+        msg_qs.order_by('-created_at')
+        .values_list('created_at', flat=True)[recent_window:recent_window + 1]
+    )
+    cutoff_time = list(cutoff_msg)[0] if cutoff_msg else None
+    if not cutoff_time:
+        return {'status': 'skipped', 'reason': 'could not determine cutoff'}
+
+    conv_summary = ConversationSummary.objects.filter(conversation_id=conversation_id).first()
+
+    # Already up-to-date?
+    if conv_summary and conv_summary.up_to and conv_summary.up_to >= cutoff_time:
+        return {'status': 'skipped', 'reason': 'already up to date'}
+
+    # Only fetch messages that need summarising (after last summary, up to cutoff)
+    new_qs = msg_qs.filter(created_at__lte=cutoff_time).order_by('created_at')
+    if conv_summary and conv_summary.up_to:
+        new_qs = new_qs.filter(created_at__gt=conv_summary.up_to)
+
+    new_messages = list(
+        new_qs.select_related('author', 'author__bot_profile')
+    )
+    if not new_messages:
+        return {'status': 'skipped', 'reason': 'no new messages to summarize'}
+
+    # Format messages — truncate individually to keep the summarisation prompt lean
+    lines = []
+    for msg in new_messages:
+        name = msg.author.get_full_name() or msg.author.username
+        is_bot = hasattr(msg.author, 'bot_profile')
+        label = f'[Bot] {name}' if is_bot else name
+        body = msg.body[:1000] if len(msg.body) > 1000 else msg.body
+        lines.append(f'{label}: {body}')
+
+    messages_text = '\n'.join(lines)
+
+    system = (
+        'Summarize this conversation concisely. Preserve:\n'
+        '- Key topics discussed and conclusions reached\n'
+        '- User preferences, personal details, and requests\n'
+        '- Ongoing tasks or commitments\n'
+        '- Important context needed to continue the conversation naturally\n\n'
+        'Write in the same language as the conversation. Be concise but complete.'
+    )
+
+    existing = conv_summary.content if conv_summary else ''
+    if existing:
+        user_content = f'Previous summary:\n{existing}\n\nNew messages to incorporate:\n{messages_text}'
+    else:
+        user_content = f'Messages:\n{messages_text}'
+
+    prompt_messages = [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': user_content},
+    ]
+
+    try:
+        result = _call_llm(
+            prompt_messages,
+            model=settings.AI_SMALL_MODEL or settings.AI_MODEL,
+            max_tokens=1024,
+        )
+        ConversationSummary.objects.update_or_create(
+            conversation_id=conversation_id,
+            defaults={'content': result['content'], 'up_to': cutoff_time},
+        )
+
+        logger.info(
+            'Conversation summary updated: conversation=%s messages_summarized=%d tokens=%s+%s',
+            conversation_id, len(new_messages),
+            result['prompt_tokens'], result['completion_tokens'],
+        )
+        return {'status': 'ok'}
+
+    except Exception as e:
+        logger.exception('Conversation summary failed: conversation=%s', conversation_id)
         return {'status': 'error', 'error': str(e)}
 
 
@@ -881,7 +1023,13 @@ def generate_scheduled_response(self, schedule_id: str):
         return {'status': 'error', 'error': 'Not found'}
 
     # Load recent conversation context (simplified — no vision/image handling)
-    recent_messages = (
+    from workspace.ai.models import ConversationSummary
+
+    recent_window = settings.AI_CHAT_CONTEXT_SIZE
+    conv_summary = ConversationSummary.objects.filter(conversation_id=conversation.pk).first()
+    summary_text = conv_summary.content if conv_summary else ''
+
+    all_msgs = list(
         Message.objects.filter(
             conversation_id=conversation.pk,
             deleted_at__isnull=True,
@@ -890,11 +1038,21 @@ def generate_scheduled_response(self, schedule_id: str):
         .order_by('-created_at')[:settings.AI_CHAT_CONTEXT_SIZE]
     )
 
+    if summary_text and conv_summary.up_to:
+        msgs_to_use = [m for m in all_msgs if m.created_at > conv_summary.up_to]
+    else:
+        msgs_to_use = all_msgs
+
+    truncate_count = max(0, len(msgs_to_use) - recent_window) if not summary_text else 0
+
     history = []
-    for msg in reversed(recent_messages):
+    for idx, msg in enumerate(reversed(msgs_to_use)):
         is_bot = hasattr(msg.author, 'bot_profile')
         role = 'assistant' if is_bot else 'user'
-        history.append({'role': role, 'content': msg.body})
+        body = msg.body
+        if idx < truncate_count and len(body) > _TRUNCATE_BODY_LIMIT:
+            body = body[:_TRUNCATE_BODY_LIMIT] + '…'
+        history.append({'role': role, 'content': body})
 
     bot_name = bot_user.get_full_name() or bot_user.username
     human_user = User.objects.filter(pk=schedule.created_by_id).first()
@@ -914,7 +1072,7 @@ def generate_scheduled_response(self, schedule_id: str):
     messages = build_chat_messages(
         bot_profile.system_prompt + scheduled_instruction,
         history, bot_name=bot_name,
-        user=human_user, bot=bot_user,
+        user=human_user, bot=bot_user, summary=summary_text,
     )
 
     ai_task = AITask.objects.create(
@@ -974,6 +1132,22 @@ def generate_scheduled_response(self, schedule_id: str):
         )
 
         notify_new_message(conversation, bot_user, body)
+
+        # Trigger rolling summary update if needed
+        msg_count = Message.objects.filter(
+            conversation_id=conversation.pk, deleted_at__isnull=True,
+        ).count()
+        if msg_count > recent_window:
+            needs_summary = not summary_text
+            if not needs_summary and conv_summary and conv_summary.up_to:
+                unsummarized = Message.objects.filter(
+                    conversation_id=conversation.pk,
+                    deleted_at__isnull=True,
+                    created_at__gt=conv_summary.up_to,
+                ).count()
+                needs_summary = unsummarized > recent_window + _SUMMARY_BUFFER
+            if needs_summary:
+                update_conversation_summary.delay(str(conversation.pk))
 
         logger.info('Scheduled response generated: schedule=%s conversation=%s tokens=%s+%s',
                      schedule_id, conversation.pk, result['prompt_tokens'], result['completion_tokens'])

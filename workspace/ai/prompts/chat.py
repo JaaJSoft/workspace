@@ -45,6 +45,7 @@ def build_chat_messages(
     bot_name: str = '',
     user=None,
     bot=None,
+    summary: str = '',
 ) -> list[dict]:
     """Build the messages list for the OpenAI API from conversation history.
 
@@ -54,6 +55,7 @@ def build_chat_messages(
         bot_name: The display name of the bot.
         user: The user interacting with the bot (for memory lookup).
         bot: The bot's user instance (for memory lookup).
+        summary: Rolling summary of older conversation messages.
     """
     base_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
     context = build_context_block(user=user)
@@ -166,6 +168,14 @@ def build_chat_messages(
 
     tools_block = _build_tools_block()
 
+    summary_block = ''
+    if summary:
+        summary_block = (
+            '\n\n## Earlier conversation\n'
+            'Summary of older messages in this conversation:\n'
+            f'{summary}'
+        )
+
     system_content = (
         f"{base_prompt}\n\n{context}"
         f"{language_instructions}"
@@ -178,6 +188,7 @@ def build_chat_messages(
         f"{safety_instructions}"
         f"{tools_block}"
         f"{memory_block}"
+        f"{summary_block}"
     )
     messages = [{'role': 'system', 'content': system_content}]
     messages.extend(history)

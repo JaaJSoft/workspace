@@ -383,12 +383,44 @@ function mailApp() {
       // Handle browser back/forward on mobile
       window.addEventListener('popstate', () => {
         const p = new URLSearchParams(window.location.search);
+        const folderId = p.get('folder');
+        const labelId = p.get('label');
         const msgId = p.get('message');
+
         if (msgId) {
           this._openMessageById(msgId);
+          return;
+        }
+
+        // Clear message selection
+        this.selectedMessage = null;
+        this.messageDetail = null;
+        this.selectedMessages = [];
+        this.currentPage = 1;
+        this._resetFilters();
+
+        // Restore folder/label/unified inbox state
+        if (folderId) {
+          const folder = this._findFolderById(folderId);
+          if (folder) {
+            this.unifiedInbox = false;
+            this.selectedFolder = folder;
+            this.selectedLabel = null;
+            this.loadMessages();
+          }
+        } else if (labelId) {
+          const label = this._findLabelById(labelId);
+          if (label) {
+            this.unifiedInbox = false;
+            this.selectedLabel = label;
+            this.selectedFolder = null;
+            this.loadMessages();
+          }
         } else {
-          this.selectedMessage = null;
-          this.messageDetail = null;
+          this.unifiedInbox = true;
+          this.selectedFolder = null;
+          this.selectedLabel = null;
+          this.loadMessages();
         }
       });
 
@@ -594,7 +626,7 @@ function mailApp() {
       this.selectedLabel = null;
       this.selectedMessage = null;
       this.messageDetail = null;
-      this._updateUrl(null);
+      this._updateUrl(null, {push: this.isMobile()});
       this.selectedMessages = [];
       this.currentPage = 1;
       this._resetFilters();
@@ -623,7 +655,7 @@ function mailApp() {
       this.selectedLabel = null;
       this.selectedMessage = null;
       this.messageDetail = null;
-      this._updateUrl(null);
+      this._updateUrl(null, {push: this.isMobile()});
       this.selectedMessages = [];
       this.currentPage = 1;
       this._resetFilters();
@@ -2460,7 +2492,7 @@ function mailApp() {
       this.selectedFolder = null;
       this.selectedMessage = null;
       this.messageDetail = null;
-      this._updateUrl(null);
+      this._updateUrl(null, {push: this.isMobile()});
       this.currentPage = 1;
       this._closeDrawerOnMobile();
       this.loadMessages();

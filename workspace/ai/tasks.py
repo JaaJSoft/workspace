@@ -651,11 +651,20 @@ def update_conversation_summary(self, conversation_id: str):
         result = _call_llm(
             prompt_messages,
             model=settings.AI_SMALL_MODEL or settings.AI_MODEL,
-            max_tokens=1024,
+            max_tokens=4096,
         )
+        summary_content = result['content']
+        if not summary_content:
+            logger.warning(
+                'Empty summary from model (tokens=%s+%s), skipping: conversation=%s',
+                result.get('prompt_tokens'), result.get('completion_tokens'),
+                conversation_id,
+            )
+            return {'status': 'error', 'error': 'Empty summary from model'}
+
         ConversationSummary.objects.update_or_create(
             conversation_id=conversation_id,
-            defaults={'content': result['content'], 'up_to': cutoff_time},
+            defaults={'content': summary_content, 'up_to': cutoff_time},
         )
 
         logger.info(

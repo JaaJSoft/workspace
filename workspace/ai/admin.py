@@ -8,7 +8,7 @@ from workspace.users.avatar_service import (
     has_avatar,
 )
 
-from .models import AITask, BotProfile
+from .models import AITask, BotProfile, ConversationSummary
 
 
 class BotProfileForm(forms.ModelForm):
@@ -90,6 +90,20 @@ class BotProfileAdmin(admin.ModelAdmin):
         path = get_avatar_path(user.id)
         save_image(path, buf.getvalue())
         set_setting(user, 'profile', 'has_avatar', True)
+
+
+@admin.register(ConversationSummary)
+class ConversationSummaryAdmin(admin.ModelAdmin):
+    list_display = ('conversation', 'up_to', 'content_preview', 'updated_at')
+    search_fields = ('conversation__title', 'content')
+    readonly_fields = ('conversation', 'up_to', 'content', 'updated_at')
+    raw_id_fields = ()
+
+    @admin.display(description='Summary')
+    def content_preview(self, obj):
+        if not obj.content:
+            return '—'
+        return obj.content[:120] + '…' if len(obj.content) > 120 else obj.content
 
 
 @admin.register(AITask)

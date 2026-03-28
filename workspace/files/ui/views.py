@@ -407,6 +407,27 @@ def pinned_folders(request):
 
 
 @login_required
+def group_folders_sidebar(request):
+    """Return group folders partial for Alpine AJAX refresh."""
+    group_folders = File.objects.filter(
+        group__in=request.user.groups.all(),
+        parent__isnull=True,
+        deleted_at__isnull=True,
+        node_type=File.NodeType.FOLDER,
+    ).select_related('group').order_by('name')
+
+    groups_with_folders = group_folders.values_list('group_id', flat=True)
+    available_groups = request.user.groups.exclude(
+        id__in=groups_with_folders
+    ).order_by('name')
+
+    return render(request, 'files/ui/partials/group_folders_section.html', {
+        'group_folders': group_folders,
+        'available_groups': available_groups,
+    })
+
+
+@login_required
 def view_file(request, uuid):
     """
     Render file viewer HTML for a specific file.

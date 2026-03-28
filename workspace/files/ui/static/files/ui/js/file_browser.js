@@ -328,7 +328,7 @@ window.fileBrowser = function fileBrowser() {
             this.showRenameDialog(uuid, name);
             break;
           case 'delete':
-            this.confirmDelete(uuid, name, nodeType, e.detail);
+            this.confirmDelete(uuid, name, nodeType, !!e.detail.isGroupFolder);
             break;
           case 'restore':
             this.confirmRestore(uuid, name, nodeType);
@@ -464,7 +464,7 @@ window.fileBrowser = function fileBrowser() {
       window.fileActions.showRenameDialog(uuid, name);
     },
 
-    async confirmDelete(uuid, name, nodeType, detail) {
+    async confirmDelete(uuid, name, nodeType, isGroupFolder) {
       if (window.getFilePrefs().confirmBeforeDelete) {
         const confirmed = await AppDialog.confirm({
           title: `Delete ${nodeType}?`,
@@ -475,9 +475,8 @@ window.fileBrowser = function fileBrowser() {
         if (!confirmed) return;
       }
       await this.deleteItem(uuid);
-      // Group folder deletion requires full reload to update sidebar
-      if (detail && detail.isGroupFolder) {
-        window.location.reload();
+      if (isGroupFolder) {
+        window.dispatchEvent(new CustomEvent('group-folders-changed'));
       }
     },
 
@@ -1414,7 +1413,7 @@ window.fileBrowser = function fileBrowser() {
       window.addEventListener('rename-item', (e) => this.renameItem(e.detail.uuid, e.detail.name));
       window.addEventListener('create-group-folder', (e) => {
         window.fileActions.createGroupFolder(e.detail.groupId, e.detail.groupName)
-          .then(() => window.location.reload())
+          .then(() => window.dispatchEvent(new CustomEvent('group-folders-changed')))
           .catch((err) => this.showAlert('error', err.message || 'Failed to create group folder'));
       });
 
@@ -2435,6 +2434,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
       this.pinnedCount = list ? list.children.length : 0;
 
       window.addEventListener('pinned-folders-changed', () => this.refreshPinnedSection());
+      window.addEventListener('group-folders-changed', () => this.refreshGroupFoldersSection());
 
       // Listen for pinned folder context menu events
       window.addEventListener('open-pinned-folder-context-menu', (e) => {
@@ -2538,6 +2538,26 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
         if (window.Alpine?.initTree) {
           window.Alpine.initTree(currentList);
         }
+      } catch (error) {
+        // Silent fail for sidebar refresh
+      }
+    },
+
+    async refreshGroupFoldersSection() {
+      try {
+        const response = await fetch('/files/group-folders');
+        if (!response.ok) return;
+        const html = await response.text();
+        const container = document.getElementById('group-folders-section');
+        if (!container) return;
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newContent = Array.from(doc.body.children);
+
+        container.replaceChildren(...newContent);
+
+        if (window.lucide) window.lucide.createIcons();
       } catch (error) {
         // Silent fail for sidebar refresh
       }

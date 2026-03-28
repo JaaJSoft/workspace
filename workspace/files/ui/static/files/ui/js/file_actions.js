@@ -75,6 +75,34 @@ window.fileActions = {
      * Rename a file/folder. Resolves with the updated object, rejects on error.
      * Closes the dialog on success.
      */
+    /**
+     * Create a group folder. Resolves with the created object, rejects on error.
+     * Closes the dialog on success.
+     */
+    createGroupFolder: function(groupId, groupName) {
+        return fetch('/api/v1/files', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken(),
+            },
+            body: JSON.stringify({
+                name: groupName,
+                node_type: 'folder',
+                group: groupId,
+            }),
+        }).then(function(resp) {
+            if (!resp.ok) {
+                return resp.json().catch(function() { return {}; }).then(function(data) {
+                    throw new Error(data.name ? data.name[0] : (data.detail || 'Failed to create group folder'));
+                });
+            }
+            var dlg = document.getElementById('create-group-folder-dialog');
+            if (dlg) dlg.close();
+            return resp.json();
+        });
+    },
+
     renameItem: function(uuid, newName) {
         return fetch('/api/v1/files/' + uuid, {
             method: 'PATCH',

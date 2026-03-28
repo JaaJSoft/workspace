@@ -169,7 +169,7 @@ x-init="init()"
       Create Group Folder
     </h3>
     {% if available_groups %}
-    <form @submit.prevent="if (selectedGroup) { createGroupFolder(parseInt(selectedGroup), $refs.noteGroupSelect.options[$refs.noteGroupSelect.selectedIndex].text); document.getElementById('notes-create-group-folder-dialog').close(); }">
+    <form @submit.prevent="if (selectedGroup) { window.dispatchEvent(new CustomEvent('create-group-folder', { detail: { groupId: parseInt(selectedGroup), groupName: $refs.noteGroupSelect.options[$refs.noteGroupSelect.selectedIndex].text } })); document.getElementById('notes-create-group-folder-dialog').close(); }">
       <div class="form-control">
         <label class="label">
           <span class="label-text">Group</span>

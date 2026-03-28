@@ -147,6 +147,11 @@ window.notesApp = function notesApp(config) {
                         .then(function() { self.refreshSidebar(); })
                         .catch(function() {});
                 });
+                window.addEventListener('create-group-folder', function(e) {
+                    window.fileActions.createGroupFolder(e.detail.groupId, e.detail.groupName)
+                        .then(function() { self.refreshSidebar(); })
+                        .catch(function() {});
+                });
             }
 
             // Sync reactive prefs and re-sort when sort preference changes
@@ -537,25 +542,6 @@ window.notesApp = function notesApp(config) {
             window.fileActions.showRenameDialog(uuid, name);
         },
 
-        createGroupFolder: function(groupId, groupName) {
-            var self = this;
-            fetch('/api/v1/files', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCSRFToken(),
-                },
-                body: JSON.stringify({
-                    name: groupName,
-                    node_type: 'folder',
-                    group: groupId,
-                }),
-            }).then(function(resp) {
-                if (resp.ok) {
-                    self.refreshSidebar();
-                }
-            }).catch(function() {});
-        },
 
         // ── Context menu ─────────────────────────────────────
 
@@ -617,13 +603,24 @@ window.notesApp = function notesApp(config) {
             if (action.id === 'rename') {
                 this.showRenameDialog(m.data.uuid, m.data.name);
             } else if (action.id === 'delete') {
-                if (!confirm('Delete folder "' + m.data.name + '"? Notes inside will be moved to trash.')) return;
                 var self = this;
-                fetch('/api/v1/files/' + m.data.uuid, {
-                    method: 'DELETE',
-                    headers: { 'X-CSRFToken': getCSRFToken() },
-                }).then(function(resp) {
-                    if (resp.ok) self.refreshSidebar();
+                var uuid = m.data.uuid;
+                var name = m.data.name;
+                AppDialog.confirm({
+                    title: 'Delete folder',
+                    message: 'Move "' + name + '" to trash? Notes inside will also be moved.',
+                    okLabel: 'Move to trash',
+                    okClass: 'btn-error',
+                    icon: 'trash-2',
+                    iconClass: 'bg-error/10 text-error',
+                }).then(function(ok) {
+                    if (!ok) return;
+                    fetch('/api/v1/files/' + uuid, {
+                        method: 'DELETE',
+                        headers: { 'X-CSRFToken': getCSRFToken() },
+                    }).then(function(resp) {
+                        if (resp.ok) self.refreshSidebar();
+                    });
                 });
             } else if (action.id === 'create_subfolder') {
                 this._createSubfolder(m.data);

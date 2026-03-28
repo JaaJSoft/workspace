@@ -8,7 +8,7 @@
       Create Group Folder
     </h3>
     {% if available_groups %}
-    <form @submit.prevent="if (selectedGroup) { createGroupFolder(parseInt(selectedGroup), $refs.groupSelect.options[$refs.groupSelect.selectedIndex].text); document.getElementById('create-group-folder-dialog').close(); }">
+    <form @submit.prevent="if (selectedGroup) { window.dispatchEvent(new CustomEvent('create-group-folder', { detail: { groupId: parseInt(selectedGroup), groupName: $refs.groupSelect.options[$refs.groupSelect.selectedIndex].text } })); }">
       <div class="form-control">
         <label class="label">
           <span class="label-text">Group</span>

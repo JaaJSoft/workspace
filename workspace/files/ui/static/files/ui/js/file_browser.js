@@ -328,7 +328,7 @@ window.fileBrowser = function fileBrowser() {
             this.showRenameDialog(uuid, name);
             break;
           case 'delete':
-            this.confirmDelete(uuid, name, nodeType);
+            this.confirmDelete(uuid, name, nodeType, e.detail);
             break;
           case 'restore':
             this.confirmRestore(uuid, name, nodeType);
@@ -464,7 +464,7 @@ window.fileBrowser = function fileBrowser() {
       window.fileActions.showRenameDialog(uuid, name);
     },
 
-    async confirmDelete(uuid, name, nodeType) {
+    async confirmDelete(uuid, name, nodeType, detail) {
       if (window.getFilePrefs().confirmBeforeDelete) {
         const confirmed = await AppDialog.confirm({
           title: `Delete ${nodeType}?`,
@@ -474,7 +474,11 @@ window.fileBrowser = function fileBrowser() {
         });
         if (!confirmed) return;
       }
-      this.deleteItem(uuid);
+      await this.deleteItem(uuid);
+      // Group folder deletion requires full reload to update sidebar
+      if (detail && detail.isGroupFolder) {
+        window.location.reload();
+      }
     },
 
     async createFolder(name) {
@@ -486,33 +490,6 @@ window.fileBrowser = function fileBrowser() {
       }
     },
 
-    async createGroupFolder(groupId, groupName) {
-      try {
-        const response = await fetch('/api/v1/files', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken(),
-          },
-          body: JSON.stringify({
-            name: groupName,
-            node_type: 'folder',
-            group: groupId,
-          }),
-        });
-        if (response.ok) {
-          window.location.reload();
-        } else {
-          let data = {};
-          try {
-            data = await response.json();
-          } catch (_) {}
-          this.showAlert('error', data.detail || 'Failed to create group folder');
-        }
-      } catch (error) {
-        this.showAlert('error', 'Failed to create group folder');
-      }
-    },
 
     async createFile(name, fileType, customExt) {
       const trimmedName = (name || '').trim();
@@ -1435,6 +1412,11 @@ window.fileBrowser = function fileBrowser() {
       window.addEventListener('create-folder', (e) => this.createFolder(e.detail.name));
       window.addEventListener('create-file', (e) => this.createFile(e.detail.name, e.detail.fileType, e.detail.customExt));
       window.addEventListener('rename-item', (e) => this.renameItem(e.detail.uuid, e.detail.name));
+      window.addEventListener('create-group-folder', (e) => {
+        window.fileActions.createGroupFolder(e.detail.groupId, e.detail.groupName)
+          .then(() => window.location.reload())
+          .catch((err) => this.showAlert('error', err.message || 'Failed to create group folder'));
+      });
 
       // Properties panel events
       window.addEventListener('open-properties', (e) => {
@@ -2478,7 +2460,8 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
           isFavorite: e.detail.isFavorite,
           isViewable: false,
           isTrash: false,
-          isPinned: false
+          isPinned: false,
+          isGroupFolder: true,
         });
       });
 

@@ -86,6 +86,7 @@ class Message(models.Model):
     )
     body = models.TextField()
     body_html = models.TextField(blank=True, default='')
+    tool_data = models.JSONField(null=True, blank=True)
     edited_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     deleted_at = models.DateTimeField(null=True, blank=True)

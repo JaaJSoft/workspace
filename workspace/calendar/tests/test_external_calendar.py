@@ -230,6 +230,10 @@ class SyncExternalCalendarTests(TestCase):
         event = Event.objects.get(ical_uid='ext-recurring@example.com')
         self.assertEqual(event.recurrence_frequency, 'daily')
         self.assertEqual(event.recurrence_interval, 1)
+        # COUNT=10 daily from April 1 → last occurrence April 10
+        self.assertIsNotNone(event.recurrence_end)
+        self.assertEqual(event.recurrence_end.day, 10)
+        self.assertEqual(event.recurrence_end.month, 4)
 
 
 # ─── Celery Task Tests ─────────────────────────────────────

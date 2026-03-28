@@ -1,6 +1,6 @@
 """Fetch and sync external ICS calendar feeds."""
 import logging
-from datetime import datetime, timezone as dt_tz
+from datetime import datetime, timedelta, timezone as dt_tz
 
 import httpx
 import icalendar
@@ -123,6 +123,7 @@ def _parse_rrule(vevent):
     interval_list = rrule.get('INTERVAL', [1])
     interval = int(interval_list[0]) if interval_list else 1
 
+    # UNTIL takes priority, then COUNT is converted to a concrete end date
     until_list = rrule.get('UNTIL', [])
     recurrence_end = None
     if until_list:
@@ -131,12 +132,43 @@ def _parse_rrule(vevent):
             recurrence_end = until if until.tzinfo else until.replace(tzinfo=dt_tz.utc)
         else:
             recurrence_end = datetime(until.year, until.month, until.day, tzinfo=dt_tz.utc)
+    elif rrule.get('COUNT') and frequency:
+        recurrence_end = _count_to_end(
+            vevent.get('DTSTART'), frequency, interval, int(rrule['COUNT'][0]),
+        )
 
     return {
         'recurrence_frequency': frequency,
         'recurrence_interval': interval,
         'recurrence_end': recurrence_end,
     }
+
+
+def _count_to_end(dtstart_prop, frequency, interval, count):
+    """Convert a COUNT-based RRULE to a concrete end datetime."""
+    if not dtstart_prop or count <= 0:
+        return None
+    start = _to_datetime(dtstart_prop)
+    if not start:
+        return None
+
+    delta_map = {
+        'daily': timedelta(days=interval),
+        'weekly': timedelta(weeks=interval),
+        'monthly': None,
+        'yearly': None,
+    }
+    delta = delta_map.get(frequency)
+    if delta:
+        return start + delta * (count - 1)
+
+    # For monthly/yearly, approximate with dateutil
+    from dateutil.relativedelta import relativedelta
+    if frequency == 'monthly':
+        return start + relativedelta(months=interval * (count - 1))
+    if frequency == 'yearly':
+        return start + relativedelta(years=interval * (count - 1))
+    return None
 
 
 def _to_datetime(dt_prop):

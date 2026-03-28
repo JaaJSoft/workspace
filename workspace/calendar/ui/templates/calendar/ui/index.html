@@ -129,6 +129,54 @@
         </li>
       </ul>
 
+      <!-- External Calendars (ICS feeds) -->
+      <template x-if="externalCalendars.length > 0 || !collapsed">
+        <div>
+          <hr class="mb-3 border-base-300 transition-all duration-200"
+              :class="collapsed ? 'opacity-0' : 'opacity-100'">
+          <div class="flex items-center justify-between overflow-hidden transition-all duration-200"
+               :class="collapsed ? 'max-h-0 mb-0 opacity-0' : 'max-h-6 mb-3 opacity-100'">
+            <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider">
+              <span class="flex items-center gap-2">
+                <i data-lucide="globe" class="w-3 h-3"></i>
+                External
+              </span>
+            </h3>
+            <button type="button" class="btn btn-ghost btn-xs btn-square" @click="createExternalCalendar()" title="Add ICS feed">
+              <i data-lucide="plus" class="w-3 h-3"></i>
+            </button>
+          </div>
+          <ul class="space-y-1 mb-4">
+            <template x-for="ext in externalCalendars" :key="ext.uuid">
+              <li class="flex items-center gap-2 p-1.5 rounded-lg text-sm hover:bg-base-content/5 group cursor-pointer"
+                  :class="collapsed ? 'justify-center' : ''">
+                <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center"
+                      :class="'text-' + ext.color"
+                      :title="collapsed ? ext.name : ''">
+                  <i data-lucide="globe" class="w-4 h-4"></i>
+                </span>
+                <span x-show="!collapsed" x-transition class="flex-1 truncate" x-text="ext.name"></span>
+                <div x-show="!collapsed" class="flex items-center gap-0.5">
+                  <div class="opacity-0 group-hover:opacity-100 flex gap-0.5">
+                    <button type="button" class="btn btn-ghost btn-xs btn-square" @click.stop="syncExternalCalendar(ext)" title="Sync now" :disabled="syncingExternal[ext.uuid] === true">
+                      <span class="loading loading-spinner w-3 h-3" x-show="syncingExternal[ext.uuid] === true"></span>
+                      <i data-lucide="refresh-cw" class="w-3 h-3" x-show="syncingExternal[ext.uuid] !== true"></i>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-xs btn-square" @click.stop="deleteExternalCalendar(ext)" title="Remove">
+                      <i data-lucide="trash-2" class="w-3 h-3"></i>
+                    </button>
+                  </div>
+                  <input type="checkbox" class="checkbox checkbox-xs"
+                         :class="'checkbox-' + ext.color"
+                         :checked="visibleCalendars[ext.uuid]"
+                         @change="toggleCalendarVisibility(ext.uuid)">
+                </div>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </template>
+
       <!-- Other Calendars (subscribed) -->
       <template x-if="subscribedCalendars.length > 0">
         <div>
@@ -364,8 +412,16 @@
             </div>
           </template>
 
+          <!-- Read-only indicator for external calendar events -->
+          <template x-if="isExternalEvent()">
+            <div class="flex items-center gap-2 pt-2 border-t border-base-200 text-xs text-base-content/50">
+              <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+              <span>External calendar — read only</span>
+            </div>
+          </template>
+
           <!-- Owner actions -->
-          <template x-if="isOwner()">
+          <template x-if="isOwner() && !isExternalEvent()">
             <div class="flex gap-2 pt-2 border-t border-base-200">
               <button type="button" class="btn btn-sm btn-primary flex-1" @click="openEditModal()">
                 <i data-lucide="pencil" class="w-4 h-4"></i> Edit
@@ -432,6 +488,63 @@
   </div>
 </dialog>
 
+<!-- External Calendar Modal -->
+<dialog class="modal" :class="showExternalModal && 'modal-open'" @click.self="showExternalModal = false" @keydown.escape.window="showExternalModal && (showExternalModal = false)">
+  <div class="modal-box w-11/12 max-w-sm">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <span class="w-8 h-8 rounded-full flex items-center justify-center bg-info/10 text-info">
+          <i data-lucide="globe" class="w-4 h-4"></i>
+        </span>
+        Add external calendar
+      </h3>
+      <button type="button" class="btn btn-sm btn-circle btn-ghost" @click="showExternalModal = false">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form @submit.prevent="saveExternalCalendar()" class="space-y-4">
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">ICS URL</span></div>
+        <input id="external-form-url" type="url" class="input input-bordered input-sm w-full"
+               x-model="externalForm.url" placeholder="https://calendar.google.com/...ical" required />
+      </label>
+
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Name</span></div>
+        <input type="text" class="input input-bordered input-sm w-full"
+               x-model="externalForm.name" placeholder="My external calendar" />
+      </label>
+
+      <div>
+        <div class="label"><span class="label-text">Color</span></div>
+        <div class="flex flex-wrap gap-2">
+          <template x-for="c in calendarColors" :key="c">
+            <button type="button"
+                    class="w-8 h-8 rounded-full flex items-center justify-center transition-all border-2"
+                    :class="externalForm.color === c
+                      ? 'border-base-content scale-110 ring-2 ring-base-content/20'
+                      : 'border-transparent hover:scale-105'"
+                    :style="'background-color: oklch(var(--' + ({primary:'p',secondary:'s',accent:'a',info:'in',success:'su',warning:'wa',error:'er'}[c]) + '))'"
+                    @click="externalForm.color = c">
+              <i data-lucide="check" class="w-4 h-4" x-show="externalForm.color === c"
+                 :style="'color: oklch(var(--' + ({primary:'pc',secondary:'sc',accent:'ac',info:'inc',success:'suc',warning:'wac',error:'erc'}[c]) + '))'"></i>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm btn-ghost" @click="showExternalModal = false" :disabled="savingExternal">Cancel</button>
+        <button type="submit" class="btn btn-sm btn-primary" :disabled="!externalForm.url.trim() || savingExternal">
+          <span class="loading loading-spinner loading-xs" x-show="savingExternal"></span>
+          <span x-text="savingExternal ? 'Adding...' : 'Add'"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
 <!-- Event Create/Edit Modal -->
 <dialog class="modal" :class="showModal && 'modal-open'" @click.self="closeModal()" @keydown.escape.window="closeModal()">
   <div class="modal-box w-11/12 max-w-lg">
@@ -451,7 +564,7 @@
       <label class="form-control w-full">
         <div class="label"><span class="label-text">Calendar</span></div>
         <select class="select select-bordered select-sm w-full" x-model="form.calendar_id">
-          <template x-for="cal in ownedCalendars.filter(c => !c.is_synced)" :key="cal.uuid">
+          <template x-for="cal in ownedCalendars.filter(c => !c.is_synced && !c.is_external)" :key="cal.uuid">
             <option :value="cal.uuid" x-text="cal.name"></option>
           </template>
         </select>

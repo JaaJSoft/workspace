@@ -1,12 +1,20 @@
 from django.contrib import admin
 
 from .models import Calendar, CalendarSubscription, Event, EventMember
+from .models_external import ExternalCalendar
+
+
+class ExternalCalendarInline(admin.StackedInline):
+    model = ExternalCalendar
+    extra = 0
+    readonly_fields = ('last_synced_at', 'last_etag', 'last_error')
 
 
 @admin.register(Calendar)
 class CalendarAdmin(admin.ModelAdmin):
     list_display = ('name', 'owner', 'color', 'created_at')
     search_fields = ('name',)
+    inlines = [ExternalCalendarInline]
 
 
 class EventMemberInline(admin.TabularInline):
@@ -74,3 +82,11 @@ class PollVoteAdmin(admin.ModelAdmin):
 class PollInviteeAdmin(admin.ModelAdmin):
     list_display = ['poll', 'user', 'created_at']
     raw_id_fields = ['user', 'poll']
+
+
+@admin.register(ExternalCalendar)
+class ExternalCalendarAdmin(admin.ModelAdmin):
+    list_display = ('calendar', 'url', 'is_active', 'last_synced_at', 'last_error')
+    list_filter = ('is_active',)
+    search_fields = ('calendar__name', 'url')
+    readonly_fields = ('last_synced_at', 'last_etag', 'last_error')

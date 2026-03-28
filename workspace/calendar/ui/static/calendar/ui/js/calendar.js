@@ -20,6 +20,13 @@ window.calendarApp = function calendarApp(calendarsData) {
     calendarModalMode: 'create',
     calendarForm: { uuid: null, name: '', color: 'primary' },
 
+    // External calendars
+    externalCalendars: [],
+    showExternalModal: false,
+    externalForm: { name: '', url: '', color: 'primary' },
+    savingExternal: false,
+    syncingExternal: {},  // { [calendar_uuid]: true }
+
     // Panel & modal state
     showPanel: false,
     showModal: false,
@@ -52,7 +59,7 @@ window.calendarApp = function calendarApp(calendarsData) {
     scopeResolve: null,
 
     // Context menu state
-    ctxMenu: { open: false, x: 0, y: 0, event: null, isOwner: false, inviteStatus: null },
+    ctxMenu: { open: false, x: 0, y: 0, event: null, isOwner: false, isExternal: false, inviteStatus: null },
 
     // Poll state
     showPollListModal: false,
@@ -92,6 +99,9 @@ window.calendarApp = function calendarApp(calendarsData) {
 
       // Load preferences from API
       this._loadPrefs();
+
+      // Load external calendars
+      this._loadExternalCalendars();
 
       if (this.isMobile()) this.collapsed = true;
       window.matchMedia('(max-width: 1023px)').addEventListener('change', (e) => {
@@ -176,6 +186,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       const obj = {};
       this.ownedCalendars.forEach(c => obj[c.uuid] = true);
       this.subscribedCalendars.forEach(c => obj[c.uuid] = true);
+      this.externalCalendars.forEach(c => obj[c.uuid] = true);
       this.visibleCalendars = obj;
     },
 
@@ -342,6 +353,115 @@ window.calendarApp = function calendarApp(calendarsData) {
       }
     },
 
+    // --- External Calendars ---
+    _loadExternalCalendars() {
+      fetch('/api/v1/calendar/external-calendars', { credentials: 'same-origin' })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => {
+          this.externalCalendars = data;
+          // Make newly loaded external calendars visible by default
+          const saved = localStorage.getItem('calendarVisible');
+          if (!saved) {
+            data.forEach(c => { this.visibleCalendars[c.uuid] = true; });
+            this.visibleCalendars = { ...this.visibleCalendars };
+          } else {
+            // Ensure new external calendars get visible if not yet tracked
+            let changed = false;
+            data.forEach(c => {
+              if (!(c.uuid in this.visibleCalendars)) {
+                this.visibleCalendars[c.uuid] = true;
+                changed = true;
+              }
+            });
+            if (changed) {
+              this.visibleCalendars = { ...this.visibleCalendars };
+              this._saveVisibility();
+            }
+          }
+          if (this.calendar) this.calendar.refetchEvents();
+        })
+        .catch(() => {});
+    },
+
+    createExternalCalendar() {
+      const defaultColor = this.calendarColors[(this.ownedCalendars.length + this.externalCalendars.length) % this.calendarColors.length];
+      this.externalForm = { name: '', url: '', color: defaultColor };
+      this.showExternalModal = true;
+      this.$nextTick(() => {
+        const input = document.getElementById('external-form-url');
+        if (input) { input.focus(); }
+      });
+    },
+
+    async saveExternalCalendar() {
+      const { name, url, color } = this.externalForm;
+      if (!url.trim() || this.savingExternal) return;
+
+      this.savingExternal = true;
+      try {
+        const resp = await fetch('/api/v1/calendar/external-calendars', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ name: (name.trim() || 'External calendar'), url: url.trim(), color }),
+        });
+        if (resp.ok) {
+          const ext = await resp.json();
+          this.externalCalendars.push(ext);
+          this.visibleCalendars[ext.uuid] = true;
+          this._saveVisibility();
+          this.showExternalModal = false;
+          // The sync runs async on the backend; refetch events after a short delay
+          setTimeout(() => { if (this.calendar) this.calendar.refetchEvents(); }, 3000);
+        }
+      } finally {
+        this.savingExternal = false;
+      }
+    },
+
+    async deleteExternalCalendar(ext) {
+      const ok = await AppDialog.confirm({
+        title: 'Remove external calendar',
+        message: `Remove "${ext.name}" and all its synced events?`,
+        okLabel: 'Remove',
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!ok) return;
+
+      const resp = await fetch(`/api/v1/calendar/external-calendars/${ext.external_source.uuid}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+      });
+      if (resp.ok || resp.status === 204) {
+        this.externalCalendars = this.externalCalendars.filter(c => c.uuid !== ext.uuid);
+        delete this.visibleCalendars[ext.uuid];
+        this._saveVisibility();
+        if (this.calendar) this.calendar.refetchEvents();
+      }
+    },
+
+    async syncExternalCalendar(ext) {
+      if (this.syncingExternal[ext.uuid]) return;
+      this.syncingExternal = { ...this.syncingExternal, [ext.uuid]: true };
+      try {
+        await fetch(`/api/v1/calendar/external-calendars/${ext.external_source.uuid}/sync`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+        });
+        // Refetch after a delay to allow backend sync
+        setTimeout(() => { if (this.calendar) this.calendar.refetchEvents(); }, 3000);
+      } finally {
+        // Keep spinner for a few seconds while backend syncs
+        setTimeout(() => {
+          this.syncingExternal = { ...this.syncingExternal, [ext.uuid]: false };
+        }, 3000);
+      }
+    },
+
     // --- FullCalendar ---
     initCalendar() {
       const calendarEl = this.$refs.calendarEl;
@@ -404,10 +524,12 @@ window.calendarApp = function calendarApp(calendarsData) {
         eventDidMount: (info) => {
           info.el.addEventListener('contextmenu', (e) => {
             e.preventDefault();
+            window._eventCardScheduleHide(info.el);
             this.openContextMenu(e, info.event.extendedProps._raw);
           });
-          // Event card popover on hover
+          // Event card popover on hover (suppressed while context menu is open)
           info.el.addEventListener('mouseenter', () => {
+            if (this.ctxMenu.open) return;
             window._eventCardShow(info.el, info.event.id);
           });
           info.el.addEventListener('mouseleave', () => {
@@ -506,7 +628,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const isDeclined = isInvited && membership.status === 'declined';
 
         // Find calendar color
-        const cal = [...this.ownedCalendars, ...this.subscribedCalendars].find(c => c.uuid === event.calendar_id);
+        const cal = [...this.ownedCalendars, ...this.subscribedCalendars, ...this.externalCalendars].find(c => c.uuid === event.calendar_id);
         const color = cal?.color || 'primary';
 
         const classNames = [`event-color-${color}`];
@@ -906,6 +1028,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       // Store event data in form for actions that need it
       this.ctxMenu.event = rawEvent;
       this.ctxMenu.isOwner = isOwner;
+      this.ctxMenu.isExternal = this.externalCalendars.some(c => c.uuid === rawEvent.calendar_id);
       this.ctxMenu.inviteStatus = inviteStatus;
       this.ctxMenu.open = true;
 
@@ -1049,7 +1172,11 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
 
     eventCalendarObj() {
-      return [...this.ownedCalendars, ...this.subscribedCalendars].find(c => c.uuid === this.form.calendar_id) || null;
+      return [...this.ownedCalendars, ...this.subscribedCalendars, ...this.externalCalendars].find(c => c.uuid === this.form.calendar_id) || null;
+    },
+
+    isExternalEvent() {
+      return this.externalCalendars.some(c => c.uuid === this.form.calendar_id);
     },
 
     eventCalendarColor() {

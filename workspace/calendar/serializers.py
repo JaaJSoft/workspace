@@ -13,13 +13,17 @@ class MemberUserSerializer(serializers.Serializer):
 class CalendarSerializer(serializers.ModelSerializer):
     owner = MemberUserSerializer()
     is_synced = serializers.SerializerMethodField()
+    is_external = serializers.SerializerMethodField()
 
     class Meta:
         model = Calendar
-        fields = ['uuid', 'name', 'color', 'owner', 'is_synced', 'created_at']
+        fields = ['uuid', 'name', 'color', 'owner', 'is_synced', 'is_external', 'created_at']
 
     def get_is_synced(self, obj):
         return obj.mail_account_id is not None
+
+    def get_is_external(self, obj):
+        return hasattr(obj, 'external_source')
 
 
 class CalendarCreateSerializer(serializers.Serializer):

@@ -26,7 +26,12 @@ def _parse_dt(value):
 
 from workspace.notifications.services import notify, notify_many
 from .models import Calendar, CalendarSubscription, Event, EventMember
+from .models_external import ExternalCalendar
 from .queries import visible_calendar_ids
+
+
+def _is_external_calendar(calendar_id):
+    return ExternalCalendar.objects.filter(calendar_id=calendar_id).exists()
 from .recurrence import expand_recurring_events, make_virtual_occurrence
 from .serializers import (
     CalendarCreateSerializer,
@@ -114,7 +119,9 @@ class CalendarListView(APIView):
 
     @extend_schema(summary="List user's calendars (owned + subscribed)")
     def get(self, request):
-        owned = Calendar.objects.filter(owner=request.user).select_related('owner')
+        owned = Calendar.objects.filter(
+            owner=request.user, external_source__isnull=True,
+        ).select_related('owner')
         sub_ids = CalendarSubscription.objects.filter(
             user=request.user,
         ).values_list('calendar_id', flat=True)
@@ -248,6 +255,11 @@ class EventListView(APIView):
                 {'detail': 'Calendar not found or not owned by you.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if _is_external_calendar(cal.pk):
+            return Response(
+                {'detail': 'Cannot create events in an external calendar.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         event = Event.objects.create(
             calendar=cal,
@@ -328,6 +340,8 @@ class EventDetailView(APIView):
             return err
         if event.owner_id != request.user.id:
             return Response({'detail': 'Only the owner can edit.'}, status=status.HTTP_403_FORBIDDEN)
+        if _is_external_calendar(event.calendar_id):
+            return Response({'detail': 'Cannot edit events from an external calendar.'}, status=status.HTTP_403_FORBIDDEN)
 
         ser = EventUpdateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -508,6 +522,8 @@ class EventDetailView(APIView):
             return err
         if event.owner_id != request.user.id:
             return Response({'detail': 'Only the owner can delete.'}, status=status.HTTP_403_FORBIDDEN)
+        if _is_external_calendar(event.calendar_id):
+            return Response({'detail': 'Cannot delete events from an external calendar.'}, status=status.HTTP_403_FORBIDDEN)
 
         scope = request.query_params.get('scope', 'all')
         original_start_str = request.query_params.get('original_start')

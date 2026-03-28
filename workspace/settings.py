@@ -602,6 +602,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'chat.purge_orphan_attachments',
         'schedule': crontab(hour=4, minute=0),  # Every day at 4:00 AM
     },
+    'sync-external-calendars': {
+        'task': 'calendar.sync_all_external_calendars',
+        'schedule': 900.0,  # Every 15 minutes
+    },
 }
 
 # --------------------------------------------------

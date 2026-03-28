@@ -330,3 +330,7 @@ class PollInvitee(models.Model):
 
     def __str__(self):
         return f'{self.user} — {self.poll}'
+
+
+# Import models from sub-modules so Django's migration framework discovers them.
+from workspace.calendar.models_external import ExternalCalendar  # noqa: E402, F401

@@ -24,15 +24,15 @@
       </button>
     </li>
 
-    <!-- Owner actions -->
-    <hr x-show="ctxMenu.isOwner" class="my-1 border-base-300" />
-    <li x-show="ctxMenu.isOwner">
+    <!-- Owner actions (hidden for external calendar events) -->
+    <hr x-show="ctxMenu.isOwner && !ctxMenu.isExternal" class="my-1 border-base-300" />
+    <li x-show="ctxMenu.isOwner && !ctxMenu.isExternal">
       <button type="button" class="gap-3 rounded" @click="ctxMenuAction('edit')">
         <i data-lucide="pencil" class="w-4 h-4"></i>
         <span>Edit</span>
       </button>
     </li>
-    <li x-show="ctxMenu.isOwner">
+    <li x-show="ctxMenu.isOwner && !ctxMenu.isExternal">
       <button type="button" class="gap-3 rounded text-error" @click="ctxMenuAction('delete')">
         <i data-lucide="trash-2" class="w-4 h-4"></i>
         <span>Delete</span>

@@ -26,7 +26,9 @@ def _ensure_default_calendar(user):
 def index(request):
     _ensure_default_calendar(request.user)
 
-    owned = Calendar.objects.filter(owner=request.user).select_related('owner')
+    owned = Calendar.objects.filter(
+        owner=request.user, external_source__isnull=True,
+    ).select_related('owner')
     sub_ids = CalendarSubscription.objects.filter(
         user=request.user,
     ).values_list('calendar_id', flat=True)

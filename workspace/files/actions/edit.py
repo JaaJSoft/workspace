@@ -14,6 +14,9 @@ class RenameAction(BaseAction):
     def is_available(self, user, file_obj, *, is_owner, share_permission=None):
         if file_obj.deleted_at is not None:
             return False
+        # Cannot rename a root group folder
+        if file_obj.group_id and file_obj.parent_id is None:
+            return False
         return is_owner
 
 
@@ -30,6 +33,9 @@ class CutAction(BaseAction):
     def is_available(self, user, file_obj, *, is_owner, share_permission=None):
         if file_obj.deleted_at is not None:
             return False
+        # Cannot cut a root group folder (structural, one per group)
+        if file_obj.group_id and file_obj.parent_id is None:
+            return False
         return is_owner
 
 
@@ -45,6 +51,9 @@ class CopyAction(BaseAction):
 
     def is_available(self, user, file_obj, *, is_owner, share_permission=None):
         if file_obj.deleted_at is not None:
+            return False
+        # Cannot copy a root group folder (structural, one per group)
+        if file_obj.group_id and file_obj.parent_id is None:
             return False
         return is_owner
 

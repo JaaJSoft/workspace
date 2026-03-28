@@ -202,6 +202,18 @@ window.notesApp = function notesApp(config) {
                     this.selectedNote = null;
                 }
             }.bind(this));
+
+            // Keyboard shortcut: ? to open help dialog
+            window.addEventListener('keydown', function(e) {
+                if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    var tag = document.activeElement ? document.activeElement.tagName : '';
+                    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+                        (document.activeElement && document.activeElement.isContentEditable)) return;
+                    e.preventDefault();
+                    var dlg = document.getElementById('notes-help-dialog');
+                    if (dlg) dlg.showModal();
+                }
+            });
         },
 
         // ── Folder data management (nested tree) ─────────────

@@ -1,0 +1,140 @@
+<dialog id="notes-help-dialog" class="modal">
+  <div class="modal-box max-w-3xl">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </form>
+    <h3 class="font-bold text-xl mb-6 flex items-center gap-2">
+      <i data-lucide="circle-help" class="w-6 h-6 text-success"></i>
+      Help
+    </h3>
+
+    <div class="space-y-2">
+      <!-- Keyboard Shortcuts -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="notes-help-accordion" checked="checked" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="keyboard" class="w-4 h-4 text-success"></i>
+          Keyboard Shortcuts
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <table class="table table-sm">
+              <tbody>
+                <tr><td><kbd class="kbd kbd-sm">?</kbd></td><td>Show this help</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="notes-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="notebook-pen" class="w-4 h-4 text-success"></i>
+          Notes
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <ul>
+              <li><strong>Create</strong> &mdash; Click the <kbd class="kbd kbd-xs">+</kbd> button in the note list panel to create a new note.</li>
+              <li><strong>Edit</strong> &mdash; Select a note to open the Markdown editor with live preview.</li>
+              <li><strong>Rename</strong> &mdash; Click the note title in the editor toolbar to rename it.</li>
+              <li><strong>Favorite</strong> &mdash; Click the star icon to mark a note as favorite.</li>
+              <li><strong>Tags</strong> &mdash; Use the tag manager to organize notes with labels.</li>
+              <li><strong>Delete</strong> &mdash; Click the trash icon in the toolbar (confirmation can be toggled in preferences).</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Folders & Organization -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="notes-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="folder-tree" class="w-4 h-4 text-success"></i>
+          Folders &amp; Organization
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <ul>
+              <li><strong>Folders</strong> &mdash; Organize notes in a nested folder tree (up to 4 levels deep).</li>
+              <li><strong>Group folders</strong> &mdash; Create shared folders linked to your groups.</li>
+              <li><strong>Quick access</strong> &mdash; Use All, Favorites, Recent, and Journal views in the sidebar.</li>
+              <li><strong>Context menu</strong> &mdash; Right-click folders and tags for quick actions.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Journal -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="notes-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="book-open" class="w-4 h-4 text-success"></i>
+          Journal
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <ul>
+              <li><strong>Daily notes</strong> &mdash; The journal automatically creates a note for today's date.</li>
+              <li><strong>Auto-folder</strong> &mdash; A dedicated "Journal" folder is created the first time you use it.</li>
+              <li><strong>Toggle</strong> &mdash; Show or hide the Journal entry in preferences.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Markdown Formatting -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="notes-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="text" class="w-4 h-4 text-success"></i>
+          Markdown Formatting
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <p>Notes use a rich Markdown editor with support for:</p>
+            <table class="table table-sm">
+              <thead>
+                <tr><th>Syntax</th><th>Result</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
+                <tr><td><code>*italic*</code></td><td><em>italic</em></td></tr>
+                <tr><td><code>~~strikethrough~~</code></td><td><s>strikethrough</s></td></tr>
+                <tr><td><code>`inline code`</code></td><td><code>inline code</code></td></tr>
+                <tr><td><code>[link](url)</code></td><td><a class="link link-success">link</a></td></tr>
+                <tr><td><code>```code block```</code></td><td>Code block</td></tr>
+                <tr><td><code>$$math$$</code></td><td>LaTeX math (KaTeX)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Access -->
+      <div class="collapse collapse-arrow bg-base-200 rounded-lg">
+        <input type="radio" name="notes-help-accordion" />
+        <div class="collapse-title font-semibold flex items-center gap-2">
+          <i data-lucide="code" class="w-4 h-4 text-success"></i>
+          API Access
+        </div>
+        <div class="collapse-content">
+          <div class="prose prose-sm max-w-none pt-2">
+            <ul>
+              <li><strong>Base URL:</strong> <code>/api/v1/files</code></li>
+              <li><strong>Authentication:</strong> Use your session cookie or API token.</li>
+              <li><strong>Documentation:</strong> Full API docs are available at <a href="/schema/swagger-ui/" class="link link-success">/schema/swagger-ui/</a>.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

@@ -79,6 +79,13 @@ x-init="init()"
       {% include "notes/ui/partials/sidebar.html" %}
     </div>
 
+    <!-- Help button -->
+    <div class="px-3 pb-2">
+      <ul class="menu p-0">
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="success" onclick="document.getElementById('notes-help-dialog').showModal()" tooltip="Help (?)" %}
+      </ul>
+    </div>
+
     <!-- Bottom action: settings on mobile, collapse on desktop -->
     <div class="border-t border-base-300 py-4 px-3">
       <ul class="menu p-0 hidden lg:block">
@@ -158,6 +165,7 @@ x-init="init()"
 {% include "files/ui/partials/folder_dialog.html" %}
 {% include "files/ui/partials/rename_dialog.html" %}
 {% include "notes/ui/partials/context_menu.html" %}
+{% include "notes/ui/partials/help_dialog.html" %}
 
 <!-- Create Group Folder Dialog -->
 <dialog id="notes-create-group-folder-dialog" class="modal">

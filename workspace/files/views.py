@@ -218,6 +218,21 @@ class FileViewSet(viewsets.ModelViewSet):
         'owner': ['exact'],
         'mime_type': ['exact'],
     }
+
+    def filter_queryset(self, queryset):
+        """Override to skip the parent filter when descendants mode is active."""
+        if self._is_descendants_query() and 'parent' in self.request.query_params:
+            # Temporarily hide 'parent' from query_params so DjangoFilterBackend
+            # doesn't apply parent=exact (we handle it via path prefix in get_queryset)
+            original = self.request.query_params
+            mutable = original.copy()
+            mutable.pop('parent')
+            self.request._request.GET = mutable
+            try:
+                return super().filter_queryset(queryset)
+            finally:
+                self.request._request.GET = original
+        return super().filter_queryset(queryset)
     search_fields = ['name', 'mime_type']
     ordering_fields = ['name', 'created_at', 'updated_at', 'size']
     ordering = ['node_type', 'name']
@@ -303,31 +318,38 @@ class FileViewSet(viewsets.ModelViewSet):
                 user_share_permission=Subquery(user_share_subquery),
             ).prefetch_related('file_tags__tag').distinct()
 
-        # Group filter: return group files when ?group=<id> is present
-        # or when ?parent=<uuid> points to a group folder
+        # Resolve parent context: detect group from parent, resolve descendants
+        parent_uuid = self.request.query_params.get('parent')
         group_id = self.request.query_params.get('group')
-        if self.action == 'list' and not group_id:
-            parent_uuid = self.request.query_params.get('parent')
-            if parent_uuid:
-                parent_group = File.objects.filter(
-                    uuid=parent_uuid,
-                    group__isnull=False,
-                    deleted_at__isnull=True,
-                ).values_list('group_id', flat=True).first()
-                if parent_group:
-                    group_id = parent_group
+        ancestor_path = None
+
+        if self.action == 'list' and parent_uuid:
+            parent_obj = File.objects.filter(
+                uuid=parent_uuid, deleted_at__isnull=True,
+            ).values_list('group_id', 'path').first()
+            if parent_obj:
+                # Auto-detect group from parent
+                if not group_id and parent_obj[0]:
+                    group_id = parent_obj[0]
+                # Descendants mode: use path prefix instead of parent=exact
+                if self._is_descendants_query() and parent_obj[1]:
+                    ancestor_path = parent_obj[1]
         if self.action == 'list' and group_id:
             if not self.request.user.groups.filter(id=group_id).exists():
                 return File.objects.none()
-            return File.objects.filter(
+            qs = File.objects.filter(
                 group_id=group_id,
                 deleted_at__isnull=True,
-            ).annotate(
+            )
+            if ancestor_path:
+                qs = qs.filter(path__startswith=ancestor_path + '/')
+            qs = qs.annotate(
                 is_favorite=Exists(favorite_subquery),
                 is_pinned=Exists(pinned_subquery),
                 is_shared=Exists(is_shared_subquery),
                 user_share_permission=Subquery(user_share_subquery),
             ).prefetch_related('file_tags__tag')
+            return qs
 
         queryset = File.objects.filter(owner=self.request.user, group__isnull=True).prefetch_related('file_tags__tag')
         queryset = queryset.annotate(
@@ -344,6 +366,8 @@ class FileViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             if self._is_trash_query():
                 return queryset
+            if ancestor_path:
+                return queryset.filter(path__startswith=ancestor_path + '/')
             if not self._is_recent_query() and 'parent' not in self.request.query_params:
                 return queryset.filter(parent__isnull=True)
         return queryset
@@ -368,6 +392,9 @@ class FileViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_403_FORBIDDEN,
                 )
         return super().create(request, *args, **kwargs)
+
+    def _is_descendants_query(self):
+        return self.request.query_params.get('descendants', '').lower() in {'1', 'true'}
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())

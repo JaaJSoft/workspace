@@ -247,11 +247,12 @@ window.notesApp = function notesApp(config) {
             return sortMap[window._notesPrefsCache.sortBy] || '-updated_at';
         },
 
-        async setView(view, id, name, skipUrl) {
+        async setView(view, id, name, skipUrl, descendants) {
             id = id || null;
             var viewChanged = (view !== this.activeView || id !== this.activeId);
             this.activeView = view;
             this.activeId = id;
+            this._descendants = !!descendants;
             this._closeDrawerOnMobile();
 
             if (view === 'all') {
@@ -829,6 +830,7 @@ window.notesApp = function notesApp(config) {
                 base += '&tags=' + this.activeId + sort;
             } else if (this.activeView === 'folder' || this.activeView === 'group_folder') {
                 base += '&parent=' + this.activeId + sort;
+                if (this._descendants) base += '&descendants=1';
             } else if (this.activeView === 'journal') {
                 base += '&parent=' + this.activeId + '&ordering=-name';
             } else {

@@ -199,7 +199,7 @@ window.notesApp = function notesApp(config) {
             }.bind(this));
         },
 
-        // ── Folder data management ──────────────────────────
+        // ── Folder data management (nested tree) ─────────────
 
         _loadFolderData() {
             var el = document.getElementById('notes-folders-data');
@@ -212,68 +212,29 @@ window.notesApp = function notesApp(config) {
                 try { this.sidebarGroupFolders = JSON.parse(gel.textContent); }
                 catch (e) { this.sidebarGroupFolders = []; }
             }
-            // Initialize depth/ancestors for root folders
-            [this.sidebarFolders, this.sidebarGroupFolders].forEach(function(list) {
-                list.forEach(function(f) {
-                    if (f.depth === undefined) f.depth = 0;
-                    if (f.ancestors === undefined) f.ancestors = '';
-                });
-            });
         },
 
-        isLoadingChildren(uuid) {
-            return this.loadingChildren.indexOf(uuid) !== -1;
-        },
-
-        async _loadChildren(uuid, folderList) {
-            if (this._loadedChildren[uuid]) return;
-            this._loadedChildren[uuid] = true;
-            this.loadingChildren.push(uuid);
-
-            var resp = await fetch('/api/v1/files?parent=' + uuid + '&node_type=folder&ordering=name');
-            if (!resp.ok) {
-                this.loadingChildren = this.loadingChildren.filter(function(id) { return id !== uuid; });
-                return;
+        _findFolder(uuid, list) {
+            if (!list) return null;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].uuid === uuid) return list[i];
+                var found = this._findFolder(uuid, list[i].children);
+                if (found) return found;
             }
+            return null;
+        },
+
+        async _loadChildren(folder) {
+            if (folder.children) return; // already loaded
+            this.loadingChildren = this.loadingChildren.concat([folder.uuid]);
+
+            var resp = await fetch('/api/v1/files?parent=' + folder.uuid + '&node_type=folder&ordering=name');
+            this.loadingChildren = this.loadingChildren.filter(function(id) { return id !== folder.uuid; });
+            if (!resp.ok) { folder.children = []; return; }
 
             var children = await resp.json();
-            if (children.length === 0) {
-                this.loadingChildren = this.loadingChildren.filter(function(id) { return id !== uuid; });
-                return;
-            }
+            folder.children = children;
 
-            // Find parent in the list to compute depth/ancestors
-            var parentIdx = -1;
-            var parentFolder = null;
-            for (var i = 0; i < folderList.length; i++) {
-                if (folderList[i].uuid === uuid) {
-                    parentIdx = i;
-                    parentFolder = folderList[i];
-                    break;
-                }
-            }
-            if (parentIdx === -1) return;
-
-            var childDepth = (parentFolder.depth || 0) + 1;
-            var childAncestors = parentFolder.ancestors
-                ? parentFolder.ancestors + ',' + uuid
-                : uuid;
-
-            children.forEach(function(c) {
-                c.depth = childDepth;
-                c.ancestors = childAncestors;
-            });
-
-            // Insert children after parent (and after any existing children of parent)
-            var insertIdx = parentIdx + 1;
-            while (insertIdx < folderList.length &&
-                   folderList[insertIdx].depth > parentFolder.depth) {
-                insertIdx++;
-            }
-            folderList.splice.apply(folderList, [insertIdx, 0].concat(children));
-            this.loadingChildren = this.loadingChildren.filter(function(id) { return id !== uuid; });
-
-            // Refresh icons for new elements
             this.$nextTick(function() {
                 if (window.lucide) window.lucide.createIcons();
             });
@@ -693,16 +654,6 @@ window.notesApp = function notesApp(config) {
             return (this.notePrefs.hiddenItems || []).indexOf(uuid) !== -1;
         },
 
-        isTreeHidden(uuid, ancestorsStr) {
-            var hidden = this.notePrefs.hiddenItems || [];
-            if (hidden.indexOf(uuid) !== -1) return true;
-            if (!ancestorsStr) return false;
-            var ancestors = ancestorsStr.split(',');
-            for (var i = 0; i < ancestors.length; i++) {
-                if (hidden.indexOf(ancestors[i]) !== -1) return true;
-            }
-            return false;
-        },
 
         // ── Expanded folders (URL-based) ────────────────────
 
@@ -730,9 +681,10 @@ window.notesApp = function notesApp(config) {
             this.expandedFolders = uuids;
             // Lazy-load children for each expanded folder in order
             for (var i = 0; i < uuids.length; i++) {
-                var folderList = this._findFolderList(uuids[i]);
-                if (folderList) {
-                    await this._loadChildren(uuids[i], folderList);
+                var folder = this._findFolder(uuids[i], this.sidebarFolders)
+                          || this._findFolder(uuids[i], this.sidebarGroupFolders);
+                if (folder) {
+                    await this._loadChildren(folder);
                 }
             }
             this.$nextTick(function() {
@@ -740,28 +692,19 @@ window.notesApp = function notesApp(config) {
             });
         },
 
-        isFolderExpanded(uuid) {
-            return this.expandedFolders.indexOf(uuid) !== -1;
-        },
-
         async toggleFolderExpand(uuid) {
             var idx = this.expandedFolders.indexOf(uuid);
             if (idx === -1) {
-                // Expanding: lazy-load children first
-                var folderList = this._findFolderList(uuid);
-                if (folderList) {
-                    await this._loadChildren(uuid, folderList);
+                var folder = this._findFolder(uuid, this.sidebarFolders)
+                          || this._findFolder(uuid, this.sidebarGroupFolders);
+                if (folder) {
+                    await this._loadChildren(folder);
                 }
                 this.expandedFolders = this.expandedFolders.concat([uuid]);
             } else {
-                // Collapsing: also remove any expanded descendants
-                var toRemove = [uuid];
-                var allFolders = this.sidebarFolders.concat(this.sidebarGroupFolders);
-                allFolders.forEach(function(f) {
-                    if (f.ancestors && f.ancestors.split(',').indexOf(uuid) !== -1) {
-                        toRemove.push(f.uuid);
-                    }
-                });
+                // Collapsing: also remove expanded descendants
+                var toRemove = this._getDescendantUuids(uuid);
+                toRemove.push(uuid);
                 this.expandedFolders = this.expandedFolders.filter(function(id) {
                     return toRemove.indexOf(id) === -1;
                 });
@@ -769,23 +712,19 @@ window.notesApp = function notesApp(config) {
             this._writeExpandedToUrl();
         },
 
-        _findFolderList(uuid) {
-            for (var i = 0; i < this.sidebarFolders.length; i++) {
-                if (this.sidebarFolders[i].uuid === uuid) return this.sidebarFolders;
+        _getDescendantUuids(uuid) {
+            var folder = this._findFolder(uuid, this.sidebarFolders)
+                      || this._findFolder(uuid, this.sidebarGroupFolders);
+            if (!folder || !folder.children) return [];
+            var result = [];
+            function walk(children) {
+                for (var i = 0; i < children.length; i++) {
+                    result.push(children[i].uuid);
+                    if (children[i].children) walk(children[i].children);
+                }
             }
-            for (var j = 0; j < this.sidebarGroupFolders.length; j++) {
-                if (this.sidebarGroupFolders[j].uuid === uuid) return this.sidebarGroupFolders;
-            }
-            return null;
-        },
-
-        isAncestorCollapsed(ancestorsStr) {
-            if (!ancestorsStr) return false;
-            var ancestors = ancestorsStr.split(',');
-            for (var i = 0; i < ancestors.length; i++) {
-                if (this.expandedFolders.indexOf(ancestors[i]) === -1) return true;
-            }
-            return false;
+            walk(folder.children);
+            return result;
         },
 
         toggleHidden(uuid) {

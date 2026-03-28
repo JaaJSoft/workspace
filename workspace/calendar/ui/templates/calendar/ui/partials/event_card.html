@@ -49,8 +49,33 @@
   </div>
   {% endif %}
 
-  <a href="/calendar?event={{ event.uuid }}" class="btn btn-ghost btn-xs w-full gap-1">
-    <i data-lucide="calendar" class="w-3 h-3"></i>
-    View in calendar
-  </a>
+  <div class="flex gap-1.5">
+    <a href="/calendar?event={{ event.uuid }}" class="btn btn-ghost btn-xs flex-1 gap-1">
+      <i data-lucide="eye" class="w-3 h-3"></i>
+      View
+    </a>
+    {% if is_owner and not is_external %}
+    <button type="button" class="btn btn-ghost btn-xs flex-1 gap-1" onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'edit', eventId: '{{ event.uuid }}'}}))">
+      <i data-lucide="pencil" class="w-3 h-3"></i>
+      Edit
+    </button>
+    <button type="button" class="btn btn-ghost btn-xs btn-square text-error" onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'delete', eventId: '{{ event.uuid }}'}}))">
+      <i data-lucide="trash-2" class="w-3 h-3"></i>
+    </button>
+    {% endif %}
+    {% if invite_status %}
+    <button type="button" class="btn btn-xs flex-1 gap-1 {% if invite_status == 'accepted' %}btn-success{% else %}btn-ghost{% endif %}" onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'accept', eventId: '{{ event.uuid }}'}}))">
+      <i data-lucide="check" class="w-3 h-3"></i>
+    </button>
+    <button type="button" class="btn btn-xs flex-1 gap-1 {% if invite_status == 'declined' %}btn-error{% else %}btn-ghost{% endif %}" onclick="window.dispatchEvent(new CustomEvent('eventcard-action', {detail: {action: 'decline', eventId: '{{ event.uuid }}'}}))">
+      <i data-lucide="x" class="w-3 h-3"></i>
+    </button>
+    {% endif %}
+    {% if is_external %}
+    <span class="flex items-center gap-1 text-xs text-base-content/40 flex-1 justify-center">
+      <i data-lucide="globe" class="w-3 h-3"></i>
+      Read only
+    </span>
+    {% endif %}
+  </div>
 </div>

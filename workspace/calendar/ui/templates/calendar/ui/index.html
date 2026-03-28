@@ -14,7 +14,7 @@
 
 {% block drawer_class %}drawer-open{% endblock %}
 {% block drawer_id %}calendar-drawer{% endblock %}
-{% block drawer_attrs %}x-data="calendarApp({{ calendars_json }})" @calendar-member-selected.window="addMember($event)" @poll-invitee-selected.window="addPollInvitee($event)" @keydown.window="handleKeydown($event)"{% endblock %}
+{% block drawer_attrs %}x-data="calendarApp({{ calendars_json }})" @calendar-member-selected.window="addMember($event)" @poll-invitee-selected.window="addPollInvitee($event)" @keydown.window="handleKeydown($event)" @eventcard-action.window="handleEventCardAction($event)"{% endblock %}
 
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 

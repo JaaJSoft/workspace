@@ -1090,6 +1090,26 @@ window.calendarApp = function calendarApp(calendarsData) {
       }
     },
 
+    // --- Event card actions ---
+    async handleEventCardAction(evt) {
+      const { action, eventId } = evt.detail;
+      if (!eventId) return;
+      // Hide any open popover
+      document.querySelectorAll('.event-card-popover').forEach(p => { p.style.display = 'none'; });
+
+      await this.openEventById(eventId);
+      if (!this._panelRaw) return;
+
+      this.$nextTick(() => {
+        switch (action) {
+          case 'edit': this.openEditModal(); break;
+          case 'delete': this.deleteEvent(); break;
+          case 'accept': this.respondToInvitation('accepted'); break;
+          case 'decline': this.respondToInvitation('declined'); break;
+        }
+      });
+    },
+
     // --- Helpers ---
     toLocalDatetime(isoStr) {
       if (!isoStr) return '';

@@ -88,9 +88,17 @@ def event_card(request, event_id):
             duration = event.end - event.start
             occ_end = occ_start + duration
 
+    is_owner = event.owner_id == request.user.id
+    is_external = hasattr(event.calendar, 'external_source')
+    membership = event.members.filter(user=request.user).first()
+    invite_status = membership.status if membership and not is_owner else None
+
     return render(request, 'calendar/ui/partials/event_card.html', {
         'event': event,
         'attendees': attendees,
+        'is_owner': is_owner,
+        'is_external': is_external,
+        'invite_status': invite_status,
         'occ_start': occ_start,
         'occ_end': occ_end,
     })

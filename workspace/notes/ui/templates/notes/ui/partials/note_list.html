@@ -6,7 +6,7 @@
   </label>
   <h3 class="text-sm font-semibold text-base-content/60 truncate flex-1" x-text="viewTitle"></h3>
   <button class="btn btn-ghost btn-sm lg:btn-xs btn-circle" @click="createNote()" title="New note"
-          x-show="['all', 'folder'].includes(activeView)" x-cloak>
+          x-show="['all', 'folder', 'group_folder'].includes(activeView)" x-cloak>
     <i data-lucide="plus" class="w-4 h-4"></i>
   </button>
   <button class="btn btn-ghost btn-sm lg:btn-xs btn-circle" @click="applyFilters()" title="Refresh"

@@ -159,6 +159,48 @@ x-init="init()"
 {% include "files/ui/partials/rename_dialog.html" %}
 {% include "notes/ui/partials/context_menu.html" %}
 
+<!-- Create Group Folder Dialog -->
+<dialog id="notes-create-group-folder-dialog" class="modal">
+  <div class="modal-box" x-data="{ selectedGroup: '' }">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
+      <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-success/10 text-success">
+        <i data-lucide="users" class="w-5 h-5"></i>
+      </div>
+      Create Group Folder
+    </h3>
+    {% if available_groups %}
+    <form @submit.prevent="if (selectedGroup) { createGroupFolder(parseInt(selectedGroup), $refs.noteGroupSelect.options[$refs.noteGroupSelect.selectedIndex].text); document.getElementById('notes-create-group-folder-dialog').close(); }">
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">Group</span>
+        </label>
+        <select x-model="selectedGroup" x-ref="noteGroupSelect" class="select select-bordered w-full" required>
+          <option value="" disabled selected>Select a group</option>
+          {% for g in available_groups %}
+          <option value="{{ g.id }}">{{ g.name }}</option>
+          {% endfor %}
+        </select>
+        <label class="label">
+          <span class="label-text-alt">The folder will be named after the group</span>
+        </label>
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('notes-create-group-folder-dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-success btn-sm" :disabled="!selectedGroup">Create</button>
+      </div>
+    </form>
+    {% else %}
+    <p class="text-base-content/60 text-sm">All your groups already have a folder.</p>
+    <div class="modal-action">
+      <button type="button" class="btn btn-sm" onclick="document.getElementById('notes-create-group-folder-dialog').close()">Close</button>
+    </div>
+    {% endif %}
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
 <!-- Mobile preferences dialog -->
 <dialog id="notes-prefs-dialog" class="modal" x-data="notesPreferences()">
   <div class="modal-box">

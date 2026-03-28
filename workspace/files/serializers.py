@@ -34,6 +34,9 @@ class FileSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField(
         help_text="Tags assigned to this file."
     )
+    has_children = serializers.SerializerMethodField(
+        help_text="True when a folder contains child folders (folders only)."
+    )
 
     class Meta:
         model = File
@@ -62,6 +65,7 @@ class FileSerializer(serializers.ModelSerializer):
             'is_pinned',
             'is_shared',
             'tags',
+            'has_children',
         ]
         read_only_fields = ['owner', 'created_at', 'updated_at', 'deleted_at', 'size', 'path', 'is_favorite', 'is_pinned', 'is_shared', 'tags']
         extra_kwargs = {
@@ -142,6 +146,19 @@ class FileSerializer(serializers.ModelSerializer):
         if annotated is not None:
             return bool(annotated)
         return FileShare.objects.filter(file=obj).exists()
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_has_children(self, obj):
+        if obj.node_type != File.NodeType.FOLDER:
+            return False
+        annotated = getattr(obj, 'has_children', None)
+        if annotated is not None:
+            return bool(annotated)
+        return File.objects.filter(
+            parent=obj,
+            node_type=File.NodeType.FOLDER,
+            deleted_at__isnull=True,
+        ).exists()
 
     @extend_schema_field({'type': 'array', 'items': {'type': 'object'}})
     def get_tags(self, obj):

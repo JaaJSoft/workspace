@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+from django.db.models import Exists, OuterRef
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -6,41 +7,57 @@ from workspace.files.models import File, Tag
 from workspace.files.services import FileService
 
 
+def _get_root_folders(qs):
+    """Get root-level folders with has_children flag, serializable as JSON."""
+    child_exists = File.objects.filter(
+        parent_id=OuterRef('pk'),
+        node_type=File.NodeType.FOLDER,
+        deleted_at__isnull=True,
+    )
+    roots = list(
+        qs.filter(parent__isnull=True)
+        .annotate(has_children=Exists(child_exists))
+        .order_by('name')
+        .values('uuid', 'name', 'icon', 'color', 'has_children')
+    )
+    for f in roots:
+        f['uuid'] = str(f['uuid'])
+    return roots
+
+
 def _sidebar_context(user):
-    all_folders = list(
+    personal_qs = (
         FileService.user_files_qs(user)
         .filter(node_type=File.NodeType.FOLDER)
-        .exclude(name='Journal', parent__isnull=True)
-        .order_by('name')
-        .values('uuid', 'name', 'parent_id', 'icon', 'color')
+        .exclude(name='Journal')
     )
+    folders = _get_root_folders(personal_qs)
 
-    # Build tree-ordered list (DFS): parents appear before children
-    children_map = {}
-    roots = []
-    folder_uuids = {f['uuid'] for f in all_folders}
-    for f in all_folders:
-        pid = f['parent_id']
-        if pid is None or pid not in folder_uuids:
-            roots.append(f)
-        else:
-            children_map.setdefault(pid, []).append(f)
-
-    folders = []
-
-    def walk(nodes, depth, ancestors):
-        for node in nodes:
-            node['depth'] = depth
-            node['ancestors'] = ','.join(str(a) for a in ancestors)
-            node['has_children'] = node['uuid'] in children_map
-            folders.append(node)
-            walk(children_map.get(node['uuid'], []), depth + 1,
-                 ancestors + [node['uuid']])
-
-    walk(roots, 0, [])
+    group_qs = (
+        FileService.user_group_files_qs(user)
+        .filter(node_type=File.NodeType.FOLDER)
+    )
+    group_folders = _get_root_folders(group_qs)
 
     tags = Tag.objects.filter(owner=user).order_by('name')
-    return {'folders': folders, 'tags': tags}
+
+    # Groups without a root folder yet (for create dialog)
+    group_root_ids = File.objects.filter(
+        group__in=user.groups.all(),
+        parent__isnull=True,
+        deleted_at__isnull=True,
+        node_type=File.NodeType.FOLDER,
+    ).values_list('group_id', flat=True)
+    available_groups = user.groups.exclude(
+        id__in=group_root_ids
+    ).order_by('name')
+
+    return {
+        'folders_json': folders,
+        'group_folders_json': group_folders,
+        'tags': tags,
+        'available_groups': available_groups,
+    }
 
 
 @login_required
@@ -52,10 +69,13 @@ def index(request):
         return render(request, 'notes/ui/partials/sidebar.html', context)
 
     view = request.GET.get('view', 'all')
-    if view not in ('all', 'favorites', 'recent', 'journal', 'folder', 'tag'):
+    if view not in ('all', 'favorites', 'recent', 'journal', 'folder',
+                     'tag', 'group_folder'):
         view = 'all'
     context['initial_view'] = view
-    context['initial_id'] = request.GET.get('folder') or request.GET.get('tag') or ''
+    context['initial_id'] = (
+        request.GET.get('folder') or request.GET.get('tag') or ''
+    )
     context['initial_file'] = request.GET.get('file', '')
 
     return render(request, 'notes/ui/notes.html', context)

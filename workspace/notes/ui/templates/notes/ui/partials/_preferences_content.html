@@ -17,6 +17,12 @@
       :checked="prefs.showFolders"
       @change="update('showFolders', $event.target.checked)">
   </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Show group folders</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-success"
+      :checked="prefs.showGroupFolders"
+      @change="update('showGroupFolders', $event.target.checked)">
+  </label>
   <hr class="border-base-300">
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Default view</label>

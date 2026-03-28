@@ -304,7 +304,18 @@ class FileViewSet(viewsets.ModelViewSet):
             ).prefetch_related('file_tags__tag').distinct()
 
         # Group filter: return group files when ?group=<id> is present
+        # or when ?parent=<uuid> points to a group folder
         group_id = self.request.query_params.get('group')
+        if self.action == 'list' and not group_id:
+            parent_uuid = self.request.query_params.get('parent')
+            if parent_uuid:
+                parent_group = File.objects.filter(
+                    uuid=parent_uuid,
+                    group__isnull=False,
+                    deleted_at__isnull=True,
+                ).values_list('group_id', flat=True).first()
+                if parent_group:
+                    group_id = parent_group
         if self.action == 'list' and group_id:
             if not self.request.user.groups.filter(id=group_id).exists():
                 return File.objects.none()

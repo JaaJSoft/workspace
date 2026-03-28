@@ -3,6 +3,7 @@ window._notesPrefsDefaults = {
     showTags: true,
     showFolders: true,
     showJournal: true,
+    showGroupFolders: true,
     defaultView: 'all',
     sortBy: 'modified',
     confirmBeforeDelete: true,
@@ -76,11 +77,16 @@ window.notesApp = function notesApp(config) {
         activeId: config.id || null,
         viewTitle: titleMap[initialView] || 'All notes',
 
+        // Folder arrays (flat lists, lazy-loaded children)
+        sidebarFolders: [],
+        sidebarGroupFolders: [],
+        _loadedChildren: {},  // uuid -> true if children have been fetched
+
         // Preferences (reactive copy)
         notePrefs: { ...window._notesPrefsCache },
 
         // Context menu
-        ctxMenu: { open: false, x: 0, y: 0, type: null, data: null },
+        ctxMenu: { open: false, x: 0, y: 0, type: null, data: null, actions: null },
 
         // Note list
         notes: [],
@@ -107,6 +113,9 @@ window.notesApp = function notesApp(config) {
 
         async init() {
             this.collapsed = localStorage.getItem('notes-sidebar-collapsed') === 'true';
+
+            // Load folder data from embedded JSON
+            this._loadFolderData();
 
             // Wait for preferences to be loaded
             await window._notesPrefsReady;
@@ -139,16 +148,23 @@ window.notesApp = function notesApp(config) {
                 });
             }
 
-            // Sync reactive prefs and re-sort when preferences change
+            // Sync reactive prefs and re-sort when sort preference changes
             window.addEventListener('notes:preferences-changed', function(e) {
+                var oldSort = this.notePrefs.sortBy;
                 this.notePrefs = { ...e.detail };
-                if (this.activeView && this.activeView !== 'journal') {
+                // Only reload notes when sort order actually changed
+                if (oldSort !== this.notePrefs.sortBy && this.activeView && this.activeView !== 'journal') {
                     this.setView(this.activeView, this.activeId, this.viewTitle, true);
                 }
             }.bind(this));
 
             // Load tags for the editor dropdown
             await this.loadTags();
+
+            // Refresh icons after Alpine renders x-for folders
+            this.$nextTick(function() {
+                if (window.lucide) window.lucide.createIcons();
+            });
 
             // Load initial notes based on SSR state
             if (initialView === 'journal') {
@@ -179,6 +195,74 @@ window.notesApp = function notesApp(config) {
             }.bind(this));
         },
 
+        // ── Folder data management ──────────────────────────
+
+        _loadFolderData() {
+            var el = document.getElementById('notes-folders-data');
+            if (el) {
+                try { this.sidebarFolders = JSON.parse(el.textContent); }
+                catch (e) { this.sidebarFolders = []; }
+            }
+            var gel = document.getElementById('notes-group-folders-data');
+            if (gel) {
+                try { this.sidebarGroupFolders = JSON.parse(gel.textContent); }
+                catch (e) { this.sidebarGroupFolders = []; }
+            }
+            // Initialize depth/ancestors for root folders
+            [this.sidebarFolders, this.sidebarGroupFolders].forEach(function(list) {
+                list.forEach(function(f) {
+                    if (f.depth === undefined) f.depth = 0;
+                    if (f.ancestors === undefined) f.ancestors = '';
+                });
+            });
+        },
+
+        async _loadChildren(uuid, folderList) {
+            if (this._loadedChildren[uuid]) return;
+            this._loadedChildren[uuid] = true;
+
+            var resp = await fetch('/api/v1/files?parent=' + uuid + '&node_type=folder&ordering=name');
+            if (!resp.ok) return;
+
+            var children = await resp.json();
+            if (children.length === 0) return;
+
+            // Find parent in the list to compute depth/ancestors
+            var parentIdx = -1;
+            var parentFolder = null;
+            for (var i = 0; i < folderList.length; i++) {
+                if (folderList[i].uuid === uuid) {
+                    parentIdx = i;
+                    parentFolder = folderList[i];
+                    break;
+                }
+            }
+            if (parentIdx === -1) return;
+
+            var childDepth = (parentFolder.depth || 0) + 1;
+            var childAncestors = parentFolder.ancestors
+                ? parentFolder.ancestors + ',' + uuid
+                : uuid;
+
+            children.forEach(function(c) {
+                c.depth = childDepth;
+                c.ancestors = childAncestors;
+            });
+
+            // Insert children after parent (and after any existing children of parent)
+            var insertIdx = parentIdx + 1;
+            while (insertIdx < folderList.length &&
+                   folderList[insertIdx].depth > parentFolder.depth) {
+                insertIdx++;
+            }
+            folderList.splice.apply(folderList, [insertIdx, 0].concat(children));
+
+            // Refresh icons for new elements
+            this.$nextTick(function() {
+                if (window.lucide) window.lucide.createIcons();
+            });
+        },
+
         // ── Sidebar navigation ──────────────────────────────
 
         _sortParam() {
@@ -205,11 +289,7 @@ window.notesApp = function notesApp(config) {
                     if (tagEl) name = tagEl.dataset.tagName;
                 }
                 this.viewTitle = name || 'Tag';
-            } else if (view === 'folder') {
-                if (!name && id) {
-                    var folderEl = document.querySelector('[data-folder-uuid="' + id + '"]');
-                    if (folderEl) name = folderEl.dataset.folderName;
-                }
+            } else if (view === 'folder' || view === 'group_folder') {
                 this.viewTitle = name || 'Folder';
             } else {
                 this.viewTitle = 'All notes';
@@ -354,7 +434,7 @@ window.notesApp = function notesApp(config) {
                 }
             } catch (err) {
                 if (generation !== this._loadGeneration) return;
-                container.innerHTML = '<div class="flex items-center justify-center h-full text-error"><p>' + err.message + '</p></div>';
+                container.textContent = err.message;
             } finally {
                 if (generation === this._loadGeneration) {
                     this.loadingEditor = false;
@@ -377,7 +457,7 @@ window.notesApp = function notesApp(config) {
             if (!name) return;
             if (!name.endsWith('.md')) name += '.md';
 
-            var parentUuid = (this.activeView === 'folder' || this.activeView === 'journal') ? this.activeId : null;
+            var parentUuid = (this.activeView === 'folder' || this.activeView === 'journal' || this.activeView === 'group_folder') ? this.activeId : null;
             var note = await this._createMdFile(name, parentUuid);
             if (note) {
                 this.notes.unshift(note);
@@ -474,6 +554,26 @@ window.notesApp = function notesApp(config) {
             window.fileActions.showRenameDialog(uuid, name);
         },
 
+        createGroupFolder: function(groupId, groupName) {
+            var self = this;
+            fetch('/api/v1/files', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken(),
+                },
+                body: JSON.stringify({
+                    name: groupName,
+                    node_type: 'folder',
+                    group: groupId,
+                }),
+            }).then(function(resp) {
+                if (resp.ok) {
+                    self.refreshSidebar();
+                }
+            }).catch(function() {});
+        },
+
         // ── Context menu ─────────────────────────────────────
 
         openCtxMenu(e, type, data) {
@@ -481,14 +581,68 @@ window.notesApp = function notesApp(config) {
             var x = e.clientX;
             var y = e.clientY;
             // Prevent overflow
-            var menuW = 200, menuH = 160;
+            var menuW = 220, menuH = 200;
             if (x + menuW > window.innerWidth) x = window.innerWidth - menuW;
             if (y + menuH > window.innerHeight) y = window.innerHeight - menuH;
-            this.ctxMenu = { open: true, x: x, y: y, type: type, data: data };
+            this.ctxMenu = { open: true, x: x, y: y, type: type, data: data, actions: null };
+
+            // Fetch dynamic actions for folder types
+            if (type === 'folder' || type === 'group_folder') {
+                this._fetchFolderActions(data.uuid);
+            }
+        },
+
+        async _fetchFolderActions(uuid) {
+            try {
+                var resp = await fetch('/api/v1/files/actions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken(),
+                    },
+                    body: JSON.stringify({ uuids: [uuid] }),
+                });
+                if (resp.ok) {
+                    var data = await resp.json();
+                    var allActions = data[uuid] || [];
+                    // Filter to relevant folder actions for the notes sidebar
+                    var relevant = ['rename', 'delete'];
+                    this.ctxMenu.actions = allActions.filter(function(a) {
+                        return relevant.indexOf(a.id) !== -1;
+                    });
+                } else {
+                    this.ctxMenu.actions = [];
+                }
+            } catch (e) {
+                this.ctxMenu.actions = [];
+            }
+            // Refresh icons in the context menu
+            this.$nextTick(function() {
+                if (window.lucide) window.lucide.createIcons();
+            });
         },
 
         closeCtxMenu() {
             this.ctxMenu.open = false;
+        },
+
+        ctxFolderAction(action) {
+            var m = this.ctxMenu;
+            this.closeCtxMenu();
+            if (!m.data) return;
+
+            if (action.id === 'rename') {
+                this.showRenameDialog(m.data.uuid, m.data.name);
+            } else if (action.id === 'delete') {
+                if (!confirm('Delete folder "' + m.data.name + '"? Notes inside will be moved to trash.')) return;
+                var self = this;
+                fetch('/api/v1/files/' + m.data.uuid, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRFToken': getCSRFToken() },
+                }).then(function(resp) {
+                    if (resp.ok) self.refreshSidebar();
+                });
+            }
         },
 
         ctxAction(action) {
@@ -496,20 +650,7 @@ window.notesApp = function notesApp(config) {
             this.closeCtxMenu();
             if (!m.data) return;
 
-            if (m.type === 'folder') {
-                if (action === 'rename') {
-                    this.showRenameDialog(m.data.uuid, m.data.name);
-                } else if (action === 'delete') {
-                    if (!confirm('Delete folder "' + m.data.name + '"? Notes inside will be moved to trash.')) return;
-                    var self = this;
-                    fetch('/api/v1/files/' + m.data.uuid, {
-                        method: 'DELETE',
-                        headers: { 'X-CSRFToken': getCSRFToken() },
-                    }).then(function(resp) {
-                        if (resp.ok) self.refreshSidebar();
-                    });
-                }
-            } else if (m.type === 'tag') {
+            if (m.type === 'tag') {
                 if (action === 'edit') {
                     this.showTagModal(m.data);
                 } else if (action === 'delete') {
@@ -551,15 +692,30 @@ window.notesApp = function notesApp(config) {
             return (this.notePrefs.expandedFolders || []).indexOf(uuid) !== -1;
         },
 
-        toggleFolderExpand(uuid) {
+        async toggleFolderExpand(uuid) {
             var list = (this.notePrefs.expandedFolders || []).slice();
             var idx = list.indexOf(uuid);
             if (idx === -1) {
+                // Expanding: lazy-load children first
+                var folderList = this._findFolderList(uuid);
+                if (folderList) {
+                    await this._loadChildren(uuid, folderList);
+                }
                 list.push(uuid);
             } else {
                 list.splice(idx, 1);
             }
             this._updatePref('expandedFolders', list);
+        },
+
+        _findFolderList(uuid) {
+            for (var i = 0; i < this.sidebarFolders.length; i++) {
+                if (this.sidebarFolders[i].uuid === uuid) return this.sidebarFolders;
+            }
+            for (var j = 0; j < this.sidebarGroupFolders.length; j++) {
+                if (this.sidebarGroupFolders[j].uuid === uuid) return this.sidebarGroupFolders;
+            }
+            return null;
         },
 
         isAncestorCollapsed(ancestorsStr) {
@@ -613,7 +769,7 @@ window.notesApp = function notesApp(config) {
             if (this.activeView === 'tag' && this.activeId) {
                 url.searchParams.set('tag', this.activeId);
             }
-            if (this.activeView === 'folder' && this.activeId) {
+            if ((this.activeView === 'folder' || this.activeView === 'group_folder') && this.activeId) {
                 url.searchParams.set('folder', this.activeId);
             }
             if (this.selectedNote) {
@@ -637,7 +793,14 @@ window.notesApp = function notesApp(config) {
                 var html = await resp.text();
                 var container = document.getElementById('notes-sidebar');
                 if (container) {
-                    container.innerHTML = html;
+                    container.textContent = '';
+                    // Parse and insert safely
+                    var temp = document.createElement('template');
+                    temp.innerHTML = html;
+                    container.appendChild(temp.content);
+                    // Reload folder data from new embedded JSON
+                    this._loadedChildren = {};
+                    this._loadFolderData();
                     // Re-init Lucide icons in the new HTML
                     if (window.lucide) window.lucide.createIcons();
                 }
@@ -662,7 +825,7 @@ window.notesApp = function notesApp(config) {
             } else if (this.activeView === 'tag') {
                 if (!hasSearch) base += '&recent=1&recent_limit=200';
                 base += '&tags=' + this.activeId + sort;
-            } else if (this.activeView === 'folder') {
+            } else if (this.activeView === 'folder' || this.activeView === 'group_folder') {
                 base += '&parent=' + this.activeId + sort;
             } else if (this.activeView === 'journal') {
                 base += '&parent=' + this.activeId + '&ordering=-name';

@@ -144,7 +144,15 @@ window.notesApp = function notesApp(config) {
                 });
                 window.addEventListener('rename-item', function(e) {
                     window.fileActions.renameItem(e.detail.uuid, e.detail.name)
-                        .then(function() { self.refreshSidebar(); })
+                        .then(function() {
+                            self.refreshSidebar();
+                            // Also update the note in the list if it was renamed
+                            var note = self.notes.find(function(n) { return n.uuid === e.detail.uuid; });
+                            if (note) note.name = e.detail.name;
+                            if (self.selectedNote && self.selectedNote.uuid === e.detail.uuid) {
+                                self.selectedNote.name = e.detail.name;
+                            }
+                        })
                         .catch(function() {});
                 });
                 window.addEventListener('create-group-folder', function(e) {
@@ -567,9 +575,11 @@ window.notesApp = function notesApp(config) {
             if (y + menuH > window.innerHeight) y = window.innerHeight - menuH;
             this.ctxMenu = { open: true, x: x, y: y, type: type, data: data, actions: null };
 
-            // Fetch dynamic actions for folder types
+            // Fetch dynamic actions for folder and note types
             if (type === 'folder' || type === 'group_folder') {
                 this._fetchFolderActions(data.uuid);
+            } else if (type === 'note') {
+                this._fetchNoteActions(data.uuid);
             }
         },
 
@@ -601,6 +611,120 @@ window.notesApp = function notesApp(config) {
             this.$nextTick(function() {
                 if (window.lucide) window.lucide.createIcons();
             });
+        },
+
+        async _fetchNoteActions(uuid) {
+            try {
+                var resp = await fetch('/api/v1/files/actions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken(),
+                    },
+                    body: JSON.stringify({ uuids: [uuid] }),
+                });
+                if (resp.ok) {
+                    var data = await resp.json();
+                    var allActions = data[uuid] || [];
+                    // Show relevant note actions (favorite, rename, delete)
+                    var relevant = ['toggle_favorite', 'rename', 'delete'];
+                    this.ctxMenu.actions = allActions.filter(function(a) {
+                        return relevant.indexOf(a.id) !== -1;
+                    });
+                } else {
+                    this.ctxMenu.actions = [];
+                }
+            } catch (e) {
+                this.ctxMenu.actions = [];
+            }
+            this.$nextTick(function() {
+                if (window.lucide) window.lucide.createIcons();
+            });
+        },
+
+        ctxNoteAction(action) {
+            var m = this.ctxMenu;
+            this.closeCtxMenu();
+            if (!m.data) return;
+
+            var self = this;
+            var uuid = m.data.uuid;
+            var name = m.data.name;
+
+            if (action.id === 'toggle_favorite') {
+                var note = this.notes.find(function(n) { return n.uuid === uuid; });
+                if (note) this.toggleFavorite(note);
+            } else if (action.id === 'rename') {
+                // Select the note first, then trigger rename via the editor header
+                var note = this.notes.find(function(n) { return n.uuid === uuid; });
+                if (note) {
+                    this.selectNote(note).then(function() {
+                        self.showRenameDialog(uuid, name);
+                    });
+                }
+            } else if (action.id === 'delete') {
+                AppDialog.confirm({
+                    title: 'Delete note',
+                    message: 'Are you sure you want to delete "' + (name || '').replace(/\.md$/i, '') + '"?',
+                    okLabel: 'Delete',
+                    okClass: 'btn-error',
+                    icon: 'trash-2',
+                    iconClass: 'bg-error/10 text-error',
+                }).then(function(ok) {
+                    if (!ok) return;
+                    fetch('/api/v1/files/' + uuid, {
+                        method: 'DELETE',
+                        headers: { 'X-CSRFToken': getCSRFToken() },
+                    }).then(function(resp) {
+                        if (!resp.ok) return;
+                        self.notes = self.notes.filter(function(n) { return n.uuid !== uuid; });
+                        if (self.selectedNote && self.selectedNote.uuid === uuid) {
+                            var container = self.$refs.editorContainer;
+                            if (container) container.replaceChildren();
+                            self._loadedScripts.forEach(function(s) { s.remove(); });
+                            self._loadedScripts = [];
+                            self.selectedNote = null;
+                            self.updateUrl();
+                        }
+                    });
+                });
+            } else if (action.id === 'move') {
+                this.moveNote(uuid, name);
+            }
+        },
+
+        async moveNote(uuid, name) {
+            var displayName = (name || '').replace(/\.md$/i, '');
+            var folder = await AppDialog.folderPicker({
+                title: 'Move note',
+                message: 'Choose a destination for "' + displayName + '"',
+                okLabel: 'Move here',
+                okClass: 'btn-primary',
+                icon: 'folder-input',
+                iconClass: 'bg-primary/10 text-primary',
+            });
+            if (!folder) return;
+
+            var resp = await fetch('/api/v1/files/' + uuid, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken(),
+                },
+                body: JSON.stringify({ parent: folder.uuid }),
+            });
+            if (resp.ok) {
+                // Remove from current list if we're in a folder view and the note moved out
+                var self = this;
+                if (this.activeView === 'folder' || this.activeView === 'group_folder') {
+                    this.notes = this.notes.filter(function(n) { return n.uuid !== uuid; });
+                    if (self.selectedNote && self.selectedNote.uuid === uuid) {
+                        self.selectedNote = null;
+                        self.updateUrl();
+                    }
+                }
+                this.refreshSidebar();
+            }
         },
 
         closeCtxMenu() {

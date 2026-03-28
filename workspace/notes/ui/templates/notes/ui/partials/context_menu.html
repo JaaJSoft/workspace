@@ -55,6 +55,44 @@
     </template>
   </ul>
 
+  <!-- Note actions -->
+  <ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'note'">
+    <!-- Loading state -->
+    <li x-show="ctxMenu.actions === null">
+      <span class="gap-3 rounded pointer-events-none">
+        <span class="loading loading-spinner loading-xs"></span>
+        <span>Loading…</span>
+      </span>
+    </li>
+    <!-- Dynamic actions from API -->
+    <template x-for="(action, idx) in (ctxMenu.actions || [])" :key="action.id">
+      <li :class="idx > 0 && action.category !== ctxMenu.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''">
+        <button type="button" class="gap-3 rounded" :class="action.css_class || ''"
+                @click="ctxNoteAction(action)">
+          <i :data-lucide="action.icon" class="w-4 h-4"></i>
+          <span x-text="action.label"></span>
+        </button>
+      </li>
+    </template>
+    <!-- Move to folder (always present after API actions) -->
+    <template x-if="ctxMenu.actions !== null">
+      <li class="mt-0.5 pt-0.5 border-t border-base-300">
+        <button type="button" class="gap-3 rounded" @click="ctxNoteAction({id: 'move'})">
+          <i data-lucide="folder-input" class="w-4 h-4"></i>
+          <span>Move to folder</span>
+        </button>
+      </li>
+    </template>
+    <template x-if="ctxMenu.actions !== null">
+      <li>
+        <a :href="'/files?file=' + ctxMenu.data?.uuid" class="gap-3 rounded" @click="closeCtxMenu()">
+          <i data-lucide="hard-drive" class="w-4 h-4"></i>
+          <span>Open in Files</span>
+        </a>
+      </li>
+    </template>
+  </ul>
+
   <!-- Tag actions -->
   <ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'tag'">
     <li>

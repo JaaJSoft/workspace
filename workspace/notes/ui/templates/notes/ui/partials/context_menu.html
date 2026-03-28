@@ -25,6 +25,16 @@
         </button>
       </li>
     </template>
+    <!-- Create subfolder (depth 0-2 only, so child is visible up to level 4) -->
+    <template x-if="ctxMenu.actions !== null && (ctxMenu.data?.depth ?? 0) < 3">
+      <li>
+        <button type="button" class="gap-3 rounded"
+                @click="ctxFolderAction({id: 'create_subfolder'})">
+          <i data-lucide="folder-plus" class="w-4 h-4"></i>
+          <span>New subfolder</span>
+        </button>
+      </li>
+    </template>
     <!-- Notes-specific actions (always present after API actions) -->
     <template x-if="ctxMenu.actions !== null">
       <li class="mt-0.5 pt-0.5 border-t border-base-300">

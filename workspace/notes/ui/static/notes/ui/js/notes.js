@@ -212,6 +212,9 @@ window.notesApp = function notesApp(config) {
                 try { this.sidebarGroupFolders = JSON.parse(gel.textContent); }
                 catch (e) { this.sidebarGroupFolders = []; }
             }
+            // Root folders are at depth 0
+            this.sidebarFolders.forEach(function(f) { f.depth = 0; });
+            this.sidebarGroupFolders.forEach(function(f) { f.depth = 0; });
         },
 
         _findFolder(uuid, list) {
@@ -233,6 +236,8 @@ window.notesApp = function notesApp(config) {
             if (!resp.ok) { folder.children = []; return; }
 
             var children = await resp.json();
+            var childDepth = (folder.depth || 0) + 1;
+            children.forEach(function(c) { c.depth = childDepth; });
             folder.children = children;
 
             this.$nextTick(function() {
@@ -620,7 +625,52 @@ window.notesApp = function notesApp(config) {
                 }).then(function(resp) {
                     if (resp.ok) self.refreshSidebar();
                 });
+            } else if (action.id === 'create_subfolder') {
+                this._createSubfolder(m.data);
             }
+        },
+
+        async _createSubfolder(parentFolder) {
+            var name = await AppDialog.prompt({
+                title: 'New subfolder',
+                message: 'Create a subfolder in "' + parentFolder.name + '"',
+                placeholder: 'Subfolder name',
+                okLabel: 'Create',
+                okClass: 'btn-success',
+                icon: 'folder-plus',
+                iconClass: 'bg-success/10 text-success',
+            });
+            if (!name) return;
+
+            var body = { name: name, node_type: 'folder', parent: parentFolder.uuid };
+            var resp = await fetch('/api/v1/files', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken(),
+                },
+                body: JSON.stringify(body),
+            });
+            if (!resp.ok) return;
+
+            var created = await resp.json();
+            created.depth = (parentFolder.depth || 0) + 1;
+            created.has_children = false;
+
+            // Insert into parent's children list
+            if (!parentFolder.children) parentFolder.children = [];
+            parentFolder.children.push(created);
+            parentFolder.has_children = true;
+
+            // Auto-expand parent if not already
+            if (this.expandedFolders.indexOf(parentFolder.uuid) === -1) {
+                this.expandedFolders = this.expandedFolders.concat([parentFolder.uuid]);
+                this._writeExpandedToUrl();
+            }
+
+            this.$nextTick(function() {
+                if (window.lucide) window.lucide.createIcons();
+            });
         },
 
         ctxAction(action) {

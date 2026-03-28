@@ -9,7 +9,7 @@ window._notesPrefsDefaults = {
     confirmBeforeDelete: true,
     hiddenItems: [],
     showHidden: false,
-    expandedFolders: [],
+    // expandedFolders removed — now stored in URL
 };
 window._notesPrefsCache = { ...window._notesPrefsDefaults };
 
@@ -80,7 +80,8 @@ window.notesApp = function notesApp(config) {
         // Folder arrays (flat lists, lazy-loaded children)
         sidebarFolders: [],
         sidebarGroupFolders: [],
-        _loadedChildren: {},  // uuid -> true if children have been fetched
+        _loadedChildren: {},    // uuid -> true if children have been fetched
+        loadingChildren: [],   // uuids currently loading (reactive array)
 
         // Preferences (reactive copy)
         notePrefs: { ...window._notesPrefsCache },
@@ -166,6 +167,9 @@ window.notesApp = function notesApp(config) {
                 if (window.lucide) window.lucide.createIcons();
             });
 
+            // Restore expanded folders from URL
+            await this._restoreExpandedFolders();
+
             // Load initial notes based on SSR state
             if (initialView === 'journal') {
                 await this.openJournal();
@@ -217,15 +221,26 @@ window.notesApp = function notesApp(config) {
             });
         },
 
+        isLoadingChildren(uuid) {
+            return this.loadingChildren.indexOf(uuid) !== -1;
+        },
+
         async _loadChildren(uuid, folderList) {
             if (this._loadedChildren[uuid]) return;
             this._loadedChildren[uuid] = true;
+            this.loadingChildren.push(uuid);
 
             var resp = await fetch('/api/v1/files?parent=' + uuid + '&node_type=folder&ordering=name');
-            if (!resp.ok) return;
+            if (!resp.ok) {
+                this.loadingChildren = this.loadingChildren.filter(function(id) { return id !== uuid; });
+                return;
+            }
 
             var children = await resp.json();
-            if (children.length === 0) return;
+            if (children.length === 0) {
+                this.loadingChildren = this.loadingChildren.filter(function(id) { return id !== uuid; });
+                return;
+            }
 
             // Find parent in the list to compute depth/ancestors
             var parentIdx = -1;
@@ -256,6 +271,7 @@ window.notesApp = function notesApp(config) {
                 insertIdx++;
             }
             folderList.splice.apply(folderList, [insertIdx, 0].concat(children));
+            this.loadingChildren = this.loadingChildren.filter(function(id) { return id !== uuid; });
 
             // Refresh icons for new elements
             this.$nextTick(function() {
@@ -688,24 +704,69 @@ window.notesApp = function notesApp(config) {
             return false;
         },
 
+        // ── Expanded folders (URL-based) ────────────────────
+
+        expandedFolders: [],
+
+        _readExpandedFromUrl() {
+            var p = new URLSearchParams(window.location.search);
+            var raw = p.get('expanded');
+            return raw ? raw.split(',').filter(Boolean) : [];
+        },
+
+        _writeExpandedToUrl() {
+            var url = new URL(window.location);
+            if (this.expandedFolders.length > 0) {
+                url.searchParams.set('expanded', this.expandedFolders.join(','));
+            } else {
+                url.searchParams.delete('expanded');
+            }
+            window.history.replaceState({}, '', url);
+        },
+
+        async _restoreExpandedFolders() {
+            var uuids = this._readExpandedFromUrl();
+            if (uuids.length === 0) return;
+            this.expandedFolders = uuids;
+            // Lazy-load children for each expanded folder in order
+            for (var i = 0; i < uuids.length; i++) {
+                var folderList = this._findFolderList(uuids[i]);
+                if (folderList) {
+                    await this._loadChildren(uuids[i], folderList);
+                }
+            }
+            this.$nextTick(function() {
+                if (window.lucide) window.lucide.createIcons();
+            });
+        },
+
         isFolderExpanded(uuid) {
-            return (this.notePrefs.expandedFolders || []).indexOf(uuid) !== -1;
+            return this.expandedFolders.indexOf(uuid) !== -1;
         },
 
         async toggleFolderExpand(uuid) {
-            var list = (this.notePrefs.expandedFolders || []).slice();
-            var idx = list.indexOf(uuid);
+            var idx = this.expandedFolders.indexOf(uuid);
             if (idx === -1) {
                 // Expanding: lazy-load children first
                 var folderList = this._findFolderList(uuid);
                 if (folderList) {
                     await this._loadChildren(uuid, folderList);
                 }
-                list.push(uuid);
+                this.expandedFolders = this.expandedFolders.concat([uuid]);
             } else {
-                list.splice(idx, 1);
+                // Collapsing: also remove any expanded descendants
+                var toRemove = [uuid];
+                var allFolders = this.sidebarFolders.concat(this.sidebarGroupFolders);
+                allFolders.forEach(function(f) {
+                    if (f.ancestors && f.ancestors.split(',').indexOf(uuid) !== -1) {
+                        toRemove.push(f.uuid);
+                    }
+                });
+                this.expandedFolders = this.expandedFolders.filter(function(id) {
+                    return toRemove.indexOf(id) === -1;
+                });
             }
-            this._updatePref('expandedFolders', list);
+            this._writeExpandedToUrl();
         },
 
         _findFolderList(uuid) {
@@ -720,10 +781,9 @@ window.notesApp = function notesApp(config) {
 
         isAncestorCollapsed(ancestorsStr) {
             if (!ancestorsStr) return false;
-            var expanded = this.notePrefs.expandedFolders || [];
             var ancestors = ancestorsStr.split(',');
             for (var i = 0; i < ancestors.length; i++) {
-                if (expanded.indexOf(ancestors[i]) === -1) return true;
+                if (this.expandedFolders.indexOf(ancestors[i]) === -1) return true;
             }
             return false;
         },
@@ -774,6 +834,9 @@ window.notesApp = function notesApp(config) {
             }
             if (this.selectedNote) {
                 url.searchParams.set('file', this.selectedNote.uuid);
+            }
+            if (this.expandedFolders.length > 0) {
+                url.searchParams.set('expanded', this.expandedFolders.join(','));
             }
 
             if (push) {

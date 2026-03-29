@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.15.0
+
+### Calendar
+
+- External ICS calendar integration with background sync support
+- Event action buttons for external calendar events
+- RRULE COUNT handling for recurrence end dates in ICS sync
+
+### AI & Chat
+
+- Rolling conversation summaries with configurable context limits
+- Persistent `tool_data` for reconstructing tool call history across sessions
+- ConversationSummary admin panel with inline integration
+- Handle empty model summaries gracefully during conversation updates
+
+### Files
+
+- Group folders: shared folder spaces with creation dialog and sidebar integration
+- Restricted actions on root group folders to prevent accidental modifications
+- Dynamic refresh for group folders and improved sidebar updates
+
+### Notes
+
+- Default and journal folder selection in preferences
+- Note context menu with dynamic actions (rename, delete, move, etc.)
+- Subfolder creation from context menu
+- Icons for sidebar sections (Quick Access, Tags, Folders, Groups)
+- Help dialog with keyboard shortcut reference
+- Autosave with granular save status indicators in Markdown viewer
+
+### Documentation
+
+- README files for Calendar, Chat, Files, Mail, and Notes modules
+
+### Fixes
+
+- Mobile back navigation in Mail and Notes modules
+- Unread count updates in unified inbox mode
+- Favorite note removal handles selection state correctly
+- Chat membership update logic and read receipt display optimized
+
+### Tests
+
+- Activity visibility rules and stats across Calendar, Chat, Files, and Notes
+- AI bot visibility based on user roles and bot settings
+- Chat `last_read_at` preservation and test file reorganization
+
+### Dependencies
+
+- openai 2.29.0 → 2.30.0
+- djangorestframework 3.17.0 → 3.17.1
+- nh3 0.3.3 → 0.3.4
+- cryptography 46.0.5 → 46.0.6
+- requests 2.32.5 → 2.33.0
+
 ## 0.14.0
 
 ### New: Notes

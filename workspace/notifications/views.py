@@ -7,12 +7,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.mixins import CacheControlMixin
+
 from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
 
 
 @extend_schema(tags=['Notifications'])
-class NotificationListView(APIView):
+class NotificationListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="List notifications")

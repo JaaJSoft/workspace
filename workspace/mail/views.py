@@ -10,6 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.mixins import CacheControlMixin
+
 from .models import MailAccount, MailAttachment, MailFolder, MailLabel, MailMessage, MailMessageLabel
 from .queries import user_account_ids
 from .serializers import (
@@ -531,7 +533,7 @@ class MailFolderMarkReadView(APIView):
 
 
 @extend_schema(tags=['Mail'])
-class MailMessageListView(APIView):
+class MailMessageListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -1117,7 +1119,8 @@ class MailAttachmentSaveToFilesView(APIView):
 
 
 @extend_schema(tags=['Mail'])
-class ContactAutocompleteView(APIView):
+class ContactAutocompleteView(CacheControlMixin, APIView):
+    cache_max_age = 300
     permission_classes = [IsAuthenticated]
 
     @extend_schema(

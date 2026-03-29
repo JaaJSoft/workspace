@@ -31,6 +31,7 @@ from .serializers import (
     FileCommentSerializer,
     FileSerializer,
 )
+from workspace.common.mixins import CacheControlMixin
 from workspace.files.services import FileService
 from workspace.notifications.services import notify, notify_many
 
@@ -198,7 +199,7 @@ TRASH_RETENTION_DAYS = getattr(settings, 'TRASH_RETENTION_DAYS', 30)
     ),
 )
 @extend_schema(tags=['Files'])
-class FileViewSet(viewsets.ModelViewSet):
+class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing files and folders in a tree structure.
 
@@ -784,6 +785,11 @@ class FileViewSet(viewsets.ModelViewSet):
         if not file_obj.content:
             return Response({'detail': 'No content.'}, status=status.HTTP_404_NOT_FOUND)
 
+        # Short-circuit: return 304 if ETag matches (avoids reading file from storage)
+        not_modified = self._check_etag_304(request, file_obj)
+        if not_modified:
+            return not_modified
+
         # For text files, read and return directly (fixes streaming issues)
         if file_obj.mime_type and file_obj.mime_type.startswith('text/'):
             file_handle = None
@@ -813,6 +819,23 @@ class FileViewSet(viewsets.ModelViewSet):
         self._set_file_cache_headers(response, file_obj)
 
         return response
+
+    @staticmethod
+    def _file_etag(file_obj):
+        """Deterministic ETag based on UUID and last modification time."""
+        return f'"{file_obj.uuid}-{file_obj.updated_at.timestamp()}"'
+
+    def _check_etag_304(self, request, file_obj):
+        """Return a 304 response if the client's ETag matches, else None."""
+        etag = self._file_etag(file_obj)
+        if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
+        if if_none_match and if_none_match.strip('"') == etag.strip('"'):
+            from django.http import HttpResponse as DjHttpResponse
+            response = DjHttpResponse(status=304)
+            response['ETag'] = etag
+            response['Cache-Control'] = 'private, no-cache'
+            return response
+        return None
 
     @staticmethod
     def _set_file_cache_headers(response, file_obj):
@@ -877,6 +900,12 @@ class FileViewSet(viewsets.ModelViewSet):
         except Http404:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
+        # Short-circuit: return 304 if ETag matches (single files only)
+        if file_obj.node_type == File.NodeType.FILE:
+            not_modified = self._check_etag_304(request, file_obj)
+            if not_modified:
+                return not_modified
+
         # Single file download
         if file_obj.node_type == File.NodeType.FILE:
             if not file_obj.content:
@@ -888,6 +917,7 @@ class FileViewSet(viewsets.ModelViewSet):
                 as_attachment=True,
                 filename=file_obj.name,
             )
+            self._set_file_cache_headers(response, file_obj)
             return response
 
         # Folder download as ZIP

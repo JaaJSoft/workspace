@@ -10,6 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.mixins import CacheControlMixin
+
 
 def _parse_dt(value):
     """Parse datetime string, handling URL-encoded timezone offsets."""
@@ -114,8 +116,9 @@ def _sync_members(event, member_ids, owner_id):
 # ---------- Calendar CRUD ----------
 
 @extend_schema(tags=['Calendar'])
-class CalendarListView(APIView):
+class CalendarListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
+    cache_max_age = 300
 
     @extend_schema(summary="List user's calendars (owned + subscribed)")
     def get(self, request):
@@ -173,7 +176,7 @@ class CalendarDetailView(APIView):
 # ---------- Event CRUD ----------
 
 @extend_schema(tags=['Calendar'])
-class EventListView(APIView):
+class EventListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(

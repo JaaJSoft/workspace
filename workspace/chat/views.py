@@ -14,6 +14,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.mixins import CacheControlMixin
+
 from . import avatar_service as group_avatar_service
 from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage, Reaction
 from .serializers import (
@@ -75,7 +77,7 @@ def _trigger_bot_response(conversation_id, message, sender):
 
 
 @extend_schema(tags=['Chat'])
-class ConversationListView(APIView):
+class ConversationListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="List active conversations")
@@ -322,7 +324,7 @@ class ConversationDetailView(APIView):
 
 
 @extend_schema(tags=['Chat'])
-class MessageListView(APIView):
+class MessageListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, JSONParser]
 

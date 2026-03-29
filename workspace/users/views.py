@@ -17,14 +17,16 @@ from rest_framework.views import APIView
 
 from django.db.models import Exists, OuterRef, Q
 
+from workspace.common.mixins import CacheControlMixin
 from workspace.files.models import File
 from workspace.users import avatar_service, presence_service
 from workspace.users.models import UserSetting
 
 
 @extend_schema(tags=['Users'])
-class UserSearchView(APIView):
+class UserSearchView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
+    cache_max_age = 60
 
     @extend_schema(
         summary="Search users",

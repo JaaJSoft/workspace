@@ -4,10 +4,13 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.mixins import CacheControlMixin
 from workspace.core.module_registry import registry
 
 
-class ModulesView(APIView):
+class ModulesView(CacheControlMixin, APIView):
+    cache_max_age = 3600
+
     @extend_schema(
         tags=['Modules'],
         summary='List workspace modules',
@@ -18,7 +21,7 @@ class ModulesView(APIView):
         return Response({'results': modules})
 
 
-class UnifiedSearchView(APIView):
+class UnifiedSearchView(CacheControlMixin, APIView):
     @extend_schema(
         tags=['Search'],
         summary='Unified search across modules',

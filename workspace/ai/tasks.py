@@ -466,13 +466,18 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         msgs_to_use = all_msgs
 
     # Find the most recent user message that has image attachments
+    # Cache attachments per message to avoid double .all() calls (prefetch is in place)
+    _att_cache = {}
     last_image_msg_uuid = None
     if bot_profile.supports_vision:
         for msg in msgs_to_use:  # newest first
             is_bot = hasattr(msg.author, 'bot_profile')
-            if not is_bot and any(att.is_image for att in msg.attachments.all()):
-                last_image_msg_uuid = str(msg.uuid)
-                break
+            if not is_bot:
+                atts = list(msg.attachments.all())
+                _att_cache[msg.uuid] = atts
+                if any(att.is_image for att in atts):
+                    last_image_msg_uuid = str(msg.uuid)
+                    break
 
     # Number of old messages (outside recent window) not covered by a summary
     truncate_count = max(0, len(msgs_to_use) - recent_window) if not summary_text else 0
@@ -511,7 +516,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         # Include images only from the most recent message that has images
         image_parts = []
         if not is_bot and str(msg.uuid) == last_image_msg_uuid:
-            for att in msg.attachments.all():
+            for att in _att_cache.get(msg.uuid, msg.attachments.all()):
                 if att.is_image:
                     try:
                         data = att.file.read()

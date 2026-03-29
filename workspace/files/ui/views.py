@@ -1,13 +1,13 @@
-from django.contrib.auth.decorators import login_required
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.db.models import Exists, OuterRef, Q, Subquery
-from django.shortcuts import get_object_or_404, render
 from django.http import Http404, HttpResponse
+from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from ..models import File, FileFavorite, FileShare, FileShareLink, PinnedFolder
-from .viewers import ViewerRegistry
 from workspace.users.settings_service import get_setting
+from .viewers import ViewerRegistry
+from ..models import File, FileFavorite, FileShare, FileShareLink, PinnedFolder
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
 

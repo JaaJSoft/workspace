@@ -576,6 +576,9 @@ class Tag(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['owner', 'name'], name='unique_tag_per_user'),
         ]
+        indexes = [
+            models.Index(fields=['owner', 'name']),
+        ]
 
     def __str__(self):
         return self.name
@@ -590,6 +593,9 @@ class FileTag(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['file', 'tag'], name='unique_file_tag'),
+        ]
+        indexes = [
+            models.Index(fields=['file', 'tag']),
         ]
 
     def __str__(self):

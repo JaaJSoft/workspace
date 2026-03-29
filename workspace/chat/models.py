@@ -124,6 +124,9 @@ class Reaction(models.Model):
                 name='unique_reaction',
             ),
         ]
+        indexes = [
+            models.Index(fields=['message', 'emoji']),
+        ]
 
     def __str__(self):
         return f'{self.user} reacted {self.emoji}'

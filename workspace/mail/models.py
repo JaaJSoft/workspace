@@ -129,6 +129,9 @@ class MailFolder(models.Model):
                 name='unique_mail_folder',
             ),
         ]
+        indexes = [
+            models.Index(fields=['account', 'folder_type']),
+        ]
 
     def __str__(self):
         return f'{self.account.email} / {self.display_name}'
@@ -215,7 +218,9 @@ class MailMessage(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=['folder', '-date']),
+            models.Index(fields=['folder', 'deleted_at', '-date']),
+            models.Index(fields=['account', 'deleted_at', '-date']),
+            models.Index(fields=['account', 'is_starred', '-date']),
             models.Index(fields=['account', 'message_id']),
             models.Index(fields=['folder', 'imap_uid']),
         ]

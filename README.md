@@ -137,11 +137,11 @@ See [docs/deployments/](docs/deployments/) for Docker Compose and Kubernetes exa
 
 ## API
 
-All endpoints are prefixed with `/api/v1/` with no trailing slashes. Interactive documentation is available at:
+All endpoints are prefixed with `/api/` with no trailing slashes. Interactive documentation is available at:
 
-- **Swagger UI** — `/api/v1/schema/swagger-ui/`
-- **ReDoc** — `/api/v1/schema/redoc/`
-- **OpenAPI Schema** — `/api/v1/schema/`
+- **Swagger UI** — `/schema/swagger-ui/`
+- **ReDoc** — `/schema/redoc/`
+- **OpenAPI Schema** — `/schema/`
 
 ### Health Checks
 

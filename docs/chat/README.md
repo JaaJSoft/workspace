@@ -21,4 +21,4 @@ Direct and group messaging with real-time updates, Markdown support, and AI bot 
 
 ## API
 
-All endpoints under `/api/v1/chat/` — see the [Swagger UI](/api/v1/schema/swagger-ui/) for full documentation.
+All endpoints under `/api/v1/chat/` — see the [Swagger UI](/schema/swagger-ui/) for full documentation.

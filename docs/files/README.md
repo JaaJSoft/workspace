@@ -26,4 +26,4 @@ Upload, organize, and preview files with a full-featured file explorer.
 
 ## API
 
-All endpoints under `/api/v1/files/` — see the [Swagger UI](/api/v1/schema/swagger-ui/) for full documentation.
+All endpoints under `/api/v1/files/` — see the [Swagger UI](/schema/swagger-ui/) for full documentation.

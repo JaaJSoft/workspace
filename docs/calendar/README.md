@@ -21,4 +21,4 @@ Day, week, month, and agenda views with recurring events, participants, and sche
 
 ## API
 
-All endpoints under `/api/v1/calendar/` — see the [Swagger UI](/api/v1/schema/swagger-ui/) for full documentation.
+All endpoints under `/api/v1/calendar/` — see the [Swagger UI](/schema/swagger-ui/) for full documentation.

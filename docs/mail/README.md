@@ -23,4 +23,4 @@ IMAP/SMTP email client with OAuth2, AI-powered features, and full folder managem
 
 ## API
 
-All endpoints under `/api/v1/mail/` — see the [Swagger UI](/api/v1/schema/swagger-ui/) for full documentation.
+All endpoints under `/api/v1/mail/` — see the [Swagger UI](/schema/swagger-ui/) for full documentation.

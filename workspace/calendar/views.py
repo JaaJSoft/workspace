@@ -10,6 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.cache import cache_response, invalidate
 from workspace.common.mixins import CacheControlMixin
 
 
@@ -121,6 +122,7 @@ class CalendarListView(CacheControlMixin, APIView):
     cache_max_age = 300
 
     @extend_schema(summary="List user's calendars (owned + subscribed)")
+    @cache_response(300)
     def get(self, request):
         owned = Calendar.objects.filter(
             owner=request.user, external_source__isnull=True,
@@ -141,6 +143,7 @@ class CalendarListView(CacheControlMixin, APIView):
         ser.is_valid(raise_exception=True)
         cal = Calendar.objects.create(owner=request.user, **ser.validated_data)
         cal = Calendar.objects.select_related('owner').get(pk=cal.pk)
+        invalidate('CalendarListView', user=request.user)
         return Response(CalendarSerializer(cal).data, status=status.HTTP_201_CREATED)
 
 
@@ -161,6 +164,7 @@ class CalendarDetailView(APIView):
             setattr(cal, k, v)
         cal.save()
         cal = Calendar.objects.select_related('owner').get(pk=cal.pk)
+        invalidate('CalendarListView', user=request.user)
         return Response(CalendarSerializer(cal).data)
 
     @extend_schema(summary="Delete a calendar")
@@ -170,6 +174,7 @@ class CalendarDetailView(APIView):
         except Calendar.DoesNotExist:
             return Response({'detail': 'Calendar not found.'}, status=status.HTTP_404_NOT_FOUND)
         cal.delete()
+        invalidate('CalendarListView', user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

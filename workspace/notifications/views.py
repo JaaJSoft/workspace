@@ -11,6 +11,7 @@ from workspace.common.mixins import CacheControlMixin
 
 from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
+from .services import get_unread_count, _invalidate_unread
 
 
 @extend_schema(tags=['Notifications'])
@@ -54,9 +55,7 @@ class NotificationListView(CacheControlMixin, APIView):
         return Response({
             'notifications': NotificationSerializer(notifications, many=True).data,
             'has_more': has_more,
-            'unread_count': Notification.objects.filter(
-                recipient=request.user, read_at__isnull=True,
-            ).count(),
+            'unread_count': get_unread_count(request.user),
         })
 
 
@@ -74,6 +73,7 @@ class NotificationDetailView(APIView):
         if notif.read_at is None:
             notif.read_at = timezone.now()
             notif.save(update_fields=['read_at'])
+            _invalidate_unread(request.user.id)
         return Response(NotificationSerializer(notif).data)
 
     @extend_schema(summary="Delete a notification")
@@ -97,6 +97,7 @@ class NotificationReadAllView(APIView):
         count = Notification.objects.filter(
             recipient=request.user, read_at__isnull=True,
         ).update(read_at=timezone.now())
+        _invalidate_unread(request.user.id)
         return Response({'marked': count})
 
 

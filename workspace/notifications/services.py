@@ -1,7 +1,12 @@
+from django.core.cache import cache
+
 from workspace.core.module_registry import registry
 from workspace.core.sse_registry import notify_sse
 from .models import Notification
 from .tasks import send_push_notification
+
+_UNREAD_KEY = 'notif:unread:{}'
+_UNREAD_TTL = 300  # 5 minutes
 
 
 def _resolve_module_defaults(origin, icon, color):
@@ -13,6 +18,10 @@ def _resolve_module_defaults(origin, icon, color):
         if not color:
             color = module.color
     return icon, color
+
+
+def _invalidate_unread(user_id):
+    cache.delete(_UNREAD_KEY.format(user_id))
 
 
 def notify(*, recipient, origin, icon='', title, body='', url='', actor=None, priority='normal', color=''):
@@ -29,6 +38,7 @@ def notify(*, recipient, origin, icon='', title, body='', url='', actor=None, pr
         actor=actor,
         priority=priority,
     )
+    _invalidate_unread(recipient.id)
     notify_sse('notifications', recipient.id)
     if priority != 'low':
         send_push_notification.delay(str(notif.uuid))
@@ -53,6 +63,7 @@ def notify_many(*, recipients, origin, icon='', title, body='', url='', actor=No
         for user in recipients
     ])
     for user in recipients:
+        _invalidate_unread(user.id)
         notify_sse('notifications', user.id)
     if priority != 'low':
         for notif in notifs:
@@ -61,4 +72,9 @@ def notify_many(*, recipients, origin, icon='', title, body='', url='', actor=No
 
 
 def get_unread_count(user):
-    return Notification.objects.filter(recipient=user, read_at__isnull=True).count()
+    key = _UNREAD_KEY.format(user.pk)
+    count = cache.get(key)
+    if count is None:
+        count = Notification.objects.filter(recipient=user, read_at__isnull=True).count()
+        cache.set(key, count, _UNREAD_TTL)
+    return count

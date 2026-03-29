@@ -50,11 +50,19 @@ def sync_external_calendar(external_calendar):
         seen_uids.add(uid)
 
         defaults = _vevent_to_defaults(component, owner)
-        Event.objects.update_or_create(
-            calendar=calendar,
-            ical_uid=uid,
-            defaults=defaults,
-        )
+        try:
+            existing = Event.objects.get(calendar=calendar, ical_uid=uid)
+            # Only save if any field actually changed
+            changed = any(
+                getattr(existing, field) != value
+                for field, value in defaults.items()
+            )
+            if changed:
+                for field, value in defaults.items():
+                    setattr(existing, field, value)
+                existing.save()
+        except Event.DoesNotExist:
+            Event.objects.create(calendar=calendar, ical_uid=uid, **defaults)
 
     # Remove events that disappeared from the feed
     Event.objects.filter(

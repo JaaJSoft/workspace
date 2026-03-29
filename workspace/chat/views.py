@@ -1446,6 +1446,7 @@ class AttachmentDownloadView(APIView):
         # Sanitize filename for Content-Disposition header
         safe_name = attachment.original_name.replace('"', '\\"').replace('\n', '').replace('\r', '')
         response['Content-Disposition'] = f'inline; filename="{safe_name}"'
+        response['Cache-Control'] = 'private, max-age=604800, immutable'
         return response
 
 

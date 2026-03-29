@@ -1,15 +1,11 @@
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Exists, OuterRef, Q, Subquery
-from rest_framework import status, viewsets
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
-from datetime import timedelta
 from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiExample,
@@ -18,6 +14,10 @@ from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
 )
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.response import Response
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -792,6 +792,7 @@ class FileViewSet(viewsets.ModelViewSet):
                 content = file_handle.read().decode('utf-8')
                 response = HttpResponse(content, content_type=file_obj.mime_type)
                 response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
+                self._set_file_cache_headers(response, file_obj)
                 return response
             except Exception:
                 # Fallback to binary if UTF-8 fails
@@ -809,8 +810,15 @@ class FileViewSet(viewsets.ModelViewSet):
             as_attachment=False
         )
         response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
+        self._set_file_cache_headers(response, file_obj)
 
         return response
+
+    @staticmethod
+    def _set_file_cache_headers(response, file_obj):
+        """Set ETag + Cache-Control; ConditionalGetMiddleware handles 304."""
+        response['ETag'] = f'"{file_obj.uuid}-{file_obj.updated_at.timestamp()}"'
+        response['Cache-Control'] = 'private, no-cache'
 
     @extend_schema(
         summary="Get file thumbnail",

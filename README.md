@@ -10,27 +10,27 @@ From a Raspberry Pi to a Kubernetes cluster. One codebase, any scale.
 
 ## Features
 
-### Files
+### [Files](docs/files/)
 Upload, organize, and preview files with drag & drop, folder nesting, and built-in viewers for PDF, Markdown, images, video, audio, and code. Includes favorites, trash with retention, thumbnails, mosaic view, file sharing, locking, comments, folder downloads as ZIP, and WebDAV access.
 
 ![Files](docs/images/files_1.png)
 
-### Chat
+### [Chat](docs/chat/)
 Direct and group messaging with real-time updates (SSE), emoji reactions, file attachments, message search, pinning, editing, read receipts, rich Markdown rendering with syntax highlighting, and AI bot integration.
 
 ![Chat](docs/images/chat_1.png)
 
-### Calendar
+### [Calendar](docs/calendar/)
 Day, week, month, and agenda views. Recurring events, participants, RSVP, calendar subscriptions, scheduling polls, and iCalendar/iTIP support for email-based invitations.
 
 ![Calendar](docs/images/calendar_1.png)
 
-### Mail
+### [Mail](docs/mail/)
 IMAP/SMTP client with OAuth2 (Google, Microsoft), auto-discovery, compose with reply/forward, hierarchical folders, drag & drop, batch operations, contact autocomplete, and AI-powered summarization and reply suggestions.
 
 ![Mail](docs/images/mail_1.png)
 
-### Notes
+### [Notes](docs/notes/)
 Markdown editor with journal mode, folders, tags, favorites, and full-text search. Organize notes by folder or group, with a three-panel layout for quick navigation.
 
 ![Notes](docs/images/notes_1.png)

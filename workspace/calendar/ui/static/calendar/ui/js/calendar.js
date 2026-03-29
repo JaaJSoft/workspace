@@ -125,6 +125,11 @@ window.calendarApp = function calendarApp(calendarsData) {
         .then(data => {
           if (data?.value && typeof data.value === 'object') {
             this.prefs = { ...this._prefsDefaults, ...data.value };
+            // Migrate old listWeek preference to listAgenda
+            if (this.prefs.defaultView === 'listWeek') {
+              this.prefs.defaultView = 'listAgenda';
+              this._savePrefs();
+            }
             this._applyAllPrefs();
           }
         })
@@ -231,7 +236,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         this.ctxMenu.open = false;
         this.calendar.changeView(view);
         this.currentView = view;
-        this.calendar.setOption('selectable', view !== 'listWeek');
+        this.calendar.setOption('selectable', view !== 'listAgenda');
         this._syncTitle();
         this._syncUrl();
       }
@@ -468,7 +473,8 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (!calendarEl) return;
 
       const params = new URLSearchParams(window.location.search);
-      const urlView = params.get('view') || this.prefs.defaultView;
+      let urlView = params.get('view') || this.prefs.defaultView;
+      if (urlView === 'listWeek') urlView = 'listAgenda';
       const urlDate = params.get('date');
 
       this.currentView = urlView;
@@ -481,7 +487,19 @@ window.calendarApp = function calendarApp(calendarsData) {
         weekNumbers: this.prefs.weekNumbers,
         nowIndicator: true,
         editable: false,
-        selectable: urlView !== 'listWeek',
+        selectable: urlView !== 'listAgenda',
+        views: {
+          listAgenda: {
+            type: 'list',
+            visibleRange: () => {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const end = new Date(today);
+              end.setDate(end.getDate() + 7);
+              return { start: today, end: end };
+            },
+          },
+        },
         selectMirror: true,
         dayMaxEvents: true,
         expandRows: true,
@@ -579,7 +597,8 @@ window.calendarApp = function calendarApp(calendarsData) {
       // Browser back/forward
       window.addEventListener('popstate', () => {
         const p = new URLSearchParams(window.location.search);
-        const view = p.get('view') || this.prefs.defaultView;
+        let view = p.get('view') || this.prefs.defaultView;
+        if (view === 'listWeek') view = 'listAgenda';
         const date = p.get('date');
         const evt = p.get('event');
 
@@ -993,7 +1012,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (key === 'm' || key === 'M') { e.preventDefault(); this.changeView('dayGridMonth'); return; }
       if (key === 'w' || key === 'W') { e.preventDefault(); this.changeView('timeGridWeek'); return; }
       if (key === 'd' || key === 'D') { e.preventDefault(); this.changeView('timeGridDay'); return; }
-      if (key === 'a' || key === 'A') { e.preventDefault(); this.changeView('listWeek'); return; }
+      if (key === 'a' || key === 'A') { e.preventDefault(); this.changeView('listAgenda'); return; }
 
       // New event
       if (key === 'n' || key === 'N') {

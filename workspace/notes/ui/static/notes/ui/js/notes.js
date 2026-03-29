@@ -9,6 +9,8 @@ window._notesPrefsDefaults = {
     confirmBeforeDelete: true,
     hiddenItems: [],
     showHidden: false,
+    defaultFolderUuid: null,
+    journalFolderUuid: null,
     // expandedFolders removed — now stored in URL
 };
 window._notesPrefsCache = { ...window._notesPrefsDefaults };
@@ -29,20 +31,90 @@ window.notesPreferences = function notesPreferences() {
 
     return {
         prefs: { ...window._notesPrefsCache },
+        defaultFolderName: '',
+        journalFolderName: '',
 
         async init() {
             await window._notesPrefsReady;
             this.prefs = { ...window._notesPrefsCache };
-            // Sync when prefs change from other components
             window.addEventListener('notes:preferences-changed', function(e) {
                 this.prefs = { ...e.detail };
+                this._loadFolderNames();
             }.bind(this));
+            // Load folder names for display
+            await this._loadFolderNames();
         },
 
         update(key, value) {
             this.prefs[key] = value;
             this._saveRemote();
             this._broadcast();
+        },
+
+        async pickDefaultFolder() {
+            var folder = await AppDialog.folderPicker({
+                title: 'Default notes folder',
+                message: 'Choose where new notes are created by default.',
+                okLabel: 'Select',
+                okClass: 'btn-success',
+                icon: 'folder-pen',
+                iconClass: 'bg-success/10 text-success',
+            });
+            if (!folder) return;
+            this.prefs.defaultFolderUuid = folder.uuid;
+            this.defaultFolderName = folder.name || 'Root';
+            if (folder.uuid) {
+                try {
+                    var r = await fetch('/api/v1/files/' + folder.uuid);
+                    if (r.ok) { var f = await r.json(); this.defaultFolderName = f.path || f.name; }
+                } catch(e) {}
+            }
+            this._saveRemote();
+            this._broadcast();
+        },
+
+        async pickJournalFolder() {
+            var folder = await AppDialog.folderPicker({
+                title: 'Journal folder',
+                message: 'Choose which folder to use for daily journal notes.',
+                okLabel: 'Select',
+                okClass: 'btn-success',
+                icon: 'book-open',
+                iconClass: 'bg-success/10 text-success',
+            });
+            if (!folder) return;
+            this.prefs.journalFolderUuid = folder.uuid;
+            this.journalFolderName = folder.name || 'Root';
+            if (folder.uuid) {
+                try {
+                    var r2 = await fetch('/api/v1/files/' + folder.uuid);
+                    if (r2.ok) { var f2 = await r2.json(); this.journalFolderName = f2.path || f2.name; }
+                } catch(e) {}
+            }
+            this._saveRemote();
+            this._broadcast();
+        },
+
+        async _loadFolderNames() {
+            if (this.prefs.defaultFolderUuid) {
+                try {
+                    var r = await fetch('/api/v1/files/' + this.prefs.defaultFolderUuid);
+                    if (r.ok) { var f = await r.json(); this.defaultFolderName = f.path || f.name; }
+                    else this.defaultFolderName = 'Not set';
+                } catch(e) { this.defaultFolderName = 'Not set'; }
+            } else {
+                this.defaultFolderName = 'Not set';
+            }
+
+            if (this.prefs.journalFolderUuid) {
+                try {
+                    var r2 = await fetch('/api/v1/files/' + this.prefs.journalFolderUuid);
+                    if (r2.ok) { var f2 = await r2.json(); this.journalFolderName = f2.path || f2.name; }
+                    else this.journalFolderName = 'Not set';
+                } catch(e) { this.journalFolderName = 'Not set'; }
+            } else {
+                this.journalFolderName = 'Not set';
+            }
         },
 
         _broadcast() {
@@ -239,6 +311,11 @@ window.notesApp = function notesApp(config) {
             }
             // Root folders are at depth 0
             this.sidebarFolders.forEach(function(f) { f.depth = 0; });
+            // Filter out the journal folder from sidebar (it has its own Quick Access entry)
+            var journalUuid = this.notePrefs.journalFolderUuid;
+            if (journalUuid) {
+                this.sidebarFolders = this.sidebarFolders.filter(function(f) { return f.uuid !== journalUuid; });
+            }
             this.sidebarGroupFolders.forEach(function(f) { f.depth = 0; });
         },
 
@@ -334,34 +411,11 @@ window.notesApp = function notesApp(config) {
             this.viewTitle = 'Journal';
             this._closeDrawerOnMobile();
 
-            // Find or create the Journal folder
-            var resp = await fetch('/api/v1/files?node_type=folder&parent=&search=Journal');
-            var folders = [];
-            if (resp.ok) {
-                folders = await resp.json();
-            }
+            var journalUuid = this.notePrefs.journalFolderUuid;
+            if (!journalUuid) return;
 
-            var journalFolder = folders.find(function(f) { return f.name === 'Journal' && !f.parent; });
-
-            if (!journalFolder) {
-                var createResp = await fetch('/api/v1/files', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCSRFToken(),
-                    },
-                    body: JSON.stringify({ name: 'Journal', node_type: 'folder', icon: 'book-open', color: 'success' }),
-                });
-                if (createResp.ok) {
-                    journalFolder = await createResp.json();
-                    window.dispatchEvent(new CustomEvent('notes:refresh-sidebar'));
-                } else {
-                    return;
-                }
-            }
-
-            this.activeId = journalFolder.uuid;
-            await this.loadNotes('/api/v1/files?mime_type=text/markdown&parent=' + journalFolder.uuid + '&ordering=-name');
+            this.activeId = journalUuid;
+            await this.loadNotes('/api/v1/files?mime_type=text/markdown&parent=' + journalUuid + '&ordering=-name');
 
             // Create today's note if needed
             var today = new Date().toISOString().split('T')[0];
@@ -369,7 +423,7 @@ window.notesApp = function notesApp(config) {
             var todayNote = this.notes.find(function(n) { return n.name === todayName; });
 
             if (!todayNote) {
-                todayNote = await this._createMdFile(todayName, journalFolder.uuid);
+                todayNote = await this._createMdFile(todayName, journalUuid);
                 if (todayNote) {
                     this.notes.unshift(todayNote);
                 }
@@ -465,7 +519,14 @@ window.notesApp = function notesApp(config) {
             if (!name) return;
             if (!name.endsWith('.md')) name += '.md';
 
-            var parentUuid = (this.activeView === 'folder' || this.activeView === 'journal' || this.activeView === 'group_folder') ? this.activeId : null;
+            var parentUuid;
+            if (this.activeView === 'folder' || this.activeView === 'group_folder') {
+                parentUuid = this.activeId;
+            } else if (this.activeView === 'journal') {
+                parentUuid = this.notePrefs.journalFolderUuid || this.activeId;
+            } else {
+                parentUuid = this.notePrefs.defaultFolderUuid || null;
+            }
             var note = await this._createMdFile(name, parentUuid);
             if (note) {
                 this.notes.unshift(note);

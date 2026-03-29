@@ -79,7 +79,7 @@ def make_virtual_occurrence(master, occ_start):
         'all_day': master.all_day,
         'location': master.location,
         'owner': _user_dict(master.owner),
-        'members': [_member_dict(m) for m in master.members.all()],
+        'members': getattr(master, '_cached_member_dicts', None) or [_member_dict(m) for m in master.members.all()],
         'created_at': master.created_at.isoformat(),
         'updated_at': master.updated_at.isoformat(),
         'is_recurring': True,
@@ -147,6 +147,8 @@ def expand_recurring_events(masters_qs, range_start, range_end):
 
     occurrences = []
     for master in masters_qs:
+        # Pre-compute members list once per master (reused across all virtual occurrences)
+        master._cached_member_dicts = [_member_dict(m) for m in master.members.all()]
         for occ_start in _build_rrule(master, range_start, range_end):
             key = (str(master.uuid), occ_start.isoformat())
             exc = exc_index.get(key)

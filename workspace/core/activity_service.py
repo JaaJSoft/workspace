@@ -49,6 +49,7 @@ def get_recent_events(
         offset=0 if needs_post_filter else offset,
         viewer_id=viewer_id,
         source=source,
+        exclude_actor_id=exclude_user_id,
     )
 
     if exclude_user_id is not None:

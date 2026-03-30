@@ -188,6 +188,87 @@ class ActivityRegistryTests(TestCase):
         stats = self.registry.get_stats(1)
         self.assertEqual(stats, {})
 
+    def test_get_recent_events_exclude_actor_in_all_mode(self):
+        """Events from the excluded actor must not crowd out other actors.
+
+        Regression test: when source=None (ALL), the registry merges events
+        from every provider, sorts by timestamp, and slices.  If the excluded
+        actor has many recent events across providers, they used to push other
+        actors' events out of the window *before* the exclude filter ran,
+        resulting in an empty feed even though other actors had activity.
+        """
+        from datetime import datetime, timedelta
+        from django.utils import timezone
+
+        now = timezone.make_aware(datetime(2026, 3, 15, 12, 0))
+
+        class DominantProvider(StubProvider):
+            """Returns many events from actor 1 (the excluded user)."""
+            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+                return [
+                    {'label': f'dominant-{i}', 'timestamp': now - timedelta(minutes=i),
+                     'actor': {'id': 1, 'username': 'excluded'}}
+                    for i in range(limit)
+                ]
+
+        class MinorProvider(StubProvider):
+            """Returns a single older event from actor 2 (another user)."""
+            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+                return [
+                    {'label': 'minor-event', 'timestamp': now - timedelta(hours=2),
+                     'actor': {'id': 2, 'username': 'other'}},
+                ]
+
+        self.registry.register(ActivityProviderInfo(
+            slug='dominant', label='D', icon='d', color='primary',
+            provider_cls=DominantProvider,
+        ))
+        self.registry.register(ActivityProviderInfo(
+            slug='minor', label='M', icon='m', color='info',
+            provider_cls=MinorProvider,
+        ))
+
+        # Without exclude: ALL returns dominant events first
+        events = self.registry.get_recent_events(None, limit=5)
+        self.assertTrue(all(e['actor']['id'] == 1 for e in events))
+
+        # With exclude_actor_id: the minor provider's event must survive
+        events = self.registry.get_recent_events(
+            None, limit=5, exclude_actor_id=1,
+        )
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]['label'], 'minor-event')
+        self.assertEqual(events[0]['actor']['id'], 2)
+
+    def test_exclude_actor_not_applied_to_single_source(self):
+        """exclude_actor_id in the registry only filters in ALL mode.
+
+        For single-source queries, the service layer handles exclusion
+        with its own over-fetch buffer.
+        """
+        from datetime import datetime
+        from django.utils import timezone
+
+        ts = timezone.make_aware(datetime(2026, 3, 15, 12, 0))
+
+        class MixedProvider(StubProvider):
+            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+                return [
+                    {'label': 'own', 'timestamp': ts, 'actor': {'id': 1}},
+                    {'label': 'other', 'timestamp': ts, 'actor': {'id': 2}},
+                ]
+
+        self.registry.register(ActivityProviderInfo(
+            slug='mixed', label='M', icon='m', color='info',
+            provider_cls=MixedProvider,
+        ))
+
+        # Single-source: exclude_actor_id is NOT applied at registry level
+        events = self.registry.get_recent_events(
+            None, limit=10, source='mixed', exclude_actor_id=1,
+        )
+        self.assertEqual(len(events), 2)
+
     def test_provider_exception_is_handled_gracefully(self):
         class FailingProvider(ActivityProvider):
             def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):

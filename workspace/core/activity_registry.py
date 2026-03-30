@@ -101,6 +101,7 @@ class ActivityRegistry:
         *,
         viewer_id: int | None = None,
         source: str | None = None,
+        exclude_actor_id: int | None = None,
     ) -> list[dict]:
         if source is not None:
             info = self._providers.get(source)
@@ -130,6 +131,11 @@ class ActivityRegistry:
                 for event in events:
                     event.setdefault("source", info.slug)
                     event.setdefault("source_color", info.color)
+                if exclude_actor_id is not None:
+                    events = [
+                        e for e in events
+                        if e.get("actor", {}).get("id") != exclude_actor_id
+                    ]
                 all_events.extend(events)
             except Exception:
                 logger.exception("Activity provider '%s' failed in get_recent_events", info.slug)

@@ -2,6 +2,7 @@ from datetime import datetime, time
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
+from django.urls import reverse
 from django.utils import timezone
 
 from workspace.calendar.upcoming import get_upcoming_for_user
@@ -46,6 +47,8 @@ def _get_activity_context(user, source=None, offset=0, search=None):
         'activity_search': search or '',
         'activity_has_more': has_more,
         'activity_next_offset': offset + ACTIVITY_LIMIT,
+        'activity_prefix': 'dashboard-activity',
+        'activity_base_url': reverse('dashboard:activity_feed'),
     }
 
 
@@ -93,7 +96,7 @@ def activity_feed(request):
             activity_source=source,
         )
         context.update(_get_activity_context(request.user, source=source, offset=offset, search=search))
-        template = 'dashboard/partials/activity_page.html' if append else 'dashboard/partials/activity_feed.html'
+        template = 'ui/partials/activity_page.html' if append else 'ui/partials/activity_feed.html'
         return render(request, template, context)
 
     context = _build_dashboard_context(request.user, activity_source=source)

@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.http import Http404
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from workspace.core.activity_registry import activity_registry
@@ -88,12 +89,13 @@ def _build_heatmap_data(user_id, viewer_id=None):
     }
 
 
-def _get_profile_activity_context(user_id, viewer_id=None, source=None, offset=0):
+def _get_profile_activity_context(username, user_id, viewer_id=None, source=None, offset=0, search=None):
     """Build activity feed context for the profile page."""
     events = get_recent_events(
         user_id=user_id,
         viewer_id=viewer_id,
         source=source,
+        search=search,
         limit=ACTIVITY_LIMIT + 1,
         offset=offset,
     )
@@ -106,8 +108,11 @@ def _get_profile_activity_context(user_id, viewer_id=None, source=None, offset=0
         'activity_events': events,
         'activity_sources': get_sources(),
         'activity_source': source,
+        'activity_search': search or '',
         'activity_has_more': has_more,
         'activity_next_offset': offset + ACTIVITY_LIMIT,
+        'activity_prefix': 'profile-activity',
+        'activity_base_url': reverse('users_ui:profile_activity_feed', kwargs={'username': username}),
     }
 
 
@@ -132,7 +137,7 @@ def profile_view(request, username=None):
     heatmap = _build_heatmap_data(user_id, viewer_id=viewer_id)
 
     # Activity feed
-    activity_ctx = _get_profile_activity_context(user_id, viewer_id=viewer_id)
+    activity_ctx = _get_profile_activity_context(profile_user.username, user_id, viewer_id=viewer_id)
 
     context = {
         'profile_user': profile_user,
@@ -157,19 +162,20 @@ def profile_activity_feed(request, username):
     viewer_id = None if is_own_profile else request.user.id
 
     source = request.GET.get('source')
+    search = request.GET.get('q', '').strip() or None
     try:
         offset = int(request.GET.get('offset', 0))
     except (TypeError, ValueError):
         offset = 0
 
     activity_ctx = _get_profile_activity_context(
-        profile_user.id, viewer_id=viewer_id, source=source, offset=offset,
+        username, profile_user.id, viewer_id=viewer_id, source=source, offset=offset, search=search,
     )
     activity_ctx['profile_user'] = profile_user
 
     append = offset > 0
     if request.headers.get('X-Alpine-Request'):
-        template = 'users/ui/partials/profile_activity_page.html' if append else 'users/ui/partials/profile_activity_feed.html'
+        template = 'ui/partials/activity_page.html' if append else 'ui/partials/activity_feed.html'
         return render(request, template, activity_ctx)
 
     return redirect('users_ui:profile_by_username', username=username)

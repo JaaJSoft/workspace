@@ -231,11 +231,15 @@
   <div class="card bg-base-100 border border-base-300 shadow-sm"
        x-data="{
          activityTab: 'all',
+         activitySearch: '',
+         searchOpen: false,
          loading: false,
          get feedUrl() {
            let u = '{% url 'users_ui:profile_activity_feed' username=profile_user.username %}';
-           if (this.activityTab !== 'all') u += '?source=' + this.activityTab;
-           return u;
+           let p = [];
+           if (this.activityTab !== 'all') p.push('source=' + this.activityTab);
+           if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch));
+           return p.length ? u + '?' + p.join('&') : u;
          }
        }"
        @ajax:before="loading = true"
@@ -247,31 +251,43 @@
           <i data-lucide="activity" class="w-5 h-5"></i>
           Activity
         </h2>
-        <div class="tabs tabs-boxed">
-          <a
-            :href="'{% url 'users_ui:profile_activity_feed' username=profile_user.username %}'"
-            class="tab gap-1.5 tab-sm"
-            :class="activityTab === 'all' ? 'tab-active' : ''"
-            @click="activityTab = 'all'"
-            x-target="profile-activity"
+        <div class="flex items-center gap-2">
+          <div class="tabs tabs-boxed">
+            <a
+              :href="feedUrl.replace(/source=[^&]*/g, '').replace(/[?&]$/, '')"
+              class="tab gap-1.5 tab-sm"
+              :class="activityTab === 'all' ? 'tab-active' : ''"
+              @click="activityTab = 'all'"
+              x-target="profile-activity"
+            >
+              <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+              All
+            </a>
+            {% for src in activity_sources %}
+            <a
+              :href="feedUrl.includes('source=') ? feedUrl.replace(/source=[^&]*/, 'source={{ src.slug }}') : feedUrl + (feedUrl.includes('?') ? '&' : '?') + 'source={{ src.slug }}'"
+              class="tab gap-1.5 tab-sm"
+              :class="activityTab === '{{ src.slug }}' ? 'tab-active' : ''"
+              @click="activityTab = '{{ src.slug }}'"
+              x-target="profile-activity"
+            >
+              <i data-lucide="{{ src.icon }}" class="w-3.5 h-3.5"></i>
+              {{ src.label }}
+            </a>
+            {% endfor %}
+          </div>
+          <button
+            class="btn btn-ghost btn-sm btn-square"
+            :class="searchOpen && 'btn-active'"
+            title="Search"
+            @click="searchOpen = !searchOpen; if (!searchOpen) { activitySearch = ''; $nextTick(() => $refs.activitySearchLink.click()) } else { $nextTick(() => $refs.activitySearchInput.focus()) }"
           >
-            <i data-lucide="layers" class="w-3.5 h-3.5"></i>
-            All
-          </a>
-          {% for src in activity_sources %}
-          <a
-            :href="'{% url 'users_ui:profile_activity_feed' username=profile_user.username %}?source={{ src.slug }}'"
-            class="tab gap-1.5 tab-sm"
-            :class="activityTab === '{{ src.slug }}' ? 'tab-active' : ''"
-            @click="activityTab = '{{ src.slug }}'"
-            x-target="profile-activity"
-          >
-            <i data-lucide="{{ src.icon }}" class="w-3.5 h-3.5"></i>
-            {{ src.label }}
-          </a>
-          {% endfor %}
+            <i data-lucide="search" class="w-4 h-4"></i>
+          </button>
         </div>
       </div>
+
+      {% include "ui/partials/activity_search.html" with activity_prefix="profile-activity" %}
 
       <!-- Loading skeleton -->
       <div x-show="loading" x-cloak class="animate-pulse">
@@ -289,7 +305,7 @@
       </div>
 
       <div x-show="!loading">
-        {% include 'users/ui/partials/profile_activity_feed.html' %}
+        {% include 'ui/partials/activity_feed.html' %}
       </div>
     </div>
   </div>

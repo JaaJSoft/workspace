@@ -1,0 +1,27 @@
+<div id="{{ activity_prefix }}" class="space-y-3">
+  {% if activity_events %}
+    <ul id="{{ activity_prefix }}-list" class="divide-y divide-base-200" x-merge="append">
+      {% for event in activity_events %}
+        {% include 'dashboard/partials/activity_item.html' %}
+      {% endfor %}
+    </ul>
+    {% if activity_has_more %}
+    <div id="{{ activity_prefix }}-load-more" class="text-center pt-2" @ajax:before.stop>
+      <a
+        href="{{ activity_base_url }}?{% if activity_source %}source={{ activity_source }}&{% endif %}{% if activity_search %}q={{ activity_search }}&{% endif %}offset={{ activity_next_offset }}"
+        class="btn btn-ghost btn-sm gap-2"
+        x-target="{{ activity_prefix }}-list {{ activity_prefix }}-load-more"
+      >
+        <i data-lucide="chevrons-down" class="w-4 h-4"></i>
+        Show older activity
+      </a>
+    </div>
+    {% endif %}
+  {% else %}
+    {% if activity_search %}
+      {% include "ui/partials/inline_alert.html" with type="info" message="No activity matching your search." %}
+    {% else %}
+      {% include "ui/partials/inline_alert.html" with type="info" message="No activity to show." %}
+    {% endif %}
+  {% endif %}
+</div>

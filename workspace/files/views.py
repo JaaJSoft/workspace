@@ -32,7 +32,7 @@ from .serializers import (
     FileSerializer,
 )
 from workspace.common.mixins import CacheControlMixin
-from workspace.files.services import FileService
+from workspace.files.services import FilePermission, FileService
 from workspace.notifications.services import notify, notify_many
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
@@ -269,21 +269,18 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         return min(limit, RECENT_FILES_MAX_LIMIT)
 
     def _resolve_file_with_access(self, uuid):
-        """Try get_object() (owner), fallback to shared access.
+        """Resolve a file by UUID and check access.
 
-        Returns (file_obj, is_owner, share_permission).
+        Returns (file_obj, permission).
         Raises Http404 if no access.
         """
-        try:
-            file_obj = self.get_object()
-            return file_obj, True, None
-        except Http404:
-            file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
-            if file_obj:
-                perm = self._get_share_permission(self.request.user, file_obj)
-                if perm is not None:
-                    return file_obj, False, perm
-            raise
+        file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
+        if not file_obj:
+            raise Http404
+        perm = FileService.get_permission(self.request.user, file_obj)
+        if perm is None:
+            raise Http404
+        return file_obj, perm
 
     def get_queryset(self):
         """Filter by current user's files."""
@@ -378,10 +375,12 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         try:
             return super().get_object()
         except Http404:
+            # Only promote owner/group to full queryset object — shared
+            # users are deliberately excluded so action-level fallbacks
+            # can enforce restricted permissions (e.g. content-only writes).
             file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
-            if file_obj and file_obj.group_id:
-                if self.request.user.groups.filter(id=file_obj.group_id).exists():
-                    return file_obj
+            if file_obj and (FileService.get_permission(self.request.user, file_obj) or 0) >= FilePermission.EDIT:
+                return file_obj
             raise
 
     def create(self, request, *args, **kwargs):
@@ -437,10 +436,10 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
     def favorite(self, request, uuid=None):
         """Add or remove a file/folder from favorites."""
         from workspace.files.actions import ActionRegistry
-        file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+        file_obj, perm = self._resolve_file_with_access(uuid)
         if not ActionRegistry.is_action_available(
             'toggle_favorite', request.user, file_obj,
-            is_owner=is_owner, share_permission=share_perm,
+            permission=perm,
         ):
             return Response(status=status.HTTP_403_FORBIDDEN)
         if request.method == 'POST':
@@ -462,9 +461,10 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         """Pin or unpin a folder from the sidebar."""
         from workspace.files.actions import ActionRegistry
         file_obj = self.get_object()
+        perm = FileService.get_permission(request.user, file_obj)
         if not ActionRegistry.is_action_available(
             'toggle_pin', request.user, file_obj,
-            is_owner=True, share_permission=None,
+            permission=perm,
         ):
             return Response({'detail': 'Only folders can be pinned.'}, status=status.HTTP_400_BAD_REQUEST)
         if request.method == 'POST':
@@ -773,7 +773,7 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         from django.http import FileResponse, HttpResponse
 
         try:
-            file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+            file_obj, perm = self._resolve_file_with_access(uuid)
         except Http404:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -859,7 +859,7 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         from workspace.files.services.thumbnails import get_thumbnail_path
 
         try:
-            file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+            file_obj, perm = self._resolve_file_with_access(uuid)
         except Http404:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -896,7 +896,7 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         from django.http import FileResponse, HttpResponse
 
         try:
-            file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+            file_obj, perm = self._resolve_file_with_access(uuid)
         except Http404:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -923,8 +923,11 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         # Folder download as ZIP
         folder_path = file_obj.path or file_obj.get_path()
         prefix = f"{folder_path}/"
+        desc_filter = Q(owner=request.user)
+        if file_obj.group_id:
+            desc_filter = Q(group_id=file_obj.group_id)
         descendants = File.objects.filter(
-            owner=request.user,
+            desc_filter,
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
             path__startswith=prefix,
@@ -1155,7 +1158,7 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
             file_obj = File.objects.filter(
                 uuid=uuid, deleted_at__isnull=True,
             ).first()
-            if not file_obj or self._get_share_permission(request.user, file_obj) != FileShare.Permission.READ_WRITE:
+            if not file_obj or FileService.get_permission(request.user, file_obj) != FilePermission.WRITE:
                 raise
             # Only allow content update — reject any other fields
             allowed_fields = {'content'}
@@ -1260,26 +1263,6 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
 
     # ── Sharing ────────────────────────────────────────────────
 
-    @staticmethod
-    def _get_share_permission(user, file_obj):
-        """Return the share permission for *user* on *file_obj*, or None.
-
-        Only individual files can be shared (not folders).
-        Returns 'ro', 'rw', or None.
-        """
-        if file_obj.node_type != File.NodeType.FILE:
-            return None
-        share = FileShare.objects.filter(
-            file=file_obj,
-            shared_with=user,
-        ).values_list('permission', flat=True).first()
-        return share
-
-    @staticmethod
-    def _has_shared_access(user, file_obj):
-        """Check if *user* has read access to *file_obj* via a FileShare."""
-        return FileViewSet._get_share_permission(user, file_obj) is not None
-
     @extend_schema(
         summary="Share or unshare a file",
         description="POST to share a file with a user, DELETE to remove the share. Only files can be shared (not folders).",
@@ -1307,10 +1290,11 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         """Share or unshare a file with another user (files only)."""
         from workspace.files.actions import ActionRegistry
         file_obj = self.get_object()
+        perm = FileService.get_permission(request.user, file_obj)
 
         if not ActionRegistry.is_action_available(
             'share', request.user, file_obj,
-            is_owner=True, share_permission=None,
+            permission=perm,
         ):
             return Response(
                 {'detail': 'Only files can be shared.'},
@@ -1497,16 +1481,11 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        user_group_ids = set(request.user.groups.values_list('id', flat=True))
         result = {}
         for file_obj in file_objects:
-            is_owner = (
-                file_obj.owner_id == request.user.pk
-                or (file_obj.group_id and file_obj.group_id in user_group_ids)
-            )
-            share_perm = getattr(file_obj, 'user_share_permission', None)
+            perm = FileService.get_permission(request.user, file_obj)
             result[str(file_obj.uuid)] = ActionRegistry.get_available_actions(
-                request.user, file_obj, is_owner=is_owner, share_permission=share_perm,
+                request.user, file_obj, permission=perm,
             )
         return Response(result)
 
@@ -1568,7 +1547,7 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=['get', 'post'], url_path='comments')
     def comments(self, request, uuid=None):
         """List or create comments on a file/folder."""
-        file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+        file_obj, perm = self._resolve_file_with_access(uuid)
 
         if request.method == 'GET':
             qs = FileComment.objects.filter(

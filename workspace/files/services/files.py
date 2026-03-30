@@ -4,6 +4,7 @@ All file/folder business logic lives here so it can be reused by the API
 serializers, the sync service, future WebDAV integration, or any other module.
 """
 
+import enum
 import gc
 import logging
 import mimetypes
@@ -14,6 +15,17 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
 from workspace.files.models import File
+
+
+class FilePermission(enum.IntEnum):
+    """Permission levels for file access, ordered by capability.
+
+    Using IntEnum so callers can compare levels: ``perm >= FilePermission.WRITE``.
+    """
+    VIEW = 10     # share-ro: read/download only
+    WRITE = 20    # share-rw: update content only
+    EDIT = 30     # group member: full CRUD
+    MANAGE = 40   # owner: full control + share management
 
 logger = logging.getLogger(__name__)
 
@@ -244,27 +256,37 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def can_access(user, file_obj):
-        """Check whether *user* can access *file_obj*.
+    def get_permission(user, file_obj):
+        """Return the access permission level for *user* on *file_obj*.
 
-        Access is granted when the user owns the file, is a member of the
-        file's group, or has been granted a share (``FileShare``).  Only
-        non-deleted files are considered accessible.
+        Checks ownership, group membership, and individual shares in order.
+        Only non-deleted files are considered accessible.
 
         Returns:
-            ``True`` if the user has at least read access, ``False`` otherwise.
+            A :class:`FilePermission` value, or ``None`` if no access.
         """
         from workspace.files.models import FileShare
 
-        if file_obj.deleted_at is not None:
-            return False
         if file_obj.owner_id == user.id:
-            return True
+            return FilePermission.MANAGE
+        if file_obj.deleted_at is not None:
+            return None
         if file_obj.group_id and user.groups.filter(id=file_obj.group_id).exists():
-            return True
-        return FileShare.objects.filter(
+            return FilePermission.EDIT
+        share = FileShare.objects.filter(
             file=file_obj, shared_with=user,
-        ).exists()
+        ).values_list('permission', flat=True).first()
+        if share is None:
+            return None
+        return FilePermission.WRITE if share == 'rw' else FilePermission.VIEW
+
+    @staticmethod
+    def can_access(user, file_obj):
+        """Check whether *user* can access *file_obj*.
+
+        Shortcut for ``get_permission(user, file_obj) is not None``.
+        """
+        return FileService.get_permission(user, file_obj) is not None
 
     # ------------------------------------------------------------------
     # Validation (raise ValueError on failure)

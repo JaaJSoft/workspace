@@ -133,8 +133,8 @@ Context:
     {% else %}
       <div class="flex items-center gap-2 text-sm">
         <span class="text-base-content/60">Your access</span>
-        <span class="badge badge-sm {% if share_permission == 'rw' %}badge-primary{% else %}badge-ghost{% endif %}">
-          {% if share_permission == 'rw' %}Read & write{% else %}Read only{% endif %}
+        <span class="badge badge-sm {% if permission_is_write %}badge-primary{% else %}badge-ghost{% endif %}">
+          {{ permission_label }}
         </span>
       </div>
     {% endif %}

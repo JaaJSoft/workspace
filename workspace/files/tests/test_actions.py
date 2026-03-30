@@ -8,6 +8,12 @@ from rest_framework import status
 from workspace.files.models import File, FileShare
 from workspace.files.actions import ActionRegistry
 from workspace.files.actions.base import ActionCategory
+from workspace.files.services import FilePermission
+
+MANAGE = FilePermission.MANAGE
+EDIT = FilePermission.EDIT
+WRITE = FilePermission.WRITE
+VIEW = FilePermission.VIEW
 
 User = get_user_model()
 
@@ -103,23 +109,23 @@ class ViewActionTests(TestCase):
     def test_owner_viewable_file(self):
         f = _make_file(self.user, mime_type='text/plain')
         action = ActionRegistry.get('view')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_shared_viewable_file(self):
         f = _make_file(self.user, mime_type='text/plain')
         action = ActionRegistry.get('view')
-        self.assertTrue(action.is_available(self.other, f, is_owner=False, share_permission='ro'))
+        self.assertTrue(action.is_available(self.other, f, permission=VIEW))
 
     def test_not_viewable_file(self):
         f = _make_file(self.user, mime_type='application/octet-stream')
         action = ActionRegistry.get('view')
-        self.assertFalse(action.is_available(self.user, f, is_owner=True))
+        self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
 
     def test_deleted_file(self):
         f = _make_file(self.user, mime_type='text/plain')
         f.deleted_at = timezone.now()
         action = ActionRegistry.get('view')
-        self.assertFalse(action.is_available(self.user, f, is_owner=True))
+        self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
 
     def test_folder_not_applicable(self):
         folder = _make_folder(self.user)
@@ -137,18 +143,18 @@ class OpenFolderActionTests(TestCase):
     def test_folder_available(self):
         folder = _make_folder(self.user)
         action = ActionRegistry.get('open')
-        self.assertTrue(action.is_available(self.user, folder, is_owner=True))
+        self.assertTrue(action.is_available(self.user, folder, permission=MANAGE))
 
     def test_deleted_folder(self):
         folder = _make_folder(self.user)
         folder.deleted_at = timezone.now()
         action = ActionRegistry.get('open')
-        self.assertFalse(action.is_available(self.user, folder, is_owner=True))
+        self.assertFalse(action.is_available(self.user, folder, permission=MANAGE))
 
     def test_not_owner(self):
         folder = _make_folder(self.user)
         action = ActionRegistry.get('open')
-        self.assertFalse(action.is_available(self.other, folder, is_owner=False))
+        self.assertFalse(action.is_available(self.other, folder, permission=None))
 
 
 class OpenNewTabActionTests(TestCase):
@@ -159,23 +165,23 @@ class OpenNewTabActionTests(TestCase):
     def test_owner_file(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('open_new_tab')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_shared_file(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('open_new_tab')
-        self.assertTrue(action.is_available(self.other, f, is_owner=False, share_permission='ro'))
+        self.assertTrue(action.is_available(self.other, f, permission=VIEW))
 
     def test_no_access(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('open_new_tab')
-        self.assertFalse(action.is_available(self.other, f, is_owner=False))
+        self.assertFalse(action.is_available(self.other, f, permission=None))
 
     def test_deleted(self):
         f = _make_file(self.user)
         f.deleted_at = timezone.now()
         action = ActionRegistry.get('open_new_tab')
-        self.assertFalse(action.is_available(self.user, f, is_owner=True))
+        self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
 
 
 class DownloadActionTests(TestCase):
@@ -186,28 +192,28 @@ class DownloadActionTests(TestCase):
     def test_owner_file(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('download')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_owner_folder(self):
         folder = _make_folder(self.user)
         action = ActionRegistry.get('download')
-        self.assertTrue(action.is_available(self.user, folder, is_owner=True))
+        self.assertTrue(action.is_available(self.user, folder, permission=MANAGE))
 
     def test_shared_file(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('download')
-        self.assertTrue(action.is_available(self.other, f, is_owner=False, share_permission='ro'))
+        self.assertTrue(action.is_available(self.other, f, permission=VIEW))
 
     def test_no_access(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('download')
-        self.assertFalse(action.is_available(self.other, f, is_owner=False))
+        self.assertFalse(action.is_available(self.other, f, permission=None))
 
     def test_deleted(self):
         f = _make_file(self.user)
         f.deleted_at = timezone.now()
         action = ActionRegistry.get('download')
-        self.assertFalse(action.is_available(self.user, f, is_owner=True))
+        self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
 
     def test_folder_label(self):
         folder = _make_folder(self.user)
@@ -227,13 +233,13 @@ class CopyLinkActionTests(TestCase):
     def test_owner_file(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('copy_link')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_deleted(self):
         f = _make_file(self.user)
         f.deleted_at = timezone.now()
         action = ActionRegistry.get('copy_link')
-        self.assertFalse(action.is_available(self.user, f, is_owner=True))
+        self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
 
 
 class ToggleFavoriteActionTests(TestCase):
@@ -244,22 +250,22 @@ class ToggleFavoriteActionTests(TestCase):
     def test_owner_file(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('toggle_favorite')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_owner_folder(self):
         folder = _make_folder(self.user)
         action = ActionRegistry.get('toggle_favorite')
-        self.assertTrue(action.is_available(self.user, folder, is_owner=True))
+        self.assertTrue(action.is_available(self.user, folder, permission=MANAGE))
 
     def test_shared_file(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('toggle_favorite')
-        self.assertTrue(action.is_available(self.other, f, is_owner=False, share_permission='ro'))
+        self.assertTrue(action.is_available(self.other, f, permission=VIEW))
 
     def test_no_access(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('toggle_favorite')
-        self.assertFalse(action.is_available(self.other, f, is_owner=False))
+        self.assertFalse(action.is_available(self.other, f, permission=None))
 
     def test_dynamic_label_not_favorite(self):
         f = _make_file(self.user)
@@ -290,18 +296,18 @@ class TogglePinActionTests(TestCase):
     def test_owner_folder(self):
         folder = _make_folder(self.user)
         action = ActionRegistry.get('toggle_pin')
-        self.assertTrue(action.is_available(self.user, folder, is_owner=True))
+        self.assertTrue(action.is_available(self.user, folder, permission=MANAGE))
 
     def test_not_owner(self):
         folder = _make_folder(self.user)
         action = ActionRegistry.get('toggle_pin')
-        self.assertFalse(action.is_available(self.other, folder, is_owner=False, share_permission='ro'))
+        self.assertFalse(action.is_available(self.other, folder, permission=VIEW))
 
     def test_deleted(self):
         folder = _make_folder(self.user)
         folder.deleted_at = timezone.now()
         action = ActionRegistry.get('toggle_pin')
-        self.assertFalse(action.is_available(self.user, folder, is_owner=True))
+        self.assertFalse(action.is_available(self.user, folder, permission=MANAGE))
 
     def test_dynamic_label_not_pinned(self):
         folder = _make_folder(self.user)
@@ -332,18 +338,18 @@ class ShareActionTests(TestCase):
     def test_owner_file(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('share')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_not_owner(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('share')
-        self.assertFalse(action.is_available(self.other, f, is_owner=False, share_permission='rw'))
+        self.assertFalse(action.is_available(self.other, f, permission=WRITE))
 
     def test_deleted(self):
         f = _make_file(self.user)
         f.deleted_at = timezone.now()
         action = ActionRegistry.get('share')
-        self.assertFalse(action.is_available(self.user, f, is_owner=True))
+        self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
 
 
 class RenameActionTests(TestCase):
@@ -354,17 +360,17 @@ class RenameActionTests(TestCase):
     def test_owner_file(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('rename')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_owner_folder(self):
         folder = _make_folder(self.user)
         action = ActionRegistry.get('rename')
-        self.assertTrue(action.is_available(self.user, folder, is_owner=True))
+        self.assertTrue(action.is_available(self.user, folder, permission=MANAGE))
 
     def test_not_owner(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('rename')
-        self.assertFalse(action.is_available(self.other, f, is_owner=False, share_permission='rw'))
+        self.assertFalse(action.is_available(self.other, f, permission=WRITE))
 
 
 class CutCopyPasteActionTests(TestCase):
@@ -375,32 +381,32 @@ class CutCopyPasteActionTests(TestCase):
     def test_cut_owner(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('cut')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_cut_not_owner(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('cut')
-        self.assertFalse(action.is_available(self.other, f, is_owner=False))
+        self.assertFalse(action.is_available(self.other, f, permission=None))
 
     def test_copy_owner(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('copy')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_copy_not_owner(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('copy')
-        self.assertFalse(action.is_available(self.other, f, is_owner=False))
+        self.assertFalse(action.is_available(self.other, f, permission=None))
 
     def test_paste_into_owner_folder(self):
         folder = _make_folder(self.user)
         action = ActionRegistry.get('paste_into')
-        self.assertTrue(action.is_available(self.user, folder, is_owner=True))
+        self.assertTrue(action.is_available(self.user, folder, permission=MANAGE))
 
     def test_paste_into_not_owner(self):
         folder = _make_folder(self.user)
         action = ActionRegistry.get('paste_into')
-        self.assertFalse(action.is_available(self.other, folder, is_owner=False))
+        self.assertFalse(action.is_available(self.other, folder, permission=None))
 
 
 class PropertiesActionTests(TestCase):
@@ -411,23 +417,23 @@ class PropertiesActionTests(TestCase):
     def test_owner(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('properties')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_shared(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('properties')
-        self.assertTrue(action.is_available(self.other, f, is_owner=False, share_permission='ro'))
+        self.assertTrue(action.is_available(self.other, f, permission=VIEW))
 
     def test_no_access(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('properties')
-        self.assertFalse(action.is_available(self.other, f, is_owner=False))
+        self.assertFalse(action.is_available(self.other, f, permission=None))
 
     def test_deleted(self):
         f = _make_file(self.user)
         f.deleted_at = timezone.now()
         action = ActionRegistry.get('properties')
-        self.assertFalse(action.is_available(self.user, f, is_owner=True))
+        self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
 
 
 class DeleteActionTests(TestCase):
@@ -438,18 +444,18 @@ class DeleteActionTests(TestCase):
     def test_owner(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('delete')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_not_owner(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('delete')
-        self.assertFalse(action.is_available(self.other, f, is_owner=False))
+        self.assertFalse(action.is_available(self.other, f, permission=None))
 
     def test_deleted(self):
         f = _make_file(self.user)
         f.deleted_at = timezone.now()
         action = ActionRegistry.get('delete')
-        self.assertFalse(action.is_available(self.user, f, is_owner=True))
+        self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
 
     def test_css_class(self):
         action = ActionRegistry.get('delete')
@@ -465,18 +471,18 @@ class RestoreActionTests(TestCase):
         f = _make_file(self.user)
         f.deleted_at = timezone.now()
         action = ActionRegistry.get('restore')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_not_deleted(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('restore')
-        self.assertFalse(action.is_available(self.user, f, is_owner=True))
+        self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
 
     def test_not_owner(self):
         f = _make_file(self.user)
         f.deleted_at = timezone.now()
         action = ActionRegistry.get('restore')
-        self.assertFalse(action.is_available(self.other, f, is_owner=False))
+        self.assertFalse(action.is_available(self.other, f, permission=None))
 
 
 class PurgeActionTests(TestCase):
@@ -488,18 +494,18 @@ class PurgeActionTests(TestCase):
         f = _make_file(self.user)
         f.deleted_at = timezone.now()
         action = ActionRegistry.get('purge')
-        self.assertTrue(action.is_available(self.user, f, is_owner=True))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_not_deleted(self):
         f = _make_file(self.user)
         action = ActionRegistry.get('purge')
-        self.assertFalse(action.is_available(self.user, f, is_owner=True))
+        self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
 
     def test_not_owner(self):
         f = _make_file(self.user)
         f.deleted_at = timezone.now()
         action = ActionRegistry.get('purge')
-        self.assertFalse(action.is_available(self.other, f, is_owner=False))
+        self.assertFalse(action.is_available(self.other, f, permission=None))
 
     def test_css_class(self):
         action = ActionRegistry.get('purge')
@@ -516,7 +522,7 @@ class GetAvailableActionsTests(TestCase):
     def test_owner_file_actions(self):
         f = _make_file(self.user, mime_type='text/plain')
         actions = ActionRegistry.get_available_actions(
-            self.user, f, is_owner=True,
+            self.user, f, permission=MANAGE,
         )
         action_ids = [a['id'] for a in actions]
         # Owner of a viewable file should see all non-trash, non-folder actions
@@ -541,7 +547,7 @@ class GetAvailableActionsTests(TestCase):
     def test_owner_folder_actions(self):
         folder = _make_folder(self.user)
         actions = ActionRegistry.get_available_actions(
-            self.user, folder, is_owner=True,
+            self.user, folder, permission=MANAGE,
         )
         action_ids = [a['id'] for a in actions]
         self.assertIn('open', action_ids)
@@ -561,7 +567,7 @@ class GetAvailableActionsTests(TestCase):
     def test_shared_ro_file_actions(self):
         f = _make_file(self.user, mime_type='text/plain')
         actions = ActionRegistry.get_available_actions(
-            self.other, f, is_owner=False, share_permission='ro',
+            self.other, f, permission=VIEW,
         )
         action_ids = [a['id'] for a in actions]
         self.assertIn('view', action_ids)
@@ -578,7 +584,7 @@ class GetAvailableActionsTests(TestCase):
     def test_shared_rw_file_actions(self):
         f = _make_file(self.user, mime_type='text/plain')
         actions = ActionRegistry.get_available_actions(
-            self.other, f, is_owner=False, share_permission='rw',
+            self.other, f, permission=WRITE,
         )
         action_ids = [a['id'] for a in actions]
         # RW shared still can't rename, delete, share — same as RO for menu actions
@@ -590,7 +596,7 @@ class GetAvailableActionsTests(TestCase):
         f = _make_file(self.user)
         f.deleted_at = timezone.now()
         actions = ActionRegistry.get_available_actions(
-            self.user, f, is_owner=True,
+            self.user, f, permission=MANAGE,
         )
         action_ids = [a['id'] for a in actions]
         self.assertIn('restore', action_ids)
@@ -604,7 +610,7 @@ class GetAvailableActionsTests(TestCase):
     def test_no_access_returns_empty(self):
         f = _make_file(self.user)
         actions = ActionRegistry.get_available_actions(
-            self.other, f, is_owner=False,
+            self.other, f, permission=None,
         )
         # No share permission — only actions that don't require access
         # For file: no actions should be available without owner or share
@@ -616,7 +622,7 @@ class GetAvailableActionsTests(TestCase):
     def test_serialized_format(self):
         f = _make_file(self.user, mime_type='text/plain')
         actions = ActionRegistry.get_available_actions(
-            self.user, f, is_owner=True,
+            self.user, f, permission=MANAGE,
         )
         for action in actions:
             self.assertIn('id', action)
@@ -630,7 +636,7 @@ class GetAvailableActionsTests(TestCase):
     def test_bulk_flag_in_serialized(self):
         f = _make_file(self.user, mime_type='text/plain')
         actions = ActionRegistry.get_available_actions(
-            self.user, f, is_owner=True,
+            self.user, f, permission=MANAGE,
         )
         by_id = {a['id']: a for a in actions}
         self.assertTrue(by_id['download']['bulk'])
@@ -642,7 +648,7 @@ class GetAvailableActionsTests(TestCase):
         """Actions should be grouped by category with no interleaving."""
         f = _make_file(self.user, mime_type='text/plain')
         actions = ActionRegistry.get_available_actions(
-            self.user, f, is_owner=True,
+            self.user, f, permission=MANAGE,
         )
         seen = []
         for a in actions:
@@ -663,7 +669,7 @@ class IsActionAvailableTests(TestCase):
         f = _make_file(self.user)
         self.assertTrue(
             ActionRegistry.is_action_available(
-                'download', self.user, f, is_owner=True,
+                'download', self.user, f, permission=MANAGE,
             )
         )
 
@@ -671,7 +677,7 @@ class IsActionAvailableTests(TestCase):
         folder = _make_folder(self.user)
         self.assertFalse(
             ActionRegistry.is_action_available(
-                'view', self.user, folder, is_owner=True,
+                'view', self.user, folder, permission=MANAGE,
             )
         )
 
@@ -679,7 +685,7 @@ class IsActionAvailableTests(TestCase):
         f = _make_file(self.user)
         self.assertFalse(
             ActionRegistry.is_action_available(
-                'rename', self.other, f, is_owner=False,
+                'rename', self.other, f, permission=None,
             )
         )
 
@@ -687,7 +693,7 @@ class IsActionAvailableTests(TestCase):
         f = _make_file(self.user)
         self.assertFalse(
             ActionRegistry.is_action_available(
-                'nonexistent', self.user, f, is_owner=True,
+                'nonexistent', self.user, f, permission=MANAGE,
             )
         )
 

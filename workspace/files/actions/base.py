@@ -24,9 +24,10 @@ class BaseAction(ABC):
     supports_bulk: bool = False
 
     @abstractmethod
-    def is_available(self, user, file_obj, *, is_owner, share_permission=None):
+    def is_available(self, user, file_obj, *, permission):
         """Return True if this action should appear for the given context.
 
+        ``permission`` is a :class:`~workspace.files.services.FilePermission` value.
         All state is passed via parameters — no DB queries allowed.
         """
 

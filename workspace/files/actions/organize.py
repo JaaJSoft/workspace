@@ -1,3 +1,4 @@
+from workspace.files.services import FilePermission
 from . import ActionRegistry
 from .base import ActionCategory, BaseAction
 
@@ -12,10 +13,10 @@ class ToggleFavoriteAction(BaseAction):
     keyboard_shortcut = 'F'
     supports_bulk = True
 
-    def is_available(self, user, file_obj, *, is_owner, share_permission=None):
+    def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:
             return False
-        return is_owner or share_permission is not None
+        return permission is not None
 
     def get_label(self, file_obj):
         if getattr(file_obj, 'is_favorite', False):
@@ -41,13 +42,13 @@ class TogglePinAction(BaseAction):
     keyboard_shortcut = 'P'
     supports_bulk = True
 
-    def is_available(self, user, file_obj, *, is_owner, share_permission=None):
+    def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:
             return False
         # Group root folders are already shown in the sidebar Groups section
         if file_obj.group_id and file_obj.parent_id is None:
             return False
-        return is_owner
+        return permission is not None and permission >= FilePermission.EDIT
 
     def get_label(self, file_obj):
         if getattr(file_obj, 'is_pinned', False):
@@ -71,7 +72,7 @@ class ShareAction(BaseAction):
     category = ActionCategory.ORGANIZE
     node_types = ('file',)
 
-    def is_available(self, user, file_obj, *, is_owner, share_permission=None):
+    def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:
             return False
-        return is_owner
+        return permission is not None and permission >= FilePermission.EDIT

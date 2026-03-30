@@ -5,6 +5,7 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from workspace.files.services import FilePermission, FileService
 from workspace.users.settings_service import get_setting
 from .viewers import ViewerRegistry
 from ..models import File, FileFavorite, FileShare, FileShareLink, PinnedFolder
@@ -312,18 +313,12 @@ def properties(request, uuid):
     # Try as owner first, then as shared recipient
     file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
     if not file_obj:
-        from django.http import Http404
         raise Http404
 
-    is_owner = file_obj.owner == request.user
-    share_permission = None
-    if not is_owner:
-        share_permission = FileShare.objects.filter(
-            file=file_obj, shared_with=request.user,
-        ).values_list('permission', flat=True).first()
-        if share_permission is None:
-            from django.http import Http404
-            raise Http404
+    perm = FileService.get_permission(request.user, file_obj)
+    if perm is None:
+        raise Http404
+    is_owner = perm >= FilePermission.MANAGE
 
     # Check if favorite
     is_favorite = FileFavorite.objects.filter(owner=request.user, file=file_obj).exists()
@@ -362,6 +357,13 @@ def properties(request, uuid):
             FileShareLink.objects.filter(file=file_obj).order_by('-created_at')
         )
 
+    PERMISSION_LABELS = {
+        FilePermission.VIEW: ('Read only', False),
+        FilePermission.WRITE: ('Read & write', True),
+        FilePermission.EDIT: ('Full access', True),
+    }
+    perm_label, perm_is_write = PERMISSION_LABELS.get(perm, (None, False))
+
     return render(request, 'files/ui/partials/properties_content.html', {
         'file': file_obj,
         'is_owner': is_owner,
@@ -370,7 +372,8 @@ def properties(request, uuid):
         'children_count': children_count,
         'total_size': total_size,
         'shares': shares,
-        'share_permission': share_permission,
+        'permission_label': perm_label,
+        'permission_is_write': perm_is_write,
         'share_links': share_links,
     })
 
@@ -438,20 +441,12 @@ def view_file(request, uuid):
     # Get file — allow owner or shared-with user
     file_obj = File.objects.select_related('locked_by').filter(uuid=uuid, deleted_at__isnull=True).first()
     if not file_obj:
-        from django.http import Http404
         raise Http404
 
-    # Determine user_can_edit based on ownership / share permission
-    if file_obj.owner == request.user:
-        user_can_edit = True
-    else:
-        share = FileShare.objects.filter(
-            file=file_obj, shared_with=request.user,
-        ).values_list('permission', flat=True).first()
-        if share is None:
-            from django.http import Http404
-            raise Http404
-        user_can_edit = share == FileShare.Permission.READ_WRITE
+    perm = FileService.get_permission(request.user, file_obj)
+    if perm is None:
+        raise Http404
+    user_can_edit = perm >= FilePermission.WRITE
 
     # Only files can be viewed
     if file_obj.node_type != File.NodeType.FILE:
@@ -500,7 +495,6 @@ def shared_file_view(request, token):
         .first()
     )
     if not link:
-        from django.http import Http404
         raise Http404
 
     if link.is_expired:

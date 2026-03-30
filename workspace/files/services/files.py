@@ -38,6 +38,20 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def accessible_files_q(user):
+        """Return a Q filter matching all files *user* can access.
+
+        Covers owned files, group files, and individually shared files.
+        Does NOT filter on ``deleted_at`` — callers add that when needed.
+        """
+        from django.db.models import Q
+        return (
+            Q(owner=user)
+            | Q(group__in=user.groups.all())
+            | Q(shares__shared_with=user)
+        )
+
+    @staticmethod
     def user_files_qs(user):
         """Return a queryset of active (non-deleted) personal files owned by the user."""
         return File.objects.filter(owner=user, group__isnull=True, deleted_at__isnull=True)

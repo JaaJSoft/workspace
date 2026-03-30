@@ -81,12 +81,10 @@ def _build_context(request, folder=None, is_trash_view=False):
         breadcrumbs = [files_root, SPECIAL_VIEWS[active_special]]
     elif folder:
         current_folder = File.objects.filter(
+            FileService.accessible_files_q(request.user),
             uuid=folder,
             node_type=File.NodeType.FOLDER,
             deleted_at__isnull=True,
-        ).filter(
-            Q(owner=request.user, group__isnull=True)
-            | Q(group__in=request.user.groups.all())
         ).first()
         if not current_folder:
             raise Http404
@@ -110,10 +108,9 @@ def _build_context(request, folder=None, is_trash_view=False):
         ).order_by('-deleted_at', 'name')
     elif is_favorites_view:
         nodes = File.objects.filter(
+            FileService.accessible_files_q(request.user),
             deleted_at__isnull=True,
             favorites__owner=request.user,
-        ).filter(
-            Q(owner=request.user) | Q(shares__shared_with=request.user)
         ).distinct().order_by('-node_type', 'name')
     elif is_recent_view:
         nodes = File.objects.filter(

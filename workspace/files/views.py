@@ -303,12 +303,9 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         # Favorites: include owned, shared-with-me, and group files
         if self.action == 'list' and self._is_favorites_query():
             return File.objects.filter(
+                FileService.accessible_files_q(self.request.user),
                 deleted_at__isnull=True,
                 favorites__owner=self.request.user,
-            ).filter(
-                Q(owner=self.request.user)
-                | Q(shares__shared_with=self.request.user)
-                | Q(group__in=self.request.user.groups.all())
             ).annotate(
                 is_favorite=Exists(favorite_subquery),
                 is_pinned=Exists(pinned_subquery),
@@ -997,10 +994,9 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
 
         file_objects = list(
             File.objects.filter(
+                FileService.accessible_files_q(request.user),
                 uuid__in=uuids,
                 deleted_at__isnull=True,
-            ).filter(
-                Q(owner=request.user) | Q(shares__shared_with=request.user)
             ).distinct()
         )
 
@@ -1463,11 +1459,8 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
 
         file_objects = list(
             File.objects.filter(
+                FileService.accessible_files_q(request.user),
                 uuid__in=uuids,
-            ).filter(
-                Q(owner=request.user)
-                | Q(shares__shared_with=request.user)
-                | Q(group__in=request.user.groups.all())
             ).annotate(
                 is_favorite=Exists(favorite_subquery),
                 is_pinned=Exists(pinned_subquery),

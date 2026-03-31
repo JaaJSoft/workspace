@@ -125,16 +125,11 @@ def _build_context(request, folder=None, is_trash_view=False):
                 parent=current_folder,
             ).order_by('-node_type', 'name')
         else:
-            nodes = File.objects.filter(
-                owner=request.user,
-                deleted_at__isnull=True,
+            nodes = FileService.user_files_qs(request.user).filter(
                 parent=current_folder,
             ).order_by('-node_type', 'name')
     else:
-        nodes = File.objects.filter(
-            owner=request.user,
-            group__isnull=True,
-            deleted_at__isnull=True,
+        nodes = FileService.user_files_qs(request.user).filter(
             parent__isnull=True,
         ).order_by('-node_type', 'name')
 
@@ -194,10 +189,8 @@ def _build_context(request, folder=None, is_trash_view=False):
         empty_message = None
 
     # Group folders the user has access to
-    group_folders = File.objects.filter(
-        group__in=request.user.groups.all(),
+    group_folders = FileService.user_group_files_qs(request.user).filter(
         parent__isnull=True,
-        deleted_at__isnull=True,
         node_type=File.NodeType.FOLDER,
     ).select_related('group').order_by('name')
 
@@ -409,10 +402,8 @@ def pinned_folders(request):
 @login_required
 def group_folders_sidebar(request):
     """Return group folders partial for Alpine AJAX refresh."""
-    group_folders = File.objects.filter(
-        group__in=request.user.groups.all(),
+    group_folders = FileService.user_group_files_qs(request.user).filter(
         parent__isnull=True,
-        deleted_at__isnull=True,
         node_type=File.NodeType.FOLDER,
     ).select_related('group').order_by('name')
 

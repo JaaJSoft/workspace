@@ -31,6 +31,7 @@ from .serializers import (
 )
 from .services import (
     extract_mentions,
+    get_active_membership,
     get_or_create_dm,
     get_unread_counts,
     notify_conversation_members,
@@ -41,15 +42,6 @@ from .services import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
-
-
-def _get_active_membership(user, conversation_id):
-    """Return the active membership or None."""
-    return ConversationMember.objects.filter(
-        conversation_id=conversation_id,
-        user=user,
-        left_at__isnull=True,
-    ).first()
 
 
 def _trigger_bot_response(conversation_id, message, sender):
@@ -233,7 +225,7 @@ class ConversationDetailView(APIView):
 
     @extend_schema(summary="Get conversation detail")
     def get(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -262,7 +254,7 @@ class ConversationDetailView(APIView):
         }),
     )
     def patch(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -311,7 +303,7 @@ class ConversationDetailView(APIView):
 
     @extend_schema(summary="Leave conversation")
     def delete(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -336,7 +328,7 @@ class MessageListView(CacheControlMixin, APIView):
         ],
     )
     def get(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -387,7 +379,7 @@ class MessageListView(CacheControlMixin, APIView):
     def post(self, request, conversation_id):
         from workspace.files.services.files import FileService
 
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -524,7 +516,7 @@ class MessageDetailView(APIView):
         request=MessageEditSerializer,
     )
     def patch(self, request, conversation_id, message_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -592,7 +584,7 @@ class MessageDetailView(APIView):
 
     @extend_schema(summary="Delete a message (soft)")
     def delete(self, request, conversation_id, message_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -665,7 +657,7 @@ class ReactionToggleView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        membership = _get_active_membership(request.user, message.conversation_id)
+        membership = get_active_membership(request.user, message.conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -718,7 +710,7 @@ class ConversationMembersView(APIView):
         request=MemberAddSerializer,
     )
     def post(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -796,7 +788,7 @@ class ConversationMemberRemoveView(APIView):
 
     @extend_schema(summary="Remove a member from a group conversation (creator only)")
     def delete(self, request, conversation_id, user_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -844,7 +836,7 @@ class MarkReadView(APIView):
 
     @extend_schema(summary="Mark conversation as read")
     def post(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -885,7 +877,7 @@ class TypingIndicatorView(APIView):
 
     @extend_schema(summary="Signal typing", request=None, responses={200: None})
     def post(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member.'},
@@ -910,7 +902,7 @@ class MessageReadersView(APIView):
 
     @extend_schema(summary="Get who has read a specific message")
     def get(self, request, conversation_id, message_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1002,7 +994,7 @@ class GroupAvatarUploadView(APIView):
         },
     )
     def post(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1068,7 +1060,7 @@ class GroupAvatarUploadView(APIView):
         },
     )
     def delete(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1128,7 +1120,7 @@ class ConversationStatsView(APIView):
 
     @extend_schema(summary="Get conversation statistics")
     def get(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1184,7 +1176,7 @@ class ConversationMessageSearchView(APIView):
         ],
     )
     def get(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1269,7 +1261,7 @@ class ConversationPinView(APIView):
 
     @extend_schema(summary="Pin a conversation")
     def post(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1351,7 +1343,7 @@ class MessagePinToggleView(APIView):
         except Message.DoesNotExist:
             return Response({'detail': 'Message not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        membership = _get_active_membership(request.user, message.conversation_id)
+        membership = get_active_membership(request.user, message.conversation_id)
         if not membership:
             return Response({'detail': 'Not a member of this conversation.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -1379,7 +1371,7 @@ class MessagePinToggleView(APIView):
         except Message.DoesNotExist:
             return Response({'detail': 'Message not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        membership = _get_active_membership(request.user, message.conversation_id)
+        membership = get_active_membership(request.user, message.conversation_id)
         if not membership:
             return Response({'detail': 'Not a member of this conversation.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -1401,7 +1393,7 @@ class ConversationPinnedMessagesView(APIView):
 
     @extend_schema(summary="List pinned messages in a conversation")
     def get(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response({'detail': 'Not a member of this conversation.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -1432,7 +1424,7 @@ class AttachmentDownloadView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        membership = _get_active_membership(
+        membership = get_active_membership(
             request.user, attachment.message.conversation_id,
         )
         if not membership:
@@ -1478,7 +1470,7 @@ class AttachmentSaveToFilesView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        membership = _get_active_membership(
+        membership = get_active_membership(
             request.user, attachment.message.conversation_id,
         )
         if not membership:
@@ -1526,7 +1518,7 @@ class BotRetryView(APIView):
 
     @extend_schema(summary="Retry a failed bot response")
     def post(self, request, conversation_id, message_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -1563,7 +1555,7 @@ class ConversationClearView(APIView):
 
     @extend_schema(tags=['Chat'], summary="Clear all messages in a conversation")
     def delete(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -1603,7 +1595,7 @@ class BotCancelView(APIView):
     def post(self, request, conversation_id):
         from workspace.ai.models import AITask
 
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -1631,7 +1623,7 @@ class ScheduledMessageListView(APIView):
     def get(self, request, conversation_id):
         from workspace.ai.models import ScheduledMessage
 
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1663,7 +1655,7 @@ class ScheduledMessageDetailView(APIView):
     def patch(self, request, conversation_id, schedule_id):
         from workspace.ai.models import ScheduledMessage
 
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1701,7 +1693,7 @@ class ScheduledMessageDetailView(APIView):
     def delete(self, request, conversation_id, schedule_id):
         from workspace.ai.models import ScheduledMessage
 
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},

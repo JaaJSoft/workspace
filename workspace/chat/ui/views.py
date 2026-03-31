@@ -12,7 +12,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.chat.models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage
 from workspace.chat.serializers import ConversationListSerializer
-from workspace.chat.services import get_unread_counts, user_conversation_ids
+from workspace.chat.services import get_active_membership, get_unread_counts, user_conversation_ids
 from workspace.files.ui.viewers import ViewerRegistry
 
 
@@ -216,11 +216,7 @@ def group_messages(messages, current_user):
 @login_required
 def conversation_messages_view(request, conversation_uuid):
     """Partial: server-rendered grouped messages for a conversation."""
-    membership = ConversationMember.objects.filter(
-        conversation_id=conversation_uuid,
-        user=request.user,
-        left_at__isnull=True,
-    ).first()
+    membership = get_active_membership(request.user, conversation_uuid)
     if not membership:
         return HttpResponseForbidden()
 
@@ -304,11 +300,7 @@ def conversation_messages_view(request, conversation_uuid):
 @login_required
 def message_readers_view(request, conversation_uuid, message_uuid):
     """Partial: server-rendered popover content showing who read a message."""
-    membership = ConversationMember.objects.filter(
-        conversation_id=conversation_uuid,
-        user=request.user,
-        left_at__isnull=True,
-    ).first()
+    membership = get_active_membership(request.user, conversation_uuid)
     if not membership:
         return HttpResponseForbidden()
 
@@ -352,12 +344,7 @@ def view_attachment(request, attachment_uuid):
         raise Http404
 
     # Check user is member of the conversation
-    is_member = ConversationMember.objects.filter(
-        conversation=attachment.message.conversation,
-        user=request.user,
-        left_at__isnull=True,
-    ).exists()
-    if not is_member:
+    if not get_active_membership(request.user, attachment.message.conversation_id):
         from django.http import Http404
         raise Http404
 

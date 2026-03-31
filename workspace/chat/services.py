@@ -18,6 +18,17 @@ def user_conversation_ids(user):
     ).values_list('conversation_id', flat=True)
 
 
+def get_active_membership(user, conversation_id):
+    """Return the active ConversationMember for *user* in *conversation_id*, or None."""
+    from .models import ConversationMember
+
+    return ConversationMember.objects.filter(
+        conversation_id=conversation_id,
+        user=user,
+        left_at__isnull=True,
+    ).first()
+
+
 def get_or_create_dm(user, other_user):
     """Get or create a DM conversation between two users.
 

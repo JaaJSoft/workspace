@@ -55,11 +55,16 @@ Never duplicate access/permission querysets. Always use the centralized helpers 
 ### Chat — `workspace.chat.services`
 
 ```python
-from workspace.chat.services import user_conversation_ids
+from workspace.chat.services import user_conversation_ids, get_active_membership
+
 conv_ids = user_conversation_ids(user)  # returns queryset of conversation UUIDs
+
+# Single-conversation access check — returns ConversationMember or None:
+membership = get_active_membership(user, conversation_id)
 ```
 
-Returns conversation UUIDs where the user is an active member (`left_at__isnull=True`).
+- `user_conversation_ids`: returns conversation UUIDs where the user is an active member (`left_at__isnull=True`).
+- `get_active_membership`: returns the active `ConversationMember` for a specific conversation, or `None`. Use this for per-view access checks.
 
 ### Mail — `workspace.mail.queries`
 
@@ -73,10 +78,13 @@ Returns mail account UUIDs owned by the user. Use for filtering messages: `MailM
 ### Calendar — `workspace.calendar.queries`
 
 ```python
-from workspace.calendar.queries import visible_calendar_ids, visible_events_q
+from workspace.calendar.queries import visible_calendar_ids, visible_calendars, visible_events_q
 
-# For calendar-level queries (owned + subscribed):
+# For calendar-level queries — all visible IDs (owned incl. external + subscribed):
 cal_ids = visible_calendar_ids(user)
+
+# For UI display — split owned (excl. external) / subscribed querysets:
+owned, subscribed = visible_calendars(user)
 
 # For event-level queries (owned calendars + subscribed calendars + event membership):
 events = Event.objects.filter(visible_events_q(user), title__icontains=query)

@@ -45,9 +45,14 @@ Use the `dialogs` partial for modal dialogs instead of inline modal HTML.
 
 ## Access Control Querysets
 
-Never duplicate access/permission querysets. Always use the centralized helpers below. This ensures permission logic is defined once per module.
+Never duplicate access/permission querysets. Always use the centralized helpers listed below. Each module exposes its access control logic through a dedicated service (`services.py`) or query module (`queries.py`). This ensures permission logic is defined once per module and stays consistent across views, API endpoints, and background tasks.
 
-### Chat — `user_conversation_ids(user)`
+**Rules:**
+- Never write raw ORM filters to check access rights (e.g. `File.objects.filter(owner=user)`) — always call the corresponding helper.
+- When adding a new view or API endpoint, import and use the existing helper rather than reimplementing the logic.
+- If a module doesn't have a helper yet, create one in its `services.py` or `queries.py` and use it everywhere.
+
+### Chat — `workspace.chat.services`
 
 ```python
 from workspace.chat.services import user_conversation_ids
@@ -56,7 +61,7 @@ conv_ids = user_conversation_ids(user)  # returns queryset of conversation UUIDs
 
 Returns conversation UUIDs where the user is an active member (`left_at__isnull=True`).
 
-### Mail — `user_account_ids(user)`
+### Mail — `workspace.mail.queries`
 
 ```python
 from workspace.mail.queries import user_account_ids
@@ -65,7 +70,7 @@ account_ids = user_account_ids(user)  # returns queryset of account UUIDs
 
 Returns mail account UUIDs owned by the user. Use for filtering messages: `MailMessage.objects.filter(account_id__in=account_ids, ...)`.
 
-### Calendar — `visible_calendar_ids(user)` / `visible_events_q(user)`
+### Calendar — `workspace.calendar.queries`
 
 ```python
 from workspace.calendar.queries import visible_calendar_ids, visible_events_q
@@ -77,11 +82,24 @@ cal_ids = visible_calendar_ids(user)
 events = Event.objects.filter(visible_events_q(user), title__icontains=query)
 ```
 
-### Files — `FileService.user_files_qs(user)`
+### Files — `workspace.files.services.FileService`
 
 ```python
 from workspace.files.services import FileService
-qs = FileService.user_files_qs(user)  # returns queryset: File(owner=user, deleted_at__isnull=True)
-```
 
-Returns active (non-deleted) files owned by the user. For single-file access checks, use `FileService.can_access(user, file_obj)` instead.
+# All accessible files (owned + group + shared) — returns Q filter, does NOT filter deleted_at:
+q = FileService.accessible_files_q(user)
+
+# Personal files only (owned, non-deleted, no group):
+qs = FileService.user_files_qs(user)
+
+# Group files only (non-deleted, from user's groups):
+qs = FileService.user_group_files_qs(user)
+
+# Single-file permission check — returns FilePermission (MANAGE/EDIT/WRITE/VIEW) or None:
+perm = FileService.get_permission(user, file_obj)
+
+# Quick boolean access check:
+if FileService.can_access(user, file_obj):
+    ...
+```

@@ -4,13 +4,18 @@ from .models import Calendar, CalendarSubscription, EventMember
 
 
 def visible_calendar_ids(user):
-    """Return calendar UUIDs the user can see: owned + subscribed."""
-    owned, subscribed = visible_calendars(user)
-    return list(owned.values_list('uuid', flat=True)) + list(subscribed.values_list('uuid', flat=True))
+    """Return calendar UUIDs the user can see: owned (incl. external) + subscribed."""
+    owned = Calendar.objects.filter(owner=user).values_list('uuid', flat=True)
+    subscribed = CalendarSubscription.objects.filter(user=user).values_list('calendar_id', flat=True)
+    return list(owned) + list(subscribed)
 
 
 def visible_calendars(user):
-    """Return (owned_qs, subscribed_qs) calendar querysets for *user*."""
+    """Return (owned_qs, subscribed_qs) calendar querysets for *user*.
+
+    Excludes external-source calendars from the owned set (those are
+    managed separately via the external-calendars UI).
+    """
     owned = Calendar.objects.filter(owner=user, external_source__isnull=True).select_related('owner')
     sub_ids = CalendarSubscription.objects.filter(user=user).values_list('calendar_id', flat=True)
     subscribed = Calendar.objects.filter(uuid__in=sub_ids).select_related('owner')

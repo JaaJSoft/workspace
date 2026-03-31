@@ -84,7 +84,8 @@ Call this when the user asks about upcoming events, meetings, or scheduling poll
 Call this when the user asks if they are free, available, or have any events during a specific period."""
         from datetime import datetime
         from django.db.models import Q
-        from workspace.calendar.models import Calendar, Event
+        from workspace.calendar.models import Event
+        from workspace.calendar.queries import visible_calendar_ids
         from workspace.calendar.recurrence import _build_rrule
         from workspace.users.settings_service import get_user_timezone
 
@@ -107,8 +108,8 @@ Call this when the user asks if they are free, available, or have any events dur
         if end <= start:
             return 'Error: end must be after start'
 
-        # Only the user's own calendars
-        cal_ids = list(Calendar.objects.filter(owner=user).values_list('uuid', flat=True))
+        # All calendars visible to the user (owned + subscribed)
+        cal_ids = visible_calendar_ids(user)
         if not cal_ids:
             return json.dumps({'available': True, 'events': [], 'message': 'No calendars found — user is free.'})
 

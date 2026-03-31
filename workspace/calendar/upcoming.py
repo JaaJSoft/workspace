@@ -6,6 +6,7 @@ Used by the dashboard (event list + pending action count).
 from django.db.models import Q
 
 from workspace.calendar.models import Event, EventMember
+from workspace.calendar.queries import visible_events_q
 from workspace.calendar.recurrence import _build_rrule
 
 
@@ -28,9 +29,7 @@ def get_upcoming_for_user(user, now, end_of_today):
     Returns a sorted list mixing real Event instances and VirtualOccurrence
     objects (both expose .uuid, .title, .all_day, .start, .calendar).
     """
-    user_q = Q(owner=user) | Q(members__user=user, members__status__in=[
-        EventMember.Status.ACCEPTED, EventMember.Status.PENDING,
-    ])
+    user_q = visible_events_q(user)
 
     # One-off events + materialized exceptions with start today
     one_off = list(

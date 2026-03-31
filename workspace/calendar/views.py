@@ -30,7 +30,7 @@ def _parse_dt(value):
 from workspace.notifications.services import notify, notify_many
 from .models import Calendar, CalendarSubscription, Event, EventMember
 from .models_external import ExternalCalendar
-from .queries import visible_calendar_ids
+from .queries import visible_calendars, visible_calendar_ids
 
 
 def _is_external_calendar(calendar_id):
@@ -124,13 +124,7 @@ class CalendarListView(CacheControlMixin, APIView):
     @extend_schema(summary="List user's calendars (owned + subscribed)")
     @cache_response(300)
     def get(self, request):
-        owned = Calendar.objects.filter(
-            owner=request.user, external_source__isnull=True,
-        ).select_related('owner')
-        sub_ids = CalendarSubscription.objects.filter(
-            user=request.user,
-        ).values_list('calendar_id', flat=True)
-        subscribed = Calendar.objects.filter(uuid__in=sub_ids).select_related('owner')
+        owned, subscribed = visible_calendars(request.user)
 
         return Response({
             'owned': CalendarSerializer(owned, many=True).data,

@@ -796,7 +796,7 @@ class MailBatchActionView(APIView):
 
         messages = MailMessage.objects.filter(
             uuid__in=message_ids,
-            account__owner=request.user,
+            account_id__in=user_account_ids(request.user),
             deleted_at__isnull=True,
         ).select_related('account', 'folder')
 
@@ -1135,7 +1135,7 @@ class ContactAutocompleteView(CacheControlMixin, APIView):
         if len(q) < 2:
             return Response([])
 
-        account_filter = Q(account__owner=request.user)
+        account_filter = Q(account_id__in=user_account_ids(request.user))
         account_id = request.query_params.get('account_id')
         if account_id:
             account_filter &= Q(account__uuid=account_id)

@@ -28,9 +28,10 @@ or when the user asks to read, open, or see the details of a specific email."""
         if not email_uuid:
             return 'Error: uuid is required'
         from workspace.mail.models import MailMessage
+        from workspace.mail.queries import user_account_ids
         msg = (
             MailMessage.objects
-            .filter(uuid=email_uuid, account__owner=user, deleted_at__isnull=True)
+            .filter(uuid=email_uuid, account_id__in=user_account_ids(user), deleted_at__isnull=True)
             .select_related('folder', 'account')
             .first()
         )

@@ -30,6 +30,8 @@ def get_upcoming_for_user(user, now, end_of_today):
     objects (both expose .uuid, .title, .all_day, .start, .calendar).
     """
     user_q = visible_events_q(user)
+    # Exclude events the user explicitly declined
+    declined_q = Q(members__user=user, members__status=EventMember.Status.DECLINED)
 
     # One-off events + materialized exceptions with start today
     one_off = list(
@@ -40,6 +42,7 @@ def get_upcoming_for_user(user, now, end_of_today):
             is_cancelled=False,
             recurrence_frequency__isnull=True,
         )
+        .exclude(declined_q)
         .select_related('calendar')
         .distinct()
     )
@@ -53,6 +56,7 @@ def get_upcoming_for_user(user, now, end_of_today):
             start__lte=end_of_today,
             is_cancelled=False,
         )
+        .exclude(declined_q)
         .filter(Q(recurrence_end__isnull=True) | Q(recurrence_end__gte=now))
         .select_related('calendar')
         .distinct()

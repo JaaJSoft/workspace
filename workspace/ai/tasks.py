@@ -495,14 +495,11 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         body = msg.body
 
         # Prefix messages with a timestamp so the LLM has temporal context
-        local_dt = msg.created_at.astimezone(_user_tz) if _user_tz else msg.created_at
-        timestamp_prefix = f"[{local_dt.strftime('%Y-%m-%d %H:%M')}] "
-
-        # Truncate verbose old messages when no summary covers them
-        if idx < truncate_count and len(body) > _TRUNCATE_BODY_LIMIT:
-            body = body[:_TRUNCATE_BODY_LIMIT] + '…'
-
-        body = timestamp_prefix + body
+        # Only user messages get timestamps — adding them to assistant messages
+        # causes the LLM to mimic the pattern in its own replies.
+        if not is_bot:
+            local_dt = msg.created_at.astimezone(_user_tz) if _user_tz else msg.created_at
+            body = f"[{local_dt.strftime('%Y-%m-%d %H:%M')}] {body}"
 
         # Reconstruct tool call history for bot messages
         if is_bot and msg.tool_data:
@@ -1132,8 +1129,9 @@ def generate_scheduled_response(self, schedule_id: str):
         body = msg.body
         if idx < truncate_count and len(body) > _TRUNCATE_BODY_LIMIT:
             body = body[:_TRUNCATE_BODY_LIMIT] + '…'
-        local_dt = msg.created_at.astimezone(_user_tz) if _user_tz else msg.created_at
-        body = f"[{local_dt.strftime('%Y-%m-%d %H:%M')}] {body}"
+        if not is_bot:
+            local_dt = msg.created_at.astimezone(_user_tz) if _user_tz else msg.created_at
+            body = f"[{local_dt.strftime('%Y-%m-%d %H:%M')}] {body}"
         history.append({'role': role, 'content': body})
 
     bot_name = bot_user.get_full_name() or bot_user.username

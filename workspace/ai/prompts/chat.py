@@ -71,6 +71,13 @@ def build_chat_messages(
 
     # --- Behavioral rules ---
 
+    timestamp_instructions = (
+        "\n\n## Message timestamps\n"
+        "Messages include timestamps like [2026-04-01 14:32] for temporal context. "
+        "Use these to reason about time (e.g. how long ago something was said). "
+        "These are internal metadata — never include them in your replies."
+    )
+
     language_instructions = (
         "\n\n## Language\n"
         "Always respond in the same language as the user's last message. "
@@ -178,6 +185,7 @@ def build_chat_messages(
 
     system_content = (
         f"{base_prompt}\n\n{context}"
+        f"{timestamp_instructions}"
         f"{language_instructions}"
         f"{tone_instructions}"
         f"{discretion_instructions}"

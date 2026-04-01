@@ -482,15 +482,27 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
     # Number of old messages (outside recent window) not covered by a summary
     truncate_count = max(0, len(msgs_to_use) - recent_window) if not summary_text else 0
 
+    # Identify the human user who triggered the response
+    from workspace.users.settings_service import get_user_timezone
+    trigger_message = Message.objects.filter(pk=message_id).select_related('author').first()
+    human_user = trigger_message.author if trigger_message else None
+    _user_tz = get_user_timezone(human_user) if human_user else None
+
     history = []
     for idx, msg in enumerate(reversed(msgs_to_use)):
         is_bot = hasattr(msg.author, 'bot_profile')
         role = 'assistant' if is_bot else 'user'
         body = msg.body
 
+        # Prefix messages with a timestamp so the LLM has temporal context
+        local_dt = msg.created_at.astimezone(_user_tz) if _user_tz else msg.created_at
+        timestamp_prefix = f"[{local_dt.strftime('%Y-%m-%d %H:%M')}] "
+
         # Truncate verbose old messages when no summary covers them
         if idx < truncate_count and len(body) > _TRUNCATE_BODY_LIMIT:
             body = body[:_TRUNCATE_BODY_LIMIT] + '…'
+
+        body = timestamp_prefix + body
 
         # Reconstruct tool call history for bot messages
         if is_bot and msg.tool_data:
@@ -540,10 +552,6 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             history.append({'role': role, 'content': body})
 
     bot_name = bot_user.get_full_name() or bot_user.username
-
-    # Identify the human user who triggered the response
-    trigger_message = Message.objects.filter(pk=message_id).select_related('author').first()
-    human_user = trigger_message.author if trigger_message else None
 
     messages = build_chat_messages(
         bot_profile.system_prompt, history, bot_name=bot_name,
@@ -1112,6 +1120,11 @@ def generate_scheduled_response(self, schedule_id: str):
 
     truncate_count = max(0, len(msgs_to_use) - recent_window) if not summary_text else 0
 
+    # Resolve user timezone for message timestamps
+    from workspace.users.settings_service import get_user_timezone
+    human_user = User.objects.filter(pk=schedule.created_by_id).first()
+    _user_tz = get_user_timezone(human_user) if human_user else None
+
     history = []
     for idx, msg in enumerate(reversed(msgs_to_use)):
         is_bot = hasattr(msg.author, 'bot_profile')
@@ -1119,10 +1132,11 @@ def generate_scheduled_response(self, schedule_id: str):
         body = msg.body
         if idx < truncate_count and len(body) > _TRUNCATE_BODY_LIMIT:
             body = body[:_TRUNCATE_BODY_LIMIT] + '…'
+        local_dt = msg.created_at.astimezone(_user_tz) if _user_tz else msg.created_at
+        body = f"[{local_dt.strftime('%Y-%m-%d %H:%M')}] {body}"
         history.append({'role': role, 'content': body})
 
     bot_name = bot_user.get_full_name() or bot_user.username
-    human_user = User.objects.filter(pk=schedule.created_by_id).first()
 
     # Inject the scheduled action instruction into the system prompt
     scheduled_instruction = (

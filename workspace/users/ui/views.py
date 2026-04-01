@@ -1,3 +1,4 @@
+import json
 from datetime import date as date_type, timedelta
 
 from django.contrib.auth.decorators import login_required
@@ -10,6 +11,8 @@ from django.utils import timezone
 from workspace.core.activity_registry import activity_registry
 from workspace.core.activity_service import annotate_time_ago, get_recent_events, get_sources
 from workspace.users import avatar_service, presence_service
+from workspace.users.banner_palettes import BANNER_PALETTES, resolve_banner_gradient
+from workspace.users.settings_service import get_setting
 
 ACTIVITY_LIMIT = 10
 
@@ -136,6 +139,11 @@ def profile_view(request, username=None):
     # Heatmap
     heatmap = _build_heatmap_data(user_id, viewer_id=viewer_id)
 
+    # Profile fields
+    profile_bio = get_setting(profile_user, 'profile', 'bio')
+    profile_role = get_setting(profile_user, 'profile', 'role')
+    banner_gradient = resolve_banner_gradient(profile_user)
+
     # Activity feed
     activity_ctx = _get_profile_activity_context(profile_user.username, user_id, viewer_id=viewer_id)
 
@@ -145,6 +153,9 @@ def profile_view(request, username=None):
         'last_seen': presence_service.get_last_seen(user_id),
         'activity_stats': stats,
         'heatmap': heatmap,
+        'profile_bio': profile_bio,
+        'profile_role': profile_role,
+        'banner_gradient': banner_gradient,
     }
     context.update(activity_ctx)
     return render(request, 'users/ui/profile.html', context)
@@ -184,10 +195,16 @@ def profile_activity_feed(request, username):
 @login_required
 def settings_view(request):
     from django.conf import settings as django_settings
+    palette_raw = get_setting(request.user, 'profile', 'banner_palette')
     return render(request, 'users/ui/settings.html', {
         'has_avatar': avatar_service.has_avatar(request.user),
         'usage_stats': activity_registry.get_stats(request.user.id),
         'storage_quota': django_settings.STORAGE_QUOTA_BYTES,
+        'profile_bio': get_setting(request.user, 'profile', 'bio') or '',
+        'profile_role': get_setting(request.user, 'profile', 'role') or '',
+        'banner_palette': palette_raw,
+        'banner_palettes': BANNER_PALETTES,
+        'banner_palette_json': json.dumps(palette_raw).replace('</', '<\\/'),
     })
 
 

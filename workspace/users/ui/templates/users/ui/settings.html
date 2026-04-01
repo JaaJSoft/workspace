@@ -81,7 +81,8 @@
     <div class="flex-1 min-w-0">
 
       <!-- Profile Tab -->
-      <div x-show="tab === 'profile'" x-cloak x-data="avatarUploadForm()">
+      <div x-show="tab === 'profile'" x-cloak>
+        <div x-data="avatarUploadForm()">
         <div class="card bg-base-100 border border-base-300 shadow-sm">
           <div class="card-body">
             <h2 class="card-title text-lg gap-2">
@@ -139,6 +140,122 @@
             <button @click="cancelCrop()">close</button>
           </form>
         </dialog>
+        </div>
+
+        <!-- Bio & Role -->
+        <div class="card bg-base-100 border border-base-300 shadow-sm mt-4" x-data="profileFieldsForm()">
+          <div class="card-body">
+            <h2 class="card-title text-lg gap-2">
+              <i data-lucide="user" class="w-5 h-5"></i>
+              About You
+            </h2>
+
+            <div x-ref="profileFieldsFeedback"></div>
+
+            <!-- Role -->
+            <div class="form-control mt-3">
+              <label class="label"><span class="label-text font-medium">Role</span></label>
+              <input
+                type="text"
+                x-model="role"
+                maxlength="50"
+                placeholder="ex: Lead Backend, Designer..."
+                class="input input-bordered input-sm w-full max-w-md"
+                @blur="saveField('role', role)"
+                @keydown.enter="$event.target.blur()"
+              />
+              <label class="label"><span class="label-text-alt text-base-content/40">Displayed below your name on your profile.</span></label>
+            </div>
+
+            <!-- Bio -->
+            <div class="form-control mt-2">
+              <label class="label"><span class="label-text font-medium">Bio</span></label>
+              <textarea
+                x-model="bio"
+                maxlength="200"
+                rows="3"
+                placeholder="A few words about yourself..."
+                class="textarea textarea-bordered w-full max-w-md text-sm"
+                @blur="saveField('bio', bio)"
+              ></textarea>
+              <label class="label">
+                <span class="label-text-alt text-base-content/40">Visible on your public profile.</span>
+                <span class="label-text-alt" :class="bio.length > 180 ? 'text-warning' : 'text-base-content/40'" x-text="bio.length + ' / 200'"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Banner Palette -->
+        <div class="card bg-base-100 border border-base-300 shadow-sm mt-4" x-data="bannerPaletteForm()">
+          <div class="card-body">
+            <h2 class="card-title text-lg gap-2">
+              <i data-lucide="paintbrush" class="w-5 h-5"></i>
+              Banner Color
+            </h2>
+            <p class="text-sm text-base-content/60 mt-1">Choose a gradient for your profile banner.</p>
+
+            <div x-ref="paletteFeedback"></div>
+
+            <!-- Preset grid -->
+            <div class="grid grid-cols-4 sm:grid-cols-8 gap-2 mt-4">
+              {% for pid, p in banner_palettes.items %}
+              <button
+                type="button"
+                @click="selectPreset('{{ pid }}')"
+                class="h-10 rounded-lg border-2 transition-all hover:scale-105 cursor-pointer"
+                :class="currentId === '{{ pid }}' ? 'border-primary ring-2 ring-primary/30' : 'border-base-300'"
+                style="background: linear-gradient(135deg, {{ p.from }}, {{ p.via }}, {{ p.to }})"
+                title="{{ p.label }}"
+              ></button>
+              {% endfor %}
+            </div>
+
+            <!-- Custom toggle -->
+            <div class="flex items-center gap-3 mt-4">
+              <button type="button" @click="showCustom = !showCustom" class="btn btn-ghost btn-xs gap-1">
+                <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+                <span x-text="showCustom ? 'Hide custom' : 'Custom colors'"></span>
+              </button>
+              <button
+                type="button"
+                x-show="currentId !== null"
+                @click="resetPalette()"
+                class="btn btn-ghost btn-xs gap-1 text-base-content/50"
+              >
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                Reset to default
+              </button>
+            </div>
+
+            <!-- Custom color pickers -->
+            <div x-show="showCustom" x-cloak class="mt-3 p-4 border border-base-300 rounded-lg space-y-3">
+              <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2 text-sm">
+                  <span class="text-base-content/60 w-10">From</span>
+                  <input type="color" x-model="customFrom" @input="previewCustom()" class="w-8 h-8 rounded cursor-pointer border-0 p-0" />
+                  <span class="text-xs text-base-content/40 font-mono" x-text="customFrom"></span>
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                  <span class="text-base-content/60 w-10">Via</span>
+                  <input type="color" x-model="customVia" @input="previewCustom()" class="w-8 h-8 rounded cursor-pointer border-0 p-0" />
+                  <span class="text-xs text-base-content/40 font-mono" x-text="customVia"></span>
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                  <span class="text-base-content/60 w-10">To</span>
+                  <input type="color" x-model="customTo" @input="previewCustom()" class="w-8 h-8 rounded cursor-pointer border-0 p-0" />
+                  <span class="text-xs text-base-content/40 font-mono" x-text="customTo"></span>
+                </label>
+              </div>
+              <!-- Live preview -->
+              <div class="h-10 rounded-lg" :style="'background: linear-gradient(135deg, ' + customFrom + ', ' + customVia + ', ' + customTo + ')'"></div>
+              <button type="button" @click="saveCustom()" class="btn btn-primary btn-sm gap-2">
+                <i data-lucide="check" class="w-4 h-4"></i>
+                Apply custom colors
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Preferences Tab -->
@@ -478,6 +595,99 @@
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
           body: JSON.stringify({ value: value }),
         });
+      },
+    };
+  }
+
+  function profileFieldsForm() {
+    return {
+      role: '{{ profile_role|escapejs }}',
+      bio: '{{ profile_bio|escapejs }}',
+      async saveField(key, value) {
+        const csrfToken = getCSRFToken();
+        try {
+          const res = await fetch('/api/v1/settings/profile/' + key, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ value: value || null }),
+          });
+          if (res.ok) {
+            this.showFeedback('success', key.charAt(0).toUpperCase() + key.slice(1) + ' saved.');
+          } else {
+            const data = await res.json();
+            this.showFeedback('error', data.detail || 'Failed to save.');
+          }
+        } catch (e) {
+          this.showFeedback('error', 'Network error. Please try again.');
+        }
+      },
+      showFeedback(type, message) {
+        const container = this.$refs.profileFieldsFeedback;
+        if (!container) return;
+        container.replaceChildren();
+        container.appendChild(InlineAlert.create({ type, message, dismissible: true }));
+      },
+    };
+  }
+
+  function bannerPaletteForm() {
+    const raw = {{ banner_palette_json|safe }};
+    const isPreset = typeof raw === 'string';
+    const isCustom = raw && typeof raw === 'object' && raw.from;
+    return {
+      currentId: isPreset ? raw : (isCustom ? '__custom' : null),
+      showCustom: isCustom,
+      customFrom: isCustom ? raw.from : '#6366f1',
+      customVia: isCustom ? raw.via : '#8b5cf6',
+      customTo: isCustom ? raw.to : '#a855f7',
+      async selectPreset(id) {
+        this.currentId = id;
+        this.showCustom = false;
+        await this._save(id);
+      },
+      previewCustom() {
+        this.currentId = '__custom';
+      },
+      async saveCustom() {
+        this.currentId = '__custom';
+        await this._save({ from: this.customFrom, via: this.customVia, to: this.customTo });
+      },
+      async resetPalette() {
+        this.currentId = null;
+        this.showCustom = false;
+        const csrfToken = getCSRFToken();
+        try {
+          await fetch('/api/v1/settings/profile/banner_palette', {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': csrfToken },
+          });
+          this.showFeedback('success', 'Banner reset to default.');
+        } catch (e) {
+          this.showFeedback('error', 'Network error.');
+        }
+      },
+      async _save(value) {
+        const csrfToken = getCSRFToken();
+        try {
+          const res = await fetch('/api/v1/settings/profile/banner_palette', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ value }),
+          });
+          if (res.ok) {
+            this.showFeedback('success', 'Banner palette saved.');
+          } else {
+            this.showFeedback('error', 'Failed to save palette.');
+          }
+        } catch (e) {
+          this.showFeedback('error', 'Network error.');
+        }
+      },
+      showFeedback(type, message) {
+        const container = this.$refs.paletteFeedback;
+        if (!container) return;
+        container.replaceChildren();
+        container.appendChild(InlineAlert.create({ type, message, dismissible: true }));
       },
     };
   }

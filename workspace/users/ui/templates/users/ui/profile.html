@@ -15,7 +15,15 @@
   <!-- ── Profile hero ───────────────────────────────────── -->
   <div class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
     <!-- Banner -->
-    <div class="h-32 bg-gradient-to-br from-primary via-primary/80 to-secondary"></div>
+    {% if banner_gradient %}
+    <div class="h-36 relative" style="background: {{ banner_gradient }}">
+      <div class="absolute inset-0" style="background: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)"></div>
+    </div>
+    {% else %}
+    <div class="h-36 bg-gradient-to-br from-primary via-primary/80 to-secondary relative">
+      <div class="absolute inset-0" style="background: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)"></div>
+    </div>
+    {% endif %}
 
     <!-- Content below banner -->
     <div class="px-6 pb-6">
@@ -70,6 +78,9 @@
             </span>
           {% endif %}
         </div>
+        {% if profile_role %}
+        <div class="text-sm text-base-content/60 font-medium mt-1">{{ profile_role }}</div>
+        {% endif %}
         <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-base-content/60">
           <span class="flex items-center gap-1.5">
             <i data-lucide="at-sign" class="w-3.5 h-3.5"></i>
@@ -98,60 +109,28 @@
             </template>
           </span>
         </div>
+        {% if profile_bio %}
+        <p class="text-sm text-base-content/60 mt-3 max-w-xl leading-relaxed">{{ profile_bio }}</p>
+        {% endif %}
       </div>
-    </div>
-  </div>
 
-  <!-- ── Activity stats ───────────────────────────────── -->
-  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-    <!-- Files -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-4 flex-row items-center gap-4">
-        <div class="rounded-lg bg-primary/10 p-2.5">
-          <i data-lucide="hard-drive" class="w-5 h-5 text-primary"></i>
+      <!-- Inline stats -->
+      <div class="flex flex-wrap gap-x-8 gap-y-3 mt-5 pt-5 border-t border-base-content/5">
+        <div>
+          <div class="text-xl font-bold">{{ activity_stats.files.total_files|default:"0" }}</div>
+          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5">Files</div>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Files</div>
-          <div class="font-semibold text-lg mt-0.5">{{ activity_stats.files.total_files|default:"0" }}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Messages -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-4 flex-row items-center gap-4">
-        <div class="rounded-lg bg-info/10 p-2.5">
-          <i data-lucide="message-circle" class="w-5 h-5 text-info"></i>
+          <div class="text-xl font-bold">{{ activity_stats.chat.total_messages|default:"0" }}</div>
+          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5">Messages</div>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Messages</div>
-          <div class="font-semibold text-lg mt-0.5">{{ activity_stats.chat.total_messages|default:"0" }}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Events -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-4 flex-row items-center gap-4">
-        <div class="rounded-lg bg-secondary/10 p-2.5">
-          <i data-lucide="calendar" class="w-5 h-5 text-secondary"></i>
+          <div class="text-xl font-bold">{{ activity_stats.calendar.total_events|default:"0" }}</div>
+          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5">Events</div>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Events</div>
-          <div class="font-semibold text-lg mt-0.5">{{ activity_stats.calendar.total_events|default:"0" }}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Member since -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-4 flex-row items-center gap-4">
-        <div class="rounded-lg bg-accent/10 p-2.5">
-          <i data-lucide="clock" class="w-5 h-5 text-accent"></i>
-        </div>
-        <div>
-          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Member since</div>
-          <div class="font-semibold mt-0.5">{{ profile_user.date_joined|localtime_tag:"date" }}</div>
+          <div class="text-xl font-bold">{{ profile_user.date_joined|localtime_tag:"date" }}</div>
+          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5">Member since</div>
         </div>
       </div>
     </div>

@@ -73,10 +73,9 @@ def build_chat_messages(
 
     timestamp_instructions = (
         "\n\n## Message timestamps\n"
-        "User messages are prefixed with a timestamp like [2026-04-01 14:32]. "
-        "Use these to understand when messages were sent and reason about time "
-        "(e.g. how long ago something was said, time between messages). "
-        "These are internal metadata only — do not reference or reproduce them in your replies."
+        "Messages include timestamps like [2026-04-01 14:32] for temporal context. "
+        "Use these to reason about time (e.g. how long ago something was said). "
+        "These are internal metadata — never include them in your replies."
     )
 
     language_instructions = (

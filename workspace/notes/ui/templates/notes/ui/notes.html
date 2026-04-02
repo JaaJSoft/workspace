@@ -136,6 +136,14 @@ x-init="init()"
              :class="selectedNote?.is_favorite ? 'text-warning fill-warning' : ''"></i>
         </button>
         {% include "files/ui/partials/tag_manager.html" %}
+        <button class="btn btn-ghost btn-sm btn-square" @click="moveNote(selectedNote.uuid, selectedNote.name)"
+                title="Move to folder">
+          <i data-lucide="folder-input" class="w-4 h-4"></i>
+        </button>
+        <a class="btn btn-ghost btn-sm btn-square" :href="'/files?file=' + selectedNote?.uuid"
+           title="Open in Files">
+          <i data-lucide="hard-drive" class="w-4 h-4"></i>
+        </a>
         <button class="btn btn-ghost btn-sm btn-square text-error" @click="deleteNote()">
           <i data-lucide="trash-2" class="w-4 h-4"></i>
         </button>

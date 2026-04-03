@@ -58,6 +58,12 @@ urlpatterns = [
         views.ConversationStatsView.as_view(),
         name='chat-conversation-stats',
     ),
+    # Media gallery
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/medias',
+        views.ConversationMediaView.as_view(),
+        name='chat-conversation-media',
+    ),
     # Read / Unread
     path(
         'api/v1/chat/conversations/<uuid:conversation_id>/read',

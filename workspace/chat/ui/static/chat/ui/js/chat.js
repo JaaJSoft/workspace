@@ -56,6 +56,13 @@ function chatApp(currentUserId) {
     draggingPinned: null,
     dragOverPinned: null,
 
+    // Shared media (info panel)
+    conversationMedia: [],
+    conversationMediaTotal: 0,
+    loadingMedia: false,
+    loadingMoreMedia: false,
+    mediaFilter: 'images',  // 'images', 'files', 'all'
+
     // Bot / AI
     showBotPicker: false,
     availableBots: [],
@@ -302,6 +309,9 @@ function chatApp(currentUserId) {
       this.botTyping = false;
       this.showInfoPanel = false;
       this.conversationStats = null;
+      this.conversationMedia = [];
+      this.conversationMediaTotal = 0;
+      this.mediaFilter = 'images';
       this.botMemories = [];
       this.memorySearch = '';
       this.showSearchPanel = false;
@@ -1133,6 +1143,7 @@ function chatApp(currentUserId) {
         if (this.activeConversation) {
           this.loadConversationStats(this.activeConversation.uuid);
           this.loadPinnedMessages(this.activeConversation.uuid);
+          this.loadConversationMedia(this.activeConversation.uuid);
           if (this.isBotConversation(this.activeConversation)) {
             this.loadBotMemories();
             this.loadScheduledMessages(this.activeConversation.uuid);
@@ -1155,6 +1166,55 @@ function chatApp(currentUserId) {
         console.error('Failed to load conversation stats', e);
       }
       this.loadingStats = false;
+    },
+
+    // ── Shared media ────────────────────────────────────────
+    async loadConversationMedia(conversationId, append = false) {
+      if (append) {
+        this.loadingMoreMedia = true;
+      } else {
+        this.loadingMedia = true;
+        this.conversationMedia = [];
+        this.conversationMediaTotal = 0;
+      }
+      const offset = append ? this.conversationMedia.length : 0;
+      try {
+        const resp = await fetch(
+          `/api/v1/chat/conversations/${conversationId}/medias?type=${this.mediaFilter}&offset=${offset}&limit=24`,
+          { credentials: 'same-origin' },
+        );
+        if (resp.ok) {
+          const data = await resp.json();
+          if (append) {
+            this.conversationMedia.push(...data.results);
+          } else {
+            this.conversationMedia = data.results;
+          }
+          this.conversationMediaTotal = data.total;
+        }
+      } catch (e) {
+        console.error('Failed to load conversation media', e);
+      }
+      this.loadingMedia = false;
+      this.loadingMoreMedia = false;
+    },
+
+    loadMoreMedia() {
+      if (!this.activeConversation || this.loadingMoreMedia) return;
+      this.loadConversationMedia(this.activeConversation.uuid, true);
+    },
+
+    changeMediaFilter(filter) {
+      this.mediaFilter = filter;
+      if (this.activeConversation) {
+        this.loadConversationMedia(this.activeConversation.uuid);
+      }
+    },
+
+    formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
     },
 
     // ── Search panel ────────────────────────────────────────
@@ -1912,6 +1972,7 @@ function chatApp(currentUserId) {
           this.showInfoPanel = true;
           if (this.activeConversation) {
             this.loadConversationStats(this.activeConversation.uuid);
+            this.loadConversationMedia(this.activeConversation.uuid);
           }
           break;
         case 'copy_link':

@@ -208,6 +208,103 @@
     <p class="text-xs text-base-content/40 text-center py-2">No pinned messages</p>
   </template>
 
+  <!-- Shared Media -->
+  <div class="divider my-0 text-xs text-base-content/40">
+    Shared Media
+    <span x-show="conversationMediaTotal > 0" class="badge badge-ghost badge-xs" x-text="conversationMediaTotal"></span>
+  </div>
+
+  <!-- Filter tabs -->
+  <div class="flex gap-1">
+    <button class="btn btn-xs" :class="mediaFilter === 'images' ? 'btn-primary' : 'btn-ghost'" @click="changeMediaFilter('images')">
+      <i data-lucide="image" class="w-3 h-3"></i> Images
+    </button>
+    <button class="btn btn-xs" :class="mediaFilter === 'files' ? 'btn-primary' : 'btn-ghost'" @click="changeMediaFilter('files')">
+      <i data-lucide="file" class="w-3 h-3"></i> Files
+    </button>
+    <button class="btn btn-xs" :class="mediaFilter === 'all' ? 'btn-primary' : 'btn-ghost'" @click="changeMediaFilter('all')">
+      All
+    </button>
+  </div>
+
+  <!-- Loading -->
+  <template x-if="loadingMedia">
+    <div class="grid grid-cols-3 gap-1">
+      <template x-for="i in 6" :key="i">
+        <div class="aspect-square bg-base-300 rounded animate-pulse"></div>
+      </template>
+    </div>
+  </template>
+
+  <!-- Media grid (images) -->
+  <template x-if="!loadingMedia && conversationMedia.length > 0 && mediaFilter !== 'files'">
+    <div>
+      <div class="grid grid-cols-3 gap-1">
+        <template x-for="item in conversationMedia.filter(m => m.is_image)" :key="item.uuid">
+          <div class="group/media relative aspect-square rounded overflow-hidden cursor-pointer bg-base-300"
+               @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, mime_type: item.mime_type })"
+               :title="item.original_name">
+            <img :src="item.url" :alt="item.original_name"
+                 class="w-full h-full object-cover" loading="lazy" />
+            <div class="absolute inset-0 bg-black/0 group-hover/media:bg-black/30 transition-colors flex items-end">
+              <div class="p-1 text-white text-[0.6rem] opacity-0 group-hover/media:opacity-100 transition-opacity truncate w-full">
+                <span x-text="item.author.username"></span>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+      <!-- Non-image items when filter is 'all' -->
+      <template x-if="mediaFilter === 'all'">
+        <ul class="mt-2 space-y-1">
+          <template x-for="item in conversationMedia.filter(m => !m.is_image)" :key="item.uuid">
+            <li class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
+                @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, mime_type: item.mime_type })">
+              <i data-lucide="file" class="w-3.5 h-3.5 text-base-content/40 flex-shrink-0"></i>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs truncate" x-text="item.original_name"></p>
+                <p class="text-[0.6rem] text-base-content/40" x-text="formatFileSize(item.size) + ' · ' + item.author.username"></p>
+              </div>
+            </li>
+          </template>
+        </ul>
+      </template>
+    </div>
+  </template>
+
+  <!-- File list (files filter only) -->
+  <template x-if="!loadingMedia && conversationMedia.length > 0 && mediaFilter === 'files'">
+    <ul class="space-y-1">
+      <template x-for="item in conversationMedia" :key="item.uuid">
+        <li class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
+            @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, mime_type: item.mime_type })">
+          <i data-lucide="file" class="w-3.5 h-3.5 text-base-content/40 flex-shrink-0"></i>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs truncate" x-text="item.original_name"></p>
+            <p class="text-[0.6rem] text-base-content/40" x-text="formatFileSize(item.size) + ' · ' + item.author.username"></p>
+          </div>
+        </li>
+      </template>
+    </ul>
+  </template>
+
+  <!-- Empty state -->
+  <template x-if="!loadingMedia && conversationMedia.length === 0">
+    <p class="text-xs text-base-content/40 text-center py-2"
+       x-text="mediaFilter === 'images' ? 'No images shared yet' : mediaFilter === 'files' ? 'No files shared yet' : 'No media shared yet'">
+    </p>
+  </template>
+
+  <!-- Load more -->
+  <template x-if="!loadingMedia && conversationMedia.length < conversationMediaTotal">
+    <div class="text-center">
+      <button class="btn btn-ghost btn-xs gap-1" @click="loadMoreMedia()" :disabled="loadingMoreMedia">
+        <span x-show="loadingMoreMedia" class="loading loading-spinner loading-xs"></span>
+        <span x-text="loadingMoreMedia ? 'Loading...' : 'Load more (' + (conversationMediaTotal - conversationMedia.length) + ')'"></span>
+      </button>
+    </div>
+  </template>
+
   <!-- Stats -->
   <div class="divider my-0 text-xs text-base-content/40">Statistics</div>
 

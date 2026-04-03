@@ -1171,6 +1171,71 @@ class ConversationStatsView(APIView):
 
 
 @extend_schema(tags=['Chat'])
+class ConversationMediaView(CacheControlMixin, APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="List media attachments in a conversation",
+        parameters=[
+            OpenApiParameter('type', str, enum=['images', 'files', 'all'], default='images',
+                             description='Filter by attachment type.'),
+            OpenApiParameter('offset', int, default=0),
+            OpenApiParameter('limit', int, default=24),
+        ],
+    )
+    def get(self, request, conversation_id):
+        membership = get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {'detail': 'Not a member of this conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        qs = MessageAttachment.objects.filter(
+            message__conversation_id=conversation_id,
+            message__deleted_at__isnull=True,
+        ).select_related('message__author').order_by('-created_at')
+
+        media_type = request.query_params.get('type', 'images')
+        if media_type == 'images':
+            qs = qs.filter(mime_type__startswith='image/')
+        elif media_type == 'files':
+            qs = qs.exclude(mime_type__startswith='image/')
+
+        total = qs.count()
+        offset = max(int(request.query_params.get('offset', 0)), 0)
+        limit = min(int(request.query_params.get('limit', 24)), 100)
+        items = qs[offset:offset + limit]
+
+        data = []
+        for att in items:
+            author = att.message.author
+            data.append({
+                'uuid': att.uuid,
+                'original_name': att.original_name,
+                'mime_type': att.mime_type,
+                'size': att.size,
+                'is_image': att.is_image,
+                'url': f'/api/v1/chat/attachments/{att.uuid}',
+                'created_at': att.created_at.isoformat(),
+                'message_uuid': att.message_id,
+                'author': {
+                    'id': author.id,
+                    'username': author.username,
+                    'first_name': author.first_name,
+                    'last_name': author.last_name,
+                },
+            })
+
+        return Response({
+            'results': data,
+            'total': total,
+            'offset': offset,
+            'limit': limit,
+        })
+
+
+@extend_schema(tags=['Chat'])
 class ConversationMessageSearchView(APIView):
     permission_classes = [IsAuthenticated]
 

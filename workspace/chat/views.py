@@ -346,6 +346,7 @@ class MessageListView(CacheControlMixin, APIView):
                 queryset=Reaction.objects.select_related('user'),
             ),
             'attachments',
+            'link_previews__preview',
         )
 
         if before:
@@ -489,6 +490,14 @@ class MessageListView(CacheControlMixin, APIView):
         # Trigger AI response if a bot is in the conversation
         _trigger_bot_response(conversation_id, message, request.user)
 
+        # Enqueue link preview fetching for URLs in the message body
+        if body:
+            from .link_preview_service import extract_urls
+            urls = extract_urls(body)
+            if urls:
+                from .tasks import fetch_link_previews
+                fetch_link_previews.delay(str(message.pk), urls)
+
         msg = (
             Message.objects.filter(pk=message.pk)
             .select_related('author', 'author__bot_profile', 'reply_to', 'reply_to__author')
@@ -498,6 +507,7 @@ class MessageListView(CacheControlMixin, APIView):
                     queryset=Reaction.objects.select_related('user'),
                 ),
                 'attachments',
+                'link_previews__preview',
             )
             .first()
         )
@@ -577,6 +587,7 @@ class MessageDetailView(APIView):
                     queryset=Reaction.objects.select_related('user'),
                 ),
                 'attachments',
+                'link_previews__preview',
             )
             .first()
         )

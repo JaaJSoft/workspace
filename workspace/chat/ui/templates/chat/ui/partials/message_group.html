@@ -52,11 +52,53 @@
               <div class="msg-body prose prose-sm max-w-none break-words">{{ msg.body_html|safe }}</div>
             {% endif %}
 
+            {# Link previews #}
+            {% with previews=msg.link_previews.all %}
+              {% if previews %}
+                <div class="flex flex-col gap-1.5 my-1.5">
+                  {% for lp in previews %}
+                    <a href="{{ lp.preview.url }}" target="_blank" rel="noopener noreferrer"
+                       class="block border rounded-lg overflow-hidden no-underline transition-colors
+                              {% if is_own %}border-info/30 hover:bg-info/10{% else %}border-base-300 hover:bg-base-200{% endif %}
+                              max-w-sm">
+                      {% if lp.preview.image_url %}
+                        <img src="{{ lp.preview.image_url }}"
+                             alt=""
+                             class="w-full h-32 object-cover"
+                             loading="lazy"
+                             onerror="this.remove()">
+                      {% endif %}
+                      <div class="px-2.5 py-2">
+                        <div class="flex items-center gap-1 text-[0.65rem] text-base-content/50">
+                          {% if lp.preview.favicon_url %}
+                            <img src="{{ lp.preview.favicon_url }}"
+                                 alt=""
+                                 class="w-3.5 h-3.5 rounded-sm"
+                                 loading="lazy"
+                                 onerror="this.remove()">
+                          {% endif %}
+                          {% if lp.preview.site_name %}
+                            <span>{{ lp.preview.site_name }}</span>
+                          {% endif %}
+                        </div>
+                        {% if lp.preview.title %}
+                          <div class="font-medium text-xs text-base-content mt-0.5 line-clamp-2">{{ lp.preview.title }}</div>
+                        {% endif %}
+                        {% if lp.preview.description %}
+                          <div class="text-[0.7rem] text-base-content/60 mt-0.5 line-clamp-2">{{ lp.preview.description }}</div>
+                        {% endif %}
+                      </div>
+                    </a>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% endwith %}
+
             {# Attachments #}
             {% with attachments=msg.attachments.all %}
               {% if attachments %}
                 {% if msg.body_html %}<div class="border-t {% if is_own %}border-info/30{% else %}border-base-300{% endif %} my-1.5"></div>{% endif %}
-                <div class="flex flex-col gap-1.5">
+                <div class="flex flex-col gap-1.5 mb-1.5">
                   {% for att in attachments %}
                     {% if att.is_image %}
                       <div class="relative group/att inline-block">

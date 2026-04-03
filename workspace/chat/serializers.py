@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from workspace.ai.models import ScheduledMessage
 
-from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedMessage, Reaction
+from .models import Conversation, ConversationMember, LinkPreview, Message, MessageAttachment, MessageLinkPreview, PinnedMessage, Reaction
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -71,10 +71,20 @@ class ReplyToSerializer(serializers.ModelSerializer):
         return body[:200] + '\u2026' if len(body) > 200 else body
 
 
+class LinkPreviewSerializer(serializers.Serializer):
+    url = serializers.URLField(source='preview.url')
+    title = serializers.CharField(source='preview.title')
+    description = serializers.CharField(source='preview.description')
+    image_url = serializers.URLField(source='preview.image_url', allow_blank=True)
+    favicon_url = serializers.URLField(source='preview.favicon_url', allow_blank=True)
+    site_name = serializers.CharField(source='preview.site_name')
+
+
 class MessageSerializer(serializers.ModelSerializer):
     author = MemberUserSerializer()
     reactions = ReactionSerializer(many=True, read_only=True)
     attachments = MessageAttachmentSerializer(many=True, read_only=True)
+    link_previews = LinkPreviewSerializer(many=True, read_only=True)
     conversation_id = serializers.UUIDField()
     reply_to = ReplyToSerializer(read_only=True, allow_null=True)
 
@@ -83,7 +93,7 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = [
             'uuid', 'conversation_id', 'author', 'body', 'body_html',
             'edited_at', 'created_at', 'deleted_at',
-            'reactions', 'attachments', 'reply_to',
+            'reactions', 'attachments', 'link_previews', 'reply_to',
         ]
 
 

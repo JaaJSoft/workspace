@@ -1044,6 +1044,12 @@ function chatApp(currentUserId) {
       }
     },
 
+    handleSSELinkPreview(detail) {
+      if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
+        this._refreshCurrentMessages();
+      }
+    },
+
     // ── Helpers ─────────────────────────────────────────────
     _updateConversationLastMessage(convId, msg) {
       const conv = this.conversations.find(c => c.uuid === convId);

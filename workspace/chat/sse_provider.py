@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from workspace.core.sse_registry import SSEProvider
 
-from .models import ConversationMember, Message, PinnedMessage, Reaction
+from .models import ConversationMember, Message, MessageLinkPreview, PinnedMessage, Reaction
 from .serializers import MessageSerializer
 from .services import get_unread_counts, user_conversation_ids
 
@@ -37,6 +37,7 @@ class ChatSSEProvider(SSEProvider):
         self._seen_delete_keys = set()
         self._seen_reaction_ids = set()
         self._seen_pin_ids = set()
+        self._seen_link_preview_ids = set()
         self._last_unread_push = 0
         self._last_read_check = timezone.now()
         self._last_typing_state = {}
@@ -99,6 +100,7 @@ class ChatSSEProvider(SSEProvider):
                     queryset=Reaction.objects.select_related('user'),
                 ),
                 'attachments',
+                'link_previews__preview',
             )
             .order_by('created_at')[:50]
         )
@@ -209,6 +211,32 @@ class ChatSSEProvider(SSEProvider):
                 },
             }
             events.append(('message_pinned', data, None))
+
+        # Link previews
+        new_link_previews = (
+            MessageLinkPreview.objects.filter(
+                message__conversation_id__in=self._member_conv_ids,
+                created_at__gt=self._since - timedelta(seconds=5),
+            )
+            .exclude(uuid__in=self._seen_link_preview_ids)
+            .values_list('message__conversation_id', flat=True)
+            .distinct()[:50]
+        )
+        lp_conv_ids = set(new_link_previews)
+        if lp_conv_ids:
+            recent_lp_ids = set(
+                MessageLinkPreview.objects.filter(
+                    message__conversation_id__in=lp_conv_ids,
+                    created_at__gt=self._since - timedelta(seconds=5),
+                ).values_list('uuid', flat=True)
+            )
+            self._seen_link_preview_ids |= recent_lp_ids
+            for conv_id in lp_conv_ids:
+                data = {
+                    'type': 'link_preview',
+                    'conversation_id': str(conv_id),
+                }
+                events.append(('link_preview', data, None))
 
         # Read receipts: detect members who read conversations since last poll
         recent_reads = (

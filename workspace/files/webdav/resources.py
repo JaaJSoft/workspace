@@ -3,7 +3,7 @@
 import io
 from tempfile import SpooledTemporaryFile
 
-from django.core.files.base import ContentFile
+from django.core.files.base import File as DjangoFile
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.files.models import File
@@ -30,11 +30,17 @@ class _WriteBuffer:
     def close(self):
         pass  # deferred
 
-    def read_all_and_close(self):
+    def as_django_file(self, name):
+        """Return a Django ``File`` wrapping the buffer for streaming to storage.
+
+        The caller is responsible for calling ``real_close()`` afterwards.
+        """
+        self._buf.seek(0, 2)
+        size = self._buf.tell()
         self._buf.seek(0)
-        data = self._buf.read()
-        self._buf.close()
-        return data
+        f = DjangoFile(self._buf, name=name)
+        f.size = size
+        return f
 
     def real_close(self):
         self._buf.close()
@@ -220,9 +226,11 @@ class FileResource(DAVNonCollection):
                 self._file.delete(hard=True)
             return
 
-        data = buf.read_all_and_close()
-        content = ContentFile(data, name=self._file.name)
-        FileService.update_content(self._file, content)
+        try:
+            content = buf.as_django_file(self._file.name)
+            FileService.update_content(self._file, content)
+        finally:
+            buf.real_close()
 
     def delete(self):
         if getattr(self, "_moved", False):
@@ -271,17 +279,17 @@ def _copy_as(file_obj, dest_parent, owner, new_name):
 
     content = None
     if file_obj.content:
-        try:
-            file_obj.content.open("rb")
-            data = file_obj.content.read()
-        finally:
-            file_obj.content.close()
-        content = ContentFile(data, name=new_name)
+        file_obj.content.open("rb")
+        content = DjangoFile(file_obj.content, name=new_name)
 
-    return FileService.create_file(
-        owner, new_name, parent=dest_parent,
-        content=content, mime_type=file_obj.mime_type,
-    )
+    try:
+        return FileService.create_file(
+            owner, new_name, parent=dest_parent,
+            content=content, mime_type=file_obj.mime_type,
+        )
+    finally:
+        if content is not None:
+            file_obj.content.close()
 
 
 def _resolve_parent(user, path_parts):

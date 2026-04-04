@@ -536,21 +536,25 @@ class WriteBufferTests(TestCase):
         buf.write(b"hello ")
         buf.write(b"world")
         buf.close()  # no-op
-        data = buf.read_all_and_close()
-        self.assertEqual(data, b"hello world")
+        f = buf.as_django_file("test.txt")
+        self.assertEqual(f.read(), b"hello world")
+        self.assertEqual(f.size, 11)
+        buf.real_close()
 
     def test_writelines(self):
         buf = _WriteBuffer()
         buf.writelines([b"a", b"b", b"c"])
-        data = buf.read_all_and_close()
-        self.assertEqual(data, b"abc")
+        f = buf.as_django_file("test.txt")
+        self.assertEqual(f.read(), b"abc")
+        self.assertEqual(f.size, 3)
+        buf.real_close()
 
     def test_real_close(self):
         buf = _WriteBuffer()
         buf.write(b"data")
         buf.real_close()
         with self.assertRaises(ValueError):
-            buf.read_all_and_close()
+            buf.as_django_file("test.txt")
 
 
 # ── Integration (full WSGI stack) ─────────────────────────────────────

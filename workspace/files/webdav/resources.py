@@ -3,6 +3,7 @@
 import io
 from tempfile import SpooledTemporaryFile
 
+from django.conf import settings as django_settings
 from django.core.files.base import File as DjangoFile
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
@@ -96,6 +97,12 @@ class RootCollection(DAVCollection):
     def create_collection(self, name):
         FileService.create_folder(self._user, name, parent=None)
         return True
+
+    def get_used_bytes(self):
+        return FileService.storage_used(self._user)
+
+    def get_available_bytes(self):
+        return max(0, django_settings.STORAGE_QUOTA_BYTES - self.get_used_bytes())
 
 
 class FolderResource(DAVCollection):

@@ -1198,9 +1198,9 @@ class ConversationMediaView(CacheControlMixin, APIView):
 
         media_type = request.query_params.get('type', 'images')
         if media_type == 'images':
-            qs = qs.filter(mime_type__startswith='image/')
+            qs = qs.filter(Q(mime_type__startswith='image/') | Q(mime_type__startswith='video/'))
         elif media_type == 'files':
-            qs = qs.exclude(mime_type__startswith='image/')
+            qs = qs.exclude(mime_type__startswith='image/').exclude(mime_type__startswith='video/')
 
         total = qs.count()
         offset = max(int(request.query_params.get('offset', 0)), 0)
@@ -1216,6 +1216,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
                 'mime_type': att.mime_type,
                 'size': att.size,
                 'is_image': att.is_image,
+                'is_video': att.is_video,
                 'url': f'/api/v1/chat/attachments/{att.uuid}',
                 'created_at': att.created_at.isoformat(),
                 'message_uuid': att.message_id,

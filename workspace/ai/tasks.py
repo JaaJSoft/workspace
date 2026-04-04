@@ -1,7 +1,10 @@
 import base64
 import json
 import logging
+import os
 import re
+import subprocess
+import tempfile
 
 from celery import shared_task
 from django.conf import settings
@@ -13,6 +16,84 @@ _THINK_RE = re.compile(r'<think>[\s\S]*?</think>\s*', re.IGNORECASE)
 _RAW_TOOL_CALL_RE = re.compile(r'</?tool_call>', re.IGNORECASE)
 _TRUNCATE_BODY_LIMIT = 500  # max chars for old messages outside the recent window
 _SUMMARY_BUFFER = 10  # re-summarise when unsummarised old messages exceed window by this many
+_VIDEO_MAX_FRAMES = 30  # cap frames sent to the model to limit context size
+
+
+def _get_video_duration(video_path):
+    """Return video duration in seconds using ffprobe, or None on failure."""
+    try:
+        result = subprocess.run(
+            [
+                'ffprobe', '-v', 'error',
+                '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                video_path,
+            ],
+            capture_output=True, text=True, timeout=15,
+        )
+        return float(result.stdout.strip())
+    except Exception:
+        return None
+
+
+def _extract_video_frames(att):
+    """Extract evenly-spaced frames from a video attachment (max _VIDEO_MAX_FRAMES).
+
+    Returns (frame_parts, description) where frame_parts is a list of image_url
+    content parts and description is a string summarising the video for the model.
+    """
+    parts = []
+    description = None
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            video_path = os.path.join(tmpdir, 'input.vid')
+            with open(video_path, 'wb') as f:
+                for chunk in att.file.chunks():
+                    f.write(chunk)
+
+            duration = _get_video_duration(video_path)
+            if duration and duration > _VIDEO_MAX_FRAMES:
+                fps = _VIDEO_MAX_FRAMES / duration
+            else:
+                fps = 1
+
+            out_pattern = os.path.join(tmpdir, 'frame_%04d.jpg')
+            subprocess.run(
+                [
+                    'ffmpeg', '-i', video_path,
+                    '-vf', f'fps={fps}',
+                    '-q:v', '8',
+                    '-frames:v', str(_VIDEO_MAX_FRAMES),
+                    out_pattern,
+                ],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=120,
+            )
+            frame_files = sorted(
+                f for f in os.listdir(tmpdir) if f.startswith('frame_') and f.endswith('.jpg')
+            )
+            if frame_files:
+                dur_str = f'{duration:.0f}s' if duration else 'unknown duration'
+                interval = duration / len(frame_files) if duration else 1
+                description = (
+                    f'The user attached a video: "{att.original_name}" '
+                    f'(duration: {dur_str}). Since you cannot watch videos directly, '
+                    f'it has been converted into {len(frame_files)} frames '
+                    f'(1 frame every {interval:.1f}s) shown in chronological order '
+                    f'in the next message. Analyze these frames to understand '
+                    f'what happens in the video.'
+                )
+            for fname in frame_files:
+                fpath = os.path.join(tmpdir, fname)
+                with open(fpath, 'rb') as fh:
+                    b64 = base64.b64encode(fh.read()).decode()
+                parts.append({
+                    'type': 'image_url',
+                    'image_url': {'url': f'data:image/jpeg;base64,{b64}'},
+                })
+    except Exception:
+        logger.warning('Could not extract frames from video %s', att.uuid)
+    return parts, description
 
 
 def _serialize_response(result):
@@ -465,18 +546,18 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
     else:
         msgs_to_use = all_msgs
 
-    # Find the most recent user message that has image attachments
+    # Find the most recent user message that has visual attachments (image/video)
     # Cache attachments per message to avoid double .all() calls (prefetch is in place)
     _att_cache = {}
-    last_image_msg_uuid = None
+    last_visual_msg_uuid = None
     if bot_profile.supports_vision:
         for msg in msgs_to_use:  # newest first
             is_bot = hasattr(msg.author, 'bot_profile')
             if not is_bot:
                 atts = list(msg.attachments.all())
                 _att_cache[msg.uuid] = atts
-                if any(att.is_image for att in atts):
-                    last_image_msg_uuid = str(msg.uuid)
+                if any(att.is_image or att.is_video for att in atts):
+                    last_visual_msg_uuid = str(msg.uuid)
                     break
 
     # Number of old messages (outside recent window) not covered by a summary
@@ -520,15 +601,16 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             history.append({'role': 'assistant', 'content': body})
             continue
 
-        # Include images only from the most recent message that has images
-        image_parts = []
-        if not is_bot and str(msg.uuid) == last_image_msg_uuid:
+        # Include visual media only from the most recent message that has them
+        media_parts = []
+        video_descriptions = []
+        if not is_bot and str(msg.uuid) == last_visual_msg_uuid:
             for att in _att_cache.get(msg.uuid, msg.attachments.all()):
                 if att.is_image:
                     try:
                         data = att.file.read()
                         b64 = base64.b64encode(data).decode()
-                        image_parts.append({
+                        media_parts.append({
                             'type': 'image_url',
                             'image_url': {
                                 'url': f'data:{att.mime_type};base64,{b64}',
@@ -536,12 +618,21 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
                         })
                     except Exception:
                         logger.warning('Could not read attachment %s', att.uuid)
+                elif att.is_video:
+                    frames, desc = _extract_video_frames(att)
+                    if desc:
+                        video_descriptions.append(desc)
+                    media_parts.extend(frames)
 
-        if image_parts:
+        # Inject a system message before the user message to explain video context
+        if video_descriptions:
+            history.append({'role': 'system', 'content': '\n'.join(video_descriptions)})
+
+        if media_parts:
             content = []
             if body:
                 content.append({'type': 'text', 'text': body})
-            content.extend(image_parts)
+            content.extend(media_parts)
             history.append({'role': role, 'content': content})
         else:
             history.append({'role': role, 'content': body})

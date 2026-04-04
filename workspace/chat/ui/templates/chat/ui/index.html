@@ -309,7 +309,15 @@ x-init="init()"
                       <img :src="file._preview" class="w-full h-full object-cover" />
                     </div>
                   </template>
-                  <template x-if="!isImageFile(file)">
+                  <template x-if="isVideoFile(file)">
+                    <div class="w-24 h-16 rounded-lg overflow-hidden border border-base-300 bg-base-200 relative">
+                      <video :src="file._preview" class="w-full h-full object-cover" preload="metadata"></video>
+                      <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <i data-lucide="play" class="w-5 h-5 text-white drop-shadow-lg"></i>
+                      </div>
+                    </div>
+                  </template>
+                  <template x-if="!isImageFile(file) && !isVideoFile(file)">
                     <div class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-base-300 bg-base-200 text-xs max-w-[10rem]">
                       <i data-lucide="file" class="w-3.5 h-3.5 flex-shrink-0"></i>
                       <span class="truncate" x-text="file.name"></span>

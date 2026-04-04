@@ -48,10 +48,11 @@ class PinnedMessageSerializer(serializers.ModelSerializer):
 class MessageAttachmentSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
     is_image = serializers.BooleanField(read_only=True)
+    is_video = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = MessageAttachment
-        fields = ['uuid', 'original_name', 'mime_type', 'size', 'is_image', 'url', 'created_at']
+        fields = ['uuid', 'original_name', 'mime_type', 'size', 'is_image', 'is_video', 'url', 'created_at']
 
     def get_url(self, obj):
         return f'/api/v1/chat/attachments/{obj.uuid}'

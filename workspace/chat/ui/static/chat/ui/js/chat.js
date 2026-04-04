@@ -632,25 +632,42 @@ function chatApp(currentUserId) {
         const items = files.map(f => {
           const name = this._escapeHtml(f.name);
           if (f.type && f.type.startsWith('image/') && f._preview) {
-            return `<img src="${f._preview}" alt="${name}" class="max-h-64 max-w-full rounded-lg object-contain opacity-60" />`;
+            return `<img src="${f._preview}" alt="${name}" class="max-h-64 max-w-full rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity opacity-60" />`;
           }
-          return `<div class="flex items-center gap-2 p-2 rounded-lg bg-info/15">
-            <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
-            <span class="truncate text-xs font-medium">${name}</span>
+          if (f.type && f.type.startsWith('video/') && f._preview) {
+            return `<div class="relative max-h-64 max-w-full rounded-lg overflow-hidden opacity-60">
+              <video src="${f._preview}" class="max-h-64 max-w-full rounded-lg object-contain" preload="metadata"></video>
+              <div class="absolute inset-0 flex items-center justify-center bg-black/20">
+                <div class="w-12 h-12 rounded-full bg-base-100/80 flex items-center justify-center">
+                  <i data-lucide="play" class="w-6 h-6"></i>
+                </div>
+              </div>
+            </div>`;
+          }
+          const size = f.size ? this.formatFileSize(f.size) : '';
+          return `<div class="flex items-center gap-0.5 min-w-0">
+            <div class="flex items-center gap-2 p-2 rounded-lg bg-info/15 min-w-0 flex-1">
+              <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
+              <span class="truncate text-xs font-medium">${name}</span>
+              ${size ? `<span class="text-[0.65rem] opacity-60 flex-shrink-0">${size}</span>` : ''}
+            </div>
           </div>`;
         }).join('');
         const separator = bodyHtml ? '<div class="border-t border-info/30 my-1.5"></div>' : '';
-        filesHtml = `${separator}<div class="flex flex-col gap-1.5">${items}</div>`;
+        const mtClass = bodyHtml ? '' : ' mt-1.5';
+        filesHtml = `${separator}<div class="flex flex-col gap-1.5 mb-1.5${mtClass}">${items}</div>`;
       }
 
       const html = `
         <div class="msg-group msg-group-end flex gap-2 mb-3 flex-row-reverse" id="${tempId}">
           <div class="flex-shrink-0 w-8 mt-auto">${avatarHtml}</div>
           <div class="flex flex-col items-end gap-0.5 min-w-0 max-w-[75%]">
-            <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm bg-info/15 text-base-content opacity-70">
-              ${replyHtml}
-              ${bodyHtml ? `<div class="msg-body break-words">${bodyHtml}</div>` : ''}
-              ${filesHtml}
+            <div class="relative max-w-full">
+              <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm bg-info/15 text-base-content opacity-70">
+                ${replyHtml}
+                ${bodyHtml ? `<div class="msg-body prose prose-sm max-w-none break-words">${bodyHtml}</div>` : ''}
+                ${filesHtml}
+              </div>
             </div>
             <div class="flex items-center gap-1 px-1">
               <span class="loading loading-dots loading-xs text-base-content/40"></span>
@@ -2328,8 +2345,8 @@ function chatApp(currentUserId) {
       const existing = new Set(this.pendingFiles.map(f => f.name + f.size));
       for (const f of fileList) {
         if (existing.has(f.name + f.size)) continue;
-        // Generate preview URL for images
-        if (f.type.startsWith('image/')) {
+        // Generate preview URL for images and videos
+        if (f.type.startsWith('image/') || f.type.startsWith('video/')) {
           f._preview = URL.createObjectURL(f);
         }
         this.pendingFiles.push(f);
@@ -2355,6 +2372,10 @@ function chatApp(currentUserId) {
 
     isImageFile(file) {
       return file.type?.startsWith('image/');
+    },
+
+    isVideoFile(file) {
+      return file.type?.startsWith('video/');
     },
 
     handleDragEnter(e) {

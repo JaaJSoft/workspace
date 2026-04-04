@@ -207,6 +207,10 @@ class MessageAttachment(models.Model):
     def is_image(self):
         return self.mime_type.startswith('image/')
 
+    @property
+    def is_video(self):
+        return self.mime_type.startswith('video/')
+
     def __str__(self):
         return f'{self.original_name} ({self.message_id})'
 

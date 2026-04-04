@@ -347,7 +347,7 @@
           <template x-if="form.location">
             <div class="flex items-center gap-2.5 text-sm">
               <i data-lucide="map-pin" class="w-4 h-4 opacity-50 flex-shrink-0"></i>
-              <span x-text="form.location"></span>
+              <span class="break-words min-w-0" x-text="form.location"></span>
             </div>
           </template>
 
@@ -355,7 +355,7 @@
           <template x-if="form.description">
             <div class="flex items-start gap-2.5 text-sm">
               <i data-lucide="align-left" class="w-4 h-4 opacity-50 mt-0.5 flex-shrink-0"></i>
-              <p class="text-base-content/70 whitespace-pre-wrap" x-text="form.description"></p>
+              <p class="text-base-content/70 whitespace-pre-wrap break-words min-w-0" x-text="form.description"></p>
             </div>
           </template>
 

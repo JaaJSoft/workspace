@@ -823,33 +823,65 @@ function mailApp() {
       }
     },
 
+    // ----- Shared optimistic helpers -----
+
+    /**
+     * Adjust unread count on the relevant folder and labels for a message.
+     * @param {object} msg - message object (needs account_id, folder_id, labels)
+     * @param {number} delta - +1 (became unread) or -1 (became read / removed)
+     */
+    _adjustUnreadCount(msg, delta) {
+      const accountId = msg.account_id || this.selectedFolder?.account_id || this.selectedLabel?.account_id;
+      // Folder unread count
+      if (this.selectedFolder) {
+        this.selectedFolder.unread_count = Math.max(0, (this.selectedFolder.unread_count || 0) + delta);
+      } else if (this.unifiedInbox) {
+        const accFolders = this.folders[accountId] || [];
+        const folder = accFolders.find(f => f.uuid === msg.folder_id);
+        if (folder) folder.unread_count = Math.max(0, (folder.unread_count || 0) + delta);
+      }
+      // Label unread counts
+      const msgLabels = msg.labels || [];
+      const accountLabels = accountId ? (this.labels[accountId] || []) : [];
+      for (const ml of msgLabels) {
+        const lbl = accountLabels.find(l => l.uuid === ml.uuid);
+        if (lbl) lbl.unread_count = Math.max(0, (lbl.unread_count || 0) + delta);
+      }
+    },
+
+    /**
+     * Optimistically remove messages from the current list.
+     * Adjusts unread counts, clears selection/detail, updates totalMessages.
+     * @param {string[]} msgUuids - UUIDs of messages to remove
+     */
+    _optimisticRemoveMessages(msgUuids) {
+      const removed = this.messages.filter(m => msgUuids.includes(m.uuid));
+      this.messages = this.messages.filter(m => !msgUuids.includes(m.uuid));
+      this.selectedMessages = this.selectedMessages.filter(id => !msgUuids.includes(id));
+      this.totalMessages = Math.max(0, this.totalMessages - removed.length);
+      // Adjust unread counts for removed unread messages
+      for (const msg of removed) {
+        if (!msg.is_read) this._adjustUnreadCount(msg, -1);
+      }
+      // Clear detail if the viewed message was removed
+      if (this.messageDetail && msgUuids.includes(this.messageDetail.uuid)) {
+        this.selectedMessage = null;
+        this.messageDetail = null;
+        this._updateUrl(null);
+      }
+    },
+
     // ----- Flags -----
     async toggleRead(msg, forceRead) {
       this.actionInProgress = true;
       const newVal = forceRead !== undefined ? forceRead : !msg.is_read;
-      const wasRead = msg.is_read;
-      // Optimistic UI update — apply locally before awaiting the server
-      msg.is_read = newVal;
-      const listMsg = this.messages.find(m => m.uuid === msg.uuid);
-      if (listMsg) listMsg.is_read = newVal;
-      if (wasRead !== newVal) {
-        const delta = newVal ? -1 : 1;
-        if (this.selectedFolder) {
-          this.selectedFolder.unread_count = Math.max(0, (this.selectedFolder.unread_count || 0) + delta);
-        } else if (this.unifiedInbox) {
-          // In unified inbox mode, find the actual folder object and update its count
-          const accFolders = this.folders[msg.account_id] || [];
-          const folder = accFolders.find(f => f.uuid === msg.folder_id);
-          if (folder) folder.unread_count = Math.max(0, (folder.unread_count || 0) + delta);
-        }
-        // Update label unread counts for labels on this message
-        const msgLabels = listMsg?.labels || msg.labels || [];
-        const accountId = msg.account_id || this.selectedFolder?.account_id || this.selectedLabel?.account_id;
-        const accountLabels = accountId ? (this.labels[accountId] || []) : [];
-        for (const ml of msgLabels) {
-          const lbl = accountLabels.find(l => l.uuid === ml.uuid);
-          if (lbl) lbl.unread_count = Math.max(0, (lbl.unread_count || 0) + delta);
-        }
+      // Optimistic UI update
+      if (msg.is_read !== newVal) {
+        const listMsg = this.messages.find(m => m.uuid === msg.uuid);
+        const ref = listMsg || msg;
+        ref.is_read = newVal;
+        if (listMsg && msg !== listMsg) msg.is_read = newVal;
+        this._adjustUnreadCount(ref, newVal ? -1 : 1);
       }
       await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
         method: 'PATCH',
@@ -860,16 +892,16 @@ function mailApp() {
 
     async toggleStar(msg) {
       this.actionInProgress = true;
+      // Optimistic UI update
       const newVal = !msg.is_starred;
+      msg.is_starred = newVal;
+      const listMsg = this.messages.find(m => m.uuid === msg.uuid);
+      if (listMsg && listMsg !== msg) listMsg.is_starred = newVal;
       await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
         method: 'PATCH',
         body: { is_starred: newVal },
       });
-      msg.is_starred = newVal;
-      const listMsg = this.messages.find(m => m.uuid === msg.uuid);
-      if (listMsg) listMsg.is_starred = newVal;
       this.actionInProgress = false;
-
     },
 
     async deleteMessage(msg) {
@@ -884,17 +916,9 @@ function mailApp() {
       if (!ok) return;
 
       this.actionInProgress = true;
+      // Optimistic UI update
+      this._optimisticRemoveMessages([msg.uuid]);
       await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, { method: 'DELETE' });
-      this.messages = this.messages.filter(m => m.uuid !== msg.uuid);
-      if (this.selectedMessage?.uuid === msg.uuid) {
-        this.selectedMessage = null;
-        this.messageDetail = null;
-        this._updateUrl(null);
-      }
-      if (this.selectedFolder) {
-        this.selectedFolder.message_count--;
-        if (!msg.is_read) this.selectedFolder.unread_count--;
-      }
       this.actionInProgress = false;
     },
 
@@ -908,7 +932,34 @@ function mailApp() {
     async batchAction(action, targetFolderId) {
       if (this.selectedMessages.length === 0) return;
       this.batchInProgress = true;
-      const body = { message_ids: this.selectedMessages, action };
+      const msgUuids = [...this.selectedMessages];
+      const affectedMsgs = this.messages.filter(m => msgUuids.includes(m.uuid));
+
+      // Optimistic UI update
+      if (action === 'delete' || action === 'move') {
+        this._optimisticRemoveMessages(msgUuids);
+      } else if (action === 'mark_read' || action === 'mark_unread') {
+        const markRead = action === 'mark_read';
+        for (const msg of affectedMsgs) {
+          if (msg.is_read !== markRead) {
+            msg.is_read = markRead;
+            this._adjustUnreadCount(msg, markRead ? -1 : 1);
+          }
+        }
+        if (this.messageDetail && msgUuids.includes(this.messageDetail.uuid)) {
+          this.messageDetail.is_read = markRead;
+        }
+        this.selectedMessages = [];
+      } else if (action === 'star' || action === 'unstar') {
+        const starred = action === 'star';
+        for (const msg of affectedMsgs) msg.is_starred = starred;
+        if (this.messageDetail && msgUuids.includes(this.messageDetail.uuid)) {
+          this.messageDetail.is_starred = starred;
+        }
+        this.selectedMessages = [];
+      }
+
+      const body = { message_ids: msgUuids, action };
       if (action === 'move' && targetFolderId) {
         body.target_folder_id = targetFolderId;
       }
@@ -916,19 +967,6 @@ function mailApp() {
         method: 'POST',
         body,
       });
-      this.selectedMessages = [];
-      await this.loadMessages();
-      if (this.selectedFolder) {
-        await this.loadFolders(this.selectedFolder.account_id);
-        const flds = this.folders[this.selectedFolder.account_id] || [];
-        const updated = flds.find(f => f.uuid === this.selectedFolder.uuid);
-        if (updated) this.selectedFolder = updated;
-      }
-      if (this.messageDetail && (action === 'delete' || action === 'move')) {
-        this.selectedMessage = null;
-        this.messageDetail = null;
-        this._updateUrl(null);
-      }
       this.batchInProgress = false;
     },
 
@@ -1800,19 +1838,32 @@ function mailApp() {
       const ids = this._getMsgCtxTargetIds();
       if (!ids.length) return;
       const hasLabel = this._msgCtxHasLabel(label.uuid);
-      const method = hasLabel ? 'DELETE' : 'POST';
-      const csrfToken = getCSRFToken();
+      const adding = !hasLabel;
+
+      // Optimistic UI update
+      for (const msgId of ids) {
+        const msg = this.messages.find(m => m.uuid === msgId);
+        if (!msg) continue;
+        if (!msg.labels) msg.labels = [];
+        if (adding) {
+          if (!msg.labels.some(l => l.uuid === label.uuid)) {
+            msg.labels.push({ uuid: label.uuid, name: label.name, color: label.color, icon: label.icon });
+            if (!msg.is_read) label.unread_count = (label.unread_count || 0) + 1;
+          }
+        } else {
+          msg.labels = msg.labels.filter(l => l.uuid !== label.uuid);
+          if (!msg.is_read) label.unread_count = Math.max(0, (label.unread_count || 0) - 1);
+        }
+      }
+
+      const method = adding ? 'POST' : 'DELETE';
       try {
         await Promise.all(ids.map(msgId =>
-          fetch(`/api/v1/mail/messages/${msgId}/labels`, {
+          this._fetch(`/api/v1/mail/messages/${msgId}/labels`, {
             method,
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ label_ids: [label.uuid] }),
+            body: { label_ids: [label.uuid] },
           })
         ));
-        const accountId = this.selectedFolder?.account_id || this.selectedLabel?.account_id;
-        await Promise.all([this.loadMessages(), accountId ? this.fetchLabels(accountId) : null]);
       } catch (e) {
         console.warn('Toggle label failed:', e);
       }
@@ -1841,6 +1892,8 @@ function mailApp() {
     async moveMessages(msgUuids, targetFolder) {
       if (!msgUuids || !msgUuids.length || !targetFolder) return;
       this.batchInProgress = true;
+      // Optimistic UI update
+      this._optimisticRemoveMessages(msgUuids);
       await this._fetch('/api/v1/mail/messages/batch-action', {
         method: 'POST',
         body: {
@@ -1849,24 +1902,7 @@ function mailApp() {
           target_folder_id: targetFolder.uuid,
         },
       });
-      // Remove moved messages from the current list
-      this.messages = this.messages.filter(m => !msgUuids.includes(m.uuid));
-      this.selectedMessages = this.selectedMessages.filter(id => !msgUuids.includes(id));
-      // Clear detail if the viewed message was moved
-      if (this.messageDetail && msgUuids.includes(this.messageDetail.uuid)) {
-        this.selectedMessage = null;
-        this.messageDetail = null;
-        this._updateUrl(null);
-      }
-      // Refresh folder counts
-      if (this.selectedFolder) {
-        await this.loadFolders(this.selectedFolder.account_id);
-        const flds = this.folders[this.selectedFolder.account_id] || [];
-        const updated = flds.find(f => f.uuid === this.selectedFolder.uuid);
-        if (updated) this.selectedFolder = updated;
-      }
       this.batchInProgress = false;
-
     },
 
     // ----- Drag & drop -----
@@ -1945,18 +1981,22 @@ function mailApp() {
         const raw = event.dataTransfer.getData('text/plain');
         const ids = JSON.parse(raw);
         if (!Array.isArray(ids) || !ids.length) return;
-        const csrfToken = getCSRFToken();
+        // Optimistic UI update
+        for (const msgId of ids) {
+          const msg = this.messages.find(m => m.uuid === msgId);
+          if (!msg) continue;
+          if (!msg.labels) msg.labels = [];
+          if (!msg.labels.some(l => l.uuid === label.uuid)) {
+            msg.labels.push({ uuid: label.uuid, name: label.name, color: label.color, icon: label.icon });
+            if (!msg.is_read) label.unread_count = (label.unread_count || 0) + 1;
+          }
+        }
         await Promise.all(ids.map(msgId =>
-          fetch(`/api/v1/mail/messages/${msgId}/labels`, {
+          this._fetch(`/api/v1/mail/messages/${msgId}/labels`, {
             method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ label_ids: [label.uuid] }),
+            body: { label_ids: [label.uuid] },
           })
         ));
-        // Refresh message list and label counts
-        const accountId = this.selectedFolder?.account_id || this.selectedLabel?.account_id;
-        await Promise.all([this.loadMessages(), accountId ? this.fetchLabels(accountId) : null]);
       } catch (e) {
         console.warn('Label drop failed:', e);
       }

@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.16.0
+
+### Users
+
+- Profile customization with bio, role, and banner palette
+- Banner palette service with validation and gradient resolution
+
+### AI & Chat
+
+- Link preview support for messages with URLs
+- Shared media gallery in conversation info panel
+- Video attachment support with frame extraction for AI analysis
+- Filter input in AI chatbot picker dialog
+- Temporal context added to LLM conversation history
+
+### Calendar
+
+- Improved agenda view
+
+### Notes
+
+- Move and open in files actions in note manager
+
+### WebDAV
+
+- Storage quota tracking with used and available bytes
+
+### Performance & Caching
+
+- View caching framework with invalidation and tests
+- `CacheControlMixin` for API responses
+- Cache control headers for file and chat responses
+- Missing database indexes added to optimize queries
+- Optimized member dict computation in calendar recurrence handling
+
+### Refactoring
+
+- Centralized access control helpers: `FileService`, `user_account_ids`, `get_active_membership`, `visible_calendar_ids`
+- Unified activity feed templates with search functionality
+- Simplified conversation and message filtering logic
+- Optimized mail UI updates with shared optimistic helpers
+- Simplified unread indicator styling in chat
+
+### Fixes
+
+- Folder content table layout and text handling in list view
+- WebDAV methods routing on root path
+- Calendar text wrapping for location and description in event details
+- Excluded explicitly declined events from upcoming calendar view
+- Activity feed: excluded actor's events no longer block others
+
 ## 0.15.0
 
 ### Calendar

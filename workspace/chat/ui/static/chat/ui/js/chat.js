@@ -66,6 +66,7 @@ function chatApp(currentUserId) {
     // Bot / AI
     showBotPicker: false,
     availableBots: [],
+    botFilter: '',
     botTyping: false,
 
     // Typing indicators

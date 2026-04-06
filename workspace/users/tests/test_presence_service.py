@@ -1,5 +1,4 @@
-from datetime import datetime, timedelta
-from unittest.mock import patch
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache

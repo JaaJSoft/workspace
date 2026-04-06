@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
-from workspace.users.models import UserPresence, UserSetting
+from workspace.users.models import UserSetting
 
 User = get_user_model()
 

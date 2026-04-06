@@ -16,6 +16,20 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - ai
+          - calendar
+          - chat
+          - common
+          - files
+          - mail
+          - notes
+          - notifications
+          - users
+    name: Tests (${{ matrix.module }})
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,4 +49,4 @@ jobs:
         env:
           PYTHONWARNINGS: default
         run: |
-          uv run python manage.py test workspace -v 2
+          uv run python manage.py test workspace.${{ matrix.module }} -v 2

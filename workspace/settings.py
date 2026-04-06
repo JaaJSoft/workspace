@@ -435,6 +435,13 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
         "PRAGMA cache_size=-64000;"
     )
 
+# Test optimizations
+if TESTING:
+    PASSWORD_HASHERS = [
+        'django.contrib.auth.hashers.MD5PasswordHasher',
+    ]
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.InMemoryStorage'
+
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 

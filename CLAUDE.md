@@ -5,6 +5,10 @@
 Never commit automatically. Only commit when I explicitly ask for it.
 Do not use git worktrees. Work directly on the current branch.
 
+## CI
+
+Tests run in parallel in CI with one job per module (see `.github/workflows/tests.yml`). When creating a new Django app module, add it to the `matrix.module` list in the workflow file.
+
 ## API
 
 all api must be prefixed with `/api/` and have no trailing slashes

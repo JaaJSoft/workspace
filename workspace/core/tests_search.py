@@ -40,7 +40,7 @@ class ChatSearchTests(TestCase):
     def test_search_dm_by_member_name(self):
         from workspace.chat.search import search_conversations
         results = search_conversations('Bob', self.alice, 10)
-        self.assertTrue(len(results) >= 1)
+        self.assertGreaterEqual(len(results), 1)
 
     def test_excludes_non_member_conversations(self):
         from workspace.chat.models import Conversation, ConversationMember
@@ -82,7 +82,7 @@ class FilesSearchTests(TestCase):
     def test_search_finds_folders(self):
         from workspace.files.search import search_files
         results = search_files('Documents', self.alice, 10)
-        self.assertTrue(len(results) >= 1)
+        self.assertGreaterEqual(len(results), 1)
 
     def test_excludes_other_users_files(self):
         from workspace.files.models import File
@@ -224,7 +224,7 @@ class MailSearchTests(TestCase):
     def test_search_by_from_address(self):
         from workspace.mail.search import search_mail
         results = search_mail('billing', self.alice, 10)
-        self.assertTrue(len(results) >= 1)
+        self.assertGreaterEqual(len(results), 1)
 
     def test_excludes_other_users_mail(self):
         from workspace.mail.search import search_mail

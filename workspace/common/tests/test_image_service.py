@@ -1,5 +1,4 @@
 from io import BytesIO
-from unittest.mock import patch
 
 from django.core.files.storage import default_storage
 from django.test import TestCase

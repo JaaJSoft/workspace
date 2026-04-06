@@ -24,6 +24,8 @@ jobs:
           - calendar
           - chat
           - common
+          - core
+          - dashboard
           - files
           - mail
           - notes

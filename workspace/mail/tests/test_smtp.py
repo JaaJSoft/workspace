@@ -136,7 +136,7 @@ class ConnectSmtpTests(TestCase):
         acct.username = 'alice'
         acct.get_password.return_value = 'secret'
 
-        server = connect_smtp(acct)
+        connect_smtp(acct)
 
         mock_smtp_ssl_cls.assert_called_with('smtp.example.com', 465)
         mock_server.login.assert_called_with('alice', 'secret')

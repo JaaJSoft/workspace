@@ -1,7 +1,7 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, RequestFactory
+from django.test import TestCase
 
 from workspace.dashboard.views import (
     _build_dashboard_context,

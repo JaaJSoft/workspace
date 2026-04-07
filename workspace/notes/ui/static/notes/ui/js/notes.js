@@ -283,17 +283,108 @@ window.notesApp = function notesApp(config) {
                 }
             }.bind(this));
 
-            // Keyboard shortcut: ? to open help dialog
-            window.addEventListener('keydown', function(e) {
-                if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-                    var tag = document.activeElement ? document.activeElement.tagName : '';
-                    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
-                        (document.activeElement && document.activeElement.isContentEditable)) return;
+            // Keyboard shortcuts
+            window.addEventListener('keydown', this._handleShortcut.bind(this));
+        },
+
+        _handleShortcut(e) {
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            // Ignore when typing in inputs, textareas, contenteditables
+            var ae = document.activeElement;
+            var tag = ae ? ae.tagName : '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+                (ae && ae.isContentEditable)) {
+                // Allow Escape to blur the active editable element
+                if (e.key === 'Escape' && ae && typeof ae.blur === 'function') {
+                    ae.blur();
+                }
+                return;
+            }
+            // Skip if any modal dialog is open (other than letting Esc close it natively)
+            var openDialog = document.querySelector('dialog[open]');
+            if (openDialog && e.key !== '?') return;
+
+            // Handle "go to" two-key combos first (g then x)
+            if (this._gPending) {
+                var key = e.key.toLowerCase();
+                this._gPending = false;
+                if (key === 'a') { e.preventDefault(); this.setView('all', null, 'All notes'); return; }
+                if (key === 'f') { e.preventDefault(); this.setView('favorites', null, 'Favorites'); return; }
+                if (key === 'r') { e.preventDefault(); this.setView('recent', null, 'Recent'); return; }
+                if (key === 'j') { e.preventDefault(); this.openJournal(); return; }
+                // unknown follow-up key falls through to single-key handling
+            }
+
+            switch (e.key) {
+                case '?':
                     e.preventDefault();
                     var dlg = document.getElementById('notes-help-dialog');
                     if (dlg) dlg.showModal();
+                    break;
+                case 'n':
+                case 'N':
+                    e.preventDefault();
+                    this.createNote();
+                    break;
+                case 'j':
+                case 'J':
+                    e.preventDefault();
+                    this._selectAdjacentNote(1);
+                    break;
+                case 'k':
+                case 'K':
+                    e.preventDefault();
+                    this._selectAdjacentNote(-1);
+                    break;
+                case 's':
+                case 'S':
+                    if (this.selectedNote) {
+                        e.preventDefault();
+                        this.toggleFavorite(this.selectedNote);
+                    }
+                    break;
+                case '#':
+                    if (this.selectedNote) {
+                        e.preventDefault();
+                        this.deleteNote();
+                    }
+                    break;
+                case 'r':
+                case 'R':
+                    if (this.selectedNote) {
+                        e.preventDefault();
+                        var input = document.querySelector('input.input-ghost.input-sm.font-semibold');
+                        if (input) { input.focus(); input.select(); }
+                    }
+                    break;
+                case 'Escape':
+                    if (this.selectedNote) {
+                        e.preventDefault();
+                        this.selectedNote = null;
+                        this.updateUrl();
+                    }
+                    break;
+                case 'g':
+                case 'G':
+                    e.preventDefault();
+                    this._gPending = true;
+                    setTimeout(function() { this._gPending = false; }.bind(this), 1000);
+                    break;
+            }
+        },
+
+        _selectAdjacentNote(delta) {
+            if (!this.notes || this.notes.length === 0) return;
+            var idx = -1;
+            if (this.selectedNote) {
+                for (var i = 0; i < this.notes.length; i++) {
+                    if (this.notes[i].uuid === this.selectedNote.uuid) { idx = i; break; }
                 }
-            });
+            }
+            var next = idx + delta;
+            if (idx === -1) next = delta > 0 ? 0 : this.notes.length - 1;
+            if (next < 0 || next >= this.notes.length) return;
+            this.selectNote(this.notes[next]);
         },
 
         // ── Folder data management (nested tree) ─────────────

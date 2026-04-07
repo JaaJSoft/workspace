@@ -121,8 +121,8 @@
 
   <script>
     function fileViewerModal() {
-      var VIEWER_PREFS_URL = '/api/v1/settings/files/viewer';
-      var _prefsSaveTimer = null;
+      const VIEWER_PREFS_URL = '/api/v1/settings/files/viewer';
+      let _prefsSaveTimer = null;
 
       return {
         open: false,
@@ -135,7 +135,7 @@
         expanded: false,
 
         _getViewableFiles() {
-          var rows = document.querySelectorAll('[data-uuid][data-viewable="1"][data-node-type="file"]');
+          const rows = document.querySelectorAll('[data-uuid][data-viewable="1"][data-node-type="file"]');
           return Array.from(rows)
             .filter(function(r) { return r.offsetParent !== null; })
             .map(function(r) {
@@ -148,25 +148,25 @@
         },
 
         navigateNext() {
-          var files = this._getViewableFiles();
-          var idx = files.findIndex(f => f.uuid === this.fileUuid);
+          const files = this._getViewableFiles();
+          const idx = files.findIndex(f => f.uuid === this.fileUuid);
           if (idx >= 0 && idx < files.length - 1) {
-            var next = files[idx + 1];
+            const next = files[idx + 1];
             this.openFile(next.uuid, next.name, next.mimeType);
           }
         },
 
         navigatePrev() {
-          var files = this._getViewableFiles();
-          var idx = files.findIndex(f => f.uuid === this.fileUuid);
+          const files = this._getViewableFiles();
+          const idx = files.findIndex(f => f.uuid === this.fileUuid);
           if (idx > 0) {
-            var prev = files[idx - 1];
+            const prev = files[idx - 1];
             this.openFile(prev.uuid, prev.name, prev.mimeType);
           }
         },
 
         _currentIndex() {
-          var files = this._getViewableFiles();
+          const files = this._getViewableFiles();
           return files.findIndex(f => f.uuid === this.fileUuid);
         },
 
@@ -180,7 +180,7 @@
         },
 
         _saveViewerPrefs() {
-          var prefs = { expanded: this.expanded };
+          const prefs = { expanded: this.expanded };
           clearTimeout(_prefsSaveTimer);
           _prefsSaveTimer = setTimeout(function() {
             fetch(VIEWER_PREFS_URL, {
@@ -289,7 +289,7 @@
 
           // Arrow navigation — skip if focus is in an editable element
           if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-            var tag = document.activeElement && document.activeElement.tagName;
+            const tag = document.activeElement && document.activeElement.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
             if (document.activeElement && document.activeElement.isContentEditable) return;
 
@@ -311,9 +311,9 @@
 
           // Load viewer preferences
           try {
-            var prefsResp = await fetch(VIEWER_PREFS_URL, { credentials: 'same-origin' });
+            const prefsResp = await fetch(VIEWER_PREFS_URL, { credentials: 'same-origin' });
             if (prefsResp.ok) {
-              var data = await prefsResp.json();
+              const data = await prefsResp.json();
               if (data && data.value && typeof data.value === 'object') {
                 if (data.value.expanded !== undefined) this.expanded = data.value.expanded;
               }

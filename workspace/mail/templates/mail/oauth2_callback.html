@@ -5,12 +5,12 @@
 <p id="status">Connecting your account...</p>
 <script>
 (function() {
-  var result = {{ result_json|safe }};
-  var sent = false;
+  const result = {{ result_json|safe }};
+  let sent = false;
 
   // BroadcastChannel: works even when window.opener is null (cross-origin redirects)
   try {
-    var bc = new BroadcastChannel('oauth2');
+    const bc = new BroadcastChannel('oauth2');
     bc.postMessage(result);
     bc.close();
     sent = true;
@@ -25,7 +25,7 @@
   if (sent) {
     window.close();
   } else {
-    var el = document.getElementById('status');
+    const el = document.getElementById('status');
     if (result.type === 'oauth2-success') {
       el.textContent = 'Account connected! You can close this window.';
     } else {

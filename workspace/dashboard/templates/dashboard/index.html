@@ -175,7 +175,7 @@
 </div>
 
 <script>
-var _weatherCodes = {
+const _weatherCodes = {
   0:'clear-day',1:'clear-day',2:'partly-cloudy',3:'cloudy',
   45:'fog',48:'fog',
   51:'drizzle',53:'drizzle',55:'drizzle',56:'drizzle',57:'drizzle',
@@ -185,13 +185,13 @@ var _weatherCodes = {
   85:'snow',86:'snow',
   95:'thunderstorm',96:'thunderstorm',99:'thunderstorm',
 };
-var _weatherIcons = {
+const _weatherIcons = {
   'clear-day':'sun','clear-night':'moon','partly-cloudy':'cloud-sun',
   'cloudy':'cloud','fog':'cloud-fog','drizzle':'cloud-drizzle',
   'rain':'cloud-rain','snow':'snowflake','thunderstorm':'cloud-lightning',
 };
-var _WEATHER_CACHE_KEY = 'dashboard_weather';
-var _WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 min
+const _WEATHER_CACHE_KEY = 'dashboard_weather';
+const _WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 min
 
 function usagePopover() {
   return {
@@ -210,32 +210,32 @@ function usagePopover() {
       }
     },
     _animateCounts() {
-      var refs = ['countFiles', 'countMessages', 'countMail', 'countEvents'];
-      var duration = 600;
-      for (var i = 0; i < refs.length; i++) {
-        var el = this.$refs[refs[i]];
+      const refs = ['countFiles', 'countMessages', 'countMail', 'countEvents'];
+      const duration = 600;
+      for (let i = 0; i < refs.length; i++) {
+        const el = this.$refs[refs[i]];
         if (!el) continue;
-        var target = parseInt(el.dataset.target) || 0;
+        const target = parseInt(el.dataset.target) || 0;
         if (target === 0) { el.textContent = '0'; continue; }
         this._countUp(el, target, duration);
       }
     },
     _countUp(el, target, duration) {
-      var start = performance.now();
+      const start = performance.now();
       function tick(now) {
-        var progress = Math.min((now - start) / duration, 1);
-        var eased = 1 - Math.pow(1 - progress, 3);
+        const progress = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
         el.textContent = Math.round(eased * target).toLocaleString();
         if (progress < 1) requestAnimationFrame(tick);
       }
       requestAnimationFrame(tick);
     },
     _animateStorage() {
-      var bar = this.$refs.storageBar;
+      const bar = this.$refs.storageBar;
       if (!bar) return;
-      var used = {{ usage_stats.files.total_size|default:"0" }};
-      var quota = {{ storage_quota }};
-      var pct = quota > 0 ? Math.min((used / quota) * 100, 100) : 0;
+      const used = {{ usage_stats.files.total_size|default:"0" }};
+      const quota = {{ storage_quota }};
+      const pct = quota > 0 ? Math.min((used / quota) * 100, 100) : 0;
       requestAnimationFrame(() => { bar.style.width = pct + '%'; });
     },
   };
@@ -245,17 +245,17 @@ function weatherWidget() {
   return {
     label: '',
     init() {
-      var now = new Date();
+      const now = new Date();
       this.label = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
       this._loadWeather();
     },
     _loadWeather() {
-      var self = this;
+      const self = this;
       // Check cache
       try {
-        var raw = localStorage.getItem(_WEATHER_CACHE_KEY);
+        const raw = localStorage.getItem(_WEATHER_CACHE_KEY);
         if (raw) {
-          var c = JSON.parse(raw);
+          const c = JSON.parse(raw);
           if (c.ts + _WEATHER_CACHE_TTL > Date.now()) {
             self._applyWeather(c.temp, c.code);
             return;
@@ -265,30 +265,30 @@ function weatherWidget() {
 
       if (!navigator.geolocation) return;
       navigator.geolocation.getCurrentPosition(function(pos) {
-        var lat = pos.coords.latitude.toFixed(2);
-        var lon = pos.coords.longitude.toFixed(2);
+        const lat = pos.coords.latitude.toFixed(2);
+        const lon = pos.coords.longitude.toFixed(2);
         fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current=temperature_2m,weather_code')
           .then(function(r) { return r.json(); })
           .then(function(data) {
-            var temp = Math.round(data.current.temperature_2m);
-            var code = data.current.weather_code;
+            const temp = Math.round(data.current.temperature_2m);
+            const code = data.current.weather_code;
             try { localStorage.setItem(_WEATHER_CACHE_KEY, JSON.stringify({ temp: temp, code: code, ts: Date.now() })); } catch(e) {}
             self._applyWeather(temp, code);
         }).catch(function() {});
       }, function() {}, { timeout: 5000 });
     },
     _applyWeather(temp, code) {
-      var condition = _weatherCodes[code] || 'cloudy';
-      var h = new Date().getHours();
+      let condition = _weatherCodes[code] || 'cloudy';
+      const h = new Date().getHours();
       if ((condition === 'clear-day') && (h < 6 || h >= 20)) condition = 'clear-night';
-      var icon = _weatherIcons[condition] || 'cloud';
-      var dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+      const icon = _weatherIcons[condition] || 'cloud';
+      const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
       this.label = dateStr + '  ·  ' + temp + '°C';
       // Inject lucide icon next to temperature
       this.$nextTick(() => {
-        var el = this.$el.querySelector('[data-weather-icon]');
+        const el = this.$el.querySelector('[data-weather-icon]');
         if (el) el.remove();
-        var span = document.createElement('i');
+        const span = document.createElement('i');
         span.setAttribute('data-lucide', icon);
         span.setAttribute('data-weather-icon', '');
         span.className = 'inline-block w-4 h-4 ml-1 -translate-y-px';

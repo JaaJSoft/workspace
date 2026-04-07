@@ -179,8 +179,8 @@ window.textViewerMonaco = function() {
   let _lock = null;
   let _aiPollTimer = null;
 
-  var PREFS_URL = '/api/v1/settings/files/editor';
-  var PREFS_DEFAULTS = {
+  const PREFS_URL = '/api/v1/settings/files/editor';
+  const PREFS_DEFAULTS = {
     wordWrap: true,
     minimap: true,
     fontSize: 14,
@@ -190,7 +190,7 @@ window.textViewerMonaco = function() {
   };
 
   function getCSRFToken() {
-    var match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
+    const match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
     return match ? match.split('=')[1] : '';
   }
 
@@ -206,8 +206,8 @@ window.textViewerMonaco = function() {
   }
 
   function _detectTheme() {
-    var dt = (document.documentElement.getAttribute('data-theme') || '').toLowerCase();
-    var dark = ['dark','dracula','night','sunset','dim','black','luxury','halloween','forest','coffee','business','synthwave'];
+    const dt = (document.documentElement.getAttribute('data-theme') || '').toLowerCase();
+    const dark = ['dark','dracula','night','sunset','dim','black','luxury','halloween','forest','coffee','business','synthwave'];
     return dark.some(function(t) { return dt.includes(t); }) ? 'vs-dark' : 'vs';
   }
 
@@ -238,17 +238,17 @@ window.textViewerMonaco = function() {
     lockOwner: {% if lock_info %}'{{ lock_info.locked_by_username|escapejs }}'{% else %}null{% endif %},
 
     initEditor() {
-      var container = this.$refs.monacoContainer;
-      var content = this.originalContent;
-      var language = this.language;
-      var self = this;
+      const container = this.$refs.monacoContainer;
+      const content = this.originalContent;
+      const language = this.language;
+      const self = this;
       _lock = window.fileLock(this.fileUuid, getCSRFToken);
 
       fetch(PREFS_URL, { credentials: 'same-origin' })
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
           if (data && data.value && typeof data.value === 'object') {
-            var v = data.value;
+            const v = data.value;
             self.wordWrap = v.wordWrap !== undefined ? v.wordWrap : PREFS_DEFAULTS.wordWrap;
             self.minimapEnabled = v.minimap !== undefined ? v.minimap : PREFS_DEFAULTS.minimap;
             self.fontSize = v.fontSize !== undefined ? v.fontSize : PREFS_DEFAULTS.fontSize;
@@ -264,7 +264,7 @@ window.textViewerMonaco = function() {
     },
 
     _createEditor(container, content, language) {
-      var self = this;
+      const self = this;
 
       if (!window._monacoConfigured) {
         require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
@@ -330,7 +330,7 @@ window.textViewerMonaco = function() {
     },
 
     forceUnlock() {
-      var self = this;
+      const self = this;
       _lock.forceUnlock(self, {
         onAcquired: function() {
           if (_editor) {
@@ -358,7 +358,7 @@ window.textViewerMonaco = function() {
 
     editorAction(action) {
       if (!_editor) return;
-      var actionMap = {
+      const actionMap = {
         undo: 'undo',
         redo: 'redo',
         find: 'actions.find',
@@ -369,7 +369,7 @@ window.textViewerMonaco = function() {
     },
 
     changeFontSize(delta) {
-      var next = Math.min(32, Math.max(8, this.fontSize + delta));
+      const next = Math.min(32, Math.max(8, this.fontSize + delta));
       if (next === this.fontSize) return;
       this.fontSize = next;
       if (_editor) _editor.updateOptions({ fontSize: this.fontSize });
@@ -377,8 +377,8 @@ window.textViewerMonaco = function() {
     },
 
     cycleTabSize() {
-      var sizes = [2, 4, 8];
-      var idx = sizes.indexOf(this.tabSize);
+      const sizes = [2, 4, 8];
+      const idx = sizes.indexOf(this.tabSize);
       this.tabSize = sizes[(idx + 1) % sizes.length];
       if (_editor) {
         _editor.getModel().updateOptions({ tabSize: this.tabSize });
@@ -415,12 +415,12 @@ window.textViewerMonaco = function() {
       this.saving = true;
 
       try {
-        var content = _editor.getValue();
-        var blob = new Blob([content], { type: 'text/plain' });
-        var formData = new FormData();
+        const content = _editor.getValue();
+        const blob = new Blob([content], { type: 'text/plain' });
+        const formData = new FormData();
         formData.append('content', blob, this.fileName || 'file.txt');
 
-        var response = await fetch('/api/v1/files/' + this.fileUuid, {
+        const response = await fetch('/api/v1/files/' + this.fileUuid, {
           method: 'PATCH',
           headers: { 'X-CSRFToken': getCSRFToken() },
           body: formData,
@@ -446,14 +446,14 @@ window.textViewerMonaco = function() {
 
     _getEditorContent() {
       if (!_editor) return null;
-      var selection = _editor.getSelection();
+      const selection = _editor.getSelection();
       if (selection && !selection.isEmpty()) {
         return {
           text: _editor.getModel().getValueInRange(selection),
           range: selection,
         };
       }
-      var model = _editor.getModel();
+      const model = _editor.getModel();
       return {
         text: model.getValue(),
         range: model.getFullModelRange(),
@@ -463,7 +463,7 @@ window.textViewerMonaco = function() {
     async aiAction(action) {
       if (!_editor || this.aiProcessing) return;
 
-      var instructions = '';
+      let instructions = '';
       if (action === 'custom') {
         instructions = await AppDialog.prompt({
           title: 'Custom AI Prompt',
@@ -475,7 +475,7 @@ window.textViewerMonaco = function() {
         if (!instructions) return;
       }
 
-      var content = this._getEditorContent();
+      const content = this._getEditorContent();
       if (!content || !content.text.trim()) {
         if (window.AppAlert) AppAlert.error('No content to process');
         return;
@@ -484,7 +484,7 @@ window.textViewerMonaco = function() {
       this.aiProcessing = true;
 
       try {
-        var body = {
+        const body = {
           action: action,
           content: content.text,
           language: this.language,
@@ -492,7 +492,7 @@ window.textViewerMonaco = function() {
         };
         if (instructions) body.instructions = instructions;
 
-        var response = await fetch('/api/v1/ai/tasks/editor', {
+        const response = await fetch('/api/v1/ai/tasks/editor', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -502,11 +502,11 @@ window.textViewerMonaco = function() {
         });
 
         if (!response.ok) {
-          var err = await response.json().catch(function() { return {}; });
+          const err = await response.json().catch(function() { return {}; });
           throw new Error(err.detail || 'Failed to start AI task');
         }
 
-        var task = await response.json();
+        const task = await response.json();
         this._pollAITask(task.uuid, action, content.range);
       } catch (error) {
         this.aiProcessing = false;
@@ -515,15 +515,15 @@ window.textViewerMonaco = function() {
     },
 
     _pollAITask(taskId, action, editRange) {
-      var self = this;
+      const self = this;
       _aiPollTimer = setInterval(async function() {
         try {
-          var response = await fetch('/api/v1/ai/tasks/' + taskId, {
+          const response = await fetch('/api/v1/ai/tasks/' + taskId, {
             credentials: 'same-origin',
           });
           if (!response.ok) throw new Error('Failed to poll task');
 
-          var task = await response.json();
+          const task = await response.json();
 
           if (task.status === 'completed') {
             clearInterval(_aiPollTimer);
@@ -548,8 +548,8 @@ window.textViewerMonaco = function() {
     _handleAIResult(action, result, resultHtml, editRange) {
       if (!result) return;
       if (action === 'explain' || action === 'summarize') {
-        var title = action === 'explain' ? 'Explanation' : 'Summary';
-        var icon = action === 'explain' ? 'message-square-text' : 'list';
+        const title = action === 'explain' ? 'Explanation' : 'Summary';
+        const icon = action === 'explain' ? 'message-square-text' : 'list';
         AppDialog.message({
           title: title,
           html: '<div class="prose prose-sm max-w-none">' + (resultHtml || result) + '</div>',

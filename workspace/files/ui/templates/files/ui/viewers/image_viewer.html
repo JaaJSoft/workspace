@@ -201,17 +201,17 @@
 
 <script>
 window.imageViewerData = function imageViewerData() {
-  var fileUuid = '{{ file_uuid|escapejs }}';
-  var fileParent = '{{ file_parent|escapejs }}';
-  var fileName = '{{ file_name|escapejs }}';
+  const fileUuid = '{{ file_uuid|escapejs }}';
+  const fileParent = '{{ file_parent|escapejs }}';
+  const fileName = '{{ file_name|escapejs }}';
 
   function getCSRFToken() {
-    var match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
+    const match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
     return match ? match.split('=')[1] : '';
   }
 
   function editedName(originalName) {
-    var dot = originalName.lastIndexOf('.');
+    const dot = originalName.lastIndexOf('.');
     if (dot > 0) {
       return originalName.substring(0, dot) + '_edited.png';
     }
@@ -220,16 +220,16 @@ window.imageViewerData = function imageViewerData() {
 
   function closestSize(w, h) {
     if (!w || !h) return '1024x1024';
-    var ratio = w / h;
-    var sizes = [
+    const ratio = w / h;
+    const sizes = [
       { value: '1024x1024', ratio: 1 },
       { value: '1792x1024', ratio: 1792 / 1024 },
       { value: '1024x1792', ratio: 1024 / 1792 },
     ];
-    var best = sizes[0];
-    var bestDiff = Math.abs(ratio - best.ratio);
-    for (var i = 1; i < sizes.length; i++) {
-      var diff = Math.abs(ratio - sizes[i].ratio);
+    let best = sizes[0];
+    let bestDiff = Math.abs(ratio - best.ratio);
+    for (let i = 1; i < sizes.length; i++) {
+      const diff = Math.abs(ratio - sizes[i].ratio);
       if (diff < bestDiff) { best = sizes[i]; bestDiff = diff; }
     }
     return best.value;
@@ -255,9 +255,9 @@ window.imageViewerData = function imageViewerData() {
     folders: [],
 
     init() {
-      var self = this;
+      const self = this;
       this.$nextTick(function() {
-        var img = self.$refs.image;
+        const img = self.$refs.image;
         if (img) {
           if (img.naturalWidth) {
             self.editSize = closestSize(img.naturalWidth, img.naturalHeight);
@@ -284,9 +284,9 @@ window.imageViewerData = function imageViewerData() {
     },
 
     async toggleFavorite() {
-      var method = this.isFavorite ? 'DELETE' : 'POST';
+      const method = this.isFavorite ? 'DELETE' : 'POST';
       try {
-        var resp = await fetch('/api/v1/files/' + fileUuid + '/favorite', {
+        const resp = await fetch('/api/v1/files/' + fileUuid + '/favorite', {
           method: method,
           headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
@@ -307,28 +307,28 @@ window.imageViewerData = function imageViewerData() {
 
     async loadFolders() {
       try {
-        var resp = await fetch('/api/v1/files?node_type=folder', { credentials: 'same-origin' });
+        const resp = await fetch('/api/v1/files?node_type=folder', { credentials: 'same-origin' });
         if (resp.ok) {
-          var data = await resp.json();
+          const data = await resp.json();
           this.folders = data.results || data;
         }
       } catch (e) {}
     },
 
     async generateEdit() {
-      var prompt = this.editPrompt.trim();
+      const prompt = this.editPrompt.trim();
       if (!prompt || this.editLoading) return;
 
       this.editLoading = true;
       this.editError = null;
 
-      var body = { prompt: prompt, size: this.editSize };
+      const body = { prompt: prompt, size: this.editSize };
       if (this.editPreview) {
         body.source_image = this.editPreview.split(',')[1];
       }
 
       try {
-        var resp = await fetch('/api/v1/files/' + fileUuid + '/ai-edit', {
+        const resp = await fetch('/api/v1/files/' + fileUuid + '/ai-edit', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -339,12 +339,12 @@ window.imageViewerData = function imageViewerData() {
         });
 
         if (!resp.ok) {
-          var err = await resp.json().catch(function() { return {}; });
+          const err = await resp.json().catch(function() { return {}; });
           throw new Error(err.error || 'Edit failed (HTTP ' + resp.status + ')');
         }
 
-        var data = await resp.json();
-        var dataUrl = 'data:image/png;base64,' + data.image;
+        const data = await resp.json();
+        const dataUrl = 'data:image/png;base64,' + data.image;
 
         this.editHistory.push(dataUrl);
         this.editPreview = dataUrl;
@@ -376,15 +376,15 @@ window.imageViewerData = function imageViewerData() {
       this.saveAsLoading = true;
 
       try {
-        var b64 = this.editPreview.split(',')[1];
-        var binary = atob(b64);
-        var bytes = new Uint8Array(binary.length);
-        for (var i = 0; i < binary.length; i++) {
+        const b64 = this.editPreview.split(',')[1];
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
           bytes[i] = binary.charCodeAt(i);
         }
-        var blob = new Blob([bytes], { type: 'image/png' });
+        const blob = new Blob([bytes], { type: 'image/png' });
 
-        var formData = new FormData();
+        const formData = new FormData();
         formData.append('name', this.saveAsName);
         formData.append('node_type', 'file');
         formData.append('content', blob, this.saveAsName);
@@ -392,7 +392,7 @@ window.imageViewerData = function imageViewerData() {
           formData.append('parent', this.saveAsParent);
         }
 
-        var resp = await fetch('/api/v1/files', {
+        const resp = await fetch('/api/v1/files', {
           method: 'POST',
           headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
@@ -400,11 +400,11 @@ window.imageViewerData = function imageViewerData() {
         });
 
         if (!resp.ok) {
-          var err = await resp.json().catch(function() { return {}; });
+          const err = await resp.json().catch(function() { return {}; });
           throw new Error(err.detail || err.name || 'Save failed');
         }
 
-        var saved = await resp.json();
+        const saved = await resp.json();
         this.showSaveAs = false;
         this.editPreview = null;
         this.editHistory = [];

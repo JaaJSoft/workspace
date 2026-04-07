@@ -81,7 +81,6 @@ window.tagsMixin = function tagsMixin() {
             const dlg = document.getElementById('tag-dialog');
             if (dlg) {
                 dlg.showModal();
-                const self = this;
                 setTimeout(function() {
                     const input = dlg.querySelector('input[type="text"]');
                     if (input) input.focus();

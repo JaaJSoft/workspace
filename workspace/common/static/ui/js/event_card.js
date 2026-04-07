@@ -5,9 +5,9 @@
  */
 
 /* ── Cache with 30s TTL ───────────────────────────────────────── */
-var _eventCardCache = {};
-var _eventCardCacheTimes = {};
-var _EVENT_CARD_CACHE_TTL = 30000;
+const _eventCardCache = {};
+const _eventCardCacheTimes = {};
+const _EVENT_CARD_CACHE_TTL = 30000;
 
 /**
  * Show the event card popover for a wrapper element.
@@ -16,7 +16,7 @@ var _EVENT_CARD_CACHE_TTL = 30000;
 window._eventCardShow = function(wrapper, eventId) {
   window._eventCardCancelHide(wrapper);
 
-  var existing = wrapper._eventCardPopover;
+  const existing = wrapper._eventCardPopover;
   if (existing && existing.style.display !== 'none' && existing.style.opacity === '1') {
     return;
   }
@@ -24,9 +24,9 @@ window._eventCardShow = function(wrapper, eventId) {
   if (wrapper._showTimeout) clearTimeout(wrapper._showTimeout);
 
   // For recurring virtual occurrences, the ID is "masterUuid:isoDate" — extract the master UUID and occurrence start
-  var fetchId = eventId;
-  var occStart = '';
-  var colonIdx = String(eventId).indexOf(':');
+  let fetchId = eventId;
+  let occStart = '';
+  const colonIdx = String(eventId).indexOf(':');
   if (colonIdx > 0) {
     fetchId = eventId.substring(0, colonIdx);
     occStart = eventId.substring(colonIdx + 1);
@@ -35,15 +35,15 @@ window._eventCardShow = function(wrapper, eventId) {
   wrapper._showTimeout = setTimeout(function() {
     wrapper._showTimeout = null;
 
-    var popover = wrapper._eventCardPopover;
+    let popover = wrapper._eventCardPopover;
     if (!popover) {
       popover = document.createElement('div');
       popover.className = 'event-card-popover fixed z-[9999] bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
       popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
       popover.style.opacity = '0';
-      var spinWrap = document.createElement('div');
+      const spinWrap = document.createElement('div');
       spinWrap.className = 'p-4 flex justify-center';
-      var spinner = document.createElement('span');
+      const spinner = document.createElement('span');
       spinner.className = 'loading loading-spinner loading-sm';
       spinWrap.appendChild(spinner);
       popover.appendChild(spinWrap);
@@ -53,7 +53,7 @@ window._eventCardShow = function(wrapper, eventId) {
       wrapper._eventCardPopover = popover;
     }
 
-    var pos = window._computePopoverPosition(wrapper, 240);
+    const pos = window._computePopoverPosition(wrapper, 240);
     popover.style.left = pos.left + 'px';
     popover.style.top = pos.top + 'px';
     wrapper._placement = pos.placement;
@@ -65,16 +65,16 @@ window._eventCardShow = function(wrapper, eventId) {
     popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
     window._applyPopoverTransform(popover, pos.placement, true);
 
-    var cacheKey = occStart ? fetchId + ':' + occStart : fetchId;
-    var cached = _eventCardCache[cacheKey];
-    var cacheValid = cached && (_eventCardCacheTimes[cacheKey] || 0) + _EVENT_CARD_CACHE_TTL > Date.now();
+    const cacheKey = occStart ? fetchId + ':' + occStart : fetchId;
+    const cached = _eventCardCache[cacheKey];
+    const cacheValid = cached && (_eventCardCacheTimes[cacheKey] || 0) + _EVENT_CARD_CACHE_TTL > Date.now();
     if (cacheValid) {
       window._setPopoverContent(popover, cached);
       _formatEventCardTimes(popover);
       if (typeof Alpine !== 'undefined') Alpine.initTree(popover);
     } else if (!wrapper._fetching) {
       wrapper._fetching = true;
-      var cardUrl = '/calendar/events/' + fetchId + '/card';
+      let cardUrl = '/calendar/events/' + fetchId + '/card';
       if (occStart) cardUrl += '?start=' + encodeURIComponent(occStart);
       fetch(cardUrl, { credentials: 'same-origin' })
         .then(function(r) { return r.ok ? r.text() : ''; })
@@ -103,7 +103,7 @@ window._eventCardScheduleHide = function(wrapper) {
   }
 
   wrapper._hideTimeout = setTimeout(function() {
-    var popover = wrapper._eventCardPopover;
+    const popover = wrapper._eventCardPopover;
     if (popover) {
       window._applyPopoverTransform(popover, wrapper._placement || 'bottom', false);
       wrapper._closeTimeout = setTimeout(function() { popover.style.display = 'none'; }, 150);
@@ -123,7 +123,7 @@ window._eventCardCancelHide = function(wrapper) {
     clearTimeout(wrapper._closeTimeout);
     wrapper._closeTimeout = null;
   }
-  var popover = wrapper._eventCardPopover;
+  const popover = wrapper._eventCardPopover;
   if (popover && popover.style.display !== 'none') {
     window._applyPopoverTransform(popover, wrapper._placement || 'bottom', true);
   }
@@ -135,9 +135,9 @@ window._eventCardCancelHide = function(wrapper) {
  */
 function _formatEventCardTimes(container) {
   container.querySelectorAll('time[data-localtime]').forEach(function(el) {
-    var d = new Date(el.getAttribute('datetime'));
+    const d = new Date(el.getAttribute('datetime'));
     if (isNaN(d)) return;
-    var mode = el.dataset.localtime;
+    const mode = el.dataset.localtime;
     if (mode === 'time') {
       el.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } else if (mode === 'date') {

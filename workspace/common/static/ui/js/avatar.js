@@ -8,14 +8,14 @@
  * @returns {string} HTML string
  */
 window.userAvatarHtml = function(userId, username, sizeClass, options) {
-  var showPresence = !options || options.presence !== false;
+  const showPresence = !options || options.presence !== false;
   const initial = (username || '?')[0].toUpperCase();
   const imgUrl = `/api/v1/users/${userId}/avatar`;
 
-  var ringAttr = showPresence
+  const ringAttr = showPresence
     ? ` :class="'ring-2 ring-offset-base-100 ring-offset-1 ' + $store.presence.ringClass(${userId})"`
     : '';
-  var dotHtml = showPresence
+  const dotHtml = showPresence
     ? `<span class="absolute bottom-0 right-0 block w-2.5 h-2.5 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass(${userId})"></span>`
     : '';
 
@@ -23,7 +23,7 @@ window.userAvatarHtml = function(userId, username, sizeClass, options) {
     `<div class="${sizeClass} rounded-full overflow-hidden"${ringAttr}>` +
       `<img src="${imgUrl}" alt="${username}" class="block w-full h-full object-cover" ` +
         `onerror="this.onerror=null;` +
-        `var d=this.closest('.avatar');` +
+        `let d=this.closest('.avatar');` +
         `d.className='avatar placeholder relative';` +
         `d.firstElementChild.className='${sizeClass} bg-neutral text-neutral-content rounded-full flex items-center justify-center';` +
         `this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${initial}'}));" />` +
@@ -34,7 +34,7 @@ window.userAvatarHtml = function(userId, username, sizeClass, options) {
 
 /* ── Patch user card status from Alpine presence store ────────── */
 
-var _statusConfig = {
+const _statusConfig = {
   bot:     { dot: 'bg-secondary', label: 'text-secondary', showAgo: false },
   online:  { dot: 'bg-success',  label: 'text-success',  showAgo: false },
   away:    { dot: 'bg-warning',  label: 'text-warning',  showAgo: true  },
@@ -43,17 +43,17 @@ var _statusConfig = {
 };
 
 function _patchCardStatus(container) {
-  var el = container.querySelector('[data-user-card-status]');
+  const el = container.querySelector('[data-user-card-status]');
   if (!el) return;
-  var userId = parseInt(el.dataset.userId, 10);
+  const userId = parseInt(el.dataset.userId, 10);
   if (!userId || typeof Alpine === 'undefined') return;
 
-  var status = Alpine.store('presence').statusOf(userId);
-  var cfg = _statusConfig[status] || _statusConfig.offline;
+  const status = Alpine.store('presence').statusOf(userId);
+  const cfg = _statusConfig[status] || _statusConfig.offline;
 
-  var dot = el.querySelector('[data-status-dot]');
-  var label = el.querySelector('[data-status-label]');
-  var ago = el.querySelector('[data-status-ago]');
+  const dot = el.querySelector('[data-status-dot]');
+  const label = el.querySelector('[data-status-label]');
+  const ago = el.querySelector('[data-status-ago]');
 
   if (dot) {
     dot.className = 'w-2 h-2 rounded-full flex-shrink-0 ' + cfg.dot;
@@ -63,9 +63,9 @@ function _patchCardStatus(container) {
     label.textContent = status;
   }
   if (ago) {
-    var lastSeen = el.dataset.lastSeen;
+    let lastSeen = el.dataset.lastSeen;
     if (cfg.showAgo && lastSeen) {
-      var diff = (Date.now() - new Date(lastSeen).getTime()) / 1000;
+      let diff = (Date.now() - new Date(lastSeen).getTime()) / 1000;
       // Skip "just now" — contradictory with away/offline status
       ago.textContent = diff >= 60 ? '\u00b7 ' + _formatTimeAgo(diff) : '';
     } else {
@@ -76,9 +76,9 @@ function _patchCardStatus(container) {
 
 function _formatTimeAgo(seconds) {
   if (seconds < 60) return 'just now';
-  if (seconds < 3600) { var m = Math.floor(seconds / 60); return m + ' minute' + (m > 1 ? 's' : '') + ' ago'; }
-  if (seconds < 86400) { var h = Math.floor(seconds / 3600); return h + ' hour' + (h > 1 ? 's' : '') + ' ago'; }
-  var d = Math.floor(seconds / 86400);
+  if (seconds < 3600) { let m = Math.floor(seconds / 60); return m + ' minute' + (m > 1 ? 's' : '') + ' ago'; }
+  if (seconds < 86400) { let h = Math.floor(seconds / 3600); return h + ' hour' + (h > 1 ? 's' : '') + ' ago'; }
+  let d = Math.floor(seconds / 86400);
   return d + ' day' + (d > 1 ? 's' : '') + ' ago';
 }
 
@@ -96,15 +96,15 @@ const _USER_CARD_CACHE_TTL = 30000; // 30 seconds
  */
 window._computePopoverPosition = function _computePopoverPosition(trigger, minSpace) {
   if (minSpace === undefined) minSpace = 280;
-  var rect = trigger.getBoundingClientRect();
-  var centerX = rect.left + rect.width / 2;
-  var spaceBelow = window.innerHeight - rect.bottom;
-  var placement = spaceBelow < minSpace ? 'top' : 'bottom';
-  var top = placement === 'top' ? rect.top - 8 : rect.bottom + 8;
+  let rect = trigger.getBoundingClientRect();
+  let centerX = rect.left + rect.width / 2;
+  let spaceBelow = window.innerHeight - rect.bottom;
+  let placement = spaceBelow < minSpace ? 'top' : 'bottom';
+  let top = placement === 'top' ? rect.top - 8 : rect.bottom + 8;
 
   // Clamp horizontally so the popover (w-64 = 256px) stays in viewport
-  var halfWidth = 128;
-  var margin = 8;
+  let halfWidth = 128;
+  let margin = 8;
   centerX = Math.max(halfWidth + margin, Math.min(centerX, window.innerWidth - halfWidth - margin));
 
   return { top: top, left: centerX, placement: placement };
@@ -118,13 +118,13 @@ window._computePopoverPosition = function _computePopoverPosition(trigger, minSp
  * @param {boolean} visible - true = final state, false = initial (hidden) state
  */
 window._applyPopoverTransform = function _applyPopoverTransform(popover, placement, visible) {
-  var baseX = 'translateX(-50%)';
-  var anchorY = placement === 'top' ? ' translateY(-100%)' : '';
+  let baseX = 'translateX(-50%)';
+  let anchorY = placement === 'top' ? ' translateY(-100%)' : '';
   if (visible) {
     popover.style.opacity = '1';
     popover.style.transform = baseX + anchorY;
   } else {
-    var slideOffset = placement === 'top' ? ' translateY(calc(-100% + 6px))' : ' translateY(-6px)';
+    let slideOffset = placement === 'top' ? ' translateY(calc(-100% + 6px))' : ' translateY(-6px)';
     popover.style.opacity = '0';
     popover.style.transform = baseX + slideOffset;
   }
@@ -154,7 +154,7 @@ window.userAvatarWithCardHtml = function(userId, username, sizeClass, options) {
  */
 window._setPopoverContent = function _setPopoverContent(el, html) {
   el.textContent = '';
-  var tpl = document.createElement('template');
+  let tpl = document.createElement('template');
   tpl.innerHTML = html;  // safe: content is from our own server endpoint
   el.appendChild(tpl.content);
 };
@@ -168,7 +168,7 @@ window._userCardShow = function(wrapper, userId) {
   window._userCardCancelHide(wrapper);
 
   // If popover is already visible, nothing to do
-  var existing = wrapper._userCardPopover;
+  let existing = wrapper._userCardPopover;
   if (existing && existing.style.display !== 'none' && existing.style.opacity === '1') {
     return;
   }
@@ -181,15 +181,15 @@ window._userCardShow = function(wrapper, userId) {
     wrapper._showTimeout = null;
 
     // Create popover element if not yet present
-    var popover = wrapper._userCardPopover;
+    let popover = wrapper._userCardPopover;
     if (!popover) {
       popover = document.createElement('div');
       popover.className = 'user-card-popover fixed z-[9999] bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
       popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
       popover.style.opacity = '0';
-      var spinWrap = document.createElement('div');
+      let spinWrap = document.createElement('div');
       spinWrap.className = 'p-4 flex justify-center';
-      var spinner = document.createElement('span');
+      let spinner = document.createElement('span');
       spinner.className = 'loading loading-spinner loading-sm';
       spinWrap.appendChild(spinner);
       popover.appendChild(spinWrap);
@@ -200,7 +200,7 @@ window._userCardShow = function(wrapper, userId) {
     }
 
     // Position using fixed coordinates
-    var pos = _computePopoverPosition(wrapper);
+    let pos = _computePopoverPosition(wrapper);
     popover.style.left = pos.left + 'px';
     popover.style.top = pos.top + 'px';
     wrapper._placement = pos.placement;
@@ -214,8 +214,8 @@ window._userCardShow = function(wrapper, userId) {
     _applyPopoverTransform(popover, pos.placement, true);
 
     // Fetch content if not cached (or cache expired)
-    var cached = _userCardCache[userId];
-    var cacheValid = cached && (_userCardCacheTimes[userId] || 0) + _USER_CARD_CACHE_TTL > Date.now();
+    let cached = _userCardCache[userId];
+    let cacheValid = cached && (_userCardCacheTimes[userId] || 0) + _USER_CARD_CACHE_TTL > Date.now();
     if (cacheValid) {
       _setPopoverContent(popover, cached);
       _patchCardStatus(popover);
@@ -249,7 +249,7 @@ window._userCardScheduleHide = function(wrapper) {
   }
 
   wrapper._hideTimeout = setTimeout(function() {
-    var popover = wrapper._userCardPopover;
+    let popover = wrapper._userCardPopover;
     if (popover) {
       _applyPopoverTransform(popover, wrapper._placement || 'bottom', false);
       wrapper._closeTimeout = setTimeout(function() { popover.style.display = 'none'; }, 150);
@@ -270,7 +270,7 @@ window._userCardCancelHide = function(wrapper) {
     wrapper._closeTimeout = null;
   }
   // Restore visible state if popover was fading out
-  var popover = wrapper._userCardPopover;
+  let popover = wrapper._userCardPopover;
   if (popover && popover.style.display !== 'none') {
     _applyPopoverTransform(popover, wrapper._placement || 'bottom', true);
   }
@@ -297,7 +297,7 @@ window.userCard = function(userId) {
     },
     destroy() {
       // Clean up the imperative popover when Alpine removes this component
-      var popover = this.$el._userCardPopover;
+      let popover = this.$el._userCardPopover;
       if (popover && popover.parentNode) {
         popover.parentNode.removeChild(popover);
       }

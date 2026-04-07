@@ -26,7 +26,7 @@ window._notesPrefsReady = fetch('/api/v1/settings/notes/preferences', { credenti
     .catch(function() {});
 
 window.notesPreferences = function notesPreferences() {
-    let API_URL = '/api/v1/settings/notes/preferences';
+    const API_URL = '/api/v1/settings/notes/preferences';
     let _saveTimer = null;
 
     return {
@@ -52,7 +52,7 @@ window.notesPreferences = function notesPreferences() {
         },
 
         async pickDefaultFolder() {
-            let folder = await AppDialog.folderPicker({
+            const folder = await AppDialog.folderPicker({
                 title: 'Default notes folder',
                 message: 'Choose where new notes are created by default.',
                 okLabel: 'Select',
@@ -65,8 +65,8 @@ window.notesPreferences = function notesPreferences() {
             this.defaultFolderName = folder.name || 'Root';
             if (folder.uuid) {
                 try {
-                    let r = await fetch('/api/v1/files/' + folder.uuid);
-                    if (r.ok) { let f = await r.json(); this.defaultFolderName = f.path || f.name; }
+                    const r = await fetch('/api/v1/files/' + folder.uuid);
+                    if (r.ok) { const f = await r.json(); this.defaultFolderName = f.path || f.name; }
                 } catch(e) {}
             }
             this._saveRemote();
@@ -74,7 +74,7 @@ window.notesPreferences = function notesPreferences() {
         },
 
         async pickJournalFolder() {
-            let folder = await AppDialog.folderPicker({
+            const folder = await AppDialog.folderPicker({
                 title: 'Journal folder',
                 message: 'Choose which folder to use for daily journal notes.',
                 okLabel: 'Select',
@@ -87,8 +87,8 @@ window.notesPreferences = function notesPreferences() {
             this.journalFolderName = folder.name || 'Root';
             if (folder.uuid) {
                 try {
-                    let r2 = await fetch('/api/v1/files/' + folder.uuid);
-                    if (r2.ok) { let f2 = await r2.json(); this.journalFolderName = f2.path || f2.name; }
+                    const r2 = await fetch('/api/v1/files/' + folder.uuid);
+                    if (r2.ok) { const f2 = await r2.json(); this.journalFolderName = f2.path || f2.name; }
                 } catch(e) {}
             }
             this._saveRemote();
@@ -98,8 +98,8 @@ window.notesPreferences = function notesPreferences() {
         async _loadFolderNames() {
             if (this.prefs.defaultFolderUuid) {
                 try {
-                    let r = await fetch('/api/v1/files/' + this.prefs.defaultFolderUuid);
-                    if (r.ok) { let f = await r.json(); this.defaultFolderName = f.path || f.name; }
+                    const r = await fetch('/api/v1/files/' + this.prefs.defaultFolderUuid);
+                    if (r.ok) { const f = await r.json(); this.defaultFolderName = f.path || f.name; }
                     else this.defaultFolderName = 'Not set';
                 } catch(e) { this.defaultFolderName = 'Not set'; }
             } else {
@@ -108,8 +108,8 @@ window.notesPreferences = function notesPreferences() {
 
             if (this.prefs.journalFolderUuid) {
                 try {
-                    let r2 = await fetch('/api/v1/files/' + this.prefs.journalFolderUuid);
-                    if (r2.ok) { let f2 = await r2.json(); this.journalFolderName = f2.path || f2.name; }
+                    const r2 = await fetch('/api/v1/files/' + this.prefs.journalFolderUuid);
+                    if (r2.ok) { const f2 = await r2.json(); this.journalFolderName = f2.path || f2.name; }
                     else this.journalFolderName = 'Not set';
                 } catch(e) { this.journalFolderName = 'Not set'; }
             } else {
@@ -138,9 +138,9 @@ window.notesPreferences = function notesPreferences() {
 // ── Notes App ────────────────────────────────────────────
 window.notesApp = function notesApp(config) {
     config = config || {};
-    let prefs = window._notesPrefsCache;
-    let initialView = config.view || prefs.defaultView || 'all';
-    let titleMap = { all: 'All notes', favorites: 'Favorites', recent: 'Recent', journal: 'Journal' };
+    const prefs = window._notesPrefsCache;
+    const initialView = config.view || prefs.defaultView || 'all';
+    const titleMap = { all: 'All notes', favorites: 'Favorites', recent: 'Recent', journal: 'Journal' };
 
     return {
         // Sidebar
@@ -195,7 +195,7 @@ window.notesApp = function notesApp(config) {
             this.notePrefs = { ...window._notesPrefsCache };
 
             // Resolve initial view: URL param takes priority, then saved pref
-            let savedPrefs = window._notesPrefsCache;
+            const savedPrefs = window._notesPrefsCache;
             if (!config.view && savedPrefs.defaultView && savedPrefs.defaultView !== 'all') {
                 initialView = savedPrefs.defaultView;
                 this.activeView = initialView;
@@ -206,7 +206,7 @@ window.notesApp = function notesApp(config) {
             window.addEventListener('notes:refresh-sidebar', this.refreshSidebar.bind(this));
 
             // Listen for file action dialog events (use named functions to prevent duplicates)
-            let self = this;
+            const self = this;
             if (!window._notesFileActionsRegistered) {
                 window._notesFileActionsRegistered = true;
                 window.addEventListener('create-folder', function(e) {
@@ -219,7 +219,7 @@ window.notesApp = function notesApp(config) {
                         .then(function() {
                             self.refreshSidebar();
                             // Also update the note in the list if it was renamed
-                            let note = self.notes.find(function(n) { return n.uuid === e.detail.uuid; });
+                            const note = self.notes.find(function(n) { return n.uuid === e.detail.uuid; });
                             if (note) note.name = e.detail.name;
                             if (self.selectedNote && self.selectedNote.uuid === e.detail.uuid) {
                                 self.selectedNote.name = e.detail.name;
@@ -236,7 +236,7 @@ window.notesApp = function notesApp(config) {
 
             // Sync reactive prefs and re-sort when sort preference changes
             window.addEventListener('notes:preferences-changed', function(e) {
-                let oldSort = this.notePrefs.sortBy;
+                const oldSort = this.notePrefs.sortBy;
                 this.notePrefs = { ...e.detail };
                 // Only reload notes when sort order actually changed
                 if (oldSort !== this.notePrefs.sortBy && this.activeView && this.activeView !== 'journal') {
@@ -264,7 +264,7 @@ window.notesApp = function notesApp(config) {
 
             // Auto-open note if specified
             if (config.file) {
-                let note = this.notes.find(function(n) { return n.uuid === config.file; });
+                const note = this.notes.find(function(n) { return n.uuid === config.file; });
                 if (note) {
                     await this.selectNote(note);
                 } else {
@@ -274,8 +274,8 @@ window.notesApp = function notesApp(config) {
 
             // Handle browser back/forward on mobile
             window.addEventListener('popstate', function() {
-                let p = new URLSearchParams(window.location.search);
-                let fileId = p.get('file');
+                const p = new URLSearchParams(window.location.search);
+                const fileId = p.get('file');
                 if (fileId) {
                     this.selectNoteById(fileId);
                 } else {
@@ -290,8 +290,8 @@ window.notesApp = function notesApp(config) {
         _handleShortcut(e) {
             if (e.ctrlKey || e.metaKey || e.altKey) return;
             // Ignore when typing in inputs, textareas, contenteditables
-            let ae = document.activeElement;
-            let tag = ae ? ae.tagName : '';
+            const ae = document.activeElement;
+            const tag = ae ? ae.tagName : '';
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
                 (ae && ae.isContentEditable)) {
                 // Allow Escape to blur the active editable element
@@ -301,12 +301,12 @@ window.notesApp = function notesApp(config) {
                 return;
             }
             // Skip if any modal dialog is open (other than letting Esc close it natively)
-            let openDialog = document.querySelector('dialog[open]');
+            const openDialog = document.querySelector('dialog[open]');
             if (openDialog && e.key !== '?') return;
 
             // Handle "go to" two-key combos first (g then x)
             if (this._gPending) {
-                let key = e.key.toLowerCase();
+                const key = e.key.toLowerCase();
                 this._gPending = false;
                 if (key === 'a') { e.preventDefault(); this.setView('all', null, 'All notes'); return; }
                 if (key === 'f') { e.preventDefault(); this.setView('favorites', null, 'Favorites'); return; }
@@ -318,7 +318,7 @@ window.notesApp = function notesApp(config) {
             switch (e.key) {
                 case '?':
                     e.preventDefault();
-                    let dlg = document.getElementById('notes-help-dialog');
+                    const dlg = document.getElementById('notes-help-dialog');
                     if (dlg) dlg.showModal();
                     break;
                 case 'n':
@@ -353,7 +353,7 @@ window.notesApp = function notesApp(config) {
                 case 'R':
                     if (this.selectedNote) {
                         e.preventDefault();
-                        let input = document.querySelector('input.input-ghost.input-sm.font-semibold');
+                        const input = document.querySelector('input.input-ghost.input-sm.font-semibold');
                         if (input) { input.focus(); input.select(); }
                     }
                     break;
@@ -390,12 +390,12 @@ window.notesApp = function notesApp(config) {
         // ── Folder data management (nested tree) ─────────────
 
         _loadFolderData() {
-            let el = document.getElementById('notes-folders-data');
+            const el = document.getElementById('notes-folders-data');
             if (el) {
                 try { this.sidebarFolders = JSON.parse(el.textContent); }
                 catch (e) { this.sidebarFolders = []; }
             }
-            let gel = document.getElementById('notes-group-folders-data');
+            const gel = document.getElementById('notes-group-folders-data');
             if (gel) {
                 try { this.sidebarGroupFolders = JSON.parse(gel.textContent); }
                 catch (e) { this.sidebarGroupFolders = []; }
@@ -403,7 +403,7 @@ window.notesApp = function notesApp(config) {
             // Root folders are at depth 0
             this.sidebarFolders.forEach(function(f) { f.depth = 0; });
             // Filter out the journal folder from sidebar (it has its own Quick Access entry)
-            let journalUuid = this.notePrefs.journalFolderUuid;
+            const journalUuid = this.notePrefs.journalFolderUuid;
             if (journalUuid) {
                 this.sidebarFolders = this.sidebarFolders.filter(function(f) { return f.uuid !== journalUuid; });
             }
@@ -414,7 +414,7 @@ window.notesApp = function notesApp(config) {
             if (!list) return null;
             for (let i = 0; i < list.length; i++) {
                 if (list[i].uuid === uuid) return list[i];
-                let found = this._findFolder(uuid, list[i].children);
+                const found = this._findFolder(uuid, list[i].children);
                 if (found) return found;
             }
             return null;
@@ -424,12 +424,12 @@ window.notesApp = function notesApp(config) {
             if (folder.children) return; // already loaded
             this.loadingChildren = this.loadingChildren.concat([folder.uuid]);
 
-            let resp = await fetch('/api/v1/files?parent=' + folder.uuid + '&node_type=folder&ordering=name');
+            const resp = await fetch('/api/v1/files?parent=' + folder.uuid + '&node_type=folder&ordering=name');
             this.loadingChildren = this.loadingChildren.filter(function(id) { return id !== folder.uuid; });
             if (!resp.ok) { folder.children = []; return; }
 
-            let children = await resp.json();
-            let childDepth = (folder.depth || 0) + 1;
+            const children = await resp.json();
+            const childDepth = (folder.depth || 0) + 1;
             children.forEach(function(c) { c.depth = childDepth; });
             folder.children = children;
 
@@ -441,13 +441,13 @@ window.notesApp = function notesApp(config) {
         // ── Sidebar navigation ──────────────────────────────
 
         _sortParam() {
-            let sortMap = { name: 'name', modified: '-updated_at', created: '-created_at' };
+            const sortMap = { name: 'name', modified: '-updated_at', created: '-created_at' };
             return sortMap[window._notesPrefsCache.sortBy] || '-updated_at';
         },
 
         async setView(view, id, name, skipUrl, descendants) {
             id = id || null;
-            let viewChanged = (view !== this.activeView || id !== this.activeId);
+            const viewChanged = (view !== this.activeView || id !== this.activeId);
             this.activeView = view;
             this.activeId = id;
             this._descendants = !!descendants;
@@ -461,7 +461,7 @@ window.notesApp = function notesApp(config) {
                 this.viewTitle = 'Recent';
             } else if (view === 'tag') {
                 if (!name && id) {
-                    let tagEl = document.querySelector('[data-tag-uuid="' + id + '"]');
+                    const tagEl = document.querySelector('[data-tag-uuid="' + id + '"]');
                     if (tagEl) name = tagEl.dataset.tagName;
                 }
                 this.viewTitle = name || 'Tag';
@@ -487,7 +487,7 @@ window.notesApp = function notesApp(config) {
         async loadNotes(url) {
             this.notes = [];
             this.loadingNotes = true;
-            let resp = await fetch(url);
+            const resp = await fetch(url);
             if (resp.ok) {
                 this.notes = await resp.json();
             }
@@ -502,15 +502,15 @@ window.notesApp = function notesApp(config) {
             this.viewTitle = 'Journal';
             this._closeDrawerOnMobile();
 
-            let journalUuid = this.notePrefs.journalFolderUuid;
+            const journalUuid = this.notePrefs.journalFolderUuid;
             if (!journalUuid) return;
 
             this.activeId = journalUuid;
             await this.loadNotes('/api/v1/files?mime_type=text/markdown&parent=' + journalUuid + '&ordering=-name');
 
             // Create today's note if needed
-            let today = new Date().toISOString().split('T')[0];
-            let todayName = today + '.md';
+            const today = new Date().toISOString().split('T')[0];
+            const todayName = today + '.md';
             let todayNote = this.notes.find(function(n) { return n.name === todayName; });
 
             if (!todayNote) {
@@ -537,15 +537,15 @@ window.notesApp = function notesApp(config) {
         },
 
         async selectNoteById(uuid) {
-            let resp = await fetch('/api/v1/files/' + uuid);
+            const resp = await fetch('/api/v1/files/' + uuid);
             if (resp.ok) {
-                let note = await resp.json();
+                const note = await resp.json();
                 await this.selectNote(note);
             }
         },
 
         async loadViewer(note) {
-            let container = this.$refs.editorContainer;
+            const container = this.$refs.editorContainer;
             if (!container) return;
 
             // Cleanup previous viewer
@@ -554,29 +554,29 @@ window.notesApp = function notesApp(config) {
             this._loadedScripts.forEach(function(s) { s.remove(); });
             this._loadedScripts = [];
 
-            let generation = ++this._loadGeneration;
+            const generation = ++this._loadGeneration;
             this.loadingEditor = true;
 
             try {
-                let resp = await fetch('/files/view/' + note.uuid);
+                const resp = await fetch('/files/view/' + note.uuid);
                 if (generation !== this._loadGeneration) return;
                 if (!resp.ok) throw new Error('Failed to load viewer: ' + resp.status);
 
-                let rawHtml = await resp.text();
+                const rawHtml = await resp.text();
                 if (generation !== this._loadGeneration) return;
 
-                let temp = document.createElement('template');
+                const temp = document.createElement('template');
                 temp.innerHTML = rawHtml;
 
-                let scriptEls = temp.content.querySelectorAll('script');
-                let scripts = [];
+                const scriptEls = temp.content.querySelectorAll('script');
+                const scripts = [];
                 scriptEls.forEach(function(el) {
                     scripts.push(el.textContent);
                     el.remove();
                 });
 
                 scripts.forEach(function(scriptContent) {
-                    let newScript = document.createElement('script');
+                    const newScript = document.createElement('script');
                     newScript.textContent = scriptContent;
                     document.head.appendChild(newScript);
                     this._loadedScripts.push(newScript);
@@ -618,7 +618,7 @@ window.notesApp = function notesApp(config) {
             } else {
                 parentUuid = this.notePrefs.defaultFolderUuid || null;
             }
-            let note = await this._createMdFile(name, parentUuid);
+            const note = await this._createMdFile(name, parentUuid);
             if (note) {
                 this.notes.unshift(note);
                 await this.selectNote(note);
@@ -630,7 +630,7 @@ window.notesApp = function notesApp(config) {
             if (!newName.endsWith('.md')) newName += '.md';
             if (newName === this.selectedNote.name) return;
 
-            let resp = await fetch('/api/v1/files/' + this.selectedNote.uuid, {
+            const resp = await fetch('/api/v1/files/' + this.selectedNote.uuid, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -647,7 +647,7 @@ window.notesApp = function notesApp(config) {
         async deleteNote() {
             if (!this.selectedNote) return;
             if (window._notesPrefsCache.confirmBeforeDelete) {
-                let ok = await AppDialog.confirm({
+                const ok = await AppDialog.confirm({
                     title: 'Delete note',
                     message: 'Are you sure you want to delete "' + this.noteName(this.selectedNote) + '"?',
                     okLabel: 'Delete',
@@ -660,15 +660,15 @@ window.notesApp = function notesApp(config) {
 
             window.dispatchEvent(new CustomEvent('viewer-cleanup'));
 
-            let resp = await fetch('/api/v1/files/' + this.selectedNote.uuid, {
+            const resp = await fetch('/api/v1/files/' + this.selectedNote.uuid, {
                 method: 'DELETE',
                 headers: { 'X-CSRFToken': getCSRFToken() },
             });
 
             if (resp.ok) {
-                let uuid = this.selectedNote.uuid;
+                const uuid = this.selectedNote.uuid;
                 this.notes = this.notes.filter(function(n) { return n.uuid !== uuid; });
-                let container = this.$refs.editorContainer;
+                const container = this.$refs.editorContainer;
                 if (container) container.replaceChildren();
                 this._loadedScripts.forEach(function(s) { s.remove(); });
                 this._loadedScripts = [];
@@ -680,18 +680,18 @@ window.notesApp = function notesApp(config) {
         async toggleFavorite(note) {
             if (!note || this.togglingFavorite) return;
             this.togglingFavorite = true;
-            let isFav = note.is_favorite;
-            let resp = await fetch('/api/v1/files/' + note.uuid + '/favorite', {
+            const isFav = note.is_favorite;
+            const resp = await fetch('/api/v1/files/' + note.uuid + '/favorite', {
                 method: isFav ? 'DELETE' : 'POST',
                 headers: { 'X-CSRFToken': getCSRFToken() },
             });
             if (resp.ok) {
                 note.is_favorite = !isFav;
                 if (this.activeView === 'favorites' && isFav) {
-                    let idx = this.notes.findIndex(function(n) { return n.uuid === note.uuid; });
+                    const idx = this.notes.findIndex(function(n) { return n.uuid === note.uuid; });
                     this.notes = this.notes.filter(function(n) { return n.uuid !== note.uuid; });
                     if (this.selectedNote && this.selectedNote.uuid === note.uuid) {
-                        let next = this.notes[idx] || this.notes[idx - 1] || null;
+                        const next = this.notes[idx] || this.notes[idx - 1] || null;
                         if (next) {
                             this.selectNote(next);
                         } else {
@@ -722,7 +722,7 @@ window.notesApp = function notesApp(config) {
             let x = e.clientX;
             let y = e.clientY;
             // Prevent overflow
-            let menuW = 220, menuH = 200;
+            const menuW = 220, menuH = 200;
             if (x + menuW > window.innerWidth) x = window.innerWidth - menuW;
             if (y + menuH > window.innerHeight) y = window.innerHeight - menuH;
             this.ctxMenu = { open: true, x: x, y: y, type: type, data: data, actions: null };
@@ -737,7 +737,7 @@ window.notesApp = function notesApp(config) {
 
         async _fetchFolderActions(uuid) {
             try {
-                let resp = await fetch('/api/v1/files/actions', {
+                const resp = await fetch('/api/v1/files/actions', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -746,10 +746,10 @@ window.notesApp = function notesApp(config) {
                     body: JSON.stringify({ uuids: [uuid] }),
                 });
                 if (resp.ok) {
-                    let data = await resp.json();
-                    let allActions = data[uuid] || [];
+                    const data = await resp.json();
+                    const allActions = data[uuid] || [];
                     // Filter to relevant folder actions for the notes sidebar
-                    let relevant = ['rename', 'delete'];
+                    const relevant = ['rename', 'delete'];
                     this.ctxMenu.actions = allActions.filter(function(a) {
                         return relevant.indexOf(a.id) !== -1;
                     });
@@ -767,7 +767,7 @@ window.notesApp = function notesApp(config) {
 
         async _fetchNoteActions(uuid) {
             try {
-                let resp = await fetch('/api/v1/files/actions', {
+                const resp = await fetch('/api/v1/files/actions', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -776,10 +776,10 @@ window.notesApp = function notesApp(config) {
                     body: JSON.stringify({ uuids: [uuid] }),
                 });
                 if (resp.ok) {
-                    let data = await resp.json();
-                    let allActions = data[uuid] || [];
+                    const data = await resp.json();
+                    const allActions = data[uuid] || [];
                     // Show relevant note actions (favorite, rename, delete)
-                    let relevant = ['toggle_favorite', 'rename', 'delete'];
+                    const relevant = ['toggle_favorite', 'rename', 'delete'];
                     this.ctxMenu.actions = allActions.filter(function(a) {
                         return relevant.indexOf(a.id) !== -1;
                     });
@@ -795,20 +795,20 @@ window.notesApp = function notesApp(config) {
         },
 
         ctxNoteAction(action) {
-            let m = this.ctxMenu;
+            const m = this.ctxMenu;
             this.closeCtxMenu();
             if (!m.data) return;
 
-            let self = this;
-            let uuid = m.data.uuid;
-            let name = m.data.name;
+            const self = this;
+            const uuid = m.data.uuid;
+            const name = m.data.name;
 
             if (action.id === 'toggle_favorite') {
-                let note = this.notes.find(function(n) { return n.uuid === uuid; });
+                const note = this.notes.find(function(n) { return n.uuid === uuid; });
                 if (note) this.toggleFavorite(note);
             } else if (action.id === 'rename') {
                 // Select the note first, then trigger rename via the editor header
-                let note = this.notes.find(function(n) { return n.uuid === uuid; });
+                const note = this.notes.find(function(n) { return n.uuid === uuid; });
                 if (note) {
                     this.selectNote(note).then(function() {
                         self.showRenameDialog(uuid, name);
@@ -831,7 +831,7 @@ window.notesApp = function notesApp(config) {
                         if (!resp.ok) return;
                         self.notes = self.notes.filter(function(n) { return n.uuid !== uuid; });
                         if (self.selectedNote && self.selectedNote.uuid === uuid) {
-                            let container = self.$refs.editorContainer;
+                            const container = self.$refs.editorContainer;
                             if (container) container.replaceChildren();
                             self._loadedScripts.forEach(function(s) { s.remove(); });
                             self._loadedScripts = [];
@@ -846,8 +846,8 @@ window.notesApp = function notesApp(config) {
         },
 
         async moveNote(uuid, name) {
-            let displayName = (name || '').replace(/\.md$/i, '');
-            let folder = await AppDialog.folderPicker({
+            const displayName = (name || '').replace(/\.md$/i, '');
+            const folder = await AppDialog.folderPicker({
                 title: 'Move note',
                 message: 'Choose a destination for "' + displayName + '"',
                 okLabel: 'Move here',
@@ -857,7 +857,7 @@ window.notesApp = function notesApp(config) {
             });
             if (!folder) return;
 
-            let resp = await fetch('/api/v1/files/' + uuid, {
+            const resp = await fetch('/api/v1/files/' + uuid, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -867,7 +867,7 @@ window.notesApp = function notesApp(config) {
             });
             if (resp.ok) {
                 // Remove from current list if we're in a folder view and the note moved out
-                let self = this;
+                const self = this;
                 if (this.activeView === 'folder' || this.activeView === 'group_folder') {
                     this.notes = this.notes.filter(function(n) { return n.uuid !== uuid; });
                     if (self.selectedNote && self.selectedNote.uuid === uuid) {
@@ -884,16 +884,16 @@ window.notesApp = function notesApp(config) {
         },
 
         ctxFolderAction(action) {
-            let m = this.ctxMenu;
+            const m = this.ctxMenu;
             this.closeCtxMenu();
             if (!m.data) return;
 
             if (action.id === 'rename') {
                 this.showRenameDialog(m.data.uuid, m.data.name);
             } else if (action.id === 'delete') {
-                let self = this;
-                let uuid = m.data.uuid;
-                let name = m.data.name;
+                const self = this;
+                const uuid = m.data.uuid;
+                const name = m.data.name;
                 AppDialog.confirm({
                     title: 'Delete folder',
                     message: 'Move "' + name + '" to trash? Notes inside will also be moved.',
@@ -916,7 +916,7 @@ window.notesApp = function notesApp(config) {
         },
 
         async _createSubfolder(parentFolder) {
-            let name = await AppDialog.prompt({
+            const name = await AppDialog.prompt({
                 title: 'New subfolder',
                 message: 'Create a subfolder in "' + parentFolder.name + '"',
                 placeholder: 'Subfolder name',
@@ -927,8 +927,8 @@ window.notesApp = function notesApp(config) {
             });
             if (!name) return;
 
-            let body = { name: name, node_type: 'folder', parent: parentFolder.uuid };
-            let resp = await fetch('/api/v1/files', {
+            const body = { name: name, node_type: 'folder', parent: parentFolder.uuid };
+            const resp = await fetch('/api/v1/files', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -938,7 +938,7 @@ window.notesApp = function notesApp(config) {
             });
             if (!resp.ok) return;
 
-            let created = await resp.json();
+            const created = await resp.json();
             created.depth = (parentFolder.depth || 0) + 1;
             created.has_children = false;
 
@@ -959,7 +959,7 @@ window.notesApp = function notesApp(config) {
         },
 
         ctxAction(action) {
-            let m = this.ctxMenu;
+            const m = this.ctxMenu;
             this.closeCtxMenu();
             if (!m.data) return;
 
@@ -968,7 +968,7 @@ window.notesApp = function notesApp(config) {
                     this.showTagModal(m.data);
                 } else if (action === 'delete') {
                     if (!confirm('Delete tag "' + m.data.name + '"?')) return;
-                    let self = this;
+                    const self = this;
                     fetch('/api/v1/tags/' + m.data.uuid, {
                         method: 'DELETE',
                         headers: { 'X-CSRFToken': getCSRFToken() },
@@ -996,13 +996,13 @@ window.notesApp = function notesApp(config) {
         expandedFolders: [],
 
         _readExpandedFromUrl() {
-            let p = new URLSearchParams(window.location.search);
-            let raw = p.get('expanded');
+            const p = new URLSearchParams(window.location.search);
+            const raw = p.get('expanded');
             return raw ? raw.split(',').filter(Boolean) : [];
         },
 
         _writeExpandedToUrl() {
-            let url = new URL(window.location);
+            const url = new URL(window.location);
             if (this.expandedFolders.length > 0) {
                 url.searchParams.set('expanded', this.expandedFolders.join(','));
             } else {
@@ -1012,12 +1012,12 @@ window.notesApp = function notesApp(config) {
         },
 
         async _restoreExpandedFolders() {
-            let uuids = this._readExpandedFromUrl();
+            const uuids = this._readExpandedFromUrl();
             if (uuids.length === 0) return;
             this.expandedFolders = uuids;
             // Lazy-load children for each expanded folder in order
             for (let i = 0; i < uuids.length; i++) {
-                let folder = this._findFolder(uuids[i], this.sidebarFolders)
+                const folder = this._findFolder(uuids[i], this.sidebarFolders)
                           || this._findFolder(uuids[i], this.sidebarGroupFolders);
                 if (folder) {
                     await this._loadChildren(folder);
@@ -1029,9 +1029,9 @@ window.notesApp = function notesApp(config) {
         },
 
         async toggleFolderExpand(uuid) {
-            let idx = this.expandedFolders.indexOf(uuid);
+            const idx = this.expandedFolders.indexOf(uuid);
             if (idx === -1) {
-                let folder = this._findFolder(uuid, this.sidebarFolders)
+                const folder = this._findFolder(uuid, this.sidebarFolders)
                           || this._findFolder(uuid, this.sidebarGroupFolders);
                 if (folder) {
                     await this._loadChildren(folder);
@@ -1039,7 +1039,7 @@ window.notesApp = function notesApp(config) {
                 this.expandedFolders = this.expandedFolders.concat([uuid]);
             } else {
                 // Collapsing: also remove expanded descendants
-                let toRemove = this._getDescendantUuids(uuid);
+                const toRemove = this._getDescendantUuids(uuid);
                 toRemove.push(uuid);
                 this.expandedFolders = this.expandedFolders.filter(function(id) {
                     return toRemove.indexOf(id) === -1;
@@ -1049,10 +1049,10 @@ window.notesApp = function notesApp(config) {
         },
 
         _getDescendantUuids(uuid) {
-            let folder = this._findFolder(uuid, this.sidebarFolders)
+            const folder = this._findFolder(uuid, this.sidebarFolders)
                       || this._findFolder(uuid, this.sidebarGroupFolders);
             if (!folder || !folder.children) return [];
-            let result = [];
+            const result = [];
             function walk(children) {
                 for (let i = 0; i < children.length; i++) {
                     result.push(children[i].uuid);
@@ -1064,8 +1064,8 @@ window.notesApp = function notesApp(config) {
         },
 
         toggleHidden(uuid) {
-            let list = (this.notePrefs.hiddenItems || []).slice();
-            let idx = list.indexOf(uuid);
+            const list = (this.notePrefs.hiddenItems || []).slice();
+            const idx = list.indexOf(uuid);
             if (idx === -1) {
                 list.push(uuid);
             } else {
@@ -1082,7 +1082,7 @@ window.notesApp = function notesApp(config) {
                 detail: { ...window._notesPrefsCache }
             }));
             // Persist to server
-            let prefs = { ...window._notesPrefsCache };
+            const prefs = { ...window._notesPrefsCache };
             fetch('/api/v1/settings/notes/preferences', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -1094,8 +1094,8 @@ window.notesApp = function notesApp(config) {
 
         updateUrl(options) {
             options = options || {};
-            let push = options.push || false;
-            let url = new URL(window.location);
+            const push = options.push || false;
+            const url = new URL(window.location);
             url.search = '';
 
             if (this.activeView !== 'all') {
@@ -1124,16 +1124,16 @@ window.notesApp = function notesApp(config) {
         // ── Sidebar refresh ──────────────────────────────────
 
         async refreshSidebar() {
-            let resp = await fetch('/notes', {
+            const resp = await fetch('/notes', {
                 headers: { 'X-Alpine-Request': 'true' },
             });
             if (resp.ok) {
-                let html = await resp.text();
-                let container = document.getElementById('notes-sidebar');
+                const html = await resp.text();
+                const container = document.getElementById('notes-sidebar');
                 if (container) {
                     container.textContent = '';
                     // Parse and insert safely
-                    let temp = document.createElement('template');
+                    const temp = document.createElement('template');
                     temp.innerHTML = html;
                     container.appendChild(temp.content);
                     // Reload folder data from new embedded JSON
@@ -1148,9 +1148,9 @@ window.notesApp = function notesApp(config) {
         // ── Helpers ─────────────────────────────────────────
 
         _buildNotesUrl() {
-            let sort = '&ordering=' + this._sortParam();
+            const sort = '&ordering=' + this._sortParam();
             let base = '/api/v1/files?mime_type=text/markdown';
-            let hasSearch = this.filters.search.trim();
+            const hasSearch = this.filters.search.trim();
 
             if (this.activeView === 'all') {
                 if (!hasSearch) base += '&recent=1&recent_limit=200';
@@ -1213,7 +1213,7 @@ window.notesApp = function notesApp(config) {
         },
 
         toggleTagFilter(tagUuid) {
-            let idx = this.filters.tags.indexOf(tagUuid);
+            const idx = this.filters.tags.indexOf(tagUuid);
             if (idx === -1) {
                 this.filters.tags.push(tagUuid);
             } else {
@@ -1234,17 +1234,17 @@ window.notesApp = function notesApp(config) {
 
         highlightSearch(text) {
             if (!text) return '';
-            let escaped = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            let q = this.filters.search.trim();
+            const escaped = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const q = this.filters.search.trim();
             if (!q) return escaped;
-            let re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+            const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
             return escaped.replace(re, '<mark class="bg-warning/40 text-inherit rounded-sm px-0.5">$1</mark>');
         },
 
         selectedTagNames() {
-            let selected = this.filters.tags;
+            const selected = this.filters.tags;
             if (!selected.length) return '';
-            let names = this.allTags
+            const names = this.allTags
                 .filter(function(t) { return selected.indexOf(t.uuid) !== -1; })
                 .map(function(t) { return t.name; });
             if (names.length <= 2) return names.join(', ');
@@ -1252,7 +1252,7 @@ window.notesApp = function notesApp(config) {
         },
 
         async _createMdFile(name, parentUuid) {
-            let formData = new FormData();
+            const formData = new FormData();
             formData.append('name', name);
             formData.append('node_type', 'file');
             formData.append('mime_type', 'text/markdown');
@@ -1261,14 +1261,14 @@ window.notesApp = function notesApp(config) {
                 formData.append('parent', parentUuid);
             }
 
-            let resp = await fetch('/api/v1/files', {
+            const resp = await fetch('/api/v1/files', {
                 method: 'POST',
                 headers: { 'X-CSRFToken': getCSRFToken() },
                 body: formData,
             });
 
             if (resp.ok) {
-                let note = await resp.json();
+                const note = await resp.json();
                 note.tags = [];
                 return note;
             }
@@ -1281,7 +1281,7 @@ window.notesApp = function notesApp(config) {
 
         formatDate(dateStr) {
             if (!dateStr) return '';
-            let d = new Date(dateStr);
+            const d = new Date(dateStr);
             return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         },
 
@@ -1296,7 +1296,7 @@ window.notesApp = function notesApp(config) {
 
         _closeDrawerOnMobile() {
             if (this.isMobile()) {
-                let toggle = document.getElementById('notes-drawer');
+                const toggle = document.getElementById('notes-drawer');
                 if (toggle) toggle.checked = false;
             }
         },

@@ -63,9 +63,9 @@ function _patchCardStatus(container) {
     label.textContent = status;
   }
   if (ago) {
-    let lastSeen = el.dataset.lastSeen;
+    const lastSeen = el.dataset.lastSeen;
     if (cfg.showAgo && lastSeen) {
-      let diff = (Date.now() - new Date(lastSeen).getTime()) / 1000;
+      const diff = (Date.now() - new Date(lastSeen).getTime()) / 1000;
       // Skip "just now" — contradictory with away/offline status
       ago.textContent = diff >= 60 ? '\u00b7 ' + _formatTimeAgo(diff) : '';
     } else {
@@ -76,9 +76,9 @@ function _patchCardStatus(container) {
 
 function _formatTimeAgo(seconds) {
   if (seconds < 60) return 'just now';
-  if (seconds < 3600) { let m = Math.floor(seconds / 60); return m + ' minute' + (m > 1 ? 's' : '') + ' ago'; }
-  if (seconds < 86400) { let h = Math.floor(seconds / 3600); return h + ' hour' + (h > 1 ? 's' : '') + ' ago'; }
-  let d = Math.floor(seconds / 86400);
+  if (seconds < 3600) { const m = Math.floor(seconds / 60); return m + ' minute' + (m > 1 ? 's' : '') + ' ago'; }
+  if (seconds < 86400) { const h = Math.floor(seconds / 3600); return h + ' hour' + (h > 1 ? 's' : '') + ' ago'; }
+  const d = Math.floor(seconds / 86400);
   return d + ' day' + (d > 1 ? 's' : '') + ' ago';
 }
 
@@ -96,15 +96,15 @@ const _USER_CARD_CACHE_TTL = 30000; // 30 seconds
  */
 window._computePopoverPosition = function _computePopoverPosition(trigger, minSpace) {
   if (minSpace === undefined) minSpace = 280;
-  let rect = trigger.getBoundingClientRect();
+  const rect = trigger.getBoundingClientRect();
   let centerX = rect.left + rect.width / 2;
-  let spaceBelow = window.innerHeight - rect.bottom;
-  let placement = spaceBelow < minSpace ? 'top' : 'bottom';
-  let top = placement === 'top' ? rect.top - 8 : rect.bottom + 8;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const placement = spaceBelow < minSpace ? 'top' : 'bottom';
+  const top = placement === 'top' ? rect.top - 8 : rect.bottom + 8;
 
   // Clamp horizontally so the popover (w-64 = 256px) stays in viewport
-  let halfWidth = 128;
-  let margin = 8;
+  const halfWidth = 128;
+  const margin = 8;
   centerX = Math.max(halfWidth + margin, Math.min(centerX, window.innerWidth - halfWidth - margin));
 
   return { top: top, left: centerX, placement: placement };
@@ -118,13 +118,13 @@ window._computePopoverPosition = function _computePopoverPosition(trigger, minSp
  * @param {boolean} visible - true = final state, false = initial (hidden) state
  */
 window._applyPopoverTransform = function _applyPopoverTransform(popover, placement, visible) {
-  let baseX = 'translateX(-50%)';
-  let anchorY = placement === 'top' ? ' translateY(-100%)' : '';
+  const baseX = 'translateX(-50%)';
+  const anchorY = placement === 'top' ? ' translateY(-100%)' : '';
   if (visible) {
     popover.style.opacity = '1';
     popover.style.transform = baseX + anchorY;
   } else {
-    let slideOffset = placement === 'top' ? ' translateY(calc(-100% + 6px))' : ' translateY(-6px)';
+    const slideOffset = placement === 'top' ? ' translateY(calc(-100% + 6px))' : ' translateY(-6px)';
     popover.style.opacity = '0';
     popover.style.transform = baseX + slideOffset;
   }
@@ -154,7 +154,7 @@ window.userAvatarWithCardHtml = function(userId, username, sizeClass, options) {
  */
 window._setPopoverContent = function _setPopoverContent(el, html) {
   el.textContent = '';
-  let tpl = document.createElement('template');
+  const tpl = document.createElement('template');
   tpl.innerHTML = html;  // safe: content is from our own server endpoint
   el.appendChild(tpl.content);
 };
@@ -168,7 +168,7 @@ window._userCardShow = function(wrapper, userId) {
   window._userCardCancelHide(wrapper);
 
   // If popover is already visible, nothing to do
-  let existing = wrapper._userCardPopover;
+  const existing = wrapper._userCardPopover;
   if (existing && existing.style.display !== 'none' && existing.style.opacity === '1') {
     return;
   }
@@ -187,9 +187,9 @@ window._userCardShow = function(wrapper, userId) {
       popover.className = 'user-card-popover fixed z-[9999] bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
       popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
       popover.style.opacity = '0';
-      let spinWrap = document.createElement('div');
+      const spinWrap = document.createElement('div');
       spinWrap.className = 'p-4 flex justify-center';
-      let spinner = document.createElement('span');
+      const spinner = document.createElement('span');
       spinner.className = 'loading loading-spinner loading-sm';
       spinWrap.appendChild(spinner);
       popover.appendChild(spinWrap);
@@ -200,7 +200,7 @@ window._userCardShow = function(wrapper, userId) {
     }
 
     // Position using fixed coordinates
-    let pos = _computePopoverPosition(wrapper);
+    const pos = _computePopoverPosition(wrapper);
     popover.style.left = pos.left + 'px';
     popover.style.top = pos.top + 'px';
     wrapper._placement = pos.placement;
@@ -214,8 +214,8 @@ window._userCardShow = function(wrapper, userId) {
     _applyPopoverTransform(popover, pos.placement, true);
 
     // Fetch content if not cached (or cache expired)
-    let cached = _userCardCache[userId];
-    let cacheValid = cached && (_userCardCacheTimes[userId] || 0) + _USER_CARD_CACHE_TTL > Date.now();
+    const cached = _userCardCache[userId];
+    const cacheValid = cached && (_userCardCacheTimes[userId] || 0) + _USER_CARD_CACHE_TTL > Date.now();
     if (cacheValid) {
       _setPopoverContent(popover, cached);
       _patchCardStatus(popover);
@@ -249,7 +249,7 @@ window._userCardScheduleHide = function(wrapper) {
   }
 
   wrapper._hideTimeout = setTimeout(function() {
-    let popover = wrapper._userCardPopover;
+    const popover = wrapper._userCardPopover;
     if (popover) {
       _applyPopoverTransform(popover, wrapper._placement || 'bottom', false);
       wrapper._closeTimeout = setTimeout(function() { popover.style.display = 'none'; }, 150);
@@ -270,7 +270,7 @@ window._userCardCancelHide = function(wrapper) {
     wrapper._closeTimeout = null;
   }
   // Restore visible state if popover was fading out
-  let popover = wrapper._userCardPopover;
+  const popover = wrapper._userCardPopover;
   if (popover && popover.style.display !== 'none') {
     _applyPopoverTransform(popover, wrapper._placement || 'bottom', true);
   }
@@ -297,7 +297,7 @@ window.userCard = function(userId) {
     },
     destroy() {
       // Clean up the imperative popover when Alpine removes this component
-      let popover = this.$el._userCardPopover;
+      const popover = this.$el._userCardPopover;
       if (popover && popover.parentNode) {
         popover.parentNode.removeChild(popover);
       }

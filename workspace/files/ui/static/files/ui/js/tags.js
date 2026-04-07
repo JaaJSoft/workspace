@@ -24,7 +24,7 @@ window.tagsMixin = function tagsMixin() {
         },
 
         async loadTags() {
-            let resp = await fetch('/api/v1/tags');
+            const resp = await fetch('/api/v1/tags');
             if (resp.ok) {
                 this.allTags = await resp.json();
             }
@@ -35,15 +35,15 @@ window.tagsMixin = function tagsMixin() {
         },
 
         fileHasTag(tagUuid) {
-            let target = this._tagTarget();
+            const target = this._tagTarget();
             if (!target || !target.tags) return false;
             return target.tags.some(function(t) { return t.uuid === tagUuid; });
         },
 
         async toggleFileTag(tag) {
-            let target = this._tagTarget();
+            const target = this._tagTarget();
             if (!target) return;
-            let hasIt = this.fileHasTag(tag.uuid);
+            const hasIt = this.fileHasTag(tag.uuid);
             if (hasIt) {
                 await fetch('/api/v1/files/' + target.uuid + '/tags/' + tag.uuid, {
                     method: 'DELETE',
@@ -53,7 +53,7 @@ window.tagsMixin = function tagsMixin() {
                     return t.uuid !== tag.uuid;
                 });
             } else {
-                let resp = await fetch('/api/v1/files/' + target.uuid + '/tags', {
+                const resp = await fetch('/api/v1/files/' + target.uuid + '/tags', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -78,31 +78,31 @@ window.tagsMixin = function tagsMixin() {
                 saving: false,
                 error: '',
             };
-            let dlg = document.getElementById('tag-dialog');
+            const dlg = document.getElementById('tag-dialog');
             if (dlg) {
                 dlg.showModal();
-                let self = this;
+                const self = this;
                 setTimeout(function() {
-                    let input = dlg.querySelector('input[type="text"]');
+                    const input = dlg.querySelector('input[type="text"]');
                     if (input) input.focus();
                 }, 50);
             }
         },
 
         closeTagModal() {
-            let dlg = document.getElementById('tag-dialog');
+            const dlg = document.getElementById('tag-dialog');
             if (dlg) dlg.close();
         },
 
         async saveTagModal() {
-            let m = this.tagModal;
+            const m = this.tagModal;
             if (!m.name.trim()) return;
             m.saving = true;
             m.error = '';
 
-            let isEdit = !!m.uuid;
-            let url = isEdit ? '/api/v1/tags/' + m.uuid : '/api/v1/tags';
-            let resp = await fetch(url, {
+            const isEdit = !!m.uuid;
+            const url = isEdit ? '/api/v1/tags/' + m.uuid : '/api/v1/tags';
+            const resp = await fetch(url, {
                 method: isEdit ? 'PATCH' : 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -112,13 +112,13 @@ window.tagsMixin = function tagsMixin() {
             });
 
             if (!resp.ok) {
-                let data = await resp.json().catch(function() { return {}; });
+                const data = await resp.json().catch(function() { return {}; });
                 m.error = data.name ? data.name[0] : (data.detail || 'Failed to save tag.');
                 m.saving = false;
                 return;
             }
 
-            let tag = await resp.json();
+            const tag = await resp.json();
             if (isEdit) {
                 // Update in allTags
                 for (let i = 0; i < this.allTags.length; i++) {
@@ -141,11 +141,11 @@ window.tagsMixin = function tagsMixin() {
         },
 
         async deleteTagConfirm() {
-            let m = this.tagModal;
+            const m = this.tagModal;
             if (!m.uuid) return;
             if (!confirm('Delete tag "' + m.name + '"?')) return;
 
-            let resp = await fetch('/api/v1/tags/' + m.uuid, {
+            const resp = await fetch('/api/v1/tags/' + m.uuid, {
                 method: 'DELETE',
                 headers: { 'X-CSRFToken': getCSRFToken() },
             });
@@ -153,9 +153,9 @@ window.tagsMixin = function tagsMixin() {
             if (resp.ok || resp.status === 204) {
                 this.allTags = this.allTags.filter(function(t) { return t.uuid !== m.uuid; });
                 // Remove from selected file's tags too
-                let target = this._tagTarget();
+                const target = this._tagTarget();
                 if (target && target.tags) {
-                    let uuid = m.uuid;
+                    const uuid = m.uuid;
                     target.tags = target.tags.filter(function(t) { return t.uuid !== uuid; });
                 }
                 this.closeTagModal();

@@ -103,30 +103,7 @@
               <p class="text-sm text-base-content/60">What's happening across your workspace.</p>
             </div>
             <div class="flex items-center gap-2">
-            <div class="tabs tabs-boxed overflow-x-auto flex-nowrap">
-              <a
-                :href="feedUrl.replace(/source=[^&]*/g, '').replace(/[?&]$/, '')"
-                class="tab gap-1.5 sm:!px-3 !px-2.5"
-                :class="activityTab === 'all' ? 'tab-active' : ''"
-                @click="activityTab = 'all'"
-                x-target="dashboard-activity"
-              >
-                <i data-lucide="layers" class="w-3.5 h-3.5 shrink-0"></i>
-                <span class="hidden sm:inline">All</span>
-              </a>
-              {% for src in activity_sources %}
-              <a
-                :href="feedUrl.includes('source=') ? feedUrl.replace(/source=[^&]*/, 'source={{ src.slug }}') : feedUrl + (feedUrl.includes('?') ? '&' : '?') + 'source={{ src.slug }}'"
-                class="tab gap-1.5 sm:!px-3 !px-2.5"
-                :class="activityTab === '{{ src.slug }}' ? 'tab-active' : ''"
-                @click="activityTab = '{{ src.slug }}'"
-                x-target="dashboard-activity"
-              >
-                <i data-lucide="{{ src.icon }}" class="w-3.5 h-3.5 shrink-0"></i>
-                <span class="hidden sm:inline">{{ src.label }}</span>
-              </a>
-              {% endfor %}
-            </div>
+            {% include "ui/partials/activity_tabs.html" with activity_prefix="dashboard-activity" %}
             <button
               class="btn btn-ghost btn-sm btn-square"
               :class="searchOpen && 'btn-active'"

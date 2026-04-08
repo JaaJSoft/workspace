@@ -865,24 +865,24 @@
         this.animated = true;
         this.$nextTick(() => {
           this.$el.querySelectorAll('[data-count]').forEach(el => {
-            var target = parseInt(el.dataset.count) || 0;
+            const target = parseInt(el.dataset.count) || 0;
             if (target === 0) { el.textContent = '0'; return; }
             this._countUp(el, target, 600);
           });
-          var bar = this.$refs.settingsStorageBar;
+          const bar = this.$refs.settingsStorageBar;
           if (bar) {
-            var used = {{ usage_stats.files.total_size|default:"0" }};
-            var quota = {{ storage_quota }};
-            var pct = quota > 0 ? Math.min((used / quota) * 100, 100) : 0;
+            const used = {{ usage_stats.files.total_size|default:"0" }};
+            const quota = {{ storage_quota }};
+            const pct = quota > 0 ? Math.min((used / quota) * 100, 100) : 0;
             requestAnimationFrame(() => { bar.style.width = pct + '%'; });
           }
         });
       },
       _countUp(el, target, duration) {
-        var start = performance.now();
+        const start = performance.now();
         function tick(now) {
-          var progress = Math.min((now - start) / duration, 1);
-          var eased = 1 - Math.pow(1 - progress, 3);
+          const progress = Math.min((now - start) / duration, 1);
+          const eased = 1 - Math.pow(1 - progress, 3);
           el.textContent = Math.round(eased * target).toLocaleString();
           if (progress < 1) requestAnimationFrame(tick);
         }

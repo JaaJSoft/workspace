@@ -3,7 +3,7 @@
  *
  * Usage in a viewer's Alpine component:
  *
- *   var lock = window.fileLock(fileUuid, getCSRFToken);
+ *   let lock = window.fileLock(fileUuid, getCSRFToken);
  *
  *   // In Alpine data:
  *   lockOwner: <initial value from template>,
@@ -13,11 +13,11 @@
  *   // Call lock.dispose(self) in dispose()
  */
 window.fileLock = function(fileUuid, getCSRFToken) {
-  var _heartbeatTimer = null;
-  var _beforeUnloadHandler = null;
-  var _sseHandlers = [];
-  var _hasLock = false;
-  var _lockUrl = '/api/v1/files/' + fileUuid + '/lock';
+  let _heartbeatTimer = null;
+  let _beforeUnloadHandler = null;
+  let _sseHandlers = [];
+  let _hasLock = false;
+  const _lockUrl = '/api/v1/files/' + fileUuid + '/lock';
 
   function _fetch(method) {
     return fetch(_lockUrl, {
@@ -76,7 +76,7 @@ window.fileLock = function(fileUuid, getCSRFToken) {
      * @param {function} callbacks.onAcquired - called when lock is acquired successfully
      */
     acquire: function(self, callbacks) {
-      var _this = this;
+      const _this = this;
       _removeSSEListeners();
 
       _addSSEListener('sse:files.lock_released', function(e) {

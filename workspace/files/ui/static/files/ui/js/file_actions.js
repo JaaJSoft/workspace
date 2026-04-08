@@ -22,21 +22,21 @@ window.fileActions = {
     // ── Dialog helpers ───────────────────────────────────
 
     showCreateFolderDialog: function() {
-        var dialog = document.getElementById('create-folder-dialog');
+        const dialog = document.getElementById('create-folder-dialog');
         if (!dialog) return;
-        var input = dialog.querySelector('input');
+        const input = dialog.querySelector('input');
         if (input) input.value = '';
         dialog.showModal();
         setTimeout(function() { if (input) input.focus(); }, 100);
     },
 
     showRenameDialog: function(uuid, name) {
-        var dialog = document.getElementById('rename-dialog');
+        const dialog = document.getElementById('rename-dialog');
         if (!dialog) return;
         window.dispatchEvent(new CustomEvent('open-rename', { detail: { uuid: uuid, name: name } }));
         dialog.showModal();
         setTimeout(function() {
-            var input = dialog.querySelector('input');
+            const input = dialog.querySelector('input');
             if (input) input.focus();
         }, 100);
     },
@@ -65,7 +65,7 @@ window.fileActions = {
                     throw new Error(data.name ? data.name[0] : (data.detail || 'Failed to create folder'));
                 });
             }
-            var dlg = document.getElementById('create-folder-dialog');
+            const dlg = document.getElementById('create-folder-dialog');
             if (dlg) dlg.close();
             return resp.json();
         });
@@ -97,7 +97,7 @@ window.fileActions = {
                     throw new Error(data.name ? data.name[0] : (data.detail || 'Failed to create group folder'));
                 });
             }
-            var dlg = document.getElementById('create-group-folder-dialog');
+            const dlg = document.getElementById('create-group-folder-dialog');
             if (dlg) dlg.close();
             return resp.json();
         });
@@ -117,7 +117,7 @@ window.fileActions = {
                     throw new Error(data.name ? data.name[0] : (data.detail || 'Failed to rename'));
                 });
             }
-            var dlg = document.getElementById('rename-dialog');
+            const dlg = document.getElementById('rename-dialog');
             if (dlg) dlg.close();
             return resp.json();
         });

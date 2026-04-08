@@ -103,7 +103,7 @@ window.markdownViewerCrepe = function() {
   let _beforeUnloadHandler = null;
 
   function getCSRFToken() {
-    var match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
+    const match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
     return match ? match.split('=')[1] : '';
   }
 
@@ -141,7 +141,7 @@ window.markdownViewerCrepe = function() {
       _listenerAttached = true;
       _crepe.on(function(listener) {
         listener.markdownUpdated(function(md) {
-          var dirty = md !== self.originalContent;
+          const dirty = md !== self.originalContent;
           self.isDirty = dirty;
           if (dirty) {
             self.setSaveStatus('modified');
@@ -181,7 +181,7 @@ window.markdownViewerCrepe = function() {
       }
       this.saveStatus = status;
       if (status === 'saved') {
-        var self = this;
+        const self = this;
         _savedFadeTimer = setTimeout(function() {
           if (self.saveStatus === 'saved') self.saveStatus = null;
           _savedFadeTimer = null;
@@ -190,14 +190,14 @@ window.markdownViewerCrepe = function() {
     },
 
     async initEditor() {
-      var container = this.$refs.crepeContainer;
-      var self = this;
+      const container = this.$refs.crepeContainer;
+      const self = this;
       _container = container;
       _lock = window.fileLock(this.fileUuid, getCSRFToken);
 
       try {
-        var mod = await import('https://esm.sh/@milkdown/crepe@7.17.3?bundle');
-        var Crepe = mod.Crepe;
+        const mod = await import('https://esm.sh/@milkdown/crepe@7.17.3?bundle');
+        const Crepe = mod.Crepe;
 
         _crepe = new Crepe({ root: container, defaultValue: self.originalContent });
         await _crepe.create();
@@ -253,7 +253,7 @@ window.markdownViewerCrepe = function() {
     },
 
     forceUnlock() {
-      var self = this;
+      const self = this;
       _lock.forceUnlock(self, {
         onAcquired: function() {
           if (_crepe) {
@@ -265,18 +265,18 @@ window.markdownViewerCrepe = function() {
     },
 
     async save(opts) {
-      var force = opts && opts.force;
+      const force = opts && opts.force;
       if (!_crepe || this.saveStatus === 'saving' || !this.isDirty) return;
       if (!force && this.lockOwner) return;
       this.setSaveStatus('saving');
 
       try {
-        var content = _crepe.getMarkdown();
-        var blob = new Blob([content], { type: 'text/markdown' });
-        var formData = new FormData();
+        const content = _crepe.getMarkdown();
+        const blob = new Blob([content], { type: 'text/markdown' });
+        const formData = new FormData();
         formData.append('content', blob, this.fileName || 'file.md');
 
-        var response = await fetch('/api/v1/files/' + this.fileUuid, {
+        const response = await fetch('/api/v1/files/' + this.fileUuid, {
           method: 'PATCH',
           headers: { 'X-CSRFToken': getCSRFToken() },
           body: formData,

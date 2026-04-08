@@ -13,7 +13,7 @@ function _cleanName(raw) {
 
 function _initial(str) {
   if (!str) return '?';
-  var m = str.match(/[a-zA-Z\u00C0-\u024F]/);
+  const m = str.match(/[a-zA-Z\u00C0-\u024F]/);
   return m ? m[0].toUpperCase() : str[0].toUpperCase();
 }
 
@@ -21,29 +21,29 @@ function _buildMailCard(name, email) {
   name = _cleanName(name);
   email = (email && typeof email === 'string') ? email.trim() : '';
 
-  var root = document.createElement('div');
+  const root = document.createElement('div');
   root.className = 'p-3 w-64';
 
   // Avatar + info row
-  var row = document.createElement('div');
+  const row = document.createElement('div');
   row.className = 'flex items-center gap-3 mb-2';
 
-  var avatarWrap = document.createElement('div');
+  const avatarWrap = document.createElement('div');
   avatarWrap.className = 'avatar placeholder';
-  var avatarInner = document.createElement('div');
+  const avatarInner = document.createElement('div');
   avatarInner.className = 'w-10 h-10 bg-warning/15 text-warning rounded-full flex items-center justify-center font-semibold';
   avatarInner.textContent = _initial(name || email);
   avatarWrap.appendChild(avatarInner);
   row.appendChild(avatarWrap);
 
-  var info = document.createElement('div');
+  const info = document.createElement('div');
   info.className = 'min-w-0 flex-1';
-  var nameEl = document.createElement('div');
+  const nameEl = document.createElement('div');
   nameEl.className = 'font-semibold text-sm truncate';
   nameEl.textContent = name || email;
   info.appendChild(nameEl);
   if (name) {
-    var emailEl = document.createElement('div');
+    const emailEl = document.createElement('div');
     emailEl.className = 'text-xs text-base-content/50 truncate';
     emailEl.textContent = email;
     info.appendChild(emailEl);
@@ -52,12 +52,12 @@ function _buildMailCard(name, email) {
   root.appendChild(row);
 
   // Action buttons
-  var actions = document.createElement('div');
+  const actions = document.createElement('div');
   actions.className = 'flex gap-1';
 
-  var copyBtn = document.createElement('button');
+  const copyBtn = document.createElement('button');
   copyBtn.className = 'btn btn-ghost btn-xs flex-1 gap-1';
-  var copyIcon = document.createElement('i');
+  const copyIcon = document.createElement('i');
   copyIcon.setAttribute('data-lucide', 'copy');
   copyIcon.className = 'w-3 h-3';
   copyBtn.appendChild(copyIcon);
@@ -73,16 +73,16 @@ function _buildMailCard(name, email) {
   });
   actions.appendChild(copyBtn);
 
-  var sendBtn = document.createElement('button');
+  const sendBtn = document.createElement('button');
   sendBtn.className = 'btn btn-ghost btn-xs flex-1 gap-1';
-  var sendIcon = document.createElement('i');
+  const sendIcon = document.createElement('i');
   sendIcon.setAttribute('data-lucide', 'send');
   sendIcon.className = 'w-3 h-3';
   sendBtn.appendChild(sendIcon);
   sendBtn.appendChild(document.createTextNode(' Send email'));
   sendBtn.addEventListener('click', function() {
     // If already on the mail page, dispatch a custom event to open compose
-    var composeDialog = document.getElementById('mail-compose-dialog');
+    const composeDialog = document.getElementById('mail-compose-dialog');
     if (composeDialog) {
       document.dispatchEvent(new CustomEvent('mail:compose', { detail: { to: email } }));
     } else {
@@ -103,7 +103,7 @@ function _buildMailCard(name, email) {
  */
 window._mailCardShow = function(wrapper, nameOrAddr, email) {
   // Support both _mailCardShow(el, {name, email}) and _mailCardShow(el, name, email)
-  var name;
+  let name;
   if (nameOrAddr && typeof nameOrAddr === 'object') {
     name = nameOrAddr.name;
     email = nameOrAddr.email;
@@ -111,13 +111,13 @@ window._mailCardShow = function(wrapper, nameOrAddr, email) {
     name = nameOrAddr;
   }
   window._mailCardCancelHide(wrapper);
-  var existing = wrapper._mailCardPopover;
+  const existing = wrapper._mailCardPopover;
   if (existing && existing.style.display !== 'none' && existing.style.opacity === '1') return;
   if (wrapper._showTimeout) clearTimeout(wrapper._showTimeout);
 
   wrapper._showTimeout = setTimeout(function() {
     wrapper._showTimeout = null;
-    var popover = wrapper._mailCardPopover;
+    let popover = wrapper._mailCardPopover;
     if (!popover) {
       popover = document.createElement('div');
       popover.className = 'fixed z-[9999] bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
@@ -131,7 +131,7 @@ window._mailCardShow = function(wrapper, nameOrAddr, email) {
     popover.textContent = '';
     popover.appendChild(_buildMailCard(name, email));
 
-    var pos = _computePopoverPosition(wrapper);
+    const pos = _computePopoverPosition(wrapper);
     popover.style.left = pos.left + 'px';
     popover.style.top = pos.top + 'px';
     wrapper._placement = pos.placement;
@@ -148,7 +148,7 @@ window._mailCardShow = function(wrapper, nameOrAddr, email) {
 window._mailCardScheduleHide = function(wrapper) {
   if (wrapper._showTimeout) { clearTimeout(wrapper._showTimeout); wrapper._showTimeout = null; }
   wrapper._hideTimeout = setTimeout(function() {
-    var popover = wrapper._mailCardPopover;
+    const popover = wrapper._mailCardPopover;
     if (popover) {
       _applyPopoverTransform(popover, wrapper._placement || 'bottom', false);
       wrapper._closeTimeout = setTimeout(function() { popover.style.display = 'none'; }, 150);
@@ -159,7 +159,7 @@ window._mailCardScheduleHide = function(wrapper) {
 window._mailCardCancelHide = function(wrapper) {
   if (wrapper._hideTimeout) { clearTimeout(wrapper._hideTimeout); wrapper._hideTimeout = null; }
   if (wrapper._closeTimeout) { clearTimeout(wrapper._closeTimeout); wrapper._closeTimeout = null; }
-  var popover = wrapper._mailCardPopover;
+  const popover = wrapper._mailCardPopover;
   if (popover && popover.style.display !== 'none') {
     _applyPopoverTransform(popover, wrapper._placement || 'bottom', true);
   }
@@ -184,8 +184,8 @@ window._mailPrefsReady = fetch('/api/v1/settings/mail/preferences', { credential
     .catch(function() {});
 
 window.mailPreferences = function mailPreferences() {
-    var API_URL = '/api/v1/settings/mail/preferences';
-    var _saveTimer = null;
+    const API_URL = '/api/v1/settings/mail/preferences';
+    let _saveTimer = null;
 
     return {
         prefs: { ...window._mailPrefsCache },
@@ -227,7 +227,7 @@ window.mailPreferences = function mailPreferences() {
  */
 function _eagerAccounts() {
   try {
-    var el = document.getElementById('accounts-data');
+    const el = document.getElementById('accounts-data');
     if (el) return JSON.parse(el.textContent);
   } catch (e) {}
   return [];

@@ -1,8 +1,8 @@
 /* Service Worker — PWA caching + Web Push Notifications */
 
-var CACHE_VERSION = new URL(self.location).searchParams.get('v') || 'dev';
-var CACHE_NAME = 'workspace-' + CACHE_VERSION;
-var OFFLINE_URL = '/static/offline.html';
+const CACHE_VERSION = new URL(self.location).searchParams.get('v') || 'dev';
+const CACHE_NAME = 'workspace-' + CACHE_VERSION;
+const OFFLINE_URL = '/static/offline.html';
 
 /* ──────────────────────────────────────────
    Lifecycle events
@@ -36,12 +36,12 @@ self.addEventListener('activate', function (event) {
    ────────────────────────────────────────── */
 
 self.addEventListener('fetch', function (event) {
-  var request = event.request;
+  const request = event.request;
 
   // Only handle GET requests
   if (request.method !== 'GET') return;
 
-  var url = new URL(request.url);
+  const url = new URL(request.url);
 
   // API requests — network only
   if (url.pathname.startsWith('/api/')) return;
@@ -75,7 +75,7 @@ function cacheFirst(request) {
     if (cached) return cached;
     return fetch(request).then(function (response) {
       if (response.ok) {
-        var clone = response.clone();
+        const clone = response.clone();
         caches.open(CACHE_NAME).then(function (cache) { cache.put(request, clone); });
       }
       return response;
@@ -87,10 +87,10 @@ function cacheFirst(request) {
 
 function staleWhileRevalidate(request) {
   return caches.match(request).then(function (cached) {
-    var fetchPromise = fetch(request).then(function (response) {
+    const fetchPromise = fetch(request).then(function (response) {
       // For cross-origin, accept opaque responses (status 0)
       if (response.ok || response.type === 'opaque') {
-        var clone = response.clone();
+        const clone = response.clone();
         caches.open(CACHE_NAME).then(function (cache) { cache.put(request, clone); });
       }
       return response;
@@ -107,7 +107,7 @@ function networkFirstWithOffline(request) {
   return fetch(request)
     .then(function (response) {
       if (response.ok) {
-        var clone = response.clone();
+        const clone = response.clone();
         caches.open(CACHE_NAME).then(function (cache) { cache.put(request, clone); });
       }
       return response;
@@ -126,14 +126,14 @@ function networkFirstWithOffline(request) {
 self.addEventListener('push', function (event) {
   if (!event.data) return;
 
-  var payload;
+  let payload;
   try {
     payload = event.data.json();
   } catch (e) {
     payload = { title: 'New notification', body: event.data.text() };
   }
 
-  var options = {
+  const options = {
     body: payload.body || '',
     icon: '/static/icons/icon-192.png',
     badge: '/static/icons/badge-72.png',
@@ -149,10 +149,10 @@ self.addEventListener('push', function (event) {
 
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
-  var url = event.notification.data?.url || '/';
+  const url = event.notification.data?.url || '/';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
-      for (var client of clientList) {
+      for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           client.focus();
           client.navigate(url);

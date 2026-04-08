@@ -110,6 +110,7 @@ def _vevent_to_defaults(vevent, owner):
         'all_day': _is_all_day(dtstart_prop),
         'ical_sequence': int(vevent.get('SEQUENCE', 0)),
         'owner': owner,
+        'external_organizer': _extract_email(vevent.get('ORGANIZER')),
         **_parse_rrule(vevent),
     }
 
@@ -196,3 +197,17 @@ def _is_all_day(dt_prop):
     if dt_prop is None:
         return False
     return not hasattr(dt_prop.dt, 'hour')
+
+
+def _extract_email(organizer_prop):
+    """Extract the email address from an ICS ORGANIZER property.
+
+    Duplicated from ics_processor._extract_email — each sync path owns
+    its own parsing, and the RFC 5545 form is stable.
+    """
+    if not organizer_prop:
+        return ''
+    value = str(organizer_prop)
+    if value.lower().startswith('mailto:'):
+        return value[7:]
+    return value

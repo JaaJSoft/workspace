@@ -12,7 +12,7 @@ def build_reply(event, user, status):
     Parameters
     ----------
     event : Event
-        The calendar event (must have ical_uid and organizer_email).
+        The calendar event (must have ical_uid and external_organizer).
     user : User
         The user responding.
     status : str
@@ -38,7 +38,7 @@ def build_reply(event, user, status):
     vevent.add('SUMMARY', event.title)
     vevent.add('SEQUENCE', event.ical_sequence)
 
-    organizer = icalendar.vCalAddress(f'mailto:{event.organizer_email}')
+    organizer = icalendar.vCalAddress(f'mailto:{event.external_organizer}')
     vevent.add('ORGANIZER', organizer)
 
     attendee = icalendar.vCalAddress(f'mailto:{user.email}')

@@ -240,6 +240,38 @@ class ActivityRegistryTests(TestCase):
         self.assertEqual(events[0]['label'], 'minor-event')
         self.assertEqual(events[0]['actor']['id'], 2)
 
+    def test_exclude_actor_id_passes_through_null_actor_events(self):
+        """Events with actor=None must not be excluded when exclude_actor_id is set.
+
+        Regression test for activity_registry.py: the filter previously
+        used e.get('actor', {}).get('id') which crashed on actor=None
+        (because None.get(...) raises AttributeError, not because the
+        default {} was used). The fix is (e.get('actor') or {}).get('id').
+        """
+        from datetime import datetime, timedelta
+        from django.utils import timezone
+
+        now = timezone.make_aware(datetime(2026, 3, 15, 12, 0))
+
+        class MixedActorProvider(StubProvider):
+            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+                return [
+                    {'label': 'null-actor-event', 'timestamp': now - timedelta(minutes=1),
+                     'actor': None},
+                    {'label': 'excluded-actor-event', 'timestamp': now - timedelta(minutes=2),
+                     'actor': {'id': 2, 'username': 'excluded'}},
+                ]
+
+        self.registry.register(ActivityProviderInfo(
+            slug='mixed_actor', label='MA', icon='m', color='info',
+            provider_cls=MixedActorProvider,
+        ))
+
+        events = self.registry.get_recent_events(None, limit=10, exclude_actor_id=2)
+        labels = [e['label'] for e in events]
+        self.assertIn('null-actor-event', labels)
+        self.assertNotIn('excluded-actor-event', labels)
+
     def test_exclude_actor_not_applied_to_single_source(self):
         """exclude_actor_id in the registry only filters in ALL mode.
 

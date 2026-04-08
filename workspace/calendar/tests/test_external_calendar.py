@@ -81,6 +81,33 @@ ICS_RECURRING = (
     "END:VCALENDAR\r\n"
 )
 
+ICS_WITH_ORGANIZER = (
+    "BEGIN:VCALENDAR\r\n"
+    "VERSION:2.0\r\n"
+    "PRODID:-//Test//Test//EN\r\n"
+    "BEGIN:VEVENT\r\n"
+    "UID:ext-organized@example.com\r\n"
+    "DTSTART:20260601T100000Z\r\n"
+    "DTEND:20260601T110000Z\r\n"
+    "SUMMARY:Organized Meeting\r\n"
+    "ORGANIZER;CN=External Boss:mailto:boss@external.com\r\n"
+    "END:VEVENT\r\n"
+    "END:VCALENDAR\r\n"
+)
+
+ICS_NO_ORGANIZER = (
+    "BEGIN:VCALENDAR\r\n"
+    "VERSION:2.0\r\n"
+    "PRODID:-//Test//Test//EN\r\n"
+    "BEGIN:VEVENT\r\n"
+    "UID:ext-anonymous@example.com\r\n"
+    "DTSTART:20260602T100000Z\r\n"
+    "DTEND:20260602T110000Z\r\n"
+    "SUMMARY:Anonymous Meeting\r\n"
+    "END:VEVENT\r\n"
+    "END:VCALENDAR\r\n"
+)
+
 
 def _mock_response(text, status_code=200, etag=''):
     resp = MagicMock()
@@ -235,6 +262,24 @@ class SyncExternalCalendarTests(TestCase):
         self.assertEqual(event.recurrence_end.day, 10)
         self.assertEqual(event.recurrence_end.month, 4)
 
+    @patch('workspace.calendar.services.ics_sync.httpx')
+    def test_sync_parses_organizer_email(self, mock_httpx):
+        _mock_httpx(mock_httpx, _mock_response(ICS_WITH_ORGANIZER))
+
+        sync_external_calendar(self.ext)
+
+        event = Event.objects.get(ical_uid='ext-organized@example.com')
+        self.assertEqual(event.external_organizer, 'boss@external.com')
+
+    @patch('workspace.calendar.services.ics_sync.httpx')
+    def test_sync_without_organizer_defaults_to_empty(self, mock_httpx):
+        _mock_httpx(mock_httpx, _mock_response(ICS_NO_ORGANIZER))
+
+        sync_external_calendar(self.ext)
+
+        event = Event.objects.get(ical_uid='ext-anonymous@example.com')
+        self.assertEqual(event.external_organizer, '')
+
 
 # ─── Celery Task Tests ─────────────────────────────────────
 
@@ -369,3 +414,65 @@ class ExternalCalendarAPITests(APITestCase):
         resp = self.client.post(f'{self.url}/{ext.uuid}/sync')
         self.assertEqual(resp.status_code, http_status.HTTP_202_ACCEPTED)
         mock_task.delay.assert_called_once_with(str(ext.uuid))
+
+
+# ─── Event Card View Tests ───────────────────────────────────
+
+
+class EventCardExternalTests(TestCase):
+    """Verify the event-card partial shows the external organiser."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='card_user', email='card@test.com', password='pass123',
+        )
+        self.cal = Calendar.objects.create(name='Feed', owner=self.user)
+        ExternalCalendar.objects.create(
+            calendar=self.cal, url='https://example.com/c.ics',
+        )
+
+    def test_event_card_shows_external_organizer(self):
+        from django.utils import timezone
+        event = Event.objects.create(
+            calendar=self.cal, title='Synced', owner=self.user,
+            start=timezone.now(),
+            end=timezone.now(),
+            external_organizer='boss@ext.com',
+            ical_uid='card@x',
+        )
+        self.client.force_login(self.user)
+        resp = self.client.get(f'/calendar/events/{event.pk}/card')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b'boss@ext.com', resp.content)
+        self.assertNotIn(b'card_user', resp.content)  # no workspace username shown
+
+    def test_event_card_falls_back_to_calendar_name(self):
+        from django.utils import timezone
+        self.cal.name = 'Fallback Anchor Calendar 12345'
+        self.cal.save(update_fields=['name'])
+        event = Event.objects.create(
+            calendar=self.cal, title='Anonymous Sync', owner=self.user,
+            start=timezone.now(),
+            end=timezone.now(),
+            external_organizer='',
+            ical_uid='card2@x',
+        )
+        self.client.force_login(self.user)
+        resp = self.client.get(f'/calendar/events/{event.pk}/card')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b'Fallback Anchor Calendar 12345', resp.content)
+        self.assertNotIn(b'boss@ext.com', resp.content)
+
+    def test_event_card_native_shows_owner_username(self):
+        """A native (non-external) event shows the workspace owner's username."""
+        from django.utils import timezone
+        native_cal = Calendar.objects.create(name='Native Cal', owner=self.user)
+        event = Event.objects.create(
+            calendar=native_cal, title='Native Event', owner=self.user,
+            start=timezone.now(),
+            end=timezone.now(),
+        )
+        self.client.force_login(self.user)
+        resp = self.client.get(f'/calendar/events/{event.pk}/card')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b'card_user', resp.content)  # owner username rendered

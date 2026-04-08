@@ -25,7 +25,10 @@ class CalendarActivityProvider(ActivityProvider):
             updated_at__date__lte=date_to,
         )
         if user_id is not None:
-            qs = qs.filter(owner_id=user_id)
+            qs = qs.filter(
+                owner_id=user_id,
+                calendar__external_source__isnull=True,
+            )
         qs = qs.filter(self._visibility_filter(user_id, viewer_id))
 
         rows = qs.annotate(day=TruncDate('updated_at')).values('day').annotate(
@@ -41,27 +44,39 @@ class CalendarActivityProvider(ActivityProvider):
             is_cancelled=False,
         )
         if user_id is not None:
-            qs = qs.filter(owner_id=user_id)
+            qs = qs.filter(
+                owner_id=user_id,
+                calendar__external_source__isnull=True,
+            )
         qs = qs.filter(
             self._visibility_filter(user_id, viewer_id),
         ).select_related(
-            'owner',
+            'owner', 'calendar__external_source',
         ).order_by('-updated_at')[offset:offset + limit]
 
         events = []
         for evt in qs:
-            is_new = abs((evt.created_at - evt.updated_at).total_seconds()) < 2
-            events.append({
-                'icon': 'calendar',
-                'label': 'Event created' if is_new else 'Event updated',
-                'description': evt.title,
-                'timestamp': evt.updated_at,
-                'url': f'/calendar?event={evt.pk}',
-                'actor': {
+            is_external = hasattr(evt.calendar, 'external_source')
+
+            if is_external:
+                label = 'Event synced'
+                actor = None
+            else:
+                is_new = abs((evt.created_at - evt.updated_at).total_seconds()) < 2
+                label = 'Event created' if is_new else 'Event updated'
+                actor = {
                     'id': evt.owner_id,
                     'username': evt.owner.username,
                     'full_name': evt.owner.get_full_name(),
-                },
+                }
+
+            events.append({
+                'icon': 'calendar',
+                'label': label,
+                'description': evt.title,
+                'timestamp': evt.updated_at,
+                'url': f'/calendar?event={evt.pk}',
+                'actor': actor,
             })
         return events
 
@@ -71,7 +86,10 @@ class CalendarActivityProvider(ActivityProvider):
         now = timezone.now()
         base = Event.objects.filter(is_cancelled=False)
         if user_id is not None:
-            base = base.filter(owner_id=user_id)
+            base = base.filter(
+                owner_id=user_id,
+                calendar__external_source__isnull=True,
+            )
 
         upcoming = base.filter(
             start__gte=now,

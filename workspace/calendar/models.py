@@ -108,7 +108,7 @@ class Event(models.Model):
     # iCalendar integration (RFC 5545 / iTIP)
     ical_uid = models.CharField(max_length=512, null=True, blank=True, default=None)
     ical_sequence = models.IntegerField(default=0)
-    organizer_email = models.EmailField(null=True, blank=True, default=None)
+    external_organizer = models.EmailField(null=True, blank=True, default=None)
     source_message = models.ForeignKey(
         'mail.MailMessage',
         on_delete=models.SET_NULL,

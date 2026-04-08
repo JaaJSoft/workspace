@@ -39,7 +39,7 @@ def send_ics_reply(event_id, user_id, response_status):
 
     msg = MIMEMultipart('mixed')
     msg['From'] = f'{user.get_full_name() or user.username} <{account.email}>'
-    msg['To'] = event.organizer_email
+    msg['To'] = event.external_organizer
     msg['Subject'] = f'{status_label}: {event.title}'
     msg['Date'] = formatdate(localtime=True)
     msg['Message-ID'] = make_msgid(domain=account.email.split('@')[-1])
@@ -56,7 +56,7 @@ def send_ics_reply(event_id, user_id, response_status):
 
     server = connect_smtp(account)
     try:
-        server.sendmail(account.email, [event.organizer_email], msg.as_string())
+        server.sendmail(account.email, [event.external_organizer], msg.as_string())
     finally:
         server.quit()
 

@@ -85,7 +85,7 @@ def _create_event(vevent, uid, sequence, mail_message):
     user = account.owner
     calendar = _get_or_create_invitation_calendar(account)
 
-    organizer_email = _extract_email(vevent.get('ORGANIZER'))
+    external_organizer = _extract_email(vevent.get('ORGANIZER'))
     dtstart = _to_datetime(vevent.get('DTSTART'))
     dtend = _to_datetime(vevent.get('DTEND'))
     all_day = _is_all_day(vevent.get('DTSTART'))
@@ -105,7 +105,7 @@ def _create_event(vevent, uid, sequence, mail_message):
         owner=user,
         ical_uid=uid,
         ical_sequence=sequence,
-        organizer_email=organizer_email,
+        external_organizer=external_organizer,
         source_message=mail_message,
     )
 
@@ -120,7 +120,7 @@ def _create_event(vevent, uid, sequence, mail_message):
             recipient=user,
             origin='calendar',
             title=f'Invitation: {title}',
-            body=f'From {organizer_email}',
+            body=f'From {external_organizer}',
             url=f'/calendar?event={event.pk}',
         )
 

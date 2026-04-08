@@ -46,6 +46,7 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
     _panelRaw: null,
     eventOwner: null,
+    externalOrganizer: null,
     eventMembers: [],
     myInviteStatus: null,
     selectedMembers: [],
@@ -742,6 +743,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       this._panelRaw = null;
       this.selectedMembers = [];
       this.eventOwner = null;
+      this.externalOrganizer = null;
       this.eventMembers = [];
       this.myInviteStatus = null;
       this.showModal = true;
@@ -770,6 +772,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         recurrence_end: event.recurrence_end ? this.toLocalDate(event.recurrence_end) : '',
       };
       this.eventOwner = event.owner;
+      this.externalOrganizer = event.external_organizer || '';
       this.eventMembers = event.members || [];
       this.selectedMembers = (event.members || []).map(m => m.user);
       this.myInviteStatus = isOwner ? null : ((event.members || []).find(m => String(m.user.id) === currentUserId)?.status || null);
@@ -897,6 +900,7 @@ window.calendarApp = function calendarApp(calendarsData) {
               recurrence_end: saved.recurrence_end ? this.toLocalDate(saved.recurrence_end) : '',
             };
             this.eventOwner = saved.owner;
+            this.externalOrganizer = saved.external_organizer || '';
             this.eventMembers = saved.members;
             this.selectedMembers = saved.members.map(m => m.user);
       

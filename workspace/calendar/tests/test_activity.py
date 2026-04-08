@@ -11,6 +11,7 @@ from workspace.calendar.models import (
     Event,
     EventMember,
 )
+from workspace.calendar.models_external import ExternalCalendar
 
 User = get_user_model()
 
@@ -70,6 +71,18 @@ class CalendarActivityProviderTests(TestCase):
         )
 
         self.provider = CalendarActivityProvider()
+
+    def _make_external_event_for_alice(self, title='External Event'):
+        """Create an external-feed calendar owned by alice with one synced event."""
+        ext_cal = Calendar.objects.create(name='Alice External', owner=self.alice)
+        ExternalCalendar.objects.create(
+            calendar=ext_cal, url='https://example.com/feed.ics',
+        )
+        return Event.objects.create(
+            calendar=ext_cal, title=title,
+            start=self.ts, end=self.ts + timedelta(hours=1),
+            owner=self.alice, ical_uid='ext@example.com',
+        )
 
     # -- get_daily_counts ------------------------------------------------
 
@@ -156,3 +169,53 @@ class CalendarActivityProviderTests(TestCase):
 
         stats = self.provider.get_stats(self.alice.id, viewer_id=None)
         self.assertEqual(stats['total_events'], 3)
+
+    # -- external events on profile mode ---------------------------------
+
+    def test_profile_recent_events_excludes_external(self):
+        """External-feed events must not appear in alice's own profile feed."""
+        self._make_external_event_for_alice()
+        events = self.provider.get_recent_events(self.alice.id, viewer_id=None)
+        titles = {e['description'] for e in events}
+        self.assertNotIn('External Event', titles)
+        self.assertEqual(len(events), 3)  # still only the 3 native events
+
+    def test_profile_daily_counts_excludes_external(self):
+        """External events must not inflate alice's heatmap counts."""
+        self._make_external_event_for_alice()
+        today = self.ts.date()
+        counts = self.provider.get_daily_counts(
+            self.alice.id, today, today, viewer_id=None,
+        )
+        self.assertEqual(counts.get(today, 0), 3)
+
+    def test_profile_stats_excludes_external(self):
+        """External events must not inflate alice's total_events stat."""
+        self._make_external_event_for_alice()
+        stats = self.provider.get_stats(self.alice.id, viewer_id=None)
+        self.assertEqual(stats['total_events'], 3)
+
+    # -- external events on dashboard mode -------------------------------
+
+    def test_dashboard_recent_events_includes_external_with_null_actor(self):
+        """Dashboard mode (user_id=None) keeps external events with actor=None."""
+        self._make_external_event_for_alice(title='Feed Sync Event')
+        # Alice subscribes to the external calendar she owns so visibility passes
+        # (already owned, so no subscription needed — visible_events_q includes owned).
+        events = self.provider.get_recent_events(
+            user_id=None, viewer_id=self.alice.id,
+        )
+        external = [e for e in events if e['description'] == 'Feed Sync Event']
+        self.assertEqual(len(external), 1)
+        self.assertIsNone(external[0]['actor'])
+        self.assertEqual(external[0]['label'], 'Event synced')
+
+    def test_dashboard_native_events_keep_actor(self):
+        """Dashboard mode (user_id=None) keeps the actor dict for native events."""
+        events = self.provider.get_recent_events(
+            user_id=None, viewer_id=self.alice.id,
+        )
+        native = [e for e in events if e['description'] == 'Alice Event 1']
+        self.assertEqual(len(native), 1)
+        self.assertIsNotNone(native[0]['actor'])
+        self.assertEqual(native[0]['actor']['id'], self.alice.id)

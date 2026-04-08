@@ -606,7 +606,7 @@ class EventRespondView(APIView):
         event = Event.objects.select_related('owner', 'calendar').get(pk=event_id)
 
         # Send iCalendar REPLY to external organizer if applicable
-        if event.organizer_email and event.source_message_id:
+        if event.external_organizer and event.source_message_id:
             from workspace.calendar.tasks import send_ics_reply
             send_ics_reply.delay(str(event.pk), request.user.id, membership.status)
 

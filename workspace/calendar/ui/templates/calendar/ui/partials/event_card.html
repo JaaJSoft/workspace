@@ -28,7 +28,12 @@
       <span class="truncate">{{ event.location }}</span>
     </div>
     {% endif %}
-    {% if event.owner %}
+    {% if is_external %}
+    <div class="flex items-center gap-1.5 truncate">
+      <i data-lucide="globe" class="w-3 h-3 flex-shrink-0"></i>
+      <span class="truncate">{{ event.external_organizer|default:event.calendar.name }}</span>
+    </div>
+    {% elif event.owner %}
     <div class="flex items-center gap-1.5 truncate">
       <i data-lucide="user" class="w-3 h-3 flex-shrink-0"></i>
       <span class="truncate">{{ event.owner.username }}</span>

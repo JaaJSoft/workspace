@@ -409,13 +409,26 @@
           <!-- People section -->
           <div class="border-t border-base-200 pt-3 space-y-3">
             <!-- Organizer -->
-            <div class="flex items-center gap-2.5 text-sm">
-              <div class="flex-shrink-0" x-html="eventOwner ? userAvatarWithCardHtml(eventOwner.id, eventOwner.username, 'w-7 h-7 text-xs') : ''"></div>
-              <div class="flex-1 min-w-0">
-                <span class="font-medium block truncate" x-text="eventOwner?.username"></span>
-                <span class="text-xs text-base-content/40">Organizer</span>
+            <template x-if="isExternalEvent()">
+              <div class="flex items-center gap-2.5 text-sm">
+                <div class="w-7 h-7 rounded-full bg-base-200 flex items-center justify-center flex-shrink-0">
+                  <i data-lucide="globe" class="w-3.5 h-3.5 opacity-60"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <span class="font-medium block truncate" x-text="externalOrganizer || eventCalendarObj()?.name || 'External calendar'"></span>
+                  <span class="text-xs text-base-content/40">External organizer</span>
+                </div>
               </div>
-            </div>
+            </template>
+            <template x-if="!isExternalEvent()">
+              <div class="flex items-center gap-2.5 text-sm">
+                <div class="flex-shrink-0" x-html="eventOwner ? userAvatarWithCardHtml(eventOwner.id, eventOwner.username, 'w-7 h-7 text-xs') : ''"></div>
+                <div class="flex-1 min-w-0">
+                  <span class="font-medium block truncate" x-text="eventOwner?.username"></span>
+                  <span class="text-xs text-base-content/40">Organizer</span>
+                </div>
+              </div>
+            </template>
 
             <!-- Members -->
             <template x-if="eventMembers.length > 0">

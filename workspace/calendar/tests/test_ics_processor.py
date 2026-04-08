@@ -103,7 +103,7 @@ class ProcessRequestTest(ICSProcessorMixin, TestCase):
         self.assertEqual(event.title, 'Sprint Review')
         self.assertEqual(event.description, 'Weekly sprint review meeting')
         self.assertEqual(event.location, 'Room 42')
-        self.assertEqual(event.organizer_email, 'alice@example.com')
+        self.assertEqual(event.external_organizer, 'alice@example.com')
         self.assertEqual(event.ical_sequence, 0)
         self.assertEqual(event.owner, self.user)
         self.assertEqual(event.source_message, mail_msg)

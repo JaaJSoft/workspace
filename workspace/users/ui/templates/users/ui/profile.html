@@ -231,30 +231,7 @@
           Activity
         </h2>
         <div class="flex items-center gap-2">
-          <div class="tabs tabs-boxed">
-            <a
-              :href="feedUrl.replace(/source=[^&]*/g, '').replace(/[?&]$/, '')"
-              class="tab gap-1.5 tab-sm"
-              :class="activityTab === 'all' ? 'tab-active' : ''"
-              @click="activityTab = 'all'"
-              x-target="profile-activity"
-            >
-              <i data-lucide="layers" class="w-3.5 h-3.5"></i>
-              All
-            </a>
-            {% for src in activity_sources %}
-            <a
-              :href="feedUrl.includes('source=') ? feedUrl.replace(/source=[^&]*/, 'source={{ src.slug }}') : feedUrl + (feedUrl.includes('?') ? '&' : '?') + 'source={{ src.slug }}'"
-              class="tab gap-1.5 tab-sm"
-              :class="activityTab === '{{ src.slug }}' ? 'tab-active' : ''"
-              @click="activityTab = '{{ src.slug }}'"
-              x-target="profile-activity"
-            >
-              <i data-lucide="{{ src.icon }}" class="w-3.5 h-3.5"></i>
-              {{ src.label }}
-            </a>
-            {% endfor %}
-          </div>
+          {% include "ui/partials/activity_tabs.html" with activity_prefix="profile-activity" %}
           <button
             class="btn btn-ghost btn-sm btn-square"
             :class="searchOpen && 'btn-active'"

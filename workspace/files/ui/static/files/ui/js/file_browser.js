@@ -2957,8 +2957,14 @@ window.fileTableWithView = function fileTableWithView() {
     ...tableControls,
     ...viewControls,
 
-    // Method to check if a card should be visible in mosaic view (respects filters)
-    shouldShowCard(name, nodeType, isFavorite) {
+    // Method to check if a card should be visible in mosaic view (respects filters).
+    // Reads all values from the element's data-* attributes to avoid inlining
+    // (and escaping) strings in the Alpine expression.
+    shouldShowCard(el) {
+      if (!el || !el.dataset) return true;
+      const name = el.dataset.name || '';
+      const nodeType = el.dataset.nodeType || '';
+      const isFavorite = el.dataset.favorite || '0';
       // Hidden files filter
       if (!this.showHiddenFiles && name.startsWith('.')) {
         return false;

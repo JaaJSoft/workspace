@@ -345,7 +345,7 @@
           <div
             class="bg-base-100 border border-base-300 rounded-lg hover:border-primary hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
             :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'ring-2 ring-primary border-primary' : '')"
-            x-show="shouldShowCard('{{ node.name|lower }}', '{{ node.node_type }}', '{{ node.is_favorite|yesno:'1,0' }}')"
+            x-show="shouldShowCard($el)"
             data-uuid="{{ node.uuid }}"
             data-name="{{ node.name|lower }}"
             data-display-name="{{ node.name }}"

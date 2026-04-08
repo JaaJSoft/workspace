@@ -22,6 +22,9 @@ Parameters:
 - onclick: Optional JavaScript onclick handler
 - tooltip: Optional tooltip text for collapsed state
 - title_binding: Optional Alpine.js expression for the title attribute
+- collapse_expr: Optional Alpine.js expression for the effective collapse state
+                 (default: "collapsed"). Pass e.g. "sidebarCollapsed()" for modules
+                 that decouple mobile layout from the stored desktop preference.
 - aria_label: Optional static aria-label text
 - aria_label_binding: Optional Alpine.js expression for aria-label
 
@@ -33,15 +36,15 @@ Usage Examples:
 {% endcomment %}
 
 {% with c=color|default:"primary" %}
-<li class="list-none" :class="collapsed ? 'flex justify-center' : ''">
+<li class="list-none" :class="{{ collapse_expr|default:"collapsed" }} ? 'flex justify-center' : ''">
   {% if disabled %}
     <span
       class="flex items-center opacity-50 cursor-not-allowed text-base rounded-lg transition-colors hover:bg-base-300/30"
-      :class="collapsed ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'"
+      :class="{{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'"
       {% if title_binding %}
         :title="{{ title_binding|safe }}"
       {% else %}
-        :title="collapsed ? '{{ label }}{% if badge %} ({{ badge }}){% endif %}' : ''"
+        :title="{{ collapse_expr|default:"collapsed" }} ? '{{ label }}{% if badge %} ({{ badge }}){% endif %}' : ''"
       {% endif %}
       {% if aria_label_binding %}
         :aria-label="{{ aria_label_binding|safe }}"
@@ -55,7 +58,7 @@ Usage Examples:
       {% else %}
         <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
       {% endif %}
-      <span x-show="!collapsed" x-transition class="flex items-center gap-2 flex-1">
+      <span x-show="!{{ collapse_expr|default:"collapsed" }}" x-transition class="flex items-center gap-2 flex-1">
         {{ label }}
         {% if badge %}
           <span class="badge badge-{{ badge_type|default:'sm' }}">{{ badge }}</span>
@@ -68,19 +71,19 @@ Usage Examples:
       {% if active_binding %}
         class="flex items-center text-base rounded-lg transition-colors"
         :class="[
-          collapsed ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3',
+          {{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3',
           ({{ active_binding|safe }}) ? 'bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}'
         ]"
       {% else %}
         class="flex items-center {% if active %}bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}{% endif %} text-base rounded-lg transition-colors"
-        :class="collapsed ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'"
+        :class="{{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'"
       {% endif %}
       {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %}
       {% if onclick %}@click="{{ onclick }}"{% endif %}
       {% if title_binding %}
         :title="{{ title_binding|safe }}"
       {% else %}
-        :title="collapsed ? '{{ tooltip|default:label }}' : ''"
+        :title="{{ collapse_expr|default:"collapsed" }} ? '{{ tooltip|default:label }}' : ''"
       {% endif %}
       {% if aria_label_binding %}
         :aria-label="{{ aria_label_binding|safe }}"
@@ -93,7 +96,7 @@ Usage Examples:
       {% else %}
         <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
       {% endif %}
-      <span x-show="!collapsed" x-transition class="flex items-center gap-2 flex-1">
+      <span x-show="!{{ collapse_expr|default:"collapsed" }}" x-transition class="flex items-center gap-2 flex-1">
         {{ label }}
         {% if badge %}
           <span class="badge badge-{{ badge_type|default:'sm' }}{% if badge_variant %} badge-{{ badge_variant }}{% endif %}">{{ badge }}</span>
@@ -106,19 +109,19 @@ Usage Examples:
       {% if active_binding %}
         class="flex items-center w-full text-left text-base rounded-lg transition-colors"
         :class="[
-          collapsed ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3',
+          {{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3',
           ({{ active_binding|safe }}) ? 'bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}'
         ]"
       {% else %}
         class="flex items-center w-full text-left {% if active %}bg-{{ c }}/10 text-{{ c }} hover:bg-{{ c }}/20{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-{{ c }}{% endif %} text-base rounded-lg transition-colors"
-        :class="collapsed ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'"
+        :class="{{ collapse_expr|default:"collapsed" }} ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'"
       {% endif %}
       {% if x_target %}x-target{% if x_target_history %}.{{ x_target_history }}{% endif %}="{{ x_target }}"{% endif %}
       {% if onclick %}@click="{{ onclick }}"{% endif %}
       {% if title_binding %}
         :title="{{ title_binding|safe }}"
       {% else %}
-        :title="collapsed ? '{{ tooltip|default:label }}' : ''"
+        :title="{{ collapse_expr|default:"collapsed" }} ? '{{ tooltip|default:label }}' : ''"
       {% endif %}
       {% if aria_label_binding %}
         :aria-label="{{ aria_label_binding|safe }}"
@@ -131,7 +134,7 @@ Usage Examples:
       {% else %}
         <i data-lucide="{{ icon }}" class="w-5 h-5 flex-shrink-0"></i>
       {% endif %}
-      <span x-show="!collapsed" x-transition class="flex items-center gap-2 flex-1">
+      <span x-show="!{{ collapse_expr|default:"collapsed" }}" x-transition class="flex items-center gap-2 flex-1">
         {{ label }}
         {% if badge %}
           <span class="badge badge-{{ badge_type|default:'sm' }}{% if badge_variant %} badge-{{ badge_variant }}{% endif %}">{{ badge }}</span>

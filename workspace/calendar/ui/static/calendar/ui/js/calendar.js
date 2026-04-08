@@ -103,9 +103,8 @@ window.calendarApp = function calendarApp(calendarsData) {
       // Load external calendars
       this._loadExternalCalendars();
 
-      if (this.isMobile()) this.collapsed = true;
-      window.matchMedia('(max-width: 1023px)').addEventListener('change', (e) => {
-        if (e.matches) this.collapsed = true;
+      window.matchMedia('(max-width: 1023px)').addEventListener('change', () => {
+        if (this.calendar) this.$nextTick(() => this.calendar.updateSize());
       });
 
       this.$watch('showPanel', () => {
@@ -207,6 +206,10 @@ window.calendarApp = function calendarApp(calendarsData) {
     // --- Sidebar ---
     isMobile() {
       return window.matchMedia('(max-width: 1023px)').matches;
+    },
+
+    sidebarCollapsed() {
+      return this.isMobile() ? false : this.collapsed;
     },
 
     toggleCollapse() {
@@ -545,14 +548,18 @@ window.calendarApp = function calendarApp(calendarsData) {
             window._eventCardScheduleHide(info.el);
             this.openContextMenu(e, info.event.extendedProps._raw);
           });
-          // Event card popover on hover (suppressed while context menu is open)
-          info.el.addEventListener('mouseenter', () => {
-            if (this.ctxMenu.open) return;
-            window._eventCardShow(info.el, info.event.id);
-          });
-          info.el.addEventListener('mouseleave', () => {
-            window._eventCardScheduleHide(info.el);
-          });
+          // Event card popover on hover — desktop only.
+          // (hover: hover) excludes touch-primary devices where a tap would
+          // otherwise synthesize a mouseenter and pop the card after the click.
+          if (window.matchMedia('(hover: hover)').matches) {
+            info.el.addEventListener('mouseenter', () => {
+              if (this.ctxMenu.open) return;
+              window._eventCardShow(info.el, info.event.id);
+            });
+            info.el.addEventListener('mouseleave', () => {
+              window._eventCardScheduleHide(info.el);
+            });
+          }
           // Add recurring indicator
           const raw = info.event.extendedProps._raw;
           if (raw?.is_recurring) {
@@ -690,6 +697,15 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
 
     // --- Create modal ---
+    createEventNow() {
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      const start = `${dateStr}T${timeStr}`;
+      this.openCreateModal(start, this._addHour(now.toISOString()), false);
+    },
+
     openCreateModal(start, end, allDay) {
       if (this.showModal) return; // prevent double-open from dateClick + select
       this.modalMode = 'create';
@@ -1017,12 +1033,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       // New event
       if (key === 'n' || key === 'N') {
         e.preventDefault();
-        const now = new Date();
-        const pad = n => String(n).padStart(2, '0');
-        const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-        const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-        const start = `${dateStr}T${timeStr}`;
-        this.openCreateModal(start, this._addHour(now.toISOString()), false);
+        this.createEventNow();
         return;
       }
 

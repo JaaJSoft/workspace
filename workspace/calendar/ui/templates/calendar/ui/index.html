@@ -75,8 +75,8 @@
                 :class="currentView === 'timeGridDay' ? 'btn-primary' : 'btn-ghost'"
                 @click="changeView('timeGridDay')">Day</button>
         <button type="button" class="btn btn-xs flex-1"
-                :class="currentView === 'listAgenda' ? 'btn-primary' : 'btn-ghost'"
-                @click="changeView('listAgenda')">Agenda</button>
+                :class="currentView === 'agenda' ? 'btn-primary' : 'btn-ghost'"
+                @click="changeView('agenda')">Agenda</button>
       </div>
     </div>
 
@@ -283,7 +283,7 @@
             </button>
           </li>
           <li>
-            <button type="button" class="rounded" :class="currentView === 'listAgenda' ? 'active' : ''" @click="changeView('listAgenda'); document.activeElement.blur()">
+            <button type="button" class="rounded" :class="currentView === 'agenda' ? 'active' : ''" @click="changeView('agenda'); document.activeElement.blur()">
               <i data-lucide="list" class="w-4 h-4"></i> Agenda
             </button>
           </li>
@@ -291,10 +291,10 @@
       </div>
     </div>
     <!-- FullCalendar container (month/week/day views) -->
-    <div x-show="currentView !== 'listAgenda'" x-ref="calendarEl" class="calendar-fc-container flex-1 min-h-0"></div>
+    <div x-show="currentView !== 'agenda'" x-ref="calendarEl" class="calendar-fc-container flex-1 min-h-0"></div>
 
     <!-- Custom Alpine agenda (list view) -->
-    <div x-show="currentView === 'listAgenda'" class="agenda-view flex-1 min-h-0 overflow-y-auto">
+    <div x-show="currentView === 'agenda'" class="agenda-view flex-1 min-h-0 overflow-y-auto">
 
       <!-- Empty state -->
       <template x-if="agenda.initialLoaded && agenda.events.length === 0 && !agenda.loading">

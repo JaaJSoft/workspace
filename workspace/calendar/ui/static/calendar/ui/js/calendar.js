@@ -133,9 +133,10 @@ window.calendarApp = function calendarApp(calendarsData) {
         .then(data => {
           if (data?.value && typeof data.value === 'object') {
             this.prefs = { ...this._prefsDefaults, ...data.value };
-            // Migrate old listWeek preference to listAgenda
-            if (this.prefs.defaultView === 'listWeek') {
-              this.prefs.defaultView = 'listAgenda';
+            // Migrate legacy view names: listWeek (original FC list view) and
+            // listAgenda (intermediate rename) → agenda (current name).
+            if (this.prefs.defaultView === 'listWeek' || this.prefs.defaultView === 'listAgenda') {
+              this.prefs.defaultView = 'agenda';
               this._savePrefs();
             }
             this._applyAllPrefs();
@@ -168,9 +169,10 @@ window.calendarApp = function calendarApp(calendarsData) {
       // Only apply default view if URL didn't specify one
       const urlView = new URLSearchParams(window.location.search).get('view');
       if (!urlView && this.currentView !== this.prefs.defaultView) {
-        this.calendar.changeView(this.prefs.defaultView);
-        this.currentView = this.prefs.defaultView;
-        this._syncTitle();
+        // Route through changeView so that 'agenda' (custom Alpine view) is
+        // handled without calling FullCalendar.changeView('agenda') which
+        // would crash since FC doesn't know about the custom view.
+        this.changeView(this.prefs.defaultView);
       }
     },
 
@@ -179,9 +181,8 @@ window.calendarApp = function calendarApp(calendarsData) {
       this._savePrefs();
       if (this.calendar) {
         if (key === 'defaultView') {
-          this.calendar.changeView(value);
-          this.currentView = value;
-          this._syncTitle();
+          // Route through changeView for the same reason as _applyAllPrefs.
+          this.changeView(value);
         } else if (key === 'firstDay') {
           this.calendar.setOption('firstDay', value);
         } else if (key === 'weekNumbers') {
@@ -237,15 +238,15 @@ window.calendarApp = function calendarApp(calendarsData) {
 
     // --- View controls ---
     calendarPrev() {
-      if (this.currentView === 'listAgenda') return; // no-op in agenda
+      if (this.currentView === 'agenda') return; // no-op in agenda
       if (this.calendar) { this.calendar.prev(); this._syncTitle(); this._syncUrl(); }
     },
     calendarNext() {
-      if (this.currentView === 'listAgenda') return; // no-op in agenda
+      if (this.currentView === 'agenda') return; // no-op in agenda
       if (this.calendar) { this.calendar.next(); this._syncTitle(); this._syncUrl(); }
     },
     calendarToday() {
-      if (this.currentView === 'listAgenda') {
+      if (this.currentView === 'agenda') {
         this.loadAgenda(); // reset to "from now"
         this._syncTitle();
         this._syncUrl();
@@ -257,9 +258,9 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (!this.calendar) return;
       this.ctxMenu.open = false;
 
-      if (view === 'listAgenda') {
+      if (view === 'agenda') {
         // Agenda is a custom Alpine view, not a FullCalendar view.
-        this.currentView = 'listAgenda';
+        this.currentView = 'agenda';
         if (this.agenda.events.length === 0) {
           this.loadAgenda();
         }
@@ -275,7 +276,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       this._syncUrl();
     },
     _syncTitle() {
-      if (this.currentView === 'listAgenda') {
+      if (this.currentView === 'agenda') {
         this.currentTitle = 'Agenda';
       } else if (this.calendar) {
         this.currentTitle = this.calendar.view.title;
@@ -283,37 +284,62 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
 
     // --- URL state ---
-    _syncUrl() {
-      if (!this.calendar) return;
+    // Map internal view names (FullCalendar identifiers + our custom 'agenda')
+    // to clean, user-facing URL slugs. Keeping the internal state as FC names
+    // avoids touching every calendar.changeView(...) / view.type callsite.
+    _viewToUrl(viewType) {
+      return {
+        dayGridMonth: 'month',
+        timeGridWeek: 'week',
+        timeGridDay:  'day',
+        agenda:       'agenda',
+      }[viewType] || viewType;
+    },
+
+    _viewFromUrl(slug) {
+      // Also accepts the legacy FC names for bookmark compat.
+      return {
+        month:         'dayGridMonth',
+        week:          'timeGridWeek',
+        day:           'timeGridDay',
+        agenda:        'agenda',
+        // legacy
+        dayGridMonth:  'dayGridMonth',
+        timeGridWeek:  'timeGridWeek',
+        timeGridDay:   'timeGridDay',
+        listWeek:      'agenda',
+        listAgenda:    'agenda',
+      }[slug] || null;
+    },
+
+    _buildUrlParams() {
+      // Always emit the current view in the URL, regardless of user preference.
+      // (We used to hide the param when it matched prefs.defaultView, but that
+      // made the URL lie about the current state and was confusing to debug.)
       const params = new URLSearchParams();
       const viewType = this.currentView;
-      if (viewType !== this.prefs.defaultView) params.set('view', viewType);
+      params.set('view', this._viewToUrl(viewType));
       // Store the current date as YYYY-MM-DD (skipped for agenda since it's always "from now")
-      if (viewType !== 'listAgenda') {
+      if (viewType !== 'agenda' && this.calendar) {
         const d = this.calendar.getDate();
         const dateStr = d.toISOString().split('T')[0];
         const today = new Date().toISOString().split('T')[0];
         if (dateStr !== today) params.set('date', dateStr);
       }
       if (this.showPanel && this.form.uuid) params.set('event', this.form.uuid);
-      const qs = params.toString();
+      return params;
+    },
+
+    _syncUrl() {
+      if (!this.calendar) return;
+      const qs = this._buildUrlParams().toString();
       const url = window.location.pathname + (qs ? '?' + qs : '');
       history.replaceState(null, '', url);
     },
 
     _pushUrl() {
       if (!this.calendar) return;
-      const params = new URLSearchParams();
-      const viewType = this.currentView;
-      if (viewType !== this.prefs.defaultView) params.set('view', viewType);
-      if (viewType !== 'listAgenda') {
-        const d = this.calendar.getDate();
-        const dateStr = d.toISOString().split('T')[0];
-        const today = new Date().toISOString().split('T')[0];
-        if (dateStr !== today) params.set('date', dateStr);
-      }
-      if (this.showPanel && this.form.uuid) params.set('event', this.form.uuid);
-      const qs = params.toString();
+      const qs = this._buildUrlParams().toString();
       const url = window.location.pathname + (qs ? '?' + qs : '');
       history.pushState(null, '', url);
     },
@@ -524,14 +550,17 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (!calendarEl) return;
 
       const params = new URLSearchParams(window.location.search);
-      let urlView = params.get('view') || this.prefs.defaultView;
-      if (urlView === 'listWeek') urlView = 'listAgenda';
+      const urlSlug = params.get('view');
+      // URL uses clean slugs (month/week/day/agenda); translate to the
+      // internal view name, falling back to the user's default when absent.
+      // `_viewFromUrl` also accepts legacy slugs (dayGridMonth, listWeek, listAgenda).
+      let urlView = this._viewFromUrl(urlSlug) || this.prefs.defaultView;
       const urlDate = params.get('date');
 
       // FullCalendar doesn't know about the custom agenda view.
       // Initialize FullCalendar with a safe fallback view; if the URL asked
-      // for listAgenda, we'll render the custom Alpine block instead.
-      const fcInitialView = urlView === 'listAgenda' ? 'dayGridMonth' : urlView;
+      // for agenda, we'll render the custom Alpine block instead.
+      const fcInitialView = urlView === 'agenda' ? 'dayGridMonth' : urlView;
       this.currentView = urlView;
       this.calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: fcInitialView,
@@ -619,7 +648,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.calendar.render();
       this._syncTitle();
 
-      if (this.currentView === 'listAgenda') {
+      if (this.currentView === 'agenda') {
         this.loadAgenda();
       }
 
@@ -654,15 +683,15 @@ window.calendarApp = function calendarApp(calendarsData) {
       // Browser back/forward
       window.addEventListener('popstate', () => {
         const p = new URLSearchParams(window.location.search);
-        let view = p.get('view') || this.prefs.defaultView;
-        if (view === 'listWeek') view = 'listAgenda';
+        // Translate URL slug → internal view name (handles short slugs + legacy).
+        const view = this._viewFromUrl(p.get('view')) || this.prefs.defaultView;
         const date = p.get('date');
         const evt = p.get('event');
 
         if (view !== this.currentView) {
           this.changeView(view);
         }
-        if (view !== 'listAgenda') {
+        if (view !== 'agenda') {
           if (date) {
             this.calendar.gotoDate(date);
           } else {
@@ -769,7 +798,7 @@ window.calendarApp = function calendarApp(calendarsData) {
 
     refetchAgenda() {
       // Re-load from scratch (filters/prefs changed, or an event was CRUD'd).
-      if (this.currentView === 'listAgenda') {
+      if (this.currentView === 'agenda') {
         this.loadAgenda();
       }
     },
@@ -789,7 +818,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       this._agendaObserver = new IntersectionObserver((entries) => {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
-          if (this.currentView !== 'listAgenda') continue;
+          if (this.currentView !== 'agenda') continue;
           if (!this.agenda.initialLoaded) continue; // wait for page 1 first
           this.loadMoreAgenda();
         }
@@ -1239,7 +1268,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (key === 'm' || key === 'M') { e.preventDefault(); this.changeView('dayGridMonth'); return; }
       if (key === 'w' || key === 'W') { e.preventDefault(); this.changeView('timeGridWeek'); return; }
       if (key === 'd' || key === 'D') { e.preventDefault(); this.changeView('timeGridDay'); return; }
-      if (key === 'a' || key === 'A') { e.preventDefault(); this.changeView('listAgenda'); return; }
+      if (key === 'a' || key === 'A') { e.preventDefault(); this.changeView('agenda'); return; }
 
       // New event
       if (key === 'n' || key === 'N') {

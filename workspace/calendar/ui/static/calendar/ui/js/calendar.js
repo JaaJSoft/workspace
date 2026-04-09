@@ -81,6 +81,14 @@ window.calendarApp = function calendarApp(calendarsData) {
     pollSubmitting: false,
     pollFinalizeSlotId: null,
 
+    // Agenda view state (custom list view, not FullCalendar)
+    agenda: {
+      events: [],
+      nextAfter: null,
+      loading: false,
+      initialLoaded: false,
+      seenIds: new Set(),
+    },
 
     init() {
       // Initialize visible calendars (all visible by default)
@@ -183,6 +191,7 @@ window.calendarApp = function calendarApp(calendarsData) {
           this.calendar.setOption('slotLabelFormat', this._timeFormatFC());
         } else if (key === 'showDeclined') {
           this.calendar.refetchEvents();
+          this.refetchAgenda();
         }
       }
     },
@@ -223,43 +232,69 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.visibleCalendars = { ...this.visibleCalendars, [uuid]: !this.visibleCalendars[uuid] };
       this._saveVisibility();
       if (this.calendar) this.calendar.refetchEvents();
+      this.refetchAgenda();
     },
 
     // --- View controls ---
     calendarPrev() {
+      if (this.currentView === 'listAgenda') return; // no-op in agenda
       if (this.calendar) { this.calendar.prev(); this._syncTitle(); this._syncUrl(); }
     },
     calendarNext() {
+      if (this.currentView === 'listAgenda') return; // no-op in agenda
       if (this.calendar) { this.calendar.next(); this._syncTitle(); this._syncUrl(); }
     },
     calendarToday() {
+      if (this.currentView === 'listAgenda') {
+        this.loadAgenda(); // reset to "from now"
+        this._syncTitle();
+        this._syncUrl();
+        return;
+      }
       if (this.calendar) { this.calendar.today(); this._syncTitle(); this._syncUrl(); }
     },
     changeView(view) {
-      if (this.calendar) {
-        this.ctxMenu.open = false;
-        this.calendar.changeView(view);
-        this.currentView = view;
-        this.calendar.setOption('selectable', view !== 'listAgenda');
+      if (!this.calendar) return;
+      this.ctxMenu.open = false;
+
+      if (view === 'listAgenda') {
+        // Agenda is a custom Alpine view, not a FullCalendar view.
+        this.currentView = 'listAgenda';
+        if (this.agenda.events.length === 0) {
+          this.loadAgenda();
+        }
         this._syncTitle();
         this._syncUrl();
+        return;
       }
+
+      this.calendar.changeView(view);
+      this.currentView = view;
+      this.calendar.setOption('selectable', true);
+      this._syncTitle();
+      this._syncUrl();
     },
     _syncTitle() {
-      if (this.calendar) this.currentTitle = this.calendar.view.title;
+      if (this.currentView === 'listAgenda') {
+        this.currentTitle = 'Agenda';
+      } else if (this.calendar) {
+        this.currentTitle = this.calendar.view.title;
+      }
     },
 
     // --- URL state ---
     _syncUrl() {
       if (!this.calendar) return;
       const params = new URLSearchParams();
-      const view = this.calendar.view;
-      if (view.type !== this.prefs.defaultView) params.set('view', view.type);
-      // Store the current date as YYYY-MM-DD
-      const d = this.calendar.getDate();
-      const dateStr = d.toISOString().split('T')[0];
-      const today = new Date().toISOString().split('T')[0];
-      if (dateStr !== today) params.set('date', dateStr);
+      const viewType = this.currentView;
+      if (viewType !== this.prefs.defaultView) params.set('view', viewType);
+      // Store the current date as YYYY-MM-DD (skipped for agenda since it's always "from now")
+      if (viewType !== 'listAgenda') {
+        const d = this.calendar.getDate();
+        const dateStr = d.toISOString().split('T')[0];
+        const today = new Date().toISOString().split('T')[0];
+        if (dateStr !== today) params.set('date', dateStr);
+      }
       if (this.showPanel && this.form.uuid) params.set('event', this.form.uuid);
       const qs = params.toString();
       const url = window.location.pathname + (qs ? '?' + qs : '');
@@ -269,12 +304,14 @@ window.calendarApp = function calendarApp(calendarsData) {
     _pushUrl() {
       if (!this.calendar) return;
       const params = new URLSearchParams();
-      const view = this.calendar.view;
-      if (view.type !== this.prefs.defaultView) params.set('view', view.type);
-      const d = this.calendar.getDate();
-      const dateStr = d.toISOString().split('T')[0];
-      const today = new Date().toISOString().split('T')[0];
-      if (dateStr !== today) params.set('date', dateStr);
+      const viewType = this.currentView;
+      if (viewType !== this.prefs.defaultView) params.set('view', viewType);
+      if (viewType !== 'listAgenda') {
+        const d = this.calendar.getDate();
+        const dateStr = d.toISOString().split('T')[0];
+        const today = new Date().toISOString().split('T')[0];
+        if (dateStr !== today) params.set('date', dateStr);
+      }
       if (this.showPanel && this.form.uuid) params.set('event', this.form.uuid);
       const qs = params.toString();
       const url = window.location.pathname + (qs ? '?' + qs : '');
@@ -334,6 +371,7 @@ window.calendarApp = function calendarApp(calendarsData) {
           if (idx >= 0) this.ownedCalendars[idx] = updated;
           this.showCalendarModal = false;
           if (this.calendar) this.calendar.refetchEvents();
+          this.refetchAgenda();
         }
       }
     },
@@ -359,6 +397,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         delete this.visibleCalendars[cal.uuid];
         this._saveVisibility();
         if (this.calendar) this.calendar.refetchEvents();
+        this.refetchAgenda();
       }
     },
 
@@ -388,6 +427,7 @@ window.calendarApp = function calendarApp(calendarsData) {
             }
           }
           if (this.calendar) this.calendar.refetchEvents();
+          this.refetchAgenda();
         })
         .catch(() => {});
     },
@@ -421,7 +461,10 @@ window.calendarApp = function calendarApp(calendarsData) {
           this._saveVisibility();
           this.showExternalModal = false;
           // The sync runs async on the backend; refetch events after a short delay
-          setTimeout(() => { if (this.calendar) this.calendar.refetchEvents(); }, 3000);
+          setTimeout(() => {
+            if (this.calendar) this.calendar.refetchEvents();
+            this.refetchAgenda();
+          }, 3000);
         }
       } finally {
         this.savingExternal = false;
@@ -449,6 +492,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         delete this.visibleCalendars[ext.uuid];
         this._saveVisibility();
         if (this.calendar) this.calendar.refetchEvents();
+        this.refetchAgenda();
       }
     },
 
@@ -462,7 +506,10 @@ window.calendarApp = function calendarApp(calendarsData) {
           headers: { 'X-CSRFToken': getCSRFToken() },
         });
         // Refetch after a delay to allow backend sync
-        setTimeout(() => { if (this.calendar) this.calendar.refetchEvents(); }, 3000);
+        setTimeout(() => {
+          if (this.calendar) this.calendar.refetchEvents();
+          this.refetchAgenda();
+        }, 3000);
       } finally {
         // Keep spinner for a few seconds while backend syncs
         setTimeout(() => {
@@ -481,29 +528,24 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (urlView === 'listWeek') urlView = 'listAgenda';
       const urlDate = params.get('date');
 
+      // FullCalendar doesn't know about the custom agenda view.
+      // Initialize FullCalendar with a safe fallback view; if the URL asked
+      // for listAgenda, we'll render the custom Alpine block instead.
+      const fcInitialView = urlView === 'listAgenda' ? 'dayGridMonth' : urlView;
       this.currentView = urlView;
       this.calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: urlView,
+        initialView: fcInitialView,
         ...(urlDate ? { initialDate: urlDate } : {}),
         headerToolbar: false,
-        locale: 'fr',
+        // Follow the browser's language (e.g. en-US, fr-FR) so FullCalendar
+        // formats weekdays, months, and the toolbar title consistently with
+        // the rest of the UI (which uses `toLocaleDateString(undefined, ...)`).
+        locale: (navigator.language || 'en').toLowerCase(),
         firstDay: this.prefs.firstDay,
         weekNumbers: this.prefs.weekNumbers,
         nowIndicator: true,
         editable: false,
-        selectable: urlView !== 'listAgenda',
-        views: {
-          listAgenda: {
-            type: 'list',
-            visibleRange: () => {
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              const end = new Date(today);
-              end.setDate(end.getDate() + 7);
-              return { start: today, end: end };
-            },
-          },
-        },
+        selectable: true,
         selectMirror: true,
         dayMaxEvents: true,
         expandRows: true,
@@ -577,6 +619,9 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.calendar.render();
       this._syncTitle();
 
+      if (this.currentView === 'listAgenda') {
+        this.loadAgenda();
+      }
 
       const eventId = params.get('event');
       if (eventId) this.openEventById(eventId);
@@ -610,14 +655,15 @@ window.calendarApp = function calendarApp(calendarsData) {
         const date = p.get('date');
         const evt = p.get('event');
 
-        if (view !== this.calendar.view.type) {
-          this.calendar.changeView(view);
-          this.currentView = view;
+        if (view !== this.currentView) {
+          this.changeView(view);
         }
-        if (date) {
-          this.calendar.gotoDate(date);
-        } else {
-          this.calendar.today();
+        if (view !== 'listAgenda') {
+          if (date) {
+            this.calendar.gotoDate(date);
+          } else {
+            this.calendar.today();
+          }
         }
         this._syncTitle();
 
@@ -673,6 +719,131 @@ window.calendarApp = function calendarApp(calendarsData) {
           extendedProps: { _raw: event },
         };
       });
+    },
+
+    // --- Agenda view (custom, not FullCalendar) ---
+
+    async loadAgenda() {
+      // Reset and fetch page 1 from "now".
+      const now = new Date();
+      this.agenda.events = [];
+      this.agenda.nextAfter = now.toISOString();
+      this.agenda.initialLoaded = false;
+      this.agenda.seenIds = new Set();
+      await this.loadMoreAgenda();
+      this.agenda.initialLoaded = true;
+    },
+
+    async loadMoreAgenda() {
+      if (this.agenda.loading || this.agenda.nextAfter === null) return;
+      this.agenda.loading = true;
+      try {
+        const calIds = Object.keys(this.visibleCalendars)
+          .filter(k => this.visibleCalendars[k]).join(',');
+        const params = new URLSearchParams({
+          after: this.agenda.nextAfter,
+          limit: '20',
+          calendar_ids: calIds,
+          show_declined: this.prefs.showDeclined ? 'true' : 'false',
+        });
+        const resp = await fetch(`/api/v1/calendar/events?${params}`, {
+          credentials: 'same-origin',
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        // Dedup boundary events (events with start == cursor may appear on
+        // both pages — see backend cursor stability note).
+        const fresh = (data.events || []).filter(e => !this.agenda.seenIds.has(e.uuid));
+        fresh.forEach(e => this.agenda.seenIds.add(e.uuid));
+        this.agenda.events = [...this.agenda.events, ...fresh];
+        this.agenda.nextAfter = data.next_after;
+      } finally {
+        this.agenda.loading = false;
+      }
+    },
+
+    refetchAgenda() {
+      // Re-load from scratch (filters/prefs changed, or an event was CRUD'd).
+      if (this.currentView === 'listAgenda') {
+        this.loadAgenda();
+      }
+    },
+
+    agendaByDay() {
+      // Regular method (not a getter — Alpine getters are not reliably reactive
+      // per the project memory note). Groups events by local date, and marks
+      // the "today" group so the template can highlight it with the accent color.
+      const groups = [];
+      let currentKey = null;
+      let currentGroup = null;
+
+      const todayDate = new Date();
+      const todayKey = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
+      const tomorrowDate = new Date(todayDate);
+      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      const tomorrowKey = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`;
+
+      for (const event of this.agenda.events) {
+        const d = new Date(event.start);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (key !== currentKey) {
+          currentKey = key;
+          // `undefined` locale → use the browser's default (OS/language settings)
+          const dateLabel = d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+          let label;
+          if (key === todayKey) {
+            label = `Today · ${dateLabel}`;
+          } else if (key === tomorrowKey) {
+            label = `Tomorrow · ${dateLabel}`;
+          } else {
+            label = dateLabel;
+          }
+          currentGroup = {
+            date: key,
+            label,
+            isToday: key === todayKey,
+            events: [],
+          };
+          groups.push(currentGroup);
+        }
+        currentGroup.events.push(event);
+      }
+      return groups;
+    },
+
+    formatAgendaEventTime(event) {
+      if (event.all_day) return 'All day';
+      const d = new Date(event.start);
+      const opts = this.prefs.timeFormat === '12h'
+        ? { hour: 'numeric', minute: '2-digit', hour12: true }
+        : { hour: '2-digit', minute: '2-digit', hour12: false };
+      // `undefined` locale → browser default
+      return d.toLocaleTimeString(undefined, opts);
+    },
+
+    agendaEventClasses(event) {
+      // Returns the space-separated class string for an agenda event row.
+      // `cal-<color>` selects the calendar color via a CSS custom property
+      // (see .agenda-event.cal-* rules in calendar.css). The FullCalendar-scoped
+      // `event-color-*` classes don't apply here because the agenda is rendered
+      // outside the .fc container.
+      const currentUserId = document.body.dataset.userId;
+      const isOwner = String(event.owner.id) === String(currentUserId);
+      const membership = (event.members || []).find(m => String(m.user.id) === String(currentUserId));
+      const isInvited = !isOwner && !!membership;
+      const isPending = isInvited && membership.status === 'pending';
+      const isDeclined = isInvited && membership.status === 'declined';
+
+      const cal = [...this.ownedCalendars, ...this.subscribedCalendars, ...this.externalCalendars]
+        .find(c => c.uuid === event.calendar_id);
+      const color = cal?.color || 'primary';
+
+      const classes = [`cal-${color}`];
+      if (isInvited) classes.push('event-invited');
+      if (isPending) classes.push('event-pending');
+      if (isDeclined) classes.push('event-declined');
+      return classes.join(' ');
     },
 
     // --- All-day toggle ---
@@ -884,6 +1055,7 @@ window.calendarApp = function calendarApp(calendarsData) {
           const saved = await resp.json();
           this.showModal = false;
           this.calendar.refetchEvents();
+          this.refetchAgenda();
           if (this.modalMode === 'edit' && this.showPanel) {
             this._panelRaw = saved;
             this.form = {
@@ -934,6 +1106,7 @@ window.calendarApp = function calendarApp(calendarsData) {
           if (resp.ok || resp.status === 204) {
             this.showPanel = false;
             this.calendar.refetchEvents();
+            this.refetchAgenda();
           }
         } catch (e) {}
         this.deleting = false;
@@ -960,6 +1133,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         if (resp.ok || resp.status === 204) {
           this.showPanel = false;
           this.calendar.refetchEvents();
+          this.refetchAgenda();
         }
       } catch (e) {}
       this.deleting = false;
@@ -981,6 +1155,7 @@ window.calendarApp = function calendarApp(calendarsData) {
           const member = this.eventMembers.find(m => String(m.user.id) === currentUserId);
           if (member) member.status = newStatus;
           this.calendar.refetchEvents();
+          this.refetchAgenda();
         }
       } catch (e) {}
     },
@@ -1465,6 +1640,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         if (resp.ok) {
           this.currentPoll = await resp.json();
           if (this.calendar) this.calendar.refetchEvents();
+          this.refetchAgenda();
           if (window.AppAlert) window.AppAlert.success('Poll finalized! Event created.', { duration: 3000 });
         }
       } catch (e) {}

@@ -46,6 +46,32 @@ def _build_rrule(master, range_start, range_end):
                 yield dt
 
 
+def next_occurrences_after(master, after, limit=None):
+    """Yield occurrence start datetimes for a recurring master, all with
+    start >= after.
+
+    Unlike `_build_rrule`, this is count-bounded (not range-bounded). A master
+    whose own `start` is in the past is still iterated — only the occurrences
+    before `after` are skipped. Stops early at `master.recurrence_end`.
+
+    If `limit` is None, yields all remaining occurrences (bounded only by
+    `master.recurrence_end`). This allows callers that need to filter the
+    stream (e.g. skipping exceptions) to take as many occurrences as they
+    need rather than being capped.
+    """
+    freq = FREQ_MAP.get(master.recurrence_frequency)
+    if freq is None:
+        return
+
+    rule = rrule(
+        freq,
+        interval=master.recurrence_interval,
+        dtstart=master.start,
+        until=master.recurrence_end,  # None → unbounded
+    )
+    yield from rule.xafter(after, count=limit, inc=True)
+
+
 def _user_dict(user):
     return {
         'id': user.id,

@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.calendar.models import Calendar, Event
-from workspace.calendar.recurrence import _build_rrule, make_virtual_occurrence
+from workspace.calendar.recurrence import _build_rrule, make_virtual_occurrence, next_occurrences_after
 
 User = get_user_model()
 
@@ -135,3 +135,74 @@ class MakeVirtualOccurrenceTests(TestCase):
         )
         occ = make_virtual_occurrence(master, now)
         self.assertIsNone(occ['end'])
+
+
+class NextOccurrencesAfterTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='bob', password='pass')
+        self.cal = Calendar.objects.create(name='Test', owner=self.user)
+
+    def _make_master(self, freq, start, end=None, interval=1, rec_end=None):
+        return Event.objects.create(
+            calendar=self.cal, owner=self.user, title='Recurring',
+            start=start, end=end,
+            recurrence_frequency=freq, recurrence_interval=interval,
+            recurrence_end=rec_end,
+        )
+
+    def test_future_master_yields_limit_occurrences(self):
+        """Weekly master starting tomorrow → first 20 occurrences."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        master = self._make_master('weekly', start=now + timedelta(days=1))
+        occs = list(next_occurrences_after(master, after=now, limit=20))
+        self.assertEqual(len(occs), 20)
+        # First is tomorrow, then weekly
+        self.assertEqual(occs[0], now + timedelta(days=1))
+        self.assertEqual(occs[1], now + timedelta(days=8))
+
+    def test_past_master_skips_past_occurrences(self):
+        """Master starting 1 year ago → occurrences are all >= after."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        master = self._make_master('weekly', start=now - timedelta(days=365))
+        occs = list(next_occurrences_after(master, after=now, limit=20))
+        self.assertEqual(len(occs), 20)
+        for occ in occs:
+            self.assertGreaterEqual(occ, now)
+
+    def test_limit_respected(self):
+        """limit=5 → exactly 5 occurrences."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        master = self._make_master('daily', start=now)
+        occs = list(next_occurrences_after(master, after=now, limit=5))
+        self.assertEqual(len(occs), 5)
+
+    def test_recurrence_end_stops_iteration(self):
+        """Weekly master with recurrence_end exactly at week 3 → 4 occurrences
+        (weeks 0, 1, 2, 3) because dateutil.rrule treats `until` as inclusive."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        master = self._make_master(
+            'weekly', start=now,
+            rec_end=now + timedelta(weeks=3),
+        )
+        occs = list(next_occurrences_after(master, after=now, limit=20))
+        self.assertEqual(len(occs), 4)  # weeks 0, 1, 2, 3
+
+    def test_interval_respected(self):
+        """Bi-weekly master → 14-day stride."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        master = self._make_master('weekly', start=now, interval=2)
+        occs = list(next_occurrences_after(master, after=now, limit=3))
+        self.assertEqual(len(occs), 3)
+        self.assertEqual(occs[1] - occs[0], timedelta(days=14))
+        self.assertEqual(occs[2] - occs[1], timedelta(days=14))
+
+    def test_non_recurring_master_yields_nothing(self):
+        """Non-recurring Event passed in → generator yields nothing."""
+        now = timezone.now()
+        master = Event.objects.create(
+            calendar=self.cal, owner=self.user, title='One-off',
+            start=now, end=now + timedelta(hours=1),
+        )
+        occs = list(next_occurrences_after(master, after=now, limit=20))
+        self.assertEqual(occs, [])

@@ -36,6 +36,7 @@ from .queries import visible_calendars, visible_calendar_ids
 def _is_external_calendar(calendar_id):
     return ExternalCalendar.objects.filter(calendar_id=calendar_id).exists()
 from .recurrence import expand_recurring_events, make_virtual_occurrence
+from .upcoming import get_upcoming_page
 from .serializers import (
     CalendarCreateSerializer,
     CalendarSerializer,
@@ -179,14 +180,53 @@ class EventListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        summary="List events in a date range",
+        summary="List events (range mode) or next N upcoming events (cursor mode)",
         parameters=[
-            OpenApiParameter(name='start', type=str, required=True),
-            OpenApiParameter(name='end', type=str, required=True),
+            OpenApiParameter(name='start', type=str, required=False, description='Range mode: start of window'),
+            OpenApiParameter(name='end', type=str, required=False, description='Range mode: end of window'),
+            OpenApiParameter(name='after', type=str, required=False, description='Cursor mode: return events starting at or after this datetime'),
+            OpenApiParameter(name='limit', type=int, required=False, description='Cursor mode: max events per page (default 20, max 100)'),
             OpenApiParameter(name='calendar_ids', type=str, required=False, description='Comma-separated calendar UUIDs'),
+            OpenApiParameter(name='show_declined', type=bool, required=False, description='Cursor mode: include declined events'),
         ],
     )
     def get(self, request):
+        after_param = request.query_params.get('after')
+        if after_param is not None and after_param.strip():
+            return self._get_cursor(request, after_param)
+        return self._get_range(request)
+
+    def _get_cursor(self, request, after_param):
+        after = _parse_dt(after_param)
+        if after is None:
+            return Response(
+                {'detail': 'Invalid "after" datetime.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            limit = int(request.query_params.get('limit', 20))
+        except (TypeError, ValueError):
+            limit = 20
+        limit = max(1, min(limit, 100))
+
+        calendar_ids_param = request.query_params.get('calendar_ids')
+        calendar_ids = None
+        if calendar_ids_param is not None:
+            calendar_ids = [c.strip() for c in calendar_ids_param.split(',') if c.strip()]
+
+        show_declined = request.query_params.get('show_declined', '').lower() in ('1', 'true', 'yes')
+
+        events, next_after = get_upcoming_page(
+            user=request.user,
+            after=after,
+            limit=limit,
+            calendar_ids=calendar_ids,
+            show_declined=show_declined,
+        )
+        return Response({'events': events, 'next_after': next_after})
+
+    def _get_range(self, request):
         start = request.query_params.get('start')
         end = request.query_params.get('end')
         if not start or not end:

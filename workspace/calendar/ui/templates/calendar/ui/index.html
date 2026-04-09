@@ -290,7 +290,67 @@
         </ul>
       </div>
     </div>
-    <div x-ref="calendarEl" class="flex-1 min-h-0"></div>
+    <!-- FullCalendar container (month/week/day views) -->
+    <div x-show="currentView !== 'listAgenda'" x-ref="calendarEl" class="calendar-fc-container flex-1 min-h-0"></div>
+
+    <!-- Custom Alpine agenda (list view) -->
+    <div x-show="currentView === 'listAgenda'" class="agenda-view flex-1 min-h-0 overflow-y-auto">
+
+      <!-- Empty state -->
+      <template x-if="agenda.initialLoaded && agenda.events.length === 0 && !agenda.loading">
+        <div class="agenda-empty">
+          <i data-lucide="calendar" class="w-10 h-10 opacity-50"></i>
+          <p>No upcoming events</p>
+        </div>
+      </template>
+
+      <!-- Loading (initial) -->
+      <template x-if="!agenda.initialLoaded && agenda.loading">
+        <div class="agenda-loading">
+          <span class="loading loading-spinner loading-md"></span>
+        </div>
+      </template>
+
+      <!-- Day-grouped list -->
+      <template x-for="group in agendaByDay()" :key="group.date">
+        <div class="agenda-day-group">
+          <div class="agenda-day-header" :class="group.isToday ? 'is-today' : ''" x-text="group.label"></div>
+          <template x-for="event in group.events" :key="event.uuid">
+            <div class="agenda-event"
+                 :class="agendaEventClasses(event)"
+                 @click="openViewPanel(event)"
+                 @contextmenu.prevent="(e) => openContextMenu(e, event)">
+              <span class="agenda-event-time" x-text="formatAgendaEventTime(event)"></span>
+              <span class="agenda-event-title" x-text="event.title"></span>
+              <svg x-show="event.is_recurring" xmlns="http://www.w3.org/2000/svg"
+                   width="12" height="12" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.5"
+                   stroke-linecap="round" stroke-linejoin="round"
+                   class="agenda-recurring-icon">
+                <path d="m17 2 4 4-4 4"/>
+                <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
+                <path d="m7 22-4-4 4-4"/>
+                <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
+              </svg>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <!-- Load more -->
+      <div class="agenda-load-more" x-show="agenda.nextAfter !== null && agenda.initialLoaded">
+        <button type="button"
+                class="btn btn-ghost btn-sm"
+                @click="loadMoreAgenda()"
+                :disabled="agenda.loading">
+          <span x-show="!agenda.loading">Load more</span>
+          <span x-show="agenda.loading">
+            <span class="loading loading-spinner loading-xs"></span>
+            Loading…
+          </span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Event detail panel (full-screen on mobile, w-80 right sidebar on desktop) -->

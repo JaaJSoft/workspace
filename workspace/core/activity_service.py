@@ -53,7 +53,7 @@ def get_recent_events(
     )
 
     if exclude_user_id is not None:
-        events = [e for e in events if e.get('actor', {}).get('id') != exclude_user_id]
+        events = [e for e in events if (e.get('actor') or {}).get('id') != exclude_user_id]
 
     if search:
         q = search.lower()

@@ -321,3 +321,64 @@ class ActivityRegistryTests(TestCase):
         self.assertEqual(events, [])
         stats = self.registry.get_stats(1)
         self.assertEqual(stats, {'fail': {}})
+
+
+class ActivityServiceTests(TestCase):
+    """Tests for workspace.core.activity_service."""
+
+    def test_exclude_user_id_passes_through_null_actor_events(self):
+        """Events with actor=None must not crash the exclude filter.
+
+        Regression test: activity_service.get_recent_events did
+        e.get('actor', {}).get('id'), which crashes on actor=None
+        (dict.get returns the stored None, not the default). The
+        calendar provider emits actor=None for external-feed events,
+        and the dashboard view calls the service with exclude_user_id
+        set, so a user with any external calendar event hit a 500 on /.
+        """
+        from unittest.mock import patch
+
+        from workspace.core import activity_service
+
+        events_from_registry = [
+            {'label': 'null-actor', 'actor': None, 'timestamp': None},
+            {'label': 'other-actor', 'actor': {'id': 42}, 'timestamp': None},
+            {'label': 'excluded', 'actor': {'id': 7}, 'timestamp': None},
+        ]
+
+        with patch.object(
+            activity_service.activity_registry,
+            'get_recent_events',
+            return_value=list(events_from_registry),
+        ):
+            result = activity_service.get_recent_events(
+                viewer_id=7, exclude_user_id=7, limit=10,
+            )
+
+        labels = [e['label'] for e in result]
+        self.assertIn('null-actor', labels)
+        self.assertIn('other-actor', labels)
+        self.assertNotIn('excluded', labels)
+
+    def test_search_filter_handles_null_actor(self):
+        """Search filter must also tolerate actor=None."""
+        from unittest.mock import patch
+
+        from workspace.core import activity_service
+
+        events_from_registry = [
+            {'label': 'meeting', 'description': 'team sync',
+             'actor': None, 'timestamp': None},
+        ]
+
+        with patch.object(
+            activity_service.activity_registry,
+            'get_recent_events',
+            return_value=list(events_from_registry),
+        ):
+            result = activity_service.get_recent_events(
+                viewer_id=1, search='meeting', limit=10,
+            )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['label'], 'meeting')

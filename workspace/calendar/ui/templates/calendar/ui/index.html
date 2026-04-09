@@ -337,7 +337,10 @@
         </div>
       </template>
 
-      <!-- Load more -->
+      <!-- Intersection sentinel for auto-load on scroll -->
+      <div x-ref="agendaSentinel" class="agenda-sentinel" aria-hidden="true"></div>
+
+      <!-- Load more (fallback button; auto-load runs via IntersectionObserver) -->
       <div class="agenda-load-more" x-show="agenda.nextAfter !== null && agenda.initialLoaded">
         <button type="button"
                 class="btn btn-ghost btn-sm"

@@ -284,10 +284,12 @@
 }
 
 .agenda-day-group {
-  margin-bottom: 1.25rem;
+  /* No bottom margin — the next day-header's padding-top provides the gap.
+     Avoids stacking event margin + group margin + header padding = too much. */
+  margin-bottom: 0;
 }
 
-.agenda-day-group:last-child {
+.agenda-day-group > .agenda-event:last-child {
   margin-bottom: 0;
 }
 
@@ -405,6 +407,13 @@
 
 .agenda-event.event-declined .agenda-event-title {
   text-decoration: line-through;
+}
+
+/* Intersection sentinel — invisible; IntersectionObserver watches it and
+   triggers loadMoreAgenda() ~300px before the user scrolls to the bottom. */
+.agenda-sentinel {
+  height: 1px;
+  pointer-events: none;
 }
 
 .agenda-load-more {

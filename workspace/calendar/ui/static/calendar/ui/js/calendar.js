@@ -623,6 +623,10 @@ window.calendarApp = function calendarApp(calendarsData) {
         this.loadAgenda();
       }
 
+      // Wire up the agenda infinite-scroll observer (runs alongside the
+      // explicit "Load more" button as a fallback).
+      this._setupAgendaObserver();
+
       const eventId = params.get('event');
       if (eventId) this.openEventById(eventId);
 
@@ -768,6 +772,34 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (this.currentView === 'listAgenda') {
         this.loadAgenda();
       }
+    },
+
+    _setupAgendaObserver() {
+      // IntersectionObserver-driven infinite scroll for the agenda view.
+      // Watches the sentinel at the bottom of the list; when it comes within
+      // 300px of the viewport bottom, we fire loadMoreAgenda(). The method
+      // itself guards against concurrent fetches and exhausted cursors, so
+      // the observer can fire liberally without causing duplicate requests.
+      if (this._agendaObserver) return; // already set up
+      if (typeof IntersectionObserver === 'undefined') return; // fallback: button only
+
+      const sentinel = this.$refs.agendaSentinel;
+      if (!sentinel) return;
+
+      this._agendaObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          if (this.currentView !== 'listAgenda') continue;
+          if (!this.agenda.initialLoaded) continue; // wait for page 1 first
+          this.loadMoreAgenda();
+        }
+      }, {
+        // Pre-load 300px before the user reaches the bottom, for a smooth feel.
+        rootMargin: '300px 0px',
+        threshold: 0,
+      });
+
+      this._agendaObserver.observe(sentinel);
     },
 
     agendaByDay() {

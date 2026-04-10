@@ -14,9 +14,19 @@ logger = logging.getLogger(__name__)
 
 _THINK_RE = re.compile(r'<think>[\s\S]*?</think>\s*', re.IGNORECASE)
 _RAW_TOOL_CALL_RE = re.compile(r'</?tool_call>', re.IGNORECASE)
+# Matches timestamp prefixes leaked by the LLM, with or without brackets:
+# "[2026-04-10 20:07] ..." or "2026-04-10 20:07 ..."
+_TIMESTAMP_PREFIX_RE = re.compile(r'^\[?\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]?\s*')
 _TRUNCATE_BODY_LIMIT = 500  # max chars for old messages outside the recent window
 _SUMMARY_BUFFER = 10  # re-summarise when unsummarised old messages exceed window by this many
 _VIDEO_MAX_FRAMES = 30  # cap frames sent to the model to limit context size
+
+
+def _clean_llm_content(content: str) -> str:
+    """Strip artifacts that LLMs sometimes leak into their replies."""
+    content = _RAW_TOOL_CALL_RE.sub('', content)
+    content = _TIMESTAMP_PREFIX_RE.sub('', content)
+    return content.strip()
 
 
 def _get_video_duration(video_path):
@@ -419,7 +429,7 @@ def _post_bot_message(conversation, bot_user, result, used_tools, tool_context, 
     from workspace.chat.models import ConversationMember, Message, MessageAttachment
     from workspace.chat.services import notify_conversation_members, render_message_body
 
-    body = _RAW_TOOL_CALL_RE.sub('', result['content']).strip()
+    body = _clean_llm_content(result['content'])
     body_html = render_message_body(body)
 
     if used_tools:
@@ -660,7 +670,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         )
 
         # Auto-retry once if the model returned an empty response
-        body_preview = _RAW_TOOL_CALL_RE.sub('', result.get('content') or '').strip()
+        body_preview = _clean_llm_content(result.get('content') or '')
         if not body_preview and not tool_context.get('images'):
             logger.warning('Empty response, retrying once: conversation=%s', conversation_id)
             result, used_tools, tool_context, retry_rounds, retry_td = _run_tool_loop(
@@ -670,7 +680,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             rounds.extend(retry_rounds)
             if retry_td:
                 tool_data = (tool_data or []) + retry_td
-            body_preview = _RAW_TOOL_CALL_RE.sub('', result.get('content') or '').strip()
+            body_preview = _clean_llm_content(result.get('content') or '')
             if not body_preview and not tool_context.get('images'):
                 raise RuntimeError('Empty response from model')
 
@@ -1258,7 +1268,7 @@ def generate_scheduled_response(self, schedule_id: str):
         )
 
         # Auto-retry once if the model returned an empty response
-        body_preview = _RAW_TOOL_CALL_RE.sub('', result.get('content') or '').strip()
+        body_preview = _clean_llm_content(result.get('content') or '')
         if not body_preview and not tool_context.get('images'):
             logger.warning('Empty scheduled response, retrying once: schedule=%s', schedule_id)
             result, used_tools, tool_context, retry_rounds, retry_td = _run_tool_loop(
@@ -1268,7 +1278,7 @@ def generate_scheduled_response(self, schedule_id: str):
             rounds.extend(retry_rounds)
             if retry_td:
                 tool_data = (tool_data or []) + retry_td
-            body_preview = _RAW_TOOL_CALL_RE.sub('', result.get('content') or '').strip()
+            body_preview = _clean_llm_content(result.get('content') or '')
             if not body_preview and not tool_context.get('images'):
                 ai_task.status = ai_task.Status.COMPLETED
                 ai_task.result = '[EMPTY]'
@@ -1283,7 +1293,7 @@ def generate_scheduled_response(self, schedule_id: str):
         raw_messages = {'messages': initial_messages, 'rounds': rounds}
 
         # Let the bot skip if it judges the message is no longer relevant
-        body = _RAW_TOOL_CALL_RE.sub('', result['content']).strip()
+        body = _clean_llm_content(result['content'])
         if body == '[SKIP]':
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = '[SKIP]'

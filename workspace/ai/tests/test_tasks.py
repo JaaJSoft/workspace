@@ -582,3 +582,46 @@ class ClassifyMailMessagesTests(TestCase):
         self.assertEqual(result['status'], 'error')
         ai_task.refresh_from_db()
         self.assertEqual(ai_task.status, 'failed')
+
+
+class CleanLlmContentTests(TestCase):
+    """Tests for _clean_llm_content — stripping LLM artifacts."""
+
+    def setUp(self):
+        from workspace.ai.tasks import _clean_llm_content
+        self.clean = _clean_llm_content
+
+    def test_strips_bracketed_timestamp_prefix(self):
+        self.assertEqual(self.clean('[2026-04-10 20:07] Hello!'), 'Hello!')
+
+    def test_strips_unbracketed_timestamp_prefix(self):
+        self.assertEqual(self.clean('2026-04-10 20:07 Hello!'), 'Hello!')
+
+    def test_strips_bracketed_timestamp_no_trailing_space(self):
+        self.assertEqual(self.clean('[2026-04-10 20:07]Hello!'), 'Hello!')
+
+    def test_strips_tool_call_tags(self):
+        self.assertEqual(self.clean('<tool_call>stuff</tool_call>'), 'stuff')
+
+    def test_strips_both_timestamp_and_tool_tags(self):
+        self.assertEqual(
+            self.clean('[2026-04-10 14:00] <tool_call>hi</tool_call>'),
+            'hi',
+        )
+
+    def test_preserves_normal_content(self):
+        self.assertEqual(self.clean('Just a normal reply.'), 'Just a normal reply.')
+
+    def test_preserves_timestamps_mid_text(self):
+        """Timestamps in the middle of a message should NOT be stripped."""
+        text = 'The meeting is at [2026-04-10 14:00] in room 3.'
+        self.assertEqual(self.clean(text), text)
+
+    def test_empty_string(self):
+        self.assertEqual(self.clean(''), '')
+
+    def test_only_timestamp(self):
+        self.assertEqual(self.clean('[2026-04-10 20:07]'), '')
+
+    def test_only_timestamp_no_brackets(self):
+        self.assertEqual(self.clean('2026-04-10 20:07'), '')

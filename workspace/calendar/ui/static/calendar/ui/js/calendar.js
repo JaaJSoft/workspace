@@ -1303,9 +1303,14 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.ctxMenu.isOwner = isOwner;
       this.ctxMenu.isExternal = this.externalCalendars.some(c => c.uuid === rawEvent.calendar_id);
       this.ctxMenu.inviteStatus = inviteStatus;
+
+      // Set initial position at cursor before opening so the menu doesn't
+      // flash at (0, 0). Overflow adjustment follows in $nextTick once the
+      // menu is rendered and we can measure its size.
+      this.ctxMenu.x = nativeEvent.clientX;
+      this.ctxMenu.y = nativeEvent.clientY;
       this.ctxMenu.open = true;
 
-      // Position with viewport overflow detection
       this.$nextTick(() => {
         const menuEl = this.$el.querySelector('[x-show="ctxMenu.open"]');
         if (!menuEl) return;
@@ -1313,8 +1318,8 @@ window.calendarApp = function calendarApp(calendarsData) {
         const vw = window.innerWidth;
         const vh = window.innerHeight;
 
-        let x = nativeEvent.clientX;
-        let y = nativeEvent.clientY;
+        let x = this.ctxMenu.x;
+        let y = this.ctxMenu.y;
 
         if (x + menuRect.width > vw) x = vw - menuRect.width - 10;
         if (y + menuRect.height > vh) y = vh - menuRect.height - 10;

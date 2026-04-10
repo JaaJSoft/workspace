@@ -319,7 +319,9 @@
             <div class="agenda-event"
                  :class="agendaEventClasses(event)"
                  @click="openViewPanel(event)"
-                 @contextmenu.prevent="(e) => openContextMenu(e, event)">
+                 @contextmenu.prevent="(e) => { window._eventCardScheduleHide($el); openContextMenu(e, event); }"
+                 @mouseenter="_hasHover && !ctxMenu.open && window._eventCardShow($el, event.uuid)"
+                 @mouseleave="_hasHover && window._eventCardScheduleHide($el)">
               <span class="agenda-event-time" x-text="formatAgendaEventTime(event)"></span>
               <span class="agenda-event-title" x-text="event.title"></span>
               <svg x-show="event.is_recurring" xmlns="http://www.w3.org/2000/svg"

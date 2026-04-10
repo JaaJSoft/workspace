@@ -90,6 +90,9 @@ window.calendarApp = function calendarApp(calendarsData) {
       seenIds: new Set(),
     },
 
+    // Desktop hover capability (excludes touch-primary devices)
+    _hasHover: window.matchMedia('(hover: hover)').matches,
+
     init() {
       // Initialize visible calendars (all visible by default)
       const saved = localStorage.getItem('calendarVisible');

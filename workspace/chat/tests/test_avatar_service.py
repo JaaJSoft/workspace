@@ -5,7 +5,6 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from workspace.chat import avatar_service
 from workspace.chat.avatar_service import (
     delete_group_avatar,
     get_group_avatar_etag,

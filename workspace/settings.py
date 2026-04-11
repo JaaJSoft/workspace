@@ -118,6 +118,7 @@ if DEBUG and not TESTING:
 #   DB 0 — cache (evictable)
 #   DB 1 — sessions (must not be evicted)
 #   DB 2 — Celery broker + results
+#   DB 3 — WebDAV lock storage (shared across gunicorn workers)
 _REDIS_URL = os.getenv('REDIS_URL') or os.getenv('DJANGO_REDIS_URL')
 
 
@@ -132,6 +133,7 @@ if _REDIS_URL:
     _REDIS_CACHE_URL = _redis_db_url(_REDIS_URL, 0)
     _REDIS_SESSION_URL = _redis_db_url(_REDIS_URL, 1)
     _REDIS_CELERY_URL = _redis_db_url(_REDIS_URL, 2)
+    WEBDAV_LOCK_REDIS_URL = _redis_db_url(_REDIS_URL, 3)
 
     CACHES = {
         'default': {
@@ -164,6 +166,8 @@ else:
     }
     # Fall back to DB sessions when Redis is not available
     SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+    # No Redis in dev: WebDAV falls back to in-process lock storage.
+    WEBDAV_LOCK_REDIS_URL = None
 
 
 MIDDLEWARE = [

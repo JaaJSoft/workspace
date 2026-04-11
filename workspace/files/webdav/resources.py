@@ -1,6 +1,8 @@
 """DAV resource classes wrapping the File model."""
 
 import io
+import logging
+import time
 from tempfile import SpooledTemporaryFile
 
 from django.conf import settings as django_settings
@@ -9,6 +11,8 @@ from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.files.models import File
 from workspace.files.services import FileService
+
+logger = logging.getLogger(__name__)
 
 
 class _WriteBuffer:
@@ -223,19 +227,40 @@ class FileResource(DAVNonCollection):
 
     def begin_write(self, content_type=None):
         self._write_buf = _WriteBuffer()
+        self._write_started_at = time.monotonic()
+        logger.info(
+            "webdav PUT begin: user=%s path=%s",
+            getattr(self._user, "username", "?"),
+            self.path,
+        )
         return self._write_buf
 
     def end_write(self, *, with_errors):
         buf = self._write_buf
+        elapsed = time.monotonic() - getattr(self, "_write_started_at", time.monotonic())
         if with_errors:
             buf.real_close()
+            logger.warning(
+                "webdav PUT failed: user=%s path=%s elapsed=%.2fs",
+                getattr(self._user, "username", "?"),
+                self.path,
+                elapsed,
+            )
             if self._file.size is None:
                 self._file.delete(hard=True)
             return
 
         try:
             content = buf.as_django_file(self._file.name)
+            size = content.size
             FileService.update_content(self._file, content)
+            logger.info(
+                "webdav PUT done: user=%s path=%s size=%d elapsed=%.2fs",
+                getattr(self._user, "username", "?"),
+                self.path,
+                size,
+                time.monotonic() - getattr(self, "_write_started_at", time.monotonic()),
+            )
         finally:
             buf.real_close()
 

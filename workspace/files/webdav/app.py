@@ -22,11 +22,11 @@ def _build_lock_storage():
     uploads (LOCK + PUT can span separate TCP connections and land on
     different workers — Explorer then reports "file too large").
 
-    When ``settings.WEBDAV_LOCK_REDIS_URL`` is set we back the lock table
-    with Redis so all workers share it. In dev (no Redis) we keep the
-    in-process dict, which is fine for a single-worker ``runserver``.
+    When ``settings.WEBDAV_LOCK_STORAGE_URL`` is set we back the lock
+    table with Redis so all workers share it. In dev (no Redis) we keep
+    the in-process dict, which is fine for a single-worker ``runserver``.
     """
-    redis_url = getattr(django_settings, "WEBDAV_LOCK_REDIS_URL", None)
+    redis_url = getattr(django_settings, "WEBDAV_LOCK_STORAGE_URL", None)
     if not redis_url:
         logger.info("webdav: using in-memory lock storage (dev mode)")
         return LockStorageDict()

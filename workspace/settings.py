@@ -133,7 +133,7 @@ if _REDIS_URL:
     _REDIS_CACHE_URL = _redis_db_url(_REDIS_URL, 0)
     _REDIS_SESSION_URL = _redis_db_url(_REDIS_URL, 1)
     _REDIS_CELERY_URL = _redis_db_url(_REDIS_URL, 2)
-    WEBDAV_LOCK_REDIS_URL = _redis_db_url(_REDIS_URL, 3)
+    _REDIS_WEBDAV_URL = _redis_db_url(_REDIS_URL, 3)
 
     CACHES = {
         'default': {
@@ -166,8 +166,6 @@ else:
     }
     # Fall back to DB sessions when Redis is not available
     SESSION_ENGINE = 'django.contrib.sessions.backends.db'
-    # No Redis in dev: WebDAV falls back to in-process lock storage.
-    WEBDAV_LOCK_REDIS_URL = None
 
 
 MIDDLEWARE = [
@@ -571,6 +569,11 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes
+
+# WebDAV lock storage
+# Use dedicated Redis DB when available so locks are shared across gunicorn
+# workers; otherwise fall back to in-process storage (dev / single worker).
+WEBDAV_LOCK_STORAGE_URL = _REDIS_WEBDAV_URL if _REDIS_URL else None
 
 # In development, run tasks synchronously in the current thread (no worker needed)
 if DEBUG:

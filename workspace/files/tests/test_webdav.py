@@ -572,13 +572,13 @@ class LockStorageBuilderTests(TestCase):
         from workspace.files.webdav.app import _build_lock_storage
         return _build_lock_storage()
 
-    @override_settings(WEBDAV_LOCK_REDIS_URL=None)
+    @override_settings(WEBDAV_LOCK_STORAGE_URL=None)
     def test_dev_fallback_is_in_memory(self):
         from wsgidav.lock_man.lock_storage import LockStorageDict
         storage = self._build()
         self.assertIsInstance(storage, LockStorageDict)
 
-    @override_settings(WEBDAV_LOCK_REDIS_URL="redis://localhost:6379/3")
+    @override_settings(WEBDAV_LOCK_STORAGE_URL="redis://localhost:6379/3")
     def test_redis_basic_url(self):
         from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
         storage = self._build()
@@ -589,7 +589,7 @@ class LockStorageBuilderTests(TestCase):
         self.assertIsNone(storage._redis_password)
 
     @override_settings(
-        WEBDAV_LOCK_REDIS_URL="redis://:s3cret@redis.internal:6380/3"
+        WEBDAV_LOCK_STORAGE_URL="redis://:s3cret@redis.internal:6380/3"
     )
     def test_redis_with_password_and_custom_port(self):
         from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
@@ -600,7 +600,7 @@ class LockStorageBuilderTests(TestCase):
         self.assertEqual(storage._redis_db, 3)
         self.assertEqual(storage._redis_password, "s3cret")
 
-    @override_settings(WEBDAV_LOCK_REDIS_URL="redis://example.com/0")
+    @override_settings(WEBDAV_LOCK_STORAGE_URL="redis://example.com/0")
     def test_redis_defaults_when_port_omitted(self):
         from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
         storage = self._build()
@@ -613,7 +613,7 @@ class LockStorageBuilderTests(TestCase):
 class CreateWebdavAppTests(TestCase):
     """Smoke tests for the WsgiDAV app factory."""
 
-    @override_settings(WEBDAV_LOCK_REDIS_URL=None)
+    @override_settings(WEBDAV_LOCK_STORAGE_URL=None)
     def test_factory_returns_app_with_lock_manager(self):
         """Dev fallback: app is built and locking is enabled (DAV level 2)."""
         from workspace.files.webdav.app import create_webdav_app

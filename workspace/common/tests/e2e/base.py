@@ -19,8 +19,17 @@ from __future__ import annotations
 import os
 import unittest
 
-from django.contrib.auth import get_user_model
-from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+# Playwright's sync API (``sync_playwright``) drives the browser over an
+# event loop under the hood, which Django's ORM detects as an "async
+# context" and uses to raise ``SynchronousOnlyOperation`` on every
+# ``Model.objects.create(...)`` call made from the test thread. We are
+# not actually running Django in an async runtime, so opt out of that
+# safety check — this is the officially documented escape hatch.
+# ``setdefault`` avoids clobbering an explicit opt-out from the caller.
+os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
+
+from django.contrib.auth import get_user_model  # noqa: E402
+from django.contrib.staticfiles.testing import StaticLiveServerTestCase  # noqa: E402
 
 
 E2E_ENABLED = os.environ.get("E2E", "").lower() in {"1", "true", "yes", "on"}

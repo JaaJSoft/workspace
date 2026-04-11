@@ -47,8 +47,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Run Django test suite
+      - name: Run Django test suite with coverage
         env:
           PYTHONWARNINGS: default
         run: |
-          uv run python manage.py test workspace.${{ matrix.module }} -v 2
+          uv run coverage run manage.py test workspace.${{ matrix.module }} -v 2
+
+      - name: Module coverage report
+        if: always()
+        run: |
+          uv run coverage combine || true
+          uv run coverage report --include='workspace/${{ matrix.module }}/*'

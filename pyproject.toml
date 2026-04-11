@@ -55,5 +55,31 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "coverage[toml]>=7.6",
     "django-debug-toolbar==6.3.0",
+]
+
+[tool.coverage.run]
+source = ["workspace"]
+branch = true
+parallel = true
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "manage.py",
+    "workspace/settings.py",
+    "workspace/asgi.py",
+    "workspace/wsgi.py",
+    "workspace/celery.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+precision = 1
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
 ]

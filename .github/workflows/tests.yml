@@ -19,18 +19,33 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module:
-          - ai
-          - calendar
-          - chat
-          - common
-          - core
-          - dashboard
-          - files
-          - mail
-          - notes
-          - notifications
-          - users
+        # Each entry pins a per-module line+branch coverage floor, rounded
+        # down to the nearest multiple of 5 and sitting at least 3 points
+        # below the current baseline to absorb flakiness.
+        # To raise a threshold, update the number here — never lower it.
+        include:
+          - module: ai
+            min_coverage: 55
+          - module: calendar
+            min_coverage: 75
+          - module: chat
+            min_coverage: 55
+          - module: common
+            min_coverage: 75
+          - module: core
+            min_coverage: 45
+          - module: dashboard
+            min_coverage: 95
+          - module: files
+            min_coverage: 65
+          - module: mail
+            min_coverage: 55
+          - module: notes
+            min_coverage: 45
+          - module: notifications
+            min_coverage: 80
+          - module: users
+            min_coverage: 85
     name: Tests (${{ matrix.module }})
     steps:
       - name: Checkout repository
@@ -57,4 +72,6 @@ jobs:
         if: always()
         run: |
           uv run coverage combine || true
-          uv run coverage report --include='workspace/${{ matrix.module }}/*'
+          uv run coverage report \
+            --include='workspace/${{ matrix.module }}/*' \
+            --fail-under=${{ matrix.min_coverage }}

@@ -57,6 +57,9 @@ build-backend = "hatchling.build"
 dev = [
     "coverage[toml]>=7.6",
     "django-debug-toolbar==6.3.0",
+    # End-to-end / UI tests. Playwright is only needed when E2E=1 is set;
+    # otherwise the E2E test cases are skipped (see workspace/common/tests/e2e/).
+    "playwright>=1.48",
 ]
 
 [tool.coverage.run]

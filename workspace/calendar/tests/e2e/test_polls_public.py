@@ -33,28 +33,34 @@ class SharedPollVotingTests(PlaywrightTestCase):
     def test_guest_can_view_and_vote_on_shared_poll(self):
         poll = self._make_open_poll(title="Team lunch")
 
-        self.page.goto(f"{self.live_server_url}/calendar/polls/shared/{poll.share_token}")
+        self.page.goto(
+            f"{self.live_server_url}/calendar/polls/shared/{poll.share_token}"
+        )
 
-        # Alpine populates the <h1> via x-text once the /api/v1/calendar/polls/shared/<token>
-        # fetch resolves; waiting on it asserts that both the UI view and
-        # the public API endpoint are wired up correctly.
+        # Alpine populates the <h1> via x-text once the
+        # /api/v1/calendar/polls/shared/<token> fetch resolves; waiting on
+        # it asserts that both the UI view and the public API endpoint
+        # are wired up correctly.
         expect(self.page.locator("h1")).to_have_text("Team lunch")
 
         # Fill in the guest identity (name is required, email is optional).
         self.page.locator('input[placeholder="Your name"]').fill("Alice Guest")
 
-        # The "You" row exposes one vote button per slot. We click the
-        # first slot's vote button once: cycleVote() goes "" → "yes".
-        # The row is identified by the "pencil" icon Lucide swaps into
-        # the leading cell, but it's more robust to match by the Alpine
-        # attribute ``@click="cycleVote(...)"`` — rendered into the DOM
-        # as the button element itself. We simply grab all vote buttons
-        # inside the "You" row, which is the last row when the poll is
-        # open (bg-primary/5).
-        vote_row = self.page.locator("tr.bg-primary\\/5")
+        # The editable "You" row is the only table row that contains a
+        # ``data-lucide="pencil"`` icon (the template uses it to mark the
+        # user's own row). We match on that instead of the Tailwind class
+        # ``bg-primary/5`` — escaped Tailwind selectors are fragile and
+        # the pencil icon is a stable semantic marker owned by the poll
+        # template itself.
+        vote_row = self.page.locator('tr:has([data-lucide="pencil"])')
         expect(vote_row).to_be_visible()
+
+        # One vote button per slot — we created two slots, so we expect
+        # two buttons in this row.
         vote_buttons = vote_row.locator("button")
         expect(vote_buttons).to_have_count(2)
+
+        # cycleVote() cycles "" → "yes" → "maybe" → "no"; one click = "yes".
         vote_buttons.nth(0).click()
 
         # Submit.

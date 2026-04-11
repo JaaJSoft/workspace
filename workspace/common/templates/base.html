@@ -214,7 +214,12 @@
       }
     })();
 
-    // Sync theme from server (if logged in) — runs after paint to avoid blocking
+    {% if user.is_authenticated %}
+    // Sync theme from server — runs after paint to avoid blocking.
+    // Gated behind auth: /api/v1/settings is IsAuthenticated-only and a 401
+    // here would be caught by the global fetch wrapper below and turned
+    // into a redirect to /login?next=<current>, which is both spurious
+    // (the user may already be on /login or an error page) and noisy.
     (function () {
       fetch('/api/v1/settings/core/theme')
         .then(r => r.ok ? r.json() : null)
@@ -231,7 +236,8 @@
         .catch(() => {});
     })();
 
-    // Auto-detect timezone and store once (only if not already set)
+    // Auto-detect timezone and store once (only if not already set).
+    // Same auth-gating rationale as the theme sync above.
     (function () {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (!tz) return;
@@ -248,6 +254,7 @@
         })
         .catch(function() {});
     })();
+    {% endif %}
 
     // Dialog utilities
     const AppDialog = {

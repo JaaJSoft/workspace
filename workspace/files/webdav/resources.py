@@ -308,8 +308,15 @@ class FileResource(DAVNonCollection):
                 "PUT failed for %s by %s (%.2fs)",
                 self.path, username, elapsed,
             )
-            if self._file.size is None:
-                self._file.delete(hard=True)
+            # Only hard-delete if the record still exists and has never
+            # had content (size is None).  Refresh first so we don't
+            # delete a record that a concurrent PUT already populated.
+            try:
+                self._file.refresh_from_db()
+                if self._file.size is None:
+                    self._file.delete(hard=True)
+            except File.DoesNotExist:
+                pass  # already gone
             return
 
         # Detect partial uploads: if the client announced Content-Length
@@ -324,8 +331,12 @@ class FileResource(DAVNonCollection):
                 "(%d of %d bytes, %.2fs)",
                 self.path, username, buf.size, expected, elapsed,
             )
-            if self._file.size is None:
-                self._file.delete(hard=True)
+            try:
+                self._file.refresh_from_db()
+                if self._file.size is None:
+                    self._file.delete(hard=True)
+            except File.DoesNotExist:
+                pass  # already gone
             raise DAVError(HTTP_BAD_REQUEST, "Incomplete upload")
 
         # Finalize the file on storage (flush remaining buffer + close).
@@ -333,7 +344,20 @@ class FileResource(DAVNonCollection):
 
         # Update DB metadata only — the file is already written to its
         # final storage path, so we just point content.name at it.
-        self._file.refresh_from_db()
+        # The record may have been hard-deleted by a concurrent retry's
+        # end_write(with_errors=True) during our (slow) upload.  If so,
+        # recreate it so the file on disk is not orphaned.
+        try:
+            self._file.refresh_from_db()
+        except File.DoesNotExist:
+            logger.warning(
+                "File record deleted during upload for %s by %s, recreating",
+                self.path, username,
+            )
+            self._file = FileService.create_file(
+                self._user, self._file.name,
+                parent=self._file.parent,
+            )
         self._file.size = buf.size
         self._file.mime_type = FileService.infer_mime_type(self._file.name)
         self._file.has_thumbnail = False

@@ -1,0 +1,12 @@
+<div class="collapse collapse-arrow bg-base-200 rounded-lg">
+  <input type="checkbox" {% if item.checked %}checked="checked"{% endif %} />
+  <div class="collapse-title font-semibold flex items-center gap-2">
+    <i data-lucide="{{ item.icon }}" class="w-4 h-4 text-{{ accent_color }}"></i>
+    {{ item.title }}
+  </div>
+  <div class="collapse-content">
+    <div class="prose prose-sm max-w-none pt-2">
+      {{ item.content }}
+    </div>
+  </div>
+</div>

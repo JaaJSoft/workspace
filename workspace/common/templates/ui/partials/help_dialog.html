@@ -1,0 +1,22 @@
+<dialog id="{{ dialog_id }}" class="modal">
+  <div class="modal-box max-w-3xl">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </form>
+    <h3 class="font-bold text-xl mb-6 flex items-center gap-2">
+      <i data-lucide="circle-help" class="w-6 h-6 text-{{ accent_color }}"></i>
+      Help
+    </h3>
+
+    <div class="space-y-2">
+      {% for item in items %}
+        {% include "ui/partials/help_dialog_item.html" %}
+      {% endfor %}
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

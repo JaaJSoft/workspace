@@ -557,6 +557,73 @@ class WriteBufferTests(TestCase):
             buf.as_django_file("test.txt")
 
 
+# ── Lock storage selection ────────────────────────────────────────────
+
+
+class LockStorageBuilderTests(TestCase):
+    """Tests for ``_build_lock_storage`` backend selection.
+
+    Instantiation only: ``LockStorageRedis`` stores its connection params
+    and opens the connection lazily via ``.open()``, so these tests don't
+    need an actual Redis instance.
+    """
+
+    def _build(self):
+        from workspace.files.webdav.app import _build_lock_storage
+        return _build_lock_storage()
+
+    @override_settings(WEBDAV_LOCK_STORAGE_URL=None)
+    def test_dev_fallback_is_in_memory(self):
+        from wsgidav.lock_man.lock_storage import LockStorageDict
+        storage = self._build()
+        self.assertIsInstance(storage, LockStorageDict)
+
+    @override_settings(WEBDAV_LOCK_STORAGE_URL="redis://localhost:6379/3")
+    def test_redis_basic_url(self):
+        from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
+        storage = self._build()
+        self.assertIsInstance(storage, LockStorageRedis)
+        self.assertEqual(storage._redis_host, "localhost")
+        self.assertEqual(storage._redis_port, 6379)
+        self.assertEqual(storage._redis_db, 3)
+        self.assertIsNone(storage._redis_password)
+
+    @override_settings(
+        WEBDAV_LOCK_STORAGE_URL="redis://:s3cret@redis.internal:6380/3"
+    )
+    def test_redis_with_password_and_custom_port(self):
+        from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
+        storage = self._build()
+        self.assertIsInstance(storage, LockStorageRedis)
+        self.assertEqual(storage._redis_host, "redis.internal")
+        self.assertEqual(storage._redis_port, 6380)
+        self.assertEqual(storage._redis_db, 3)
+        self.assertEqual(storage._redis_password, "s3cret")
+
+    @override_settings(WEBDAV_LOCK_STORAGE_URL="redis://example.com/0")
+    def test_redis_defaults_when_port_omitted(self):
+        from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
+        storage = self._build()
+        self.assertIsInstance(storage, LockStorageRedis)
+        self.assertEqual(storage._redis_host, "example.com")
+        self.assertEqual(storage._redis_port, 6379)
+        self.assertEqual(storage._redis_db, 0)
+
+
+class CreateWebdavAppTests(TestCase):
+    """Smoke tests for the WsgiDAV app factory."""
+
+    @override_settings(WEBDAV_LOCK_STORAGE_URL=None)
+    def test_factory_returns_app_with_lock_manager(self):
+        """Dev fallback: app is built and locking is enabled (DAV level 2)."""
+        from workspace.files.webdav.app import create_webdav_app
+        app = create_webdav_app()
+        # With a LockStorageDict the lock manager must be present so that
+        # OPTIONS advertises ``DAV: 1,2``.
+        provider = app.provider_map["/"]
+        self.assertIsNotNone(provider.lock_manager)
+
+
 # ── Integration (full WSGI stack) ─────────────────────────────────────
 
 

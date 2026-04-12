@@ -118,6 +118,7 @@ if DEBUG and not TESTING:
 #   DB 0 — cache (evictable)
 #   DB 1 — sessions (must not be evicted)
 #   DB 2 — Celery broker + results
+#   DB 3 — WebDAV lock storage (shared across gunicorn workers)
 _REDIS_URL = os.getenv('REDIS_URL') or os.getenv('DJANGO_REDIS_URL')
 
 
@@ -132,6 +133,7 @@ if _REDIS_URL:
     _REDIS_CACHE_URL = _redis_db_url(_REDIS_URL, 0)
     _REDIS_SESSION_URL = _redis_db_url(_REDIS_URL, 1)
     _REDIS_CELERY_URL = _redis_db_url(_REDIS_URL, 2)
+    _REDIS_WEBDAV_URL = _redis_db_url(_REDIS_URL, 3)
 
     CACHES = {
         'default': {
@@ -567,6 +569,11 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes
+
+# WebDAV lock storage
+# Use dedicated Redis DB when available so locks are shared across gunicorn
+# workers; otherwise fall back to in-process storage (dev / single worker).
+WEBDAV_LOCK_STORAGE_URL = _REDIS_WEBDAV_URL if _REDIS_URL else None
 
 # In development, run tasks synchronously in the current thread (no worker needed)
 if DEBUG:

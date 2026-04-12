@@ -86,7 +86,11 @@ class Command(BaseCommand):
         # -- 3. Export from SQLite -----------------------------------------
         self.stdout.write("Exporting data from SQLite…")
 
-        dump_file = Path(tempfile.mktemp(suffix=".json", prefix="workspace_dump_"))
+        dump_handle = tempfile.NamedTemporaryFile(
+            suffix=".json", prefix="workspace_dump_", delete=False,
+        )
+        dump_file = Path(dump_handle.name)
+        dump_handle.close()
         exclude_args = []
         for app in EXCLUDED_APPS:
             exclude_args += ["--exclude", app]

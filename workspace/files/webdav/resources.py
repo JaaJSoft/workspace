@@ -2,54 +2,91 @@
 
 import io
 import logging
+import os
 import time
-from tempfile import SpooledTemporaryFile
 
 from django.conf import settings as django_settings
 from django.core.files.base import File as DjangoFile
 from wsgidav.dav_error import DAVError, HTTP_BAD_REQUEST
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
-from workspace.files.models import File
+from workspace.files.models import File, file_upload_path
 from workspace.files.services import FileService
 
 logger = logging.getLogger(__name__)
 
 
-class _WriteBuffer:
-    """Wraps a SpooledTemporaryFile so ``close()`` is deferred.
+class _StreamingWriteBuffer:
+    """Write buffer that streams data directly to Django storage.
 
-    WsgiDAV calls ``fileobj.close()`` before ``end_write()``, but we still
-    need to read the data back.  This wrapper turns ``close()`` into a no-op
-    and exposes ``real_close()`` for cleanup.
+    Instead of buffering the entire file in ``/tmp`` via
+    ``SpooledTemporaryFile``, this writes chunks directly to the final
+    storage path on disk.  A small in-memory buffer (default 2 MB)
+    accumulates data before each flush so the storage backend receives
+    large sequential writes instead of many tiny ones.
+
+    Because flushes block on the storage I/O, TCP backpressure propagates
+    naturally: slow storage → slow ``write()`` → slow ``wsgi.input.read()``
+    → TCP window shrinks → client slows down.  The result is a smooth
+    progress bar on the client instead of "fast upload then stuck".
     """
 
-    def __init__(self, max_size=2 * 1024 * 1024):
-        self._buf = SpooledTemporaryFile(max_size=max_size)
+    def __init__(self, full_path, flush_size):
+        self._full_path = full_path
+        self._flush_size = flush_size
+        self._membuf = bytearray()
+        self._total_size = 0
+        self._fd = None
+        self._open()
+
+    def _open(self):
+        os.makedirs(os.path.dirname(self._full_path), exist_ok=True)
+        self._fd = os.open(
+            self._full_path,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+            0o644,
+        )
 
     def write(self, data):
-        return self._buf.write(data)
+        self._membuf.extend(data)
+        self._total_size += len(data)
+        if len(self._membuf) >= self._flush_size:
+            self._flush()
+        return len(data)
 
     def writelines(self, lines):
-        return self._buf.writelines(lines)
+        for chunk in lines:
+            self.write(chunk)
 
     def close(self):
-        pass  # deferred
+        pass  # deferred — wsgidav calls close() before end_write()
 
-    def as_django_file(self, name):
-        """Return a Django ``File`` wrapping the buffer for streaming to storage.
+    def _flush(self):
+        if not self._membuf:
+            return
+        os.write(self._fd, self._membuf)
+        self._membuf = bytearray()
 
-        The caller is responsible for calling ``real_close()`` afterwards.
-        """
-        self._buf.seek(0, 2)
-        size = self._buf.tell()
-        self._buf.seek(0)
-        f = DjangoFile(self._buf, name=name)
-        f.size = size
-        return f
+    @property
+    def size(self):
+        return self._total_size
 
-    def real_close(self):
-        self._buf.close()
+    def finalize(self):
+        """Flush remaining data and close the file descriptor."""
+        self._flush()
+        if self._fd is not None:
+            os.close(self._fd)
+            self._fd = None
+
+    def abort(self):
+        """Close and delete the partially-written file."""
+        if self._fd is not None:
+            os.close(self._fd)
+            self._fd = None
+        try:
+            os.unlink(self._full_path)
+        except OSError:
+            logger.debug("Could not remove partial upload %s", self._full_path)
 
 
 class RootCollection(DAVCollection):
@@ -245,7 +282,14 @@ class FileResource(DAVNonCollection):
         return self._file.content
 
     def begin_write(self, content_type=None):
-        self._write_buf = _WriteBuffer()
+        storage = self._file.content.storage
+        storage_path = file_upload_path(self._file, self._file.name)
+        full_path = storage.path(storage_path)
+
+        self._storage_path = storage_path
+        self._write_buf = _StreamingWriteBuffer(
+            full_path, DjangoFile.DEFAULT_CHUNK_SIZE,
+        )
         self._write_started_at = time.monotonic()
         logger.info(
             "PUT started for %s by %s",
@@ -259,7 +303,7 @@ class FileResource(DAVNonCollection):
         username = getattr(self._user, "username", "?")
 
         if with_errors:
-            buf.real_close()
+            buf.abort()
             logger.warning(
                 "PUT failed for %s by %s (%.2fs)",
                 self.path, username, elapsed,
@@ -268,40 +312,39 @@ class FileResource(DAVNonCollection):
                 self._file.delete(hard=True)
             return
 
-        try:
-            content = buf.as_django_file(self._file.name)
-            size = content.size
-
-            # Detect partial uploads: if the client announced Content-Length
-            # but we received fewer bytes, the connection was dropped
-            # mid-transfer (e.g. Windows timeout). Reject so we don't save
-            # a corrupted file.
-            expected = int(self.environ.get("CONTENT_LENGTH") or 0)
-            if expected and size != expected:
-                logger.warning(
-                    "PUT rejected for %s by %s: incomplete transfer "
-                    "(%d of %d bytes, %.2fs)",
-                    self.path, username, size, expected, elapsed,
-                )
-                buf.real_close()
-                if self._file.size is None:
-                    self._file.delete(hard=True)
-                raise DAVError(HTTP_BAD_REQUEST, "Incomplete upload")
-
-            # Refresh the instance to pick up any changes from a concurrent
-            # request (e.g. a retry that reused the same File record via
-            # create_empty_resource).  No select_for_update — the file
-            # write to storage can be slow and we must not hold a DB
-            # connection/transaction for its entire duration.
-            self._file.refresh_from_db()
-            FileService.update_content(self._file, content)
-            logger.info(
-                "PUT completed for %s by %s (%d bytes, %.2fs)",
-                self.path, username,
-                size, time.monotonic() - getattr(self, "_write_started_at", time.monotonic()),
+        # Detect partial uploads: if the client announced Content-Length
+        # but we received fewer bytes, the connection was dropped
+        # mid-transfer (e.g. Windows timeout). Reject so we don't save
+        # a corrupted file.
+        expected = int(self.environ.get("CONTENT_LENGTH") or 0)
+        if expected and buf.size != expected:
+            buf.abort()
+            logger.warning(
+                "PUT rejected for %s by %s: incomplete transfer "
+                "(%d of %d bytes, %.2fs)",
+                self.path, username, buf.size, expected, elapsed,
             )
-        finally:
-            buf.real_close()
+            if self._file.size is None:
+                self._file.delete(hard=True)
+            raise DAVError(HTTP_BAD_REQUEST, "Incomplete upload")
+
+        # Finalize the file on storage (flush remaining buffer + close).
+        buf.finalize()
+
+        # Update DB metadata only — the file is already written to its
+        # final storage path, so we just point content.name at it.
+        self._file.refresh_from_db()
+        self._file.size = buf.size
+        self._file.mime_type = FileService.infer_mime_type(self._file.name)
+        self._file.has_thumbnail = False
+        self._file.content.name = self._storage_path
+        self._file.save()
+
+        logger.info(
+            "PUT completed for %s by %s (%d bytes, %.2fs)",
+            self.path, username,
+            buf.size, time.monotonic() - self._write_started_at,
+        )
 
     def delete(self):
         if getattr(self, "_moved", False):

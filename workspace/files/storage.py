@@ -1,5 +1,17 @@
 """Custom file storage that overwrites files instead of creating duplicates."""
+import os
+
+from django.core.files.base import File as DjangoFile
 from django.core.files.storage import FileSystemStorage
+
+# Django's default chunk size (64 KB) causes hundreds of small writes for
+# multi-MB files.  On replicated storage (e.g. Longhorn) each write must be
+# confirmed by every replica, so larger chunks dramatically reduce the number
+# of round-trips (224 → 7 for a 14 MB file).
+# Configurable via FILE_UPLOAD_CHUNK_SIZE env var (in bytes).
+DjangoFile.DEFAULT_CHUNK_SIZE = int(
+    os.getenv("FILE_UPLOAD_CHUNK_SIZE", 2 * 1024 * 1024)
+)
 
 
 class OverwriteStorage(FileSystemStorage):

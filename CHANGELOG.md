@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.17.0
+
+### Calendar
+
+- Reworked calendar API with cursor-based pagination and infinite scroll
+- Enhanced sidebar collapse logic and mobile experience
+- Improved hover interaction support for touch and non-touch devices
+- External-feed events are no longer attributed to the subscriber
+- Fixed context menu flash by setting initial position at cursor coordinates
+
+### Notes
+
+- Added keyboard shortcuts and updated help dialog
+
+### WebDAV
+
+- Fixed large file uploads from Windows
+- Prevented duplicate files and corruption from concurrent PUTs
+- Shared lock storage across workers via Redis
+
+### AI
+
+- Standardized content cleaning with `_clean_llm_content`
+
+### Tests
+
+- Playwright end-to-end setup with a first login flow test
+- Per-module coverage thresholds enforced in CI
+- Coverage reporting enabled in the tests workflow
+- New test suites: authorization across all modules, dashboard, users, notifications, core module registry, search, AI client and image editing, calendar rrule expansion, chat message rendering, mail SMTP service, common image processing
+- Reorganized all module tests into `tests/` packages with `test_*.py` convention
+
+### Fixes
+
+- Handled activity events with `actor=None` in filters and tests
+
 ## 0.16.0
 
 ### Users

@@ -4,6 +4,7 @@ import base64
 import io
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
@@ -151,6 +152,24 @@ class ProviderTests(TestCase):
         res = self.provider.get_resource_inst("/secret.txt", self.environ)
         self.assertIsNone(res)
 
+    def test_duplicate_records_do_not_crash(self):
+        """get_resource_inst survives duplicate File rows (uses filter/first)."""
+        FileService.create_file(self.user, "dup.txt", mime_type="text/plain")
+        # Force-create a second record with the same path
+        File.objects.create(
+            owner=self.user, name="dup.txt", node_type=File.NodeType.FILE,
+            path="dup.txt", mime_type="text/plain",
+        )
+        self.assertEqual(
+            File.objects.filter(
+                owner=self.user, path="dup.txt", deleted_at__isnull=True,
+            ).count(),
+            2,
+        )
+        # Must not raise MultipleObjectsReturned
+        res = self.provider.get_resource_inst("/dup.txt", self.environ)
+        self.assertIsInstance(res, FileResource)
+
 
 # ── RootCollection ────────────────────────────────────────────────────
 
@@ -205,6 +224,19 @@ class RootCollectionTests(TestCase):
         res = self.root.create_empty_resource("new.txt")
         self.assertIsInstance(res, FileResource)
         self.assertTrue(File.objects.filter(owner=self.user, name="new.txt").exists())
+
+    def test_create_empty_resource_reuses_existing(self):
+        """Concurrent PUT retry must reuse the existing file, not create a duplicate."""
+        existing = FileService.create_file(self.user, "dup.txt", parent=None)
+        res = self.root.create_empty_resource("dup.txt")
+        self.assertIsInstance(res, FileResource)
+        self.assertEqual(
+            File.objects.filter(
+                owner=self.user, name="dup.txt", deleted_at__isnull=True,
+            ).count(),
+            1,
+        )
+        self.assertEqual(res._file.pk, existing.pk)
 
     def test_create_collection(self):
         self.root.create_collection("NewDir")
@@ -268,6 +300,46 @@ class FolderResourceTests(TestCase):
             File.objects.filter(
                 owner=self.user, name="new.txt", parent=self.folder
             ).exists()
+        )
+
+    def test_create_empty_resource_reuses_existing(self):
+        """Concurrent PUT retry must reuse the existing file in the folder."""
+        existing = FileService.create_file(
+            self.user, "dup.txt", parent=self.folder
+        )
+        res = self.res.create_empty_resource("dup.txt")
+        self.assertEqual(
+            File.objects.filter(
+                name="dup.txt", parent=self.folder, deleted_at__isnull=True,
+            ).count(),
+            1,
+        )
+        self.assertEqual(res._file.pk, existing.pk)
+
+    def test_create_empty_resource_reuses_group_member_file(self):
+        """In a group folder, reuse a file created by another group member."""
+        group = Group.objects.create(name="Team")
+        self.user.groups.add(group)
+        other = User.objects.create_user(
+            username="davother", email="other@test.com", password="pass"
+        )
+        other.groups.add(group)
+
+        group_folder = FileService.create_folder(
+            self.user, "Shared", parent=self.folder, group=group,
+        )
+        existing = FileService.create_file(
+            other, "report.txt", parent=group_folder, group=group,
+        )
+
+        group_res = FolderResource("/Docs/Shared", self.environ, group_folder)
+        res = group_res.create_empty_resource("report.txt")
+        self.assertEqual(res._file.pk, existing.pk)
+        self.assertEqual(
+            File.objects.filter(
+                name="report.txt", parent=group_folder, deleted_at__isnull=True,
+            ).count(),
+            1,
         )
 
     def test_create_collection(self):

@@ -97,9 +97,8 @@ class RootCollection(DAVCollection):
     def create_empty_resource(self, name):
         # Reuse an existing file to avoid duplicates from concurrent PUTs
         # (e.g. Windows retries while a slow upload is still in progress).
-        file_obj = File.objects.filter(
-            owner=self._user, name=name, parent__isnull=True,
-            node_type=File.NodeType.FILE, deleted_at__isnull=True,
+        file_obj = FileService.user_files_qs(self._user).filter(
+            name=name, parent__isnull=True, node_type=File.NodeType.FILE,
         ).first()
         if file_obj is None:
             file_obj = FileService.create_file(self._user, name, parent=None)
@@ -167,8 +166,11 @@ class FolderResource(DAVCollection):
 
     def create_empty_resource(self, name):
         # Reuse an existing file to avoid duplicates from concurrent PUTs.
+        # Use accessible_files_q so we also find files created by other
+        # members in group folders — not just files owned by self._user.
         file_obj = File.objects.filter(
-            owner=self._user, name=name, parent=self._file,
+            FileService.accessible_files_q(self._user),
+            name=name, parent=self._file,
             node_type=File.NodeType.FILE, deleted_at__isnull=True,
         ).first()
         if file_obj is None:

@@ -2,6 +2,7 @@
 
 import base64
 import io
+import os
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -16,7 +17,7 @@ from workspace.files.webdav.resources import (
     FileResource,
     FolderResource,
     RootCollection,
-    _WriteBuffer,
+    _StreamingWriteBuffer,
     _copy_as,
     _resolve_parent,
 )
@@ -387,11 +388,21 @@ class FolderResourceTests(TestCase):
 # ── FileResource ──────────────────────────────────────────────────────
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class FileResourceTests(TestCase):
-    """Tests for FileResource."""
+    """Tests for FileResource.
+
+    Uses a real temporary FileSystemStorage (not InMemoryStorage) because
+    ``_StreamingWriteBuffer`` writes directly to the filesystem via
+    ``os.open`` / ``os.write``.
+    """
 
     def setUp(self):
+        import shutil
+        import tempfile
+        self._tmpdir = tempfile.mkdtemp()
+        self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
+        self._media_override.enable()
+
         self.user = User.objects.create_user(
             username="davfile", email="file@test.com", password="pass"
         )
@@ -401,6 +412,11 @@ class FileResourceTests(TestCase):
             self.user, "test.txt", content=content, mime_type="text/plain"
         )
         self.res = FileResource("/test.txt", self.environ, self.file)
+
+    def tearDown(self):
+        import shutil
+        self._media_override.disable()
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
 
     def test_content_length(self):
         self.assertEqual(self.res.get_content_length(), 11)
@@ -436,9 +452,10 @@ class FileResourceTests(TestCase):
 
         self.file.refresh_from_db()
         self.assertEqual(self.file.size, 11)
-        self.file.content.open("rb")
-        self.assertEqual(self.file.content.read(), b"new content")
-        self.file.content.close()
+        # Content was streamed directly to storage; read it back.
+        storage = self.file.content.storage
+        with storage.open(self.file.content.name, "rb") as f:
+            self.assertEqual(f.read(), b"new content")
 
     def test_end_write_with_errors_on_new_file(self):
         new = FileService.create_file(self.user, "fail.txt", mime_type="text/plain")
@@ -627,33 +644,60 @@ class CopyAsTests(TestCase):
         self.assertEqual(copy.name, "y.txt")
 
 
-class WriteBufferTests(TestCase):
-    """Tests for _WriteBuffer deferred-close wrapper."""
+class StreamingWriteBufferTests(TestCase):
+    """Tests for _StreamingWriteBuffer direct-to-storage writer."""
 
-    def test_write_and_read(self):
-        buf = _WriteBuffer()
+    def _make_buf(self, name="test.bin", flush_size=1024):
+        import tempfile
+        self._tmpdir = tempfile.mkdtemp()
+        path = os.path.join(self._tmpdir, name)
+        return _StreamingWriteBuffer(path, flush_size), path
+
+    def tearDown(self):
+        import shutil
+        if hasattr(self, "_tmpdir"):
+            shutil.rmtree(self._tmpdir, ignore_errors=True)
+
+    def test_write_and_finalize(self):
+        buf, path = self._make_buf()
         buf.write(b"hello ")
         buf.write(b"world")
-        buf.close()  # no-op
-        f = buf.as_django_file("test.txt")
-        self.assertEqual(f.read(), b"hello world")
-        self.assertEqual(f.size, 11)
-        buf.real_close()
+        buf.close()  # no-op, like wsgidav does
+        buf.finalize()
+        self.assertEqual(buf.size, 11)
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), b"hello world")
 
     def test_writelines(self):
-        buf = _WriteBuffer()
+        buf, path = self._make_buf()
         buf.writelines([b"a", b"b", b"c"])
-        f = buf.as_django_file("test.txt")
-        self.assertEqual(f.read(), b"abc")
-        self.assertEqual(f.size, 3)
-        buf.real_close()
+        buf.finalize()
+        self.assertEqual(buf.size, 3)
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), b"abc")
 
-    def test_real_close(self):
-        buf = _WriteBuffer()
-        buf.write(b"data")
-        buf.real_close()
-        with self.assertRaises(ValueError):
-            buf.as_django_file("test.txt")
+    def test_flush_on_threshold(self):
+        """Data is flushed to disk when the buffer reaches flush_size."""
+        buf, path = self._make_buf(flush_size=8)
+        buf.write(b"1234")  # 4 bytes, below threshold
+        # File may be empty or contain data depending on OS buffering,
+        # but total size is tracked.
+        buf.write(b"5678ABCD")  # 12 bytes total, triggers flush
+        buf.finalize()
+        self.assertEqual(buf.size, 12)
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), b"12345678ABCD")
+
+    def test_abort_deletes_file(self):
+        buf, path = self._make_buf()
+        buf.write(b"partial data")
+        buf.abort()
+        self.assertFalse(os.path.exists(path))
+
+    def test_abort_then_missing_file_is_safe(self):
+        buf, path = self._make_buf()
+        os.unlink(path)  # already gone
+        buf.abort()  # should not raise
 
 
 # ── Lock storage selection ────────────────────────────────────────────

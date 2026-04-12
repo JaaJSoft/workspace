@@ -15,13 +15,13 @@ logger = logging.getLogger(__name__)
 # Windows Mini-Redirector can hold locks for a very long time on slow
 # uploads, then retry — and the old lock blocks the new attempt (423).
 # Capping the lock lifetime prevents stale locks from piling up.
+# The wsgidav storage classes reference these as ClassName.LOCK_TIME_OUT_*
+# so we patch the class attributes directly.
 _LOCK_TIMEOUT_DEFAULT = 180  # 3 minutes
 _LOCK_TIMEOUT_MAX = 300  # 5 minutes
 
-
-class _ShortLockStorageDict(LockStorageDict):
-    LOCK_TIME_OUT_DEFAULT = _LOCK_TIMEOUT_DEFAULT
-    LOCK_TIME_OUT_MAX = _LOCK_TIMEOUT_MAX
+LockStorageDict.LOCK_TIME_OUT_DEFAULT = _LOCK_TIMEOUT_DEFAULT
+LockStorageDict.LOCK_TIME_OUT_MAX = _LOCK_TIMEOUT_MAX
 
 
 def _build_lock_storage():
@@ -40,13 +40,12 @@ def _build_lock_storage():
     redis_url = getattr(django_settings, "WEBDAV_LOCK_STORAGE_URL", None)
     if not redis_url:
         logger.info("Using in-memory lock storage (dev mode)")
-        return _ShortLockStorageDict()
+        return LockStorageDict()
 
     from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
 
-    class _ShortLockStorageRedis(LockStorageRedis):
-        LOCK_TIME_OUT_DEFAULT = _LOCK_TIMEOUT_DEFAULT
-        LOCK_TIME_OUT_MAX = _LOCK_TIMEOUT_MAX
+    LockStorageRedis.LOCK_TIME_OUT_DEFAULT = _LOCK_TIMEOUT_DEFAULT
+    LockStorageRedis.LOCK_TIME_OUT_MAX = _LOCK_TIMEOUT_MAX
 
     parsed = urlparse(redis_url)
     db = int(parsed.path.lstrip("/")) if parsed.path and parsed.path != "/" else 0
@@ -54,7 +53,7 @@ def _build_lock_storage():
         "Using Redis lock storage (host=%s port=%s db=%s)",
         parsed.hostname or "127.0.0.1", parsed.port or 6379, db,
     )
-    return _ShortLockStorageRedis(
+    return LockStorageRedis(
         host=parsed.hostname or "127.0.0.1",
         port=parsed.port or 6379,
         db=db,

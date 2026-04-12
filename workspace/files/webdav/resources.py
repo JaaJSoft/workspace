@@ -7,7 +7,6 @@ from tempfile import SpooledTemporaryFile
 
 from django.conf import settings as django_settings
 from django.core.files.base import File as DjangoFile
-from django.db import transaction
 from wsgidav.dav_error import DAVError, HTTP_BAD_REQUEST
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
@@ -289,19 +288,13 @@ class FileResource(DAVNonCollection):
                     self._file.delete(hard=True)
                 raise DAVError(HTTP_BAD_REQUEST, "Incomplete upload")
 
-            # Serialize concurrent writes to the same file (e.g. Windows
-            # retries while the first PUT is still running) to prevent
-            # storage corruption from overlapping OverwriteStorage saves.
-            with transaction.atomic():
-                file_obj = (
-                    File.objects.select_for_update()
-                    .filter(pk=self._file.pk)
-                    .first()
-                )
-                if file_obj is None:
-                    file_obj = self._file
-                FileService.update_content(file_obj, content)
-                self._file = file_obj
+            # Refresh the instance to pick up any changes from a concurrent
+            # request (e.g. a retry that reused the same File record via
+            # create_empty_resource).  No select_for_update — the file
+            # write to storage can be slow and we must not hold a DB
+            # connection/transaction for its entire duration.
+            self._file.refresh_from_db()
+            FileService.update_content(self._file, content)
             logger.info(
                 "PUT completed for %s by %s (%d bytes, %.2fs)",
                 self.path, username,

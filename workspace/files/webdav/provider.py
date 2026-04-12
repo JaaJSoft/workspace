@@ -6,6 +6,7 @@ from django.db import close_old_connections
 from wsgidav.dav_provider import DAVProvider
 
 from workspace.files.models import File
+from workspace.files.services import FileService
 from .resources import FileResource, FolderResource, RootCollection
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ class WorkspaceDAVProvider(DAVProvider):
         # that can arise from concurrent PUT requests (race in
         # create_empty_resource).
         file_obj = File.objects.filter(
-            owner=user,
+            FileService.accessible_files_q(user),
             path="/".join(parts),
             deleted_at__isnull=True,
         ).first()
@@ -60,10 +61,12 @@ class WorkspaceDAVProvider(DAVProvider):
         (1 query).  Falls back to a segment-by-segment walk only when
         the parent path lookup also misses (e.g. stale ``path`` field).
         """
+        accessible = FileService.accessible_files_q(user)
+
         if len(parts) == 1:
             return (
                 File.objects.filter(
-                    owner=user,
+                    accessible,
                     parent__isnull=True,
                     name=parts[0],
                     deleted_at__isnull=True,
@@ -72,7 +75,7 @@ class WorkspaceDAVProvider(DAVProvider):
 
         parent_path = "/".join(parts[:-1])
         parent = File.objects.filter(
-            owner=user,
+            accessible,
             path=parent_path,
             deleted_at__isnull=True,
         ).first()
@@ -80,7 +83,7 @@ class WorkspaceDAVProvider(DAVProvider):
             return None
         return (
             File.objects.filter(
-                owner=user,
+                accessible,
                 parent=parent,
                 name=parts[-1],
                 deleted_at__isnull=True,

@@ -7,6 +7,7 @@ from tempfile import SpooledTemporaryFile
 
 from django.conf import settings as django_settings
 from django.core.files.base import File as DjangoFile
+from django.db import transaction
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.files.models import File
@@ -81,7 +82,7 @@ class RootCollection(DAVCollection):
             return
         self._members_cache = list(
             File.objects.filter(
-                owner=self._user,
+                FileService.accessible_files_q(self._user),
                 parent__isnull=True,
                 deleted_at__isnull=True,
             )
@@ -94,7 +95,15 @@ class RootCollection(DAVCollection):
         return FileResource(child_path, self.environ, file_obj)
 
     def create_empty_resource(self, name):
-        file_obj = FileService.create_file(self._user, name, parent=None)
+        # Reuse an existing file to avoid duplicates from concurrent PUTs
+        # (e.g. Windows retries while a slow upload is still in progress).
+        file_obj = File.objects.filter(
+            FileService.accessible_files_q(self._user),
+            name=name, parent__isnull=True,
+            node_type=File.NodeType.FILE, deleted_at__isnull=True,
+        ).first()
+        if file_obj is None:
+            file_obj = FileService.create_file(self._user, name, parent=None)
         child_path = self.path.rstrip("/") + "/" + name
         return FileResource(child_path, self.environ, file_obj)
 
@@ -146,6 +155,7 @@ class FolderResource(DAVCollection):
             return
         self._members_cache = list(
             File.objects.filter(
+                FileService.accessible_files_q(self._user),
                 parent=self._file,
                 deleted_at__isnull=True,
             )
@@ -158,9 +168,18 @@ class FolderResource(DAVCollection):
         return FileResource(child_path, self.environ, file_obj)
 
     def create_empty_resource(self, name):
-        file_obj = FileService.create_file(
-            self._user, name, parent=self._file
-        )
+        # Reuse an existing file to avoid duplicates from concurrent PUTs.
+        # Use accessible_files_q so we also find files created by other
+        # members in group folders — not just files owned by self._user.
+        file_obj = File.objects.filter(
+            FileService.accessible_files_q(self._user),
+            name=name, parent=self._file,
+            node_type=File.NodeType.FILE, deleted_at__isnull=True,
+        ).first()
+        if file_obj is None:
+            file_obj = FileService.create_file(
+                self._user, name, parent=self._file
+            )
         child_path = self.path.rstrip("/") + "/" + name
         return FileResource(child_path, self.environ, file_obj)
 
@@ -229,9 +248,8 @@ class FileResource(DAVNonCollection):
         self._write_buf = _WriteBuffer()
         self._write_started_at = time.monotonic()
         logger.info(
-            "webdav PUT begin: user=%s path=%s",
-            getattr(self._user, "username", "?"),
-            self.path,
+            "PUT started for %s by %s",
+            self.path, getattr(self._user, "username", "?"),
         )
         return self._write_buf
 
@@ -241,10 +259,8 @@ class FileResource(DAVNonCollection):
         if with_errors:
             buf.real_close()
             logger.warning(
-                "webdav PUT failed: user=%s path=%s elapsed=%.2fs",
-                getattr(self._user, "username", "?"),
-                self.path,
-                elapsed,
+                "PUT failed for %s by %s (%.2fs)",
+                self.path, getattr(self._user, "username", "?"), elapsed,
             )
             if self._file.size is None:
                 self._file.delete(hard=True)
@@ -253,13 +269,23 @@ class FileResource(DAVNonCollection):
         try:
             content = buf.as_django_file(self._file.name)
             size = content.size
-            FileService.update_content(self._file, content)
+            # Serialize concurrent writes to the same file (e.g. Windows
+            # retries while the first PUT is still running) to prevent
+            # storage corruption from overlapping OverwriteStorage saves.
+            with transaction.atomic():
+                file_obj = (
+                    File.objects.select_for_update()
+                    .filter(pk=self._file.pk)
+                    .first()
+                )
+                if file_obj is None:
+                    file_obj = self._file
+                FileService.update_content(file_obj, content)
+                self._file = file_obj
             logger.info(
-                "webdav PUT done: user=%s path=%s size=%d elapsed=%.2fs",
-                getattr(self._user, "username", "?"),
-                self.path,
-                size,
-                time.monotonic() - getattr(self, "_write_started_at", time.monotonic()),
+                "PUT completed for %s by %s (%d bytes, %.2fs)",
+                self.path, getattr(self._user, "username", "?"),
+                size, time.monotonic() - getattr(self, "_write_started_at", time.monotonic()),
             )
         finally:
             buf.real_close()
@@ -305,7 +331,11 @@ def _copy_as(file_obj, dest_parent, owner, new_name):
     """
     if file_obj.is_folder():
         folder = FileService.create_folder(owner, new_name, parent=dest_parent)
-        for child in File.objects.filter(parent=file_obj, deleted_at__isnull=True):
+        children = File.objects.filter(
+            FileService.accessible_files_q(owner),
+            parent=file_obj, deleted_at__isnull=True,
+        )
+        for child in children:
             _copy_as(child, folder, owner, child.name)
         return folder
 
@@ -329,12 +359,9 @@ def _resolve_parent(user, path_parts):
     if not path_parts:
         return None
     target_path = "/".join(path_parts)
-    try:
-        return File.objects.get(
-            owner=user,
-            path=target_path,
-            node_type=File.NodeType.FOLDER,
-            deleted_at__isnull=True,
-        )
-    except File.DoesNotExist:
-        return None
+    return File.objects.filter(
+        FileService.accessible_files_q(user),
+        path=target_path,
+        node_type=File.NodeType.FOLDER,
+        deleted_at__isnull=True,
+    ).first()

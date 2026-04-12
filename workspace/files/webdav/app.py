@@ -28,7 +28,7 @@ def _build_lock_storage():
     """
     redis_url = getattr(django_settings, "WEBDAV_LOCK_STORAGE_URL", None)
     if not redis_url:
-        logger.info("webdav: using in-memory lock storage (dev mode)")
+        logger.info("Using in-memory lock storage (dev mode)")
         return LockStorageDict()
 
     from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
@@ -36,7 +36,7 @@ def _build_lock_storage():
     parsed = urlparse(redis_url)
     db = int(parsed.path.lstrip("/")) if parsed.path and parsed.path != "/" else 0
     logger.info(
-        "webdav: using Redis lock storage (host=%s port=%s db=%s)",
+        "Using Redis lock storage (host=%s port=%s db=%s)",
         parsed.hostname or "127.0.0.1", parsed.port or 6379, db,
     )
     return LockStorageRedis(

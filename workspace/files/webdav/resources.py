@@ -243,9 +243,8 @@ class FileResource(DAVNonCollection):
         self._write_buf = _WriteBuffer()
         self._write_started_at = time.monotonic()
         logger.info(
-            "webdav PUT begin: user=%s path=%s",
-            getattr(self._user, "username", "?"),
-            self.path,
+            "PUT started for %s by %s",
+            self.path, getattr(self._user, "username", "?"),
         )
         return self._write_buf
 
@@ -255,10 +254,8 @@ class FileResource(DAVNonCollection):
         if with_errors:
             buf.real_close()
             logger.warning(
-                "webdav PUT failed: user=%s path=%s elapsed=%.2fs",
-                getattr(self._user, "username", "?"),
-                self.path,
-                elapsed,
+                "PUT failed for %s by %s (%.2fs)",
+                self.path, getattr(self._user, "username", "?"), elapsed,
             )
             if self._file.size is None:
                 self._file.delete(hard=True)
@@ -281,11 +278,9 @@ class FileResource(DAVNonCollection):
                 FileService.update_content(file_obj, content)
                 self._file = file_obj
             logger.info(
-                "webdav PUT done: user=%s path=%s size=%d elapsed=%.2fs",
-                getattr(self._user, "username", "?"),
-                self.path,
-                size,
-                time.monotonic() - getattr(self, "_write_started_at", time.monotonic()),
+                "PUT completed for %s by %s (%d bytes, %.2fs)",
+                self.path, getattr(self._user, "username", "?"),
+                size, time.monotonic() - getattr(self, "_write_started_at", time.monotonic()),
             )
         finally:
             buf.real_close()

@@ -7,7 +7,7 @@ from tempfile import SpooledTemporaryFile
 
 from django.conf import settings as django_settings
 from django.core.files.base import File as DjangoFile
-from django.db import transaction
+from wsgidav.dav_error import DAVError, HTTP_BAD_REQUEST
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.files.models import File
@@ -256,11 +256,13 @@ class FileResource(DAVNonCollection):
     def end_write(self, *, with_errors):
         buf = self._write_buf
         elapsed = time.monotonic() - getattr(self, "_write_started_at", time.monotonic())
+        username = getattr(self._user, "username", "?")
+
         if with_errors:
             buf.real_close()
             logger.warning(
                 "PUT failed for %s by %s (%.2fs)",
-                self.path, getattr(self._user, "username", "?"), elapsed,
+                self.path, username, elapsed,
             )
             if self._file.size is None:
                 self._file.delete(hard=True)
@@ -269,22 +271,33 @@ class FileResource(DAVNonCollection):
         try:
             content = buf.as_django_file(self._file.name)
             size = content.size
-            # Serialize concurrent writes to the same file (e.g. Windows
-            # retries while the first PUT is still running) to prevent
-            # storage corruption from overlapping OverwriteStorage saves.
-            with transaction.atomic():
-                file_obj = (
-                    File.objects.select_for_update()
-                    .filter(pk=self._file.pk)
-                    .first()
+
+            # Detect partial uploads: if the client announced Content-Length
+            # but we received fewer bytes, the connection was dropped
+            # mid-transfer (e.g. Windows timeout). Reject so we don't save
+            # a corrupted file.
+            expected = int(self.environ.get("CONTENT_LENGTH") or 0)
+            if expected and size != expected:
+                logger.warning(
+                    "PUT rejected for %s by %s: incomplete transfer "
+                    "(%d of %d bytes, %.2fs)",
+                    self.path, username, size, expected, elapsed,
                 )
-                if file_obj is None:
-                    file_obj = self._file
-                FileService.update_content(file_obj, content)
-                self._file = file_obj
+                buf.real_close()
+                if self._file.size is None:
+                    self._file.delete(hard=True)
+                raise DAVError(HTTP_BAD_REQUEST, "Incomplete upload")
+
+            # Refresh the instance to pick up any changes from a concurrent
+            # request (e.g. a retry that reused the same File record via
+            # create_empty_resource).  No select_for_update — the file
+            # write to storage can be slow and we must not hold a DB
+            # connection/transaction for its entire duration.
+            self._file.refresh_from_db()
+            FileService.update_content(self._file, content)
             logger.info(
                 "PUT completed for %s by %s (%d bytes, %.2fs)",
-                self.path, getattr(self._user, "username", "?"),
+                self.path, username,
                 size, time.monotonic() - getattr(self, "_write_started_at", time.monotonic()),
             )
         finally:

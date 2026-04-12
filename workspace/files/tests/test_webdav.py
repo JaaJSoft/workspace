@@ -457,6 +457,33 @@ class FileResourceTests(TestCase):
         self.file.refresh_from_db()
         self.assertTrue(File.objects.filter(pk=self.file.pk).exists())
 
+    def test_end_write_rejects_partial_upload(self):
+        """Incomplete transfer (size < Content-Length) must not save."""
+        from wsgidav.dav_error import DAVError
+
+        new = FileService.create_file(self.user, "partial.txt", mime_type="text/plain")
+        # Simulate Content-Length = 1000 but only 100 bytes received
+        env = _make_environ(user=self.user, CONTENT_LENGTH="1000")
+        res = FileResource("/partial.txt", env, new)
+        buf = res.begin_write()
+        buf.write(b"x" * 100)
+        buf.close()
+        with self.assertRaises(DAVError):
+            res.end_write(with_errors=False)
+        # New file (size=None) should be hard-deleted
+        self.assertFalse(File.objects.filter(pk=new.pk).exists())
+
+    def test_end_write_accepts_complete_upload(self):
+        """Complete transfer (size == Content-Length) must save."""
+        env = _make_environ(user=self.user, CONTENT_LENGTH="5")
+        res = FileResource("/test.txt", env, self.file)
+        buf = res.begin_write()
+        buf.write(b"hello")
+        buf.close()
+        res.end_write(with_errors=False)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.size, 5)
+
     def test_delete_soft_deletes(self):
         self.res.delete()
         self.file.refresh_from_db()

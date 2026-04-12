@@ -7,6 +7,7 @@ from tempfile import SpooledTemporaryFile
 
 from django.conf import settings as django_settings
 from django.core.files.base import File as DjangoFile
+from django.db import transaction
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.files.models import File
@@ -94,7 +95,14 @@ class RootCollection(DAVCollection):
         return FileResource(child_path, self.environ, file_obj)
 
     def create_empty_resource(self, name):
-        file_obj = FileService.create_file(self._user, name, parent=None)
+        # Reuse an existing file to avoid duplicates from concurrent PUTs
+        # (e.g. Windows retries while a slow upload is still in progress).
+        file_obj = File.objects.filter(
+            owner=self._user, name=name, parent__isnull=True,
+            node_type=File.NodeType.FILE, deleted_at__isnull=True,
+        ).first()
+        if file_obj is None:
+            file_obj = FileService.create_file(self._user, name, parent=None)
         child_path = self.path.rstrip("/") + "/" + name
         return FileResource(child_path, self.environ, file_obj)
 
@@ -158,9 +166,15 @@ class FolderResource(DAVCollection):
         return FileResource(child_path, self.environ, file_obj)
 
     def create_empty_resource(self, name):
-        file_obj = FileService.create_file(
-            self._user, name, parent=self._file
-        )
+        # Reuse an existing file to avoid duplicates from concurrent PUTs.
+        file_obj = File.objects.filter(
+            owner=self._user, name=name, parent=self._file,
+            node_type=File.NodeType.FILE, deleted_at__isnull=True,
+        ).first()
+        if file_obj is None:
+            file_obj = FileService.create_file(
+                self._user, name, parent=self._file
+            )
         child_path = self.path.rstrip("/") + "/" + name
         return FileResource(child_path, self.environ, file_obj)
 
@@ -253,7 +267,19 @@ class FileResource(DAVNonCollection):
         try:
             content = buf.as_django_file(self._file.name)
             size = content.size
-            FileService.update_content(self._file, content)
+            # Serialize concurrent writes to the same file (e.g. Windows
+            # retries while the first PUT is still running) to prevent
+            # storage corruption from overlapping OverwriteStorage saves.
+            with transaction.atomic():
+                file_obj = (
+                    File.objects.select_for_update()
+                    .filter(pk=self._file.pk)
+                    .first()
+                )
+                if file_obj is None:
+                    file_obj = self._file
+                FileService.update_content(file_obj, content)
+                self._file = file_obj
             logger.info(
                 "webdav PUT done: user=%s path=%s size=%d elapsed=%.2fs",
                 getattr(self._user, "username", "?"),

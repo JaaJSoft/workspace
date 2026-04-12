@@ -82,7 +82,7 @@ class RootCollection(DAVCollection):
             return
         self._members_cache = list(
             File.objects.filter(
-                owner=self._user,
+                FileService.accessible_files_q(self._user),
                 parent__isnull=True,
                 deleted_at__isnull=True,
             )
@@ -97,8 +97,10 @@ class RootCollection(DAVCollection):
     def create_empty_resource(self, name):
         # Reuse an existing file to avoid duplicates from concurrent PUTs
         # (e.g. Windows retries while a slow upload is still in progress).
-        file_obj = FileService.user_files_qs(self._user).filter(
-            name=name, parent__isnull=True, node_type=File.NodeType.FILE,
+        file_obj = File.objects.filter(
+            FileService.accessible_files_q(self._user),
+            name=name, parent__isnull=True,
+            node_type=File.NodeType.FILE, deleted_at__isnull=True,
         ).first()
         if file_obj is None:
             file_obj = FileService.create_file(self._user, name, parent=None)
@@ -153,6 +155,7 @@ class FolderResource(DAVCollection):
             return
         self._members_cache = list(
             File.objects.filter(
+                FileService.accessible_files_q(self._user),
                 parent=self._file,
                 deleted_at__isnull=True,
             )
@@ -328,7 +331,11 @@ def _copy_as(file_obj, dest_parent, owner, new_name):
     """
     if file_obj.is_folder():
         folder = FileService.create_folder(owner, new_name, parent=dest_parent)
-        for child in File.objects.filter(parent=file_obj, deleted_at__isnull=True):
+        children = File.objects.filter(
+            FileService.accessible_files_q(owner),
+            parent=file_obj, deleted_at__isnull=True,
+        )
+        for child in children:
             _copy_as(child, folder, owner, child.name)
         return folder
 
@@ -352,12 +359,9 @@ def _resolve_parent(user, path_parts):
     if not path_parts:
         return None
     target_path = "/".join(path_parts)
-    try:
-        return File.objects.get(
-            owner=user,
-            path=target_path,
-            node_type=File.NodeType.FOLDER,
-            deleted_at__isnull=True,
-        )
-    except File.DoesNotExist:
-        return None
+    return File.objects.filter(
+        FileService.accessible_files_q(user),
+        path=target_path,
+        node_type=File.NodeType.FOLDER,
+        deleted_at__isnull=True,
+    ).first()

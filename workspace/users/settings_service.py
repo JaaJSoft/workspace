@@ -10,7 +10,6 @@ Usage from another app::
 
 from __future__ import annotations
 
-from datetime import timezone as dt_timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 

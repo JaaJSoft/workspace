@@ -15,6 +15,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
 
 from datetime import timedelta
@@ -607,8 +608,9 @@ class APITokenListCreateView(APIView):
                 )
             expiry = timedelta(days=expiry_days)
 
-        instance, token = AuthToken.objects.create(user=request.user, expiry=expiry)
-        APITokenLabel.objects.create(auth_token=instance, name=name)
+        with transaction.atomic():
+            instance, token = AuthToken.objects.create(user=request.user, expiry=expiry)
+            APITokenLabel.objects.create(auth_token=instance, name=name)
 
         return Response(
             {

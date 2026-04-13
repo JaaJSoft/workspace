@@ -223,6 +223,7 @@ class MailMessage(models.Model):
             models.Index(fields=['account', 'is_starred', '-date']),
             models.Index(fields=['account', 'message_id']),
             models.Index(fields=['folder', 'imap_uid']),
+            models.Index(fields=['account', 'is_read', 'deleted_at'], name='mail_acct_read_del'),
         ]
 
     def __str__(self):
@@ -250,6 +251,9 @@ class MailMessageLabel(models.Model):
                 fields=['message', 'label'],
                 name='unique_mail_message_label',
             ),
+        ]
+        indexes = [
+            models.Index(fields=['label'], name='mail_msglabel_label'),
         ]
 
     def __str__(self):

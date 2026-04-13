@@ -125,6 +125,9 @@ class AITask(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['owner', 'status', '-created_at'], name='aitask_owner_status'),
+        ]
 
     def __str__(self):
         return f'AITask {self.uuid} ({self.task_type} - {self.status})'

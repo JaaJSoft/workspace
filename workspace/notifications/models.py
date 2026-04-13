@@ -28,6 +28,7 @@ class Notification(models.Model):
         indexes = [
             models.Index(fields=['recipient', '-created_at']),
             models.Index(fields=['recipient', 'read_at']),
+            models.Index(fields=['recipient', 'origin', 'read_at'], name='notif_rcpt_origin_read'),
         ]
 
     def __str__(self):

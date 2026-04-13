@@ -4,7 +4,7 @@ from django.db import models
 from workspace.common.uuids import uuid_v7_or_v4
 
 try:
-    from knox.models import AuthToken as _KnoxToken  # noqa: F401
+    import knox.models  # noqa: F401
     _KNOX_AVAILABLE = True
 except ImportError:
     _KNOX_AVAILABLE = False

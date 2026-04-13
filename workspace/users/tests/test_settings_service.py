@@ -1,8 +1,12 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.users.models import UserSetting
 from workspace.users.settings_service import (
+    _cache_key,
     delete_setting,
     get_all_settings,
     get_module_settings,
@@ -126,3 +130,53 @@ class GetAllSettingsTests(TestCase):
         self.assertEqual(len(result), 2)
         modules = {r['module'] for r in result}
         self.assertEqual(modules, {'core', 'mail'})
+
+
+class SettingCacheTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='alice', password='pass')
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_get_setting_caches_value(self):
+        set_setting(self.user, 'core', 'theme', 'dark')
+        # First call populates cache
+        self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dark')
+        # Second call should not hit DB
+        with self.assertNumQueries(0):
+            self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dark')
+
+    def test_get_setting_caches_default(self):
+        # First call — cache miss, DB miss, caches default
+        self.assertIsNone(get_setting(self.user, 'core', 'missing'))
+        # Second call — served from cache, no DB
+        with self.assertNumQueries(0):
+            self.assertIsNone(get_setting(self.user, 'core', 'missing'))
+
+    def test_get_setting_caches_none_value(self):
+        set_setting(self.user, 'core', 'key', None)
+        cache.clear()
+        # First call caches the real None value
+        result = get_setting(self.user, 'core', 'key', default='fallback')
+        self.assertIsNone(result)
+        # Second call returns cached None, not the default
+        with self.assertNumQueries(0):
+            result = get_setting(self.user, 'core', 'key', default='fallback')
+            self.assertIsNone(result)
+
+    def test_set_setting_updates_cache(self):
+        set_setting(self.user, 'core', 'theme', 'light')
+        set_setting(self.user, 'core', 'theme', 'dark')
+        # get_setting should return updated value without extra DB hit
+        with self.assertNumQueries(0):
+            self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dark')
+
+    def test_delete_setting_invalidates_cache(self):
+        set_setting(self.user, 'core', 'theme', 'dark')
+        # Warm cache
+        get_setting(self.user, 'core', 'theme')
+        delete_setting(self.user, 'core', 'theme')
+        # Cache should be cleared — next get hits DB and returns default
+        self.assertIsNone(get_setting(self.user, 'core', 'theme'))

@@ -17,10 +17,14 @@ from rest_framework.views import APIView
 
 from django.db.models import Exists, OuterRef, Q
 
+from datetime import timedelta
+
+from knox.models import AuthToken
+
 from workspace.common.mixins import CacheControlMixin
 from workspace.files.models import File
 from workspace.users import avatar_service, presence_service
-from workspace.users.models import UserSetting
+from workspace.users.models import APITokenLabel, UserSetting
 
 
 @extend_schema(tags=['Users'])
@@ -505,6 +509,134 @@ class SettingDetailView(APIView):
         if not deleted:
             return Response(
                 {'detail': 'Setting not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ── API Tokens ───────────────────────────────────────────────
+
+@extend_schema(tags=['Auth'])
+class APITokenListCreateView(APIView):
+    """List and create API tokens for the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+
+    pagination_class = None
+
+    @extend_schema(
+        summary="List API tokens",
+        description="Return all active (non-expired) API tokens for the current user.",
+        responses={
+            200: inline_serializer(
+                name='APITokenItem',
+                many=True,
+                fields={
+                    'id': serializers.IntegerField(),
+                    'name': serializers.CharField(),
+                    'token_key': serializers.CharField(),
+                    'created': serializers.DateTimeField(),
+                    'expiry': serializers.DateTimeField(allow_null=True),
+                },
+            ),
+        },
+    )
+    def get(self, request):
+        from django.utils.timezone import now
+
+        tokens = AuthToken.objects.filter(user=request.user).select_related('label')
+        # Exclude expired tokens
+        tokens = tokens.filter(
+            Q(expiry__isnull=True) | Q(expiry__gt=now()),
+        )
+        results = []
+        for t in tokens:
+            label = getattr(t, 'label', None)
+            results.append({
+                'id': t.pk,
+                'name': label.name if label else '',
+                'token_key': t.token_key,
+                'created': t.created,
+                'expiry': t.expiry,
+            })
+        return Response(results)
+
+    @extend_schema(
+        summary="Create an API token",
+        description=(
+            "Create a new API token. The full token value is returned **only once** in the response. "
+            "Use `Authorization: Token <value>` to authenticate."
+        ),
+        request=inline_serializer(
+            name='APITokenCreateRequest',
+            fields={
+                'name': serializers.CharField(required=False, help_text="Label for the token"),
+                'expiry_days': serializers.IntegerField(
+                    required=False,
+                    help_text="Token lifetime in days. Omit for no expiration.",
+                ),
+            },
+        ),
+        responses={
+            201: inline_serializer(
+                name='APITokenCreateResponse',
+                fields={
+                    'id': serializers.IntegerField(),
+                    'name': serializers.CharField(),
+                    'token': serializers.CharField(help_text="Full token (shown once)"),
+                    'token_key': serializers.CharField(),
+                    'expiry': serializers.DateTimeField(allow_null=True),
+                },
+            ),
+        },
+    )
+    def post(self, request):
+        name = request.data.get('name', '')
+        expiry_days = request.data.get('expiry_days')
+
+        expiry = None
+        if expiry_days is not None:
+            try:
+                expiry_days = int(expiry_days)
+                if expiry_days < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return Response(
+                    {'errors': ['expiry_days must be a positive integer.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            expiry = timedelta(days=expiry_days)
+
+        instance, token = AuthToken.objects.create(user=request.user, expiry=expiry)
+        APITokenLabel.objects.create(auth_token=instance, name=name)
+
+        return Response(
+            {
+                'id': instance.pk,
+                'name': name,
+                'token': token,
+                'token_key': instance.token_key,
+                'expiry': instance.expiry,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+@extend_schema(tags=['Auth'])
+class APITokenDetailView(APIView):
+    """Revoke (delete) a single API token."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Revoke an API token",
+        responses={204: None, 404: OpenApiResponse(description="Token not found.")},
+    )
+    def delete(self, request, pk):
+        deleted, _ = AuthToken.objects.filter(user=request.user, pk=pk).delete()
+        if not deleted:
+            return Response(
+                {'detail': 'Token not found.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)

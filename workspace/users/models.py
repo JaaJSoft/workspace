@@ -3,6 +3,12 @@ from django.db import models
 
 from workspace.common.uuids import uuid_v7_or_v4
 
+try:
+    from knox.models import AuthToken as _KnoxToken  # noqa: F401
+    _KNOX_AVAILABLE = True
+except ImportError:
+    _KNOX_AVAILABLE = False
+
 
 class UserPresence(models.Model):
     """Tracks the last activity timestamp for each user (presence system)."""
@@ -67,3 +73,22 @@ class UserSetting(models.Model):
 
     def __str__(self):
         return f'{self.user} / {self.module}.{self.key}'
+
+
+if _KNOX_AVAILABLE:
+    class APITokenLabel(models.Model):
+        """Human-readable label for a knox AuthToken."""
+
+        uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+        auth_token = models.OneToOneField(
+            'knox.AuthToken',
+            on_delete=models.CASCADE,
+            related_name='label',
+        )
+        name = models.CharField(max_length=128, blank=True, default='')
+
+        class Meta:
+            ordering = ['-auth_token__created']
+
+        def __str__(self):
+            return self.name or self.auth_token.token_key

@@ -1,0 +1,280 @@
+<!-- API Tokens Tab -->
+<div x-show="tab === 'tokens'" x-cloak x-data="apiTokensTab()" x-init="fetchTokens()">
+  <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card-body">
+      <div class="flex items-center justify-between">
+        <h2 class="card-title text-lg gap-2">
+          <i data-lucide="key-round" class="w-5 h-5"></i>
+          API Tokens
+        </h2>
+        <button @click="$refs.createDialog.showModal()" class="btn btn-primary btn-sm gap-1">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          New Token
+        </button>
+      </div>
+
+      <p class="text-sm text-base-content/60 mt-1">
+        Create tokens to authenticate API requests. Use the header <code class="bg-base-200 px-1.5 py-0.5 rounded text-xs">Authorization: Token &lt;value&gt;</code>
+      </p>
+
+      <!-- Feedback -->
+      <div x-ref="tokensFeedback"></div>
+
+      <!-- Loading -->
+      <div x-show="loading" class="flex justify-center py-8">
+        <span class="loading loading-spinner loading-md"></span>
+      </div>
+
+      <!-- Search -->
+      <div x-show="!loading && tokens.length > 0" class="mt-4">
+        <label class="input input-bordered input-sm flex items-center gap-2">
+          <i data-lucide="search" class="w-4 h-4 text-base-content/40"></i>
+          <input type="text" x-model="search" class="grow" placeholder="Search tokens..." />
+          <button x-show="search" @click="search = ''" class="btn btn-ghost btn-xs btn-circle">
+            <i data-lucide="x" class="w-3 h-3"></i>
+          </button>
+        </label>
+      </div>
+
+      <!-- Empty state -->
+      <template x-if="!loading && tokens.length === 0">
+        <div class="text-center py-8 text-base-content/50">
+          <i data-lucide="key-round" class="w-10 h-10 mx-auto mb-2 opacity-30"></i>
+          <p class="text-sm">No API tokens yet.</p>
+        </div>
+      </template>
+
+      <!-- No search results -->
+      <div x-show="!loading && tokens.length > 0 && filteredTokens.length === 0" class="text-center py-6 text-base-content/50">
+        <p class="text-sm">No tokens matching your search.</p>
+      </div>
+
+      <!-- Token list -->
+      <div x-show="!loading && filteredTokens.length > 0" class="mt-2 space-y-2">
+        <template x-for="token in filteredTokens" :key="token.id">
+          <div class="flex items-center justify-between p-3 rounded-lg border border-base-300 bg-base-200/30 group/token">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="rounded-lg bg-primary/10 p-2 flex-shrink-0">
+                <i data-lucide="key-round" class="w-4 h-4 text-primary"></i>
+              </div>
+              <div class="min-w-0">
+                <div class="font-medium text-sm truncate" x-text="token.name || 'Unnamed token'"></div>
+                <div class="flex items-center gap-2 text-xs text-base-content/50 mt-0.5">
+                  <code class="bg-base-200 px-1 py-0.5 rounded" x-text="token.token_key + '...'"></code>
+                  <span>&middot;</span>
+                  <span x-text="'Created ' + new Date(token.created).toLocaleDateString()"></span>
+                  <template x-if="token.expiry">
+                    <span>
+                      <span>&middot;</span>
+                      <span :class="new Date(token.expiry) < new Date() ? 'text-error' : ''"
+                            x-text="'Expires ' + new Date(token.expiry).toLocaleDateString()"></span>
+                    </span>
+                  </template>
+                  <template x-if="!token.expiry">
+                    <span>
+                      <span>&middot;</span>
+                      <span class="text-success/70">No expiration</span>
+                    </span>
+                  </template>
+                </div>
+              </div>
+            </div>
+            <button @click="revokeToken(token)" class="btn btn-ghost btn-sm text-error opacity-0 group-hover/token:opacity-100 transition-opacity" title="Revoke token">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Token Dialog -->
+  <dialog x-ref="createDialog" class="modal">
+    <div class="modal-box max-w-md">
+      <h3 class="font-bold text-lg mb-4">Create API Token</h3>
+
+      <div class="space-y-4">
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">Name</span></label>
+          <input type="text" x-model="newName" class="input input-bordered input-sm w-full" placeholder="e.g. CI script, My bot" />
+        </div>
+
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">Expiration</span></label>
+          <select x-model="newExpiry" class="select select-bordered select-sm w-full">
+            <option value="">No expiration</option>
+            <option value="7">7 days</option>
+            <option value="30">30 days</option>
+            <option value="90">90 days</option>
+            <option value="180">180 days</option>
+            <option value="365">1 year</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="modal-action">
+        <button @click="closeCreateDialog()" class="btn btn-ghost btn-sm">Cancel</button>
+        <button @click="createToken()" class="btn btn-primary btn-sm" :disabled="creating">
+          <span x-show="creating" class="loading loading-spinner loading-xs"></span>
+          <span x-text="creating ? 'Creating...' : 'Create'"></span>
+        </button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button @click="closeCreateDialog()">close</button></form>
+  </dialog>
+
+  <!-- Token Created Dialog (show token once) -->
+  <dialog x-ref="tokenCreatedDialog" class="modal">
+    <div class="modal-box max-w-lg">
+      <h3 class="font-bold text-lg mb-2">Token Created</h3>
+      <div x-ref="tokenCreatedFeedback"></div>
+      <p class="text-sm text-warning mb-4">
+        <i data-lucide="alert-triangle" class="w-4 h-4 inline-block align-text-bottom mr-1"></i>
+        Copy this token now. You won't be able to see it again.
+      </p>
+
+      <div class="flex items-center gap-2 bg-base-200 rounded-lg p-3">
+        <code class="text-sm break-all flex-1 select-all" x-text="createdToken"></code>
+        <button @click="copyToken()" class="btn btn-ghost btn-sm btn-square flex-shrink-0" title="Copy">
+          <i x-show="!copied" data-lucide="copy" class="w-4 h-4"></i>
+          <i x-show="copied" data-lucide="check" class="w-4 h-4 text-success"></i>
+        </button>
+      </div>
+
+      <div class="modal-action">
+        <button @click="closeTokenCreatedDialog()" class="btn btn-primary btn-sm">Done</button>
+      </div>
+    </div>
+  </dialog>
+</div>
+
+<script>
+  function apiTokensTab() {
+    return {
+      tokens: [],
+      search: '',
+      loading: false,
+      loaded: false,
+      creating: false,
+      newName: '',
+      newExpiry: '',
+      createdToken: '',
+      copied: false,
+
+      get filteredTokens() {
+        if (!this.search) return this.tokens;
+        const q = this.search.toLowerCase();
+        return this.tokens.filter(t =>
+          (t.name || '').toLowerCase().includes(q) ||
+          t.token_key.toLowerCase().includes(q)
+        );
+      },
+
+      async fetchTokens() {
+        this.loading = true;
+        try {
+          const res = await fetch('/api/v1/auth/tokens');
+          if (res.ok) {
+            this.tokens = await res.json();
+          }
+        } catch (e) {
+          this.showFeedback('error', 'Failed to load tokens.');
+        } finally {
+          this.loading = false;
+          this.loaded = true;
+        }
+      },
+
+      async createToken() {
+        this.creating = true;
+        const csrfToken = getCSRFToken();
+        const body = { name: this.newName };
+        if (this.newExpiry) body.expiry_days = parseInt(this.newExpiry);
+
+        try {
+          const res = await fetch('/api/v1/auth/tokens', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            this.createdToken = data.token;
+            this.copied = false;
+            this.$refs.createDialog.close();
+            this.newName = '';
+            this.newExpiry = '';
+            this.$refs.tokenCreatedDialog.showModal();
+            this.$nextTick(() => lucide.createIcons({ nodes: [this.$refs.tokenCreatedDialog] }));
+            await this.fetchTokens();
+          } else {
+            const msgs = data.errors || ['Failed to create token.'];
+            this.showFeedback('error', msgs.join(', '));
+            this.$refs.createDialog.close();
+          }
+        } catch (e) {
+          this.showFeedback('error', 'Network error.');
+          this.$refs.createDialog.close();
+        } finally {
+          this.creating = false;
+        }
+      },
+
+      async revokeToken(token) {
+        const confirmed = await AppDialog.confirm({
+          title: 'Revoke token',
+          message: 'Revoke "' + (token.name || token.token_key) + '"? This cannot be undone.',
+          okLabel: 'Revoke',
+          okClass: 'btn-error',
+          icon: 'trash-2',
+          iconClass: 'bg-error/10 text-error',
+        });
+        if (!confirmed) return;
+        const csrfToken = getCSRFToken();
+        try {
+          const res = await fetch('/api/v1/auth/tokens/' + token.id, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': csrfToken },
+          });
+          if (res.ok) {
+            this.tokens = this.tokens.filter(t => t.id !== token.id);
+            this.showFeedback('success', 'Token revoked.');
+          } else {
+            this.showFeedback('error', 'Failed to revoke token.');
+          }
+        } catch (e) {
+          this.showFeedback('error', 'Network error.');
+        }
+      },
+
+      async copyToken() {
+        try {
+          await navigator.clipboard.writeText(this.createdToken);
+          this.copied = true;
+          setTimeout(() => { this.copied = false; }, 2000);
+        } catch (e) {
+          const el = this.$refs.tokenCreatedDialog.querySelector('code');
+          if (el) { const range = document.createRange(); range.selectNodeContents(el); window.getSelection().removeAllRanges(); window.getSelection().addRange(range); }
+        }
+      },
+
+      closeCreateDialog() {
+        this.$refs.createDialog.close();
+        this.newName = '';
+        this.newExpiry = '';
+      },
+
+      closeTokenCreatedDialog() {
+        this.$refs.tokenCreatedDialog.close();
+        this.createdToken = '';
+      },
+
+      showFeedback(type, message) {
+        const container = this.$refs.tokensFeedback;
+        if (!container) return;
+        container.replaceChildren();
+        container.appendChild(InlineAlert.create({ type, message, dismissible: true }));
+      },
+    };
+  }
+</script>

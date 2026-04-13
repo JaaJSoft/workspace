@@ -515,26 +515,18 @@ def _handle_generation_error(conversation, bot_user, ai_task, error):
     notify_conversation_members(conversation, exclude_user=bot_user)
 
 
-@shared_task(name='ai.generate_chat_response', bind=True, max_retries=0)
-def generate_chat_response(self, conversation_id: str, message_id: str, bot_user_id: int):
-    """Generate a bot response in a chat conversation."""
-    from django.contrib.auth import get_user_model
+def _build_conversation_history(conversation_id, bot_profile, human_user):
+    """Build the LLM message history for a conversation.
 
-    from workspace.ai.models import AITask, BotProfile
-    from workspace.ai.prompts.chat import build_chat_messages
-    from workspace.chat.models import Conversation, Message
+    Loads recent messages, reconstructs tool-call rounds, includes vision
+    attachments when the bot supports it, and truncates old message bodies
+    that fall outside the recent context window.
 
-    User = get_user_model()
-
-    try:
-        bot_user = User.objects.get(pk=bot_user_id)
-        bot_profile = BotProfile.objects.get(user=bot_user)
-        conversation = Conversation.objects.get(pk=conversation_id)
-    except (User.DoesNotExist, BotProfile.DoesNotExist, Conversation.DoesNotExist):
-        logger.error('Bot response failed: conversation=%s bot=%s not found', conversation_id, bot_user_id)
-        return {'status': 'error', 'error': 'Not found'}
-
+    Returns (history, summary_text).
+    """
     from workspace.ai.models import ConversationSummary
+    from workspace.chat.models import Message
+    from workspace.users.settings_service import get_user_timezone
 
     recent_window = settings.AI_CHAT_CONTEXT_SIZE
     conv_summary = ConversationSummary.objects.filter(conversation_id=conversation_id).first()
@@ -547,17 +539,15 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         )
         .select_related('author', 'author__bot_profile')
         .prefetch_related('attachments')
-        .order_by('-created_at')[:settings.AI_CHAT_CONTEXT_SIZE]
+        .order_by('-created_at')[:recent_window]
     )
 
-    # If we have a summary, only send messages created after the summary cutoff
     if summary_text and conv_summary.up_to:
         msgs_to_use = [m for m in all_msgs if m.created_at > conv_summary.up_to]
     else:
         msgs_to_use = all_msgs
 
     # Find the most recent user message that has visual attachments (image/video)
-    # Cache attachments per message to avoid double .all() calls (prefetch is in place)
     _att_cache = {}
     last_visual_msg_uuid = None
     if bot_profile.supports_vision:
@@ -573,10 +563,6 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
     # Number of old messages (outside recent window) not covered by a summary
     truncate_count = max(0, len(msgs_to_use) - recent_window) if not summary_text else 0
 
-    # Identify the human user who triggered the response
-    from workspace.users.settings_service import get_user_timezone
-    trigger_message = Message.objects.filter(pk=message_id).select_related('author').first()
-    human_user = trigger_message.author if trigger_message else None
     _user_tz = get_user_timezone(human_user) if human_user else None
 
     history = []
@@ -584,6 +570,9 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         is_bot = hasattr(msg.author, 'bot_profile')
         role = 'assistant' if is_bot else 'user'
         body = msg.body
+
+        if idx < truncate_count and len(body) > _TRUNCATE_BODY_LIMIT:
+            body = body[:_TRUNCATE_BODY_LIMIT] + '…'
 
         # Inject a system message with the timestamp before each message
         # so the LLM has temporal context without polluting message content.
@@ -593,21 +582,18 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         # Reconstruct tool call history for bot messages
         if is_bot and msg.tool_data:
             for td_round in msg.tool_data:
-                # assistant message with tool_calls
                 assistant_msg = {
                     'role': 'assistant',
                     'content': td_round.get('assistant_content', ''),
                     'tool_calls': td_round['tool_calls'],
                 }
                 history.append(assistant_msg)
-                # tool result messages
                 for tr in td_round.get('results', []):
                     history.append({
                         'role': 'tool',
                         'tool_call_id': tr['tool_call_id'],
                         'content': tr['content'],
                     })
-            # Final assistant message with the actual response body
             history.append({'role': 'assistant', 'content': body})
             continue
 
@@ -634,7 +620,6 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
                         video_descriptions.append(desc)
                     media_parts.extend(frames)
 
-        # Inject a system message before the user message to explain video context
         if video_descriptions:
             history.append({'role': 'system', 'content': '\n'.join(video_descriptions)})
 
@@ -646,6 +631,35 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             history.append({'role': role, 'content': content})
         else:
             history.append({'role': role, 'content': body})
+
+    return history, summary_text
+
+
+@shared_task(name='ai.generate_chat_response', bind=True, max_retries=0)
+def generate_chat_response(self, conversation_id: str, message_id: str, bot_user_id: int):
+    """Generate a bot response in a chat conversation."""
+    from django.contrib.auth import get_user_model
+
+    from workspace.ai.models import AITask, BotProfile
+    from workspace.ai.prompts.chat import build_chat_messages
+    from workspace.chat.models import Conversation, Message
+
+    User = get_user_model()
+
+    try:
+        bot_user = User.objects.get(pk=bot_user_id)
+        bot_profile = BotProfile.objects.get(user=bot_user)
+        conversation = Conversation.objects.get(pk=conversation_id)
+    except (User.DoesNotExist, BotProfile.DoesNotExist, Conversation.DoesNotExist):
+        logger.error('Bot response failed: conversation=%s bot=%s not found', conversation_id, bot_user_id)
+        return {'status': 'error', 'error': 'Not found'}
+
+    trigger_message = Message.objects.filter(pk=message_id).select_related('author').first()
+    human_user = trigger_message.author if trigger_message else None
+
+    history, summary_text = _build_conversation_history(
+        conversation_id, bot_profile, human_user,
+    )
 
     bot_name = bot_user.get_full_name() or bot_user.username
 
@@ -705,15 +719,18 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             generate_conversation_title.delay(str(conversation_id))
 
         # Trigger rolling summary update when old messages exceed the recent window
-        if msg_count > recent_window:
+        _recent = settings.AI_CHAT_CONTEXT_SIZE
+        if msg_count > _recent:
+            from workspace.ai.models import ConversationSummary
+            _cs = ConversationSummary.objects.filter(conversation_id=conversation_id).first()
             needs_summary = not summary_text
-            if not needs_summary and conv_summary and conv_summary.up_to:
+            if not needs_summary and _cs and _cs.up_to:
                 unsummarized = Message.objects.filter(
                     conversation_id=conversation_id,
                     deleted_at__isnull=True,
-                    created_at__gt=conv_summary.up_to,
+                    created_at__gt=_cs.up_to,
                 ).count()
-                needs_summary = unsummarized > recent_window + _SUMMARY_BUFFER
+                needs_summary = unsummarized > _recent + _SUMMARY_BUFFER
             if needs_summary:
                 update_conversation_summary.delay(str(conversation_id))
 
@@ -1193,44 +1210,11 @@ def generate_scheduled_response(self, schedule_id: str):
         logger.error('Scheduled response failed: schedule=%s — bot or conversation not found', schedule_id)
         return {'status': 'error', 'error': 'Not found'}
 
-    # Load recent conversation context (simplified — no vision/image handling)
-    from workspace.ai.models import ConversationSummary
-
-    recent_window = settings.AI_CHAT_CONTEXT_SIZE
-    conv_summary = ConversationSummary.objects.filter(conversation_id=conversation.pk).first()
-    summary_text = conv_summary.content if conv_summary else ''
-
-    all_msgs = list(
-        Message.objects.filter(
-            conversation_id=conversation.pk,
-            deleted_at__isnull=True,
-        )
-        .select_related('author', 'author__bot_profile')
-        .order_by('-created_at')[:settings.AI_CHAT_CONTEXT_SIZE]
-    )
-
-    if summary_text and conv_summary.up_to:
-        msgs_to_use = [m for m in all_msgs if m.created_at > conv_summary.up_to]
-    else:
-        msgs_to_use = all_msgs
-
-    truncate_count = max(0, len(msgs_to_use) - recent_window) if not summary_text else 0
-
-    # Resolve user timezone for message timestamps
-    from workspace.users.settings_service import get_user_timezone
     human_user = User.objects.filter(pk=schedule.created_by_id).first()
-    _user_tz = get_user_timezone(human_user) if human_user else None
 
-    history = []
-    for idx, msg in enumerate(reversed(msgs_to_use)):
-        is_bot = hasattr(msg.author, 'bot_profile')
-        role = 'assistant' if is_bot else 'user'
-        body = msg.body
-        if idx < truncate_count and len(body) > _TRUNCATE_BODY_LIMIT:
-            body = body[:_TRUNCATE_BODY_LIMIT] + '…'
-        local_dt = msg.created_at.astimezone(_user_tz) if _user_tz else msg.created_at
-        history.append({'role': 'system', 'content': f'[{local_dt.strftime("%Y-%m-%d %H:%M")}]'})
-        history.append({'role': role, 'content': body})
+    history, summary_text = _build_conversation_history(
+        str(conversation.pk), bot_profile, human_user,
+    )
 
     bot_name = bot_user.get_full_name() or bot_user.username
 
@@ -1314,18 +1298,21 @@ def generate_scheduled_response(self, schedule_id: str):
         notify_new_message(conversation, bot_user, body)
 
         # Trigger rolling summary update if needed
+        _recent = settings.AI_CHAT_CONTEXT_SIZE
         msg_count = Message.objects.filter(
             conversation_id=conversation.pk, deleted_at__isnull=True,
         ).count()
-        if msg_count > recent_window:
+        if msg_count > _recent:
+            from workspace.ai.models import ConversationSummary
+            _cs = ConversationSummary.objects.filter(conversation_id=conversation.pk).first()
             needs_summary = not summary_text
-            if not needs_summary and conv_summary and conv_summary.up_to:
+            if not needs_summary and _cs and _cs.up_to:
                 unsummarized = Message.objects.filter(
                     conversation_id=conversation.pk,
                     deleted_at__isnull=True,
-                    created_at__gt=conv_summary.up_to,
+                    created_at__gt=_cs.up_to,
                 ).count()
-                needs_summary = unsummarized > recent_window + _SUMMARY_BUFFER
+                needs_summary = unsummarized > _recent + _SUMMARY_BUFFER
             if needs_summary:
                 update_conversation_summary.delay(str(conversation.pk))
 

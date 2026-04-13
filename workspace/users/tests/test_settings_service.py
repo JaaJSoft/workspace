@@ -18,6 +18,7 @@ User = get_user_model()
 
 class GetUserTimezoneTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='alice', password='pass')
 
     def test_returns_utc_when_no_setting(self):
@@ -42,6 +43,7 @@ class GetUserTimezoneTests(TestCase):
 
 class GetSettingTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='alice', password='pass')
 
     def test_returns_default_when_not_found(self):
@@ -65,6 +67,7 @@ class GetSettingTests(TestCase):
 
 class SetSettingTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='alice', password='pass')
 
     def test_creates_new_setting(self):
@@ -88,6 +91,7 @@ class SetSettingTests(TestCase):
 
 class DeleteSettingTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='alice', password='pass')
 
     def test_returns_true_when_deleted(self):
@@ -101,6 +105,7 @@ class DeleteSettingTests(TestCase):
 
 class GetModuleSettingsTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='alice', password='pass')
 
     def test_returns_empty_dict_when_none(self):
@@ -116,6 +121,7 @@ class GetModuleSettingsTests(TestCase):
 
 class GetAllSettingsTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='alice', password='pass')
 
     def test_returns_empty_list_when_none(self):

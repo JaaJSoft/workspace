@@ -14,6 +14,7 @@ User = get_user_model()
 
 class ResolveBannerGradientTest(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='testuser', password='testpass')
 
     def test_returns_none_when_no_setting(self):
@@ -106,6 +107,7 @@ class ValidateProfileSettingTest(TestCase):
 
 class ProfileViewContextTest(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='viewuser', password='testpass')
         self.client.login(username='viewuser', password='testpass')
 

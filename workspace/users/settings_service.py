@@ -22,18 +22,11 @@ UTC = ZoneInfo('UTC')
 
 _CACHE_TTL = 300  # 5 minutes
 _SENTINEL = object()  # distinguishes "not in cache" from any cached value
+_DB_MISS = '__SETTING_NOT_FOUND__'
 
 
 def _cache_key(user_id: int, module: str, key: str) -> str:
     return f'usetting:{user_id}:{module}:{key}'
-
-
-def _wrap(value: Any) -> list:
-    """Wrap a value for cache storage: ``[value]`` = found, ``[]`` = not in DB."""
-    return [value]
-
-
-_DB_MISS: list = []
 
 
 def get_user_timezone(user) -> ZoneInfo:
@@ -52,14 +45,13 @@ def get_setting(user, module: str, key: str, *, default: Any = None) -> Any:
     ck = _cache_key(user.pk, module, key)
     cached = cache.get(ck, _SENTINEL)
     if cached is not _SENTINEL:
-        # cached is [value] if found, [] if DB miss
-        return cached[0] if cached else default
+        return default if cached == _DB_MISS else cached
     try:
         value = UserSetting.objects.get(user=user, module=module, key=key).value
     except UserSetting.DoesNotExist:
         cache.set(ck, _DB_MISS, _CACHE_TTL)
         return default
-    cache.set(ck, _wrap(value), _CACHE_TTL)
+    cache.set(ck, value, _CACHE_TTL)
     return value
 
 
@@ -69,7 +61,7 @@ def set_setting(user, module: str, key: str, value: Any) -> UserSetting:
         user=user, module=module, key=key,
         defaults={'value': value},
     )
-    cache.set(_cache_key(user.pk, module, key), _wrap(value), _CACHE_TTL)
+    cache.set(_cache_key(user.pk, module, key), value, _CACHE_TTL)
     return obj
 
 

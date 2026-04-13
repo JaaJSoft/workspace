@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.users.banner_palettes import (
@@ -134,6 +135,7 @@ class ProfileViewContextTest(TestCase):
 
 class SettingsViewContextTest(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='settuser', password='testpass')
         self.client.login(username='settuser', password='testpass')
 

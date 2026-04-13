@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
+from django.db import transaction
 from django.db.models import Count, F, Max, Min, OuterRef, Prefetch, Q, Subquery
 from django.db.models.functions import Greatest
 from django.http import FileResponse, HttpResponse
@@ -137,6 +138,7 @@ class ConversationListView(CacheControlMixin, APIView):
         summary="Create a conversation",
         request=ConversationCreateSerializer,
     )
+    @transaction.atomic
     def post(self, request):
         serializer = ConversationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -445,36 +447,37 @@ class MessageListView(CacheControlMixin, APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        message = Message.objects.create(
-            conversation_id=conversation_id,
-            author=request.user,
-            body=body,
-            body_html=body_html,
-            reply_to=reply_to,
-        )
-
-        for f in files:
-            mime_type = FileService.infer_mime_type(f.name, uploaded=f)
-            MessageAttachment.objects.create(
-                message=message,
-                file=f,
-                original_name=f.name,
-                mime_type=mime_type,
-                size=f.size,
+        with transaction.atomic():
+            message = Message.objects.create(
+                conversation_id=conversation_id,
+                author=request.user,
+                body=body,
+                body_html=body_html,
+                reply_to=reply_to,
             )
 
-        # Increment unread_count for other active members
-        ConversationMember.objects.filter(
-            conversation_id=conversation_id,
-            left_at__isnull=True,
-        ).exclude(user=request.user).update(
-            unread_count=F('unread_count') + 1,
-        )
+            for f in files:
+                mime_type = FileService.infer_mime_type(f.name, uploaded=f)
+                MessageAttachment.objects.create(
+                    message=message,
+                    file=f,
+                    original_name=f.name,
+                    mime_type=mime_type,
+                    size=f.size,
+                )
 
-        # Bump conversation updated_at
-        Conversation.objects.filter(pk=conversation_id).update(
-            updated_at=timezone.now(),
-        )
+            # Increment unread_count for other active members
+            ConversationMember.objects.filter(
+                conversation_id=conversation_id,
+                left_at__isnull=True,
+            ).exclude(user=request.user).update(
+                unread_count=F('unread_count') + 1,
+            )
+
+            # Bump conversation updated_at
+            Conversation.objects.filter(pk=conversation_id).update(
+                updated_at=timezone.now(),
+            )
 
         # Notify other members via SSE + push notifications
         conversation = Conversation.objects.get(pk=conversation_id)
@@ -594,6 +597,7 @@ class MessageDetailView(APIView):
         return Response(MessageSerializer(message).data)
 
     @extend_schema(summary="Delete a message (soft)")
+    @transaction.atomic
     def delete(self, request, conversation_id, message_id):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
@@ -720,6 +724,7 @@ class ConversationMembersView(APIView):
         summary="Add members to a group conversation",
         request=MemberAddSerializer,
     )
+    @transaction.atomic
     def post(self, request, conversation_id):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
@@ -846,6 +851,7 @@ class MarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Mark conversation as read")
+    @transaction.atomic
     def post(self, request, conversation_id):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
@@ -1647,14 +1653,13 @@ class ConversationClearView(APIView):
                 except OSError:
                     logger.warning('Could not delete file %s', att.file.name)
 
-        # Delete all messages (hard delete, not soft)
-        count, _ = messages.delete()
-
-        # Reset unread counts
-        ConversationMember.objects.filter(
-            conversation_id=conversation_id,
-            left_at__isnull=True,
-        ).update(unread_count=0)
+        # Delete all messages (hard delete, not soft) + reset unread counts
+        with transaction.atomic():
+            count, _ = messages.delete()
+            ConversationMember.objects.filter(
+                conversation_id=conversation_id,
+                left_at__isnull=True,
+            ).update(unread_count=0)
 
         notify_conversation_members(
             Conversation.objects.get(pk=conversation_id),

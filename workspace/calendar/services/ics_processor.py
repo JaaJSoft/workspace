@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timezone
 
 import icalendar
+from django.db import transaction
 from django.utils import timezone as django_tz
 
 from workspace.calendar.models import Calendar, Event, EventMember
@@ -79,6 +80,7 @@ def _handle_cancel(vevent, uid, mail_message):
         )
 
 
+@transaction.atomic
 def _create_event(vevent, uid, sequence, mail_message):
     """Create a new Event from a VEVENT component."""
     account = mail_message.account

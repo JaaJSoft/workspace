@@ -1,6 +1,7 @@
 import logging
 from collections import Counter, defaultdict
 
+from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from django.http import FileResponse
 from django.utils import timezone
@@ -513,6 +514,7 @@ class MailFolderMarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Mark all messages in a folder as read")
+    @transaction.atomic
     def post(self, request, uuid):
         try:
             folder = MailFolder.objects.select_related('account').get(uuid=uuid)
@@ -695,10 +697,11 @@ class MailMessageDetailView(APIView):
         if 'ai_summary' in ser.validated_data:
             msg.ai_summary = ser.validated_data['ai_summary']
 
-        msg.save()
-        _refresh_folder_counts(msg.folder)
-        if 'is_read' in ser.validated_data:
-            _refresh_message_label_counts(msg)
+        with transaction.atomic():
+            msg.save()
+            _refresh_folder_counts(msg.folder)
+            if 'is_read' in ser.validated_data:
+                _refresh_message_label_counts(msg)
         return Response(MailMessageDetailSerializer(msg).data)
 
     @extend_schema(summary="Soft-delete a message")
@@ -709,16 +712,17 @@ class MailMessageDetailView(APIView):
 
         from .services.imap import delete_message
 
-        msg.deleted_at = timezone.now()
-        msg.save(update_fields=['deleted_at', 'updated_at'])
+        with transaction.atomic():
+            msg.deleted_at = timezone.now()
+            msg.save(update_fields=['deleted_at', 'updated_at'])
+            _refresh_folder_counts(msg.folder)
+            _refresh_message_label_counts(msg)
 
         try:
             delete_message(msg.account, msg)
         except Exception:
             logger.warning("Failed to delete message on IMAP for %s", msg.uuid)
 
-        _refresh_folder_counts(msg.folder)
-        _refresh_message_label_counts(msg)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -868,20 +872,21 @@ class MailBatchActionView(APIView):
             except Exception:
                 logger.warning("Batch action '%s' failed for message %s", action, msg.uuid)
 
-        if to_bulk_update:
-            MailMessage.objects.bulk_update(to_bulk_update, list(bulk_update_fields))
+        with transaction.atomic():
+            if to_bulk_update:
+                MailMessage.objects.bulk_update(to_bulk_update, list(bulk_update_fields))
 
-        # Refresh counts for all affected folders
-        for folder in MailFolder.objects.filter(uuid__in=affected_folders):
-            _refresh_folder_counts(folder)
+            # Refresh counts for all affected folders
+            for folder in MailFolder.objects.filter(uuid__in=affected_folders):
+                _refresh_folder_counts(folder)
 
-        # Refresh label counts for read/unread/delete actions
-        if action in ('mark_read', 'mark_unread', 'delete'):
-            affected_label_ids = MailMessageLabel.objects.filter(
-                message__in=messages,
-            ).values_list('label_id', flat=True).distinct()
-            if affected_label_ids:
-                _refresh_label_counts(MailLabel.objects.filter(pk__in=affected_label_ids))
+            # Refresh label counts for read/unread/delete actions
+            if action in ('mark_read', 'mark_unread', 'delete'):
+                affected_label_ids = MailMessageLabel.objects.filter(
+                    message__in=messages,
+                ).values_list('label_id', flat=True).distinct()
+                if affected_label_ids:
+                    _refresh_label_counts(MailLabel.objects.filter(pk__in=affected_label_ids))
 
         return Response({'processed': processed})
 
@@ -988,6 +993,7 @@ class MailMessageLabelView(APIView):
         return msg
 
     @extend_schema(summary="Assign labels to a message", request=MailLabelAssignSerializer)
+    @transaction.atomic
     def post(self, request, uuid):
         msg = self._get_message(request, uuid)
         if not msg:
@@ -1014,6 +1020,7 @@ class MailMessageLabelView(APIView):
         return Response({'status': 'ok'})
 
     @extend_schema(summary="Remove labels from a message", request=MailLabelAssignSerializer)
+    @transaction.atomic
     def delete(self, request, uuid):
         msg = self._get_message(request, uuid)
         if not msg:

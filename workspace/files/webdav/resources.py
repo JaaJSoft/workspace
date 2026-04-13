@@ -7,6 +7,7 @@ import time
 
 from django.conf import settings as django_settings
 from django.core.files.base import File as DjangoFile
+from django.db import transaction
 from wsgidav.dav_error import DAVError, HTTP_BAD_REQUEST
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
@@ -236,6 +237,7 @@ class FolderResource(DAVCollection):
     def support_recursive_move(self, dest_path):
         return True
 
+    @transaction.atomic
     def move_recursive(self, dest_path):
         dest_parts = dest_path.strip("/").split("/")
         new_name = dest_parts[-1]
@@ -347,22 +349,23 @@ class FileResource(DAVNonCollection):
         # The record may have been hard-deleted by a concurrent retry's
         # end_write(with_errors=True) during our (slow) upload.  If so,
         # recreate it so the file on disk is not orphaned.
-        try:
-            self._file.refresh_from_db()
-        except File.DoesNotExist:
-            logger.warning(
-                "File record deleted during upload for %s by %s, recreating",
-                self.path, username,
-            )
-            self._file = FileService.create_file(
-                self._user, self._file.name,
-                parent=self._file.parent,
-            )
-        self._file.size = buf.size
-        self._file.mime_type = FileService.infer_mime_type(self._file.name)
-        self._file.has_thumbnail = False
-        self._file.content.name = self._storage_path
-        self._file.save()
+        with transaction.atomic():
+            try:
+                self._file.refresh_from_db()
+            except File.DoesNotExist:
+                logger.warning(
+                    "File record deleted during upload for %s by %s, recreating",
+                    self.path, username,
+                )
+                self._file = FileService.create_file(
+                    self._user, self._file.name,
+                    parent=self._file.parent,
+                )
+            self._file.size = buf.size
+            self._file.mime_type = FileService.infer_mime_type(self._file.name)
+            self._file.has_thumbnail = False
+            self._file.content.name = self._storage_path
+            self._file.save()
 
         logger.info(
             "PUT completed for %s by %s (%d bytes, %.2fs)",

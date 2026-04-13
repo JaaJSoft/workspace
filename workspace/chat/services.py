@@ -1,6 +1,7 @@
 import re
 
 import mistune
+from django.db import transaction
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import TextLexer, get_lexer_by_name, guess_lexer
@@ -29,6 +30,7 @@ def get_active_membership(user, conversation_id):
     ).first()
 
 
+@transaction.atomic
 def get_or_create_dm(user, other_user):
     """Get or create a DM conversation between two users.
 

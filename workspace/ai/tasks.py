@@ -8,6 +8,7 @@ import tempfile
 
 from celery import shared_task
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -418,6 +419,7 @@ def _run_tool_loop(messages, model, human_user, bot_user, conversation_id):
     return result, used_tools, tool_context, rounds, tool_data or None
 
 
+@transaction.atomic
 def _post_bot_message(conversation, bot_user, result, used_tools, tool_context, ai_task, raw_messages=None, tool_data=None):
     """Create the bot message, attach images, update unread counts, notify, and complete AITask.
 
@@ -484,6 +486,7 @@ def _post_bot_message(conversation, bot_user, result, used_tools, tool_context, 
     return body, bot_message
 
 
+@transaction.atomic
 def _handle_generation_error(conversation, bot_user, ai_task, error):
     """Handle a failed bot response: post error message, update counts, notify."""
     from django.db.models import F
@@ -892,20 +895,21 @@ def summarize(self, task_id: str):
 
     try:
         result = _call_llm(messages, model=settings.AI_SMALL_MODEL)
-        ai_task.status = AITask.Status.COMPLETED
-        ai_task.result = result['content']
-        ai_task.model_used = result['model']
-        ai_task.prompt_tokens = result['prompt_tokens']
-        ai_task.completion_tokens = result['completion_tokens']
-        ai_task.raw_messages = {
-            'messages': _sanitize_messages_for_storage(messages),
-            'response': _serialize_response(result),
-        }
-        ai_task.completed_at = timezone.now()
-        ai_task.save()
+        with transaction.atomic():
+            ai_task.status = AITask.Status.COMPLETED
+            ai_task.result = result['content']
+            ai_task.model_used = result['model']
+            ai_task.prompt_tokens = result['prompt_tokens']
+            ai_task.completion_tokens = result['completion_tokens']
+            ai_task.raw_messages = {
+                'messages': _sanitize_messages_for_storage(messages),
+                'response': _serialize_response(result),
+            }
+            ai_task.completed_at = timezone.now()
+            ai_task.save()
 
-        message.ai_summary = result['content']
-        message.save(update_fields=['ai_summary'])
+            message.ai_summary = result['content']
+            message.save(update_fields=['ai_summary'])
 
         notify_sse('ai', ai_task.owner_id)
 
@@ -1440,13 +1444,14 @@ def classify_mail_messages(self, task_id: str):
                 if links_to_create:
                     MailMessageLabel.objects.bulk_create(links_to_create, ignore_conflicts=True)
 
-        ai_task.status = AITask.Status.COMPLETED
-        ai_task.result = f'Classified {len(msgs)} messages'
-        ai_task.model_used = model_used
-        ai_task.prompt_tokens = total_prompt
-        ai_task.completion_tokens = total_completion
-        ai_task.completed_at = timezone.now()
-        ai_task.save()
+        with transaction.atomic():
+            ai_task.status = AITask.Status.COMPLETED
+            ai_task.result = f'Classified {len(msgs)} messages'
+            ai_task.model_used = model_used
+            ai_task.prompt_tokens = total_prompt
+            ai_task.completion_tokens = total_completion
+            ai_task.completed_at = timezone.now()
+            ai_task.save()
         notify_sse('ai', ai_task.owner_id)
 
         logger.info('Classify complete: task=%s messages=%d tokens=%d+%d',

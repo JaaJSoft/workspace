@@ -13,6 +13,7 @@ import posixpath
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.db import transaction
 
 from workspace.files.models import File
 
@@ -178,6 +179,7 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    @transaction.atomic
     def move(file_obj, new_parent, *, acting_user=None):
         """Move a file or folder to a new parent, handling physical storage.
 
@@ -222,6 +224,7 @@ class FileService:
         file_obj.group = group
 
     @staticmethod
+    @transaction.atomic
     def rename(file_obj, new_name):
         """Rename a file or folder, moving physical storage files as needed.
 

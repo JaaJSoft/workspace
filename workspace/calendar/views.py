@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from dateutil.parser import parse as dateutil_parse
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import OuterRef, Q, Prefetch, Subquery
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import status
@@ -81,6 +82,7 @@ def _update_event_fields(event, data, user):
     return None
 
 
+@transaction.atomic
 def _sync_members(event, member_ids, owner_id):
     """Sync event members from a list of user IDs.
     Returns a set of user IDs that were added or removed (already notified separately).
@@ -284,6 +286,7 @@ class EventListView(CacheControlMixin, APIView):
         return Response(all_events)
 
     @extend_schema(summary="Create an event", request=EventCreateSerializer)
+    @transaction.atomic
     def post(self, request):
         ser = EventCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -451,46 +454,48 @@ class EventDetailView(APIView):
             return Response(EventSerializer(exc).data)
 
         # Create new exception: inherit fields from master, apply overrides
-        duration = (master.end - master.start) if master.end else None
-        exc = Event.objects.create(
-            calendar=master.calendar,
-            title=data.get('title', master.title),
-            description=data.get('description', master.description),
-            start=data.get('start', original_start),
-            end=data.get('end', (original_start + duration) if duration else None),
-            all_day=data.get('all_day', master.all_day),
-            location=data.get('location', master.location),
-            owner=master.owner,
-            recurrence_parent=master,
-            original_start=original_start,
-        )
+        with transaction.atomic():
+            duration = (master.end - master.start) if master.end else None
+            exc = Event.objects.create(
+                calendar=master.calendar,
+                title=data.get('title', master.title),
+                description=data.get('description', master.description),
+                start=data.get('start', original_start),
+                end=data.get('end', (original_start + duration) if duration else None),
+                all_day=data.get('all_day', master.all_day),
+                location=data.get('location', master.location),
+                owner=master.owner,
+                recurrence_parent=master,
+                original_start=original_start,
+            )
 
-        # Copy members from master or from data
-        if 'member_ids' in data:
-            member_ids = set(data['member_ids']) - {user.id}
-            existing_ids = set(master.members.values_list('user_id', flat=True))
-            users = list(User.objects.filter(id__in=member_ids))
-            EventMember.objects.bulk_create([EventMember(event=exc, user=u) for u in users])
-            new_users = [u for u in users if u.id not in existing_ids]
-            if new_users:
-                notify_many(
-                    recipients=new_users,
-                    origin='calendar',
-                    title=f'Invited to "{exc.title}"',
-                    body=f'{user.username} invited you to an event.',
-                    url=f'/calendar?event={exc.pk}',
-                    actor=user,
-                )
-        else:
-            # Copy from master
-            EventMember.objects.bulk_create([
-                EventMember(event=exc, user=m.user, status=m.status)
-                for m in master.members.all()
-            ])
+            # Copy members from master or from data
+            if 'member_ids' in data:
+                member_ids = set(data['member_ids']) - {user.id}
+                existing_ids = set(master.members.values_list('user_id', flat=True))
+                users = list(User.objects.filter(id__in=member_ids))
+                EventMember.objects.bulk_create([EventMember(event=exc, user=u) for u in users])
+                new_users = [u for u in users if u.id not in existing_ids]
+                if new_users:
+                    notify_many(
+                        recipients=new_users,
+                        origin='calendar',
+                        title=f'Invited to "{exc.title}"',
+                        body=f'{user.username} invited you to an event.',
+                        url=f'/calendar?event={exc.pk}',
+                        actor=user,
+                    )
+            else:
+                # Copy from master
+                EventMember.objects.bulk_create([
+                    EventMember(event=exc, user=m.user, status=m.status)
+                    for m in master.members.all()
+                ])
 
         exc = _prefetch_event(Event.objects.filter(pk=exc.pk)).first()
         return Response(EventSerializer(exc).data)
 
+    @transaction.atomic
     def _edit_future_occurrences(self, master, data, original_start, user):
         """Split the series: truncate old master, create new master from original_start."""
         if not original_start:
@@ -558,6 +563,7 @@ class EventDetailView(APIView):
         return Response(EventSerializer(new_master).data)
 
     @extend_schema(summary="Delete an event")
+    @transaction.atomic
     def delete(self, request, event_id):
         event, err = self._get_event(event_id, request.user)
         if err:

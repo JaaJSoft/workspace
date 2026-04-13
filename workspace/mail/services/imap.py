@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 import nh3
 from django.core.files.base import ContentFile
+from django.db import transaction
 from django.utils import timezone as dj_timezone
 
 logger = logging.getLogger(__name__)
@@ -220,40 +221,41 @@ def sync_folders(account):
     existing = {f.name: f for f in MailFolder.objects.filter(account=account)}
     remote_names = set()
 
-    for flags, _delim, name in remote_folders:
-        # Skip non-selectable containers (e.g. [Gmail])
-        if '\\noselect' in flags.lower():
-            continue
-        # Skip \All folder (Gmail "All Mail") — duplicates every message
-        if '\\all' in flags.lower():
-            continue
-        remote_names.add(name)
-        folder_type = _detect_folder_type(name, flags)
-        display = _display_name(name)
+    with transaction.atomic():
+        for flags, _delim, name in remote_folders:
+            # Skip non-selectable containers (e.g. [Gmail])
+            if '\\noselect' in flags.lower():
+                continue
+            # Skip \All folder (Gmail "All Mail") — duplicates every message
+            if '\\all' in flags.lower():
+                continue
+            remote_names.add(name)
+            folder_type = _detect_folder_type(name, flags)
+            display = _display_name(name)
 
-        if name in existing:
-            folder = existing[name]
-            changed = False
-            if folder.folder_type != folder_type:
-                folder.folder_type = folder_type
-                changed = True
-            if folder.display_name != display:
-                folder.display_name = display
-                changed = True
-            if changed:
-                folder.save(update_fields=['folder_type', 'display_name', 'updated_at'])
-        else:
-            MailFolder.objects.create(
-                account=account,
-                name=name,
-                display_name=display,
-                folder_type=folder_type,
-            )
+            if name in existing:
+                folder = existing[name]
+                changed = False
+                if folder.folder_type != folder_type:
+                    folder.folder_type = folder_type
+                    changed = True
+                if folder.display_name != display:
+                    folder.display_name = display
+                    changed = True
+                if changed:
+                    folder.save(update_fields=['folder_type', 'display_name', 'updated_at'])
+            else:
+                MailFolder.objects.create(
+                    account=account,
+                    name=name,
+                    display_name=display,
+                    folder_type=folder_type,
+                )
 
-    # Remove folders that no longer exist remotely
-    gone = set(existing.keys()) - remote_names
-    if gone:
-        MailFolder.objects.filter(account=account, name__in=gone).delete()
+        # Remove folders that no longer exist remotely
+        gone = set(existing.keys()) - remote_names
+        if gone:
+            MailFolder.objects.filter(account=account, name__in=gone).delete()
 
 
 def _get_uidvalidity(conn):
@@ -493,6 +495,7 @@ def _update_folder_counts(folder):
     folder.save(update_fields=['message_count', 'unread_count', 'last_sync_uid', 'updated_at'])
 
 
+@transaction.atomic
 def _parse_message(raw_email, account, folder, uid, flags_str):
     """Parse a raw email and save it as a MailMessage."""
     from workspace.mail.models import MailAttachment, MailMessage
@@ -989,18 +992,19 @@ def move_folder(account, folder, new_parent_name):
         except Exception:
             pass
 
-    # Update this folder in DB
-    folder.name = new_name
-    folder.display_name = _display_name(new_name)
-    folder.save(update_fields=['name', 'display_name', 'updated_at'])
+    # Update this folder and children in DB
+    with transaction.atomic():
+        folder.name = new_name
+        folder.display_name = _display_name(new_name)
+        folder.save(update_fields=['name', 'display_name', 'updated_at'])
 
-    # Update child folders: any folder whose name starts with old_name + delimiter
-    old_prefix = old_name + delimiter
-    children = MailFolder.objects.filter(account=account, name__startswith=old_prefix)
-    for child in children:
-        child.name = new_name + delimiter + child.name[len(old_prefix):]
-        child.display_name = _display_name(child.name)
-        child.save(update_fields=['name', 'display_name', 'updated_at'])
+        # Update child folders: any folder whose name starts with old_name + delimiter
+        old_prefix = old_name + delimiter
+        children = MailFolder.objects.filter(account=account, name__startswith=old_prefix)
+        for child in children:
+            child.name = new_name + delimiter + child.name[len(old_prefix):]
+            child.display_name = _display_name(child.name)
+            child.save(update_fields=['name', 'display_name', 'updated_at'])
 
     return folder
 

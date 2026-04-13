@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone as dt_tz
 
 import httpx
 import icalendar
+from django.db import transaction
 from django.utils import timezone
 
 from workspace.calendar.models import Event
@@ -19,6 +20,7 @@ _FREQ_MAP = {
 }
 
 
+@transaction.atomic
 def sync_external_calendar(external_calendar):
     """Fetch an ICS feed and sync events into the linked Calendar.
 

@@ -294,6 +294,7 @@ class File(models.Model):
             File.objects.filter(pk__in=restored_ids).update(deleted_at=None)
         return len(restored_ids)
 
+    @transaction.atomic
     def restore(self):
         if self.node_type == self.NodeType.FOLDER:
             updated = File.objects.filter(self._descendant_filter()).update(deleted_at=None)

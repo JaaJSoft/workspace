@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Exists, OuterRef
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -60,6 +61,7 @@ def _sidebar_context(user):
     }
 
 
+@transaction.atomic
 def _ensure_default_folders(user):
     """Find or create the Notes/Journal folder structure, return updated prefs.
 

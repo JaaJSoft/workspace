@@ -1,5 +1,6 @@
 import logging
 
+from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -30,6 +31,7 @@ class ExternalCalendarListView(APIView):
         return Response(ExternalCalendarSerializer(externals, many=True).data)
 
     @extend_schema(summary="Subscribe to an external ICS feed", request=ExternalCalendarCreateSerializer)
+    @transaction.atomic
     def post(self, request):
         ser = ExternalCalendarCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)

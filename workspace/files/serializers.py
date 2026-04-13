@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
@@ -242,6 +243,7 @@ class FileSerializer(serializers.ModelSerializer):
             group=group,
         )
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         # Handle content update
         if 'content' in validated_data:

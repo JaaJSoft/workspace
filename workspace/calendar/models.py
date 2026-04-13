@@ -130,6 +130,7 @@ class Event(models.Model):
             models.Index(fields=['recurrence_parent', 'original_start']),
             models.Index(fields=['recurrence_frequency', 'start']),
             models.Index(fields=['ical_uid'], name='event_ical_uid'),
+            models.Index(fields=['calendar', 'is_cancelled', 'start'], name='event_cal_cancel_start'),
         ]
 
     @property

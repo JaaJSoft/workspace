@@ -2,6 +2,7 @@ from io import BytesIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from PIL import Image
 
@@ -18,6 +19,7 @@ class GetAvatarPathTests(TestCase):
 
 class HasAvatarTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='alice', password='pass')
 
     def test_false_by_default(self):
@@ -30,6 +32,7 @@ class HasAvatarTests(TestCase):
 
 class ProcessAndSaveAvatarTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='alice', password='pass')
 
     def _make_image(self, size=(200, 200)):
@@ -64,6 +67,7 @@ class ProcessAndSaveAvatarTests(TestCase):
 
 class DeleteAvatarTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='alice', password='pass')
 
     @patch('workspace.users.avatar_service.delete_image')

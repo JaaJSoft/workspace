@@ -532,7 +532,7 @@ class APITokenListCreateView(APIView):
                 name='APITokenItem',
                 many=True,
                 fields={
-                    'id': serializers.IntegerField(),
+                    'id': serializers.CharField(),
                     'name': serializers.CharField(),
                     'token_key': serializers.CharField(),
                     'created': serializers.DateTimeField(),
@@ -581,7 +581,7 @@ class APITokenListCreateView(APIView):
             201: inline_serializer(
                 name='APITokenCreateResponse',
                 fields={
-                    'id': serializers.IntegerField(),
+                    'id': serializers.CharField(),
                     'name': serializers.CharField(),
                     'token': serializers.CharField(help_text="Full token (shown once)"),
                     'token_key': serializers.CharField(),

@@ -5,7 +5,7 @@ from . import views
 urlpatterns = [
     # Auth / API tokens
     path('api/v1/auth/tokens', views.APITokenListCreateView.as_view(), name='api-token-list-create'),
-    path('api/v1/auth/tokens/<int:pk>', views.APITokenDetailView.as_view(), name='api-token-detail'),
+    path('api/v1/auth/tokens/<str:pk>', views.APITokenDetailView.as_view(), name='api-token-detail'),
     # API endpoints
     path('api/v1/users/search', views.UserSearchView.as_view(), name='user-search'),
     path('api/v1/users/me', views.UserMeView.as_view(), name='user-me'),

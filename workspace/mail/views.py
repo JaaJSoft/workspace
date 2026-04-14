@@ -38,7 +38,12 @@ logger = logging.getLogger(__name__)
 
 
 def _refresh_folder_counts(folder):
-    """Recompute message_count and unread_count for a folder."""
+    """Recompute message_count and unread_count for a single folder.
+
+    Single-folder fast path: 1 aggregate + 1 UPDATE. For N folders, prefer
+    ``_refresh_folders_counts_bulk`` which collapses the work into 2 queries
+    total regardless of N.
+    """
     from django.db.models import Count, Q
     counts = MailMessage.objects.filter(
         folder=folder, deleted_at__isnull=True,
@@ -49,6 +54,44 @@ def _refresh_folder_counts(folder):
     folder.message_count = counts['message_count']
     folder.unread_count = counts['unread_count']
     folder.save(update_fields=['message_count', 'unread_count', 'updated_at'])
+
+
+def _refresh_folders_counts_bulk(folder_ids):
+    """Refresh message_count + unread_count for many folders in 2 queries.
+
+    Replaces the naive ``for folder in ...: _refresh_folder_counts(folder)``
+    pattern (2N queries) with a single ``GROUP BY folder_id`` aggregate and a
+    single ``bulk_update``.
+
+    Folders with no matching messages are correctly zeroed out — the
+    ``GROUP BY`` result omits them, so we default via ``by_folder.get(..., (0, 0))``.
+
+    ``bulk_update`` skips ``auto_now`` fields, so ``updated_at`` is set
+    manually to match the behaviour of the per-folder ``save()`` path.
+    """
+    folder_ids = list(folder_ids)
+    if not folder_ids:
+        return
+    counts = MailMessage.objects.filter(
+        folder_id__in=folder_ids, deleted_at__isnull=True,
+    ).values('folder_id').annotate(
+        msg_count=Count('pk'),
+        unread_cnt=Count('pk', filter=Q(is_read=False)),
+    )
+    by_folder = {
+        c['folder_id']: (c['msg_count'], c['unread_cnt']) for c in counts
+    }
+    folders = list(MailFolder.objects.filter(uuid__in=folder_ids))
+    now = timezone.now()
+    for folder in folders:
+        msg_count, unread_count = by_folder.get(folder.uuid, (0, 0))
+        folder.message_count = msg_count
+        folder.unread_count = unread_count
+        folder.updated_at = now
+    if folders:
+        MailFolder.objects.bulk_update(
+            folders, ['message_count', 'unread_count', 'updated_at'],
+        )
 
 
 def _refresh_label_counts(labels):
@@ -876,9 +919,9 @@ class MailBatchActionView(APIView):
             if to_bulk_update:
                 MailMessage.objects.bulk_update(to_bulk_update, list(bulk_update_fields))
 
-            # Refresh counts for all affected folders
-            for folder in MailFolder.objects.filter(uuid__in=affected_folders):
-                _refresh_folder_counts(folder)
+            # Refresh counts for all affected folders in a single batch:
+            # 1 aggregate + 1 bulk_update instead of 2N queries.
+            _refresh_folders_counts_bulk(affected_folders)
 
             # Refresh label counts for read/unread/delete actions
             if action in ('mark_read', 'mark_unread', 'delete'):

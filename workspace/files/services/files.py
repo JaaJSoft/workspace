@@ -67,17 +67,22 @@ class FileService:
 
     @staticmethod
     def annotate_for_serializer(queryset, user):
-        """Annotate a File queryset with every flag ``FileSerializer`` reads.
+        """Prepare a File queryset for ``FileSerializer``.
 
         ``FileSerializer`` no longer falls back to DB lookups when an
         annotation is missing, so every queryset passed to it MUST go
-        through this helper — otherwise the serializer will raise
-        ``AttributeError``. Adds:
+        through this helper — otherwise the serializer will raise at
+        render time. Applies:
 
-        * ``is_favorite``  — ``user`` favorited this node
-        * ``is_pinned``    — ``user`` pinned this folder
-        * ``is_shared``    — at least one ``FileShare`` exists for this node
-        * ``has_children`` — folder has at least one non-deleted child folder
+        Annotations:
+            * ``is_favorite``  — ``user`` favorited this node
+            * ``is_pinned``    — ``user`` pinned this folder
+            * ``is_shared``    — at least one ``FileShare`` exists for this node
+            * ``has_children`` — folder has at least one non-deleted child folder
+
+        Prefetch:
+            * ``file_tags__tag`` — ``get_tags`` reads ``ft.tag.{name,icon,color}``,
+              so both hops must be prefetched to avoid 1 + N queries per file.
         """
         from django.db.models import Exists, OuterRef
         from workspace.files.models import FileFavorite, FileShare, PinnedFolder
@@ -98,7 +103,7 @@ class FileService:
                     deleted_at__isnull=True,
                 )
             ),
-        )
+        ).prefetch_related('file_tags__tag')
 
     @staticmethod
     def storage_used(user):

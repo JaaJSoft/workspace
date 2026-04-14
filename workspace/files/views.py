@@ -300,7 +300,7 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
                 self.request.user,
             ).annotate(
                 user_share_permission=Subquery(user_share_subquery),
-            ).prefetch_related('file_tags__tag').distinct()
+            ).distinct()
 
         # Resolve parent context: detect group from parent, resolve descendants
         parent_uuid = self.request.query_params.get('parent')
@@ -329,10 +329,10 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
                 qs = qs.filter(path__startswith=ancestor_path + '/')
             qs = FileService.annotate_for_serializer(qs, self.request.user).annotate(
                 user_share_permission=Subquery(user_share_subquery),
-            ).prefetch_related('file_tags__tag')
+            )
             return qs
 
-        queryset = File.objects.filter(owner=self.request.user, group__isnull=True).prefetch_related('file_tags__tag')
+        queryset = File.objects.filter(owner=self.request.user, group__isnull=True)
         queryset = FileService.annotate_for_serializer(queryset, self.request.user).annotate(
             user_share_permission=Subquery(user_share_subquery),
         )

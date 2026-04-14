@@ -372,15 +372,21 @@ def sync_folder_messages(account, folder):
             except Exception:
                 logger.exception('Failed to dispatch classify task for %s', folder.name)
 
-        # Process any new calendar invitations
-        from workspace.mail.models import MailMessage as _MailMsg
-        cal_messages = _MailMsg.objects.filter(
-            folder=folder,
-            has_calendar_event=True,
-        )
-        if cal_messages.exists():
-            from workspace.calendar.services.ics_processor import process_calendar_emails
-            process_calendar_emails(cal_messages)
+        # Process calendar invitations among messages just synced.
+        # Scoping on new_message_uuids avoids re-parsing every old ICS
+        # email on every sync (has_calendar_event is set once at parse
+        # time and never flipped later, so old messages never need a
+        # second pass).
+        if new_message_uuids:
+            from workspace.mail.models import MailMessage as _MailMsg
+            cal_messages = _MailMsg.objects.filter(
+                folder=folder,
+                has_calendar_event=True,
+                uuid__in=new_message_uuids,
+            )
+            if cal_messages.exists():
+                from workspace.calendar.services.ics_processor import process_calendar_emails
+                process_calendar_emails(cal_messages)
 
     finally:
         try:

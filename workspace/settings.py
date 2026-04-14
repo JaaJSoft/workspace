@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'drf_spectacular',
+    'knox',
     'django_filters',
     'simple_history',
     'django_prometheus',
@@ -240,6 +241,7 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
+        'knox.auth.TokenAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
@@ -269,6 +271,10 @@ SPECTACULAR_SETTINGS = {
     'COMPONENT_SPLIT_REQUEST': True,
     'SCHEMA_PATH_PREFIX': r'/v[1-9]',
     'TAGS': [
+        {
+            'name': 'Auth',
+            'description': 'API token management for programmatic access.',
+        },
         {
             'name': 'AI',
             'description': 'AI-powered tasks: summarize, compose, reply, and editor actions.',
@@ -327,9 +333,18 @@ SPECTACULAR_SETTINGS = {
     },
     'SERVE_AUTHENTICATION': [
         'rest_framework.authentication.SessionAuthentication',
+        'knox.auth.TokenAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ],
 }
+
+# Knox (API token authentication)
+REST_KNOX = {
+    'TOKEN_TTL': None,  # No default expiry; per-token expiry set at creation
+    'AUTO_REFRESH': False,
+    'AUTH_HEADER_PREFIX': 'Token',
+}
+KNOX_TOKEN_MODEL = 'knox.AuthToken'
 
 # Login/Logout URLs
 LOGIN_URL = '/login'

@@ -25,6 +25,17 @@ Tests run in parallel in CI with one job per module (see `.github/workflows/test
 
 all api must be prefixed with `/api/` and have no trailing slashes
 
+## Models
+
+Every model must use a UUID primary key with the `uuid_v7_or_v4` helper as default. Never use Django's auto-incremented `id` or `uuid.uuid4` directly.
+
+```python
+from workspace.common.uuids import uuid_v7_or_v4
+
+class MyModel(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+```
+
 ## UI Components
 
 Always use the existing UI partials located in `workspace/common/templates/ui/partials/` instead of writing inline HTML for common components.

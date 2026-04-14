@@ -67,3 +67,21 @@ class UserSetting(models.Model):
 
     def __str__(self):
         return f'{self.user} / {self.module}.{self.key}'
+
+
+class APITokenLabel(models.Model):
+    """Human-readable label for a knox AuthToken."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    auth_token = models.OneToOneField(
+        'knox.AuthToken',
+        on_delete=models.CASCADE,
+        related_name='label',
+    )
+    name = models.CharField(max_length=128, blank=True, default='')
+
+    class Meta:
+        ordering = ['-auth_token__created']
+
+    def __str__(self):
+        return self.name or self.auth_token.token_key

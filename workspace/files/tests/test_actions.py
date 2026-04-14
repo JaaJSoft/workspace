@@ -31,6 +31,7 @@ def _make_file(owner, **kwargs):
     f.is_favorite = getattr(f, 'is_favorite', False)
     f.is_pinned = getattr(f, 'is_pinned', False)
     f.is_shared = getattr(f, 'is_shared', False)
+    f.has_children = getattr(f, 'has_children', False)
     f.deleted_at = getattr(f, 'deleted_at', None)
     return f
 

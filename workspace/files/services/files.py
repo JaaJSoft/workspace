@@ -66,6 +66,41 @@ class FileService:
         )
 
     @staticmethod
+    def annotate_for_serializer(queryset, user):
+        """Annotate a File queryset with every flag ``FileSerializer`` reads.
+
+        ``FileSerializer`` no longer falls back to DB lookups when an
+        annotation is missing, so every queryset passed to it MUST go
+        through this helper — otherwise the serializer will raise
+        ``AttributeError``. Adds:
+
+        * ``is_favorite``  — ``user`` favorited this node
+        * ``is_pinned``    — ``user`` pinned this folder
+        * ``is_shared``    — at least one ``FileShare`` exists for this node
+        * ``has_children`` — folder has at least one non-deleted child folder
+        """
+        from django.db.models import Exists, OuterRef
+        from workspace.files.models import FileFavorite, FileShare, PinnedFolder
+        return queryset.annotate(
+            is_favorite=Exists(
+                FileFavorite.objects.filter(owner=user, file_id=OuterRef('pk'))
+            ),
+            is_pinned=Exists(
+                PinnedFolder.objects.filter(owner=user, folder_id=OuterRef('pk'))
+            ),
+            is_shared=Exists(
+                FileShare.objects.filter(file_id=OuterRef('pk'))
+            ),
+            has_children=Exists(
+                File.objects.filter(
+                    parent_id=OuterRef('pk'),
+                    node_type=File.NodeType.FOLDER,
+                    deleted_at__isnull=True,
+                )
+            ),
+        )
+
+    @staticmethod
     def storage_used(user):
         """Return total bytes used by *user*'s non-deleted files."""
         from django.db.models import Sum

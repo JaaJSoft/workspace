@@ -284,17 +284,6 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Filter by current user's files."""
-        favorite_subquery = FileFavorite.objects.filter(
-            owner=self.request.user,
-            file_id=OuterRef('pk'),
-        )
-        pinned_subquery = PinnedFolder.objects.filter(
-            owner=self.request.user,
-            folder_id=OuterRef('pk'),
-        )
-        is_shared_subquery = FileShare.objects.filter(
-            file_id=OuterRef('pk'),
-        )
         user_share_subquery = FileShare.objects.filter(
             file_id=OuterRef('pk'),
             shared_with=self.request.user,
@@ -302,14 +291,14 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
 
         # Favorites: include owned, shared-with-me, and group files
         if self.action == 'list' and self._is_favorites_query():
-            return File.objects.filter(
-                FileService.accessible_files_q(self.request.user),
-                deleted_at__isnull=True,
-                favorites__owner=self.request.user,
+            return FileService.annotate_for_serializer(
+                File.objects.filter(
+                    FileService.accessible_files_q(self.request.user),
+                    deleted_at__isnull=True,
+                    favorites__owner=self.request.user,
+                ),
+                self.request.user,
             ).annotate(
-                is_favorite=Exists(favorite_subquery),
-                is_pinned=Exists(pinned_subquery),
-                is_shared=Exists(is_shared_subquery),
                 user_share_permission=Subquery(user_share_subquery),
             ).prefetch_related('file_tags__tag').distinct()
 
@@ -338,19 +327,13 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
             )
             if ancestor_path:
                 qs = qs.filter(path__startswith=ancestor_path + '/')
-            qs = qs.annotate(
-                is_favorite=Exists(favorite_subquery),
-                is_pinned=Exists(pinned_subquery),
-                is_shared=Exists(is_shared_subquery),
+            qs = FileService.annotate_for_serializer(qs, self.request.user).annotate(
                 user_share_permission=Subquery(user_share_subquery),
             ).prefetch_related('file_tags__tag')
             return qs
 
         queryset = File.objects.filter(owner=self.request.user, group__isnull=True).prefetch_related('file_tags__tag')
-        queryset = queryset.annotate(
-            is_favorite=Exists(favorite_subquery),
-            is_pinned=Exists(pinned_subquery),
-            is_shared=Exists(is_shared_subquery),
+        queryset = FileService.annotate_for_serializer(queryset, self.request.user).annotate(
             user_share_permission=Subquery(user_share_subquery),
         )
         if self.action in {'trash'} or self._is_trash_query():
@@ -375,7 +358,13 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
             # Only promote owner/group to full queryset object — shared
             # users are deliberately excluded so action-level fallbacks
             # can enforce restricted permissions (e.g. content-only writes).
-            file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
+            # The fallback queryset is annotated the same way as get_queryset()
+            # so FileSerializer can render it without hitting missing-annotation
+            # errors.
+            file_obj = FileService.annotate_for_serializer(
+                File.objects.filter(uuid=uuid, deleted_at__isnull=True),
+                self.request.user,
+            ).first()
             if file_obj and (FileService.get_permission(self.request.user, file_obj) or 0) >= FilePermission.EDIT:
                 return file_obj
             raise
@@ -627,21 +616,7 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
     def trash(self, request):
         """List trashed files and folders."""
         queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
-        favorite_subquery = FileFavorite.objects.filter(
-            owner=request.user,
-            file_id=OuterRef('pk'),
-        )
-        pinned_subquery = PinnedFolder.objects.filter(
-            owner=request.user,
-            folder_id=OuterRef('pk'),
-        )
-        is_shared_subquery = FileShare.objects.filter(
-            file_id=OuterRef('pk'),
-        )
-        queryset = queryset.annotate(
-            is_favorite=Exists(favorite_subquery),
-            is_pinned=Exists(pinned_subquery),
-            is_shared=Exists(is_shared_subquery),
+        queryset = FileService.annotate_for_serializer(queryset, request.user).annotate(
             user_share_permission=Subquery(
                 FileShare.objects.filter(
                     file_id=OuterRef('pk'),
@@ -750,7 +725,10 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
 
         # Perform the copy
         copied = FileService.copy(file_obj, parent, request.user)
-        serializer = self.get_serializer(copied)
+        # Re-fetch through get_queryset() so the instance carries the
+        # annotations FileSerializer now requires.
+        annotated = self.get_queryset().filter(pk=copied.pk).first() or copied
+        serializer = self.get_serializer(annotated)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
@@ -1151,8 +1129,9 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         except Http404:
             # Check rw shared access
             uuid = kwargs.get('uuid')
-            file_obj = File.objects.filter(
-                uuid=uuid, deleted_at__isnull=True,
+            file_obj = FileService.annotate_for_serializer(
+                File.objects.filter(uuid=uuid, deleted_at__isnull=True),
+                request.user,
             ).first()
             if not file_obj or FileService.get_permission(request.user, file_obj) != FilePermission.WRITE:
                 raise
@@ -1503,19 +1482,7 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
         )
-        favorite_subquery = FileFavorite.objects.filter(
-            owner=request.user,
-            file_id=OuterRef('pk'),
-        )
-        is_shared_subquery = FileShare.objects.filter(
-            file_id=OuterRef('pk'),
-        )
-        queryset = queryset.annotate(
-            is_favorite=Exists(favorite_subquery),
-            is_pinned=Exists(
-                PinnedFolder.objects.filter(owner=request.user, folder_id=OuterRef('pk'))
-            ),
-            is_shared=Exists(is_shared_subquery),
+        queryset = FileService.annotate_for_serializer(queryset, request.user).annotate(
             user_share_permission=Subquery(
                 FileShare.objects.filter(
                     file_id=OuterRef('pk'),

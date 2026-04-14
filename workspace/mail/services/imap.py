@@ -998,13 +998,23 @@ def move_folder(account, folder, new_parent_name):
         folder.display_name = _display_name(new_name)
         folder.save(update_fields=['name', 'display_name', 'updated_at'])
 
-        # Update child folders: any folder whose name starts with old_name + delimiter
+        # Update child folders: any folder whose name starts with old_name + delimiter.
+        # One UPDATE via bulk_update instead of N saves. Since each child gets a
+        # distinct new name (path rewrite), we can't collapse to a single
+        # QuerySet.update() — load, mutate in Python, then bulk_update.
         old_prefix = old_name + delimiter
-        children = MailFolder.objects.filter(account=account, name__startswith=old_prefix)
-        for child in children:
-            child.name = new_name + delimiter + child.name[len(old_prefix):]
-            child.display_name = _display_name(child.name)
-            child.save(update_fields=['name', 'display_name', 'updated_at'])
+        children = list(
+            MailFolder.objects.filter(account=account, name__startswith=old_prefix)
+        )
+        if children:
+            now = dj_timezone.now()
+            for child in children:
+                child.name = new_name + delimiter + child.name[len(old_prefix):]
+                child.display_name = _display_name(child.name)
+                child.updated_at = now  # bulk_update bypasses auto_now
+            MailFolder.objects.bulk_update(
+                children, ['name', 'display_name', 'updated_at'],
+            )
 
     return folder
 

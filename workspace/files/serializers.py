@@ -3,8 +3,26 @@ from rest_framework import serializers
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 
-from .models import File, FileComment, FileFavorite, FileShare, FileTag, PinnedFolder
+from .models import File, FileComment, FileTag
 from workspace.files.services import FileService
+
+
+def _require_annotation(obj, name):
+    """Fetch an annotation from *obj* or raise a loud error.
+
+    ``FileSerializer`` deliberately has no DB fallback when an annotation is
+    missing — callers must pipe their queryset through
+    ``FileService.annotate_for_serializer`` before handing it to the serializer.
+    This helper turns a missing annotation into a clear exception instead of a
+    silent N+1.
+    """
+    try:
+        return getattr(obj, name)
+    except AttributeError as exc:
+        raise AttributeError(
+            f"FileSerializer requires the {name!r} annotation. "
+            f"Use FileService.annotate_for_serializer(qs, user) on the queryset."
+        ) from exc
 
 
 class FileSerializer(serializers.ModelSerializer):
@@ -99,13 +117,7 @@ class FileSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_favorite(self, obj):
-        annotated = getattr(obj, 'is_favorite', None)
-        if annotated is not None:
-            return bool(annotated)
-        request = self.context.get('request')
-        if not request or not getattr(request, 'user', None) or not request.user.is_authenticated:
-            return False
-        return FileFavorite.objects.filter(owner=request.user, file=obj).exists()
+        return bool(_require_annotation(obj, 'is_favorite'))
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_category(self, obj):
@@ -133,33 +145,17 @@ class FileSerializer(serializers.ModelSerializer):
     def get_is_pinned(self, obj):
         if obj.node_type != File.NodeType.FOLDER:
             return False
-        annotated = getattr(obj, 'is_pinned', None)
-        if annotated is not None:
-            return bool(annotated)
-        request = self.context.get('request')
-        if not request or not getattr(request, 'user', None) or not request.user.is_authenticated:
-            return False
-        return PinnedFolder.objects.filter(owner=request.user, folder=obj).exists()
+        return bool(_require_annotation(obj, 'is_pinned'))
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_shared(self, obj):
-        annotated = getattr(obj, 'is_shared', None)
-        if annotated is not None:
-            return bool(annotated)
-        return FileShare.objects.filter(file=obj).exists()
+        return bool(_require_annotation(obj, 'is_shared'))
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_has_children(self, obj):
         if obj.node_type != File.NodeType.FOLDER:
             return False
-        annotated = getattr(obj, 'has_children', None)
-        if annotated is not None:
-            return bool(annotated)
-        return File.objects.filter(
-            parent=obj,
-            node_type=File.NodeType.FOLDER,
-            deleted_at__isnull=True,
-        ).exists()
+        return bool(_require_annotation(obj, 'has_children'))
 
     @extend_schema_field({'type': 'array', 'items': {'type': 'object'}})
     def get_tags(self, obj):
@@ -225,7 +221,7 @@ class FileSerializer(serializers.ModelSerializer):
         group = validated_data.get('group')
 
         if node_type == File.NodeType.FOLDER:
-            return FileService.create_folder(
+            instance = FileService.create_folder(
                 owner=owner,
                 name=validated_data['name'],
                 parent=validated_data.get('parent'),
@@ -233,15 +229,24 @@ class FileSerializer(serializers.ModelSerializer):
                 color=validated_data.get('color'),
                 group=group,
             )
+        else:
+            instance = FileService.create_file(
+                owner=owner,
+                name=validated_data['name'],
+                parent=validated_data.get('parent'),
+                content=validated_data.get('content'),
+                mime_type=validated_data.get('mime_type'),
+                group=group,
+            )
 
-        return FileService.create_file(
-            owner=owner,
-            name=validated_data['name'],
-            parent=validated_data.get('parent'),
-            content=validated_data.get('content'),
-            mime_type=validated_data.get('mime_type'),
-            group=group,
-        )
+        # A freshly-created node cannot have favorites, pins, shares, or
+        # children yet — attach the annotations the serializer now requires
+        # so the DRF `create()` response can be built without a re-fetch.
+        instance.is_favorite = False
+        instance.is_pinned = False
+        instance.is_shared = False
+        instance.has_children = False
+        return instance
 
     @transaction.atomic
     def update(self, instance, validated_data):

@@ -198,22 +198,23 @@ def _build_context(request, folder=None, is_trash_view=False):
     groups_with_folders = group_folders.values_list('group_id', flat=True)
     available_groups = request.user.groups.exclude(id__in=groups_with_folders).order_by('name')
 
+    # Load pinned folders + their favorite status in a single query:
+    # annotate via the FK (folder_id) rather than re-fetching the File rows.
     pinned_folders_qs = PinnedFolder.objects.filter(
         owner=request.user,
         folder__deleted_at__isnull=True,
-    ).select_related('folder').order_by('position', 'created_at')
-
-    # Annotate pinned folders with is_favorite
-    pinned_folder_ids = [p.folder_id for p in pinned_folders_qs]
-    if pinned_folder_ids:
-        pinned_favorites = {
-            f.pk: f.is_favorite
-            for f in File.objects.filter(pk__in=pinned_folder_ids).annotate(
-                is_favorite=Exists(favorite_subquery)
+    ).select_related('folder').annotate(
+        _folder_is_favorite=Exists(
+            FileFavorite.objects.filter(
+                owner=request.user,
+                file_id=OuterRef('folder_id'),
             )
-        }
-        for pin in pinned_folders_qs:
-            pin.folder.is_favorite = pinned_favorites.get(pin.folder_id, False)
+        ),
+    ).order_by('position', 'created_at')
+
+    pinned_folder_ids = [p.folder_id for p in pinned_folders_qs]
+    for pin in pinned_folders_qs:
+        pin.folder.is_favorite = pin._folder_is_favorite
 
     parent_url = breadcrumbs[-2].get('url', '/files') if len(breadcrumbs) >= 2 else None
 
@@ -371,28 +372,23 @@ def properties(request, uuid):
 @login_required
 def pinned_folders(request):
     """Return pinned folders partial for Alpine AJAX loading."""
-    # Get pinned folder IDs first
+    # Annotate is_favorite via the folder FK in the same query — avoids
+    # the previous double-fetch (one query for the join, a second one to
+    # re-load the same File rows just to attach the annotation).
     pinned_qs = PinnedFolder.objects.filter(
         owner=request.user,
         folder__deleted_at__isnull=True,
-    ).select_related('folder').order_by('position', 'created_at')
+    ).select_related('folder').annotate(
+        _folder_is_favorite=Exists(
+            FileFavorite.objects.filter(
+                owner=request.user,
+                file_id=OuterRef('folder_id'),
+            )
+        ),
+    ).order_by('position', 'created_at')
 
-    # Annotate folders with is_favorite
-    folder_ids = [p.folder_id for p in pinned_qs]
-    favorite_subquery = FileFavorite.objects.filter(
-        owner=request.user,
-        file_id=OuterRef('pk'),
-    )
-    folders_with_favorite = {
-        f.pk: f.is_favorite
-        for f in File.objects.filter(pk__in=folder_ids).annotate(
-            is_favorite=Exists(favorite_subquery)
-        )
-    }
-
-    # Attach is_favorite to each pinned folder's folder object
     for pin in pinned_qs:
-        pin.folder.is_favorite = folders_with_favorite.get(pin.folder_id, False)
+        pin.folder.is_favorite = pin._folder_is_favorite
 
     return render(request, 'files/ui/partials/pinned_folders.html', {
         'pinned_folders': pinned_qs,

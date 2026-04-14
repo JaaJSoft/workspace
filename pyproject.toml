@@ -28,6 +28,7 @@ dependencies = [
     "icalendar>=6.1.0",
     # utils
     "mistune>=3.2.0",
+    "pygments>=2.20.0",
     "dj-database-url>=2.3.0",
     "psycopg[binary,pool]>=3.2.0",
     "python-dotenv>=1.2.1",

@@ -241,33 +241,39 @@ def notify_new_message(conversation, author, body, mentioned_user_ids=None, ment
 
     icon, color = _resolve_module_defaults('chat', '', '')
 
+    # Batch-fetch existing unread chat notifications for all members at once.
+    # Previously this was a SELECT per member (N+1); a 50-member conversation
+    # cost 50 round-trips before we'd even decide update-vs-create.
+    existing_notifs = {
+        n.recipient_id: n
+        for n in Notification.objects.filter(
+            recipient_id__in=member_ids,
+            origin='chat',
+            url=conv_url,
+            read_at__isnull=True,
+        )
+    }
+
+    now = timezone.now()
+    to_update = []
+    to_create = []
     for uid in member_ids:
         is_mentioned = uid in mentioned_user_ids or mention_everyone
         priority = 'high' if is_mentioned else 'normal'
 
-        # Try to merge into an existing unread notification for this conversation
-        existing = Notification.objects.filter(
-            recipient_id=uid,
-            origin='chat',
-            url=conv_url,
-            read_at__isnull=True,
-        ).first()
-
+        existing = existing_notifs.get(uid)
         if existing:
-            # Merge: update body/title, bump timestamp
+            # Merge: update body/title, bump timestamp so it rises in the list.
             existing.body = preview
             existing.title = title_single
             existing.actor = author
             if is_mentioned and existing.priority != 'urgent':
                 existing.priority = priority
-            existing.save(update_fields=['body', 'title', 'actor', 'priority'])
-            # Bump created_at so it rises to the top of the list
-            Notification.objects.filter(pk=existing.pk).update(created_at=timezone.now())
-            # Refresh the bell icon count via SSE (count unchanged but content updated)
-            _notify_sse('notifications', uid)
+            existing.created_at = now
+            to_update.append(existing)
         else:
-            # First message: create notification + send push
-            notif = Notification.objects.create(
+            # First message: will be created below and triggers a push.
+            to_create.append(Notification(
                 recipient_id=uid,
                 origin='chat',
                 icon=icon,
@@ -277,9 +283,27 @@ def notify_new_message(conversation, author, body, mentioned_user_ids=None, ment
                 url=conv_url,
                 actor=author,
                 priority=priority,
-            )
-            _notify_sse('notifications', uid)
-            send_push_notification.delay(str(notif.uuid))
+            ))
+
+    # Collapse N saves + N created_at bumps into 2 statements total.
+    # Notification has auto_now_add on created_at (not auto_now), so setting
+    # it manually on the update path is safe — it only fires on INSERT.
+    if to_update:
+        Notification.objects.bulk_update(
+            to_update, ['body', 'title', 'actor', 'priority', 'created_at'],
+        )
+    if to_create:
+        # uuid_v7_or_v4 default runs at Notification() __init__, so every
+        # instance already has a pk before bulk_create — we can dispatch
+        # the push task straight from the Python objects.
+        Notification.objects.bulk_create(to_create)
+
+    # SSE ping refreshes the bell icon for every recipient regardless of
+    # update/create path. Push notifications only fire for fresh entries.
+    for uid in member_ids:
+        _notify_sse('notifications', uid)
+    for notif in to_create:
+        send_push_notification.delay(str(notif.uuid))
 
 
 def notify_user(user_id):

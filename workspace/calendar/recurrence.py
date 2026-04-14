@@ -164,11 +164,14 @@ def expand_recurring_events(masters_qs, range_start, range_end):
         )
     )
 
-    # Index by (parent_id, original_start)
+    # Index by (parent_id, original_start). UUIDs and datetimes are both
+    # hashable, so we use them directly — skipping .isoformat() avoids a
+    # pair of string allocations per key on both the indexing side and the
+    # lookup side below.
     exc_index = {}
     for exc in exceptions:
         if exc.original_start:
-            key = (str(exc.recurrence_parent_id), exc.original_start.isoformat())
+            key = (exc.recurrence_parent_id, exc.original_start)
             exc_index[key] = exc
 
     occurrences = []
@@ -176,7 +179,7 @@ def expand_recurring_events(masters_qs, range_start, range_end):
         # Pre-compute members list once per master (reused across all virtual occurrences)
         master._cached_member_dicts = [_member_dict(m) for m in master.members.all()]
         for occ_start in _build_rrule(master, range_start, range_end):
-            key = (str(master.uuid), occ_start.isoformat())
+            key = (master.uuid, occ_start)
             exc = exc_index.get(key)
             if exc:
                 if exc.is_cancelled:

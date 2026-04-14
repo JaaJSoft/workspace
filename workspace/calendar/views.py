@@ -347,7 +347,9 @@ class EventDetailView(APIView):
         event = _prefetch_event(Event.objects.filter(pk=event_id)).first()
         if not event:
             return None, Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
-        is_member = event.members.filter(user=user).exists()
+        # Members are already prefetched by _prefetch_event; iterate the
+        # cached list instead of issuing a redundant .filter().exists().
+        is_member = any(m.user_id == user.id for m in event.members.all())
         cal_ids = visible_calendar_ids(user)
         if event.calendar_id not in cal_ids and not is_member:
             return None, Response({'detail': 'No access.'}, status=status.HTTP_403_FORBIDDEN)
@@ -364,13 +366,15 @@ class EventDetailView(APIView):
         if original_start_str and event.is_recurring:
             original_start = _parse_dt(original_start_str)
             if original_start:
-                # Check for a materialized exception first
-                exc = Event.objects.filter(
+                # Materialized exception lookup goes straight through
+                # _prefetch_event — avoids the previous fetch-then-refetch
+                # pattern (bare lookup by (parent, original_start), then a
+                # second query to attach the prefetch).
+                exc = _prefetch_event(Event.objects.filter(
                     recurrence_parent=event,
                     original_start=original_start,
-                ).first()
+                )).first()
                 if exc:
-                    exc = _prefetch_event(Event.objects.filter(pk=exc.pk)).first()
                     return Response(EventSerializer(exc).data)
                 # Build virtual occurrence
                 occ = make_virtual_occurrence(event, original_start)

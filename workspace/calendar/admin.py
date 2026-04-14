@@ -28,6 +28,10 @@ class EventAdmin(admin.ModelAdmin):
     list_filter = ('all_day', 'calendar', 'recurrence_frequency', 'is_cancelled')
     search_fields = ('title', 'description')
     raw_id_fields = ('recurrence_parent',)
+    # list_display renders calendar/owner/recurrence_parent on every row;
+    # without list_select_related the admin changelist issues 3 queries per
+    # row (N+1 on the FKs).
+    list_select_related = ('calendar', 'owner', 'recurrence_parent')
     inlines = [EventMemberInline]
 
 

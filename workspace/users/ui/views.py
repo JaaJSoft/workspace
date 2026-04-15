@@ -9,10 +9,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from workspace.core.activity_registry import activity_registry
-from workspace.core.activity_service import annotate_time_ago, get_recent_events, get_sources
-from workspace.users import avatar_service, presence_service
+from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources
+from workspace.users.services import avatar as avatar_service, presence as presence_service
 from workspace.users.banner_palettes import BANNER_PALETTES, resolve_banner_gradient
-from workspace.users.settings_service import get_setting
+from workspace.users.services.settings import get_setting
 
 ACTIVITY_LIMIT = 10
 

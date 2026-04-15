@@ -324,7 +324,7 @@ class ActivityRegistryTests(TestCase):
 
 
 class ActivityServiceTests(TestCase):
-    """Tests for workspace.core.activity_service."""
+    """Tests for workspace.core.services.activity."""
 
     def test_exclude_user_id_passes_through_null_actor_events(self):
         """Events with actor=None must not crash the exclude filter.
@@ -338,7 +338,7 @@ class ActivityServiceTests(TestCase):
         """
         from unittest.mock import patch
 
-        from workspace.core import activity_service
+        from workspace.core.services import activity as activity_service
 
         events_from_registry = [
             {'label': 'null-actor', 'actor': None, 'timestamp': None},
@@ -364,7 +364,7 @@ class ActivityServiceTests(TestCase):
         """Search filter must also tolerate actor=None."""
         from unittest.mock import patch
 
-        from workspace.core import activity_service
+        from workspace.core.services import activity as activity_service
 
         events_from_registry = [
             {'label': 'meeting', 'description': 'team sync',

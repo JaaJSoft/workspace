@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import httpx
 from trafilatura.metadata import extract_metadata
 
-from workspace.ai.web_service import _is_url_safe, _HEADERS
+from workspace.ai.services.web import _is_url_safe, _HEADERS
 
 _URL_RE = re.compile(r'https?://[^\s<>\"\')\]}>]+', re.IGNORECASE)
 _TRAILING_PUNCT = re.compile(r'[.,;:!?)]+$')

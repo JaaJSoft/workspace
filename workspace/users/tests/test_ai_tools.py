@@ -46,9 +46,9 @@ class CheckUserStatusTests(TestCase):
 
     def test_online_user_reports_full_name(self):
         with mock.patch(
-            'workspace.users.presence_service.get_status', return_value='online',
+            'workspace.users.services.presence.get_status', return_value='online',
         ), mock.patch(
-            'workspace.users.presence_service.get_last_seen', return_value=None,
+            'workspace.users.services.presence.get_last_seen', return_value=None,
         ):
             result = self._call('alice')
 
@@ -61,9 +61,9 @@ class CheckUserStatusTests(TestCase):
     def test_display_name_falls_back_to_username(self):
         # Bob has no first/last name.
         with mock.patch(
-            'workspace.users.presence_service.get_status', return_value='away',
+            'workspace.users.services.presence.get_status', return_value='away',
         ), mock.patch(
-            'workspace.users.presence_service.get_last_seen', return_value=None,
+            'workspace.users.services.presence.get_last_seen', return_value=None,
         ):
             result = self._call('bob')
 
@@ -73,9 +73,9 @@ class CheckUserStatusTests(TestCase):
     def test_offline_user_includes_last_seen(self):
         last_seen = datetime(2026, 4, 10, 14, 30, tzinfo=dt_tz.utc)
         with mock.patch(
-            'workspace.users.presence_service.get_status', return_value='offline',
+            'workspace.users.services.presence.get_status', return_value='offline',
         ), mock.patch(
-            'workspace.users.presence_service.get_last_seen', return_value=last_seen,
+            'workspace.users.services.presence.get_last_seen', return_value=last_seen,
         ):
             result = self._call('carol')
 
@@ -85,9 +85,9 @@ class CheckUserStatusTests(TestCase):
 
     def test_offline_user_without_last_seen_omits_field(self):
         with mock.patch(
-            'workspace.users.presence_service.get_status', return_value='offline',
+            'workspace.users.services.presence.get_status', return_value='offline',
         ), mock.patch(
-            'workspace.users.presence_service.get_last_seen', return_value=None,
+            'workspace.users.services.presence.get_last_seen', return_value=None,
         ):
             result = self._call('carol')
 
@@ -101,9 +101,9 @@ class CheckUserStatusTests(TestCase):
 
     def test_case_insensitive_lookup(self):
         with mock.patch(
-            'workspace.users.presence_service.get_status', return_value='online',
+            'workspace.users.services.presence.get_status', return_value='online',
         ), mock.patch(
-            'workspace.users.presence_service.get_last_seen', return_value=None,
+            'workspace.users.services.presence.get_last_seen', return_value=None,
         ):
             result = self._call('ALICE')
 
@@ -143,7 +143,7 @@ class ListOnlineUsersTests(TestCase):
 
     def test_empty_when_no_online_users(self):
         with mock.patch(
-            'workspace.users.presence_service.get_online_user_ids',
+            'workspace.users.services.presence.get_online_user_ids',
             return_value=[],
         ):
             result = self._call()
@@ -151,10 +151,10 @@ class ListOnlineUsersTests(TestCase):
 
     def test_returns_online_users_with_status(self):
         with mock.patch(
-            'workspace.users.presence_service.get_online_user_ids',
+            'workspace.users.services.presence.get_online_user_ids',
             return_value=[self.alice.id, self.bob.id],
         ), mock.patch(
-            'workspace.users.presence_service.get_statuses',
+            'workspace.users.services.presence.get_statuses',
             return_value={self.alice.id: 'online', self.bob.id: 'away'},
         ):
             result = self._call()
@@ -164,10 +164,10 @@ class ListOnlineUsersTests(TestCase):
 
     def test_filters_out_bots(self):
         with mock.patch(
-            'workspace.users.presence_service.get_online_user_ids',
+            'workspace.users.services.presence.get_online_user_ids',
             return_value=[self.alice.id, self.bot_user.id],
         ), mock.patch(
-            'workspace.users.presence_service.get_statuses',
+            'workspace.users.services.presence.get_statuses',
             return_value={self.alice.id: 'online', self.bot_user.id: 'online'},
         ):
             result = self._call()
@@ -177,10 +177,10 @@ class ListOnlineUsersTests(TestCase):
 
     def test_message_when_only_bots_are_online(self):
         with mock.patch(
-            'workspace.users.presence_service.get_online_user_ids',
+            'workspace.users.services.presence.get_online_user_ids',
             return_value=[self.bot_user.id],
         ), mock.patch(
-            'workspace.users.presence_service.get_statuses',
+            'workspace.users.services.presence.get_statuses',
             return_value={self.bot_user.id: 'online'},
         ):
             result = self._call()
@@ -190,10 +190,10 @@ class ListOnlineUsersTests(TestCase):
     def test_limit_is_capped_at_50(self):
         # Even if the caller asks for 9999, the query only fetches 50.
         with mock.patch(
-            'workspace.users.presence_service.get_online_user_ids',
+            'workspace.users.services.presence.get_online_user_ids',
             return_value=[self.alice.id],
         ), mock.patch(
-            'workspace.users.presence_service.get_statuses',
+            'workspace.users.services.presence.get_statuses',
             return_value={self.alice.id: 'online'},
         ), mock.patch(
             'django.contrib.auth.get_user_model', return_value=User,

@@ -2,8 +2,8 @@ from django.core.cache import cache
 
 from workspace.core.module_registry import registry
 from workspace.core.sse_registry import notify_sse
-from .models import Notification
-from .tasks import send_push_notification
+from ..models import Notification
+from ..tasks import send_push_notification
 
 _UNREAD_KEY = 'notif:unread:{}'
 _UNREAD_TTL = 300  # 5 minutes

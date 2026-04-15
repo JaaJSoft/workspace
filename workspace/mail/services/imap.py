@@ -357,7 +357,7 @@ def sync_folder_messages(account, folder):
         if new_message_uuids and folder.folder_type not in ('sent', 'drafts'):
             try:
                 from workspace.ai.client import is_ai_enabled
-                from workspace.users.settings_service import get_setting
+                from workspace.users.services.settings import get_setting
                 if is_ai_enabled() and get_setting(account.owner, 'mail', 'ai_enabled', default=True):
                     from workspace.ai.models import AITask
                     ai_task = AITask.objects.create(

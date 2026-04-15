@@ -3,7 +3,7 @@ from unittest.mock import patch
 from django.test import TestCase, override_settings
 
 from workspace.ai.client import get_ai_client, get_image_client, is_ai_enabled
-from workspace.ai.image_service import VALID_SIZES, ai_edit_image
+from workspace.ai.services.image import VALID_SIZES, ai_edit_image
 
 
 # ── client.py ───────────────────────────────────────────────────
@@ -72,7 +72,7 @@ class AiEditImageTests(TestCase):
         AI_IMAGE_BASE_URL='', AI_TIMEOUT=30, AI_MAX_RETRIES=2,
         AI_IMAGE_MODEL='test-model',
     )
-    @patch('workspace.ai.image_service._edit_via_openai')
+    @patch('workspace.ai.services.image._edit_via_openai')
     def test_calls_openai_backend(self, mock_openai):
         mock_openai.return_value = b'edited-image'
         result = ai_edit_image(b'source', 'make it red')
@@ -84,8 +84,8 @@ class AiEditImageTests(TestCase):
         AI_IMAGE_BASE_URL='', AI_TIMEOUT=30, AI_MAX_RETRIES=2,
         AI_IMAGE_MODEL='test-model',
     )
-    @patch('workspace.ai.image_service._edit_via_ollama')
-    @patch('workspace.ai.image_service._edit_via_openai')
+    @patch('workspace.ai.services.image._edit_via_ollama')
+    @patch('workspace.ai.services.image._edit_via_openai')
     def test_falls_back_to_ollama(self, mock_openai, mock_ollama):
         mock_openai.side_effect = Exception('OpenAI failed')
         mock_ollama.return_value = b'ollama-image'
@@ -97,8 +97,8 @@ class AiEditImageTests(TestCase):
         AI_IMAGE_BASE_URL='', AI_TIMEOUT=30, AI_MAX_RETRIES=2,
         AI_IMAGE_MODEL='test-model',
     )
-    @patch('workspace.ai.image_service._edit_via_ollama')
-    @patch('workspace.ai.image_service._edit_via_openai')
+    @patch('workspace.ai.services.image._edit_via_ollama')
+    @patch('workspace.ai.services.image._edit_via_openai')
     def test_raises_when_both_backends_fail(self, mock_openai, mock_ollama):
         mock_openai.side_effect = Exception('OpenAI failed')
         mock_ollama.side_effect = Exception('Ollama failed')
@@ -110,7 +110,7 @@ class AiEditImageTests(TestCase):
         AI_IMAGE_BASE_URL='', AI_TIMEOUT=30, AI_MAX_RETRIES=2,
         AI_IMAGE_MODEL='test-model',
     )
-    @patch('workspace.ai.image_service._edit_via_openai')
+    @patch('workspace.ai.services.image._edit_via_openai')
     def test_invalid_size_defaults_to_1024(self, mock_openai):
         mock_openai.return_value = b'img'
         ai_edit_image(b'source', 'edit', size='999x999')

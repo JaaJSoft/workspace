@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from workspace.core.sse_registry import SSEProvider
-from workspace.users import presence_service
+from workspace.users.services import presence as presence_service
 
 logger = logging.getLogger(__name__)
 

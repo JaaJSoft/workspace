@@ -404,7 +404,7 @@ class RevokedTokenTests(TestCase):
         OAUTH_GOOGLE_CLIENT_SECRET='gsec',
     )
     @patch('workspace.mail.services.oauth2.OAuth2Session.fetch_token')
-    @patch('workspace.notifications.services.notify')
+    @patch('workspace.notifications.services.notifications.notify')
     def test_invalid_grant_deactivates_account(self, mock_notify, mock_fetch):
         from workspace.mail.services.oauth2 import _refresh_token
 
@@ -426,7 +426,7 @@ class RevokedTokenTests(TestCase):
         OAUTH_GOOGLE_CLIENT_SECRET='gsec',
     )
     @patch('workspace.mail.services.oauth2.OAuth2Session.fetch_token')
-    @patch('workspace.notifications.services.notify')
+    @patch('workspace.notifications.services.notifications.notify')
     def test_invalid_grant_sends_notification(self, mock_notify, mock_fetch):
         from workspace.mail.services.oauth2 import _refresh_token
 

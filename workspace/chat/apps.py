@@ -33,7 +33,7 @@ class ChatConfig(AppConfig):
         ))
 
         def _chat_pending_actions(user):
-            from workspace.chat.services import get_unread_counts
+            from workspace.chat.services.conversations import get_unread_counts
             return get_unread_counts(user).get('total', 0)
 
         registry.register_pending_action_provider(PendingActionProviderInfo(

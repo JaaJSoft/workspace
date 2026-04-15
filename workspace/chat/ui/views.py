@@ -12,7 +12,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.chat.models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage
 from workspace.chat.serializers import ConversationListSerializer
-from workspace.chat.services import get_active_membership, get_unread_counts, user_conversation_ids
+from workspace.chat.services.conversations import get_active_membership, get_unread_counts, user_conversation_ids
 from workspace.files.ui.viewers import ViewerRegistry
 
 

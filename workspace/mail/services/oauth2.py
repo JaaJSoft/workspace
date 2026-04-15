@@ -249,7 +249,7 @@ def _handle_revoked_token(account):
     )
     account.save(update_fields=['is_active', 'last_sync_error', 'updated_at'])
 
-    from workspace.notifications.services import notify
+    from workspace.notifications.services.notifications import notify
     notify(
         recipient=account.owner,
         origin='mail',

@@ -17,7 +17,7 @@ from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
 
-from . import avatar_service as group_avatar_service
+from .services import avatar as group_avatar_service
 from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage, Reaction
 from .serializers import (
     ConversationCreateSerializer,
@@ -30,16 +30,9 @@ from .serializers import (
     ReactionToggleSerializer,
     ScheduledMessageSerializer,
 )
-from .services import (
-    extract_mentions,
-    get_active_membership,
-    get_or_create_dm,
-    get_unread_counts,
-    notify_conversation_members,
-    notify_new_message,
-    render_message_body,
-    user_conversation_ids,
-)
+from .services.conversations import get_active_membership, get_or_create_dm, get_unread_counts, user_conversation_ids
+from .services.notifications import notify_conversation_members, notify_new_message
+from .services.rendering import extract_mentions, render_message_body
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -492,7 +485,7 @@ class MessageListView(CacheControlMixin, APIView):
         notify_new_message(conversation, request.user, body, mentioned_user_ids=mentioned_user_ids, mention_everyone=has_everyone)
 
         # Clear typing indicator now that the message is sent
-        from .typing_service import clear_typing
+        from .services.typing import clear_typing
         clear_typing(conversation_id, request.user.id)
 
         # Trigger AI response if a bot is in the conversation
@@ -500,7 +493,7 @@ class MessageListView(CacheControlMixin, APIView):
 
         # Enqueue link preview fetching for URLs in the message body
         if body:
-            from .link_preview_service import extract_urls
+            from .services.link_preview import extract_urls
             urls = extract_urls(body)
             if urls:
                 from .tasks import fetch_link_previews
@@ -906,7 +899,7 @@ class TypingIndicatorView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        from .typing_service import set_typing
+        from .services.typing import set_typing
         set_typing(
             conversation_id,
             request.user.id,
@@ -1770,7 +1763,7 @@ class ScheduledMessageDetailView(APIView):
 
         # Recompute next_run_at if any timing fields were changed
         if self.TIMING_FIELDS & set(request.data.keys()):
-            from workspace.users.settings_service import get_user_timezone
+            from workspace.users.services.settings import get_user_timezone
             updated.compute_next_run(user_tz=get_user_timezone(request.user))
             updated.save(update_fields=['next_run_at', 'is_active'])
 

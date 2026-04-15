@@ -6,8 +6,8 @@ from django.core.cache import cache
 from django.test import TestCase
 from PIL import Image
 
-from workspace.users import avatar_service
-from workspace.users.settings_service import get_setting, set_setting
+from workspace.users.services import avatar as avatar_service
+from workspace.users.services.settings import get_setting, set_setting
 
 User = get_user_model()
 
@@ -42,8 +42,8 @@ class ProcessAndSaveAvatarTests(TestCase):
         buf.seek(0)
         return buf
 
-    @patch('workspace.users.avatar_service.save_image')
-    @patch('workspace.users.avatar_service.process_image_to_webp')
+    @patch('workspace.users.services.avatar.save_image')
+    @patch('workspace.users.services.avatar.process_image_to_webp')
     def test_calls_process_and_save(self, mock_process, mock_save):
         mock_process.return_value = b'webp-bytes'
         image_file = self._make_image()
@@ -55,8 +55,8 @@ class ProcessAndSaveAvatarTests(TestCase):
         mock_process.assert_called_once_with(image_file, 0, 0, 100, 100)
         mock_save.assert_called_once_with('avatars/{}.webp'.format(self.user.id), b'webp-bytes')
 
-    @patch('workspace.users.avatar_service.save_image')
-    @patch('workspace.users.avatar_service.process_image_to_webp')
+    @patch('workspace.users.services.avatar.save_image')
+    @patch('workspace.users.services.avatar.process_image_to_webp')
     def test_sets_has_avatar_setting(self, mock_process, mock_save):
         mock_process.return_value = b'webp-bytes'
         avatar_service.process_and_save_avatar(
@@ -70,7 +70,7 @@ class DeleteAvatarTests(TestCase):
         cache.clear()
         self.user = User.objects.create_user(username='alice', password='pass')
 
-    @patch('workspace.users.avatar_service.delete_image')
+    @patch('workspace.users.services.avatar.delete_image')
     def test_deletes_file_and_clears_setting(self, mock_delete):
         set_setting(self.user, 'profile', 'has_avatar', True)
         avatar_service.delete_avatar(self.user)
@@ -79,14 +79,14 @@ class DeleteAvatarTests(TestCase):
 
 
 class GetAvatarEtagTests(TestCase):
-    @patch('workspace.users.avatar_service.get_image_etag')
+    @patch('workspace.users.services.avatar.get_image_etag')
     def test_delegates_to_image_service(self, mock_etag):
         mock_etag.return_value = 'abc123'
         result = avatar_service.get_avatar_etag(7)
         mock_etag.assert_called_once_with('avatars/7.webp')
         self.assertEqual(result, 'abc123')
 
-    @patch('workspace.users.avatar_service.get_image_etag')
+    @patch('workspace.users.services.avatar.get_image_etag')
     def test_returns_none_when_no_file(self, mock_etag):
         mock_etag.return_value = None
         self.assertIsNone(avatar_service.get_avatar_etag(7))

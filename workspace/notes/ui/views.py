@@ -6,7 +6,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.files.models import File, Tag
 from workspace.files.services import FileService
-from workspace.users.settings_service import get_setting, set_setting
+from workspace.users.services.settings import get_setting, set_setting
 
 
 def _get_root_folders(qs):

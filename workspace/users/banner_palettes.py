@@ -1,6 +1,6 @@
 import re
 
-from workspace.users.settings_service import get_setting
+from workspace.users.services.settings import get_setting
 
 BANNER_PALETTES = {
     'sunset':   {'label': 'Sunset',   'from': '#f97316', 'via': '#e11d48', 'to': '#7c3aed'},

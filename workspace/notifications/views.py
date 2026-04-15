@@ -11,7 +11,7 @@ from workspace.common.mixins import CacheControlMixin
 
 from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
-from .services import get_unread_count, _invalidate_unread
+from .services.notifications import get_unread_count, _invalidate_unread
 
 
 @extend_schema(tags=['Notifications'])

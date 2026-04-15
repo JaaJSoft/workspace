@@ -12,8 +12,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from workspace.notifications.services import notify_many
-from workspace.users.settings_service import get_setting
+from workspace.notifications.services.notifications import notify_many
+from workspace.users.services.settings import get_setting
 
 from .models import Calendar, Event, EventMember, Poll, PollInvitee, PollSlot, PollVote
 from .serializers_polls import (

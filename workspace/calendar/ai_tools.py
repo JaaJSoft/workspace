@@ -87,7 +87,7 @@ Call this when the user asks if they are free, available, or have any events dur
         from workspace.calendar.models import Event
         from workspace.calendar.queries import visible_calendar_ids
         from workspace.calendar.recurrence import _build_rrule
-        from workspace.users.settings_service import get_user_timezone
+        from workspace.users.services.settings import get_user_timezone
 
         user_tz = get_user_timezone(user)
 

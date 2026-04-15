@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.core.activity_registry import activity_registry
-from workspace.core.activity_service import get_recent_events, get_sources, serialize_timestamps
+from workspace.core.services.activity import get_recent_events, get_sources, serialize_timestamps
 
 
 class ActivityRecentView(APIView):

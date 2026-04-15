@@ -20,7 +20,7 @@ class BotProfileSerializer(serializers.ModelSerializer):
         return obj.user.get_full_name() or obj.user.username
 
     def get_avatar_url(self, obj):
-        from workspace.users.avatar_service import has_avatar
+        from workspace.users.services.avatar import has_avatar
         if has_avatar(obj.user):
             return f'/api/v1/users/{obj.user_id}/avatar'
         return None

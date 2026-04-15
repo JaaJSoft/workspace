@@ -4,9 +4,9 @@ import logging
 
 from celery import shared_task
 
-from .link_preview_service import fetch_opengraph
+from .services.link_preview import fetch_opengraph
 from .models import LinkPreview, Message, MessageLinkPreview
-from .services import notify_conversation_members
+from .services.notifications import notify_conversation_members
 
 logger = logging.getLogger(__name__)
 

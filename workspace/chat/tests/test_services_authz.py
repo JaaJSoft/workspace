@@ -3,12 +3,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.chat.models import Conversation, ConversationMember
-from workspace.chat.services import (
-    get_active_membership,
-    get_or_create_dm,
-    get_unread_counts,
-    user_conversation_ids,
-)
+from workspace.chat.services.conversations import get_active_membership, get_or_create_dm, get_unread_counts, user_conversation_ids
 
 User = get_user_model()
 

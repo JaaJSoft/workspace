@@ -6,7 +6,7 @@ from celery import shared_task
 from django.conf import settings
 from pywebpush import webpush, WebPushException
 
-from workspace.users.presence_service import is_active
+from workspace.users.services.presence import is_active
 
 logger = logging.getLogger(__name__)
 

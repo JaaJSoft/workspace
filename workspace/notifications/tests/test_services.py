@@ -5,7 +5,7 @@ from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.notifications.models import Notification
-from workspace.notifications.services import get_unread_count, notify, notify_many
+from workspace.notifications.services.notifications import get_unread_count, notify, notify_many
 
 User = get_user_model()
 
@@ -19,8 +19,8 @@ class NotifyTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    @patch('workspace.notifications.services.send_push_notification')
-    @patch('workspace.notifications.services.notify_sse')
+    @patch('workspace.notifications.services.notifications.send_push_notification')
+    @patch('workspace.notifications.services.notifications.notify_sse')
     def test_creates_notification(self, mock_sse, mock_push):
         notif = notify(
             recipient=self.alice, origin='chat', title='New message',
@@ -30,26 +30,26 @@ class NotifyTests(TestCase):
         self.assertEqual(notif.title, 'New message')
         self.assertEqual(Notification.objects.count(), 1)
 
-    @patch('workspace.notifications.services.send_push_notification')
-    @patch('workspace.notifications.services.notify_sse')
+    @patch('workspace.notifications.services.notifications.send_push_notification')
+    @patch('workspace.notifications.services.notifications.notify_sse')
     def test_triggers_sse(self, mock_sse, mock_push):
         notify(recipient=self.alice, origin='chat', title='Test')
         mock_sse.assert_called_with('notifications', self.alice.id)
 
-    @patch('workspace.notifications.services.send_push_notification')
-    @patch('workspace.notifications.services.notify_sse')
+    @patch('workspace.notifications.services.notifications.send_push_notification')
+    @patch('workspace.notifications.services.notifications.notify_sse')
     def test_triggers_push_for_normal_priority(self, mock_sse, mock_push):
         notify(recipient=self.alice, origin='chat', title='Test')
         mock_push.delay.assert_called_once()
 
-    @patch('workspace.notifications.services.send_push_notification')
-    @patch('workspace.notifications.services.notify_sse')
+    @patch('workspace.notifications.services.notifications.send_push_notification')
+    @patch('workspace.notifications.services.notifications.notify_sse')
     def test_skips_push_for_low_priority(self, mock_sse, mock_push):
         notify(recipient=self.alice, origin='chat', title='Test', priority='low')
         mock_push.delay.assert_not_called()
 
-    @patch('workspace.notifications.services.send_push_notification')
-    @patch('workspace.notifications.services.notify_sse')
+    @patch('workspace.notifications.services.notifications.send_push_notification')
+    @patch('workspace.notifications.services.notifications.notify_sse')
     def test_invalidates_unread_cache(self, mock_sse, mock_push):
         cache.set(f'notif:unread:{self.alice.pk}', 0, 300)
         notify(recipient=self.alice, origin='chat', title='Test')
@@ -66,8 +66,8 @@ class NotifyManyTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    @patch('workspace.notifications.services.send_push_notification')
-    @patch('workspace.notifications.services.notify_sse')
+    @patch('workspace.notifications.services.notifications.send_push_notification')
+    @patch('workspace.notifications.services.notifications.notify_sse')
     def test_creates_notifications_for_all_recipients(self, mock_sse, mock_push):
         notifs = notify_many(
             recipients=[self.alice, self.bob], origin='files',
@@ -76,16 +76,16 @@ class NotifyManyTests(TestCase):
         self.assertEqual(len(notifs), 2)
         self.assertEqual(Notification.objects.count(), 2)
 
-    @patch('workspace.notifications.services.send_push_notification')
-    @patch('workspace.notifications.services.notify_sse')
+    @patch('workspace.notifications.services.notifications.send_push_notification')
+    @patch('workspace.notifications.services.notifications.notify_sse')
     def test_triggers_sse_for_each_recipient(self, mock_sse, mock_push):
         notify_many(
             recipients=[self.alice, self.bob], origin='files', title='Shared',
         )
         self.assertEqual(mock_sse.call_count, 2)
 
-    @patch('workspace.notifications.services.send_push_notification')
-    @patch('workspace.notifications.services.notify_sse')
+    @patch('workspace.notifications.services.notifications.send_push_notification')
+    @patch('workspace.notifications.services.notifications.notify_sse')
     def test_skips_push_for_low_priority(self, mock_sse, mock_push):
         notify_many(
             recipients=[self.alice, self.bob], origin='files',

@@ -8,7 +8,7 @@ class ChatActivityProvider(ActivityProvider):
 
     def _base_qs(self, user_id, viewer_id):
         from workspace.chat.models import Conversation
-        from workspace.chat.services import user_conversation_ids
+        from workspace.chat.services.conversations import user_conversation_ids
 
         qs = Conversation.objects.filter(kind=Conversation.Kind.GROUP)
         if user_id is not None:
@@ -50,7 +50,7 @@ class ChatActivityProvider(ActivityProvider):
 
     def get_stats(self, user_id, *, viewer_id=None):
         from workspace.chat.models import Message, ConversationMember
-        from workspace.chat.services import user_conversation_ids
+        from workspace.chat.services.conversations import user_conversation_ids
 
         visible_convs = None
         if viewer_id is not None and viewer_id != user_id:

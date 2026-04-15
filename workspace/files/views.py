@@ -33,7 +33,7 @@ from .serializers import (
 )
 from workspace.common.mixins import CacheControlMixin
 from workspace.files.services import FilePermission, FileService
-from workspace.notifications.services import notify, notify_many
+from workspace.notifications.services.notifications import notify, notify_many
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
 RECENT_FILES_MAX_LIMIT = getattr(settings, 'RECENT_FILES_MAX_LIMIT', 200)
@@ -1644,7 +1644,7 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
             except Exception:
                 return Response({'error': 'could not read file content'}, status=status.HTTP_400_BAD_REQUEST)
 
-        from workspace.ai.image_service import ai_edit_image
+        from workspace.ai.services.image import ai_edit_image
         try:
             image_data = ai_edit_image(source_data, prompt, size)
         except ValueError:

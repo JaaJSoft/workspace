@@ -7,7 +7,7 @@ from workspace.users.banner_palettes import (
     resolve_banner_gradient,
     validate_profile_setting,
 )
-from workspace.users.settings_service import delete_setting, set_setting
+from workspace.users.services.settings import delete_setting, set_setting
 
 User = get_user_model()
 

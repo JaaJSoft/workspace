@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from workspace.calendar.upcoming import get_upcoming_for_user
-from workspace.core.activity_service import annotate_time_ago, get_recent_events, get_sources
+from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources
 from workspace.core.activity_registry import activity_registry
 from workspace.core.module_registry import registry
 

@@ -3,7 +3,7 @@ from django.db.models.functions import Concat
 
 from workspace.core.module_registry import SearchResult, SearchTag
 from workspace.chat.models import Conversation, ConversationMember
-from workspace.chat.services import user_conversation_ids
+from workspace.chat.services.conversations import user_conversation_ids
 
 
 def search_conversations(query, user, limit):

@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
-from workspace.chat.link_preview_service import extract_urls, fetch_opengraph
+from workspace.chat.services.link_preview import extract_urls, fetch_opengraph
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
@@ -62,7 +62,7 @@ class FetchOpengraphTests(TestCase):
             tags += f'<meta name="description" content="{meta_desc}">\n'
         return f'<html><head>{tags}</head><body><p>content</p></body></html>'
 
-    @patch('workspace.chat.link_preview_service._fetch_html')
+    @patch('workspace.chat.services.link_preview._fetch_html')
     def test_extracts_og_tags(self, mock_fetch):
         mock_fetch.return_value = self._make_html({
             'title': 'My Page',
@@ -77,14 +77,14 @@ class FetchOpengraphTests(TestCase):
         self.assertEqual(meta['image'], 'https://example.com/img.jpg')
         self.assertEqual(meta['site_name'], 'Example')
 
-    @patch('workspace.chat.link_preview_service._fetch_html')
+    @patch('workspace.chat.services.link_preview._fetch_html')
     def test_fallback_to_meta_description(self, mock_fetch):
         mock_fetch.return_value = self._make_html({}, meta_desc='Fallback desc')
 
         meta = fetch_opengraph('https://example.com')
         self.assertIn('Fallback desc', meta['description'])
 
-    @patch('workspace.chat.link_preview_service._fetch_html')
+    @patch('workspace.chat.services.link_preview._fetch_html')
     def test_favicon_fallback(self, mock_fetch):
         mock_fetch.return_value = self._make_html({'title': 'X'})
 
@@ -99,7 +99,7 @@ class FetchOpengraphTests(TestCase):
         with self.assertRaises(ValueError):
             fetch_opengraph('http://192.168.1.1/')
 
-    @patch('workspace.chat.link_preview_service._fetch_html')
+    @patch('workspace.chat.services.link_preview._fetch_html')
     def test_returns_empty_strings_for_missing_fields(self, mock_fetch):
         mock_fetch.return_value = '<html><head></head><body></body></html>'
 

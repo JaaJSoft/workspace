@@ -4,11 +4,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.chat.models import Conversation, ConversationMember
-from workspace.chat.services import (
-    extract_mentions,
-    notify_new_message,
-    render_message_body,
-)
+from workspace.chat.services.notifications import notify_new_message
+from workspace.chat.services.rendering import extract_mentions, render_message_body
 from workspace.notifications.models import Notification
 
 User = get_user_model()

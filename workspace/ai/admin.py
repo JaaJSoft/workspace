@@ -2,7 +2,7 @@ from django import forms
 from django.contrib import admin
 from django.utils.html import format_html
 
-from workspace.users.avatar_service import (
+from workspace.users.services.avatar import (
     delete_avatar,
     get_avatar_path,
     has_avatar,
@@ -67,8 +67,8 @@ class BotProfileAdmin(admin.ModelAdmin):
     @staticmethod
     def _save_avatar(user, image_file):
         from PIL import Image, ImageOps
-        from workspace.common.image_service import save_image
-        from workspace.users.settings_service import set_setting
+        from workspace.common.services.image import save_image
+        from workspace.users.services.settings import set_setting
         from io import BytesIO
 
         img = Image.open(image_file)

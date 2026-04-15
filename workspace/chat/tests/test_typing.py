@@ -1,7 +1,7 @@
-"""Tests for workspace.chat.typing_service.
+"""Tests for workspace.chat.services.typing.
 
 NOTE: patches replace the ``time`` module reference inside
-``workspace.chat.typing_service`` — patching ``time.time`` globally would
+``workspace.chat.services.typing`` — patching ``time.time`` globally would
 also affect Django's cache backend, which uses it for TTL computation.
 """
 
@@ -11,8 +11,8 @@ from uuid import uuid4
 from django.core.cache import cache
 from django.test import SimpleTestCase
 
-from workspace.chat import typing_service
-from workspace.chat.typing_service import (
+from workspace.chat.services import typing as typing_service
+from workspace.chat.services.typing import (
     TYPING_STALE,
     TYPING_TTL,
     _cache_key,

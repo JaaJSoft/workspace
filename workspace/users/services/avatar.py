@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import logging
 
-from workspace.common.image_service import (
+from workspace.common.services.image import (
     delete_image,
     get_image_etag,
     process_image_to_webp,
     save_image,
 )
-from workspace.users.settings_service import delete_setting, get_setting, set_setting
+from workspace.users.services.settings import delete_setting, get_setting, set_setting
 
 logger = logging.getLogger(__name__)
 

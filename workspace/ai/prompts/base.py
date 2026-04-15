@@ -15,7 +15,7 @@ def build_context_block(user=None) -> str:
     timezone instead of the server default (UTC).
     """
     if user:
-        from workspace.users.settings_service import get_user_timezone
+        from workspace.users.services.settings import get_user_timezone
         user_tz = get_user_timezone(user)
         now = timezone.now().astimezone(user_tz)
         tz_label = str(user_tz)

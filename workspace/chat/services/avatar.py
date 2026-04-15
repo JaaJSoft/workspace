@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from workspace.common.image_service import (
+from workspace.common.services.image import (
     delete_image,
     get_image_etag,
     process_image_to_webp,

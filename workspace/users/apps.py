@@ -26,5 +26,5 @@ class UsersConfig(AppConfig):
     @staticmethod
     def _on_logout(sender, request, user, **kwargs):
         if user and user.is_authenticated:
-            from workspace.users import presence_service
+            from workspace.users.services import presence as presence_service
             presence_service.clear(user.id)

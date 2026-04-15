@@ -30,7 +30,7 @@ or references a past discussion."""
         from datetime import timedelta
         from django.utils import timezone
         from workspace.chat.models import Conversation, Message
-        from workspace.chat.services import user_conversation_ids
+        from workspace.chat.services.conversations import user_conversation_ids
 
         # Determine scope
         conv_only = args.conversation_only

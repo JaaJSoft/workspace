@@ -46,19 +46,67 @@ class MyModel(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
 ```
 
+### Services
+
+Business logic that doesn't belong in views, models, or tasks lives in **services**. Services are reusable across views, REST endpoints, Celery tasks, and management commands.
+
+#### Layout
+
+Every module exposes its services through a `services/` **package** (directory with `__init__.py`), never a single `services.py` file:
+
+```
+workspace/<module>/
+├── services/
+│   ├── __init__.py    # empty — DO NOT re-export
+│   ├── <name1>.py
+│   └── <name2>.py
+├── tests/
+│   ├── test_<name1>.py
+│   └── test_<name2>.py
+└── ...
+```
+
+Examples in the codebase: `files/services/{files,mime,thumbnails}.py`, `chat/services/{conversations,notifications,rendering,avatar,typing,link_preview}.py`, `mail/services/{imap,smtp,oauth2}.py`.
+
+#### Naming rules
+
+- File names describe **what the file contains** (a feature, an entity, an integration) — they **never contain the word "service"**. ✅ `chat/services/conversations.py` ❌ `chat/services/conversation_service.py`
+- One distinct concern per file. If a single file mixes 3+ unrelated topics (membership / notifications / rendering), split it.
+- Tests follow the same naming: `tests/test_<name>.py` — never `tests/test_<name>_service.py`.
+
+#### Imports
+
+- Default: import from the explicit submodule — `from workspace.<module>.services.<name> import X`. Keep `__init__.py` empty.
+- Re-exports in `__init__.py` are allowed **only** for a canonical class/value that defines the module's core entity (e.g., `FileService` in `files/services/__init__.py`). Never re-export functions you patch in tests — `@patch('workspace.X.services.fn')` would patch the alias in `__init__`, not the call site, and silently do nothing.
+- Relative imports inside a service file must escape the `services/` package with `..`:
+  ```python
+  # In workspace/chat/services/conversations.py
+  from ..models import Conversation, ConversationMember   # ✅
+  from .models import Conversation                        # ❌ resolves to services/models — doesn't exist
+  ```
+- For unavoidable package-style imports (`from workspace.X import old_name_service`), alias to keep call sites unchanged:
+  ```python
+  from workspace.users.services import settings as settings_service
+  ```
+  Use this only when many call sites read `settings_service.X` and renaming all of them is out of scope.
+
+#### Test patches
+
+`@patch('workspace.<module>.services.<name>.symbol')` patches the symbol at its **definition site**. Patch there, not at a re-export alias — patches at an alias site bind a different name and the actual call site keeps running unmocked.
+
 ### Access Control Querysets
 
-Never duplicate access/permission querysets. Always use the centralized helpers listed below. Each module exposes its access control logic through a dedicated service (`services.py`) or query module (`queries.py`). This ensures permission logic is defined once per module and stays consistent across views, API endpoints, and background tasks.
+Never duplicate access/permission querysets. Always use the centralized helpers listed below. Each module exposes its access control logic through its `services/` package or a `queries.py` module. This ensures permission logic is defined once per module and stays consistent across views, API endpoints, and background tasks.
 
 **Rules:**
 - Never write raw ORM filters to check access rights (e.g. `File.objects.filter(owner=user)`) — always call the corresponding helper.
 - When adding a new view or API endpoint, import and use the existing helper rather than reimplementing the logic.
-- If a module doesn't have a helper yet, create one in its `services.py` or `queries.py` and use it everywhere.
+- If a module doesn't have a helper yet, create one in its `services/` package or `queries.py` and use it everywhere.
 
-#### Chat — `workspace.chat.services`
+#### Chat — `workspace.chat.services.conversations`
 
 ```python
-from workspace.chat.services import user_conversation_ids, get_active_membership
+from workspace.chat.services.conversations import user_conversation_ids, get_active_membership
 
 conv_ids = user_conversation_ids(user)  # returns queryset of conversation UUIDs
 

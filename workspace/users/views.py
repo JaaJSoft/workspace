@@ -24,7 +24,7 @@ from knox.models import AuthToken
 
 from workspace.common.mixins import CacheControlMixin
 from workspace.files.models import File
-from workspace.users import avatar_service, presence_service
+from workspace.users.services import avatar as avatar_service, presence as presence_service
 from workspace.users.models import APITokenLabel, UserSetting
 
 

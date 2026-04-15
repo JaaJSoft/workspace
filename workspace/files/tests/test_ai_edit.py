@@ -28,7 +28,7 @@ class AIEditEndpointTests(APITestCase):
         )
         self.file.content.save('photo.png', ContentFile(FAKE_PNG))
 
-    @patch('workspace.ai.image_service.ai_edit_image')
+    @patch('workspace.ai.services.image.ai_edit_image')
     def test_edit_from_original(self, mock_edit):
         """First edit — source_image is null, reads from storage."""
         mock_edit.return_value = b'\x89PNGedited'
@@ -43,7 +43,7 @@ class AIEditEndpointTests(APITestCase):
         args = mock_edit.call_args
         self.assertEqual(args[0][1], 'make it blue')
 
-    @patch('workspace.ai.image_service.ai_edit_image')
+    @patch('workspace.ai.services.image.ai_edit_image')
     def test_edit_from_source_image(self, mock_edit):
         """Iterative edit — source_image is base64."""
         mock_edit.return_value = b'\x89PNGedited2'
@@ -84,7 +84,7 @@ class AIEditEndpointTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    @patch('workspace.ai.image_service.ai_edit_image', side_effect=RuntimeError('API down'))
+    @patch('workspace.ai.services.image.ai_edit_image', side_effect=RuntimeError('API down'))
     def test_edit_ai_error(self, mock_edit):
         resp = self.client.post(
             f'/api/v1/files/{self.file.uuid}/ai-edit',

@@ -25,7 +25,7 @@ Call this when the user asks if someone is available, reachable, or what their s
         if not username:
             return 'Error: username is required'
         from django.contrib.auth import get_user_model
-        from workspace.users.presence_service import get_last_seen, get_status
+        from workspace.users.services.presence import get_last_seen, get_status
         User = get_user_model()
         try:
             target = User.objects.get(username__iexact=username, is_active=True)
@@ -45,7 +45,7 @@ Call this when the user asks if someone is available, reachable, or what their s
 Call this when the user asks who is available, who is online, or wants an overview of active colleagues."""
         limit = min(args.limit, 50)
         from django.contrib.auth import get_user_model
-        from workspace.users.presence_service import get_online_user_ids, get_statuses
+        from workspace.users.services.presence import get_online_user_ids, get_statuses
         User = get_user_model()
         online_ids = get_online_user_ids()
         if not online_ids:

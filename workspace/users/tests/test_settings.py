@@ -3,7 +3,7 @@ from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.users.models import UserSetting
-from workspace.users.settings_service import (
+from workspace.users.services.settings import (
     _cache_key,
     delete_setting,
     get_all_settings,

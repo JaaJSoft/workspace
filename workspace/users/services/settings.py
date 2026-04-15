@@ -2,7 +2,7 @@
 
 Usage from another app::
 
-    from workspace.users.settings_service import get_setting, set_setting
+    from workspace.users.services.settings import get_setting, set_setting
 
     theme = get_setting(request.user, 'core', 'theme', default='light')
     set_setting(request.user, 'core', 'theme', 'dark')

@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone as django_tz
 
 from workspace.calendar.models import Calendar, Event, EventMember
-from workspace.notifications.services import notify
+from workspace.notifications.services.notifications import notify
 
 logger = logging.getLogger(__name__)
 

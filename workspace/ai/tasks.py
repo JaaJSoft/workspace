@@ -429,7 +429,8 @@ def _post_bot_message(conversation, bot_user, result, used_tools, tool_context, 
     from django.db.models import F
 
     from workspace.chat.models import ConversationMember, Message, MessageAttachment
-    from workspace.chat.services import notify_conversation_members, render_message_body
+    from workspace.chat.services.notifications import notify_conversation_members
+    from workspace.chat.services.rendering import render_message_body
 
     body = _clean_llm_content(result['content'])
     body_html = render_message_body(body)
@@ -492,7 +493,8 @@ def _handle_generation_error(conversation, bot_user, ai_task, error):
     from django.db.models import F
 
     from workspace.chat.models import ConversationMember, Message
-    from workspace.chat.services import notify_conversation_members, render_message_body
+    from workspace.chat.services.notifications import notify_conversation_members
+    from workspace.chat.services.rendering import render_message_body
 
     ai_task.status = ai_task.Status.FAILED
     ai_task.error = str(error)
@@ -529,7 +531,7 @@ def _build_conversation_history(conversation_id, bot_profile, human_user):
     """
     from workspace.ai.models import ConversationSummary
     from workspace.chat.models import Message
-    from workspace.users.settings_service import get_user_timezone
+    from workspace.users.services.settings import get_user_timezone
 
     recent_window = settings.AI_CHAT_CONTEXT_SIZE
     conv_summary = ConversationSummary.objects.filter(conversation_id=conversation_id).first()
@@ -1089,7 +1091,7 @@ def compose_email(self, task_id: str):
 def generate_conversation_title(self, conversation_id: str):
     """Generate a short title for a bot conversation based on the first exchange."""
     from workspace.chat.models import Conversation, Message
-    from workspace.chat.services import notify_conversation_members
+    from workspace.chat.services.notifications import notify_conversation_members
 
     try:
         conversation = Conversation.objects.get(pk=conversation_id)
@@ -1185,7 +1187,7 @@ def generate_scheduled_response(self, schedule_id: str):
     from workspace.ai.models import AITask, BotProfile, ScheduledMessage
     from workspace.ai.prompts.chat import build_chat_messages
     from workspace.chat.models import Conversation, Message
-    from workspace.chat.services import notify_new_message
+    from workspace.chat.services.notifications import notify_new_message
 
     User = get_user_model()
 
@@ -1199,7 +1201,7 @@ def generate_scheduled_response(self, schedule_id: str):
     if not schedule.is_active:
         return {'status': 'skipped', 'reason': 'inactive'}
 
-    from workspace.users.settings_service import get_user_timezone
+    from workspace.users.services.settings import get_user_timezone
     creator_tz = get_user_timezone(schedule.created_by)
 
     schedule.last_run_at = timezone.now()

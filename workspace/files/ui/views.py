@@ -6,7 +6,7 @@ from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.files.services import FilePermission, FileService
-from workspace.users.settings_service import get_setting
+from workspace.users.services.settings import get_setting
 from .viewers import ViewerRegistry
 from ..models import File, FileFavorite, FileShare, FileShareLink, PinnedFolder
 

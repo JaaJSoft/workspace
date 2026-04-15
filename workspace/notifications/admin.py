@@ -1,7 +1,7 @@
 from django.contrib import admin, messages
 
 from .models import Notification, PushSubscription
-from .services import notify
+from .services.notifications import notify
 
 
 @admin.register(Notification)

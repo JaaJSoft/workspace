@@ -1,11 +1,11 @@
-"""Tests for workspace.chat.avatar_service."""
+"""Tests for workspace.chat.services.avatar."""
 
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from workspace.chat.avatar_service import (
+from workspace.chat.services.avatar import (
     delete_group_avatar,
     get_group_avatar_etag,
     get_group_avatar_path,
@@ -44,10 +44,10 @@ class GroupAvatarServiceTests(TestCase):
         dummy_bytes = b'webp-bytes'
 
         with mock.patch(
-            'workspace.chat.avatar_service.process_image_to_webp',
+            'workspace.chat.services.avatar.process_image_to_webp',
             return_value=dummy_bytes,
         ) as process, mock.patch(
-            'workspace.chat.avatar_service.save_image'
+            'workspace.chat.services.avatar.save_image'
         ) as save:
             process_and_save_group_avatar(
                 self.conversation,
@@ -70,7 +70,7 @@ class GroupAvatarServiceTests(TestCase):
         self.conversation.save(update_fields=['has_avatar'])
 
         with mock.patch(
-            'workspace.chat.avatar_service.delete_image'
+            'workspace.chat.services.avatar.delete_image'
         ) as delete:
             delete_group_avatar(self.conversation)
 
@@ -82,7 +82,7 @@ class GroupAvatarServiceTests(TestCase):
 
     def test_get_group_avatar_etag_delegates_to_image_service(self):
         with mock.patch(
-            'workspace.chat.avatar_service.get_image_etag',
+            'workspace.chat.services.avatar.get_image_etag',
             return_value='"abc"',
         ) as etag:
             result = get_group_avatar_etag(self.conversation.uuid)
@@ -94,7 +94,7 @@ class GroupAvatarServiceTests(TestCase):
 
     def test_get_group_avatar_etag_returns_none_when_missing(self):
         with mock.patch(
-            'workspace.chat.avatar_service.get_image_etag',
+            'workspace.chat.services.avatar.get_image_etag',
             return_value=None,
         ):
             self.assertIsNone(get_group_avatar_etag(self.conversation.uuid))

@@ -1431,7 +1431,7 @@ class ChatActivityProviderTests(ChatTestMixin, TestCase):
         self.assertEqual(stats['total_messages'], 1)
 
 
-from workspace.chat.services import render_message_body
+from workspace.chat.services.rendering import render_message_body
 
 
 class RenderMessageBodyTest(TestCase):

@@ -49,7 +49,7 @@ class SummarizeView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        from workspace.users.settings_service import get_setting
+        from workspace.users.services.settings import get_setting
         if get_setting(request.user, 'mail', 'ai_enabled', default=True) is False:
             return Response(
                 {'detail': 'Mail AI features are disabled in your settings.'},
@@ -99,7 +99,7 @@ class ComposeView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        from workspace.users.settings_service import get_setting
+        from workspace.users.services.settings import get_setting
         if get_setting(request.user, 'mail', 'ai_enabled', default=True) is False:
             return Response(
                 {'detail': 'Mail AI features are disabled in your settings.'},
@@ -148,7 +148,7 @@ class ReplyView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        from workspace.users.settings_service import get_setting
+        from workspace.users.services.settings import get_setting
         if get_setting(request.user, 'mail', 'ai_enabled', default=True) is False:
             return Response(
                 {'detail': 'Mail AI features are disabled in your settings.'},
@@ -250,7 +250,7 @@ class ClassifyView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        from workspace.users.settings_service import get_setting
+        from workspace.users.services.settings import get_setting
         if get_setting(request.user, 'mail', 'ai_enabled', default=True) is False:
             return Response(
                 {'detail': 'Mail AI features are disabled in your settings.'},

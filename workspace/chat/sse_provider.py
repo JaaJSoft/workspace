@@ -9,7 +9,7 @@ from workspace.core.sse_registry import SSEProvider
 
 from .models import ConversationMember, Message, MessageLinkPreview, PinnedMessage, Reaction
 from .serializers import MessageSerializer
-from .services import get_unread_counts, user_conversation_ids
+from .services.conversations import get_unread_counts, user_conversation_ids
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class ChatSSEProvider(SSEProvider):
         user_id = self.user.id
 
         # Typing — always check (independent of dirty flag)
-        from .typing_service import get_typing_users
+        from .services.typing import get_typing_users
         typing_data = get_typing_users(self._member_conv_ids, exclude_user_id=user_id)
         if typing_data != self._last_typing_state:
             self._last_typing_state = typing_data

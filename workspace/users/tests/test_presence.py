@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.users.models import UserPresence
-from workspace.users import presence_service
+from workspace.users.services import presence as presence_service
 
 User = get_user_model()
 

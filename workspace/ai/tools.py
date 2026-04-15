@@ -105,7 +105,7 @@ Call this when the user asks what you look like, wants to see your avatar, or me
         if not bot:
             return 'Error: no bot context'
         from django.core.files.storage import default_storage
-        from workspace.users.avatar_service import get_avatar_path, has_avatar
+        from workspace.users.services.avatar import get_avatar_path, has_avatar
         if not has_avatar(bot):
             return 'You do not have an avatar set.'
         try:
@@ -131,7 +131,7 @@ class WebToolProvider(ToolProvider):
         """Search the web for current information. \
 Call this when the user asks about recent events, news, facts you're unsure about, \
 or anything that requires up-to-date information you don't have."""
-        from .web_service import search
+        from .services.web import search
 
         query = args.query.strip()
         if not query:
@@ -148,7 +148,7 @@ or anything that requires up-to-date information you don't have."""
         """Fetch and extract the main text content of a webpage. \
 Call this when you need to read the content of a specific URL shared by the user \
 or found via web_search to get more details."""
-        from .web_service import fetch_and_extract
+        from .services.web import fetch_and_extract
 
         url = args.url.strip()
         if not url:
@@ -222,7 +222,7 @@ Automatically uses the most recent image in the conversation as the source. \
 Call this when the user asks you to modify, change, update, transform, or edit a picture — \
 for example "make it darker", "remove the background", "add a hat". \
 Do NOT use this to create an image from scratch — use generate_image instead."""
-        from .image_service import ai_edit_image
+        from .services.image import ai_edit_image
 
         prompt = args.prompt.strip()
         if not prompt:
@@ -277,7 +277,7 @@ schedules with a similar prompt — update or cancel the old one instead of crea
         from datetime import datetime, time, timedelta, timezone
         import calendar
         from django.utils import timezone as dj_timezone
-        from workspace.users.settings_service import get_user_timezone
+        from workspace.users.services.settings import get_user_timezone
         from .models import ScheduledMessage
 
         prompt = args.prompt.strip()
@@ -445,7 +445,7 @@ Call this when the user wants to stop or remove a previously scheduled message."
     def list_schedules(self, args, user, bot, conversation_id, context):
         """List all active scheduled messages in this conversation. \
 Call this when the user wants to see what messages are scheduled or pending."""
-        from workspace.users.settings_service import get_user_timezone
+        from workspace.users.services.settings import get_user_timezone
         from .models import ScheduledMessage
 
         schedules = ScheduledMessage.objects.filter(

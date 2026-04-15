@@ -5,7 +5,7 @@ import logging
 
 from django.conf import settings
 
-from .client import get_image_client
+from ..client import get_image_client
 
 logger = logging.getLogger(__name__)
 

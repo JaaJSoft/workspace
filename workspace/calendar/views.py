@@ -28,7 +28,7 @@ def _parse_dt(value):
     except (ValueError, TypeError):
         return None
 
-from workspace.notifications.services import notify, notify_many
+from workspace.notifications.services.notifications import notify, notify_many
 from .models import Calendar, CalendarSubscription, Event, EventMember
 from .models_external import ExternalCalendar
 from .queries import visible_calendars, visible_calendar_ids

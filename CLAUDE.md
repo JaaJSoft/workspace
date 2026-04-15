@@ -1,11 +1,19 @@
 # Claude Code Instructions
 
-## Git
+## Workflow
 
-Never commit automatically. Only commit when I explicitly ask for it.
-Do not use git worktrees. Work directly on the current branch.
+### Git
 
-## Tests
+- Never commit automatically. Only commit when I explicitly ask for it.
+- Do not use git worktrees. Work directly on the current branch.
+
+### Refactoring & Optimization
+
+Before any refactor or optimization, verify that at least one test covers the code being touched. If no test exists, **write the test first** (it must pass against the current code), then start the refactor. The test acts as a safety net to guarantee the behavior is preserved.
+
+## Testing
+
+### Structure
 
 Every module must have its tests inside a `tests/` package (directory with `__init__.py`), **not** a single `tests.py` file. Test files must follow the `test_*.py` naming convention (never `tests_*.py`).
 
@@ -17,15 +25,17 @@ workspace/<module>/tests/
 └── ...
 ```
 
-## CI
+### CI
 
 Tests run in parallel in CI with one job per module (see `.github/workflows/tests.yml`). When creating a new Django app module, add it to the `matrix.module` list in the workflow file.
 
-## API
+## Backend Conventions
 
-all api must be prefixed with `/api/` and have no trailing slashes
+### API
 
-## Models
+All API endpoints must be prefixed with `/api/` and have no trailing slashes.
+
+### Models
 
 Every model must use a UUID primary key with the `uuid_v7_or_v4` helper as default. Never use Django's auto-incremented `id` or `uuid.uuid4` directly.
 
@@ -36,41 +46,7 @@ class MyModel(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
 ```
 
-## UI Components
-
-Always use the existing UI partials located in `workspace/common/templates/ui/partials/` instead of writing inline HTML for common components.
-
-### Alerts
-
-Use the `inline_alert` partial for all alert messages:
-
-```django
-{% include "ui/partials/inline_alert.html" with type="error" message="Your error message" %}
-{% include "ui/partials/inline_alert.html" with type="warning" message="Your warning message" %}
-{% include "ui/partials/inline_alert.html" with type="success" message="Your success message" %}
-{% include "ui/partials/inline_alert.html" with type="info" message="Your info message" %}
-```
-
-Available parameters:
-- `type`: 'info' (default), 'success', 'warning', 'error'
-- `message`: The message to display
-- `title`: Optional title
-- `dismissible`: True/False - adds close button
-- `icon`: True (default) / False - show/hide icon
-- `class`: Additional CSS classes (e.g., "mb-4")
-
-### Dialogs
-
-Use the `dialogs` partial for modal dialogs instead of inline modal HTML.
-
-### Other Available Partials
-
-- `app_logo.html` - Application logo
-- `breadcrumbs.html` - Breadcrumb navigation
-- `navbar.html` - Navigation bar
-- `user_avatar.html` - User avatar display
-
-## Access Control Querysets
+### Access Control Querysets
 
 Never duplicate access/permission querysets. Always use the centralized helpers listed below. Each module exposes its access control logic through a dedicated service (`services.py`) or query module (`queries.py`). This ensures permission logic is defined once per module and stays consistent across views, API endpoints, and background tasks.
 
@@ -79,7 +55,7 @@ Never duplicate access/permission querysets. Always use the centralized helpers 
 - When adding a new view or API endpoint, import and use the existing helper rather than reimplementing the logic.
 - If a module doesn't have a helper yet, create one in its `services.py` or `queries.py` and use it everywhere.
 
-### Chat — `workspace.chat.services`
+#### Chat — `workspace.chat.services`
 
 ```python
 from workspace.chat.services import user_conversation_ids, get_active_membership
@@ -93,7 +69,7 @@ membership = get_active_membership(user, conversation_id)
 - `user_conversation_ids`: returns conversation UUIDs where the user is an active member (`left_at__isnull=True`).
 - `get_active_membership`: returns the active `ConversationMember` for a specific conversation, or `None`. Use this for per-view access checks.
 
-### Mail — `workspace.mail.queries`
+#### Mail — `workspace.mail.queries`
 
 ```python
 from workspace.mail.queries import user_account_ids
@@ -102,7 +78,7 @@ account_ids = user_account_ids(user)  # returns queryset of account UUIDs
 
 Returns mail account UUIDs owned by the user. Use for filtering messages: `MailMessage.objects.filter(account_id__in=account_ids, ...)`.
 
-### Calendar — `workspace.calendar.queries`
+#### Calendar — `workspace.calendar.queries`
 
 ```python
 from workspace.calendar.queries import visible_calendar_ids, visible_calendars, visible_events_q
@@ -117,7 +93,7 @@ owned, subscribed = visible_calendars(user)
 events = Event.objects.filter(visible_events_q(user), title__icontains=query)
 ```
 
-### Files — `workspace.files.services.FileService`
+#### Files — `workspace.files.services.FileService`
 
 ```python
 from workspace.files.services import FileService
@@ -138,3 +114,39 @@ perm = FileService.get_permission(user, file_obj)
 if FileService.can_access(user, file_obj):
     ...
 ```
+
+## Frontend Conventions
+
+### UI Partials
+
+Always use the existing UI partials located in `workspace/common/templates/ui/partials/` instead of writing inline HTML for common components.
+
+#### Alerts
+
+Use the `inline_alert` partial for all alert messages:
+
+```django
+{% include "ui/partials/inline_alert.html" with type="error" message="Your error message" %}
+{% include "ui/partials/inline_alert.html" with type="warning" message="Your warning message" %}
+{% include "ui/partials/inline_alert.html" with type="success" message="Your success message" %}
+{% include "ui/partials/inline_alert.html" with type="info" message="Your info message" %}
+```
+
+Available parameters:
+- `type`: 'info' (default), 'success', 'warning', 'error'
+- `message`: The message to display
+- `title`: Optional title
+- `dismissible`: True/False - adds close button
+- `icon`: True (default) / False - show/hide icon
+- `class`: Additional CSS classes (e.g., "mb-4")
+
+#### Dialogs
+
+Use the `dialogs` partial for modal dialogs instead of inline modal HTML.
+
+#### Other Available Partials
+
+- `app_logo.html` - Application logo
+- `breadcrumbs.html` - Breadcrumb navigation
+- `navbar.html` - Navigation bar
+- `user_avatar.html` - User avatar display

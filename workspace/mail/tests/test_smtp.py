@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
-from workspace.mail.services.credentials import decrypt, encrypt
+from workspace.core.encryption import decrypt, encrypt
 from workspace.mail.services.smtp import (
     build_draft_message,
     connect_smtp,

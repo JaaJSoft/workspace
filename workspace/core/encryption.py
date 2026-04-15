@@ -1,7 +1,15 @@
-"""Fernet-based encryption for mail account credentials.
+"""Fernet-based symmetric encryption for sensitive data stored at rest.
 
-Derives a stable Fernet key from Django SECRET_KEY so that credentials
-survive application restarts but are encrypted at rest.
+Derives a stable Fernet key from Django SECRET_KEY so that ciphertext
+survives application restarts. Intended for any module that needs to
+store encrypted credentials or secrets in the database.
+
+Usage::
+
+    from workspace.core.encryption import encrypt, decrypt
+
+    ciphertext = encrypt("my-secret")   # bytes
+    plaintext  = decrypt(ciphertext)    # str
 """
 
 import base64
@@ -10,7 +18,7 @@ import hashlib
 from cryptography.fernet import Fernet
 from django.conf import settings
 
-_fernet = None
+_fernet: Fernet | None = None
 
 
 def _get_fernet() -> Fernet:

@@ -114,6 +114,7 @@ class LastMessageSerializer(serializers.ModelSerializer):
 
 class ConversationListSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
+    member_count = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.IntegerField(read_only=True, default=0)
     is_pinned = serializers.BooleanField(read_only=True, default=False)
@@ -125,9 +126,18 @@ class ConversationListSerializer(serializers.ModelSerializer):
         fields = [
             'uuid', 'kind', 'title', 'description', 'created_by_id',
             'created_at', 'updated_at', 'has_avatar',
-            'members', 'last_message', 'unread_count',
+            'members', 'member_count', 'last_message', 'unread_count',
             'is_pinned', 'pin_position', 'is_bot_conversation',
         ]
+
+    def get_member_count(self, obj):
+        # Members are prefetched (filtered to active) by the view, so len()
+        # of the cache is free. The fallback hits the DB only when an ad-hoc
+        # caller serializes a conversation without priming the prefetch.
+        cache = getattr(obj, '_prefetched_objects_cache', None)
+        if cache and 'members' in cache:
+            return len(cache['members'])
+        return obj.members.filter(left_at__isnull=True).count()
 
     def get_is_bot_conversation(self, obj):
         """Check if this conversation includes a bot member."""

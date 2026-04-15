@@ -164,7 +164,12 @@ class ConversationListView(CacheControlMixin, APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        # DM: exactly one other user
+        # `created_members` is populated on the fresh-creation paths so the
+        # response can serialize without a post-INSERT refetch. On the
+        # get_or_create_dm path we may be returning a pre-existing DM whose
+        # live member state we don't hold in memory — keep the refetch there.
+        created_members = None
+
         if len(member_ids) == 1:
             other_user = users.first()
             if other_user.id == request.user.id:
@@ -172,49 +177,49 @@ class ConversationListView(CacheControlMixin, APIView):
                     {'detail': 'Cannot create a DM with yourself.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            # Bot conversations: always create a new DM (no dedup)
             if hasattr(other_user, 'bot_profile'):
                 conversation = Conversation.objects.create(
                     kind=Conversation.Kind.DM,
                     created_by=request.user,
                 )
-                ConversationMember.objects.bulk_create([
+                created_members = [
                     ConversationMember(conversation=conversation, user=request.user),
                     ConversationMember(conversation=conversation, user=other_user),
-                ])
+                ]
+                ConversationMember.objects.bulk_create(created_members)
             else:
                 conversation = get_or_create_dm(request.user, other_user)
         else:
-            # Group conversation
             conversation = Conversation.objects.create(
                 kind=Conversation.Kind.GROUP,
                 title=title,
                 created_by=request.user,
             )
-            # Add creator + selected members
-            members_to_create = [
+            created_members = [
                 ConversationMember(conversation=conversation, user=request.user),
             ]
             for u in users:
                 if u.id != request.user.id:
-                    members_to_create.append(
+                    created_members.append(
                         ConversationMember(conversation=conversation, user=u),
                     )
-            ConversationMember.objects.bulk_create(members_to_create)
+            ConversationMember.objects.bulk_create(created_members)
 
-        # Refetch with prefetched members
-        conversation = (
-            Conversation.objects.filter(pk=conversation.pk)
-            .prefetch_related(
-                Prefetch(
-                    'members',
-                    queryset=ConversationMember.objects.filter(
-                        left_at__isnull=True,
-                    ).select_related('user', 'user__bot_profile'),
-                ),
+        if created_members is not None:
+            conversation._prefetched_objects_cache = {'members': created_members}
+        else:
+            conversation = (
+                Conversation.objects.filter(pk=conversation.pk)
+                .prefetch_related(
+                    Prefetch(
+                        'members',
+                        queryset=ConversationMember.objects.filter(
+                            left_at__isnull=True,
+                        ).select_related('user', 'user__bot_profile'),
+                    ),
+                )
+                .first()
             )
-            .first()
-        )
         return Response(
             ConversationDetailSerializer(conversation).data,
             status=status.HTTP_201_CREATED,

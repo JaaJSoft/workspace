@@ -102,6 +102,7 @@ INSTALLED_APPS = [
     'workspace.mail.ui',
     'workspace.notifications',
     'workspace.ai',
+    'workspace.passwords',
 ]
 
 # Add Debug Toolbar only in DEBUG mode and not during tests

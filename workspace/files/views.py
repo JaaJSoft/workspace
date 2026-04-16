@@ -658,8 +658,7 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
         if not force:
             queryset = queryset.filter(deleted_at__lt=cutoff)
-        file_count = queryset.count()
-        queryset.delete()
+        file_count, _ = queryset.delete()
         return Response({
             'deleted': file_count,
             'retention_days': retention_days,
@@ -975,6 +974,8 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
                 FileService.accessible_files_q(request.user),
                 uuid__in=uuids,
                 deleted_at__isnull=True,
+            ).only(
+                'uuid', 'name', 'path', 'content', 'node_type', 'owner_id',
             ).distinct()
         )
 
@@ -1005,6 +1006,8 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
                         node_type=File.NodeType.FILE,
                         deleted_at__isnull=True,
                         path__startswith=prefix,
+                    ).only(
+                        'uuid', 'name', 'path', 'content',
                     ).exclude(content='').exclude(content__isnull=True)
                     for desc in descendants:
                         rel_path = f"{obj.name}/{desc.path[len(prefix):]}"

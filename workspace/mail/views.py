@@ -1227,7 +1227,7 @@ class ContactAutocompleteView(CacheControlMixin, APIView):
 
         q_lower = q.lower()
 
-        messages = (
+        rows = (
             MailMessage.objects
             .filter(account_filter, deleted_at__isnull=True)
             .filter(
@@ -1236,19 +1236,19 @@ class ContactAutocompleteView(CacheControlMixin, APIView):
                 | Q(cc_addresses__icontains=q)
             )
             .order_by('-date')
-            .only('from_address', 'to_addresses', 'cc_addresses')[:500]
+            .values('from_address', 'to_addresses', 'cc_addresses')[:500]
         )
 
         # Extract all addresses and count frequency
         email_count = Counter()
         email_names = defaultdict(Counter)
 
-        for msg in messages:
+        for row in rows:
             addresses = []
-            fa = msg.from_address
+            fa = row['from_address']
             if isinstance(fa, dict) and fa.get('email'):
                 addresses.append(fa)
-            for field in (msg.to_addresses, msg.cc_addresses):
+            for field in (row['to_addresses'], row['cc_addresses']):
                 if isinstance(field, list):
                     addresses.extend(
                         a for a in field if isinstance(a, dict) and a.get('email')

@@ -162,6 +162,11 @@ class FileSerializer(serializers.ModelSerializer):
         fts = obj.file_tags.all()  # uses prefetch cache if available
         return [{'uuid': str(ft.tag.uuid), 'name': ft.tag.name, 'icon': ft.tag.icon, 'color': ft.tag.color} for ft in fts]
 
+    def validate_name(self, value):
+        if '/' in value:
+            raise serializers.ValidationError("File and folder names must not contain '/'.")
+        return value
+
     def validate(self, attrs):
         if self.instance is not None:
             errors = {}

@@ -14,25 +14,56 @@ RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
 
 
 def build_breadcrumbs(folder, user=None):
-    """Build breadcrumb trail from current folder to root."""
-    breadcrumbs = []
-    current = folder
-    while current:
-        breadcrumbs.insert(0, {
-            'label': current.name,
-            'url': f'/files/{current.uuid}',
-            'icon': current.icon or 'folder',
-            'icon_color': current.color or 'text-warning',
-        })
-        current = current.parent
+    """Build breadcrumb trail from current folder to root.
 
-    # Group folders: prepend "Groups" as root
-    # Personal folders: prepend user's name as root
+    Uses the denormalized ``path`` field to fetch all ancestors in a single
+    query instead of walking the parent FK chain (which costs 1 query per
+    ancestor level).
+    """
+    path = folder.path or folder.get_path()
+    parts = path.split('/')
+
+    def _crumb(f):
+        return {
+            'label': f.name,
+            'url': f'/files/{f.uuid}',
+            'uuid': f.uuid,
+            'icon': f.icon or 'folder',
+            'icon_color': f.color or 'text-warning',
+        }
+
+    if len(parts) <= 1:
+        # Root-level folder — no ancestors to fetch
+        breadcrumbs = [_crumb(folder)]
+    else:
+        # Build ancestor path prefixes: "A", "A/B", … (excluding self)
+        ancestor_paths = ['/'.join(parts[:i]) for i in range(1, len(parts))]
+
+        # Scope to same owner+group to avoid cross-user path collisions
+        if folder.group_id:
+            scope = Q(group_id=folder.group_id)
+        else:
+            scope = Q(owner_id=folder.owner_id, group__isnull=True)
+
+        # Single query for ALL ancestors
+        ancestors = {
+            f.path: f
+            for f in File.objects.filter(
+                scope,
+                path__in=ancestor_paths,
+                node_type=File.NodeType.FOLDER,
+                deleted_at__isnull=True,
+            ).only('uuid', 'name', 'icon', 'color', 'path')
+        }
+
+        breadcrumbs = [
+            _crumb(ancestors[ap]) for ap in ancestor_paths if ap in ancestors
+        ]
+        breadcrumbs.append(_crumb(folder))
+
+    # Prepend root entry
     if folder.group_id:
-        breadcrumbs.insert(0, {
-            'label': 'Groups',
-            'icon': 'users',
-        })
+        breadcrumbs.insert(0, {'label': 'Groups', 'icon': 'users'})
     else:
         label = user.get_full_name() or user.username if user else 'My Files'
         breadcrumbs.insert(0, {
@@ -218,25 +249,24 @@ def _build_context(request, folder=None, is_trash_view=False):
 
     parent_url = breadcrumbs[-2].get('url', '/files') if len(breadcrumbs) >= 2 else None
 
-    # Determine which sidebar item should be active
+    # Determine which sidebar item should be active.
+    # Breadcrumb dicts include 'uuid' for each folder entry, so we can
+    # resolve group-root and pinned-ancestor without walking parent FKs.
     if active_special:
         sidebar_active = active_special
     elif current_folder and current_folder.group_id:
-        # Find the group root folder UUID
-        group_root = current_folder
-        while group_root.parent_id:
-            group_root = group_root.parent
-        sidebar_active = f'group:{group_root.uuid}'
+        # breadcrumbs[0] = "Groups" header, breadcrumbs[1] = group root folder
+        sidebar_active = f'group:{breadcrumbs[1]["uuid"]}'
     elif current_folder:
-        # Check if we're inside a pinned folder
+        # Check if current folder or any ancestor is a pinned folder.
+        # Iterate self → root (reversed) to find the deepest pinned ancestor.
         pinned_ids = set(pinned_folder_ids) if pinned_folder_ids else set()
-        ancestor = current_folder
         sidebar_active = 'root'
-        while ancestor:
-            if ancestor.pk in pinned_ids:
-                sidebar_active = f'pinned:{ancestor.uuid}'
+        for bc in reversed(breadcrumbs):
+            bc_uuid = bc.get('uuid')
+            if bc_uuid and bc_uuid in pinned_ids:
+                sidebar_active = f'pinned:{bc_uuid}'
                 break
-            ancestor = ancestor.parent
     else:
         sidebar_active = 'root'
 

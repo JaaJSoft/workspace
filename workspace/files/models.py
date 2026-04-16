@@ -203,6 +203,9 @@ class File(models.Model):
         return name
 
     def save(self, *args, **kwargs):
+        if '/' in self.name:
+            raise ValueError("File and folder names must not contain '/'.")
+
         old_data = None
         if self.pk:
             old_data = File.objects.filter(pk=self.pk).values(

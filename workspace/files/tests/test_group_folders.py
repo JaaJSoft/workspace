@@ -598,3 +598,172 @@ class BreadcrumbTests(TestCase):
         crumbs = build_breadcrumbs(folder, user=self.alice)
         self.assertEqual(crumbs[1]['icon'], 'briefcase')
         self.assertEqual(crumbs[1]['icon_color'], 'text-error')
+
+    def test_breadcrumbs_include_uuid(self):
+        """Breadcrumb dicts for folders must include a 'uuid' key."""
+        parent = File.objects.create(
+            owner=self.alice, name='Documents', node_type=File.NodeType.FOLDER,
+        )
+        child = File.objects.create(
+            owner=self.alice, name='Reports', node_type=File.NodeType.FOLDER, parent=parent,
+        )
+        crumbs = build_breadcrumbs(child, user=self.alice)
+        # Root entry ("Alice Dupont") has no uuid
+        self.assertNotIn('uuid', crumbs[0])
+        # Folder entries have their uuid
+        self.assertEqual(crumbs[1]['uuid'], parent.uuid)
+        self.assertEqual(crumbs[2]['uuid'], child.uuid)
+
+    def test_group_breadcrumbs_include_uuid(self):
+        root = File.objects.create(
+            owner=self.alice, name='Marketing Files', node_type=File.NodeType.FOLDER,
+            group=self.group,
+        )
+        sub = File.objects.create(
+            owner=self.alice, name='Q1', node_type=File.NodeType.FOLDER,
+            parent=root, group=self.group,
+        )
+        crumbs = build_breadcrumbs(sub, user=self.alice)
+        # "Groups" header has no uuid
+        self.assertNotIn('uuid', crumbs[0])
+        self.assertEqual(crumbs[1]['uuid'], root.uuid)
+        self.assertEqual(crumbs[2]['uuid'], sub.uuid)
+
+
+class BreadcrumbQueryCountTests(TestCase):
+    """Breadcrumb building must use a constant number of queries regardless of depth."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='alice', password='pass', first_name='Alice', last_name='Dupont',
+        )
+        self.group = Group.objects.create(name='Engineering')
+        self.user.groups.add(self.group)
+
+    def test_root_folder_zero_queries(self):
+        folder = File.objects.create(
+            owner=self.user, name='Root', node_type=File.NodeType.FOLDER,
+        )
+        # Re-fetch from DB to clear cached FK references
+        folder = File.objects.get(pk=folder.pk)
+        with self.assertNumQueries(0):
+            build_breadcrumbs(folder, user=self.user)
+
+    def test_nested_5_levels_one_query(self):
+        """5 levels deep should use exactly 1 query, not 5."""
+        parent = None
+        for i in range(5):
+            parent = File.objects.create(
+                owner=self.user, name=f'level_{i}', node_type=File.NodeType.FOLDER,
+                parent=parent,
+            )
+
+        # Re-fetch leaf from DB — simulates the real view path where
+        # the folder is loaded via File.objects.filter(...).first()
+        leaf = File.objects.get(pk=parent.pk)
+        # 1 query to fetch the 4 ancestors (leaf itself is already in memory)
+        with self.assertNumQueries(1):
+            crumbs = build_breadcrumbs(leaf, user=self.user)
+        self.assertEqual(len(crumbs), 6)  # root entry + 5 folders
+        for i, name in enumerate(['level_0', 'level_1', 'level_2', 'level_3', 'level_4']):
+            self.assertEqual(crumbs[i + 1]['label'], name)
+
+    def test_group_nested_3_levels_one_query(self):
+        parent = None
+        for i in range(3):
+            parent = File.objects.create(
+                owner=self.user, name=f'g_level_{i}', node_type=File.NodeType.FOLDER,
+                parent=parent, group=self.group,
+            )
+
+        leaf = File.objects.get(pk=parent.pk)
+        with self.assertNumQueries(1):
+            crumbs = build_breadcrumbs(leaf, user=self.user)
+        self.assertEqual(len(crumbs), 4)  # "Groups" + 3 folders
+        self.assertEqual(crumbs[0]['label'], 'Groups')
+
+
+class BreadcrumbSpecialCharTests(TestCase):
+    """Breadcrumbs must handle folder names with spaces, unicode, and symbols."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='alice', password='pass', first_name='Alice', last_name='Dupont',
+        )
+
+    def test_spaces_in_names(self):
+        parent = File.objects.create(
+            owner=self.user, name='My Documents', node_type=File.NodeType.FOLDER,
+        )
+        child = File.objects.create(
+            owner=self.user, name='Work Stuff 2026', node_type=File.NodeType.FOLDER,
+            parent=parent,
+        )
+        leaf = File.objects.get(pk=child.pk)
+        crumbs = build_breadcrumbs(leaf, user=self.user)
+        self.assertEqual(crumbs[1]['label'], 'My Documents')
+        self.assertEqual(crumbs[2]['label'], 'Work Stuff 2026')
+
+    def test_unicode_names(self):
+        parent = File.objects.create(
+            owner=self.user, name='Données', node_type=File.NodeType.FOLDER,
+        )
+        child = File.objects.create(
+            owner=self.user, name='日本語フォルダ', node_type=File.NodeType.FOLDER,
+            parent=parent,
+        )
+        leaf = File.objects.get(pk=child.pk)
+        crumbs = build_breadcrumbs(leaf, user=self.user)
+        self.assertEqual(crumbs[1]['label'], 'Données')
+        self.assertEqual(crumbs[2]['label'], '日本語フォルダ')
+
+    def test_symbols_in_names(self):
+        parent = File.objects.create(
+            owner=self.user, name='R&D (2026)', node_type=File.NodeType.FOLDER,
+        )
+        child = File.objects.create(
+            owner=self.user, name='budget — final #2', node_type=File.NodeType.FOLDER,
+            parent=parent,
+        )
+        leaf = File.objects.get(pk=child.pk)
+        crumbs = build_breadcrumbs(leaf, user=self.user)
+        self.assertEqual(crumbs[1]['label'], 'R&D (2026)')
+        self.assertEqual(crumbs[2]['label'], 'budget — final #2')
+
+    def test_special_chars_query_count(self):
+        """Special characters must not break the single-query optimization."""
+        parent = File.objects.create(
+            owner=self.user, name='Données & Résultats (2026)', node_type=File.NodeType.FOLDER,
+        )
+        child = File.objects.create(
+            owner=self.user, name='日本語 #2', node_type=File.NodeType.FOLDER,
+            parent=parent,
+        )
+        leaf = File.objects.get(pk=child.pk)
+        with self.assertNumQueries(1):
+            build_breadcrumbs(leaf, user=self.user)
+
+
+class FileNameSlashValidationTests(TestCase):
+    """Names containing '/' must be rejected — it is the path separator."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='alice', password='pass')
+
+    def test_folder_name_with_slash_rejected(self):
+        with self.assertRaises(ValueError):
+            File.objects.create(
+                owner=self.user, name='foo/bar', node_type=File.NodeType.FOLDER,
+            )
+
+    def test_file_name_with_slash_rejected(self):
+        with self.assertRaises(ValueError):
+            File.objects.create(
+                owner=self.user, name='report/final.pdf', node_type=File.NodeType.FILE,
+            )
+
+    def test_name_without_slash_accepted(self):
+        f = File.objects.create(
+            owner=self.user, name='R&D (2026) — final', node_type=File.NodeType.FOLDER,
+        )
+        self.assertEqual(f.name, 'R&D (2026) — final')

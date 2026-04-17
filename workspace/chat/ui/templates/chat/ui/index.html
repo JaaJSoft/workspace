@@ -74,6 +74,14 @@ x-init="init()"
       </div>
     </div>
 
+    <!-- Hidden link: alpine-ajax swaps #conversation-list in place when clicked. -->
+    <a
+      x-ref="conversationListRefreshLink"
+      class="hidden"
+      href="{% url 'chat_ui:conversation_list' %}"
+      x-target="conversation-list"
+    >Refresh</a>
+
     <!-- Conversation list -->
     <div class="flex-1 overflow-y-auto py-4 px-3">
       {% include "chat/ui/partials/conversation_list.html" %}

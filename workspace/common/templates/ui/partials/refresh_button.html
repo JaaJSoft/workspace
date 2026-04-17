@@ -1,0 +1,19 @@
+{# Refresh button that triggers an Alpine AJAX swap on a target element.
+
+Required context:
+- url_expr: Alpine expression evaluated for the href (e.g. "feedUrl").
+- target: id(s) of the element(s) to swap. Passed as-is to x-target.
+
+Optional context:
+- loading_expr: Alpine expression (default "loading") that, when truthy, spins the icon.
+- title: tooltip text (default "Refresh").
+- size: button size modifier (default "sm").
+#}
+<a
+  :href="{{ url_expr }}"
+  class="btn btn-ghost btn-{{ size|default:'sm' }} btn-square"
+  x-target="{{ target }}"
+  title="{{ title|default:'Refresh' }}"
+>
+  <i data-lucide="refresh-cw" class="w-4 h-4" :class="{{ loading_expr|default:'loading' }} && 'animate-spin'"></i>
+</a>

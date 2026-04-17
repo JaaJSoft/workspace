@@ -8,7 +8,7 @@ from .models import LoginEntry, Vault
 # ---------------------------------------------------------------------------
 
 class VaultSerializer(serializers.ModelSerializer):
-    """Read-only vault metadata returned by GET /api/v1/passwords/vault."""
+    """Read-only vault representation returned by GET /api/v1/passwords/vaults."""
 
     class Meta:
         model = Vault
@@ -30,8 +30,68 @@ class VaultSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class VaultSetupResponseSerializer(serializers.ModelSerializer):
+    """Response body for a successful vault setup.
+
+    Returned by POST /api/v1/passwords/vaults/<uuid>/setup.
+    Includes ``protected_vault_key`` so the client is immediately unlocked
+    after setup — no separate /unlock call needed after creation.
+    """
+
+    class Meta:
+        model = Vault
+        fields = [
+            'uuid',
+            'name',
+            'description',
+            'icon',
+            'color',
+            'is_setup',
+            'kdf_algorithm',
+            'kdf_iterations',
+            'kdf_salt',
+            'kdf_memory',
+            'kdf_parallelism',
+            'protected_vault_key',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = fields
+
+
+class VaultCreateSerializer(serializers.Serializer):
+    """Payload for POST /api/v1/passwords/vaults.
+
+    Only vault metadata is sent here.  The server pre-generates a composite
+    KDF salt (user_uuid_bytes || random) and returns it in the response so the
+    client can perform key derivation before calling /setup.
+    """
+
+    name = serializers.CharField(
+        max_length=100, default='Personal',
+        help_text="Display name for this vault (e.g. Personal, Work).",
+    )
+    description = serializers.CharField(
+        required=False, default='', allow_blank=True,
+        help_text="Optional description.",
+    )
+    icon = serializers.CharField(
+        max_length=50, required=False, default='vault',
+        help_text="Lucide icon name.",
+    )
+    color = serializers.CharField(
+        max_length=50, required=False, default='primary',
+        help_text="DaisyUI/Tailwind colour class.",
+    )
+
+
 class VaultSetupSerializer(serializers.Serializer):
-    """Payload for POST /api/v1/passwords/vault/setup."""
+    """Payload for POST /api/v1/passwords/vaults/<uuid>/setup.
+
+    Used both for initial setup (after vault creation) and for master-password
+    rotation.  On rotation, supply ``kdf_salt`` to replace the server-generated
+    salt with a new composite salt derived from the new master password.
+    """
 
     client_master_hash = serializers.CharField(
         help_text=(
@@ -44,7 +104,13 @@ class VaultSetupSerializer(serializers.Serializer):
     )
     kdf_salt = serializers.CharField(
         max_length=44,
-        help_text="Base64url-encoded 32-byte salt used for PBKDF2 key derivation."
+        required=False,
+        allow_blank=True,
+        help_text=(
+            "Base64url-encoded 32-byte salt. Omit on initial setup — the server reuses "
+            "the composite salt generated at vault creation. Supply on master-password "
+            "rotation to replace the salt."
+        ),
     )
     kdf_algorithm = serializers.ChoiceField(
         choices=Vault.KdfAlgorithm.choices,
@@ -79,7 +145,7 @@ class VaultSetupSerializer(serializers.Serializer):
 
 
 class VaultUnlockSerializer(serializers.Serializer):
-    """Payload for POST /api/v1/passwords/vault/unlock."""
+    """Payload for POST /api/v1/passwords/vaults/<uuid>/unlock."""
 
     client_master_hash = serializers.CharField(
         help_text="Client-derived hash to verify against the stored vault hash."
@@ -153,9 +219,13 @@ class LoginEntryCreateSerializer(serializers.ModelSerializer):
 
     def validate_vault(self, vault):
         request = self.context['request']
-        if vault.user != request.user:
-            raise serializers.ValidationError("Vault does not belong to you.")
-        return vault
+        user = request.user
+        if vault.user == user:
+            return vault
+        from .services.sharing import SharingService
+        if SharingService.can_write(vault, user):
+            return vault
+        raise serializers.ValidationError("You do not have write access to this vault.")
 
     def create(self, validated_data):
         validated_data['type'] = LoginEntry.EntryType.LOGIN

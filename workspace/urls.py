@@ -41,6 +41,7 @@ api_urlpatterns = [
     path('', include('workspace.mail.urls')),
     path('', include('workspace.notifications.urls')),
     path('', include('workspace.ai.urls')),
+    path('', include('workspace.passwords.urls')),
 ]
 
 ui_urlpatterns = [

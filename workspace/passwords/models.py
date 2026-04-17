@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.contrib.auth.models import Group
 from django.db import models
 
 
@@ -246,3 +247,138 @@ class LoginEntry(PasswordEntry):
     class Meta:
         verbose_name = 'Login entry'
         verbose_name_plural = 'Login entries'
+
+
+# ---------------------------------------------------------------------------
+# User keypair  (zero-knowledge vault sharing)
+# ---------------------------------------------------------------------------
+
+class UserKeyPair(models.Model):
+    """Per-user ECDH P-256 keypair for zero-knowledge vault sharing.
+
+    The private key is encrypted client-side with a key derived from the user's
+    master password.  The server only stores the public key in plaintext; the
+    protected private key is opaque.
+
+    Created when the user sets up their first vault.
+    """
+
+    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='key_pair'
+    )
+    algorithm = models.CharField(max_length=20, default='ecdh_p256')
+
+    # Stored plaintext — used by other users to encrypt the vault key for this user
+    public_key = models.TextField()
+
+    # Private key encrypted client-side with a key derived from master password
+    protected_private_key = models.TextField()
+
+    # Composite KDF salt: base64url(user_uuid_bytes[16] || random[16])
+    # Used to derive the key protecting the private key
+    kdf_salt = models.CharField(max_length=44)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'User key pair'
+
+    def __str__(self):
+        return f'{self.user} / {self.algorithm}'
+
+
+# ---------------------------------------------------------------------------
+# Vault sharing
+# ---------------------------------------------------------------------------
+
+class VaultMember(models.Model):
+    """Per-user access grant for a shared vault.
+
+    Zero-knowledge: the vault key is re-encrypted client-side with the member's
+    ECDH public key and stored in ``protected_vault_key``.  The server never
+    sees the plaintext vault key.
+    """
+
+    class Role(models.TextChoices):
+        VIEWER = 'viewer', 'Viewer'
+        EDITOR = 'editor', 'Editor'
+        MANAGER = 'manager', 'Manager'
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        ACCEPTED = 'accepted', 'Accepted'
+        REVOKED = 'revoked', 'Revoked'
+
+    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    vault = models.ForeignKey(Vault, on_delete=models.CASCADE, related_name='members')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='vault_memberships'
+    )
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.VIEWER)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+
+    # Vault key re-encrypted with this member's ECDH public key (opaque to server)
+    protected_vault_key = models.TextField(blank=True, default='')
+
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='vault_invitations_sent',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['vault', 'user'], name='vault_member_uniq'),
+        ]
+        indexes = [
+            models.Index(fields=['vault', 'status'], name='vault_member_vault_status_idx'),
+            models.Index(fields=['user', 'status'], name='vault_member_user_status_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.vault} → {self.user} ({self.role})'
+
+
+class VaultGroupAccess(models.Model):
+    """Metadata record that a Django group has been granted access to a vault.
+
+    Actual key distribution is handled per-user via ``VaultMember``.  This model
+    serves as a reference: when a new user joins the group a vault manager must
+    manually add them (zero-knowledge constraint — the server cannot auto-distribute
+    the vault key to new group members).
+    """
+
+    class Role(models.TextChoices):
+        VIEWER = 'viewer', 'Viewer'
+        EDITOR = 'editor', 'Editor'
+        MANAGER = 'manager', 'Manager'
+
+    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    vault = models.ForeignKey(Vault, on_delete=models.CASCADE, related_name='group_accesses')
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='vault_accesses')
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.VIEWER)
+    granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='vault_group_grants',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['vault', 'group'], name='vault_group_uniq'),
+        ]
+        indexes = [
+            models.Index(fields=['vault'], name='vault_group_vault_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.vault} → {self.group} ({self.role})'

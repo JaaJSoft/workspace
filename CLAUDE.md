@@ -198,3 +198,31 @@ Use the `dialogs` partial for modal dialogs instead of inline modal HTML.
 - `breadcrumbs.html` - Breadcrumb navigation
 - `navbar.html` - Navigation bar
 - `user_avatar.html` - User avatar display
+
+### File Actions
+
+Any frontend element that triggers an action on a file or folder (rename, delete, favorite, share, move, pin, download, etc.) **must** check availability against `POST /api/v1/files/actions` before letting the user click. Never hard-code availability rules in the frontend (no "is journal note?", no "is owner?", no "is shared with me?" checks duplicated client-side). The backend `ActionRegistry` (`workspace/files/actions/`) is the single source of truth, and `RenameAction.is_available()` / `DeleteAction.is_available()` / etc. already encode all the rules.
+
+**Rules:**
+
+- Context menus: fetch the action list for the target file(s) via `/api/v1/files/actions` and render only the returned actions — never render a static list of menu items.
+- Buttons, links, inline inputs (e.g., title input for rename): bind their `:disabled` / `:readonly` attribute to the presence of the corresponding action ID in the fetched list. Default to disabled while the list is loading (fail-safe).
+- When implementing a new file-manipulating UI element, first check that an `is_available` entry exists for the action in `workspace/files/actions/`. If not, add it — don't ship the UI without it.
+- Defence-in-depth: the JS handler that performs the action (e.g., `renameNote`, `deleteNote`) must also early-return if the action isn't in the cached list. Prevents stale state from producing a request the backend will 403 anyway.
+
+**Endpoint contract:**
+
+```js
+const resp = await fetch('/api/v1/files/actions', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+  body: JSON.stringify({ uuids: [fileUuid] }),
+});
+const data = await resp.json();
+// data[fileUuid] is an array of { id, label, icon, category, shortcut, css_class, bulk }
+const actionIds = (data[fileUuid] || []).map(a => a.id);
+```
+
+Use a race-protection counter (see `_loadGeneration` in `workspace/notes/ui/static/notes/ui/js/notes.js:557`) when the fetched list feeds reactive state that depends on the current selection — rapid selection changes otherwise lead to stale results being applied.
+
+**Scope:** applies to the `files` module and every module whose UI manipulates files (notes, mail attachments, chat attachments, etc.). If a module manipulates another kind of entity with its own action registry (not files), follow the same principle against that module's equivalent endpoint.

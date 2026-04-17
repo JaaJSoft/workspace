@@ -42,7 +42,7 @@ dependencies = [
     # push notifications
     "pywebpush>=2.3.0",
     # oauth2
-    "authlib>=1.5.0",
+    "authlib>=1.6.11",
     # ai
     "openai>=2.32.0",
     "ollama>=0.6.1",

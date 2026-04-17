@@ -74,9 +74,40 @@ x-init="init()"
       </div>
     </div>
 
-    <!-- Conversation list -->
-    <div class="flex-1 overflow-y-auto py-4 px-3">
-      {% include "chat/ui/partials/conversation_list.html" %}
+    <!-- Search + conversation list (shared convSearch scope) -->
+    <div class="flex-1 min-h-0 flex flex-col" x-data="{ convSearch: '' }">
+      <div class="px-3 pt-3" x-show="!collapsed" x-cloak>
+        <label class="input input-sm input-bordered w-full flex items-center gap-2">
+          <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+          <input
+            type="search"
+            class="grow"
+            placeholder="Search conversations"
+            x-model="convSearch"
+            @input.debounce.300ms="$refs.convSearchLink.click()"
+            @keydown.escape.stop="convSearch = ''; $refs.convSearchLink.click()"
+          />
+          <button
+            type="button"
+            x-show="convSearch.length > 0"
+            x-cloak
+            @click="convSearch = ''; $refs.convSearchLink.click()"
+            class="btn btn-ghost btn-xs btn-square -mr-1"
+            title="Clear search"
+          >
+            <i data-lucide="x" class="w-3 h-3"></i>
+          </button>
+        </label>
+      </div>
+      <a
+        x-ref="convSearchLink"
+        class="hidden"
+        :href="'{% url 'chat_ui:conversation_list' %}' + (convSearch.trim() ? '?q=' + encodeURIComponent(convSearch.trim()) : '')"
+        x-target="conversation-list"
+      >Search</a>
+      <div class="flex-1 overflow-y-auto py-4 px-3">
+        {% include "chat/ui/partials/conversation_list.html" %}
+      </div>
     </div>
 
     <!-- New chat buttons (visible when collapsed) -->

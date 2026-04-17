@@ -329,6 +329,7 @@ def message_readers_view(request, conversation_uuid, message_uuid):
     return render(request, 'chat/ui/partials/_read_receipt_popover.html', {
         'readers': readers,
         'not_read': not_read,
+        'message_uuid': message_uuid,
     })
 
 

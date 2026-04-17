@@ -45,6 +45,7 @@ def render_read_receipt(message, conversation_kind):
         'all_read': message.all_read,
         'is_dm': conversation_kind == 'dm',
         'message_uuid': message.uuid,
+        'conversation_uuid': message.conversation_id,
     }
 
 

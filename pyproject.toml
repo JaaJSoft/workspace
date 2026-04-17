@@ -44,7 +44,7 @@ dependencies = [
     # oauth2
     "authlib>=1.5.0",
     # ai
-    "openai>=1.0",
+    "openai>=2.32.0",
     "ollama>=0.6.1",
     # web search & scraping
     "httpx>=0.28.0",

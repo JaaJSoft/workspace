@@ -112,14 +112,7 @@
             >
               <i data-lucide="search" class="w-4 h-4"></i>
             </button>
-            <a
-              :href="feedUrl"
-              class="btn btn-ghost btn-sm btn-square"
-              x-target="dashboard-activity"
-              title="Refresh"
-            >
-              <i data-lucide="refresh-cw" class="w-4 h-4" :class="loading && 'animate-spin'"></i>
-            </a>
+            {% include "ui/partials/refresh_button.html" with url_expr="feedUrl" target="dashboard-activity" %}
             </div>
           </div>
           {% include "ui/partials/activity_search.html" with activity_prefix="dashboard-activity" %}

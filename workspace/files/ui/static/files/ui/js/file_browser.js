@@ -1345,44 +1345,8 @@ window.fileBrowser = function fileBrowser() {
     },
 
     refreshFolderBrowser() {
-      const refreshLink = document.querySelector('[data-refresh-folder-browser]');
-      if (refreshLink) {
-        refreshLink.click();
-        return;
-      }
-      const target = document.getElementById('folder-browser');
-      if (!target) return;
-      fetch(window.location.href, {
-        headers: {
-          'X-Alpine-Request': 'true'
-        }
-      })
-        .then((response) => {
-          if (!response.ok) {
-            this.showAlert('error', 'Failed to refresh items');
-            return null;
-          }
-          return response.text();
-        })
-        .then((html) => {
-          if (!html) return;
-          const wrapper = document.createElement('div');
-          wrapper.innerHTML = html;
-          const fresh = wrapper.querySelector('#folder-browser');
-          if (!fresh) {
-            this.showAlert('error', 'Failed to refresh items');
-            return;
-          }
-          if (window.Alpine?.mutateDom) {
-            window.Alpine.mutateDom(() => { target.replaceWith(fresh); });
-          } else {
-            target.replaceWith(fresh);
-          }
-          if (window.Alpine?.initTree) {
-            window.Alpine.initTree(fresh);
-          }
-        })
-        .catch(() => this.showAlert('error', 'Failed to refresh items'));
+      const link = document.querySelector('[data-refresh-folder-browser]');
+      if (link) link.click();
     },
 
     showAlert(type, message) {

@@ -199,6 +199,7 @@
                     class="hidden"
                     x-target="folder-browser"
                     data-refresh-folder-browser
+                    @ajax:error="showAlert('error', 'Failed to refresh items')"
                   ></a>
                 </div>
 

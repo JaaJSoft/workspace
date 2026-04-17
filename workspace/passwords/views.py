@@ -78,7 +78,9 @@ class VaultListCreateView(APIView):
 
 
 class VaultDetailView(APIView):
-    """GET /api/v1/passwords/vaults/<uuid> — retrieve a specific vault."""
+    """GET    /api/v1/passwords/vaults/<uuid> — retrieve a specific vault.
+    DELETE /api/v1/passwords/vaults/<uuid> — permanently delete a vault (owner only).
+    """
 
     permission_classes = [IsAuthenticated]
 

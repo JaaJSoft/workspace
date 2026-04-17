@@ -17,6 +17,7 @@ import uuid
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from workspace.passwords.models import LoginEntry, PasswordEntry, Vault, VaultMember
 from workspace.passwords.services.vault import VaultService
@@ -524,3 +525,39 @@ class DeleteVaultTests(VaultServiceMixin, TestCase):
     def test_delete_nonexistent_vault_returns_false(self):
         result = VaultService.delete_vault(self.alice, uuid.uuid4())
         self.assertFalse(result)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/v1/passwords/vaults/<uuid> — View layer tests
+# ---------------------------------------------------------------------------
+
+class DeleteVaultViewTests(VaultServiceMixin, TestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+
+    def test_owner_gets_204(self):
+        vault = VaultService.create_vault(self.alice)
+        self.client.force_authenticate(user=self.alice)
+        response = self.client.delete(f'/api/v1/passwords/vaults/{vault.pk}')
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Vault.objects.filter(pk=vault.pk).exists())
+
+    def test_member_gets_404(self):
+        vault = self._shared_vault(self.alice, self.bob)
+        self.client.force_authenticate(user=self.bob)
+        response = self.client.delete(f'/api/v1/passwords/vaults/{vault.pk}')
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Vault.objects.filter(pk=vault.pk).exists())
+
+    def test_unauthenticated_gets_403(self):
+        vault = VaultService.create_vault(self.alice)
+        response = self.client.delete(f'/api/v1/passwords/vaults/{vault.pk}')
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Vault.objects.filter(pk=vault.pk).exists())
+
+    def test_nonexistent_vault_gets_404(self):
+        self.client.force_authenticate(user=self.alice)
+        response = self.client.delete(f'/api/v1/passwords/vaults/{uuid.uuid4()}')
+        self.assertEqual(response.status_code, 404)

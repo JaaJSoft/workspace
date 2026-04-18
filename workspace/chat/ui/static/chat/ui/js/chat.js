@@ -233,32 +233,18 @@ function chatApp(currentUserId) {
       }
     },
 
-    async refreshConversationList() {
-      try {
-        const resp = await fetch('/chat/conversations', {
-          credentials: 'same-origin',
-          headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        });
-        if (resp.ok) {
-          const html = await resp.text();
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html, 'text/html');
-          const newList = doc.getElementById('conversation-list');
-          const target = document.getElementById('conversation-list');
-          if (newList && target) {
-            target.innerHTML = newList.innerHTML;
-            // Bust browser memory cache for avatar images that were updated this session
-            for (const conv of this.conversations) {
-              if (conv._avatar_bust) {
-                const img = target.querySelector(`img[src*="/conversations/${conv.uuid}/avatar/"]`);
-                if (img) img.src = `/api/v1/chat/conversations/${conv.uuid}/avatar/image?t=${conv._avatar_bust}`;
-              }
-            }
+    refreshConversationList() {
+      this.$el.addEventListener('ajax:after', () => {
+        const target = document.getElementById('conversation-list');
+        if (!target) return;
+        for (const conv of this.conversations) {
+          if (conv._avatar_bust) {
+            const img = target.querySelector(`img[src*="/conversations/${conv.uuid}/avatar/"]`);
+            if (img) img.src = `/api/v1/chat/conversations/${conv.uuid}/avatar/image?t=${conv._avatar_bust}`;
           }
         }
-      } catch (e) {
-        console.error('Failed to refresh conversation list', e);
-      }
+      }, { once: true });
+      this.$ajax('/chat/conversations', { target: 'conversation-list' });
     },
 
     async selectConversationById(uuid, updateUrl = true) {

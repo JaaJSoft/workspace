@@ -1,36 +1,163 @@
 <style>
-.changelog-body h3 { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.5; margin-top: 1rem; margin-bottom: 0.375rem; }
+/* Timeline layout */
+.cl-list {
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+.cl-entry {
+  position: relative;
+  padding: 0.125rem 0 2.5rem 1.75rem;
+  border-left: 1px solid oklch(var(--bc) / 0.12);
+}
+.cl-entry:last-child {
+  padding-bottom: 0.25rem;
+  border-left-color: transparent;
+}
+.cl-entry:last-child::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1rem;
+  background: oklch(var(--bc) / 0.12);
+}
+
+/* Dots on the timeline */
+.cl-entry::before {
+  content: "";
+  position: absolute;
+  left: -0.3125rem;
+  top: 0.5rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 9999px;
+  background: oklch(var(--b1));
+  box-shadow: 0 0 0 1.5px oklch(var(--bc) / 0.3);
+}
+.cl-entry.is-latest::before {
+  left: -0.4375rem;
+  top: 0.4375rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  background: oklch(var(--p));
+  box-shadow: 0 0 0 4px oklch(var(--p) / 0.15);
+}
+
+/* Version header */
+.cl-version {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.625rem;
+  margin-bottom: 0.75rem;
+}
+.cl-version-num {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: oklch(var(--bc));
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.cl-entry:not(.is-latest) .cl-version-num {
+  font-size: 1.0625rem;
+  color: oklch(var(--bc) / 0.85);
+}
+.cl-version-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: oklch(var(--bc) / 0.65);
+  letter-spacing: -0.005em;
+}
+.cl-version-title::before {
+  content: "—";
+  margin-right: 0.375rem;
+  color: oklch(var(--bc) / 0.3);
+}
+.cl-entry:not(.is-latest) .cl-version-title {
+  font-size: 0.875rem;
+}
+.cl-latest-badge {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 9999px;
+  background: oklch(var(--p) / 0.14);
+  color: oklch(var(--p));
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+/* Markdown body rendered by mistune */
+.changelog-body h3:first-of-type { display: none; }
+.changelog-body h3:first-of-type + p {
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.6;
+  color: oklch(var(--bc) / 0.88);
+  margin: 0 0 1.25rem 0;
+  font-style: normal;
+}
+.changelog-body h3 {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: oklch(var(--bc) / 0.5);
+  margin: 1.375rem 0 0.5rem 0;
+}
 .changelog-body ul { list-style: none; padding: 0; margin: 0; }
-.changelog-body li { font-size: 0.8125rem; opacity: 0.7; padding: 0.125rem 0; padding-left: 1rem; position: relative; }
-.changelog-body li::before { content: "·"; position: absolute; left: 0.25rem; opacity: 0.4; }
-.changelog-body p { font-size: 0.8125rem; opacity: 0.6; font-style: italic; margin-bottom: 0.25rem; }
-.changelog-body code { font-size: 0.75rem; padding: 0.1rem 0.3rem; border-radius: 0.25rem; background: oklch(var(--b2) / 0.5); }
+.changelog-body li {
+  position: relative;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: oklch(var(--bc) / 0.78);
+  padding: 0.25rem 0 0.25rem 1rem;
+}
+.changelog-body li::before {
+  content: "";
+  position: absolute;
+  left: 0.25rem;
+  top: 0.75rem;
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 9999px;
+  background: oklch(var(--bc) / 0.35);
+}
+.changelog-body p {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: oklch(var(--bc) / 0.78);
+  margin: 0.375rem 0;
+}
+.changelog-body code {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  background: oklch(var(--b2) / 0.7);
+  color: oklch(var(--bc) / 0.9);
+}
 </style>
+
+<div class="cl-list">
 {% for entry in entries %}
-<div class="border-b border-base-300/50 last:border-b-0" x-data="{ open: {{ forloop.first|yesno:'true,false' }} }">
-  <button
-    type="button"
-    @click="open = !open"
-    class="flex items-center gap-3 w-full px-4 py-3 text-left transition-colors hover:bg-base-200/50"
-  >
-    <span class="flex items-center gap-2 flex-1 min-w-0">
-      <span class="font-semibold text-sm text-base-content">{{ entry.version }}</span>
-      {% if forloop.first %}
-        <span class="badge badge-sm badge-primary">latest</span>
-      {% endif %}
-    </span>
-    <i data-lucide="chevron-down"
-       class="w-4 h-4 text-base-content/40 shrink-0 transition-transform duration-200"
-       :class="open && 'rotate-180'"></i>
-  </button>
-  <div x-show="open" x-collapse>
-    <div class="px-4 pb-4 changelog-body">
-      {{ entry.html|safe }}
-    </div>
+<div class="cl-entry{% if forloop.first %} is-latest{% endif %}">
+  <div class="cl-version">
+    <span class="cl-version-num">{{ entry.version }}</span>
+    {% if forloop.first %}
+      <span class="cl-latest-badge">Latest</span>
+    {% endif %}
+    {% if entry.title %}
+      <span class="cl-version-title">{{ entry.title }}</span>
+    {% endif %}
+  </div>
+  <div class="changelog-body">
+    {{ entry.html|safe }}
   </div>
 </div>
 {% empty %}
-<div class="px-4 py-8 text-center text-sm text-base-content/50">
+<div class="px-4 py-10 text-center text-sm text-base-content/50">
   No changelog available.
 </div>
 {% endfor %}
+</div>

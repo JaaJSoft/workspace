@@ -17,7 +17,7 @@ Before any refactor or optimization, verify that at least one test covers the co
 
 **Structure of a release entry:**
 
-1. `## <version>` heading
+1. `## <version> — <title>` heading. The title is a short thematic label (2–4 words) summarizing the release theme: *Performance & Reliability*, *Calendar Overhaul*, *Profile & Rich Media*. It shows up next to the version number in the in-app "What's new" modal. Em-dash (`—`), en-dash (`–`), hyphen (`-`), and colon (`:`) are all accepted as separators; the title is optional but recommended for non-patch releases.
 2. `### Highlights` — one short paragraph (2–4 sentences) summarizing the theme of the release and what users will notice. No bullet list here.
 3. Then one `###` section per user-facing area (module name or feature theme: *Chat*, *Files & Notes*, *Calendar*, *WebDAV*, *Profile & UI*, *Performance*, *API Tokens*, *Fixes*, …).
 

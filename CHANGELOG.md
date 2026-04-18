@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.18.0
+## 0.18.0 — Performance & Reliability
 
 ### Highlights
 
@@ -44,7 +44,7 @@ Performance and reliability release. Listings, sidebars, and notifications acros
 - Multi-step operations are now fully transactional, preventing rare partial updates
 - User settings are no longer fetched for anonymous visitors
 
-## 0.17.0
+## 0.17.0 — Calendar Overhaul
 
 ### Highlights
 
@@ -72,7 +72,7 @@ Calendar overhaul with infinite scroll and a smoother mobile experience. WebDAV 
 
 - Activity events with no actor no longer break the activity feed
 
-## 0.16.0
+## 0.16.0 — Profile & Rich Media
 
 ### Highlights
 
@@ -116,7 +116,7 @@ Calendar overhaul with infinite scroll and a smoother mobile experience. WebDAV 
 - Declined events no longer appear in the upcoming calendar view
 - Activity feed no longer hides others' events when the actor is excluded
 
-## 0.15.0
+## 0.15.0 — External Calendars & Group Folders
 
 ### Highlights
 
@@ -156,7 +156,7 @@ Calendar overhaul with infinite scroll and a smoother mobile experience. WebDAV 
 - Un-favoriting a note keeps the selection consistent
 - Smoother chat membership updates and read receipts
 
-## 0.14.0
+## 0.14.0 — Notes & Unified Inbox
 
 ### Highlights
 
@@ -208,7 +208,7 @@ Markdown-based note-taking app with rich organization features.
 - Markdown editor padding on smaller screens
 - Changelog modal width on smaller screens
 
-## 0.13.0
+## 0.13.0 — File Sharing Links
 
 ### Highlights
 
@@ -241,7 +241,7 @@ Markdown-based note-taking app with rich organization features.
 - Fixed edge cases in IMAP folder synchronization
 - Scheduled messages no longer post empty responses
 
-## 0.12.0
+## 0.12.0 — AI Search & PWA
 
 ### Highlights
 
@@ -296,7 +296,7 @@ Enhanced AI capabilities with web search, scheduling, and improved tool handling
 - Chat titles generate only after 2+ messages
 - Calendar widget accent color consistency
 
-## 0.11.0
+## 0.11.0 — AI Bots Overhaul
 
 ### Highlights
 
@@ -341,7 +341,7 @@ AI tools ecosystem and bot management overhaul.
 - Calendar icons refresh correctly after polls update
 - Greeting falls back to username when first name is empty
 
-## 0.10.0
+## 0.10.0 — AI Assistant
 
 ### Highlights
 
@@ -386,7 +386,7 @@ AI-powered assistant integrated across Chat and Mail modules.
 - Presence indicators disabled in dialog avatars
 - Visual refresh for the mail account menu
 
-## 0.9.0
+## 0.9.0 — Polls & File Locking
 
 ### Highlights
 
@@ -432,7 +432,7 @@ AI-powered assistant integrated across Chat and Mail modules.
 
 - Mail unread counts stay in sync with optimistic UI updates
 
-## 0.8.0
+## 0.8.0 — Replies & Read Receipts
 
 ### Highlights
 
@@ -450,7 +450,7 @@ Chat gets **message replies** with quoted preview and click-to-scroll, plus **re
 - **Calendar event notifications** — invites, updates, cancellations, and RSVP responses
 - Notification URLs and click handling now work reliably
 
-## 0.7.0
+## 0.7.0 — Notifications & Presence
 
 ### Highlights
 
@@ -481,7 +481,7 @@ A real-time **notification system** lands with its own UI panel. User **presence
 - App shortcuts no longer conflict with browser shortcuts
 - Navbar cleanup: removed unused entries
 
-## 0.6.0
+## 0.6.0 — Mail & Recurring Events
 
 ### Highlights
 
@@ -537,7 +537,7 @@ IMAP/SMTP mail client integrated into the workspace.
 - **Kubernetes deployment manifests** with health probes (liveness, readiness, startup)
 - **Celery task queue** for background processing, with Redis fallback
 
-## 0.5.0
+## 0.5.0 — Agenda & Attachments
 
 ### Highlights
 
@@ -569,7 +569,7 @@ Calendar introduces an **Agenda view** with a chronological event listing. Chat 
 
 - **Docker images** now published on GHCR for each `main` push and tag
 
-## 0.4.0
+## 0.4.0 — Chat, Calendar & Sharing
 
 ### Highlights
 
@@ -630,7 +630,7 @@ Full-featured calendar with multiple views and event management.
 
 - **Trash auto-purge** — trashed items are now periodically cleaned up
 
-## 0.3.0
+## 0.3.0 — Folder ZIP Downloads
 
 ### Highlights
 
@@ -641,7 +641,7 @@ Folders can now be **downloaded as ZIP archives**. A new "Download as ZIP" optio
 - **Download folders as ZIP archives** — new "Download as ZIP" context menu option
 - The download endpoint now handles both files and folders
 
-## 0.2.0
+## 0.2.0 — PostgreSQL Support
 
 ### Highlights
 
@@ -655,7 +655,7 @@ Folders can now be **downloaded as ZIP archives**. A new "Download as ZIP" optio
 
 - Monaco editor base theme syncs with the workspace theme
 
-## 0.1.0
+## 0.1.0 — Initial Release
 
 ### Highlights
 

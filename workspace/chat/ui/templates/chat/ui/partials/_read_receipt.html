@@ -1,9 +1,17 @@
 {% if show %}
 <span class="inline-flex items-center gap-0.5 cursor-pointer relative"
       x-data="{ open: false, loaded: false, loading: false, above: true }"
-      @click.stop="if (!open) { const rect = $el.getBoundingClientRect(); above = rect.top > 160; } open = !open; if (open && !loaded) { $refs.readersLink.click(); }"
+      @click.stop="
+        if (!open) { const rect = $el.getBoundingClientRect(); above = rect.top > 160; }
+        open = !open;
+        if (open && !loaded) {
+          loading = true;
+          $ajax('/chat/{{ conversation_uuid }}/messages/{{ message_uuid }}/readers', {
+            target: 'readers-popover-{{ message_uuid }}',
+          });
+        }
+      "
       @click.outside="open = false"
-      @ajax:before="loading = true"
       @ajax:after="loading = false; loaded = true">
   <svg class="w-3.5 h-3.5 {% if all_read %}text-info{% else %}text-base-content/30{% endif %}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
     <path d="M1 12l5 5L17 6" />
@@ -12,11 +20,6 @@
   {% if not is_dm and total_recipients > 1 %}
     <span class="text-[0.6rem] {% if all_read %}text-info{% else %}text-base-content/40{% endif %}">{{ read_count }}/{{ total_recipients }}</span>
   {% endif %}
-
-  <a x-ref="readersLink"
-     class="hidden"
-     href="/chat/{{ conversation_uuid }}/messages/{{ message_uuid }}/readers"
-     x-target="readers-popover-{{ message_uuid }}"></a>
 
   <div x-show="open" x-cloak x-transition
        class="absolute right-0 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg p-2 min-w-48 max-w-64"

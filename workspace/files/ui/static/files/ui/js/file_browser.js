@@ -90,7 +90,7 @@ window.isActionLoading = function (uuid) {
 };
 
 // --- File browser preferences ---
-window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list', mosaicTileSize: 3 };
+window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list', mosaicTileSize: 3, showPinned: true, showGroups: true };
 window._filePrefsCache = { ...window._filePrefsDefaults };
 
 window.getFilePrefs = function() {
@@ -122,8 +122,7 @@ window.filePreferences = function filePreferences() {
       this._broadcast();
       // Breadcrumb collapse is rendered server-side; refresh to apply
       if (key === 'breadcrumbCollapse') {
-        const link = document.querySelector('[data-refresh-folder-browser]');
-        if (link) link.click();
+        this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
       }
     },
 
@@ -135,9 +134,7 @@ window.filePreferences = function filePreferences() {
     _saveRemote() {
       clearTimeout(this._saveTimer);
       this._saveTimer = setTimeout(() => {
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-          || '';
+        const csrfToken = getCSRFToken();
         fetch(API_URL, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -152,11 +149,13 @@ window.sidebarCollapse = function sidebarCollapse() {
   return {
     collapsed: localStorage.getItem('sidebarCollapsed') === 'true',
     activeView: null,
+    showPinned: window._filePrefsCache.showPinned !== false,
+    showGroups: window._filePrefsCache.showGroups !== false,
 
     isMobile() {
       return window.matchMedia('(max-width: 1023px)').matches;
     },
-    
+
     init() {
       if (this.isMobile()) {
         this.collapsed = true;
@@ -164,72 +163,30 @@ window.sidebarCollapse = function sidebarCollapse() {
       this.syncActiveView();
       window.addEventListener('popstate', () => this.syncActiveView());
       window.addEventListener('nav-state-changed', () => this.syncActiveView());
+      window.addEventListener('preferences-changed', (e) => {
+        this.showPinned = e.detail.showPinned !== false;
+        this.showGroups = e.detail.showGroups !== false;
+      });
       window.matchMedia('(max-width: 1023px)').addEventListener('change', (event) => {
         if (event.matches) {
           this.collapsed = true;
         }
       });
 
-      // Initialize Lucide icons on load
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') {
-          lucide.createIcons();
-        }
-      });
-      
-      // Re-initialize Lucide icons when state changes
-      this.$watch('collapsed', () => {
-        // Wait for transition to complete before recreating icons
-        setTimeout(() => {
-          if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-          }
-        }, 350); // Slightly longer than transition duration (300ms)
-      });
     },
-    
+
     toggleCollapse() {
       if (this.isMobile()) {
         return;
       }
       this.collapsed = !this.collapsed;
       localStorage.setItem('sidebarCollapsed', this.collapsed);
-      
-      // Immediate icon refresh for visible elements
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') {
-          lucide.createIcons();
-        }
-      });
     },
 
     syncActiveView() {
-      const path = window.location.pathname.replace(/\/+$/, '');
-      const params = new URLSearchParams(window.location.search);
-      const favorites = (params.get('favorites') || '').toLowerCase();
-      const recent = (params.get('recent') || '').toLowerCase();
-      const shared = (params.get('shared') || '').toLowerCase();
-      if (['1', 'true', 'yes'].includes(shared)) {
-        this.activeView = 'shared';
-        return;
-      }
-      if (['1', 'true', 'yes'].includes(favorites)) {
-        this.activeView = 'favorites';
-        return;
-      }
-      if (['1', 'true', 'yes'].includes(recent)) {
-        this.activeView = 'recent';
-        return;
-      }
-      if (path === '/files/trash') {
-        this.activeView = 'trash';
-        return;
-      }
-      if (path === '/files' || path.startsWith('/files/')) {
-        this.activeView = 'root';
-        return;
-      }
-      this.activeView = null;
+      const browser = document.getElementById('folder-browser');
+      const sidebarActive = browser ? browser.dataset.sidebarActive : null;
+      this.activeView = sidebarActive || 'root';
     },
 
     setActiveView(view) {
@@ -340,7 +297,6 @@ window.fileBrowser = function fileBrowser() {
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
         this.$refs.propertiesContent.replaceChildren(...doc.body.children);
-        this.$nextTick(() => lucide.createIcons());
       } catch (err) {
         this.propertiesError = err.message;
       } finally {
@@ -371,7 +327,7 @@ window.fileBrowser = function fileBrowser() {
             this.showRenameDialog(uuid, name);
             break;
           case 'delete':
-            this.confirmDelete(uuid, name, nodeType);
+            this.confirmDelete(uuid, name, nodeType, !!e.detail.isGroupFolder);
             break;
           case 'restore':
             this.confirmRestore(uuid, name, nodeType);
@@ -480,11 +436,7 @@ window.fileBrowser = function fileBrowser() {
     },
 
     showCreateFolderDialog() {
-      const dialog = document.getElementById('create-folder-dialog');
-      const input = dialog.querySelector('input');
-      input.value = '';
-      dialog.showModal();
-      setTimeout(() => input.focus(), 100);
+      window.fileActions.showCreateFolderDialog();
     },
 
     showCreateFileDialog(defaultType = 'txt') {
@@ -508,13 +460,10 @@ window.fileBrowser = function fileBrowser() {
     },
 
     showRenameDialog(uuid, name) {
-      const dialog = document.getElementById('rename-dialog');
-      window.dispatchEvent(new CustomEvent('open-rename', { detail: { uuid, name } }));
-      dialog.showModal();
-      setTimeout(() => dialog.querySelector('input').focus(), 100);
+      window.fileActions.showRenameDialog(uuid, name);
     },
 
-    async confirmDelete(uuid, name, nodeType) {
+    async confirmDelete(uuid, name, nodeType, isGroupFolder) {
       if (window.getFilePrefs().confirmBeforeDelete) {
         const confirmed = await AppDialog.confirm({
           title: `Delete ${nodeType}?`,
@@ -524,34 +473,21 @@ window.fileBrowser = function fileBrowser() {
         });
         if (!confirmed) return;
       }
-      this.deleteItem(uuid);
+      await this.deleteItem(uuid);
+      if (isGroupFolder) {
+        window.dispatchEvent(new CustomEvent('group-folders-changed'));
+      }
     },
 
     async createFolder(name) {
       try {
-        const response = await fetch('/api/v1/files', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.getCsrfToken()
-          },
-          body: JSON.stringify({
-            name: name,
-            node_type: 'folder',
-            parent: this.currentFolder || null
-          })
-        });
-        if (response.ok) {
-          document.getElementById('create-folder-dialog').close();
-          this.refreshFolderBrowser();
-        } else {
-          const data = await response.json();
-          this.showAlert('error', data.detail || 'Failed to create folder');
-        }
+        await window.fileActions.createFolder(name, this.currentFolder || null);
+        this.refreshFolderBrowser();
       } catch (error) {
-        this.showAlert('error', 'Failed to create folder');
+        this.showAlert('error', error.message || 'Failed to create folder');
       }
     },
+
 
     async createFile(name, fileType, customExt) {
       const trimmedName = (name || '').trim();
@@ -610,7 +546,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch('/api/v1/files', {
           method: 'POST',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           },
           body: formData
         });
@@ -742,7 +678,7 @@ window.fileBrowser = function fileBrowser() {
         xhr.onerror = () => reject(new Error('Network error'));
 
         xhr.open('POST', '/api/v1/files');
-        xhr.setRequestHeader('X-CSRFToken', this.getCsrfToken());
+        xhr.setRequestHeader('X-CSRFToken', getCSRFToken());
         xhr.send(formData);
       });
     },
@@ -855,24 +791,11 @@ window.fileBrowser = function fileBrowser() {
     async renameItem(uuid, newName) {
       this._startLoading(uuid);
       try {
-        const response = await fetch(`/api/v1/files/${uuid}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.getCsrfToken()
-          },
-          body: JSON.stringify({ name: newName })
-        });
-        if (response.ok) {
-          document.getElementById('rename-dialog').close();
-          window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-          this.refreshFolderBrowser();
-        } else {
-          const data = await response.json();
-          this.showAlert('error', data.detail || 'Failed to rename');
-        }
+        await window.fileActions.renameItem(uuid, newName);
+        window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
+        this.refreshFolderBrowser();
       } catch (error) {
-        this.showAlert('error', 'Failed to rename');
+        this.showAlert('error', error.message || 'Failed to rename');
       } finally {
         this._stopLoading(uuid);
       }
@@ -884,7 +807,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(`/api/v1/files/${uuid}`, {
           method: 'DELETE',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -918,7 +841,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(`/api/v1/files/${uuid}/restore`, {
           method: 'POST',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -952,7 +875,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(`/api/v1/files/${uuid}/purge`, {
           method: 'DELETE',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -987,7 +910,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(url, {
           method: 'DELETE',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -1010,7 +933,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(`/api/v1/files/${uuid}/favorite`, {
           method: isFavorite ? 'DELETE' : 'POST',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -1038,7 +961,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(`/api/v1/files/${uuid}/pin`, {
           method: isPinned ? 'DELETE' : 'POST',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -1083,7 +1006,7 @@ window.fileBrowser = function fileBrowser() {
         try {
           const response = await fetch(`/api/v1/files/${uuid}`, {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': this.getCsrfToken() }
+            headers: { 'X-CSRFToken': getCSRFToken() }
           });
           if (response.ok) {
             successCount++;
@@ -1118,7 +1041,7 @@ window.fileBrowser = function fileBrowser() {
         try {
           const response = await fetch(`/api/v1/files/${uuid}/favorite`, {
             method: add ? 'POST' : 'DELETE',
-            headers: { 'X-CSRFToken': this.getCsrfToken() }
+            headers: { 'X-CSRFToken': getCSRFToken() }
           });
           if (response.ok) {
             successCount++;
@@ -1162,7 +1085,7 @@ window.fileBrowser = function fileBrowser() {
         try {
           const response = await fetch(`/api/v1/files/${uuid}/restore`, {
             method: 'POST',
-            headers: { 'X-CSRFToken': this.getCsrfToken() }
+            headers: { 'X-CSRFToken': getCSRFToken() }
           });
           if (response.ok) {
             successCount++;
@@ -1206,7 +1129,7 @@ window.fileBrowser = function fileBrowser() {
         try {
           const response = await fetch(`/api/v1/files/${uuid}/purge`, {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': this.getCsrfToken() }
+            headers: { 'X-CSRFToken': getCSRFToken() }
           });
           if (response.ok) {
             successCount++;
@@ -1241,7 +1164,7 @@ window.fileBrowser = function fileBrowser() {
         try {
           const response = await fetch(`/api/v1/files/${uuid}/pin`, {
             method: add ? 'POST' : 'DELETE',
-            headers: { 'X-CSRFToken': this.getCsrfToken() }
+            headers: { 'X-CSRFToken': getCSRFToken() }
           });
           if (response.ok) {
             successCount++;
@@ -1329,7 +1252,7 @@ window.fileBrowser = function fileBrowser() {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': this.getCsrfToken()
+                'X-CSRFToken': getCSRFToken()
               },
               body: JSON.stringify({ parent: targetFolderId })
             });
@@ -1339,7 +1262,7 @@ window.fileBrowser = function fileBrowser() {
               method: 'PATCH',
               headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': this.getCsrfToken()
+                'X-CSRFToken': getCSRFToken()
               },
               body: JSON.stringify({ parent: targetFolderId })
             });
@@ -1377,7 +1300,7 @@ window.fileBrowser = function fileBrowser() {
         const response = await fetch(`/api/v1/files/${uuid}/pin`, {
           method: 'POST',
           headers: {
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           }
         });
         if (response.ok) {
@@ -1409,7 +1332,7 @@ window.fileBrowser = function fileBrowser() {
         await fetch(syncUrl, {
           method: 'POST',
           headers: {
-            'X-CSRFToken': this.getCsrfToken(),
+            'X-CSRFToken': getCSRFToken(),
           },
         });
       } catch (error) {
@@ -1421,47 +1344,7 @@ window.fileBrowser = function fileBrowser() {
     },
 
     refreshFolderBrowser() {
-      const refreshLink = document.querySelector('[data-refresh-folder-browser]');
-      if (refreshLink) {
-        refreshLink.click();
-        return;
-      }
-      const target = document.getElementById('folder-browser');
-      if (!target) return;
-      fetch(window.location.href, {
-        headers: {
-          'X-Alpine-Request': 'true'
-        }
-      })
-        .then((response) => {
-          if (!response.ok) {
-            this.showAlert('error', 'Failed to refresh items');
-            return null;
-          }
-          return response.text();
-        })
-        .then((html) => {
-          if (!html) return;
-          const wrapper = document.createElement('div');
-          wrapper.innerHTML = html;
-          const fresh = wrapper.querySelector('#folder-browser');
-          if (!fresh) {
-            this.showAlert('error', 'Failed to refresh items');
-            return;
-          }
-          if (window.Alpine?.mutateDom) {
-            window.Alpine.mutateDom(() => { target.replaceWith(fresh); });
-          } else {
-            target.replaceWith(fresh);
-          }
-          if (window.Alpine?.initTree) {
-            window.Alpine.initTree(fresh);
-          }
-          if (window.lucide?.createIcons) {
-            window.lucide.createIcons({ nodes: [fresh] });
-          }
-        })
-        .catch(() => this.showAlert('error', 'Failed to refresh items'));
+      this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
     },
 
     showAlert(type, message) {
@@ -1476,10 +1359,6 @@ window.fileBrowser = function fileBrowser() {
       console.warn('AppAlert is not available:', message);
     },
 
-    getCsrfToken() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-             document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-    },
 
     init() {
       // Create reactive backing for the global isActionLoading() function.
@@ -1494,6 +1373,11 @@ window.fileBrowser = function fileBrowser() {
       window.addEventListener('create-folder', (e) => this.createFolder(e.detail.name));
       window.addEventListener('create-file', (e) => this.createFile(e.detail.name, e.detail.fileType, e.detail.customExt));
       window.addEventListener('rename-item', (e) => this.renameItem(e.detail.uuid, e.detail.name));
+      window.addEventListener('create-group-folder', (e) => {
+        window.fileActions.createGroupFolder(e.detail.groupId, e.detail.groupName)
+          .then(() => window.dispatchEvent(new CustomEvent('group-folders-changed')))
+          .catch((err) => this.showAlert('error', err.message || 'Failed to create group folder'));
+      });
 
       // Properties panel events
       window.addEventListener('open-properties', (e) => {
@@ -1607,12 +1491,6 @@ window.fileTableControls = function fileTableControls() {
       this.ready = true;
       this.applyAll();
       this._initializing = false;
-
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') {
-          lucide.createIcons({ nodes: [this.$el] });
-        }
-      });
 
       this.$watch('searchQuery', () => this.applyRows());
       this.$watch('typeFilter', () => this.applyRows());
@@ -1828,9 +1706,7 @@ window.fileTableControls = function fileTableControls() {
 
       this.actionsLoading = true;
       try {
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-          || '';
+        const csrfToken = getCSRFToken();
         const resp = await fetch('/api/v1/files/actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -1871,10 +1747,6 @@ window.fileTableControls = function fileTableControls() {
 
       const catOrder = ['transfer', 'organize', 'edit', 'danger', 'trash'];
       this.bulkActions = common.sort((a, b) => catOrder.indexOf(a.category) - catOrder.indexOf(b.category));
-
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [this.$el] });
-      });
     },
 
     executeBulkAction(action) {
@@ -1935,9 +1807,7 @@ window.fileTableControls = function fileTableControls() {
 
     async _bulkDownload(uuids) {
       try {
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-          || '';
+        const csrfToken = getCSRFToken();
         const resp = await fetch('/api/v1/files/bulk-download', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -2263,9 +2133,7 @@ window.fileTableControls = function fileTableControls() {
         const payload = this._getStatePayload();
         const serialized = JSON.stringify(payload);
         if (serialized === this._lastSyncedState) return;
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-          || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-          || '';
+        const csrfToken = getCSRFToken();
         fetch('/api/v1/settings/files/table_controls', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -2528,6 +2396,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
       this.pinnedCount = list ? list.children.length : 0;
 
       window.addEventListener('pinned-folders-changed', () => this.refreshPinnedSection());
+      window.addEventListener('group-folders-changed', () => this.refreshGroupFoldersSection());
 
       // Listen for pinned folder context menu events
       window.addEventListener('open-pinned-folder-context-menu', (e) => {
@@ -2543,17 +2412,23 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
         });
       });
 
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') {
-          lucide.createIcons({ nodes: [this.$el] });
-        }
+      // Listen for group folder context menu events
+      window.addEventListener('open-group-folder-context-menu', (e) => {
+        this.openContextMenu(e.detail.event, {
+          uuid: e.detail.uuid,
+          name: e.detail.name,
+          nodeType: 'folder',
+          mimeType: '',
+          isFavorite: e.detail.isFavorite,
+          isViewable: false,
+          isTrash: false,
+          isPinned: false,
+          isGroupFolder: true,
+        });
       });
+
     },
 
-    getCsrfToken() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-             document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-    },
 
     onDragOver(event) {
       if (!event.dataTransfer.types.includes('application/x-pin-folder')) return;
@@ -2584,12 +2459,11 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
         if (!data.uuid) return;
         const response = await fetch(`/api/v1/files/${data.uuid}/pin`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this.getCsrfToken() }
+          headers: { 'X-CSRFToken': getCSRFToken() }
         });
         if (response.ok) {
           window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-          const refreshLink = document.querySelector('[data-refresh-folder-browser]');
-          if (refreshLink) refreshLink.click();
+          this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
         } else {
           let errData = {};
           try { errData = await response.json(); } catch (e) {}
@@ -2621,14 +2495,30 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
         currentList.replaceChildren(...newItems);
         this.pinnedCount = currentList.querySelectorAll('li').length;
 
-        // Re-initialize Lucide icons
-        if (typeof lucide !== 'undefined') {
-          lucide.createIcons({ nodes: [currentList] });
-        }
         // Re-init Alpine on new content
         if (window.Alpine?.initTree) {
           window.Alpine.initTree(currentList);
         }
+      } catch (error) {
+        // Silent fail for sidebar refresh
+      }
+    },
+
+    async refreshGroupFoldersSection() {
+      try {
+        const response = await fetch('/files/group-folders');
+        if (!response.ok) return;
+        const html = await response.text();
+        const container = document.getElementById('group-folders-section');
+        if (!container) return;
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newContent = Array.from(doc.body.children);
+
+        container.replaceChildren(...newContent);
+
+        if (window.lucide) window.lucide.createIcons();
       } catch (error) {
         // Silent fail for sidebar refresh
       }
@@ -2639,7 +2529,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
 
       // Load actions for the pinned folder
       try {
-        const csrfToken = this.getCsrfToken();
+        const csrfToken = getCSRFToken();
         const resp = await fetch('/api/v1/files/actions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -2720,7 +2610,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this.getCsrfToken()
+            'X-CSRFToken': getCSRFToken()
           },
           body: JSON.stringify({ order: uuids })
         });
@@ -2749,6 +2639,13 @@ window.shareModal = function shareModal() {
     pendingPermissionChanges: new Map(), // userId → newPermission for existing shares
     loading: false,
     saving: false,
+    // Share links state
+    shareLinks: [],
+    linksLoading: false,
+    creatingLink: false,
+    showLinkForm: false,
+    newLinkExpiry: '',
+    newLinkPassword: '',
 
     get displayList() {
       const permChanges = this.pendingPermissionChanges;
@@ -2783,10 +2680,10 @@ window.shareModal = function shareModal() {
         this.pendingRemovals = new Set();
         this.pendingPermissionChanges = new Map();
         this.loadShares();
+        this.loadShareLinks();
         this.$nextTick(() => {
           const dlg = this.$refs.shareDialog;
           if (dlg && !dlg.open) dlg.showModal();
-          if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [this.$el] });
         });
       });
 
@@ -2866,9 +2763,7 @@ window.shareModal = function shareModal() {
     async save() {
       if (!this.fileUuid || !this.hasChanges) return;
       this.saving = true;
-      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-        || '';
+      const csrfToken = getCSRFToken();
       const headers = {
         'Content-Type': 'application/json',
         'X-CSRFToken': csrfToken,
@@ -2923,8 +2818,7 @@ window.shareModal = function shareModal() {
       await this.loadShares();
       window.dispatchEvent(new CustomEvent('shares-changed'));
       // Refresh the folder browser so the shared badge updates
-      const refreshLink = document.querySelector('[data-refresh-folder-browser]');
-      if (refreshLink) refreshLink.click();
+      this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
       this.closeModal();
     },
 
@@ -2938,6 +2832,74 @@ window.shareModal = function shareModal() {
       this.pendingAdds = [];
       this.pendingRemovals = new Set();
       this.pendingPermissionChanges = new Map();
+      this.shareLinks = [];
+      this.showLinkForm = false;
+      this.newLinkExpiry = '';
+      this.newLinkPassword = '';
+    },
+
+    // --- Share Links ---
+
+    async loadShareLinks() {
+      if (!this.fileUuid) return;
+      this.linksLoading = true;
+      try {
+        const resp = await fetch(`/api/v1/files/${this.fileUuid}/share-links`, {
+          credentials: 'same-origin',
+        });
+        if (resp.ok) this.shareLinks = await resp.json();
+      } catch (e) {
+        this.shareLinks = [];
+      }
+      this.linksLoading = false;
+    },
+
+    async createShareLink() {
+      if (!this.fileUuid) return;
+      this.creatingLink = true;
+      const csrfToken = getCSRFToken();
+      const body = {};
+      if (this.newLinkExpiry) body.expires_at = new Date(this.newLinkExpiry).toISOString();
+      if (this.newLinkPassword) body.password = this.newLinkPassword;
+      try {
+        const resp = await fetch(`/api/v1/files/${this.fileUuid}/share-links`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(body),
+          credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          this.showLinkForm = false;
+          this.newLinkExpiry = '';
+          this.newLinkPassword = '';
+          await this.loadShareLinks();
+        }
+      } catch (e) {}
+      this.creatingLink = false;
+    },
+
+    async deleteShareLink(linkUuid) {
+      const csrfToken = getCSRFToken();
+      try {
+        await fetch(`/api/v1/files/${this.fileUuid}/share-links/${linkUuid}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': csrfToken },
+          credentials: 'same-origin',
+        });
+        this.shareLinks = this.shareLinks.filter(l => l.uuid !== linkUuid);
+      } catch (e) {}
+    },
+
+    copyShareLink(url) {
+      navigator.clipboard.writeText(url).then(() => {
+        if (window.AppAlert) window.AppAlert.success('Link copied to clipboard');
+      });
+    },
+
+    formatLinkExpiry(expiresAt) {
+      if (!expiresAt) return 'Permanent';
+      const d = new Date(expiresAt);
+      return d.toLocaleDateString();
     },
   };
 };
@@ -2955,8 +2917,14 @@ window.fileTableWithView = function fileTableWithView() {
     ...tableControls,
     ...viewControls,
 
-    // Method to check if a card should be visible in mosaic view (respects filters)
-    shouldShowCard(name, nodeType, isFavorite) {
+    // Method to check if a card should be visible in mosaic view (respects filters).
+    // Reads all values from the element's data-* attributes to avoid inlining
+    // (and escaping) strings in the Alpine expression.
+    shouldShowCard(el) {
+      if (!el || !el.dataset) return true;
+      const name = el.dataset.name || '';
+      const nodeType = el.dataset.nodeType || '';
+      const isFavorite = el.dataset.favorite || '0';
       // Hidden files filter
       if (!this.showHiddenFiles && name.startsWith('.')) {
         return false;
@@ -3007,14 +2975,6 @@ window.viewToggle = function viewToggle() {
         }
       });
 
-      // Re-init Lucide icons after view switch
-      this.$watch('viewMode', () => {
-        this.$nextTick(() => {
-          if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-          }
-        });
-      });
     },
 
     // Tile size computed helpers
@@ -3041,9 +3001,7 @@ window.viewToggle = function viewToggle() {
 
     _saveFilePrefs() {
       const API_URL = '/api/v1/settings/files/preferences';
-      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-        || '';
+      const csrfToken = getCSRFToken();
 
       fetch(API_URL, {
         method: 'PUT',
@@ -3113,11 +3071,6 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
     editingId: null,
     editBody: '',
 
-    _csrf() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value
-        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-        || '';
-    },
 
     async init() {
       await this.loadComments();
@@ -3134,11 +3087,6 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
         }
       } catch (e) { /* ignore */ }
       this.loading = false;
-      this.$nextTick(() => {
-        if (this.$refs.commentsList) {
-          lucide.createIcons({ nodes: this.$refs.commentsList.querySelectorAll('[data-lucide]') });
-        }
-      });
     },
 
     async addComment() {
@@ -3147,7 +3095,7 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
       try {
         const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
           body: JSON.stringify({ body: this.newBody.trim() }),
         });
@@ -3160,11 +3108,6 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
     },
 
     _refreshIcons() {
-      this.$nextTick(() => {
-        if (this.$refs.commentsList) {
-          lucide.createIcons({ nodes: this.$refs.commentsList.querySelectorAll('[data-lucide]') });
-        }
-      });
     },
 
     startEdit(comment) {
@@ -3184,7 +3127,7 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
       try {
         const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments/${commentUuid}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
           body: JSON.stringify({ body: this.editBody.trim() }),
         });
@@ -3200,7 +3143,7 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
       try {
         const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments/${commentUuid}`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok) {

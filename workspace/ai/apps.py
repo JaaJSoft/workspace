@@ -26,3 +26,7 @@ class AIConfig(AppConfig):
         if getattr(settings, 'AI_IMAGE_MODEL', ''):
             from workspace.ai.tools import ImageToolProvider
             tool_registry.register_provider(ImageToolProvider())
+
+        if getattr(settings, 'SEARXNG_URL', ''):
+            from workspace.ai.tools import WebToolProvider
+            tool_registry.register_provider(WebToolProvider())

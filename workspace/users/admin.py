@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import UserPresence, UserSetting
+from .models import APITokenLabel, UserPresence, UserSetting
 
 
 @admin.register(UserPresence)
@@ -18,3 +18,11 @@ class UserSettingAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'key')
     raw_id_fields = ('user',)
     readonly_fields = ('uuid', 'created_at', 'updated_at')
+
+
+@admin.register(APITokenLabel)
+class APITokenLabelAdmin(admin.ModelAdmin):
+    list_display = ('name', 'auth_token')
+    search_fields = ('name',)
+    raw_id_fields = ('auth_token',)
+    readonly_fields = ('uuid',)

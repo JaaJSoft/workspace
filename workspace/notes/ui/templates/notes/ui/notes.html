@@ -1,0 +1,251 @@
+{% extends "base_with_navbar.html" %}
+{% load static %}
+
+{% block title %}Notes{% endblock %}
+
+{% block extra_head %}
+<!-- Milkdown Crepe - External dependency CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prosemirror-view@1/style/prosemirror.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prosemirror-gapcursor@1/style/gapcursor.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prosemirror-virtual-cursor@0/style/virtual-cursor.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prosemirror-tables@1/style/tables.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0/dist/katex.min.css">
+<!-- Milkdown Crepe - Common feature styles -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/reset.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/block-edit.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/code-mirror.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/image-block.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/link-tooltip.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/list-item.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/placeholder.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/crepe@7.17.3/lib/theme/common/toolbar.css">
+<!-- Milkdown Crepe - DaisyUI theme bridge + custom rules -->
+<link rel="stylesheet" href="{% static 'files/ui/css/milkdown-overrides.css' %}">
+{% endblock %}
+
+{% block navbar %}
+{% include 'ui/partials/navbar.html' with navbar_full_width=True %}
+{% endblock %}
+
+{% block drawer_class %}lg:drawer-open{% endblock %}
+{% block drawer_id %}notes-drawer{% endblock %}
+
+{% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
+
+{% block drawer_attrs %}
+x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{ initial_file }}' })"
+x-init="init()"
+{% endblock %}
+
+{% block drawer_sidebar %}
+<div class="drawer-side z-40 h-full">
+  <label for="notes-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+
+  <!-- Sidebar -->
+  <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
+         :class="collapsed ? 'w-16' : 'w-72'">
+    <!-- Sidebar header -->
+    <div class="lg:border-b border-base-300 py-4 px-3">
+      <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
+        <h2 class="text-xl font-semibold flex items-center gap-2" :class="collapsed ? '' : 'pl-2'">
+          <i data-lucide="notebook-pen" class="w-6 h-6 text-success"></i>
+          <span x-show="!collapsed" x-transition>Notes</span>
+        </h2>
+        <div class="flex items-center gap-0.5" x-show="!collapsed" x-transition>
+          <div class="dropdown dropdown-end" x-data="notesPreferences()">
+            <button
+              type="button"
+              tabindex="0"
+              class="btn btn-ghost btn-sm btn-square hover:text-success"
+              aria-label="Settings"
+              title="Settings"
+            >
+              <i data-lucide="settings" class="w-4 h-4"></i>
+            </button>
+            <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-64 mt-1">
+              <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+                <i data-lucide="settings" class="w-4 h-4 text-success"></i>
+                Preferences
+              </h4>
+              {% include "notes/ui/partials/_preferences_content.html" %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar content -->
+    <div class="flex-1 overflow-y-auto py-2 px-3" id="notes-sidebar" x-target="notes-sidebar">
+      {% include "notes/ui/partials/sidebar.html" %}
+    </div>
+
+    <!-- Help button -->
+    <div class="px-3 pb-2">
+      <ul class="menu p-0">
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="success" onclick="document.getElementById('notes-help-dialog').showModal()" tooltip="Help (?)" %}
+      </ul>
+    </div>
+
+    <!-- Bottom action: settings on mobile, collapse on desktop -->
+    <div class="border-t border-base-300 py-4 px-3">
+      <ul class="menu p-0 hidden lg:block">
+        {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" color="success" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+      </ul>
+      <ul class="menu p-0 lg:hidden">
+        {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="success" onclick="document.getElementById('notes-prefs-dialog').showModal()" tooltip="Preferences" %}
+      </ul>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="h-full flex min-w-0 bg-base-100">
+
+  <!-- Note List (middle panel) -->
+  <div class="w-full lg:w-80 border-r border-base-300 flex flex-col min-h-0"
+       :class="selectedNote && isMobile() ? 'hidden' : ''">
+    {% include "notes/ui/partials/note_list.html" %}
+  </div>
+
+  <!-- Editor (right panel) -->
+  <div class="flex-1 flex flex-col min-h-0 min-w-0"
+       :class="!selectedNote && isMobile() ? 'hidden' : ''">
+
+    <!-- Editor Toolbar -->
+    <div x-show="selectedNote" x-cloak class="flex items-center justify-between p-3 border-b border-base-300">
+      <div class="flex items-center gap-2 min-w-0">
+        <!-- Mobile: back to list -->
+        <button class="btn btn-ghost btn-sm btn-square lg:hidden" @click="history.back()">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        </button>
+        <i data-lucide="notebook-pen" class="w-4 h-4 text-success flex-shrink-0"></i>
+        <input
+          type="text"
+          class="input input-ghost input-sm font-semibold flex-1 min-w-0"
+          :value="selectedNote ? noteName(selectedNote) : ''"
+          @change="renameNote($event.target.value)"
+          :readonly="!canDoOnSelected('rename')"
+          :class="!canDoOnSelected('rename') ? 'cursor-not-allowed opacity-70' : ''"
+          :title="!canDoOnSelected('rename') ? 'Renaming is disabled for this note' : ''"
+        >
+      </div>
+      <div class="flex items-center gap-1 flex-shrink-0">
+        <button class="btn btn-ghost btn-sm btn-square" @click="toggleFavorite(selectedNote)"
+                :disabled="togglingFavorite || !canDoOnSelected('toggle_favorite')"
+                :title="!canDoOnSelected('toggle_favorite') ? 'Unavailable for this note' : (selectedNote?.is_favorite ? 'Remove from favorites' : 'Add to favorites')">
+          <span class="loading loading-spinner loading-xs" x-show="togglingFavorite" x-cloak></span>
+          <i data-lucide="star" class="w-4 h-4 transition-colors" x-show="!togglingFavorite"
+             :class="selectedNote?.is_favorite ? 'text-warning fill-warning' : ''"></i>
+        </button>
+        {% include "files/ui/partials/tag_manager.html" %}
+        <button class="btn btn-ghost btn-sm btn-square" @click="moveNote(selectedNote.uuid, selectedNote.name)"
+                title="Move to folder">
+          <i data-lucide="folder-input" class="w-4 h-4"></i>
+        </button>
+        <a class="btn btn-ghost btn-sm btn-square" :href="'/files?file=' + selectedNote?.uuid"
+           title="Open in Files">
+          <i data-lucide="hard-drive" class="w-4 h-4"></i>
+        </a>
+        <button class="btn btn-ghost btn-sm btn-square text-error" @click="deleteNote()"
+                :disabled="!canDoOnSelected('delete')"
+                :title="!canDoOnSelected('delete') ? 'Unavailable for this note' : 'Delete note'">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Editor Container -->
+    <div class="flex-1 flex flex-col min-h-0">
+      <div x-show="selectedNote && loadingEditor" x-cloak class="flex-1 flex items-center justify-center">
+        <span class="loading loading-spinner loading-lg"></span>
+      </div>
+      <div x-ref="editorContainer" x-show="selectedNote && !loadingEditor" class="flex-1 min-h-0 overflow-auto flex flex-col bg-base-200"></div>
+      <div x-show="!selectedNote" x-cloak class="flex items-center justify-center h-full text-base-content/30">
+        <div class="text-center">
+          <i data-lucide="notebook-pen" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
+          <p class="text-lg font-medium">Select or create a note</p>
+          <label for="notes-drawer" class="btn btn-success btn-sm mt-4 lg:hidden cursor-pointer">
+            <i data-lucide="menu" class="w-4 h-4"></i>
+            Open notes
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% include "files/ui/partials/tag_dialog.html" %}
+{% include "files/ui/partials/folder_dialog.html" %}
+{% include "files/ui/partials/rename_dialog.html" %}
+{% include "notes/ui/partials/context_menu.html" %}
+{% include "notes/ui/partials/help_dialog.html" %}
+
+<!-- Create Group Folder Dialog -->
+<dialog id="notes-create-group-folder-dialog" class="modal">
+  <div class="modal-box" x-data="{ selectedGroup: '' }">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
+      <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-success/10 text-success">
+        <i data-lucide="users" class="w-5 h-5"></i>
+      </div>
+      Create Group Folder
+    </h3>
+    {% if available_groups %}
+    <form @submit.prevent="if (selectedGroup) { window.dispatchEvent(new CustomEvent('create-group-folder', { detail: { groupId: parseInt(selectedGroup), groupName: $refs.noteGroupSelect.options[$refs.noteGroupSelect.selectedIndex].text } })); document.getElementById('notes-create-group-folder-dialog').close(); }">
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">Group</span>
+        </label>
+        <select x-model="selectedGroup" x-ref="noteGroupSelect" class="select select-bordered w-full" required>
+          <option value="" disabled selected>Select a group</option>
+          {% for g in available_groups %}
+          <option value="{{ g.id }}">{{ g.name }}</option>
+          {% endfor %}
+        </select>
+        <label class="label">
+          <span class="label-text-alt">The folder will be named after the group</span>
+        </label>
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('notes-create-group-folder-dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-success btn-sm" :disabled="!selectedGroup">Create</button>
+      </div>
+    </form>
+    {% else %}
+    <p class="text-base-content/60 text-sm">All your groups already have a folder.</p>
+    <div class="modal-action">
+      <button type="button" class="btn btn-sm" onclick="document.getElementById('notes-create-group-folder-dialog').close()">Close</button>
+    </div>
+    {% endif %}
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
+<!-- Mobile preferences dialog -->
+<dialog id="notes-prefs-dialog" class="modal" x-data="notesPreferences()">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg flex items-center gap-2">
+      <i data-lucide="settings" class="w-5 h-5 text-success"></i>
+      Preferences
+    </h3>
+    <div class="mt-4">
+      {% include "notes/ui/partials/_preferences_content.html" %}
+    </div>
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'ui/js/icon_picker.js' %}"></script>
+<script src="{% static 'files/ui/js/file_lock.js' %}"></script>
+<script src="{% static 'files/ui/js/file_actions.js' %}"></script>
+<script src="{% static 'files/ui/js/tags.js' %}"></script>
+<script src="{% static 'notes/ui/js/notes.js' %}"></script>
+{% endblock %}

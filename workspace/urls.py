@@ -46,6 +46,7 @@ api_urlpatterns = [
 ui_urlpatterns = [
     # UI apps
     path('files', include('workspace.files.ui.urls')),
+    path('notes', include('workspace.notes.ui.urls')),
     path('users', include('workspace.users.ui.urls')),
     path('chat', include('workspace.chat.ui.urls')),
     path('calendar', include('workspace.calendar.ui.urls')),
@@ -55,10 +56,12 @@ ui_urlpatterns = [
 urlpatterns = [
     path('admin/', admin.site.urls),
     # Authentication
-    path('login', auth_views.LoginView.as_view(template_name='users/auth/login.html'), name='login'),
+    path('login', auth_views.LoginView.as_view(template_name='users/ui/auth/login.html'), name='login'),
     path('logout', auth_views.LogoutView.as_view(), name='logout'),
     # Service Worker (must be at root scope for push notifications)
     path('sw.js', serve, {'path': 'sw.js', 'document_root': Path(__file__).resolve().parent / 'common' / 'static'}, name='service-worker'),
+    # Web App Manifest (must be at root for PWA install)
+    path('manifest.json', serve, {'path': 'manifest.json', 'document_root': Path(__file__).resolve().parent / 'common' / 'static'}, name='manifest'),
     # Health probes (k8s)
     path('health/startup', StartupView.as_view(), name='health-startup'),
     path('health/live', LiveView.as_view(), name='health-live'),

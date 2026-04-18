@@ -1,5 +1,314 @@
 # Changelog
 
+## 0.17.0
+
+### Calendar
+
+- Reworked calendar API with cursor-based pagination and infinite scroll
+- Enhanced sidebar collapse logic and mobile experience
+- Improved hover interaction support for touch and non-touch devices
+- External-feed events are no longer attributed to the subscriber
+- Fixed context menu flash by setting initial position at cursor coordinates
+
+### Notes
+
+- Added keyboard shortcuts and updated help dialog
+
+### WebDAV
+
+- Fixed large file uploads from Windows
+- Prevented duplicate files and corruption from concurrent PUTs
+- Shared lock storage across workers via Redis
+
+### AI
+
+- Standardized content cleaning with `_clean_llm_content`
+
+### Tests
+
+- Playwright end-to-end setup with a first login flow test
+- Per-module coverage thresholds enforced in CI
+- Coverage reporting enabled in the tests workflow
+- New test suites: authorization across all modules, dashboard, users, notifications, core module registry, search, AI client and image editing, calendar rrule expansion, chat message rendering, mail SMTP service, common image processing
+- Reorganized all module tests into `tests/` packages with `test_*.py` convention
+
+### Fixes
+
+- Handled activity events with `actor=None` in filters and tests
+
+## 0.16.0
+
+### Users
+
+- Profile customization with bio, role, and banner palette
+- Banner palette service with validation and gradient resolution
+
+### AI & Chat
+
+- Link preview support for messages with URLs
+- Shared media gallery in conversation info panel
+- Video attachment support with frame extraction for AI analysis
+- Filter input in AI chatbot picker dialog
+- Temporal context added to LLM conversation history
+
+### Calendar
+
+- Improved agenda view
+
+### Notes
+
+- Move and open in files actions in note manager
+
+### WebDAV
+
+- Storage quota tracking with used and available bytes
+
+### Performance & Caching
+
+- View caching framework with invalidation and tests
+- `CacheControlMixin` for API responses
+- Cache control headers for file and chat responses
+- Missing database indexes added to optimize queries
+- Optimized member dict computation in calendar recurrence handling
+
+### Refactoring
+
+- Centralized access control helpers: `FileService`, `user_account_ids`, `get_active_membership`, `visible_calendar_ids`
+- Unified activity feed templates with search functionality
+- Simplified conversation and message filtering logic
+- Optimized mail UI updates with shared optimistic helpers
+- Simplified unread indicator styling in chat
+
+### Fixes
+
+- Folder content table layout and text handling in list view
+- WebDAV methods routing on root path
+- Calendar text wrapping for location and description in event details
+- Excluded explicitly declined events from upcoming calendar view
+- Activity feed: excluded actor's events no longer block others
+
+## 0.15.0
+
+### Calendar
+
+- External ICS calendar integration with background sync support
+- Event action buttons for external calendar events
+- RRULE COUNT handling for recurrence end dates in ICS sync
+
+### AI & Chat
+
+- Rolling conversation summaries with configurable context limits
+- Persistent `tool_data` for reconstructing tool call history across sessions
+- ConversationSummary admin panel with inline integration
+- Handle empty model summaries gracefully during conversation updates
+
+### Files
+
+- Group folders: shared folder spaces with creation dialog and sidebar integration
+- Restricted actions on root group folders to prevent accidental modifications
+- Dynamic refresh for group folders and improved sidebar updates
+
+### Notes
+
+- Default and journal folder selection in preferences
+- Note context menu with dynamic actions (rename, delete, move, etc.)
+- Subfolder creation from context menu
+- Icons for sidebar sections (Quick Access, Tags, Folders, Groups)
+- Help dialog with keyboard shortcut reference
+- Autosave with granular save status indicators in Markdown viewer
+
+### Documentation
+
+- README files for Calendar, Chat, Files, Mail, and Notes modules
+
+### Fixes
+
+- Mobile back navigation in Mail and Notes modules
+- Unread count updates in unified inbox mode
+- Favorite note removal handles selection state correctly
+- Chat membership update logic and read receipt display optimized
+
+### Tests
+
+- Activity visibility rules and stats across Calendar, Chat, Files, and Notes
+- AI bot visibility based on user roles and bot settings
+- Chat `last_read_at` preservation and test file reorganization
+
+### Dependencies
+
+- openai 2.29.0 → 2.30.0
+- djangorestframework 3.17.0 → 3.17.1
+- nh3 0.3.3 → 0.3.4
+- cryptography 46.0.5 → 46.0.6
+- requests 2.32.5 → 2.33.0
+
+## 0.14.0
+
+### New: Notes
+
+Markdown-based note-taking app with rich organization features.
+
+- Notes app with tagging and activity tracking
+- Advanced filters and search highlighting
+- Context menu for folders and tags with "hide from sidebar" option
+- Folder tree structure with expand/collapse in sidebar
+- Refresh button and AppDialog for note actions
+
+### Mail
+
+- Unified inbox view as the default landing page
+- Customizable mail preferences: density, preview lines, and label visibility
+- Improved mobile support and responsiveness
+
+### Calendar
+
+- Availability check AI tool
+- Notifications sent only for future events
+- Timezone-aware datetime for event comparisons
+
+### Dashboard
+
+- Improved tab layout and responsiveness
+
+### UI
+
+- Dynamic quick actions and recent commands tracking
+- "Favorites" view across modules
+- "Open in Files" option in context menu
+- Improved folder and label selection with URL state handling
+- Mobile navigation with sidebar toggle and URL updates
+- Reusable preferences UI partials
+- Favorite toggle for images
+- Responsive button sizing in note and message lists
+
+### Infrastructure
+
+- Centralized CSRF token handling with `getCSRFToken` helper
+- Removed unused profile and settings templates
+- OpenAPI schema tags for shared links views
+
+### Fixes
+
+- Poll icons update dynamically after voting
+- SVG processing no longer causes infinite loop
+- `format_size` filter handles invalid inputs
+- `is_favorite` respects `user_can_edit` permissions
+- SSE reconnection and error handling improvements
+- Milkdown editor padding on smaller screens
+- Changelog modal width on smaller screens
+
+## 0.13.0
+
+### Files
+
+- Shareable file links with password protection and expiration
+
+### AI & Bots
+
+- Fallback for parsing tool calls from text content
+- Pydantic models for standardizing tool parameters
+- Clarified `generate_image` usage for broader image-related requests
+
+### Mail
+
+- Folder reconciliation to detect deleted/moved messages
+- Pending actions now exclude inactive accounts
+- Skip AI classification for messages in sent and drafts folders
+
+### UI
+
+- Dark theme compatibility for modal typography
+- Fixed auto-scroll interruptions when messages load
+- Fixed stale message injection during conversation switch
+
+### Infrastructure
+
+- Versioned service worker registration with improved cache logic
+- Excluded Markdown files (except `CHANGELOG.md`) from `.dockerignore`
+- Removed unnecessary Lucide.js initialization calls across the codebase
+
+### Fixes
+
+- IMAP flag sync with precise state diffs
+- IMAP UID search edge cases for folder synchronization
+- IMAP optimized message flag updates with targeted queries
+- Prevented scheduled messages from posting empty responses
+
+### Dependencies
+
+- openai 2.26.0 → 2.29.0
+- djangorestframework 3.16.1 → 3.17.0
+
+## 0.12.0
+
+### AI & Bots
+
+Enhanced AI capabilities with web search, scheduling, and improved tool handling.
+
+- Web search and webpage reading via SearXNG integration
+- Scheduled messages with timezone-aware delivery
+- Dedicated search tools for calendar, chat, mail, and files
+- AI image editing service with OpenAI and Ollama fallback
+- Lightweight model support (`AI_SMALL_MODEL`) for summaries and titles
+- Auto-retry for empty model responses
+- XML `<image>` tag support for tool calls
+- Improved raw tool call parsing and handling
+- Raw message storage and sanitization for task processing
+- Prompt refinements: factual accuracy, natural tool use, memory integration
+
+### Chat
+
+- Typing indicators with real-time synchronization
+- Bot conversation renaming with auto-title generation
+- Orphan attachment purge command and scheduler
+- SSE reconnection on mobile resume (visibility change detection)
+- Improved Markdown image handling for AI-generated images
+
+### Mail
+
+- Label management with AI-driven email classification
+- Unread count support for labels
+- Activity tracking split: sent mail for heatmap/profile, received for dashboard
+- OAuth2 revoked token handling with automatic account deactivation and user notification
+- OAuth2 account reconnection without duplicate creation
+- Improved AI summary rendering and folder/label UI
+- Message labels ordered by position and name
+
+### Dashboard & UI
+
+- Changelog viewer modal accessible from user menu ("What's new")
+- Redesigned inline alert component with subtle border styling
+- PWA support with offline caching and app icons
+- Workspace usage stats with count-up animations and storage quota
+- Improved search bar responsiveness
+- Session expiry handling for AJAX and fetch requests
+
+### Users
+
+- Timezone-aware scheduling and user settings
+
+### Infrastructure
+
+- SearXNG configuration for Docker Compose and Kubernetes
+- Centralized permission query helpers (`user_conversation_ids`, `user_account_ids`, `visible_calendar_ids`, `FileService.user_files_qs`)
+- `APP_VERSION` exposed to templates via context processor
+
+### Fixes
+
+- Scheduled message UTC conversion (`datetime.timezone` consistency)
+- AI badge layout for multiple tools
+- AI image edit error messages and logging
+- File context generation with missing `parent_id`
+- Duplicate files from trashed folders during sync
+- Web Push safety checks
+- Chat title generation threshold (2+ messages)
+- Calendar widget accent color consistency
+
+### Dependencies
+
+- cairosvg 2.9.0
+- redis 7.3.0
+
 ## 0.11.0
 
 ### AI & Bots

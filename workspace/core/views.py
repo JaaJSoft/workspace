@@ -4,21 +4,26 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.cache import cache_response
+from workspace.common.mixins import CacheControlMixin
 from workspace.core.module_registry import registry
 
 
-class ModulesView(APIView):
+class ModulesView(CacheControlMixin, APIView):
+    cache_max_age = 3600
+
     @extend_schema(
         tags=['Modules'],
         summary='List workspace modules',
         description='Returns all registered workspace modules.',
     )
+    @cache_response(3600, per_user=False)
     def get(self, request):
         modules = [asdict(m) for m in registry.get_all()]
         return Response({'results': modules})
 
 
-class UnifiedSearchView(APIView):
+class UnifiedSearchView(CacheControlMixin, APIView):
     @extend_schema(
         tags=['Search'],
         summary='Unified search across modules',
@@ -28,6 +33,7 @@ class UnifiedSearchView(APIView):
             OpenApiParameter(name='limit', type=int, required=False, description='Max results per provider (1-50, default 10)'),
         ],
     )
+    @cache_response(120)
     def get(self, request):
         query = request.query_params.get('q', '').strip()
         if len(query) < 2:

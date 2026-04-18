@@ -5,8 +5,8 @@
     <a
       href="/calendar?event={{ event.uuid }}"
       class="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-{{ event.calendar.color }}/5 border border-{{ event.calendar.color }}/20 hover:bg-{{ event.calendar.color }}/10 transition-colors group"
-      onmouseenter="window._eventCardShow(this,'{{ event.uuid }}')"
-      onmouseleave="window._eventCardScheduleHide(this)"
+      onmouseenter="window.matchMedia('(hover:hover)').matches&&window._eventCardShow(this,'{{ event.uuid }}')"
+      onmouseleave="window.matchMedia('(hover:hover)').matches&&window._eventCardScheduleHide(this)"
     >
       <span class="w-2 h-2 rounded-full bg-{{ event.calendar.color }} flex-shrink-0"></span>
       <span class="text-sm font-medium text-base-content truncate max-w-48">{{ event.title }}</span>

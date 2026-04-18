@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'drf_spectacular',
+    'knox',
     'django_filters',
     'simple_history',
     'django_prometheus',
@@ -88,6 +89,8 @@ INSTALLED_APPS = [
     'workspace.common',
     'workspace.files',
     'workspace.files.ui',
+    'workspace.notes',
+    'workspace.notes.ui',
     'workspace.dashboard',
     'workspace.users',
     'workspace.users.ui',
@@ -116,6 +119,7 @@ if DEBUG and not TESTING:
 #   DB 0 — cache (evictable)
 #   DB 1 — sessions (must not be evicted)
 #   DB 2 — Celery broker + results
+#   DB 3 — WebDAV lock storage (shared across gunicorn workers)
 _REDIS_URL = os.getenv('REDIS_URL') or os.getenv('DJANGO_REDIS_URL')
 
 
@@ -130,6 +134,7 @@ if _REDIS_URL:
     _REDIS_CACHE_URL = _redis_db_url(_REDIS_URL, 0)
     _REDIS_SESSION_URL = _redis_db_url(_REDIS_URL, 1)
     _REDIS_CELERY_URL = _redis_db_url(_REDIS_URL, 2)
+    _REDIS_WEBDAV_URL = _redis_db_url(_REDIS_URL, 3)
 
     CACHES = {
         'default': {
@@ -236,6 +241,7 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
+        'knox.auth.TokenAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
@@ -265,6 +271,10 @@ SPECTACULAR_SETTINGS = {
     'COMPONENT_SPLIT_REQUEST': True,
     'SCHEMA_PATH_PREFIX': r'/v[1-9]',
     'TAGS': [
+        {
+            'name': 'Auth',
+            'description': 'API token management for programmatic access.',
+        },
         {
             'name': 'AI',
             'description': 'AI-powered tasks: summarize, compose, reply, and editor actions.',
@@ -323,9 +333,18 @@ SPECTACULAR_SETTINGS = {
     },
     'SERVE_AUTHENTICATION': [
         'rest_framework.authentication.SessionAuthentication',
+        'knox.auth.TokenAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ],
 }
+
+# Knox (API token authentication)
+REST_KNOX = {
+    'TOKEN_TTL': None,  # No default expiry; per-token expiry set at creation
+    'AUTO_REFRESH': False,
+    'AUTH_HEADER_PREFIX': 'Token',
+}
+KNOX_TOKEN_MODEL = 'knox.AuthToken'
 
 # Login/Logout URLs
 LOGIN_URL = '/login'
@@ -432,6 +451,13 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
         "PRAGMA mmap_size=268435456; "
         "PRAGMA cache_size=-64000;"
     )
+
+# Test optimizations
+if TESTING:
+    PASSWORD_HASHERS = [
+        'django.contrib.auth.hashers.MD5PasswordHasher',
+    ]
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.InMemoryStorage'
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -559,6 +585,11 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes
 
+# WebDAV lock storage
+# Use dedicated Redis DB when available so locks are shared across gunicorn
+# workers; otherwise fall back to in-process storage (dev / single worker).
+WEBDAV_LOCK_STORAGE_URL = _REDIS_WEBDAV_URL if _REDIS_URL else None
+
 # In development, run tasks synchronously in the current thread (no worker needed)
 if DEBUG:
     CELERY_TASK_ALWAYS_EAGER = True
@@ -591,6 +622,18 @@ CELERY_BEAT_SCHEDULE = {
     'dispatch-scheduled-messages': {
         'task': 'ai.dispatch_scheduled_messages',
         'schedule': 60.0,  # Every minute
+    },
+    'purge-ai-tasks': {
+        'task': 'ai.purge_ai_tasks',
+        'schedule': crontab(hour=3, minute=30),  # Every day at 3:30 AM
+    },
+    'purge-orphan-attachments': {
+        'task': 'chat.purge_orphan_attachments',
+        'schedule': crontab(hour=4, minute=0),  # Every day at 4:00 AM
+    },
+    'sync-external-calendars': {
+        'task': 'calendar.sync_all_external_calendars',
+        'schedule': 900.0,  # Every 15 minutes
     },
 }
 
@@ -626,6 +669,11 @@ OAUTH_GENERIC_IMAP_HOST = os.getenv('OAUTH_GENERIC_IMAP_HOST', '')
 OAUTH_GENERIC_SMTP_HOST = os.getenv('OAUTH_GENERIC_SMTP_HOST', '')
 
 # --------------------------------------------------
+# Storage
+# --------------------------------------------------
+STORAGE_QUOTA_BYTES = int(os.getenv('STORAGE_QUOTA_BYTES', str(1 * 1024 * 1024 * 1024)))  # 1 GB
+
+# --------------------------------------------------
 # AI Configuration
 # --------------------------------------------------
 AI_API_KEY = os.getenv('AI_API_KEY', '')
@@ -633,8 +681,11 @@ AI_BASE_URL = os.getenv('AI_BASE_URL') or None  # For Ollama, LM Studio, etc.
 AI_MODEL = os.getenv('AI_MODEL', 'gpt-5')
 AI_SMALL_MODEL = os.getenv('AI_SMALL_MODEL', '') or None  # Fast model for summaries, titles, etc.
 AI_MAX_TOKENS = int(os.getenv('AI_MAX_TOKENS', '2048'))
-AI_CHAT_CONTEXT_SIZE = int(os.getenv('AI_CHAT_CONTEXT_SIZE', '150'))
+AI_CHAT_CONTEXT_SIZE = int(os.getenv('AI_CHAT_CONTEXT_SIZE', '30'))  # recent messages kept in full; older ones are summarized
 AI_TIMEOUT = int(os.getenv('AI_TIMEOUT', '300'))  # seconds per request
 AI_MAX_RETRIES = int(os.getenv('AI_MAX_RETRIES', '2'))  # retries on transient errors (timeout, 5xx)
+AI_TASK_RETENTION_DAYS = int(os.getenv('AI_TASK_RETENTION_DAYS', '90'))
 AI_IMAGE_MODEL = os.getenv('AI_IMAGE_MODEL', '')
 AI_IMAGE_BASE_URL = os.getenv('AI_IMAGE_BASE_URL') or None
+SEARXNG_URL = os.getenv('SEARXNG_URL', '')  # e.g. http://searxng:8080
+SEARXNG_BLOCKED_DOMAINS = os.getenv('SEARXNG_BLOCKED_DOMAINS', '')  # comma-separated, e.g. "evil.com,spam.org"

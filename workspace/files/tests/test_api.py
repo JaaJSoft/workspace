@@ -4,7 +4,10 @@ from django.core.files.base import ContentFile
 from rest_framework.test import APITestCase
 from rest_framework import status
 
+from django.contrib.auth.models import Group
+
 from workspace.files.models import File, FileFavorite, PinnedFolder
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 
@@ -1193,3 +1196,293 @@ class EdgeCaseTests(APITestCase):
         self.assertIsNone(child.deleted_at)
         # Parent should also be restored
         self.assertIsNone(parent.deleted_at)
+
+
+class DescendantsAPITests(APITestCase):
+    """Tests for ?descendants=1 query parameter."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='alice', password='pass',
+        )
+        self.client.force_authenticate(user=self.user)
+
+        # Build tree: root / sub / deep
+        self.root = File.objects.create(
+            owner=self.user, name='Root',
+            node_type=File.NodeType.FOLDER,
+        )
+        self.sub = File.objects.create(
+            owner=self.user, name='Sub',
+            node_type=File.NodeType.FOLDER,
+            parent=self.root,
+        )
+        self.deep = File.objects.create(
+            owner=self.user, name='Deep',
+            node_type=File.NodeType.FOLDER,
+            parent=self.sub,
+        )
+        # Files at various levels
+        self.note_root = File.objects.create(
+            owner=self.user, name='root.md',
+            node_type=File.NodeType.FILE,
+            mime_type='text/markdown',
+            parent=self.root,
+        )
+        self.note_sub = File.objects.create(
+            owner=self.user, name='sub.md',
+            node_type=File.NodeType.FILE,
+            mime_type='text/markdown',
+            parent=self.sub,
+        )
+        self.note_deep = File.objects.create(
+            owner=self.user, name='deep.md',
+            node_type=File.NodeType.FILE,
+            mime_type='text/markdown',
+            parent=self.deep,
+        )
+        # File outside the tree
+        self.other = File.objects.create(
+            owner=self.user, name='other.md',
+            node_type=File.NodeType.FILE,
+            mime_type='text/markdown',
+        )
+
+    def test_without_descendants_returns_direct_children(self):
+        resp = self.client.get(
+            '/api/v1/files',
+            {'parent': str(self.root.uuid), 'mime_type': 'text/markdown'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        uuids = {item['uuid'] for item in resp.data}
+        self.assertEqual(uuids, {str(self.note_root.uuid)})
+
+    def test_descendants_returns_all_nested_files(self):
+        resp = self.client.get(
+            '/api/v1/files',
+            {
+                'parent': str(self.root.uuid),
+                'mime_type': 'text/markdown',
+                'descendants': '1',
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        uuids = {item['uuid'] for item in resp.data}
+        self.assertEqual(uuids, {
+            str(self.note_root.uuid),
+            str(self.note_sub.uuid),
+            str(self.note_deep.uuid),
+        })
+
+    def test_descendants_excludes_files_outside_tree(self):
+        resp = self.client.get(
+            '/api/v1/files',
+            {
+                'parent': str(self.root.uuid),
+                'descendants': '1',
+            },
+        )
+        uuids = {item['uuid'] for item in resp.data}
+        self.assertNotIn(str(self.other.uuid), uuids)
+
+    def test_descendants_respects_node_type_filter(self):
+        resp = self.client.get(
+            '/api/v1/files',
+            {
+                'parent': str(self.root.uuid),
+                'node_type': 'folder',
+                'descendants': '1',
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        uuids = {item['uuid'] for item in resp.data}
+        self.assertEqual(uuids, {str(self.sub.uuid), str(self.deep.uuid)})
+
+    def test_descendants_from_subfolder(self):
+        resp = self.client.get(
+            '/api/v1/files',
+            {
+                'parent': str(self.sub.uuid),
+                'mime_type': 'text/markdown',
+                'descendants': '1',
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        uuids = {item['uuid'] for item in resp.data}
+        self.assertEqual(uuids, {
+            str(self.note_sub.uuid),
+            str(self.note_deep.uuid),
+        })
+
+    def test_descendants_with_group_folder(self):
+        group = Group.objects.create(name='Team')
+        self.user.groups.add(group)
+        group_root = File.objects.create(
+            owner=self.user, name='Team',
+            node_type=File.NodeType.FOLDER,
+            group=group,
+        )
+        group_sub = File.objects.create(
+            owner=self.user, name='Docs',
+            node_type=File.NodeType.FOLDER,
+            parent=group_root, group=group,
+        )
+        group_note = File.objects.create(
+            owner=self.user, name='doc.md',
+            node_type=File.NodeType.FILE,
+            mime_type='text/markdown',
+            parent=group_sub, group=group,
+        )
+        resp = self.client.get(
+            '/api/v1/files',
+            {
+                'parent': str(group_root.uuid),
+                'mime_type': 'text/markdown',
+                'descendants': '1',
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        uuids = {item['uuid'] for item in resp.data}
+        self.assertIn(str(group_note.uuid), uuids)
+
+    def test_descendants_does_not_leak_other_users_files(self):
+        other = User.objects.create_user(username='bob', password='pass')
+        sneaky = File.objects.create(
+            owner=other, name='sneaky.md',
+            node_type=File.NodeType.FILE,
+            mime_type='text/markdown',
+        )
+        resp = self.client.get(
+            '/api/v1/files',
+            {
+                'parent': str(self.root.uuid),
+                'descendants': '1',
+            },
+        )
+        uuids = {item['uuid'] for item in resp.data}
+        self.assertNotIn(str(sneaky.uuid), uuids)
+
+    def test_has_children_field_on_folder(self):
+        resp = self.client.get(
+            '/api/v1/files',
+            {'parent': str(self.root.uuid), 'node_type': 'folder'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        sub_data = next(
+            item for item in resp.data
+            if item['uuid'] == str(self.sub.uuid)
+        )
+        self.assertTrue(sub_data['has_children'])
+
+    def test_has_children_false_for_leaf_folder(self):
+        resp = self.client.get(
+            '/api/v1/files',
+            {'parent': str(self.sub.uuid), 'node_type': 'folder'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        deep_data = next(
+            item for item in resp.data
+            if item['uuid'] == str(self.deep.uuid)
+        )
+        self.assertFalse(deep_data['has_children'])
+
+
+class JournalRenameGateTests(APITestCase):
+    """HTTP-level guards: PATCH must refuse to rename a journal note."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='journal_http', email='jh@test.com', password='pass123',
+        )
+        self.client.force_authenticate(user=self.user)
+
+        self.journal = File.objects.create(
+            owner=self.user, name='Journal', node_type=File.NodeType.FOLDER,
+        )
+        self.other_folder = File.objects.create(
+            owner=self.user, name='Other', node_type=File.NodeType.FOLDER,
+        )
+        set_setting(self.user, 'notes', 'preferences', {
+            'journalFolderUuid': str(self.journal.uuid),
+        })
+
+        self.journal_note = File.objects.create(
+            owner=self.user, name='2026-04-17.md', node_type=File.NodeType.FILE,
+            mime_type='text/markdown', parent=self.journal,
+        )
+        self.normal_note = File.objects.create(
+            owner=self.user, name='shopping.md', node_type=File.NodeType.FILE,
+            mime_type='text/markdown', parent=self.other_folder,
+        )
+
+    def test_rename_journal_note_forbidden(self):
+        resp = self.client.patch(
+            f'/api/v1/files/{self.journal_note.uuid}',
+            {'name': 'renamed.md'},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.journal_note.refresh_from_db()
+        self.assertEqual(self.journal_note.name, '2026-04-17.md')
+
+    def test_rename_normal_note_allowed(self):
+        resp = self.client.patch(
+            f'/api/v1/files/{self.normal_note.uuid}',
+            {'name': 'groceries.md'},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.normal_note.refresh_from_db()
+        self.assertEqual(self.normal_note.name, 'groceries.md')
+
+    def test_noop_rename_journal_note_allowed(self):
+        # Sending the current name unchanged is not a rename — must not 403.
+        resp = self.client.patch(
+            f'/api/v1/files/{self.journal_note.uuid}',
+            {'name': '2026-04-17.md'},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_content_update_journal_note_not_gated(self):
+        # Content-only PATCH (no 'name' key) must bypass the rename gate.
+        # The endpoint may still 4xx for unrelated reasons (content is a
+        # FileField that rejects raw JSON strings), but it must not 403
+        # from our gate.
+        resp = self.client.patch(
+            f'/api/v1/files/{self.journal_note.uuid}',
+            {'content': '# today\n\nsome content'},
+            format='json',
+        )
+        self.assertNotEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_move_journal_note_allowed(self):
+        resp = self.client.patch(
+            f'/api/v1/files/{self.journal_note.uuid}',
+            {'parent': str(self.other_folder.uuid)},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.journal_note.refresh_from_db()
+        self.assertEqual(self.journal_note.parent_id, self.other_folder.uuid)
+
+    def test_actions_endpoint_omits_rename_for_journal_note(self):
+        resp = self.client.post(
+            '/api/v1/files/actions',
+            {'uuids': [str(self.journal_note.uuid)]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.json()
+        action_ids = {a['id'] for a in data[str(self.journal_note.uuid)]}
+        self.assertNotIn('rename', action_ids)
+        # Other actions should still be offered — the frontend keeps those buttons enabled.
+        self.assertIn('toggle_favorite', action_ids)
+        self.assertIn('delete', action_ids)
+
+    def test_actions_endpoint_includes_rename_for_normal_note(self):
+        resp = self.client.post(
+            '/api/v1/files/actions',
+            {'uuids': [str(self.normal_note.uuid)]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.json()
+        action_ids = {a['id'] for a in data[str(self.normal_note.uuid)]}
+        self.assertIn('rename', action_ids)

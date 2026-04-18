@@ -1,15 +1,11 @@
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Exists, OuterRef, Q, Subquery
-from rest_framework import status, viewsets
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
-from datetime import timedelta
 from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiExample,
@@ -18,21 +14,26 @@ from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
 )
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.response import Response
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
 from django.http import Http404
 
-from .models import File, FileComment, FileFavorite, FileShare, PinnedFolder
+from .models import File, FileComment, FileFavorite, FileShare, FileShareLink, PinnedFolder
 from .serializers import (
     FileCommentCreateSerializer,
     FileCommentEditSerializer,
     FileCommentSerializer,
     FileSerializer,
 )
-from workspace.files.services import FileService
-from workspace.notifications.services import notify, notify_many
+from workspace.common.mixins import CacheControlMixin
+from workspace.files.services import FilePermission, FileService
+from workspace.notifications.services.notifications import notify, notify_many
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
 RECENT_FILES_MAX_LIMIT = getattr(settings, 'RECENT_FILES_MAX_LIMIT', 200)
@@ -198,7 +199,7 @@ TRASH_RETENTION_DAYS = getattr(settings, 'TRASH_RETENTION_DAYS', 30)
     ),
 )
 @extend_schema(tags=['Files'])
-class FileViewSet(viewsets.ModelViewSet):
+class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing files and folders in a tree structure.
 
@@ -216,7 +217,23 @@ class FileViewSet(viewsets.ModelViewSet):
         'node_type': ['exact'],
         'parent': ['exact'],
         'owner': ['exact'],
+        'mime_type': ['exact'],
     }
+
+    def filter_queryset(self, queryset):
+        """Override to skip the parent filter when descendants mode is active."""
+        if self._is_descendants_query() and 'parent' in self.request.query_params:
+            # Temporarily hide 'parent' from query_params so DjangoFilterBackend
+            # doesn't apply parent=exact (we handle it via path prefix in get_queryset)
+            original = self.request.query_params
+            mutable = original.copy()
+            mutable.pop('parent')
+            self.request._request.GET = mutable
+            try:
+                return super().filter_queryset(queryset)
+            finally:
+                self.request._request.GET = original
+        return super().filter_queryset(queryset)
     search_fields = ['name', 'mime_type']
     ordering_fields = ['name', 'created_at', 'updated_at', 'size']
     ordering = ['node_type', 'name']
@@ -252,59 +269,71 @@ class FileViewSet(viewsets.ModelViewSet):
         return min(limit, RECENT_FILES_MAX_LIMIT)
 
     def _resolve_file_with_access(self, uuid):
-        """Try get_object() (owner), fallback to shared access.
+        """Resolve a file by UUID and check access.
 
-        Returns (file_obj, is_owner, share_permission).
+        Returns (file_obj, permission).
         Raises Http404 if no access.
         """
-        try:
-            file_obj = self.get_object()
-            return file_obj, True, None
-        except Http404:
-            file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
-            if file_obj:
-                perm = self._get_share_permission(self.request.user, file_obj)
-                if perm is not None:
-                    return file_obj, False, perm
-            raise
+        file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
+        if not file_obj:
+            raise Http404
+        perm = FileService.get_permission(self.request.user, file_obj)
+        if perm is None:
+            raise Http404
+        return file_obj, perm
 
     def get_queryset(self):
         """Filter by current user's files."""
-        favorite_subquery = FileFavorite.objects.filter(
-            owner=self.request.user,
-            file_id=OuterRef('pk'),
-        )
-        pinned_subquery = PinnedFolder.objects.filter(
-            owner=self.request.user,
-            folder_id=OuterRef('pk'),
-        )
-        is_shared_subquery = FileShare.objects.filter(
-            file_id=OuterRef('pk'),
-        )
         user_share_subquery = FileShare.objects.filter(
             file_id=OuterRef('pk'),
             shared_with=self.request.user,
         ).values('permission')[:1]
 
-        # Favorites: include both owned and shared-with-me files
+        # Favorites: include owned, shared-with-me, and group files
         if self.action == 'list' and self._is_favorites_query():
-            return File.objects.filter(
-                deleted_at__isnull=True,
-                favorites__owner=self.request.user,
-            ).filter(
-                Q(owner=self.request.user) | Q(shares__shared_with=self.request.user)
+            return FileService.annotate_for_serializer(
+                File.objects.filter(
+                    FileService.accessible_files_q(self.request.user),
+                    deleted_at__isnull=True,
+                    favorites__owner=self.request.user,
+                ),
+                self.request.user,
             ).annotate(
-                is_favorite=Exists(favorite_subquery),
-                is_pinned=Exists(pinned_subquery),
-                is_shared=Exists(is_shared_subquery),
                 user_share_permission=Subquery(user_share_subquery),
             ).distinct()
 
-        queryset = File.objects.filter(owner=self.request.user)
-        queryset = queryset.annotate(
-            is_favorite=Exists(favorite_subquery),
-            is_pinned=Exists(pinned_subquery),
-            is_shared=Exists(is_shared_subquery),
+        # Resolve parent context: detect group from parent, resolve descendants
+        parent_uuid = self.request.query_params.get('parent')
+        group_id = self.request.query_params.get('group')
+        ancestor_path = None
+
+        if self.action == 'list' and parent_uuid:
+            parent_obj = File.objects.filter(
+                uuid=parent_uuid, deleted_at__isnull=True,
+            ).values_list('group_id', 'path').first()
+            if parent_obj:
+                # Auto-detect group from parent
+                if not group_id and parent_obj[0]:
+                    group_id = parent_obj[0]
+                # Descendants mode: use path prefix instead of parent=exact
+                if self._is_descendants_query() and parent_obj[1]:
+                    ancestor_path = parent_obj[1]
+        if self.action == 'list' and group_id:
+            if not self.request.user.groups.filter(id=group_id).exists():
+                return File.objects.none()
+            qs = File.objects.filter(
+                group_id=group_id,
+                deleted_at__isnull=True,
+            )
+            if ancestor_path:
+                qs = qs.filter(path__startswith=ancestor_path + '/')
+            qs = FileService.annotate_for_serializer(qs, self.request.user).annotate(
+                user_share_permission=Subquery(user_share_subquery),
+            )
+            return qs
+
+        queryset = File.objects.filter(owner=self.request.user, group__isnull=True)
+        queryset = FileService.annotate_for_serializer(queryset, self.request.user).annotate(
             user_share_permission=Subquery(user_share_subquery),
         )
         if self.action in {'trash'} or self._is_trash_query():
@@ -315,12 +344,59 @@ class FileViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             if self._is_trash_query():
                 return queryset
+            if ancestor_path:
+                return queryset.filter(path__startswith=ancestor_path + '/')
             if not self._is_recent_query() and 'parent' not in self.request.query_params:
                 return queryset.filter(parent__isnull=True)
         return queryset
 
+    def get_object(self):
+        uuid = self.kwargs.get('uuid')
+        try:
+            return super().get_object()
+        except Http404:
+            # Only promote owner/group to full queryset object — shared
+            # users are deliberately excluded so action-level fallbacks
+            # can enforce restricted permissions (e.g. content-only writes).
+            # The fallback queryset is annotated the same way as get_queryset()
+            # so FileSerializer can render it without hitting missing-annotation
+            # errors.
+            file_obj = FileService.annotate_for_serializer(
+                File.objects.filter(uuid=uuid, deleted_at__isnull=True),
+                self.request.user,
+            ).first()
+            if file_obj and (FileService.get_permission(self.request.user, file_obj) or 0) >= FilePermission.EDIT:
+                return file_obj
+            raise
+
+    def create(self, request, *args, **kwargs):
+        group_id = request.data.get('group')
+        if group_id:
+            if not request.user.groups.filter(id=group_id).exists():
+                return Response(
+                    {'group': 'You are not a member of this group.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        return super().create(request, *args, **kwargs)
+
+    def _is_descendants_query(self):
+        return self.request.query_params.get('descendants', '').lower() in {'1', 'true'}
+
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
+
+        # Filter by tags (comma-separated UUIDs)
+        tags_param = request.query_params.get('tags')
+        if tags_param:
+            tag_uuids = [u.strip() for u in tags_param.split(',') if u.strip()]
+            if tag_uuids:
+                queryset = queryset.filter(file_tags__tag__uuid__in=tag_uuids).distinct()
+
+        # Filter by tag name (case-insensitive contains)
+        tag_name_param = request.query_params.get('tag_name')
+        if tag_name_param:
+            queryset = queryset.filter(file_tags__tag__name__icontains=tag_name_param.strip()).distinct()
+
         if self._is_recent_query():
             queryset = queryset.order_by('-updated_at')
             limit = self._get_recent_limit()
@@ -346,10 +422,10 @@ class FileViewSet(viewsets.ModelViewSet):
     def favorite(self, request, uuid=None):
         """Add or remove a file/folder from favorites."""
         from workspace.files.actions import ActionRegistry
-        file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+        file_obj, perm = self._resolve_file_with_access(uuid)
         if not ActionRegistry.is_action_available(
             'toggle_favorite', request.user, file_obj,
-            is_owner=is_owner, share_permission=share_perm,
+            permission=perm,
         ):
             return Response(status=status.HTTP_403_FORBIDDEN)
         if request.method == 'POST':
@@ -371,9 +447,10 @@ class FileViewSet(viewsets.ModelViewSet):
         """Pin or unpin a folder from the sidebar."""
         from workspace.files.actions import ActionRegistry
         file_obj = self.get_object()
+        perm = FileService.get_permission(request.user, file_obj)
         if not ActionRegistry.is_action_available(
             'toggle_pin', request.user, file_obj,
-            is_owner=True, share_permission=None,
+            permission=perm,
         ):
             return Response({'detail': 'Only folders can be pinned.'}, status=status.HTTP_400_BAD_REQUEST)
         if request.method == 'POST':
@@ -539,21 +616,7 @@ class FileViewSet(viewsets.ModelViewSet):
     def trash(self, request):
         """List trashed files and folders."""
         queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
-        favorite_subquery = FileFavorite.objects.filter(
-            owner=request.user,
-            file_id=OuterRef('pk'),
-        )
-        pinned_subquery = PinnedFolder.objects.filter(
-            owner=request.user,
-            folder_id=OuterRef('pk'),
-        )
-        is_shared_subquery = FileShare.objects.filter(
-            file_id=OuterRef('pk'),
-        )
-        queryset = queryset.annotate(
-            is_favorite=Exists(favorite_subquery),
-            is_pinned=Exists(pinned_subquery),
-            is_shared=Exists(is_shared_subquery),
+        queryset = FileService.annotate_for_serializer(queryset, request.user).annotate(
             user_share_permission=Subquery(
                 FileShare.objects.filter(
                     file_id=OuterRef('pk'),
@@ -595,8 +658,7 @@ class FileViewSet(viewsets.ModelViewSet):
         queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
         if not force:
             queryset = queryset.filter(deleted_at__lt=cutoff)
-        file_count = queryset.count()
-        queryset.delete()
+        file_count, _ = queryset.delete()
         return Response({
             'deleted': file_count,
             'retention_days': retention_days,
@@ -662,7 +724,10 @@ class FileViewSet(viewsets.ModelViewSet):
 
         # Perform the copy
         copied = FileService.copy(file_obj, parent, request.user)
-        serializer = self.get_serializer(copied)
+        # Re-fetch through get_queryset() so the instance carries the
+        # annotations FileSerializer now requires.
+        annotated = self.get_queryset().filter(pk=copied.pk).first() or copied
+        serializer = self.get_serializer(annotated)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
@@ -682,7 +747,7 @@ class FileViewSet(viewsets.ModelViewSet):
         from django.http import FileResponse, HttpResponse
 
         try:
-            file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+            file_obj, perm = self._resolve_file_with_access(uuid)
         except Http404:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -694,6 +759,11 @@ class FileViewSet(viewsets.ModelViewSet):
         if not file_obj.content:
             return Response({'detail': 'No content.'}, status=status.HTTP_404_NOT_FOUND)
 
+        # Short-circuit: return 304 if ETag matches (avoids reading file from storage)
+        not_modified = self._check_etag_304(request, file_obj)
+        if not_modified:
+            return not_modified
+
         # For text files, read and return directly (fixes streaming issues)
         if file_obj.mime_type and file_obj.mime_type.startswith('text/'):
             file_handle = None
@@ -702,6 +772,7 @@ class FileViewSet(viewsets.ModelViewSet):
                 content = file_handle.read().decode('utf-8')
                 response = HttpResponse(content, content_type=file_obj.mime_type)
                 response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
+                self._set_file_cache_headers(response, file_obj)
                 return response
             except Exception:
                 # Fallback to binary if UTF-8 fails
@@ -719,8 +790,32 @@ class FileViewSet(viewsets.ModelViewSet):
             as_attachment=False
         )
         response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
+        self._set_file_cache_headers(response, file_obj)
 
         return response
+
+    @staticmethod
+    def _file_etag(file_obj):
+        """Deterministic ETag based on UUID and last modification time."""
+        return f'"{file_obj.uuid}-{file_obj.updated_at.timestamp()}"'
+
+    def _check_etag_304(self, request, file_obj):
+        """Return a 304 response if the client's ETag matches, else None."""
+        etag = self._file_etag(file_obj)
+        if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
+        if if_none_match and if_none_match.strip('"') == etag.strip('"'):
+            from django.http import HttpResponse as DjHttpResponse
+            response = DjHttpResponse(status=304)
+            response['ETag'] = etag
+            response['Cache-Control'] = 'private, no-cache'
+            return response
+        return None
+
+    @staticmethod
+    def _set_file_cache_headers(response, file_obj):
+        """Set ETag + Cache-Control; ConditionalGetMiddleware handles 304."""
+        response['ETag'] = f'"{file_obj.uuid}-{file_obj.updated_at.timestamp()}"'
+        response['Cache-Control'] = 'private, no-cache'
 
     @extend_schema(
         summary="Get file thumbnail",
@@ -738,7 +833,7 @@ class FileViewSet(viewsets.ModelViewSet):
         from workspace.files.services.thumbnails import get_thumbnail_path
 
         try:
-            file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+            file_obj, perm = self._resolve_file_with_access(uuid)
         except Http404:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -775,9 +870,15 @@ class FileViewSet(viewsets.ModelViewSet):
         from django.http import FileResponse, HttpResponse
 
         try:
-            file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+            file_obj, perm = self._resolve_file_with_access(uuid)
         except Http404:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Short-circuit: return 304 if ETag matches (single files only)
+        if file_obj.node_type == File.NodeType.FILE:
+            not_modified = self._check_etag_304(request, file_obj)
+            if not_modified:
+                return not_modified
 
         # Single file download
         if file_obj.node_type == File.NodeType.FILE:
@@ -790,13 +891,17 @@ class FileViewSet(viewsets.ModelViewSet):
                 as_attachment=True,
                 filename=file_obj.name,
             )
+            self._set_file_cache_headers(response, file_obj)
             return response
 
         # Folder download as ZIP
         folder_path = file_obj.path or file_obj.get_path()
         prefix = f"{folder_path}/"
+        desc_filter = Q(owner=request.user)
+        if file_obj.group_id:
+            desc_filter = Q(group_id=file_obj.group_id)
         descendants = File.objects.filter(
-            owner=request.user,
+            desc_filter,
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
             path__startswith=prefix,
@@ -866,10 +971,11 @@ class FileViewSet(viewsets.ModelViewSet):
 
         file_objects = list(
             File.objects.filter(
+                FileService.accessible_files_q(request.user),
                 uuid__in=uuids,
                 deleted_at__isnull=True,
-            ).filter(
-                Q(owner=request.user) | Q(shares__shared_with=request.user)
+            ).only(
+                'uuid', 'name', 'path', 'content', 'node_type', 'owner_id',
             ).distinct()
         )
 
@@ -900,6 +1006,8 @@ class FileViewSet(viewsets.ModelViewSet):
                         node_type=File.NodeType.FILE,
                         deleted_at__isnull=True,
                         path__startswith=prefix,
+                    ).only(
+                        'uuid', 'name', 'path', 'content',
                     ).exclude(content='').exclude(content__isnull=True)
                     for desc in descendants:
                         rel_path = f"{obj.name}/{desc.path[len(prefix):]}"
@@ -1013,6 +1121,28 @@ class FileViewSet(viewsets.ModelViewSet):
                 status=423,
             )
 
+        # Rename gate — consult the action registry so any future rule on
+        # RenameAction.is_available (e.g., journal notes, shared files)
+        # applies uniformly to direct PATCH calls, not just to UI menus.
+        # Only fires when the user already has EDIT+ permission — below that,
+        # the standard flow returns 404/403 and we must not preempt it
+        # (e.g. a VIEW-only shared user must still see 404, not 403).
+        if 'name' in request.data:
+            from workspace.files.actions import ActionRegistry
+            target = File.objects.filter(
+                uuid=uuid, deleted_at__isnull=True,
+            ).first()
+            if target and request.data['name'] != target.name:
+                perm = FileService.get_permission(request.user, target)
+                if perm is not None and perm >= FilePermission.EDIT:
+                    if not ActionRegistry.is_action_available(
+                        'rename', request.user, target, permission=perm,
+                    ):
+                        return Response(
+                            {'detail': 'Renaming this file is not allowed.'},
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
+
         try:
             response = super().partial_update(request, *args, **kwargs)
             if response.status_code == 200 and ('content' in request.data or 'content' in request.FILES):
@@ -1024,10 +1154,11 @@ class FileViewSet(viewsets.ModelViewSet):
         except Http404:
             # Check rw shared access
             uuid = kwargs.get('uuid')
-            file_obj = File.objects.filter(
-                uuid=uuid, deleted_at__isnull=True,
+            file_obj = FileService.annotate_for_serializer(
+                File.objects.filter(uuid=uuid, deleted_at__isnull=True),
+                request.user,
             ).first()
-            if not file_obj or self._get_share_permission(request.user, file_obj) != FileShare.Permission.READ_WRITE:
+            if not file_obj or FileService.get_permission(request.user, file_obj) != FilePermission.WRITE:
                 raise
             # Only allow content update — reject any other fields
             allowed_fields = {'content'}
@@ -1132,26 +1263,6 @@ class FileViewSet(viewsets.ModelViewSet):
 
     # ── Sharing ────────────────────────────────────────────────
 
-    @staticmethod
-    def _get_share_permission(user, file_obj):
-        """Return the share permission for *user* on *file_obj*, or None.
-
-        Only individual files can be shared (not folders).
-        Returns 'ro', 'rw', or None.
-        """
-        if file_obj.node_type != File.NodeType.FILE:
-            return None
-        share = FileShare.objects.filter(
-            file=file_obj,
-            shared_with=user,
-        ).values_list('permission', flat=True).first()
-        return share
-
-    @staticmethod
-    def _has_shared_access(user, file_obj):
-        """Check if *user* has read access to *file_obj* via a FileShare."""
-        return FileViewSet._get_share_permission(user, file_obj) is not None
-
     @extend_schema(
         summary="Share or unshare a file",
         description="POST to share a file with a user, DELETE to remove the share. Only files can be shared (not folders).",
@@ -1179,10 +1290,11 @@ class FileViewSet(viewsets.ModelViewSet):
         """Share or unshare a file with another user (files only)."""
         from workspace.files.actions import ActionRegistry
         file_obj = self.get_object()
+        perm = FileService.get_permission(request.user, file_obj)
 
         if not ActionRegistry.is_action_available(
             'share', request.user, file_obj,
-            is_owner=True, share_permission=None,
+            permission=perm,
         ):
             return Response(
                 {'detail': 'Only files can be shared.'},
@@ -1351,9 +1463,8 @@ class FileViewSet(viewsets.ModelViewSet):
 
         file_objects = list(
             File.objects.filter(
+                FileService.accessible_files_q(request.user),
                 uuid__in=uuids,
-            ).filter(
-                Q(owner=request.user) | Q(shares__shared_with=request.user)
             ).annotate(
                 is_favorite=Exists(favorite_subquery),
                 is_pinned=Exists(pinned_subquery),
@@ -1369,10 +1480,9 @@ class FileViewSet(viewsets.ModelViewSet):
 
         result = {}
         for file_obj in file_objects:
-            is_owner = file_obj.owner_id == request.user.pk
-            share_perm = getattr(file_obj, 'user_share_permission', None)
+            perm = FileService.get_permission(request.user, file_obj)
             result[str(file_obj.uuid)] = ActionRegistry.get_available_actions(
-                request.user, file_obj, is_owner=is_owner, share_permission=share_perm,
+                request.user, file_obj, permission=perm,
             )
         return Response(result)
 
@@ -1397,19 +1507,7 @@ class FileViewSet(viewsets.ModelViewSet):
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
         )
-        favorite_subquery = FileFavorite.objects.filter(
-            owner=request.user,
-            file_id=OuterRef('pk'),
-        )
-        is_shared_subquery = FileShare.objects.filter(
-            file_id=OuterRef('pk'),
-        )
-        queryset = queryset.annotate(
-            is_favorite=Exists(favorite_subquery),
-            is_pinned=Exists(
-                PinnedFolder.objects.filter(owner=request.user, folder_id=OuterRef('pk'))
-            ),
-            is_shared=Exists(is_shared_subquery),
+        queryset = FileService.annotate_for_serializer(queryset, request.user).annotate(
             user_share_permission=Subquery(
                 FileShare.objects.filter(
                     file_id=OuterRef('pk'),
@@ -1434,7 +1532,7 @@ class FileViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get', 'post'], url_path='comments')
     def comments(self, request, uuid=None):
         """List or create comments on a file/folder."""
-        file_obj, is_owner, share_perm = self._resolve_file_with_access(uuid)
+        file_obj, perm = self._resolve_file_with_access(uuid)
 
         if request.method == 'GET':
             qs = FileComment.objects.filter(
@@ -1571,7 +1669,7 @@ class FileViewSet(viewsets.ModelViewSet):
             except Exception:
                 return Response({'error': 'could not read file content'}, status=status.HTTP_400_BAD_REQUEST)
 
-        from workspace.ai.image_service import ai_edit_image
+        from workspace.ai.services.image import ai_edit_image
         try:
             image_data = ai_edit_image(source_data, prompt, size)
         except ValueError:
@@ -1581,3 +1679,69 @@ class FileViewSet(viewsets.ModelViewSet):
             return Response({'error': 'image editing failed'}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({'image': base64.b64encode(image_data).decode()})
+
+    @action(detail=True, methods=['get', 'post'], url_path='share-links')
+    def share_links(self, request, uuid=None):
+        """List or create share links for a file (owner only)."""
+        file_obj = self.get_object()  # get_queryset filters by owner, so 404 for non-owners
+
+        if request.method == 'GET':
+            links = FileShareLink.objects.filter(file=file_obj)
+            data = [self._serialize_share_link(link, request) for link in links]
+            return Response(data)
+
+        # POST — create
+        if file_obj.node_type != File.NodeType.FILE:
+            return Response(
+                {'detail': 'Share links can only be created for files.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from django.contrib.auth.hashers import make_password
+
+        raw_password = request.data.get('password', '')
+        link = FileShareLink.objects.create(
+            file=file_obj,
+            created_by=request.user,
+            password=make_password(raw_password) if raw_password else '',
+            expires_at=request.data.get('expires_at'),
+        )
+        return Response(
+            self._serialize_share_link(link, request),
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=['delete'], url_path=r'share-links/(?P<link_uuid>[^/.]+)')
+    def delete_share_link(self, request, uuid=None, link_uuid=None):
+        """Revoke (delete) a share link (owner only)."""
+        file_obj = self.get_object()  # get_queryset filters by owner, so 404 for non-owners
+
+        deleted, _ = FileShareLink.objects.filter(
+            uuid=link_uuid, file=file_obj,
+        ).delete()
+        if not deleted:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @staticmethod
+    def _format_dt(value):
+        """Format a datetime value for API responses, handling both datetime objects and strings."""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        return value.isoformat()
+
+    def _serialize_share_link(self, link, request):
+        """Serialize a FileShareLink for API responses."""
+        url = request.build_absolute_uri(f'/files/shared/{link.token}')
+        return {
+            'uuid': str(link.uuid),
+            'token': link.token,
+            'url': url,
+            'has_password': link.has_password,
+            'expires_at': self._format_dt(link.expires_at),
+            'view_count': link.view_count,
+            'last_accessed_at': self._format_dt(link.last_accessed_at),
+            'created_at': self._format_dt(link.created_at),
+        }

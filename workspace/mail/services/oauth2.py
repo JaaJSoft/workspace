@@ -4,10 +4,14 @@ Supports Google, Microsoft, and a single generic (admin-configured) provider.
 Uses authlib for the OAuth2 handshake and token refresh.
 """
 
+import logging
 import time
 
+from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.requests_client import OAuth2Session
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Provider configuration
@@ -194,7 +198,9 @@ def _refresh_token(account, data):
     """Refresh the OAuth2 token and persist the updated data.
 
     Returns the new access token string, or raises if no refresh_token
-    is available.
+    is available.  When the provider reports *invalid_grant* (token
+    revoked / expired permanently) the account is deactivated and the
+    owner is notified so they can reconnect.
     """
     refresh_tok = data.get('refresh_token')
     if not refresh_tok:
@@ -210,11 +216,17 @@ def _refresh_token(account, data):
         client_id=client_id,
         client_secret=client_secret,
     )
-    new_token = session.fetch_token(
-        config['token_url'],
-        grant_type='refresh_token',
-        refresh_token=refresh_tok,
-    )
+
+    try:
+        new_token = session.fetch_token(
+            config['token_url'],
+            grant_type='refresh_token',
+            refresh_token=refresh_tok,
+        )
+    except OAuthError as exc:
+        if exc.error == 'invalid_grant':
+            _handle_revoked_token(account)
+        raise
 
     # Merge: keep existing refresh_token if the provider did not issue a new one
     if 'refresh_token' not in new_token:
@@ -224,3 +236,25 @@ def _refresh_token(account, data):
     account.save(update_fields=['oauth2_data_encrypted'])
 
     return new_token['access_token']
+
+
+def _handle_revoked_token(account):
+    """Deactivate account and notify owner when a token is revoked."""
+    logger.warning(
+        "OAuth2 token revoked for %s — deactivating account", account.email,
+    )
+    account.is_active = False
+    account.last_sync_error = (
+        'Authorization expired or revoked. Please reconnect this account.'
+    )
+    account.save(update_fields=['is_active', 'last_sync_error', 'updated_at'])
+
+    from workspace.notifications.services.notifications import notify
+    notify(
+        recipient=account.owner,
+        origin='mail',
+        title=f'Mail account {account.email} disconnected',
+        body='Authorization was revoked or expired. Please reconnect your account.',
+        url='/mail',
+        priority='high',
+    )

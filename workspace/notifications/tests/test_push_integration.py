@@ -13,10 +13,10 @@ class NotifyPushIntegrationTests(TestCase):
             username='intuser', email='int@test.com', password='pass123',
         )
 
-    @patch('workspace.notifications.services.send_push_notification')
-    @patch('workspace.notifications.services.notify_sse')
+    @patch('workspace.notifications.services.notifications.send_push_notification')
+    @patch('workspace.notifications.services.notifications.notify_sse')
     def test_notify_dispatches_push_for_normal_priority(self, _mock_sse, mock_push):
-        from workspace.notifications.services import notify
+        from workspace.notifications.services.notifications import notify
         notif = notify(
             recipient=self.user,
             origin='test',
@@ -25,10 +25,10 @@ class NotifyPushIntegrationTests(TestCase):
         )
         mock_push.delay.assert_called_once_with(str(notif.uuid))
 
-    @patch('workspace.notifications.services.send_push_notification')
-    @patch('workspace.notifications.services.notify_sse')
+    @patch('workspace.notifications.services.notifications.send_push_notification')
+    @patch('workspace.notifications.services.notifications.notify_sse')
     def test_notify_skips_push_for_low_priority(self, _mock_sse, mock_push):
-        from workspace.notifications.services import notify
+        from workspace.notifications.services.notifications import notify
         notify(
             recipient=self.user,
             origin='test',
@@ -37,13 +37,13 @@ class NotifyPushIntegrationTests(TestCase):
         )
         mock_push.delay.assert_not_called()
 
-    @patch('workspace.notifications.services.send_push_notification')
-    @patch('workspace.notifications.services.notify_sse')
+    @patch('workspace.notifications.services.notifications.send_push_notification')
+    @patch('workspace.notifications.services.notifications.notify_sse')
     def test_notify_many_dispatches_push_per_recipient(self, _mock_sse, mock_push):
         user2 = User.objects.create_user(
             username='intuser2', email='int2@test.com', password='pass123',
         )
-        from workspace.notifications.services import notify_many
+        from workspace.notifications.services.notifications import notify_many
         notify_many(
             recipients=[self.user, user2],
             origin='test',
@@ -52,13 +52,13 @@ class NotifyPushIntegrationTests(TestCase):
         )
         self.assertEqual(mock_push.delay.call_count, 2)
 
-    @patch('workspace.notifications.services.send_push_notification')
-    @patch('workspace.notifications.services.notify_sse')
+    @patch('workspace.notifications.services.notifications.send_push_notification')
+    @patch('workspace.notifications.services.notifications.notify_sse')
     def test_notify_many_skips_push_for_low(self, _mock_sse, mock_push):
         user2 = User.objects.create_user(
             username='intuser2', email='int2@test.com', password='pass123',
         )
-        from workspace.notifications.services import notify_many
+        from workspace.notifications.services.notifications import notify_many
         notify_many(
             recipients=[self.user, user2],
             origin='test',

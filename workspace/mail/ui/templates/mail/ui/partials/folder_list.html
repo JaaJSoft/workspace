@@ -1,3 +1,33 @@
+<!-- All Inboxes (unified view) — expanded -->
+<div x-show="accounts.length > 0 && !collapsed" class="mb-2">
+  <button
+    class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
+    :class="unifiedInbox ? 'bg-warning/10 text-warning' : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
+    @click="selectUnifiedInbox()"
+  >
+    <span class="flex-shrink-0 text-warning">
+      <i data-lucide="inbox" class="w-4 h-4"></i>
+    </span>
+    <span class="flex-1 text-left truncate">All Inboxes</span>
+    <span
+      x-show="getTotalInboxUnread() > 0"
+      class="badge badge-xs badge-warning"
+      x-text="getTotalInboxUnread()"
+    ></span>
+  </button>
+</div>
+<!-- All Inboxes (unified view) — collapsed -->
+<div x-show="accounts.length > 0 && collapsed" x-cloak class="mb-2">
+  <button
+    class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
+    :class="unifiedInbox ? 'bg-warning/10 text-warning' : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
+    title="All Inboxes"
+    @click="selectUnifiedInbox()"
+  >
+    <i data-lucide="inbox" class="w-5 h-5"></i>
+  </button>
+</div>
+
 <!-- Folder list per account -->
 <template x-for="account in accounts" :key="account.uuid">
   <div class="mb-2">
@@ -19,6 +49,12 @@
 
     <!-- Folders (expanded — hierarchical tree) -->
     <div x-show="expandedAccounts[account.uuid] && !collapsed" x-collapse>
+      <div class="pl-3 pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between">
+        Folders
+        <button class="btn btn-ghost btn-circle btn-xs" @click="_createFolder(account.uuid)" title="New folder">
+          <i data-lucide="plus" class="w-3 h-3"></i>
+        </button>
+      </div>
       <template x-for="node in getFlatFolderTree(account.uuid)" :key="node.folder.uuid + '-' + (node.folder.icon || '') + '-' + (node.folder.color || '')">
         <button
           class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
@@ -54,6 +90,52 @@
       </template>
     </div>
 
+    <!-- Labels section (expanded only) -->
+    <template x-if="labels[account.uuid]?.length && expandedAccounts[account.uuid] && !collapsed">
+      <div>
+        <div class="pl-3 pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between">
+          Labels
+          <button class="btn btn-ghost btn-circle btn-xs" @click="showLabelModal(account.uuid)" title="New label">
+            <i data-lucide="plus" class="w-3 h-3"></i>
+          </button>
+        </div>
+        <template x-for="label in labels[account.uuid]" :key="label.uuid">
+          <button
+            class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
+            :class="{
+              'ring-2 ring-offset-1 bg-base-content/5': dragOverLabel?.uuid === label.uuid,
+              ['bg-' + (label.color && label.color !== 'ghost' ? label.color : 'base-content') + '/10 text-' + (label.color && label.color !== 'ghost' ? label.color : 'base-content')]: selectedLabel?.uuid === label.uuid && dragOverLabel?.uuid !== label.uuid,
+              'text-base-content/70 hover:bg-base-content/5': selectedLabel?.uuid !== label.uuid && dragOverLabel?.uuid !== label.uuid,
+            }"
+            @click="selectLabel(label)"
+            @contextmenu="openLabelContextMenu($event, label)"
+            @dragover.prevent="onLabelDragOver($event, label)"
+            @dragleave="onLabelDragLeave($event, label)"
+            @drop.prevent="onLabelDrop($event, label)">
+            <span class="flex-shrink-0" :class="label.color && label.color !== 'ghost' ? 'text-' + label.color : 'text-base-content/50'">
+              <i :data-lucide="label.icon || 'tag'" class="w-4 h-4"></i>
+            </span>
+            <span class="flex-1 text-left truncate" x-text="label.name"></span>
+            <span
+              x-show="label.unread_count > 0"
+              class="badge badge-xs badge-warning"
+              x-text="label.unread_count"
+            ></span>
+          </button>
+        </template>
+      </div>
+    </template>
+    <!-- Show create label button even when no labels exist (expanded only) -->
+    <template x-if="!labels[account.uuid]?.length && !collapsed && expandedAccounts[account.uuid]">
+      <div>
+        <button class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors text-base-content/50 hover:bg-base-content/5 hover:text-warning"
+                @click="showLabelModal(account.uuid)">
+          <i data-lucide="tag" class="w-4 h-4"></i>
+          Add label
+        </button>
+      </div>
+    </template>
+
     <!-- Folders (collapsed: icons only with tooltip) -->
     <div x-show="collapsed" x-cloak>
       <template x-for="folder in getFolders(account.uuid)" :key="'c-' + folder.uuid + '-' + (folder.icon || '') + '-' + (folder.color || '')">
@@ -81,8 +163,8 @@
 </template>
 
 <!-- Add account button (expanded) -->
-<div class="mt-2 px-1" x-show="!collapsed">
-  <button class="btn btn-ghost btn-sm btn-block justify-start text-base-content/50 hover:text-warning"
+<div class="mt-2" x-show="!collapsed">
+  <button class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors text-base-content/50 hover:bg-base-content/5 hover:text-warning"
           @click="showAddAccount()">
     <i data-lucide="plus-circle" class="w-4 h-4"></i>
     Add account

@@ -46,6 +46,32 @@ def _build_rrule(master, range_start, range_end):
                 yield dt
 
 
+def next_occurrences_after(master, after, limit=None):
+    """Yield occurrence start datetimes for a recurring master, all with
+    start >= after.
+
+    Unlike `_build_rrule`, this is count-bounded (not range-bounded). A master
+    whose own `start` is in the past is still iterated — only the occurrences
+    before `after` are skipped. Stops early at `master.recurrence_end`.
+
+    If `limit` is None, yields all remaining occurrences (bounded only by
+    `master.recurrence_end`). This allows callers that need to filter the
+    stream (e.g. skipping exceptions) to take as many occurrences as they
+    need rather than being capped.
+    """
+    freq = FREQ_MAP.get(master.recurrence_frequency)
+    if freq is None:
+        return
+
+    rule = rrule(
+        freq,
+        interval=master.recurrence_interval,
+        dtstart=master.start,
+        until=master.recurrence_end,  # None → unbounded
+    )
+    yield from rule.xafter(after, count=limit, inc=True)
+
+
 def _user_dict(user):
     return {
         'id': user.id,
@@ -79,7 +105,7 @@ def make_virtual_occurrence(master, occ_start):
         'all_day': master.all_day,
         'location': master.location,
         'owner': _user_dict(master.owner),
-        'members': [_member_dict(m) for m in master.members.all()],
+        'members': getattr(master, '_cached_member_dicts', None) or [_member_dict(m) for m in master.members.all()],
         'created_at': master.created_at.isoformat(),
         'updated_at': master.updated_at.isoformat(),
         'is_recurring': True,
@@ -138,17 +164,22 @@ def expand_recurring_events(masters_qs, range_start, range_end):
         )
     )
 
-    # Index by (parent_id, original_start)
+    # Index by (parent_id, original_start). UUIDs and datetimes are both
+    # hashable, so we use them directly — skipping .isoformat() avoids a
+    # pair of string allocations per key on both the indexing side and the
+    # lookup side below.
     exc_index = {}
     for exc in exceptions:
         if exc.original_start:
-            key = (str(exc.recurrence_parent_id), exc.original_start.isoformat())
+            key = (exc.recurrence_parent_id, exc.original_start)
             exc_index[key] = exc
 
     occurrences = []
     for master in masters_qs:
+        # Pre-compute members list once per master (reused across all virtual occurrences)
+        master._cached_member_dicts = [_member_dict(m) for m in master.members.all()]
         for occ_start in _build_rrule(master, range_start, range_end):
-            key = (str(master.uuid), occ_start.isoformat())
+            key = (master.uuid, occ_start)
             exc = exc_index.get(key)
             if exc:
                 if exc.is_cancelled:

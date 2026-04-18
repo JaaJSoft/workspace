@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.http import HttpResponse
 
-from workspace.users import presence_service
+from workspace.users.services import presence as presence_service
 
 
 class AjaxLoginRedirectMiddleware:

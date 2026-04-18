@@ -1,11 +1,12 @@
 import base64
+import json
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
 from workspace.ai.models import AITask, BotProfile
-from workspace.ai.tools import CoreToolProvider
+from workspace.ai.tools import CoreToolProvider, GenerateImageParams, EditImageParams
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
@@ -188,7 +189,6 @@ class GenerateChatResponseWithToolsTests(TestCase):
     @patch('workspace.ai.client.get_ai_client')
     def test_tool_call_saves_memory_then_responds(self, mock_get_client):
         mock_client = MagicMock()
-
         # First call: tool_calls response
         tool_call = MagicMock()
         tool_call.id = 'call_abc'
@@ -266,7 +266,7 @@ class GenerateImageToolTest(TestCase):
         mock_get_client.return_value = mock_client
 
         result = self.provider.generate_image(
-            {'prompt': 'a cat'}, user=None, bot=None,
+            GenerateImageParams(prompt='a cat'), user=None, bot=None,
             conversation_id=self.conv_id, context=self.context,
         )
 
@@ -277,7 +277,7 @@ class GenerateImageToolTest(TestCase):
 
     def test_generate_image_empty_prompt(self):
         result = self.provider.generate_image(
-            {'prompt': ''}, user=None, bot=None,
+            GenerateImageParams(prompt=''), user=None, bot=None,
             conversation_id=self.conv_id, context=self.context,
         )
         self.assertIn('Error', result)
@@ -285,7 +285,7 @@ class GenerateImageToolTest(TestCase):
 
     def test_generate_image_no_conversation(self):
         result = self.provider.generate_image(
-            {'prompt': 'a cat'}, user=None, bot=None,
+            GenerateImageParams(prompt='a cat'), user=None, bot=None,
             conversation_id=None, context=self.context,
         )
         self.assertIn('Error', result)
@@ -299,7 +299,7 @@ class GenerateImageToolTest(TestCase):
         mock_get_client.return_value = mock_client
 
         self.provider.generate_image(
-            {'prompt': 'a cat', 'size': '999x999'},
+            GenerateImageParams(prompt='a cat', size='999x999'),
             user=None, bot=None, conversation_id=self.conv_id,
             context=self.context,
         )
@@ -313,7 +313,7 @@ class GenerateImageToolTest(TestCase):
         mock_get_client.return_value = mock_client
 
         result = self.provider.generate_image(
-            {'prompt': 'a cat'}, user=None, bot=None,
+            GenerateImageParams(prompt='a cat'), user=None, bot=None,
             conversation_id=self.conv_id, context=self.context,
         )
         self.assertIn('Error', result)
@@ -343,7 +343,7 @@ class EditImageToolTest(TestCase):
         att.save()
         return att
 
-    @patch('workspace.ai.image_service.get_image_client')
+    @patch('workspace.ai.services.image.get_image_client')
     def test_edit_image_openai_success(self, mock_get_client):
         """OpenAI images.edit works on first try."""
         self._attach_image()
@@ -354,7 +354,7 @@ class EditImageToolTest(TestCase):
         mock_get_client.return_value = mock_client
 
         result = self.provider.edit_image(
-            {'prompt': 'make it blue'}, user=self.user, bot=None,
+            EditImageParams(prompt='make it blue'), user=self.user, bot=None,
             conversation_id=str(self.conv.uuid), context=self.context,
         )
 
@@ -368,7 +368,7 @@ class EditImageToolTest(TestCase):
         AI_IMAGE_BASE_URL='http://localhost:11434/v1/',
         AI_TIMEOUT=30,
     )
-    @patch('workspace.ai.image_service.get_image_client')
+    @patch('workspace.ai.services.image.get_image_client')
     def test_edit_image_ollama_fallback(self, mock_get_client):
         """Falls back to Ollama native API when OpenAI endpoint fails."""
         self._attach_image()
@@ -376,10 +376,10 @@ class EditImageToolTest(TestCase):
         mock_client.images.edit.side_effect = Exception('400 Bad Request')
         mock_get_client.return_value = mock_client
 
-        with patch('workspace.ai.image_service._edit_via_ollama',
+        with patch('workspace.ai.services.image._edit_via_ollama',
                    return_value=b'\x89PNG ollama') as mock_ollama:
             result = self.provider.edit_image(
-                {'prompt': 'make it red'}, user=self.user, bot=None,
+                EditImageParams(prompt='make it red'), user=self.user, bot=None,
                 conversation_id=str(self.conv.uuid), context=self.context,
             )
 
@@ -389,19 +389,19 @@ class EditImageToolTest(TestCase):
 
     def test_edit_image_empty_prompt(self):
         result = self.provider.edit_image(
-            {'prompt': ''}, user=None, bot=None,
+            EditImageParams(prompt=''), user=None, bot=None,
             conversation_id=str(self.conv.uuid), context=self.context,
         )
         self.assertIn('Error', result)
 
     def test_edit_image_no_image_in_conversation(self):
         result = self.provider.edit_image(
-            {'prompt': 'make it blue'}, user=self.user, bot=None,
+            EditImageParams(prompt='make it blue'), user=self.user, bot=None,
             conversation_id=str(self.conv.uuid), context=self.context,
         )
         self.assertIn('no image found', result)
 
-    @patch('workspace.ai.image_service.get_image_client')
+    @patch('workspace.ai.services.image.get_image_client')
     def test_edit_image_both_backends_fail(self, mock_get_client):
         """Returns error when both OpenAI and Ollama fail."""
         self._attach_image()
@@ -409,10 +409,10 @@ class EditImageToolTest(TestCase):
         mock_client.images.edit.side_effect = Exception('OpenAI failed')
         mock_get_client.return_value = mock_client
 
-        with patch('workspace.ai.image_service._edit_via_ollama',
+        with patch('workspace.ai.services.image._edit_via_ollama',
                    side_effect=Exception('Ollama failed')):
             result = self.provider.edit_image(
-                {'prompt': 'make it blue'}, user=self.user, bot=None,
+                EditImageParams(prompt='make it blue'), user=self.user, bot=None,
                 conversation_id=str(self.conv.uuid), context=self.context,
             )
 
@@ -421,7 +421,207 @@ class EditImageToolTest(TestCase):
 
     def test_edit_image_no_conversation(self):
         result = self.provider.edit_image(
-            {'prompt': 'make it blue'}, user=None, bot=None,
+            EditImageParams(prompt='make it blue'), user=None, bot=None,
             conversation_id=None, context=self.context,
         )
         self.assertIn('Error', result)
+
+
+@override_settings(
+    AI_API_KEY='test-key',
+    AI_MODEL='gpt-4o-mini',
+    AI_SMALL_MODEL='gpt-4o-mini',
+    AI_MAX_TOKENS=100,
+    CELERY_TASK_ALWAYS_EAGER=False,
+)
+class ClassifyMailMessagesTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='clsuser', password='pass123')
+        self.account = MailAccount.objects.create(
+            owner=self.user, email='cls@test.com',
+            imap_host='imap.test.com', smtp_host='smtp.test.com',
+            username='cls@test.com',
+        )
+        self.folder = MailFolder.objects.create(
+            account=self.account, name='INBOX',
+            display_name='Inbox', folder_type='inbox',
+        )
+        self.msg1 = MailMessage.objects.create(
+            account=self.account, folder=self.folder, imap_uid=1,
+            subject='Server down!', snippet='Production is down',
+            from_address={'name': 'Alert', 'email': 'alert@ops.com'},
+        )
+        self.msg2 = MailMessage.objects.create(
+            account=self.account, folder=self.folder, imap_uid=2,
+            subject='Weekly digest', snippet='Here is your digest',
+            from_address={'name': 'News', 'email': 'news@co.com'},
+        )
+        self.label_urgent = self.account.labels.get(name='Urgent')
+        self.label_newsletter = self.account.labels.get(name='Newsletter')
+
+    @patch('workspace.ai.client.get_ai_client')
+    def test_classifies_messages_with_labels(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps([
+            {'i': 1, 'labels': ['Urgent']},
+            {'i': 2, 'labels': ['Newsletter']},
+        ])
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = 'gpt-4o-mini'
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={'message_uuids': [str(self.msg1.uuid), str(self.msg2.uuid)]},
+        )
+        from workspace.ai.tasks import classify_mail_messages
+        classify_mail_messages(str(ai_task.uuid))
+
+        from workspace.mail.models import MailMessageLabel
+        self.assertTrue(MailMessageLabel.objects.filter(message=self.msg1, label=self.label_urgent).exists())
+        self.assertTrue(MailMessageLabel.objects.filter(message=self.msg2, label=self.label_newsletter).exists())
+        ai_task.refresh_from_db()
+        self.assertEqual(ai_task.status, AITask.Status.COMPLETED)
+
+    @patch('workspace.ai.client.get_ai_client')
+    def test_unknown_label_names_ignored(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps([
+            {'i': 1, 'labels': ['Urgent', 'NonExistent']},
+        ])
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = 'gpt-4o-mini'
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={'message_uuids': [str(self.msg1.uuid)]},
+        )
+        from workspace.ai.tasks import classify_mail_messages
+        classify_mail_messages(str(ai_task.uuid))
+
+        from workspace.mail.models import MailMessageLabel
+        self.assertEqual(self.msg1.message_labels.count(), 1)
+        self.assertEqual(self.msg1.message_labels.first().label.name, 'Urgent')
+
+    @patch('workspace.ai.client.get_ai_client')
+    def test_case_insensitive_label_matching(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps([
+            {'i': 1, 'labels': ['urgent', 'NEWSLETTER']},
+        ])
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = 'gpt-4o-mini'
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={'message_uuids': [str(self.msg1.uuid)]},
+        )
+        from workspace.ai.tasks import classify_mail_messages
+        classify_mail_messages(str(ai_task.uuid))
+
+        from workspace.mail.models import MailMessageLabel
+        self.assertEqual(self.msg1.message_labels.count(), 2)
+
+    @patch('workspace.ai.client.get_ai_client')
+    def test_max_3_labels_per_message(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps([
+            {'i': 1, 'labels': ['Urgent', 'Action', 'FYI', 'Newsletter', 'Notification']},
+        ])
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = 'gpt-4o-mini'
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={'message_uuids': [str(self.msg1.uuid)]},
+        )
+        from workspace.ai.tasks import classify_mail_messages
+        classify_mail_messages(str(ai_task.uuid))
+
+        from workspace.mail.models import MailMessageLabel
+        self.assertEqual(self.msg1.message_labels.count(), 3)
+
+    @patch('workspace.ai.client.get_ai_client')
+    def test_malformed_json_fails_gracefully(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = 'not json'
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = 'gpt-4o-mini'
+        mock_response.usage.prompt_tokens = 50
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={'message_uuids': [str(self.msg1.uuid)]},
+        )
+        from workspace.ai.tasks import classify_mail_messages
+        result = classify_mail_messages(str(ai_task.uuid))
+
+        self.assertEqual(result['status'], 'error')
+        ai_task.refresh_from_db()
+        self.assertEqual(ai_task.status, 'failed')
+
+
+class CleanLlmContentTests(TestCase):
+    """Tests for _clean_llm_content — stripping LLM artifacts."""
+
+    def setUp(self):
+        from workspace.ai.tasks import _clean_llm_content
+        self.clean = _clean_llm_content
+
+    def test_strips_bracketed_timestamp_prefix(self):
+        self.assertEqual(self.clean('[2026-04-10 20:07] Hello!'), 'Hello!')
+
+    def test_strips_unbracketed_timestamp_prefix(self):
+        self.assertEqual(self.clean('2026-04-10 20:07 Hello!'), 'Hello!')
+
+    def test_strips_bracketed_timestamp_no_trailing_space(self):
+        self.assertEqual(self.clean('[2026-04-10 20:07]Hello!'), 'Hello!')
+
+    def test_strips_tool_call_tags(self):
+        self.assertEqual(self.clean('<tool_call>stuff</tool_call>'), 'stuff')
+
+    def test_strips_both_timestamp_and_tool_tags(self):
+        self.assertEqual(
+            self.clean('[2026-04-10 14:00] <tool_call>hi</tool_call>'),
+            'hi',
+        )
+
+    def test_preserves_normal_content(self):
+        self.assertEqual(self.clean('Just a normal reply.'), 'Just a normal reply.')
+
+    def test_preserves_timestamps_mid_text(self):
+        """Timestamps in the middle of a message should NOT be stripped."""
+        text = 'The meeting is at [2026-04-10 14:00] in room 3.'
+        self.assertEqual(self.clean(text), text)
+
+    def test_empty_string(self):
+        self.assertEqual(self.clean(''), '')
+
+    def test_only_timestamp(self):
+        self.assertEqual(self.clean('[2026-04-10 20:07]'), '')
+
+    def test_only_timestamp_no_brackets(self):
+        self.assertEqual(self.clean('2026-04-10 20:07'), '')

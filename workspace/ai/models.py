@@ -67,9 +67,10 @@ class BotProfile(models.Model):
     @classmethod
     def accessible_by(cls, user):
         """Return a queryset of BotProfiles accessible by the given user."""
+        qs = cls.objects.filter(user__is_active=True)
         if user.is_superuser:
-            return cls.objects.all()
-        return cls.objects.filter(
+            return qs
+        return qs.filter(
             Q(is_public=True)
             | Q(created_by=user)
             | Q(allowed_users=user)
@@ -91,6 +92,7 @@ class AITask(models.Model):
         REPLY = 'reply'
         CHAT = 'chat'
         EDITOR = 'editor'
+        CLASSIFY = 'classify'
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     owner = models.ForeignKey(
@@ -123,9 +125,28 @@ class AITask(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['owner', 'status', '-created_at'], name='aitask_owner_status'),
+        ]
 
     def __str__(self):
         return f'AITask {self.uuid} ({self.task_type} - {self.status})'
+
+
+class ConversationSummary(models.Model):
+    """Rolling AI summary of older messages in a bot conversation."""
+    conversation = models.OneToOneField(
+        'chat.Conversation',
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='ai_summary_obj',
+    )
+    content = models.TextField(blank=True, default='')
+    up_to = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Summary: {self.conversation_id}'
 
 
 class UserMemory(models.Model):

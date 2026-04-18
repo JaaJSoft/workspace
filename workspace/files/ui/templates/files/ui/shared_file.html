@@ -1,0 +1,152 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% if file %}{{ file.name }} — {% endif %}Shared File — Workspace</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.23/dist/full.min.css" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="min-h-screen bg-base-200 flex flex-col">
+  <div class="flex-1 max-w-5xl mx-auto w-full p-4 sm:p-6">
+
+    {% if expired %}
+    <!-- Expired link -->
+    <div class="card bg-base-100 shadow-lg">
+      <div class="card-body text-center py-12">
+        <i data-lucide="clock" class="w-12 h-12 text-warning mx-auto mb-4"></i>
+        <h2 class="text-xl font-bold mb-2">Link expired</h2>
+        <p class="text-base-content/60">This share link is no longer available.</p>
+      </div>
+    </div>
+
+    {% elif needs_password %}
+    <!-- Password form -->
+    <div class="card bg-base-100 shadow-xl max-w-sm mx-auto mt-8" x-data="sharedFilePassword('{{ share_token }}')">
+      <div class="card-body items-center text-center pt-10 pb-8 px-8">
+        <!-- Lock icon -->
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-4 shadow-lg">
+          <i data-lucide="lock" class="w-7 h-7 text-white"></i>
+        </div>
+
+        <h2 class="text-lg font-bold">Protected file</h2>
+        <p class="text-sm text-base-content/50 mb-5">Enter the password to access this file</p>
+
+        <!-- Input with integrated button -->
+        <div class="w-full relative">
+          <input
+            type="password"
+            class="input input-bordered w-full pr-12"
+            :class="error ? 'input-error' : ''"
+            x-model="password"
+            @keydown.enter="verify()"
+            placeholder="Password"
+            autofocus
+          />
+          <button
+            class="absolute right-1.5 top-1/2 -translate-y-1/2 btn btn-primary btn-sm btn-square"
+            @click="verify()"
+            :disabled="!password || verifying"
+          >
+            <span x-show="verifying" class="loading loading-spinner loading-xs"></span>
+            <i x-show="!verifying" data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Error -->
+        <p x-show="error" x-cloak class="text-sm text-error mt-2" x-text="error"></p>
+      </div>
+    </div>
+
+    <script>
+    function sharedFilePassword(token) {
+      return {
+        password: '',
+        verifying: false,
+        error: '',
+        async verify() {
+          this.verifying = true;
+          this.error = '';
+          try {
+            const resp = await fetch('/api/v1/files/shared/' + token + '/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ password: this.password }),
+            });
+            if (resp.ok) {
+              const data = await resp.json();
+              sessionStorage.setItem('share_access_' + token, data.access_token);
+              window.location.href = '/files/shared/' + token + '?access_token=' + encodeURIComponent(data.access_token);
+            } else {
+              this.error = 'Invalid password';
+            }
+          } catch (e) {
+            this.error = 'An error occurred';
+          }
+          this.verifying = false;
+        }
+      };
+    }
+    </script>
+
+    {% else %}
+    <!-- File viewer -->
+    <div class="card bg-base-100 shadow-lg overflow-hidden">
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+            <i data-lucide="file" class="w-5 h-5 text-white"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h1 class="text-xl font-bold text-white truncate">{{ file.name }}</h1>
+            <p class="text-white/70 text-sm">{{ file.mime_type }} — {{ file.size|filesizeformat }}</p>
+          </div>
+          <a
+            href="{{ download_url }}"
+            class="btn btn-sm bg-white/20 border-0 text-white hover:bg-white/30 gap-1"
+          >
+            <i data-lucide="download" class="w-4 h-4"></i>
+            Download
+          </a>
+        </div>
+      </div>
+
+      <!-- Viewer -->
+      <div class="bg-base-200">
+        {% if viewer_html %}
+          {{ viewer_html|safe }}
+        {% else %}
+          <div class="p-12 text-center">
+            <i data-lucide="eye-off" class="w-12 h-12 text-base-content/30 mx-auto mb-4"></i>
+            <p class="text-base-content/60 mb-4">Preview not available for this file type</p>
+            <a href="{{ download_url }}" class="btn btn-primary btn-sm gap-1">
+              <i data-lucide="download" class="w-4 h-4"></i>
+              Download file
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Footer -->
+    <footer class="mt-6 mb-4 text-center">
+      <div class="flex items-center justify-center gap-2 text-base-content/40 text-sm">
+        <div class="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+          <i data-lucide="share-2" class="w-3.5 h-3.5 text-white"></i>
+        </div>
+        <span>Shared with</span>
+        <a href="/" class="font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent hover:underline">
+          Workspace
+        </a>
+      </div>
+    </footer>
+  </div>
+
+  <script>document.addEventListener('DOMContentLoaded', () => lucide.createIcons());</script>
+</body>
+</html>

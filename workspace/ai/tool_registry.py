@@ -4,29 +4,9 @@ import logging
 import threading
 from dataclasses import dataclass
 
+from pydantic import BaseModel, ValidationError
+
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Param helper — compact parameter definitions
-# ---------------------------------------------------------------------------
-
-class Param:
-    """Describes a single tool parameter for OpenAI schema generation.
-
-    Usage::
-
-        params={
-            'username': Param('The username to look up.'),
-            'limit': Param('Max results.', type='integer', required=False),
-        }
-    """
-    __slots__ = ('description', 'type', 'required')
-
-    def __init__(self, description: str, type: str = 'string', *, required: bool = True):
-        self.description = description
-        self.type = type
-        self.required = required
 
 
 # ---------------------------------------------------------------------------
@@ -38,19 +18,20 @@ def tool(
     badge_icon: str = '⚡',
     badge_label: str | None = None,
     detail_key: str | None = None,
-    params: dict[str, Param] | None = None,
+    params: type[BaseModel] | None = None,
 ):
     """Mark a :class:`ToolProvider` method as an AI chat tool.
 
     The tool **name** is the method name and the **description** is its
-    docstring.  Parameters are defined via *params* using :class:`Param`.
+    docstring.  Parameters are defined via *params* using a Pydantic
+    ``BaseModel`` subclass.
     """
     def decorator(fn):
         fn._tool_meta = {
             'badge_icon': badge_icon,
             'badge_label': badge_label,
             'detail_key': detail_key,
-            'params': params or {},
+            'params': params,
         }
         return fn
     return decorator
@@ -66,6 +47,9 @@ class ToolProvider:
     Subclass this and decorate methods with :func:`tool`.  Each decorated
     method becomes a chat tool whose handler receives
     ``(self, args, user, bot, conversation_id, context)`` and returns a ``str``.
+
+    When a ``params`` model is set, *args* is a validated Pydantic instance.
+    When ``params`` is ``None``, *args* is a raw ``dict``.
 
     *context* is a mutable dict scoped to a single response generation.
     Tools can store side-effects there (e.g. generated images) for the
@@ -86,26 +70,21 @@ class _ToolInfo:
     badge_icon: str
     badge_label: str
     detail_key: str | None = None
+    params_class: type[BaseModel] | None = None
 
 
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
-def _build_parameters(params: dict[str, Param]) -> dict:
-    """Convert a dict of Param objects into an OpenAI parameters schema."""
-    properties = {}
-    required = []
-    for pname, param in params.items():
-        properties[pname] = {
-            'type': param.type,
-            'description': param.description,
-        }
-        if param.required:
-            required.append(pname)
-    schema: dict = {'type': 'object', 'properties': properties}
-    if required:
-        schema['required'] = required
+def _build_parameters(params_cls: type[BaseModel] | None) -> dict:
+    """Convert a Pydantic model class into an OpenAI parameters schema."""
+    if params_cls is None:
+        return {'type': 'object', 'properties': {}}
+    schema = params_cls.model_json_schema()
+    # Remove Pydantic metadata keys not needed by OpenAI
+    schema.pop('title', None)
+    schema.pop('$defs', None)
     return schema
 
 
@@ -130,14 +109,16 @@ class ToolRegistry:
                     f"Tool method '{name}' on {type(provider).__name__} "
                     f"must have a docstring (used as the tool description)"
                 )
+            params_cls = meta['params']
             info = _ToolInfo(
                 name=name,
                 description=docstring,
-                parameters=_build_parameters(meta['params']),
+                parameters=_build_parameters(params_cls),
                 handler=method,
                 badge_icon=meta['badge_icon'],
                 badge_label=meta['badge_label'] or name.replace('_', ' ').title(),
                 detail_key=meta['detail_key'],
+                params_class=params_cls,
             )
             with self._lock:
                 if info.name in self._tools:
@@ -169,12 +150,19 @@ class ToolRegistry:
         """Execute a tool call and return the result string."""
         name = tool_call.function.name
         try:
-            args = json.loads(tool_call.function.arguments)
+            raw_args = json.loads(tool_call.function.arguments)
         except json.JSONDecodeError:
             return 'Error: invalid JSON arguments'
         info = self._tools.get(name)
         if not info:
             return f'Unknown tool: {name}'
+        if info.params_class is not None:
+            try:
+                args = info.params_class.model_validate(raw_args)
+            except ValidationError as e:
+                return f'Error: invalid arguments — {e}'
+        else:
+            args = raw_args
         if context is None:
             context = {}
         return info.handler(args, user, bot, conversation_id, context)

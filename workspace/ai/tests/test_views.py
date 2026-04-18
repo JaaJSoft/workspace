@@ -51,6 +51,64 @@ class BotListTests(APITestCase):
         usernames = [b['username'] for b in resp.data]
         self.assertIn('test-assistant', usernames)
 
+    def test_inactive_bot_user_hidden(self):
+        self.bot_user.is_active = False
+        self.bot_user.save()
+        self.client.force_authenticate(self.user)
+        resp = self.client.get('/api/v1/ai/bots')
+        usernames = [b['username'] for b in resp.data]
+        self.assertNotIn('test-assistant', usernames)
+
+    def test_inactive_bot_user_hidden_even_for_superuser(self):
+        admin = User.objects.create_superuser(username='admin', password='pass123')
+        self.bot_user.is_active = False
+        self.bot_user.save()
+        self.client.force_authenticate(admin)
+        resp = self.client.get('/api/v1/ai/bots')
+        usernames = [b['username'] for b in resp.data]
+        self.assertNotIn('test-assistant', usernames)
+
+    def test_inactive_bot_user_hidden_even_if_allowed(self):
+        self.bot.is_public = False
+        self.bot.save()
+        self.bot.allowed_users.add(self.user)
+        self.bot_user.is_active = False
+        self.bot_user.save()
+        self.client.force_authenticate(self.user)
+        resp = self.client.get('/api/v1/ai/bots')
+        usernames = [b['username'] for b in resp.data]
+        self.assertNotIn('test-assistant', usernames)
+
+    def test_private_bot_visible_to_creator(self):
+        self.bot.is_public = False
+        self.bot.created_by = self.user
+        self.bot.save()
+        self.client.force_authenticate(self.user)
+        resp = self.client.get('/api/v1/ai/bots')
+        usernames = [b['username'] for b in resp.data]
+        self.assertIn('test-assistant', usernames)
+
+    def test_private_bot_visible_to_allowed_group(self):
+        from django.contrib.auth.models import Group
+        group = Group.objects.create(name='testers')
+        group.user_set.add(self.user)
+        self.bot.is_public = False
+        self.bot.save()
+        self.bot.allowed_groups.add(group)
+        self.client.force_authenticate(self.user)
+        resp = self.client.get('/api/v1/ai/bots')
+        usernames = [b['username'] for b in resp.data]
+        self.assertIn('test-assistant', usernames)
+
+    def test_superuser_sees_all_active_bots(self):
+        admin = User.objects.create_superuser(username='admin', password='pass123')
+        self.bot.is_public = False
+        self.bot.save()
+        self.client.force_authenticate(admin)
+        resp = self.client.get('/api/v1/ai/bots')
+        usernames = [b['username'] for b in resp.data]
+        self.assertIn('test-assistant', usernames)
+
 
 @override_settings(AI_API_KEY='test-key')
 class SummarizeViewTests(APITestCase):
@@ -142,3 +200,87 @@ class MemoryAPITests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         mem.refresh_from_db()
         self.assertEqual(mem.content, 'Paul')
+
+
+from unittest.mock import patch
+
+from workspace.mail.models import MailAccount, MailFolder, MailMessage
+
+
+@override_settings(AI_API_KEY='test-key')
+class ClassifyViewTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='clsviewuser', password='pass123')
+        self.account = MailAccount.objects.create(
+            owner=self.user, email='cls@test.com',
+            imap_host='imap.test.com', smtp_host='smtp.test.com',
+            username='cls@test.com',
+        )
+        self.folder = MailFolder.objects.create(
+            account=self.account, name='INBOX',
+            display_name='Inbox', folder_type='inbox',
+        )
+        self.msg = MailMessage.objects.create(
+            account=self.account, folder=self.folder, imap_uid=1,
+            subject='Test',
+        )
+
+    def test_unauthenticated_rejected(self):
+        resp = self.client.post('/api/v1/ai/tasks/mail/classify', {}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(AI_API_KEY='')
+    def test_ai_not_configured(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.post('/api/v1/ai/tasks/mail/classify', {}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    @patch('workspace.ai.tasks.classify_mail_messages.delay')
+    def test_creates_task_for_unclassified(self, mock_delay):
+        self.client.force_authenticate(self.user)
+        resp = self.client.post('/api/v1/ai/tasks/mail/classify', {}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
+        self.assertIn('uuid', resp.data)
+        mock_delay.assert_called_once()
+
+    def test_validates_account_ownership(self):
+        other_user = User.objects.create_user(username='other', password='pass123')
+        self.client.force_authenticate(other_user)
+        resp = self.client.post('/api/v1/ai/tasks/mail/classify', {
+            'account_id': str(self.account.uuid),
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    @patch('workspace.ai.tasks.classify_mail_messages.delay')
+    def test_rate_limit(self, mock_delay):
+        self.client.force_authenticate(self.user)
+        resp1 = self.client.post('/api/v1/ai/tasks/mail/classify', {}, format='json')
+        self.assertEqual(resp1.status_code, status.HTTP_202_ACCEPTED)
+        resp2 = self.client.post('/api/v1/ai/tasks/mail/classify', {}, format='json')
+        self.assertEqual(resp2.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    @patch('workspace.ai.tasks.classify_mail_messages.delay')
+    def test_no_unclassified_messages(self, mock_delay):
+        from workspace.mail.models import MailMessageLabel
+        label = self.account.labels.first()
+        MailMessageLabel.objects.create(message=self.msg, label=label)
+        self.client.force_authenticate(self.user)
+        resp = self.client.post('/api/v1/ai/tasks/mail/classify', {}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    @patch('workspace.ai.tasks.classify_mail_messages.delay')
+    def test_excludes_already_labeled_messages(self, mock_delay):
+        from workspace.mail.models import MailMessageLabel
+        label = self.account.labels.first()
+        MailMessageLabel.objects.create(message=self.msg, label=label)
+
+        self.client.force_authenticate(self.user)
+        resp = self.client.post('/api/v1/ai/tasks/mail/classify')
+        self.assertEqual(resp.status_code, 202)
+        from workspace.ai.models import AITask
+        ai_task = AITask.objects.get(pk=resp.data['uuid'])
+        self.assertEqual(ai_task.input_data['message_uuids'], [])

@@ -15,7 +15,15 @@
   <!-- ── Profile hero ───────────────────────────────────── -->
   <div class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
     <!-- Banner -->
-    <div class="h-32 bg-gradient-to-br from-primary via-primary/80 to-secondary"></div>
+    {% if banner_gradient %}
+    <div class="h-36 relative" style="background: {{ banner_gradient }}">
+      <div class="absolute inset-0" style="background: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)"></div>
+    </div>
+    {% else %}
+    <div class="h-36 bg-gradient-to-br from-primary via-primary/80 to-secondary relative">
+      <div class="absolute inset-0" style="background: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)"></div>
+    </div>
+    {% endif %}
 
     <!-- Content below banner -->
     <div class="px-6 pb-6">
@@ -70,6 +78,9 @@
             </span>
           {% endif %}
         </div>
+        {% if profile_role %}
+        <div class="text-sm text-base-content/60 font-medium mt-1">{{ profile_role }}</div>
+        {% endif %}
         <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-base-content/60">
           <span class="flex items-center gap-1.5">
             <i data-lucide="at-sign" class="w-3.5 h-3.5"></i>
@@ -98,60 +109,28 @@
             </template>
           </span>
         </div>
+        {% if profile_bio %}
+        <p class="text-sm text-base-content/60 mt-3 max-w-xl leading-relaxed">{{ profile_bio }}</p>
+        {% endif %}
       </div>
-    </div>
-  </div>
 
-  <!-- ── Activity stats ───────────────────────────────── -->
-  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-    <!-- Files -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-4 flex-row items-center gap-4">
-        <div class="rounded-lg bg-primary/10 p-2.5">
-          <i data-lucide="hard-drive" class="w-5 h-5 text-primary"></i>
+      <!-- Inline stats -->
+      <div class="flex flex-wrap gap-x-8 gap-y-3 mt-5 pt-5 border-t border-base-content/5">
+        <div>
+          <div class="text-xl font-bold">{{ activity_stats.files.total_files|default:"0" }}</div>
+          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5">Files</div>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Files</div>
-          <div class="font-semibold text-lg mt-0.5">{{ activity_stats.files.total_files|default:"0" }}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Messages -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-4 flex-row items-center gap-4">
-        <div class="rounded-lg bg-info/10 p-2.5">
-          <i data-lucide="message-circle" class="w-5 h-5 text-info"></i>
+          <div class="text-xl font-bold">{{ activity_stats.chat.total_messages|default:"0" }}</div>
+          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5">Messages</div>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Messages</div>
-          <div class="font-semibold text-lg mt-0.5">{{ activity_stats.chat.total_messages|default:"0" }}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Events -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-4 flex-row items-center gap-4">
-        <div class="rounded-lg bg-secondary/10 p-2.5">
-          <i data-lucide="calendar" class="w-5 h-5 text-secondary"></i>
+          <div class="text-xl font-bold">{{ activity_stats.calendar.total_events|default:"0" }}</div>
+          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5">Events</div>
         </div>
         <div>
-          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Events</div>
-          <div class="font-semibold text-lg mt-0.5">{{ activity_stats.calendar.total_events|default:"0" }}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Member since -->
-    <div class="card bg-base-100 border border-base-300 shadow-sm">
-      <div class="card-body p-4 flex-row items-center gap-4">
-        <div class="rounded-lg bg-accent/10 p-2.5">
-          <i data-lucide="clock" class="w-5 h-5 text-accent"></i>
-        </div>
-        <div>
-          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide">Member since</div>
-          <div class="font-semibold mt-0.5">{{ profile_user.date_joined|localtime_tag:"date" }}</div>
+          <div class="text-xl font-bold">{{ profile_user.date_joined|localtime_tag:"date" }}</div>
+          <div class="text-xs text-base-content/50 font-medium uppercase tracking-wide mt-0.5">Member since</div>
         </div>
       </div>
     </div>
@@ -231,15 +210,19 @@
   <div class="card bg-base-100 border border-base-300 shadow-sm"
        x-data="{
          activityTab: 'all',
+         activitySearch: '',
+         searchOpen: false,
          loading: false,
          get feedUrl() {
            let u = '{% url 'users_ui:profile_activity_feed' username=profile_user.username %}';
-           if (this.activityTab !== 'all') u += '?source=' + this.activityTab;
-           return u;
+           let p = [];
+           if (this.activityTab !== 'all') p.push('source=' + this.activityTab);
+           if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch));
+           return p.length ? u + '?' + p.join('&') : u;
          }
        }"
        @ajax:before="loading = true"
-       @ajax:after="loading = false; $nextTick(() => lucide.createIcons())"
+       @ajax:after="loading = false"
   >
     <div class="card-body gap-4">
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -247,31 +230,21 @@
           <i data-lucide="activity" class="w-5 h-5"></i>
           Activity
         </h2>
-        <div class="tabs tabs-boxed">
-          <a
-            :href="'{% url 'users_ui:profile_activity_feed' username=profile_user.username %}'"
-            class="tab gap-1.5 tab-sm"
-            :class="activityTab === 'all' ? 'tab-active' : ''"
-            @click="activityTab = 'all'"
-            x-target="profile-activity"
+        <div class="flex items-center gap-2">
+          {% include "ui/partials/activity_tabs.html" with activity_prefix="profile-activity" %}
+          <button
+            class="btn btn-ghost btn-sm btn-square"
+            :class="searchOpen && 'btn-active'"
+            title="Search"
+            @click="searchOpen = !searchOpen; if (!searchOpen) { activitySearch = ''; $nextTick(() => $refs.activitySearchLink.click()) } else { $nextTick(() => $refs.activitySearchInput.focus()) }"
           >
-            <i data-lucide="layers" class="w-3.5 h-3.5"></i>
-            All
-          </a>
-          {% for src in activity_sources %}
-          <a
-            :href="'{% url 'users_ui:profile_activity_feed' username=profile_user.username %}?source={{ src.slug }}'"
-            class="tab gap-1.5 tab-sm"
-            :class="activityTab === '{{ src.slug }}' ? 'tab-active' : ''"
-            @click="activityTab = '{{ src.slug }}'"
-            x-target="profile-activity"
-          >
-            <i data-lucide="{{ src.icon }}" class="w-3.5 h-3.5"></i>
-            {{ src.label }}
-          </a>
-          {% endfor %}
+            <i data-lucide="search" class="w-4 h-4"></i>
+          </button>
+          {% include "ui/partials/refresh_button.html" with url_expr="feedUrl" target="profile-activity" %}
         </div>
       </div>
+
+      {% include "ui/partials/activity_search.html" with activity_prefix="profile-activity" %}
 
       <!-- Loading skeleton -->
       <div x-show="loading" x-cloak class="animate-pulse">
@@ -289,7 +262,7 @@
       </div>
 
       <div x-show="!loading">
-        {% include 'users/ui/partials/profile_activity_feed.html' %}
+        {% include 'ui/partials/activity_feed.html' %}
       </div>
     </div>
   </div>

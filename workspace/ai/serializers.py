@@ -20,7 +20,7 @@ class BotProfileSerializer(serializers.ModelSerializer):
         return obj.user.get_full_name() or obj.user.username
 
     def get_avatar_url(self, obj):
-        from workspace.users.avatar_service import has_avatar
+        from workspace.users.services.avatar import has_avatar
         if has_avatar(obj.user):
             return f'/api/v1/users/{obj.user_id}/avatar'
         return None
@@ -39,11 +39,14 @@ class AITaskSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_result_html(self, obj):
+        if obj.status != AITask.Status.COMPLETED or not obj.result:
+            return None
+        if obj.task_type == AITask.TaskType.SUMMARIZE:
+            import mistune
+            return mistune.html(obj.result)
         if (
             obj.task_type == AITask.TaskType.EDITOR
-            and obj.status == AITask.Status.COMPLETED
             and obj.input_data.get('action') in ('explain', 'summarize')
-            and obj.result
         ):
             import mistune
             return mistune.html(obj.result)
@@ -99,3 +102,8 @@ class UserMemorySerializer(serializers.ModelSerializer):
 
     def get_bot_name(self, obj):
         return obj.bot.get_full_name() or obj.bot.username
+
+
+class ClassifyRequestSerializer(serializers.Serializer):
+    account_id = serializers.UUIDField(required=False)
+    folder_id = serializers.UUIDField(required=False)

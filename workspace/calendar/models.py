@@ -108,7 +108,7 @@ class Event(models.Model):
     # iCalendar integration (RFC 5545 / iTIP)
     ical_uid = models.CharField(max_length=512, null=True, blank=True, default=None)
     ical_sequence = models.IntegerField(default=0)
-    organizer_email = models.EmailField(null=True, blank=True, default=None)
+    external_organizer = models.EmailField(null=True, blank=True, default=None)
     source_message = models.ForeignKey(
         'mail.MailMessage',
         on_delete=models.SET_NULL,
@@ -130,6 +130,7 @@ class Event(models.Model):
             models.Index(fields=['recurrence_parent', 'original_start']),
             models.Index(fields=['recurrence_frequency', 'start']),
             models.Index(fields=['ical_uid'], name='event_ical_uid'),
+            models.Index(fields=['calendar', 'is_cancelled', 'start'], name='event_cal_cancel_start'),
         ]
 
     @property
@@ -330,3 +331,7 @@ class PollInvitee(models.Model):
 
     def __str__(self):
         return f'{self.user} — {self.poll}'
+
+
+# Import models from sub-modules so Django's migration framework discovers them.
+from workspace.calendar.models_external import ExternalCalendar  # noqa: E402, F401

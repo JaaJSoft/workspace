@@ -61,23 +61,23 @@ class MailAccount(models.Model):
         return self.email
 
     def set_password(self, plaintext):
-        from workspace.mail.services.credentials import encrypt
+        from workspace.core.encryption import encrypt
         self.password_encrypted = encrypt(plaintext)
 
     def get_password(self):
-        from workspace.mail.services.credentials import decrypt
+        from workspace.core.encryption import decrypt
         if not self.password_encrypted:
             return ''
         return decrypt(bytes(self.password_encrypted))
 
     def set_oauth2_data(self, data):
         import orjson
-        from workspace.mail.services.credentials import encrypt
+        from workspace.core.encryption import encrypt
         self.oauth2_data_encrypted = encrypt(orjson.dumps(data).decode())
 
     def get_oauth2_data(self):
         import orjson
-        from workspace.mail.services.credentials import decrypt
+        from workspace.core.encryption import decrypt
         if not self.oauth2_data_encrypted:
             return None
         return orjson.loads(decrypt(bytes(self.oauth2_data_encrypted)))
@@ -129,9 +129,43 @@ class MailFolder(models.Model):
                 name='unique_mail_folder',
             ),
         ]
+        indexes = [
+            models.Index(fields=['account', 'folder_type']),
+        ]
 
     def __str__(self):
         return f'{self.account.email} / {self.display_name}'
+
+
+class MailLabel(models.Model):
+    """User-defined label that can be applied to mail messages."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    account = models.ForeignKey(
+        MailAccount,
+        on_delete=models.CASCADE,
+        related_name='labels',
+    )
+    name = models.CharField(max_length=100)
+    color = models.CharField(max_length=30, blank=True, default='')
+    icon = models.CharField(max_length=50, blank=True, default='')
+    position = models.PositiveIntegerField(default=0)
+    unread_count = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['position', 'name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['account', 'name'],
+                name='unique_mail_label_per_account',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.account.email} / {self.name}'
 
 
 class MailMessage(models.Model):
@@ -184,13 +218,46 @@ class MailMessage(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=['folder', '-date']),
+            models.Index(fields=['folder', 'deleted_at', '-date']),
+            models.Index(fields=['account', 'deleted_at', '-date']),
+            models.Index(fields=['account', 'is_starred', '-date']),
             models.Index(fields=['account', 'message_id']),
             models.Index(fields=['folder', 'imap_uid']),
+            models.Index(fields=['account', 'is_read', 'deleted_at'], name='mail_acct_read_del'),
         ]
 
     def __str__(self):
         return self.subject or '(no subject)'
+
+
+class MailMessageLabel(models.Model):
+    """Junction table linking mail messages to labels."""
+
+    message = models.ForeignKey(
+        MailMessage,
+        on_delete=models.CASCADE,
+        related_name='message_labels',
+    )
+    label = models.ForeignKey(
+        MailLabel,
+        on_delete=models.CASCADE,
+        related_name='label_links',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['message', 'label'],
+                name='unique_mail_message_label',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['label'], name='mail_msglabel_label'),
+        ]
+
+    def __str__(self):
+        return f'{self.message} / {self.label.name}'
 
 
 def mail_attachment_path(instance, filename):

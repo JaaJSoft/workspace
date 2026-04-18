@@ -12,7 +12,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.chat.models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage
 from workspace.chat.serializers import ConversationListSerializer
-from workspace.chat.services import get_unread_counts, user_conversation_ids
+from workspace.chat.services.conversations import get_active_membership, get_unread_counts, user_conversation_ids
 from workspace.files.ui.viewers import ViewerRegistry
 
 
@@ -150,6 +150,10 @@ def conversation_list_view(request):
     """Partial: conversation list HTML for alpine-ajax refresh."""
     conv_list = _build_conversation_context(request.user)
 
+    search = (request.GET.get('q') or '').strip().lower()
+    if search:
+        conv_list = [c for c in conv_list if search in c.display_name.lower()]
+
     pinned = sorted(
         [c for c in conv_list if c.is_pinned],
         key=lambda c: (c.pin_position or 0, c.created_at),
@@ -160,6 +164,7 @@ def conversation_list_view(request):
         'pinned_conversations': pinned,
         'dm_conversations': [c for c in conv_list if c.kind == Conversation.Kind.DM and str(c.uuid) not in pinned_uuids],
         'group_conversations': [c for c in conv_list if c.kind == Conversation.Kind.GROUP and str(c.uuid) not in pinned_uuids],
+        'search_query': request.GET.get('q', ''),
     })
 
 
@@ -216,11 +221,7 @@ def group_messages(messages, current_user):
 @login_required
 def conversation_messages_view(request, conversation_uuid):
     """Partial: server-rendered grouped messages for a conversation."""
-    membership = ConversationMember.objects.filter(
-        conversation_id=conversation_uuid,
-        user=request.user,
-        left_at__isnull=True,
-    ).first()
+    membership = get_active_membership(request.user, conversation_uuid)
     if not membership:
         return HttpResponseForbidden()
 
@@ -228,7 +229,7 @@ def conversation_messages_view(request, conversation_uuid):
         Message.objects
         .filter(conversation_id=conversation_uuid)
         .select_related('author', 'author__bot_profile', 'reply_to', 'reply_to__author')
-        .prefetch_related('reactions__user', 'attachments')
+        .prefetch_related('reactions__user', 'attachments', 'link_previews__preview')
         .order_by('-created_at')
     )
 
@@ -304,11 +305,7 @@ def conversation_messages_view(request, conversation_uuid):
 @login_required
 def message_readers_view(request, conversation_uuid, message_uuid):
     """Partial: server-rendered popover content showing who read a message."""
-    membership = ConversationMember.objects.filter(
-        conversation_id=conversation_uuid,
-        user=request.user,
-        left_at__isnull=True,
-    ).first()
+    membership = get_active_membership(request.user, conversation_uuid)
     if not membership:
         return HttpResponseForbidden()
 
@@ -337,6 +334,7 @@ def message_readers_view(request, conversation_uuid, message_uuid):
     return render(request, 'chat/ui/partials/_read_receipt_popover.html', {
         'readers': readers,
         'not_read': not_read,
+        'message_uuid': message_uuid,
     })
 
 
@@ -352,12 +350,7 @@ def view_attachment(request, attachment_uuid):
         raise Http404
 
     # Check user is member of the conversation
-    is_member = ConversationMember.objects.filter(
-        conversation=attachment.message.conversation,
-        user=request.user,
-        left_at__isnull=True,
-    ).exists()
-    if not is_member:
+    if not get_active_membership(request.user, attachment.message.conversation_id):
         from django.http import Http404
         raise Http404
 

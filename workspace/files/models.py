@@ -1,4 +1,6 @@
 import os
+import posixpath
+import secrets
 from django.db import models, transaction
 from django.db.models import Value
 from django.db.models.functions import Concat, Substr
@@ -18,14 +20,18 @@ def file_upload_path(instance, filename):
 
     Uses ``instance.path`` (set by ``File.save()`` before
     ``super().save()`` runs) to avoid walking the parent FK chain.
+    Group files are stored under ``files/groups/<group_name>/...``.
+    Personal files are stored under ``files/users/<username>/...``.
     """
+    if instance.group_id:
+        root = 'files/groups/' + instance.group.name
+    else:
+        root = 'files/users/' + instance.owner.username
+
     if instance.path:
-        # instance.path = "A/B/myfile.txt" — drop the last segment
         parent_parts = instance.path.split('/')[:-1]
-        return os.path.join(
-            'files', instance.owner.username, *parent_parts, filename,
-        )
-    return os.path.join('files', instance.owner.username, filename)
+        return posixpath.join(root, *parent_parts, filename)
+    return posixpath.join(root, filename)
 
 
 class MimeTypeRule(models.Model):
@@ -96,7 +102,7 @@ class File(models.Model):
         max_length=1024
     )
     size = models.BigIntegerField(null=True, blank=True, help_text="File size in bytes")
-    mime_type = models.CharField(max_length=100, null=True, blank=True)
+    mime_type = models.CharField(max_length=100, null=True, blank=True, db_index=True)
 
     has_thumbnail = models.BooleanField(default=False)
 
@@ -122,6 +128,13 @@ class File(models.Model):
 
     # Metadata
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='files')
+    group = models.ForeignKey(
+        'auth.Group',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='group_files',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -143,7 +156,10 @@ class File(models.Model):
             models.Index(fields=['parent', 'node_type']),
             models.Index(fields=['owner', 'created_at']),
             models.Index(fields=['owner', 'deleted_at'], name='file_owner_del_idx'),
+            models.Index(fields=['group', 'deleted_at'], name='file_group_del_idx'),
             models.Index(fields=['locked_by', 'lock_expires_at'], name='file_lock_idx'),
+            models.Index(fields=['owner', 'deleted_at', 'node_type'], name='file_owner_del_type'),
+            models.Index(fields=['parent', 'deleted_at', 'name'], name='file_parent_del_name'),
         ]
         constraints = [
             models.CheckConstraint(
@@ -155,6 +171,15 @@ class File(models.Model):
                     models.Q(node_type='file')
                 ),
                 name='folder_has_no_content'
+            ),
+            models.UniqueConstraint(
+                fields=['group'],
+                condition=models.Q(
+                    group__isnull=False,
+                    parent__isnull=True,
+                    deleted_at__isnull=True,
+                ),
+                name='unique_group_root_folder',
             ),
         ]
 
@@ -178,6 +203,9 @@ class File(models.Model):
         return name
 
     def save(self, *args, **kwargs):
+        if '/' in self.name:
+            raise ValueError("File and folder names must not contain '/'.")
+
         old_data = None
         if self.pk:
             old_data = File.objects.filter(pk=self.pk).values(
@@ -271,6 +299,7 @@ class File(models.Model):
             File.objects.filter(pk__in=restored_ids).update(deleted_at=None)
         return len(restored_ids)
 
+    @transaction.atomic
     def restore(self):
         if self.node_type == self.NodeType.FOLDER:
             updated = File.objects.filter(self._descendant_filter()).update(deleted_at=None)
@@ -492,3 +521,88 @@ def delete_file_on_delete(sender, instance, **kwargs):
                     logger.info(f"Signal: Deleted folder and contents: {full_path}")
         except Exception as e:
             logger.warning(f"Signal: Could not delete folder {instance.name}: {e}")
+
+
+@receiver(pre_delete, sender='auth.Group')
+def soft_delete_group_files(sender, instance, **kwargs):
+    """Soft-delete all files belonging to this group before it is deleted."""
+    File.objects.filter(
+        group=instance,
+        deleted_at__isnull=True,
+    ).update(deleted_at=timezone.now())
+
+
+def _generate_share_link_token():
+    return secrets.token_urlsafe(24)
+
+
+class FileShareLink(models.Model):
+    """A public share link for a file, allowing unauthenticated access."""
+
+    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name='share_links')
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='+'
+    )
+    token = models.CharField(max_length=44, unique=True, db_index=True, default=_generate_share_link_token)
+    password = models.CharField(max_length=128, blank=True, default='')
+    expires_at = models.DateTimeField(null=True, blank=True)
+    view_count = models.PositiveIntegerField(default=0)
+    last_accessed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"ShareLink({self.token[:8]}... -> {self.file.name})"
+
+    @property
+    def is_expired(self):
+        if self.expires_at is None:
+            return False
+        from django.utils import timezone
+        return self.expires_at <= timezone.now()
+
+    @property
+    def has_password(self):
+        return bool(self.password)
+
+
+class Tag(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tags')
+    name = models.CharField(max_length=100)
+    icon = models.CharField(max_length=50, blank=True, default='')
+    color = models.CharField(max_length=20, default='ghost')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(fields=['owner', 'name'], name='unique_tag_per_user'),
+        ]
+        indexes = [
+            models.Index(fields=['owner', 'name']),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class FileTag(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name='file_tags')
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name='file_tags')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['file', 'tag'], name='unique_file_tag'),
+        ]
+        indexes = [
+            models.Index(fields=['file', 'tag']),
+        ]
+
+    def __str__(self):
+        return f'{self.file.name} — {self.tag.name}'

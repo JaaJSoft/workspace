@@ -12,7 +12,7 @@
 {% include 'ui/partials/navbar.html' with navbar_full_width=True %}
 {% endblock %}
 
-{% block drawer_class %}drawer-open{% endblock %}
+{% block drawer_class %}lg:drawer-open{% endblock %}
 {% block drawer_id %}mail-drawer{% endblock %}
 
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
@@ -31,20 +31,31 @@ x-init="init()"
   <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
          :class="collapsed ? 'w-16' : 'w-72'">
     <!-- Sidebar header -->
-    <div class="border-b border-base-300 py-4 px-3">
+    <div class="lg:border-b border-base-300 py-4 px-3 relative" x-data="{ ...mailPreferences(), prefsOpen: false }">
       <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
         <h2 class="text-xl font-semibold flex items-center gap-2" :class="collapsed ? '' : 'pl-2'">
           <i data-lucide="mail" class="w-6 h-6 text-warning"></i>
           <span x-show="!collapsed" x-transition>Mail</span>
         </h2>
-        <button
-          x-show="!collapsed" x-transition
-          class="btn btn-ghost btn-sm btn-square mr-1 hover:text-warning"
-          @click="showCompose()"
-          title="Compose (C)"
-        >
-          <i data-lucide="plus" class="w-4 h-4"></i>
-        </button>
+        <div class="flex items-center gap-0.5" x-show="!collapsed" x-transition>
+          <button type="button" class="btn btn-ghost btn-sm btn-square hover:text-warning" aria-label="Settings" title="Settings"
+                  @click="prefsOpen = !prefsOpen">
+            <i data-lucide="settings" class="w-4 h-4"></i>
+          </button>
+          <button class="btn btn-ghost btn-sm btn-square mr-1 hover:text-warning" @click="showCompose()" title="Compose (C)">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+      <!-- Preferences popover -->
+      <div x-show="prefsOpen" x-cloak x-transition
+           @click.outside="prefsOpen = false"
+           class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4">
+        <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+          <i data-lucide="settings" class="w-4 h-4 text-warning"></i>
+          Preferences
+        </h4>
+        {% include "mail/ui/partials/_preferences_content.html" %}
       </div>
     </div>
 
@@ -63,14 +74,17 @@ x-init="init()"
     <!-- Help button -->
     <div class="px-3 pb-2">
       <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="warning" onclick="document.getElementById('mail-help-dialog').showModal(); lucide?.createIcons()" tooltip="Help (?)" %}
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="warning" onclick="document.getElementById('mail-help-dialog').showModal()" tooltip="Help (?)" %}
       </ul>
     </div>
 
-    <!-- Collapse toggle -->
+    <!-- Bottom action: settings on mobile, collapse on desktop -->
     <div class="border-t border-base-300 py-4 px-3">
-      <ul class="menu p-0" x-show="!isMobile()">
+      <ul class="menu p-0 hidden lg:block">
         {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" color="warning" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+      </ul>
+      <ul class="menu p-0 lg:hidden">
+        {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="warning" onclick="document.getElementById('mail-prefs-dialog').showModal()" tooltip="Preferences" %}
       </ul>
     </div>
   </aside>
@@ -98,9 +112,9 @@ x-init="init()"
   <template x-if="accounts.length > 0 || selectedFolder">
     <div class="flex h-full min-w-0 w-full">
       <!-- Message list panel -->
-      <div class="w-96 border-r border-base-300 flex flex-col min-h-0"
+      <div class="w-full lg:w-96 border-r border-base-300 flex flex-col min-h-0"
            :class="selectedMessage && isMobile() ? 'hidden' : ''"
-           x-show="selectedFolder">
+           x-show="selectedFolder || selectedLabel || unifiedInbox">
         {% include "mail/ui/partials/message_list.html" %}
       </div>
 
@@ -110,15 +124,16 @@ x-init="init()"
         {% include "mail/ui/partials/message_detail.html" %}
       </div>
 
-      <!-- Empty state: has accounts but no folder selected -->
-      <div class="flex-1 flex items-center justify-center" x-show="!selectedFolder">
-        <div class="text-center text-base-content/40">
-          <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
-          <p class="text-lg font-medium">Select a folder to view messages</p>
-        </div>
-      </div>
     </div>
   </template>
+
+  <!-- Mobile compose FAB -->
+  <button class="btn btn-warning btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden"
+          @click="showCompose()"
+          x-show="!selectedMessage"
+          x-cloak>
+    <i data-lucide="pencil" class="w-5 h-5"></i>
+  </button>
 </div>
 
 <!-- Account context menu -->
@@ -126,6 +141,94 @@ x-init="init()"
 
 <!-- Folder context menu -->
 {% include "mail/ui/partials/folder_context_menu.html" %}
+
+<!-- Label context menu -->
+<div
+  x-show="labelCtx.open"
+  x-cloak
+  @click.outside="labelCtx.open = false"
+  @keydown.escape.window="labelCtx.open = false"
+  class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-44 p-1"
+  :style="`top: ${labelCtx.y}px; left: ${labelCtx.x}px;`"
+  id="label-context-menu"
+>
+  <ul class="menu menu-sm p-0">
+    <li>
+      <button type="button" class="gap-3 rounded" @click="labelCtxAction('edit')">
+        <i data-lucide="pencil" class="w-4 h-4"></i>
+        <span>Edit</span>
+      </button>
+    </li>
+    <li>
+      <button type="button" class="gap-3 rounded text-error" @click="labelCtxAction('delete')">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+        <span>Delete</span>
+      </button>
+    </li>
+  </ul>
+</div>
+
+<!-- Label create/edit dialog -->
+<dialog id="mail-label-dialog" class="modal">
+  <div class="modal-box max-w-md">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+      <span :class="labelModal.color && labelModal.color !== 'ghost' ? 'text-' + labelModal.color : 'text-base-content/50'">
+        <i :data-lucide="labelModal.icon || 'tag'" class="w-5 h-5"></i>
+      </span>
+      <span x-text="labelModal.uuid ? 'Edit Label' : 'New Label'"></span>
+    </h3>
+    <form @submit.prevent="saveLabelModal()">
+      <label class="form-control w-full mb-3">
+        <div class="label"><span class="label-text">Name</span></div>
+        <input type="text" class="input input-bordered w-full input-sm"
+               x-model="labelModal.name" placeholder="Label name" required
+               @keydown.escape="closeLabelModal()" />
+      </label>
+      <!-- Icon & color picker (shared component) -->
+      <div x-data="{
+        icons: window.ICON_PICKER_ICONS,
+        colors: window.ICON_PICKER_COLORS,
+        selectedIcon: '',
+        selectedColor: '',
+        _colorToClass: {'ghost': 'text-base-content/60', 'accent': 'text-cyan-500'},
+        _classToColor: {'text-base-content/60': 'ghost', 'text-cyan-500': 'accent'},
+        selectIcon(icon) {
+          this.selectedIcon = icon;
+          labelModal.icon = icon;
+
+        },
+        selectColor(cls) {
+          this.selectedColor = cls;
+          labelModal.color = this._classToColor[cls] || cls.replace('text-', '');
+
+        },
+        saving: false,
+        saved: false,
+      }" x-effect="
+        selectedIcon = labelModal.icon || 'tag';
+        selectedColor = _colorToClass[labelModal.color] || ('text-' + (labelModal.color || 'base-content/60'));
+      " class="mb-4">
+        {% include "ui/partials/icon_picker.html" %}
+      </div>
+      <div x-show="labelModal.error" x-cloak class="mb-3">
+        <div class="text-sm text-error" x-text="labelModal.error"></div>
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost btn-sm text-error mr-auto"
+                x-show="labelModal.uuid" @click="deleteLabelConfirm()">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          Delete
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" @click="closeLabelModal()">Cancel</button>
+        <button type="submit" class="btn btn-warning btn-sm" :disabled="labelModal.saving || !labelModal.name.trim()">
+          <span x-show="!labelModal.saving" x-text="labelModal.uuid ? 'Save' : 'Create'"></span>
+          <span x-show="labelModal.saving" class="loading loading-spinner loading-xs"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 
 <!-- Hidden folders dialog -->
 {% include "mail/ui/partials/hidden_folders_dialog.html" %}
@@ -165,6 +268,25 @@ x-init="init()"
 
 <!-- Help dialog -->
 {% include "mail/ui/partials/help_dialog.html" %}
+
+<!-- Mobile preferences dialog -->
+<dialog id="mail-prefs-dialog" class="modal" x-data="mailPreferences()">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg flex items-center gap-2">
+      <i data-lucide="settings" class="w-5 h-5 text-warning"></i>
+      Preferences
+    </h3>
+    <div class="mt-4">
+      {% include "mail/ui/partials/_preferences_content.html" %}
+    </div>
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 
 <!-- Compose dialog -->
 {% include "mail/ui/partials/compose_dialog.html" %}

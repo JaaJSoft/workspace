@@ -13,7 +13,7 @@ function _cleanName(raw) {
 
 function _initial(str) {
   if (!str) return '?';
-  var m = str.match(/[a-zA-Z\u00C0-\u024F]/);
+  const m = str.match(/[a-zA-Z\u00C0-\u024F]/);
   return m ? m[0].toUpperCase() : str[0].toUpperCase();
 }
 
@@ -21,29 +21,29 @@ function _buildMailCard(name, email) {
   name = _cleanName(name);
   email = (email && typeof email === 'string') ? email.trim() : '';
 
-  var root = document.createElement('div');
+  const root = document.createElement('div');
   root.className = 'p-3 w-64';
 
   // Avatar + info row
-  var row = document.createElement('div');
+  const row = document.createElement('div');
   row.className = 'flex items-center gap-3 mb-2';
 
-  var avatarWrap = document.createElement('div');
+  const avatarWrap = document.createElement('div');
   avatarWrap.className = 'avatar placeholder';
-  var avatarInner = document.createElement('div');
+  const avatarInner = document.createElement('div');
   avatarInner.className = 'w-10 h-10 bg-warning/15 text-warning rounded-full flex items-center justify-center font-semibold';
   avatarInner.textContent = _initial(name || email);
   avatarWrap.appendChild(avatarInner);
   row.appendChild(avatarWrap);
 
-  var info = document.createElement('div');
+  const info = document.createElement('div');
   info.className = 'min-w-0 flex-1';
-  var nameEl = document.createElement('div');
+  const nameEl = document.createElement('div');
   nameEl.className = 'font-semibold text-sm truncate';
   nameEl.textContent = name || email;
   info.appendChild(nameEl);
   if (name) {
-    var emailEl = document.createElement('div');
+    const emailEl = document.createElement('div');
     emailEl.className = 'text-xs text-base-content/50 truncate';
     emailEl.textContent = email;
     info.appendChild(emailEl);
@@ -52,12 +52,12 @@ function _buildMailCard(name, email) {
   root.appendChild(row);
 
   // Action buttons
-  var actions = document.createElement('div');
+  const actions = document.createElement('div');
   actions.className = 'flex gap-1';
 
-  var copyBtn = document.createElement('button');
+  const copyBtn = document.createElement('button');
   copyBtn.className = 'btn btn-ghost btn-xs flex-1 gap-1';
-  var copyIcon = document.createElement('i');
+  const copyIcon = document.createElement('i');
   copyIcon.setAttribute('data-lucide', 'copy');
   copyIcon.className = 'w-3 h-3';
   copyBtn.appendChild(copyIcon);
@@ -69,21 +69,20 @@ function _buildMailCard(name, email) {
       copyBtn.textContent = '';
       copyBtn.appendChild(copyIcon);
       copyBtn.appendChild(document.createTextNode(' Copy email'));
-      lucide?.createIcons({ nodes: [copyIcon] });
     }, 1500);
   });
   actions.appendChild(copyBtn);
 
-  var sendBtn = document.createElement('button');
+  const sendBtn = document.createElement('button');
   sendBtn.className = 'btn btn-ghost btn-xs flex-1 gap-1';
-  var sendIcon = document.createElement('i');
+  const sendIcon = document.createElement('i');
   sendIcon.setAttribute('data-lucide', 'send');
   sendIcon.className = 'w-3 h-3';
   sendBtn.appendChild(sendIcon);
   sendBtn.appendChild(document.createTextNode(' Send email'));
   sendBtn.addEventListener('click', function() {
     // If already on the mail page, dispatch a custom event to open compose
-    var composeDialog = document.getElementById('mail-compose-dialog');
+    const composeDialog = document.getElementById('mail-compose-dialog');
     if (composeDialog) {
       document.dispatchEvent(new CustomEvent('mail:compose', { detail: { to: email } }));
     } else {
@@ -104,7 +103,7 @@ function _buildMailCard(name, email) {
  */
 window._mailCardShow = function(wrapper, nameOrAddr, email) {
   // Support both _mailCardShow(el, {name, email}) and _mailCardShow(el, name, email)
-  var name;
+  let name;
   if (nameOrAddr && typeof nameOrAddr === 'object') {
     name = nameOrAddr.name;
     email = nameOrAddr.email;
@@ -112,13 +111,13 @@ window._mailCardShow = function(wrapper, nameOrAddr, email) {
     name = nameOrAddr;
   }
   window._mailCardCancelHide(wrapper);
-  var existing = wrapper._mailCardPopover;
+  const existing = wrapper._mailCardPopover;
   if (existing && existing.style.display !== 'none' && existing.style.opacity === '1') return;
   if (wrapper._showTimeout) clearTimeout(wrapper._showTimeout);
 
   wrapper._showTimeout = setTimeout(function() {
     wrapper._showTimeout = null;
-    var popover = wrapper._mailCardPopover;
+    let popover = wrapper._mailCardPopover;
     if (!popover) {
       popover = document.createElement('div');
       popover.className = 'fixed z-[9999] bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
@@ -132,7 +131,7 @@ window._mailCardShow = function(wrapper, nameOrAddr, email) {
     popover.textContent = '';
     popover.appendChild(_buildMailCard(name, email));
 
-    var pos = _computePopoverPosition(wrapper);
+    const pos = _computePopoverPosition(wrapper);
     popover.style.left = pos.left + 'px';
     popover.style.top = pos.top + 'px';
     wrapper._placement = pos.placement;
@@ -143,14 +142,13 @@ window._mailCardShow = function(wrapper, nameOrAddr, email) {
     void popover.offsetHeight;
     popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
     _applyPopoverTransform(popover, pos.placement, true);
-    lucide?.createIcons({ nodes: popover.querySelectorAll('[data-lucide]') });
   }, 500);
 };
 
 window._mailCardScheduleHide = function(wrapper) {
   if (wrapper._showTimeout) { clearTimeout(wrapper._showTimeout); wrapper._showTimeout = null; }
   wrapper._hideTimeout = setTimeout(function() {
-    var popover = wrapper._mailCardPopover;
+    const popover = wrapper._mailCardPopover;
     if (popover) {
       _applyPopoverTransform(popover, wrapper._placement || 'bottom', false);
       wrapper._closeTimeout = setTimeout(function() { popover.style.display = 'none'; }, 150);
@@ -161,19 +159,84 @@ window._mailCardScheduleHide = function(wrapper) {
 window._mailCardCancelHide = function(wrapper) {
   if (wrapper._hideTimeout) { clearTimeout(wrapper._hideTimeout); wrapper._hideTimeout = null; }
   if (wrapper._closeTimeout) { clearTimeout(wrapper._closeTimeout); wrapper._closeTimeout = null; }
-  var popover = wrapper._mailCardPopover;
+  const popover = wrapper._mailCardPopover;
   if (popover && popover.style.display !== 'none') {
     _applyPopoverTransform(popover, wrapper._placement || 'bottom', true);
   }
 };
 
+// ── Mail Preferences ──────────────────────────────────────
+window._mailPrefsDefaults = {
+    density: 'normal',       // compact | normal | spacious
+    previewLines: 1,         // 0 | 1 | 2
+    confirmBeforeDelete: true,
+    showLabels: true,
+};
+window._mailPrefsCache = { ...window._mailPrefsDefaults };
+
+window._mailPrefsReady = fetch('/api/v1/settings/mail/preferences', { credentials: 'same-origin' })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+        if (data && data.value && typeof data.value === 'object') {
+            window._mailPrefsCache = { ...window._mailPrefsDefaults, ...data.value };
+        }
+    })
+    .catch(function() {});
+
+window.mailPreferences = function mailPreferences() {
+    const API_URL = '/api/v1/settings/mail/preferences';
+    let _saveTimer = null;
+
+    return {
+        prefs: { ...window._mailPrefsCache },
+
+        async init() {
+            await window._mailPrefsReady;
+            this.prefs = { ...window._mailPrefsCache };
+            window.addEventListener('mail:preferences-changed', function(e) {
+                this.prefs = { ...e.detail };
+            }.bind(this));
+        },
+
+        update(key, value) {
+            this.prefs[key] = value;
+            this._saveRemote();
+            this._broadcast();
+        },
+
+        _broadcast() {
+            window._mailPrefsCache = { ...this.prefs };
+            window.dispatchEvent(new CustomEvent('mail:preferences-changed', { detail: this.prefs }));
+        },
+
+        _saveRemote() {
+            clearTimeout(_saveTimer);
+            _saveTimer = setTimeout(function() {
+                fetch(API_URL, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                    body: JSON.stringify({ value: this.prefs }),
+                }).catch(function() {});
+            }.bind(this), 500);
+        },
+    };
+};
+
 /**
  * Mail application — Alpine.js component
  */
+function _eagerAccounts() {
+  try {
+    const el = document.getElementById('accounts-data');
+    if (el) return JSON.parse(el.textContent);
+  } catch (e) {}
+  return [];
+}
+
 function mailApp() {
   return {
     // State
-    accounts: [],
+    accounts: _eagerAccounts(),
     folders: {},        // { accountUuid: [folder, ...] }
     messages: [],
     selectedFolder: null,
@@ -190,6 +253,7 @@ function mailApp() {
     syncingAccounts: {},  // { accountUuid: true }
     actionInProgress: false,
     batchInProgress: false,
+    classifyingFolder: false,
     hasMoreMessages: false,
     currentPage: 1,
     totalMessages: 0,
@@ -203,6 +267,9 @@ function mailApp() {
     editAccount: null,
     editAccountError: '',
     savingAccount: false,
+
+    // Preferences (reactive copy)
+    mailPrefs: { ...window._mailPrefsCache },
 
     // Filters
     filters: {
@@ -240,6 +307,14 @@ function mailApp() {
     compose: _defaultCompose(),
     showCcBcc: false,
 
+    // Labels
+    labels: {},
+    selectedLabel: null,
+    unifiedInbox: false,
+    labelModal: { accountId: null, uuid: null, name: '', color: 'ghost', icon: '', saving: false, error: '' },
+    labelCtx: { open: false, x: 0, y: 0, label: null },
+    dragOverLabel: null,
+
     // AI features
     aiSummarizing: false,
     aiSummary: null,
@@ -252,26 +327,102 @@ function mailApp() {
     // Autocomplete
     _autocomplete: { results: [], highlight: -1, show: false, loading: false, field: null, _timer: null },
 
-    init() {
+    async init() {
+      // Load preferences
+      await window._mailPrefsReady;
+      this.mailPrefs = { ...window._mailPrefsCache };
+      window.addEventListener('mail:preferences-changed', (e) => {
+        this.mailPrefs = { ...e.detail };
+      });
+
       // Load accounts from embedded data
       try {
         const el = document.getElementById('accounts-data');
         if (el) this.accounts = JSON.parse(el.textContent);
       } catch (e) {}
 
-      // Auto-expand all accounts and load folders
+      // Load all folders and labels, then restore URL state
+      const folderLoads = [];
+      const labelLoads = [];
       for (const acc of this.accounts) {
         this.expandedAccounts[acc.uuid] = true;
         this.syncingAccounts[acc.uuid] = false;
-        this.loadFolders(acc.uuid);
+        folderLoads.push(this.loadFolders(acc.uuid));
+        labelLoads.push(this.fetchLabels(acc.uuid));
+      }
+      await Promise.all([...folderLoads, ...labelLoads]);
+
+      // Restore state from URL params
+      const params = new URLSearchParams(window.location.search);
+      const folderId = params.get('folder');
+      const labelId = params.get('label');
+      const msgId = params.get('message');
+
+      if (folderId) {
+        const folder = this._findFolderById(folderId);
+        if (folder) {
+          await this.selectFolder(folder);
+          if (msgId) this._openMessageById(msgId);
+        } else {
+          this.selectUnifiedInbox();
+        }
+      } else if (labelId) {
+        const label = this._findLabelById(labelId);
+        if (label) {
+          this.selectLabel(label);
+          if (msgId) this._openMessageById(msgId);
+        } else {
+          this.selectUnifiedInbox();
+        }
+      } else if (msgId) {
+        this._openMessageById(msgId);
+      } else if (this.accounts.length > 0) {
+        this.selectUnifiedInbox();
       }
 
-      // Check URL params for deep linking
-      const params = new URLSearchParams(window.location.search);
-      const msgId = params.get('message');
-      if (msgId) {
-        this._openMessageById(msgId);
-      }
+      // Handle browser back/forward on mobile
+      window.addEventListener('popstate', () => {
+        const p = new URLSearchParams(window.location.search);
+        const folderId = p.get('folder');
+        const labelId = p.get('label');
+        const msgId = p.get('message');
+
+        if (msgId) {
+          this._openMessageById(msgId);
+          return;
+        }
+
+        // Clear message selection
+        this.selectedMessage = null;
+        this.messageDetail = null;
+        this.selectedMessages = [];
+        this.currentPage = 1;
+        this._resetFilters();
+
+        // Restore folder/label/unified inbox state
+        if (folderId) {
+          const folder = this._findFolderById(folderId);
+          if (folder) {
+            this.unifiedInbox = false;
+            this.selectedFolder = folder;
+            this.selectedLabel = null;
+            this.loadMessages();
+          }
+        } else if (labelId) {
+          const label = this._findLabelById(labelId);
+          if (label) {
+            this.unifiedInbox = false;
+            this.selectedLabel = label;
+            this.selectedFolder = null;
+            this.loadMessages();
+          }
+        } else {
+          this.unifiedInbox = true;
+          this.selectedFolder = null;
+          this.selectedLabel = null;
+          this.loadMessages();
+        }
+      });
 
       // ?compose=email@example.com — open compose with pre-filled "to"
       const composeTo = params.get('compose');
@@ -300,9 +451,10 @@ function mailApp() {
           this.accounts.push(data.account);
           this.expandedAccounts[data.account.uuid] = true;
           await this.loadFolders(data.account.uuid);
+          await this.fetchLabels(data.account.uuid);
           this.closeAddAccount();
           this.syncAccount(data.account.uuid);
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    
         } else if (data?.type === 'oauth2-error') {
           this.accountError = data.error || 'OAuth2 connection failed';
         }
@@ -321,16 +473,10 @@ function mailApp() {
       });
     },
 
-    // ----- CSRF -----
-    _csrf() {
-      return document.cookie.split('; ')
-        .find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
-    },
-
     async _fetch(url, opts = {}) {
       opts.headers = {
         ...opts.headers,
-        'X-CSRFToken': this._csrf(),
+        'X-CSRFToken': getCSRFToken(),
       };
       if (opts.body && !(opts.body instanceof FormData)) {
         opts.headers['Content-Type'] = 'application/json';
@@ -348,7 +494,7 @@ function mailApp() {
         const data = await res.json();
         this.folders[accountUuid] = data;
       }
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     getFolders(accountUuid) {
@@ -365,7 +511,7 @@ function mailApp() {
 
     toggleAccountExpanded(uuid) {
       this.expandedAccounts[uuid] = !this.expandedAccounts[uuid];
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     folderIcon(type) {
@@ -462,7 +608,7 @@ function mailApp() {
       // Default is expanded (true), so toggling undefined -> false
       const current = this.expandedFolders[folderName] === undefined ? true : this.expandedFolders[folderName];
       this.expandedFolders[folderName] = !current;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     getSubtreeUnreadCount(node) {
@@ -474,19 +620,58 @@ function mailApp() {
     },
 
     // ----- Messages -----
-    async selectFolder(folder) {
-      this.selectedFolder = folder;
+    async selectUnifiedInbox() {
+      this.unifiedInbox = true;
+      this.selectedFolder = null;
+      this.selectedLabel = null;
       this.selectedMessage = null;
       this.messageDetail = null;
-      this._updateUrl(null);
+      this._updateUrl(null, {push: this.isMobile()});
       this.selectedMessages = [];
       this.currentPage = 1;
       this._resetFilters();
+      this._closeDrawerOnMobile();
+      await this.loadMessages();
+    },
+
+    getTotalInboxUnread() {
+      let total = 0;
+      for (const accId in this.folders) {
+        for (const f of this.folders[accId]) {
+          if (f.folder_type === 'inbox') total += (f.unread_count || 0);
+        }
+      }
+      return total;
+    },
+
+    _getAccountEmail(accountId) {
+      const acc = this.accounts.find(a => a.uuid === accountId);
+      return acc ? (acc.display_name || acc.email) : '';
+    },
+
+    async selectFolder(folder) {
+      this.unifiedInbox = false;
+      this.selectedFolder = folder;
+      this.selectedLabel = null;
+      this.selectedMessage = null;
+      this.messageDetail = null;
+      this._updateUrl(null, {push: this.isMobile()});
+      this.selectedMessages = [];
+      this.currentPage = 1;
+      this._resetFilters();
+      this._closeDrawerOnMobile();
       await this.loadMessages();
     },
 
     _buildMessagesUrl() {
-      let url = `/api/v1/mail/messages?folder=${this.selectedFolder.uuid}&page=${this.currentPage}`;
+      let url;
+      if (this.unifiedInbox) {
+        url = `/api/v1/mail/messages?inbox=all&page=${this.currentPage}`;
+      } else if (this.selectedLabel) {
+        url = `/api/v1/mail/messages?label=${this.selectedLabel.uuid}&page=${this.currentPage}`;
+      } else {
+        url = `/api/v1/mail/messages?folder=${this.selectedFolder.uuid}&page=${this.currentPage}`;
+      }
       if (this.filters.search) url += `&search=${encodeURIComponent(this.filters.search)}`;
       if (this.filters.unread) url += '&unread=1';
       if (this.filters.starred) url += '&starred=1';
@@ -495,7 +680,7 @@ function mailApp() {
     },
 
     async loadMessages() {
-      if (!this.selectedFolder) return;
+      if (!this.selectedFolder && !this.selectedLabel && !this.unifiedInbox) return;
       this.loadingMessages = true;
       const res = await this._fetch(this._buildMessagesUrl());
       if (res.ok) {
@@ -505,7 +690,7 @@ function mailApp() {
         this.hasMoreMessages = data.count > this.currentPage * data.page_size;
       }
       this.loadingMessages = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async loadMoreMessages() {
@@ -518,13 +703,46 @@ function mailApp() {
         this.hasMoreMessages = data.count > this.currentPage * data.page_size;
       }
       this.loadingMoreMessages = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async refreshFolder() {
-      if (!this.selectedFolder) return;
-      const accountUuid = this.selectedFolder.account_id;
+      if (this.unifiedInbox) {
+        // Sync all accounts in parallel
+        await Promise.all(this.accounts.map(acc => this.syncAccount(acc.uuid)));
+        this.loadMessages();
+        return;
+      }
+      const accountUuid = this.selectedFolder?.account_id || this.selectedLabel?.account_id;
+      if (!accountUuid) return;
       await this.syncAccount(accountUuid);
+      if (this.selectedLabel) {
+        await this.fetchLabels(accountUuid);
+        this.loadMessages();
+      }
+    },
+
+    async classifyFolder() {
+      if (this.classifyingFolder) return;
+      this.classifyingFolder = true;
+      try {
+        const csrfToken = getCSRFToken();
+        const body = {};
+        if (this.selectedFolder) body.folder_id = this.selectedFolder.uuid;
+        const resp = await fetch('/api/v1/ai/tasks/mail/classify', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(body),
+        });
+        if (resp.ok) {
+          setTimeout(() => this.loadMessages(), 3000);
+        }
+      } catch (e) {
+        console.warn('Classify failed:', e);
+      } finally {
+        this.classifyingFolder = false;
+      }
     },
 
     // ----- Filters -----
@@ -567,12 +785,12 @@ function mailApp() {
 
       this.selectedMessage = msg;
       this.loadingDetail = true;
-      this._updateUrl(msg.uuid);
+      this._updateUrl(msg.uuid, {push: this.isMobile()});
       const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`);
       if (res.ok) {
         this.messageDetail = await res.json();
-        if (this.messageDetail.ai_summary) {
-          this.aiSummary = this.messageDetail.ai_summary.replace(/\n/g, '<br>');
+        if (this.messageDetail.ai_summary_html) {
+          this.aiSummary = this.messageDetail.ai_summary_html;
         }
         // Auto-mark as read
         if (!msg.is_read) {
@@ -581,7 +799,7 @@ function mailApp() {
         }
       }
       this.loadingDetail = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async _openMessageById(uuid) {
@@ -589,8 +807,8 @@ function mailApp() {
       if (res.ok) {
         this.messageDetail = await res.json();
         this.selectedMessage = this.messageDetail;
-        if (this.messageDetail.ai_summary) {
-          this.aiSummary = this.messageDetail.ai_summary.replace(/\n/g, '<br>');
+        if (this.messageDetail.ai_summary_html) {
+          this.aiSummary = this.messageDetail.ai_summary_html;
         }
         // Load the folder
         const folderId = this.messageDetail.folder_id;
@@ -605,17 +823,65 @@ function mailApp() {
       }
     },
 
+    // ----- Shared optimistic helpers -----
+
+    /**
+     * Adjust unread count on the relevant folder and labels for a message.
+     * @param {object} msg - message object (needs account_id, folder_id, labels)
+     * @param {number} delta - +1 (became unread) or -1 (became read / removed)
+     */
+    _adjustUnreadCount(msg, delta) {
+      const accountId = msg.account_id || this.selectedFolder?.account_id || this.selectedLabel?.account_id;
+      // Folder unread count
+      if (this.selectedFolder) {
+        this.selectedFolder.unread_count = Math.max(0, (this.selectedFolder.unread_count || 0) + delta);
+      } else if (this.unifiedInbox) {
+        const accFolders = this.folders[accountId] || [];
+        const folder = accFolders.find(f => f.uuid === msg.folder_id);
+        if (folder) folder.unread_count = Math.max(0, (folder.unread_count || 0) + delta);
+      }
+      // Label unread counts
+      const msgLabels = msg.labels || [];
+      const accountLabels = accountId ? (this.labels[accountId] || []) : [];
+      for (const ml of msgLabels) {
+        const lbl = accountLabels.find(l => l.uuid === ml.uuid);
+        if (lbl) lbl.unread_count = Math.max(0, (lbl.unread_count || 0) + delta);
+      }
+    },
+
+    /**
+     * Optimistically remove messages from the current list.
+     * Adjusts unread counts, clears selection/detail, updates totalMessages.
+     * @param {string[]} msgUuids - UUIDs of messages to remove
+     */
+    _optimisticRemoveMessages(msgUuids) {
+      const removed = this.messages.filter(m => msgUuids.includes(m.uuid));
+      this.messages = this.messages.filter(m => !msgUuids.includes(m.uuid));
+      this.selectedMessages = this.selectedMessages.filter(id => !msgUuids.includes(id));
+      this.totalMessages = Math.max(0, this.totalMessages - removed.length);
+      // Adjust unread counts for removed unread messages
+      for (const msg of removed) {
+        if (!msg.is_read) this._adjustUnreadCount(msg, -1);
+      }
+      // Clear detail if the viewed message was removed
+      if (this.messageDetail && msgUuids.includes(this.messageDetail.uuid)) {
+        this.selectedMessage = null;
+        this.messageDetail = null;
+        this._updateUrl(null);
+      }
+    },
+
     // ----- Flags -----
     async toggleRead(msg, forceRead) {
       this.actionInProgress = true;
       const newVal = forceRead !== undefined ? forceRead : !msg.is_read;
-      const wasRead = msg.is_read;
-      // Optimistic UI update — apply locally before awaiting the server
-      msg.is_read = newVal;
-      const listMsg = this.messages.find(m => m.uuid === msg.uuid);
-      if (listMsg) listMsg.is_read = newVal;
-      if (this.selectedFolder && wasRead !== newVal) {
-        this.selectedFolder.unread_count = Math.max(0, (this.selectedFolder.unread_count || 0) + (newVal ? -1 : 1));
+      // Optimistic UI update
+      if (msg.is_read !== newVal) {
+        const listMsg = this.messages.find(m => m.uuid === msg.uuid);
+        const ref = listMsg || msg;
+        ref.is_read = newVal;
+        if (listMsg && msg !== listMsg) msg.is_read = newVal;
+        this._adjustUnreadCount(ref, newVal ? -1 : 1);
       }
       await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
         method: 'PATCH',
@@ -626,16 +892,16 @@ function mailApp() {
 
     async toggleStar(msg) {
       this.actionInProgress = true;
+      // Optimistic UI update
       const newVal = !msg.is_starred;
+      msg.is_starred = newVal;
+      const listMsg = this.messages.find(m => m.uuid === msg.uuid);
+      if (listMsg && listMsg !== msg) listMsg.is_starred = newVal;
       await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
         method: 'PATCH',
         body: { is_starred: newVal },
       });
-      msg.is_starred = newVal;
-      const listMsg = this.messages.find(m => m.uuid === msg.uuid);
-      if (listMsg) listMsg.is_starred = newVal;
       this.actionInProgress = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     async deleteMessage(msg) {
@@ -650,17 +916,9 @@ function mailApp() {
       if (!ok) return;
 
       this.actionInProgress = true;
+      // Optimistic UI update
+      this._optimisticRemoveMessages([msg.uuid]);
       await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, { method: 'DELETE' });
-      this.messages = this.messages.filter(m => m.uuid !== msg.uuid);
-      if (this.selectedMessage?.uuid === msg.uuid) {
-        this.selectedMessage = null;
-        this.messageDetail = null;
-        this._updateUrl(null);
-      }
-      if (this.selectedFolder) {
-        this.selectedFolder.message_count--;
-        if (!msg.is_read) this.selectedFolder.unread_count--;
-      }
       this.actionInProgress = false;
     },
 
@@ -674,7 +932,34 @@ function mailApp() {
     async batchAction(action, targetFolderId) {
       if (this.selectedMessages.length === 0) return;
       this.batchInProgress = true;
-      const body = { message_ids: this.selectedMessages, action };
+      const msgUuids = [...this.selectedMessages];
+      const affectedMsgs = this.messages.filter(m => msgUuids.includes(m.uuid));
+
+      // Optimistic UI update
+      if (action === 'delete' || action === 'move') {
+        this._optimisticRemoveMessages(msgUuids);
+      } else if (action === 'mark_read' || action === 'mark_unread') {
+        const markRead = action === 'mark_read';
+        for (const msg of affectedMsgs) {
+          if (msg.is_read !== markRead) {
+            msg.is_read = markRead;
+            this._adjustUnreadCount(msg, markRead ? -1 : 1);
+          }
+        }
+        if (this.messageDetail && msgUuids.includes(this.messageDetail.uuid)) {
+          this.messageDetail.is_read = markRead;
+        }
+        this.selectedMessages = [];
+      } else if (action === 'star' || action === 'unstar') {
+        const starred = action === 'star';
+        for (const msg of affectedMsgs) msg.is_starred = starred;
+        if (this.messageDetail && msgUuids.includes(this.messageDetail.uuid)) {
+          this.messageDetail.is_starred = starred;
+        }
+        this.selectedMessages = [];
+      }
+
+      const body = { message_ids: msgUuids, action };
       if (action === 'move' && targetFolderId) {
         body.target_folder_id = targetFolderId;
       }
@@ -682,19 +967,6 @@ function mailApp() {
         method: 'POST',
         body,
       });
-      this.selectedMessages = [];
-      await this.loadMessages();
-      if (this.selectedFolder) {
-        await this.loadFolders(this.selectedFolder.account_id);
-        const flds = this.folders[this.selectedFolder.account_id] || [];
-        const updated = flds.find(f => f.uuid === this.selectedFolder.uuid);
-        if (updated) this.selectedFolder = updated;
-      }
-      if (this.messageDetail && (action === 'delete' || action === 'move')) {
-        this.selectedMessage = null;
-        this.messageDetail = null;
-        this._updateUrl(null);
-      }
       this.batchInProgress = false;
     },
 
@@ -805,7 +1077,7 @@ function mailApp() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           body: JSON.stringify({ message_id: message.uuid }),
         });
@@ -836,10 +1108,10 @@ function mailApp() {
           if (!resp.ok) return;
           const task = await resp.json();
           if (task.status === 'completed') {
-            this.aiSummary = task.result.replace(/\n/g, '<br>');
+            this.aiSummary = task.result_html || task.result;
             this.aiSummarizing = false;
             clearInterval(this._aiPollInterval);
-            this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      
           } else if (task.status === 'failed') {
             AppDialog.error({ message: task.error || 'AI task failed' });
             this.aiSummarizing = false;
@@ -858,7 +1130,7 @@ function mailApp() {
       try {
         await fetch(`/api/v1/mail/messages/${message.uuid}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ ai_summary: '' }),
         });
       } catch (e) {
@@ -881,7 +1153,7 @@ function mailApp() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           body: JSON.stringify(body),
         });
@@ -1072,7 +1344,7 @@ function mailApp() {
 
       const res = await fetch('/api/v1/mail/messages/send', {
         method: 'POST',
-        headers: { 'X-CSRFToken': this._csrf() },
+        headers: { 'X-CSRFToken': getCSRFToken() },
         credentials: 'same-origin',
         body: formData,
       });
@@ -1239,7 +1511,7 @@ function mailApp() {
       }
 
       this.autoDiscovering = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     closeAddAccount() {
@@ -1271,6 +1543,7 @@ function mailApp() {
         this.accounts.push(account);
         this.expandedAccounts[account.uuid] = true;
         await this.loadFolders(account.uuid);
+        await this.fetchLabels(account.uuid);
         this.closeAddAccount();
 
         // Trigger initial sync
@@ -1293,7 +1566,7 @@ function mailApp() {
       } finally {
         this.syncingAccounts[uuid] = false;
       }
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async testAccount(uuid) {
@@ -1402,7 +1675,7 @@ function mailApp() {
         if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
         this.accountCtx.x = x;
         this.accountCtx.y = y;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+
       });
     },
 
@@ -1447,7 +1720,7 @@ function mailApp() {
         if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
         this.folderCtx.x = x;
         this.folderCtx.y = y;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+
       });
     },
 
@@ -1503,14 +1776,14 @@ function mailApp() {
         if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
         this.msgCtx.x = x;
         this.msgCtx.y = y;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+
       });
     },
 
     async msgCtxAction(action) {
       const msg = this.msgCtx.msg;
-      this.msgCtx.open = false;
       if (!msg) return;
+      this.msgCtx.open = false;
 
       switch (action) {
         case 'reply':
@@ -1540,6 +1813,62 @@ function mailApp() {
       }
     },
 
+    _getMsgCtxTargetIds() {
+      const msg = this.msgCtx.msg;
+      if (!msg) return [];
+      return this.selectedMessages.length > 0 && this.selectedMessages.includes(msg.uuid)
+        ? [...this.selectedMessages] : [msg.uuid];
+    },
+
+    _getMsgCtxAccountLabels() {
+      const accountId = this.selectedFolder?.account_id || this.selectedLabel?.account_id;
+      return accountId ? (this.labels[accountId] || []) : [];
+    },
+
+    _msgCtxHasLabel(labelUuid) {
+      const ids = this._getMsgCtxTargetIds();
+      // Check if ALL targeted messages have the label
+      return ids.every(id => {
+        const msg = this.messages.find(m => m.uuid === id);
+        return msg?.labels?.some(l => l.uuid === labelUuid);
+      });
+    },
+
+    async toggleMsgLabel(label) {
+      const ids = this._getMsgCtxTargetIds();
+      if (!ids.length) return;
+      const hasLabel = this._msgCtxHasLabel(label.uuid);
+      const adding = !hasLabel;
+
+      // Optimistic UI update
+      for (const msgId of ids) {
+        const msg = this.messages.find(m => m.uuid === msgId);
+        if (!msg) continue;
+        if (!msg.labels) msg.labels = [];
+        if (adding) {
+          if (!msg.labels.some(l => l.uuid === label.uuid)) {
+            msg.labels.push({ uuid: label.uuid, name: label.name, color: label.color, icon: label.icon });
+            if (!msg.is_read) label.unread_count = (label.unread_count || 0) + 1;
+          }
+        } else {
+          msg.labels = msg.labels.filter(l => l.uuid !== label.uuid);
+          if (!msg.is_read) label.unread_count = Math.max(0, (label.unread_count || 0) - 1);
+        }
+      }
+
+      const method = adding ? 'POST' : 'DELETE';
+      try {
+        await Promise.all(ids.map(msgId =>
+          this._fetch(`/api/v1/mail/messages/${msgId}/labels`, {
+            method,
+            body: { label_ids: [label.uuid] },
+          })
+        ));
+      } catch (e) {
+        console.warn('Toggle label failed:', e);
+      }
+    },
+
     // ----- Move messages -----
     getMoveTargetFolders(msg) {
       if (!msg) return [];
@@ -1563,6 +1892,8 @@ function mailApp() {
     async moveMessages(msgUuids, targetFolder) {
       if (!msgUuids || !msgUuids.length || !targetFolder) return;
       this.batchInProgress = true;
+      // Optimistic UI update
+      this._optimisticRemoveMessages(msgUuids);
       await this._fetch('/api/v1/mail/messages/batch-action', {
         method: 'POST',
         body: {
@@ -1571,24 +1902,7 @@ function mailApp() {
           target_folder_id: targetFolder.uuid,
         },
       });
-      // Remove moved messages from the current list
-      this.messages = this.messages.filter(m => !msgUuids.includes(m.uuid));
-      this.selectedMessages = this.selectedMessages.filter(id => !msgUuids.includes(id));
-      // Clear detail if the viewed message was moved
-      if (this.messageDetail && msgUuids.includes(this.messageDetail.uuid)) {
-        this.selectedMessage = null;
-        this.messageDetail = null;
-        this._updateUrl(null);
-      }
-      // Refresh folder counts
-      if (this.selectedFolder) {
-        await this.loadFolders(this.selectedFolder.account_id);
-        const flds = this.folders[this.selectedFolder.account_id] || [];
-        const updated = flds.find(f => f.uuid === this.selectedFolder.uuid);
-        if (updated) this.selectedFolder = updated;
-      }
       this.batchInProgress = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     // ----- Drag & drop -----
@@ -1601,7 +1915,7 @@ function mailApp() {
         ids = [msg.uuid];
       }
       this._draggingMsgIds = ids;
-      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.effectAllowed = 'copyMove';
       event.dataTransfer.setData('text/plain', JSON.stringify(ids));
       // Custom drag image label
       const count = ids.length;
@@ -1618,6 +1932,7 @@ function mailApp() {
     onMsgDragEnd(event) {
       this._draggingMsgIds = null;
       this.dragOverFolder = null;
+      this.dragOverLabel = null;
     },
 
     onFolderDragOver(event, folder) {
@@ -1646,6 +1961,45 @@ function mailApp() {
           this.moveMessages(ids, folder);
         }
       } catch (e) {}
+      this._draggingMsgIds = null;
+    },
+
+    onLabelDragOver(event, label) {
+      event.dataTransfer.dropEffect = 'copy';
+      this.dragOverLabel = label;
+    },
+
+    onLabelDragLeave(event, label) {
+      if (this.dragOverLabel?.uuid === label.uuid) {
+        this.dragOverLabel = null;
+      }
+    },
+
+    async onLabelDrop(event, label) {
+      this.dragOverLabel = null;
+      try {
+        const raw = event.dataTransfer.getData('text/plain');
+        const ids = JSON.parse(raw);
+        if (!Array.isArray(ids) || !ids.length) return;
+        // Optimistic UI update
+        for (const msgId of ids) {
+          const msg = this.messages.find(m => m.uuid === msgId);
+          if (!msg) continue;
+          if (!msg.labels) msg.labels = [];
+          if (!msg.labels.some(l => l.uuid === label.uuid)) {
+            msg.labels.push({ uuid: label.uuid, name: label.name, color: label.color, icon: label.icon });
+            if (!msg.is_read) label.unread_count = (label.unread_count || 0) + 1;
+          }
+        }
+        await Promise.all(ids.map(msgId =>
+          this._fetch(`/api/v1/mail/messages/${msgId}/labels`, {
+            method: 'POST',
+            body: { label_ids: [label.uuid] },
+          })
+        ));
+      } catch (e) {
+        console.warn('Label drop failed:', e);
+      }
       this._draggingMsgIds = null;
     },
 
@@ -1724,7 +2078,7 @@ function mailApp() {
           this.expandedFolders[parentFolder.name] = true;
         }
         await this.loadFolders(accountUuid);
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to create folder' });
@@ -1758,7 +2112,7 @@ function mailApp() {
         if (this.selectedFolder?.uuid === folder.uuid) {
           Object.assign(this.selectedFolder, updated);
         }
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to rename folder' });
@@ -1795,7 +2149,7 @@ function mailApp() {
           this.messageDetail = null;
           this._updateUrl(null);
         }
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to delete folder' });
@@ -1862,7 +2216,7 @@ function mailApp() {
           const updated = flds.find(f => f.uuid === folder.uuid);
           if (updated) this.selectedFolder = updated;
         }
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to move folder' });
@@ -1900,7 +2254,7 @@ function mailApp() {
           this.messageDetail = null;
           this._updateUrl(null);
         }
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to hide folder' });
@@ -1920,7 +2274,7 @@ function mailApp() {
       this.hiddenFolders = allFolders.filter(f => f.is_hidden);
       this.hiddenFoldersSearch = '';
       document.getElementById('mail-hidden-folders-dialog').showModal();
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async restoreFolder(folder) {
@@ -1931,7 +2285,7 @@ function mailApp() {
       if (res.ok) {
         this.hiddenFolders = this.hiddenFolders.filter(f => f.uuid !== folder.uuid);
         await this.loadFolders(folder.account_id);
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
         if (this.hiddenFolders.length === 0) {
           document.getElementById('mail-hidden-folders-dialog').close();
         }
@@ -1950,7 +2304,7 @@ function mailApp() {
         color: folder.color || null,
       };
       document.getElementById('mail-folder-icon-dialog').showModal();
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     onFolderIconSaved(icon, color) {
@@ -1969,10 +2323,6 @@ function mailApp() {
         this.selectedFolder.icon = icon;
         this.selectedFolder.color = color;
       }
-      // Key change in x-for triggers element recreation; wait for Alpine + DOM before Lucide
-      this.$nextTick(() => {
-        setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50);
-      });
     },
 
     // ----- Keyboard -----
@@ -2008,15 +2358,19 @@ function mailApp() {
           break;
         case 'Escape':
           if (this.selectedMessage) {
-            this.selectedMessage = null;
-            this.messageDetail = null;
-            this._updateUrl(null);
+            if (this.isMobile()) {
+              history.back();
+            } else {
+              this.selectedMessage = null;
+              this.messageDetail = null;
+              this._updateUrl(null);
+            }
           }
           break;
         case '?':
           e.preventDefault();
           const dlg = document.getElementById('mail-help-dialog');
-          if (dlg) { dlg.showModal(); lucide?.createIcons(); }
+          if (dlg) { dlg.showModal(); }
           break;
       }
     },
@@ -2031,14 +2385,42 @@ function mailApp() {
     },
 
     // ----- URL -----
-    _updateUrl(messageUuid) {
+    _updateUrl(messageUuid, {push = false} = {}) {
       const url = new URL(window.location);
+      url.search = '';
+
+      if (this.selectedFolder) {
+        url.searchParams.set('folder', this.selectedFolder.uuid);
+      } else if (this.selectedLabel) {
+        url.searchParams.set('label', this.selectedLabel.uuid);
+      }
+      // unified inbox = no folder/label params (default)
+
       if (messageUuid) {
         url.searchParams.set('message', messageUuid);
-      } else {
-        url.searchParams.delete('message');
       }
-      history.replaceState(null, '', url);
+
+      if (push) {
+        history.pushState(null, '', url);
+      } else {
+        history.replaceState(null, '', url);
+      }
+    },
+
+    _findFolderById(uuid) {
+      for (const accId in this.folders) {
+        const found = (this.folders[accId] || []).find(f => f.uuid === uuid);
+        if (found) return found;
+      }
+      return null;
+    },
+
+    _findLabelById(uuid) {
+      for (const accId in this.labels) {
+        const found = (this.labels[accId] || []).find(l => l.uuid === uuid);
+        if (found) return found;
+      }
+      return null;
     },
 
     // ----- UI helpers -----
@@ -2061,6 +2443,13 @@ function mailApp() {
 
     isMobile() {
       return window.innerWidth < 1024;
+    },
+
+    _closeDrawerOnMobile() {
+      if (this.isMobile()) {
+        const toggle = document.getElementById('mail-drawer');
+        if (toggle) toggle.checked = false;
+      }
     },
 
     formatDate(dateStr) {
@@ -2123,6 +2512,142 @@ function mailApp() {
       let i = 0;
       while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
       return `${bytes.toFixed(i ? 1 : 0)} ${units[i]}`;
+    },
+
+    // ----- Labels -----
+    async fetchLabels(accountId) {
+      try {
+        const resp = await fetch(`/api/v1/mail/labels?account=${accountId}`, { credentials: 'same-origin' });
+        if (resp.ok) {
+          this.labels[accountId] = await resp.json();
+        }
+      } catch (e) {
+        console.warn('Failed to fetch labels:', e);
+      }
+    },
+
+    selectLabel(label) {
+      this.unifiedInbox = false;
+      this.selectedLabel = label;
+      this.selectedFolder = null;
+      this.selectedMessage = null;
+      this.messageDetail = null;
+      this._updateUrl(null, {push: this.isMobile()});
+      this.currentPage = 1;
+      this._closeDrawerOnMobile();
+      this.loadMessages();
+    },
+
+    showLabelModal(accountId, label) {
+      this.labelModal = {
+        accountId: label ? label.account_id : accountId,
+        uuid: label?.uuid || null,
+        name: label?.name || '',
+        color: label?.color || 'ghost',
+        icon: label?.icon || '',
+        saving: false,
+        error: '',
+      };
+      const dlg = document.getElementById('mail-label-dialog');
+      if (dlg) {
+        dlg.showModal();
+        this.$nextTick(() => {
+          const input = dlg.querySelector('input[type="text"]');
+          if (input) input.focus();
+        });
+      }
+    },
+
+    closeLabelModal() {
+      document.getElementById('mail-label-dialog')?.close();
+    },
+
+    async saveLabelModal() {
+      const m = this.labelModal;
+      if (!m.name.trim() || !m.accountId) return;
+      m.saving = true;
+      m.error = '';
+      try {
+        const csrfToken = getCSRFToken();
+        const isEdit = !!m.uuid;
+        const url = isEdit ? `/api/v1/mail/labels/${m.uuid}` : '/api/v1/mail/labels';
+        const resp = await fetch(url, {
+          method: isEdit ? 'PATCH' : 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(isEdit
+            ? { name: m.name.trim(), color: m.color, icon: m.icon }
+            : { account_id: m.accountId, name: m.name.trim(), color: m.color, icon: m.icon }
+          ),
+        });
+        if (resp.ok) {
+          await this.fetchLabels(m.accountId);
+          this.closeLabelModal();
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          m.error = data.name?.[0] || data.detail || 'Failed to save label.';
+        }
+      } catch (e) {
+        m.error = 'Network error.';
+      } finally {
+        m.saving = false;
+      }
+    },
+
+    async deleteLabelConfirm() {
+      const m = this.labelModal;
+      if (!m.uuid) return;
+      if (!confirm(`Delete label "${m.name}"? Messages won't be deleted.`)) return;
+      try {
+        const csrfToken = getCSRFToken();
+        const resp = await fetch(`/api/v1/mail/labels/${m.uuid}`, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': csrfToken },
+        });
+        if (resp.ok || resp.status === 204) {
+          if (this.selectedLabel?.uuid === m.uuid) {
+            this.selectedLabel = null;
+          }
+          await this.fetchLabels(m.accountId);
+          this.closeLabelModal();
+        }
+      } catch (e) {
+        console.warn('Delete label failed:', e);
+      }
+    },
+
+    openLabelContextMenu(event, label) {
+      event.preventDefault();
+      const menu = document.getElementById('label-context-menu');
+      if (!menu) return;
+
+      this.labelCtx.label = label;
+      this.labelCtx.open = true;
+
+      this.$nextTick(() => {
+        const rect = menu.getBoundingClientRect();
+        let x = event.clientX;
+        let y = event.clientY;
+        if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 10;
+        if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
+        this.labelCtx.x = x;
+        this.labelCtx.y = y;
+
+      });
+    },
+
+    labelCtxAction(action) {
+      const label = this.labelCtx.label;
+      this.labelCtx.open = false;
+      if (!label) return;
+
+      if (action === 'edit') {
+        this.showLabelModal(null, label);
+      } else if (action === 'delete') {
+        this.showLabelModal(null, label);
+        this.$nextTick(() => this.deleteLabelConfirm());
+      }
     },
   };
 }

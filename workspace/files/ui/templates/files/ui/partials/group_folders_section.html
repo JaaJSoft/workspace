@@ -1,0 +1,48 @@
+{% comment %}
+Group Folders Sidebar Section
+=============================
+Renders the group folders section in the sidebar.
+
+Context variables:
+- group_folders: QuerySet of root File objects with group set
+- available_groups: QuerySet of Groups without a folder yet
+{% endcomment %}
+
+{% if group_folders or available_groups %}
+<hr class="my-2 border-base-300" x-show="!collapsed">
+<!-- Expanded: title + create button -->
+<div class="flex items-center mb-1" x-show="!collapsed" x-transition>
+  <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wider flex-1">
+    <span class="flex items-center gap-2">
+      <i data-lucide="users" class="w-3 h-3"></i>
+      Groups
+    </span>
+  </h3>
+  <button type="button"
+          class="btn btn-ghost btn-xs btn-square"
+          @click="document.getElementById('create-group-folder-dialog').showModal()"
+          title="Create group folder">
+    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+  </button>
+</div>
+<!-- Collapsed: thin separator if there are folders -->
+{% if group_folders %}
+<hr class="my-1 border-base-300" x-show="collapsed">
+{% endif %}
+<ul class="space-y-0.5">
+  {% for folder in group_folders %}
+  <li class="list-none" :class="collapsed ? 'flex justify-center' : ''"
+      @contextmenu.prevent="window.dispatchEvent(new CustomEvent('open-group-folder-context-menu', { detail: { event: $event, uuid: '{{ folder.uuid }}', name: '{{ folder.name|escapejs }}', isFavorite: false } }))">
+    {% include "files/ui/partials/_sidebar_folder_item.html" with folder=folder default_icon="folder" default_color="text-warning" active_id="group:"|add:folder.uuid %}
+  </li>
+  {% endfor %}
+  {% if not group_folders %}
+  <li class="list-none px-2 py-2 text-sm text-base-content/40" x-show="!collapsed">
+    <span class="flex items-center gap-2 justify-center">
+      <i data-lucide="users" class="w-4 h-4"></i>
+      No group folders
+    </span>
+  </li>
+  {% endif %}
+</ul>
+{% endif %}

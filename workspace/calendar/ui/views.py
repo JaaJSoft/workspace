@@ -8,6 +8,7 @@ from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.calendar.models import Calendar, CalendarSubscription, Event, EventMember, Poll, PollInvitee, PollVote
+from workspace.calendar.queries import visible_calendars, visible_events_q
 from workspace.calendar.serializers import CalendarSerializer
 
 
@@ -26,11 +27,7 @@ def _ensure_default_calendar(user):
 def index(request):
     _ensure_default_calendar(request.user)
 
-    owned = Calendar.objects.filter(owner=request.user).select_related('owner')
-    sub_ids = CalendarSubscription.objects.filter(
-        user=request.user,
-    ).values_list('calendar_id', flat=True)
-    subscribed = Calendar.objects.filter(uuid__in=sub_ids).select_related('owner')
+    owned, subscribed = visible_calendars(request.user)
 
     # Count open polls where user is invited but hasn't voted
     invited_poll_ids = PollInvitee.objects.filter(
@@ -59,9 +56,7 @@ def event_card(request, event_id):
     """Return a compact event card partial for popover display."""
     event = (
         Event.objects.filter(
-            Q(owner=request.user) | Q(members__user=request.user, members__status__in=[
-                EventMember.Status.ACCEPTED, EventMember.Status.PENDING,
-            ]),
+            visible_events_q(request.user),
             uuid=event_id,
             is_cancelled=False,
         )
@@ -86,9 +81,17 @@ def event_card(request, event_id):
             duration = event.end - event.start
             occ_end = occ_start + duration
 
+    is_owner = event.owner_id == request.user.id
+    is_external = hasattr(event.calendar, 'external_source')
+    membership = event.members.filter(user=request.user).first()
+    invite_status = membership.status if membership and not is_owner else None
+
     return render(request, 'calendar/ui/partials/event_card.html', {
         'event': event,
         'attendees': attendees,
+        'is_owner': is_owner,
+        'is_external': is_external,
+        'invite_status': invite_status,
         'occ_start': occ_start,
         'occ_end': occ_end,
     })

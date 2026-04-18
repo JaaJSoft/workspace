@@ -1,6 +1,6 @@
 from django import template
 
-from workspace.users.avatar_service import has_avatar as _has_avatar
+from workspace.users.services.avatar import has_avatar as _has_avatar
 
 register = template.Library()
 

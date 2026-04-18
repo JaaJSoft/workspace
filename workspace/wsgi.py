@@ -32,13 +32,25 @@ def _get_webdav_app():
     return _webdav_app
 
 
+_WEBDAV_METHODS = {"PROPFIND", "PROPPATCH", "MKCOL", "COPY", "MOVE", "LOCK", "UNLOCK"}
+
+
 def application(environ, start_response):
     path = environ.get("PATH_INFO", "")
+    method = environ.get("REQUEST_METHOD", "")
 
     if path == DAV_PREFIX or path.startswith(DAV_PREFIX + "/"):
         # Strip the /dav prefix so WsgiDAV sees paths relative to its root.
         environ["SCRIPT_NAME"] = environ.get("SCRIPT_NAME", "") + DAV_PREFIX
         environ["PATH_INFO"] = path[len(DAV_PREFIX):] or "/"
+        return _get_webdav_app()(environ, start_response)
+
+    # Windows WebDAV MiniRedir sends PROPFIND to "/" to check quota before
+    # uploading to /dav.  Route WebDAV methods on the root to the DAV app
+    # so the client gets a proper multistatus response instead of a 403.
+    if path == "/" and method in _WEBDAV_METHODS:
+        environ["SCRIPT_NAME"] = environ.get("SCRIPT_NAME", "") + DAV_PREFIX
+        environ["PATH_INFO"] = "/"
         return _get_webdav_app()(environ, start_response)
 
     return _django_app(environ, start_response)

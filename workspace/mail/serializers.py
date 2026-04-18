@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import MailAccount, MailAttachment, MailFolder, MailMessage
+from .models import MailAccount, MailAttachment, MailFolder, MailLabel, MailMessage
 
 
 class MailAccountSerializer(serializers.ModelSerializer):
@@ -42,6 +42,27 @@ class MailAccountUpdateSerializer(serializers.Serializer):
     is_active = serializers.BooleanField(required=False)
 
 
+class MailLabelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MailLabel
+        fields = ['uuid', 'account_id', 'name', 'color', 'icon', 'position', 'unread_count']
+        read_only_fields = ['uuid', 'account_id', 'unread_count']
+
+
+class MailLabelCreateSerializer(serializers.Serializer):
+    account_id = serializers.UUIDField()
+    name = serializers.CharField(max_length=100)
+    color = serializers.CharField(max_length=30, required=False, default='')
+    icon = serializers.CharField(max_length=50, required=False, default='')
+
+
+class MailLabelUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=100, required=False)
+    color = serializers.CharField(max_length=30, required=False)
+    icon = serializers.CharField(max_length=50, required=False)
+    position = serializers.IntegerField(min_value=0, required=False)
+
+
 class MailFolderSerializer(serializers.ModelSerializer):
     class Meta:
         model = MailFolder
@@ -73,19 +94,29 @@ class MailAttachmentSerializer(serializers.ModelSerializer):
 
 class MailMessageListSerializer(serializers.ModelSerializer):
     attachments_count = serializers.IntegerField(read_only=True)
+    labels = serializers.SerializerMethodField()
 
     class Meta:
         model = MailMessage
         fields = [
-            'uuid', 'folder_id', 'message_id', 'subject',
+            'uuid', 'account_id', 'folder_id', 'message_id', 'subject',
             'from_address', 'to_addresses', 'date', 'snippet',
             'is_read', 'is_starred', 'is_draft', 'has_attachments',
-            'has_calendar_event', 'attachments_count',
+            'has_calendar_event', 'attachments_count', 'labels',
+        ]
+
+    def get_labels(self, obj):
+        # Django serves from prefetch cache when message_labels is prefetched
+        return [
+            {'uuid': str(link.label.uuid), 'name': link.label.name, 'color': link.label.color}
+            for link in obj.message_labels.all()
         ]
 
 
 class MailMessageDetailSerializer(serializers.ModelSerializer):
     attachments = MailAttachmentSerializer(many=True, read_only=True)
+    labels = serializers.SerializerMethodField()
+    ai_summary_html = serializers.SerializerMethodField()
 
     class Meta:
         model = MailMessage
@@ -95,7 +126,21 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
             'bcc_addresses', 'reply_to', 'date', 'snippet',
             'body_text', 'body_html',
             'is_read', 'is_starred', 'is_draft', 'has_attachments',
-            'has_calendar_event', 'ai_summary', 'attachments', 'created_at',
+            'has_calendar_event', 'ai_summary', 'ai_summary_html',
+            'attachments', 'labels', 'created_at',
+        ]
+
+    def get_ai_summary_html(self, obj):
+        if obj.ai_summary:
+            import mistune
+            return mistune.html(obj.ai_summary)
+        return None
+
+    def get_labels(self, obj):
+        # Django serves from prefetch cache when message_labels is prefetched
+        return [
+            {'uuid': str(link.label.uuid), 'name': link.label.name, 'color': link.label.color}
+            for link in obj.message_labels.all()
         ]
 
 
@@ -126,6 +171,13 @@ class DraftSaveSerializer(serializers.Serializer):
     body_html = serializers.CharField(required=False, default='', allow_blank=True)
     body_text = serializers.CharField(required=False, default='', allow_blank=True)
     reply_to = serializers.CharField(max_length=255, required=False, default='', allow_blank=True)
+
+
+class MailLabelAssignSerializer(serializers.Serializer):
+    label_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        min_length=1,
+    )
 
 
 class BatchActionSerializer(serializers.Serializer):

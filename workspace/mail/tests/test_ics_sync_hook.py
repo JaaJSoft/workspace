@@ -23,13 +23,18 @@ class SyncCalendarHookTest(TestCase):
 
     @patch('workspace.mail.services.imap.connect_imap')
     @patch('workspace.calendar.services.ics_processor.process_calendar_emails')
-    def test_sync_calls_ics_processor_for_flagged_messages(self, mock_process, mock_connect):
+    def test_sync_skips_ics_processor_when_no_new_messages(self, mock_process, mock_connect):
+        """Pre-existing ICS messages are NOT re-processed on every sync.
+
+        Calendar reprocessing must be scoped to messages actually parsed in
+        the current sync pass, otherwise every sync pays O(all_cal_messages).
+        """
         from workspace.mail.services.imap import sync_folder_messages
 
-        msg = MailMessage.objects.create(
+        MailMessage.objects.create(
             account=self.account, folder=self.folder,
-            message_id='<test@example.com>', imap_uid=1,
-            subject='Invite', date='2026-03-01T10:00:00Z',
+            message_id='<old@example.com>', imap_uid=1,
+            subject='Old Invite', date='2026-03-01T10:00:00Z',
             has_calendar_event=True,
         )
 
@@ -40,7 +45,45 @@ class SyncCalendarHookTest(TestCase):
 
         sync_folder_messages(self.account, self.folder)
 
+        # No new UIDs parsed in this pass → no calendar reprocessing.
+        mock_process.assert_not_called()
+
+    @patch('workspace.ai.tasks.classify_mail_messages.delay')
+    @patch('workspace.ai.client.is_ai_enabled', return_value=False)
+    @patch('workspace.mail.services.imap._reconcile_folder')
+    @patch('workspace.mail.services.imap._parse_message')
+    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.calendar.services.ics_processor.process_calendar_emails')
+    def test_sync_calls_ics_processor_for_newly_parsed_messages(
+        self, mock_process, mock_connect, mock_parse, _mock_reconcile,
+        _mock_ai_enabled, _mock_classify_delay,
+    ):
+        """Newly parsed ICS messages are handed to process_calendar_emails."""
+        from workspace.mail.services.imap import sync_folder_messages
+
+        # Pretend UID 2 is a fresh ICS email that _parse_message returns.
+        new_msg = MailMessage.objects.create(
+            account=self.account, folder=self.folder,
+            message_id='<new@example.com>', imap_uid=2,
+            subject='New Invite', date='2026-03-01T10:00:00Z',
+            has_calendar_event=True,
+        )
+        mock_parse.return_value = new_msg
+
+        conn = MagicMock()
+        # SEARCH returns one new UID; FETCH returns a (headers, body) tuple
+        # so the parse loop reaches _parse_message. Reconciliation is
+        # patched out — its IMAP details don't matter here.
+        conn.uid.side_effect = [
+            ('OK', [b'2']),
+            ('OK', [(b'2 (UID 2 FLAGS ())', b'fake raw email'), b')']),
+        ]
+        conn.select.return_value = ('OK', [b'1'])
+        mock_connect.return_value = conn
+
+        sync_folder_messages(self.account, self.folder)
+
         mock_process.assert_called_once()
-        processed_msgs = list(mock_process.call_args[0][0])
-        self.assertEqual(len(processed_msgs), 1)
-        self.assertEqual(processed_msgs[0].pk, msg.pk)
+        processed = list(mock_process.call_args[0][0])
+        self.assertEqual(len(processed), 1)
+        self.assertEqual(processed[0].pk, new_msg.pk)

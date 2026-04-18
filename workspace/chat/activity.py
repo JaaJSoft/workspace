@@ -8,7 +8,7 @@ class ChatActivityProvider(ActivityProvider):
 
     def _base_qs(self, user_id, viewer_id):
         from workspace.chat.models import Conversation
-        from workspace.chat.services import user_conversation_ids
+        from workspace.chat.services.conversations import user_conversation_ids
 
         qs = Conversation.objects.filter(kind=Conversation.Kind.GROUP)
         if user_id is not None:
@@ -50,18 +50,28 @@ class ChatActivityProvider(ActivityProvider):
 
     def get_stats(self, user_id, *, viewer_id=None):
         from workspace.chat.models import Message, ConversationMember
+        from workspace.chat.services.conversations import user_conversation_ids
+
+        visible_convs = None
+        if viewer_id is not None and viewer_id != user_id:
+            visible_convs = user_conversation_ids(viewer_id)
 
         conv_filter = {}
         if user_id is not None:
             conv_filter['user_id'] = user_id
-        conv_count = ConversationMember.objects.filter(
+        conv_qs = ConversationMember.objects.filter(
             left_at__isnull=True,
             **conv_filter,
-        ).count()
+        )
+        if visible_convs is not None:
+            conv_qs = conv_qs.filter(conversation_id__in=visible_convs)
+        conv_count = conv_qs.count()
 
         msg_qs = Message.objects.filter(deleted_at__isnull=True)
         if user_id is not None:
             msg_qs = msg_qs.filter(author_id=user_id)
+        if visible_convs is not None:
+            msg_qs = msg_qs.filter(conversation_id__in=visible_convs)
         msg_count = msg_qs.count()
 
         return {

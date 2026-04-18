@@ -6,6 +6,7 @@ from django.db import close_old_connections
 from wsgidav.dav_provider import DAVProvider
 
 from workspace.files.models import File
+from workspace.files.services import FileService
 from .resources import FileResource, FolderResource, RootCollection
 
 logger = logging.getLogger(__name__)
@@ -33,13 +34,16 @@ class WorkspaceDAVProvider(DAVProvider):
 
         # File.path stores the tree path without username prefix,
         # e.g. "FolderA/SubFolder/file.txt"
-        try:
-            file_obj = File.objects.get(
-                owner=user,
-                path="/".join(parts),
-                deleted_at__isnull=True,
-            )
-        except File.DoesNotExist:
+        # Use .filter().first() instead of .get() to survive duplicates
+        # that can arise from concurrent PUT requests (race in
+        # create_empty_resource).
+        file_obj = File.objects.filter(
+            FileService.accessible_files_q(user),
+            path="/".join(parts),
+            deleted_at__isnull=True,
+        ).first()
+
+        if file_obj is None:
             # Fall back to walking the tree segment by segment
             file_obj = self._walk_path(user, parts)
             if file_obj is None:
@@ -57,10 +61,12 @@ class WorkspaceDAVProvider(DAVProvider):
         (1 query).  Falls back to a segment-by-segment walk only when
         the parent path lookup also misses (e.g. stale ``path`` field).
         """
+        accessible = FileService.accessible_files_q(user)
+
         if len(parts) == 1:
             return (
                 File.objects.filter(
-                    owner=user,
+                    accessible,
                     parent__isnull=True,
                     name=parts[0],
                     deleted_at__isnull=True,
@@ -68,22 +74,21 @@ class WorkspaceDAVProvider(DAVProvider):
             )
 
         parent_path = "/".join(parts[:-1])
-        try:
-            parent = File.objects.get(
-                owner=user,
-                path=parent_path,
-                deleted_at__isnull=True,
-            )
-            return (
-                File.objects.filter(
-                    owner=user,
-                    parent=parent,
-                    name=parts[-1],
-                    deleted_at__isnull=True,
-                ).first()
-            )
-        except File.DoesNotExist:
+        parent = File.objects.filter(
+            accessible,
+            path=parent_path,
+            deleted_at__isnull=True,
+        ).first()
+        if parent is None:
             return None
+        return (
+            File.objects.filter(
+                accessible,
+                parent=parent,
+                name=parts[-1],
+                deleted_at__isnull=True,
+            ).first()
+        )
 
     @staticmethod
     def _get_user(environ):

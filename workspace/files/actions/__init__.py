@@ -22,25 +22,25 @@ class ActionRegistry:
         return cls._by_id.get(action_id)
 
     @classmethod
-    def get_available_actions(cls, user, file_obj, *, is_owner, share_permission=None):
+    def get_available_actions(cls, user, file_obj, *, permission):
         cls._ensure_loaded()
         result = []
         for action in cls._actions:
             if file_obj.node_type not in action.node_types:
                 continue
-            if action.is_available(user, file_obj, is_owner=is_owner, share_permission=share_permission):
+            if action.is_available(user, file_obj, permission=permission):
                 result.append(action.serialize(file_obj))
         return result
 
     @classmethod
-    def is_action_available(cls, action_id, user, file_obj, *, is_owner, share_permission=None):
+    def is_action_available(cls, action_id, user, file_obj, *, permission):
         cls._ensure_loaded()
         action = cls._by_id.get(action_id)
         if not action:
             return False
         if file_obj.node_type not in action.node_types:
             return False
-        return action.is_available(user, file_obj, is_owner=is_owner, share_permission=share_permission)
+        return action.is_available(user, file_obj, permission=permission)
 
     @classmethod
     def all(cls):

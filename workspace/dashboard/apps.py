@@ -20,16 +20,6 @@ class DashboardConfig(AppConfig):
 
         planned_modules = [
             ModuleInfo(
-                name='Notes',
-                slug='notes',
-                description='Write and collaborate on documents.',
-                icon='notebook-pen',
-                color='accent',
-                url=None,
-                active=False,
-                order=30,
-            ),
-            ModuleInfo(
                 name='Tasks',
                 slug='tasks',
                 description='Track projects and to-dos.',
@@ -38,6 +28,36 @@ class DashboardConfig(AppConfig):
                 url=None,
                 active=False,
                 order=50,
+            ),
+            ModuleInfo(
+                name='Contacts',
+                slug='contacts',
+                description='Manage contacts and interactions.',
+                icon='contact',
+                color='info',
+                url=None,
+                active=False,
+                order=60,
+            ),
+            ModuleInfo(
+                name='Bookmarks',
+                slug='bookmarks',
+                description='Save and organize links.',
+                icon='bookmark',
+                color='primary',
+                url=None,
+                active=False,
+                order=70,
+            ),
+            ModuleInfo(
+                name='Passwords',
+                slug='passwords',
+                description='Encrypted password vault.',
+                icon='lock',
+                color='error',
+                url=None,
+                active=False,
+                order=80,
             ),
         ]
         for module in planned_modules:

@@ -9,23 +9,52 @@
     <div class="flex items-center gap-2 min-w-0">
       <span class="badge badge-sm badge-ghost font-mono">markdown</span>
       {% if can_edit %}
-      <span x-show="isDirty" x-cloak class="flex items-center gap-1 text-warning text-xs whitespace-nowrap">
+      <!-- Modified -->
+      <span x-show="saveStatus === 'modified'" x-cloak
+            class="flex items-center gap-1 text-warning text-xs whitespace-nowrap">
         <span class="w-1.5 h-1.5 rounded-full bg-warning inline-block"></span>
         Modified
+      </span>
+      <!-- Saving -->
+      <span x-show="saveStatus === 'saving'" x-cloak
+            class="flex items-center gap-1 text-base-content/60 text-xs whitespace-nowrap">
+        <span class="loading loading-spinner loading-xs"></span>
+        Saving...
+      </span>
+      <!-- Saved -->
+      <span x-show="saveStatus === 'saved'" x-cloak
+            class="flex items-center gap-1 text-success text-xs whitespace-nowrap"
+            x-transition:leave="transition ease-in duration-300"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0">
+        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+        Saved
+      </span>
+      <!-- Error -->
+      <span x-show="saveStatus === 'error'" x-cloak
+            class="flex items-center gap-1 text-error text-xs whitespace-nowrap">
+        <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+        Save failed
       </span>
       {% endif %}
     </div>
     {% if can_edit %}
     <div class="flex items-center gap-0.5">
+      <!-- Retry (only on error) -->
+      <button x-show="saveStatus === 'error'" x-cloak
+              type="button"
+              class="btn btn-error btn-xs"
+              @click="save()">
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+        Retry
+      </button>
       <!-- Save -->
       <button type="button"
-              class="btn btn-primary btn-xs"
-              :disabled="!isDirty || saving"
+              class="btn btn-ghost btn-xs"
+              :disabled="!isDirty || saveStatus === 'saving'"
               @click="save()"
               title="Save (Ctrl+S)">
-        <span x-show="saving" class="loading loading-spinner loading-xs"></span>
-        <i x-show="!saving" data-lucide="save" class="w-3.5 h-3.5"></i>
-        Save
+        <i data-lucide="save" class="w-3.5 h-3.5"></i>
       </button>
     </div>
     {% endif %}
@@ -67,18 +96,62 @@ window.markdownViewerCrepe = function() {
   let _keydownHandler = null;
   let _container = null;
   let _lock = null;
+  let _savedFadeTimer = null;
+  let _listenerAttached = false;
+  let _debounceTimer = null;
+  let _intervalTimer = null;
+  let _beforeUnloadHandler = null;
 
   function getCSRFToken() {
-    var match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
+    const match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
     return match ? match.split('=')[1] : '';
   }
 
+  function _clearAutosave() {
+    if (_debounceTimer) {
+      clearTimeout(_debounceTimer);
+      _debounceTimer = null;
+    }
+    if (_intervalTimer) {
+      clearInterval(_intervalTimer);
+      _intervalTimer = null;
+    }
+  }
+
+  function _scheduleAutosave(self) {
+    // Debounce: reset 2s timer on every change
+    if (_debounceTimer) clearTimeout(_debounceTimer);
+    _debounceTimer = setTimeout(function() {
+      _debounceTimer = null;
+      if (self.isDirty && self.saveStatus !== 'saving') self.save();
+    }, 2000);
+
+    // Safety interval: start 30s timer if not already running
+    if (!_intervalTimer) {
+      _intervalTimer = setInterval(function() {
+        if (self.isDirty && self.saveStatus !== 'saving') {
+          self.save();
+        }
+      }, 30000);
+    }
+  }
+
   function _attachEditHandlers(self, container) {
-    _crepe.on(function(listener) {
-      listener.markdownUpdated(function(md) {
-        self.isDirty = md !== self.originalContent;
+    if (!_listenerAttached) {
+      _listenerAttached = true;
+      _crepe.on(function(listener) {
+        listener.markdownUpdated(function(md) {
+          const dirty = md !== self.originalContent;
+          self.isDirty = dirty;
+          if (dirty) {
+            self.setSaveStatus('modified');
+            _scheduleAutosave(self);
+          } else if (self.saveStatus === 'error' || self.saveStatus === 'modified') {
+            self.setSaveStatus(null);
+          }
+        });
       });
-    });
+    }
     if (!_keydownHandler) {
       _keydownHandler = function(e) {
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -93,7 +166,7 @@ window.markdownViewerCrepe = function() {
   return {
     canEdit: {{ can_edit|yesno:'true,false' }},
     isDirty: false,
-    saving: false,
+    saveStatus: null, // null | 'modified' | 'saving' | 'saved' | 'error'
     loading: true,
     error: null,
     originalContent: '{{ content|escapejs }}',
@@ -101,15 +174,30 @@ window.markdownViewerCrepe = function() {
     fileName: '{{ file.name }}',
     lockOwner: {% if lock_info %}'{{ lock_info.locked_by_username|escapejs }}'{% else %}null{% endif %},
 
+    setSaveStatus(status) {
+      if (_savedFadeTimer) {
+        clearTimeout(_savedFadeTimer);
+        _savedFadeTimer = null;
+      }
+      this.saveStatus = status;
+      if (status === 'saved') {
+        const self = this;
+        _savedFadeTimer = setTimeout(function() {
+          if (self.saveStatus === 'saved') self.saveStatus = null;
+          _savedFadeTimer = null;
+        }, 2000);
+      }
+    },
+
     async initEditor() {
-      var container = this.$refs.crepeContainer;
-      var self = this;
+      const container = this.$refs.crepeContainer;
+      const self = this;
       _container = container;
       _lock = window.fileLock(this.fileUuid, getCSRFToken);
 
       try {
-        var mod = await import('https://esm.sh/@milkdown/crepe@7.17.3?bundle');
-        var Crepe = mod.Crepe;
+        const mod = await import('https://esm.sh/@milkdown/crepe@7.17.3?bundle');
+        const Crepe = mod.Crepe;
 
         _crepe = new Crepe({ root: container, defaultValue: self.originalContent });
         await _crepe.create();
@@ -127,8 +215,28 @@ window.markdownViewerCrepe = function() {
         self.loading = false;
 
         if (self.canEdit) {
+          _beforeUnloadHandler = function(e) {
+            if (self.isDirty) e.preventDefault();
+          };
+          window.addEventListener('beforeunload', _beforeUnloadHandler);
+
           _lock.acquire(self, {
-            onLocked: function() { if (_crepe) _crepe.setReadonly(true); },
+            onLocked: function() {
+              _clearAutosave();
+              if (_crepe) {
+                if (self.isDirty) {
+                  // Attempt one final save before going readonly
+                  self.save({ force: true }).then(function() {
+                    if (_crepe) _crepe.setReadonly(true);
+                    if (self.saveStatus === 'error' && window.AppAlert) {
+                      window.AppAlert.warning('Unsaved changes could not be saved — another user locked the file.');
+                    }
+                  });
+                } else {
+                  _crepe.setReadonly(true);
+                }
+              }
+            },
             onAcquired: function() {
               if (_crepe) {
                 _crepe.setReadonly(false);
@@ -145,7 +253,7 @@ window.markdownViewerCrepe = function() {
     },
 
     forceUnlock() {
-      var self = this;
+      const self = this;
       _lock.forceUnlock(self, {
         onAcquired: function() {
           if (_crepe) {
@@ -156,17 +264,19 @@ window.markdownViewerCrepe = function() {
       });
     },
 
-    async save() {
-      if (!_crepe || this.saving || !this.isDirty) return;
-      this.saving = true;
+    async save(opts) {
+      const force = opts && opts.force;
+      if (!_crepe || this.saveStatus === 'saving' || !this.isDirty) return;
+      if (!force && this.lockOwner) return;
+      this.setSaveStatus('saving');
 
       try {
-        var content = _crepe.getMarkdown();
-        var blob = new Blob([content], { type: 'text/markdown' });
-        var formData = new FormData();
+        const content = _crepe.getMarkdown();
+        const blob = new Blob([content], { type: 'text/markdown' });
+        const formData = new FormData();
         formData.append('content', blob, this.fileName || 'file.md');
 
-        var response = await fetch('/api/v1/files/' + this.fileUuid, {
+        const response = await fetch('/api/v1/files/' + this.fileUuid, {
           method: 'PATCH',
           headers: { 'X-CSRFToken': getCSRFToken() },
           body: formData,
@@ -176,21 +286,30 @@ window.markdownViewerCrepe = function() {
 
         this.originalContent = content;
         this.isDirty = false;
-
-        if (window.AppAlert) {
-          window.AppAlert.success('File saved successfully');
-        }
+        this.setSaveStatus('saved');
+        _clearAutosave();
       } catch (error) {
         console.error('Failed to save:', error);
-        if (window.AppAlert) {
-          window.AppAlert.error('Failed to save: ' + error.message);
+        this.setSaveStatus('error');
+        // Clear debounce but keep the safety interval running for auto-retry.
+        if (_debounceTimer) {
+          clearTimeout(_debounceTimer);
+          _debounceTimer = null;
         }
-      } finally {
-        this.saving = false;
       }
     },
 
     dispose() {
+      if (_savedFadeTimer) {
+        clearTimeout(_savedFadeTimer);
+        _savedFadeTimer = null;
+      }
+      _listenerAttached = false;
+      _clearAutosave();
+      if (_beforeUnloadHandler) {
+        window.removeEventListener('beforeunload', _beforeUnloadHandler);
+        _beforeUnloadHandler = null;
+      }
       if (_lock) _lock.dispose();
       if (_keydownHandler && _container) {
         _container.removeEventListener('keydown', _keydownHandler, true);

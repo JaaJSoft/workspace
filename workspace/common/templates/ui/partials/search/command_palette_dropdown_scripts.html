@@ -2,4 +2,5 @@
   Scripts for the command palette dropdown
 {% endcomment %}
 {% load static %}
+{{ workspace_commands|json_script:"workspace-commands" }}
 <script src="{% static 'ui/js/command_palette_dropdown.js' %}"></script>

@@ -3,6 +3,7 @@ import uuid
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
@@ -11,8 +12,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from workspace.notifications.services import notify_many
-from workspace.users.settings_service import get_setting
+from workspace.notifications.services.notifications import notify_many
+from workspace.users.services.settings import get_setting
 
 from .models import Calendar, Event, EventMember, Poll, PollInvitee, PollSlot, PollVote
 from .serializers_polls import (
@@ -100,6 +101,7 @@ class PollListView(APIView):
         return Response(PollListSerializer(polls, many=True).data)
 
     @extend_schema(summary="Create a poll", request=PollCreateSerializer, responses=PollSerializer)
+    @transaction.atomic
     def post(self, request):
         ser = PollCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -142,6 +144,7 @@ class PollDetailView(APIView):
         return Response(PollSerializer(poll, context={'request': request}).data)
 
     @extend_schema(summary="Update poll", request=PollUpdateSerializer, responses=PollSerializer)
+    @transaction.atomic
     def patch(self, request, poll_id):
         poll = self._get_poll(poll_id, request.user)
         ser = PollUpdateSerializer(data=request.data)
@@ -262,6 +265,7 @@ class PollFinalizeView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Finalize poll", request=PollFinalizeSerializer, responses=PollSerializer)
+    @transaction.atomic
     def post(self, request, poll_id):
         poll = get_object_or_404(
             Poll, uuid=poll_id, created_by=request.user, status=Poll.Status.OPEN,
@@ -367,6 +371,7 @@ class PollInviteView(APIView):
         return Response(PollSerializer(poll, context={'request': request}).data)
 
     @extend_schema(summary="Remove invited users from a poll", request=PollInviteSerializer, responses=PollSerializer)
+    @transaction.atomic
     def delete(self, request, poll_id):
         poll = get_object_or_404(
             Poll, uuid=poll_id, created_by=request.user, status=Poll.Status.OPEN,

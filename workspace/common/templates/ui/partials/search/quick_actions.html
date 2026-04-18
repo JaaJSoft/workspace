@@ -1,48 +1,36 @@
 {% comment %}
   Partial pour les actions rapides (affiché quand query est vide)
+  Affiche les 5 commandes les plus récemment utilisées (ou des défauts utiles).
   Paramètres:
   - on_click: handler supplémentaire lors du clic sur un lien (optionnel)
-  - size: "lg" pour des items plus grands avec descriptions (optionnel)
-  Contexte requis:
-  - workspace_active_modules: list of active module dicts from context processor
+  - size: "lg" pour des items plus grands (optionnel)
+  Données dynamiques:
+  - quickActions: array Alpine calculé dans command_palette_dropdown.js
 {% endcomment %}
 <div x-show="query.length === 0" class="p-2">
   <div class="px-3 py-2 text-xs font-semibold text-base-content/60 uppercase tracking-wider">
     Quick Actions
   </div>
-  {% for module in workspace_active_modules %}
+  <template x-for="(cmd, index) in quickActions" :key="cmd.url">
     <a
-      href="{{ module.url }}"
-      {% if on_click %}@click="{{ on_click }}"{% endif %}
-      @mouseenter="activeIndex = {{ forloop.counter0 }}"
-      :class="isQuickActionActive({{ forloop.counter0 }}) ? 'bg-base-300' : 'bg-transparent'"
+      :href="cmd.url"
+      @click="trackCommand(cmd.url){% if on_click %}; {{ on_click }}{% endif %}"
+      @mouseenter="activeIndex = index"
+      :class="isQuickActionActive(index) ? 'bg-base-300' : 'bg-transparent'"
       class="flex items-center gap-3 px-3 {% if size == 'lg' %}py-3{% else %}py-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
     >
-      <div class="{% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} rounded-lg bg-{{ module.color }}/10 flex items-center justify-center flex-shrink-0">
-        <i data-lucide="{{ module.icon }}" class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %} text-{{ module.color }}"></i>
+      <div
+        :class="`bg-${cmd.color}/10`"
+        class="{% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} rounded-lg flex items-center justify-center flex-shrink-0"
+      >
+        <i :data-lucide="cmd.icon" :class="`text-${cmd.color}`" class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %}"></i>
       </div>
       <div class="flex-1 min-w-0">
-        <div class="{% if size == 'lg' %}text-base{% else %}text-sm{% endif %} font-medium">{{ module.name }}</div>
-        {% if size == 'lg' and module.description %}
-          <div class="text-xs text-base-content/50">{{ module.description }}</div>
-        {% endif %}
+        <div class="{% if size == 'lg' %}text-base{% else %}text-sm{% endif %} font-medium" x-text="cmd.name"></div>
+      </div>
+      <div class="flex-shrink-0">
+        <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-base-content/30"></i>
       </div>
     </a>
-  {% endfor %}
-  {% if user.is_staff %}
-    <a
-      href="#"
-      {% if on_click %}@click="{{ on_click }}"{% endif %}
-      @mouseenter="activeIndex = {{ workspace_active_modules|length }}"
-      :class="isQuickActionActive({{ workspace_active_modules|length }}) ? 'bg-base-300' : 'bg-transparent'"
-      class="flex items-center gap-3 px-3 {% if size == 'lg' %}py-3{% else %}py-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
-    >
-      <div class="{% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} rounded-lg bg-info/10 flex items-center justify-center flex-shrink-0">
-        <i data-lucide="settings" class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %} text-info"></i>
-      </div>
-      <div class="flex-1 min-w-0">
-        <div class="{% if size == 'lg' %}text-base{% else %}text-sm{% endif %} font-medium">Settings</div>
-      </div>
-    </a>
-  {% endif %}
+  </template>
 </div>

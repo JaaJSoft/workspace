@@ -37,7 +37,7 @@ class ICSBuilderTest(TestCase):
             start=datetime(2026, 3, 1, 14, 0, tzinfo=timezone.utc),
             end=datetime(2026, 3, 1, 15, 0, tzinfo=timezone.utc),
             owner=self.user, ical_uid='evt-123@example.com',
-            ical_sequence=0, organizer_email='alice@example.com',
+            ical_sequence=0, external_organizer='alice@example.com',
             source_message=self.mail_msg,
         )
 

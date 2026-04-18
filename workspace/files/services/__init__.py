@@ -1,4 +1,4 @@
-from .files import FileService
+from .files import FilePermission, FileService
 from . import mime
 
-__all__ = ["FileService", "mime"]
+__all__ = ["FilePermission", "FileService", "mime"]

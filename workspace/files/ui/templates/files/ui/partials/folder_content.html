@@ -183,7 +183,7 @@
     <!-- Table container with overflow -->
     <div class="overflow-auto flex-1 min-h-0"{% if not is_trash_view %} @contextmenu="openBackgroundContextMenu($event)"{% endif %}>
       {% if nodes %}
-      <table class="table [&_td]:align-middle [&_th]:align-middle" x-show="viewMode === 'list'" x-cloak>
+      <table class="table table-fixed [&_td]:align-middle [&_th]:align-middle" x-show="viewMode === 'list'" x-cloak>
         <thead class="sticky top-0 z-10">
           <tr class="bg-base-200">
             <th class="w-10" data-col="select">
@@ -200,9 +200,9 @@
             {% if not is_trash_view %}
             <th class="w-10 text-center" data-col="favorite">Fav</th>
             {% endif %}
-            <th class="hidden sm:table-cell" data-col="size">Size</th>
-            <th class="hidden md:table-cell" data-col="created">Created</th>
-            <th class="hidden md:table-cell" data-col="modified">{% if is_trash_view %}Deleted{% else %}Modified{% endif %}</th>
+            <th class="hidden sm:table-cell w-24" data-col="size">Size</th>
+            <th class="hidden md:table-cell w-36" data-col="created">Created</th>
+            <th class="hidden md:table-cell w-36" data-col="modified">{% if is_trash_view %}Deleted{% else %}Modified{% endif %}</th>
             {% if show_actions != False %}
             <th class="w-16" data-col="actions"><span class="sr-only">Actions</span></th>
             {% endif %}
@@ -260,14 +260,15 @@
               {% if node.node_type == 'folder' and not is_trash_view %}
                 <a
                   href="/files/{{ node.uuid }}"
-                  class="font-medium hover:text-primary hover:underline"
+                  class="font-medium hover:text-primary hover:underline block truncate"
                   x-target.push="folder-browser"
                   data-folder-link
+                  title="{{ node.name }}"
                 >
                   {{ node.name }}
                 </a>
               {% else %}
-                <span class="font-medium">{{ node.name }}</span>
+                <span class="font-medium block truncate" title="{{ node.name }}">{{ node.name }}</span>
               {% endif %}
             </td>
             {% if not is_trash_view %}
@@ -344,7 +345,7 @@
           <div
             class="bg-base-100 border border-base-300 rounded-lg hover:border-primary hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
             :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'ring-2 ring-primary border-primary' : '')"
-            x-show="shouldShowCard('{{ node.name|lower }}', '{{ node.node_type }}', '{{ node.is_favorite|yesno:'1,0' }}')"
+            x-show="shouldShowCard($el)"
             data-uuid="{{ node.uuid }}"
             data-name="{{ node.name|lower }}"
             data-display-name="{{ node.name }}"

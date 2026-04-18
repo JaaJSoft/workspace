@@ -56,10 +56,23 @@ function chatApp(currentUserId) {
     draggingPinned: null,
     dragOverPinned: null,
 
+    // Shared media (info panel)
+    conversationMedia: [],
+    conversationMediaTotal: 0,
+    loadingMedia: false,
+    loadingMoreMedia: false,
+    mediaFilter: 'images',  // 'images', 'files', 'all'
+
     // Bot / AI
     showBotPicker: false,
     availableBots: [],
+    botFilter: '',
     botTyping: false,
+
+    // Typing indicators
+    typingUsers: {},
+    _lastTypingSent: 0,
+    _typingHideTimer: null,
     // Bot memory (info panel)
     botMemories: [],
     loadingBotMemories: false,
@@ -121,6 +134,14 @@ function chatApp(currentUserId) {
       // Save draft on page unload
       window.addEventListener('beforeunload', () => this._saveDraft());
 
+      // Catch up on missed events when SSE reconnects (mobile resume)
+      window.addEventListener('sse:reconnect', () => {
+        this.loadConversations();
+        if (this.activeConversation) {
+          this._refreshCurrentMessages();
+        }
+      });
+
       // Save-to-files from attachment viewer modal
       window.addEventListener('chat-save-attachment-to-files', (e) => {
         this.saveAttachmentToFiles(e.detail.uuid);
@@ -159,10 +180,6 @@ function chatApp(currentUserId) {
         }
       }
 
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      });
-
       // Fetch available AI bots
       this.fetchBots();
 
@@ -183,20 +200,11 @@ function chatApp(currentUserId) {
       });
     },
 
-    // ── CSRF ───────────────────────────────────────────────
-    _csrf() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value
-        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-        || '';
-    },
 
     // ── Sidebar collapse ───────────────────────────────────
     toggleCollapse() {
       this.collapsed = !this.collapsed;
       localStorage.setItem('chatSidebarCollapsed', JSON.stringify(this.collapsed));
-      setTimeout(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      }, 300);
     },
 
     isMobile() {
@@ -225,35 +233,18 @@ function chatApp(currentUserId) {
       }
     },
 
-    async refreshConversationList() {
-      try {
-        const resp = await fetch('/chat/conversations', {
-          credentials: 'same-origin',
-          headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        });
-        if (resp.ok) {
-          const html = await resp.text();
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html, 'text/html');
-          const newList = doc.getElementById('conversation-list');
-          const target = document.getElementById('conversation-list');
-          if (newList && target) {
-            target.innerHTML = newList.innerHTML;
-            // Bust browser memory cache for avatar images that were updated this session
-            for (const conv of this.conversations) {
-              if (conv._avatar_bust) {
-                const img = target.querySelector(`img[src*="/conversations/${conv.uuid}/avatar/"]`);
-                if (img) img.src = `/api/v1/chat/conversations/${conv.uuid}/avatar/image?t=${conv._avatar_bust}`;
-              }
-            }
-            this.$nextTick(() => {
-              if (typeof lucide !== 'undefined') lucide.createIcons();
-            });
+    refreshConversationList() {
+      this.$el.addEventListener('ajax:after', () => {
+        const target = document.getElementById('conversation-list');
+        if (!target) return;
+        for (const conv of this.conversations) {
+          if (conv._avatar_bust) {
+            const img = target.querySelector(`img[src*="/conversations/${conv.uuid}/avatar/"]`);
+            if (img) img.src = `/api/v1/chat/conversations/${conv.uuid}/avatar/image?t=${conv._avatar_bust}`;
           }
         }
-      } catch (e) {
-        console.error('Failed to refresh conversation list', e);
-      }
+      }, { once: true });
+      this.$ajax('/chat/conversations', { target: 'conversation-list' });
     },
 
     async selectConversationById(uuid, updateUrl = true) {
@@ -305,6 +296,9 @@ function chatApp(currentUserId) {
       this.botTyping = false;
       this.showInfoPanel = false;
       this.conversationStats = null;
+      this.conversationMedia = [];
+      this.conversationMediaTotal = 0;
+      this.mediaFilter = 'images';
       this.botMemories = [];
       this.memorySearch = '';
       this.showSearchPanel = false;
@@ -352,9 +346,8 @@ function chatApp(currentUserId) {
 
     // ── Messages (server-rendered HTML) ─────────────────────
     _initMessagesDom(container) {
-      // Initialize Alpine on dynamically injected HTML and refresh Lucide icons
+      // Initialize Alpine on dynamically injected HTML
       if (typeof Alpine !== 'undefined') Alpine.initTree(container);
-      if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [container] });
       // Attach hover card listeners on @mention badges
       this._initMentionCards(container);
     },
@@ -368,17 +361,19 @@ function chatApp(currentUserId) {
     async loadMessages(conversationId) {
       this.loadingMessages = true;
       const container = document.getElementById('messages-container');
-      if (container) container.innerHTML = '';
+      if (container) container.innerHTML = ''; // safe: cleared to empty
 
       try {
         const resp = await fetch(
           `/chat/${conversationId}/messages`,
           { credentials: 'same-origin' }
         );
+        // Discard stale response if user already switched conversation
+        if (this.activeConversation?.uuid !== conversationId) return;
         if (resp.ok) {
           const html = await resp.text();
           if (container) {
-            container.innerHTML = html;
+            container.innerHTML = html; // server-rendered trusted HTML
             this._initMessagesDom(container);
             this._readPaginationState();
             // Scroll immediately after HTML injection, before images load
@@ -457,6 +452,12 @@ function chatApp(currentUserId) {
       }
     },
 
+    _isNearBottom(threshold = 150) {
+      const container = this.$refs.messagesContainer;
+      if (!container) return true;
+      return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+    },
+
     scrollToBottom(waitForImages = false) {
       const container = this.$refs.messagesContainer;
       if (!container) return;
@@ -467,7 +468,9 @@ function chatApp(currentUserId) {
         images.forEach(img => {
           if (!img.complete) {
             img.addEventListener('load', () => {
-              container.scrollTop = container.scrollHeight;
+              if (this._isNearBottom()) {
+                container.scrollTop = container.scrollHeight;
+              }
             }, { once: true });
           }
         });
@@ -493,6 +496,7 @@ function chatApp(currentUserId) {
 
       this.messageBody = '';
       this.pendingFiles = [];
+      this._lastTypingSent = 0;
       this._clearDraft();
       this.cancelReply();
 
@@ -522,7 +526,7 @@ function chatApp(currentUserId) {
             `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
             {
               method: 'POST',
-              headers: { 'X-CSRFToken': this._csrf() },
+              headers: { 'X-CSRFToken': getCSRFToken() },
               credentials: 'same-origin',
               body: formData,
             }
@@ -536,7 +540,7 @@ function chatApp(currentUserId) {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': this._csrf(),
+                'X-CSRFToken': getCSRFToken(),
               },
               credentials: 'same-origin',
               body: JSON.stringify(payload),
@@ -615,25 +619,42 @@ function chatApp(currentUserId) {
         const items = files.map(f => {
           const name = this._escapeHtml(f.name);
           if (f.type && f.type.startsWith('image/') && f._preview) {
-            return `<img src="${f._preview}" alt="${name}" class="max-h-64 max-w-full rounded-lg object-contain opacity-60" />`;
+            return `<img src="${f._preview}" alt="${name}" class="max-h-64 max-w-full rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity opacity-60" />`;
           }
-          return `<div class="flex items-center gap-2 p-2 rounded-lg bg-info/15">
-            <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
-            <span class="truncate text-xs font-medium">${name}</span>
+          if (f.type && f.type.startsWith('video/') && f._preview) {
+            return `<div class="relative max-h-64 max-w-full rounded-lg overflow-hidden opacity-60">
+              <video src="${f._preview}" class="max-h-64 max-w-full rounded-lg object-contain" preload="metadata"></video>
+              <div class="absolute inset-0 flex items-center justify-center bg-black/20">
+                <div class="w-12 h-12 rounded-full bg-base-100/80 flex items-center justify-center">
+                  <i data-lucide="play" class="w-6 h-6"></i>
+                </div>
+              </div>
+            </div>`;
+          }
+          const size = f.size ? this.formatFileSize(f.size) : '';
+          return `<div class="flex items-center gap-0.5 min-w-0">
+            <div class="flex items-center gap-2 p-2 rounded-lg bg-info/15 min-w-0 flex-1">
+              <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
+              <span class="truncate text-xs font-medium">${name}</span>
+              ${size ? `<span class="text-[0.65rem] opacity-60 flex-shrink-0">${size}</span>` : ''}
+            </div>
           </div>`;
         }).join('');
         const separator = bodyHtml ? '<div class="border-t border-info/30 my-1.5"></div>' : '';
-        filesHtml = `${separator}<div class="flex flex-col gap-1.5">${items}</div>`;
+        const mtClass = bodyHtml ? '' : ' mt-1.5';
+        filesHtml = `${separator}<div class="flex flex-col gap-1.5 mb-1.5${mtClass}">${items}</div>`;
       }
 
       const html = `
         <div class="msg-group msg-group-end flex gap-2 mb-3 flex-row-reverse" id="${tempId}">
           <div class="flex-shrink-0 w-8 mt-auto">${avatarHtml}</div>
           <div class="flex flex-col items-end gap-0.5 min-w-0 max-w-[75%]">
-            <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm bg-info/15 text-base-content opacity-70">
-              ${replyHtml}
-              ${bodyHtml ? `<div class="msg-body break-words">${bodyHtml}</div>` : ''}
-              ${filesHtml}
+            <div class="relative max-w-full">
+              <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm bg-info/15 text-base-content opacity-70">
+                ${replyHtml}
+                ${bodyHtml ? `<div class="msg-body prose prose-sm max-w-none break-words">${bodyHtml}</div>` : ''}
+                ${filesHtml}
+              </div>
             </div>
             <div class="flex items-center gap-1 px-1">
               <span class="loading loading-dots loading-xs text-base-content/40"></span>
@@ -642,7 +663,6 @@ function chatApp(currentUserId) {
         </div>`;
 
       container.insertAdjacentHTML('beforeend', html);
-      if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [container.lastElementChild] });
     },
 
     _removeOptimisticMessage(tempId) {
@@ -708,7 +728,7 @@ function chatApp(currentUserId) {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
-              'X-CSRFToken': this._csrf(),
+              'X-CSRFToken': getCSRFToken(),
             },
             credentials: 'same-origin',
             body: JSON.stringify({ body }),
@@ -754,7 +774,7 @@ function chatApp(currentUserId) {
           `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages/${msgUuid}`,
           {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': this._csrf() },
+            headers: { 'X-CSRFToken': getCSRFToken() },
             credentials: 'same-origin',
           }
         );
@@ -786,7 +806,7 @@ function chatApp(currentUserId) {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'X-CSRFToken': this._csrf(),
+              'X-CSRFToken': getCSRFToken(),
             },
             credentials: 'same-origin',
             body: JSON.stringify({ emoji }),
@@ -807,7 +827,7 @@ function chatApp(currentUserId) {
       try {
         await fetch(`/api/v1/chat/conversations/${conversationId}/read`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
       } catch (e) {
@@ -824,7 +844,6 @@ function chatApp(currentUserId) {
       this.userSearchShowDropdown = false;
       this.$refs.newConvDialog.showModal();
       this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
         this.$refs.userSearchInput?.focus();
       });
     },
@@ -900,9 +919,6 @@ function chatApp(currentUserId) {
       if (user.id === this.currentUserId) return;
       if (this.selectedUsers.find(u => u.id === user.id)) return;
       this.selectedUsers.push(user);
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      });
     },
 
     removeSelectedUser(userId) {
@@ -924,7 +940,7 @@ function chatApp(currentUserId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           credentials: 'same-origin',
           body: JSON.stringify(payload),
@@ -950,7 +966,7 @@ function chatApp(currentUserId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           credentials: 'same-origin',
           body: JSON.stringify({ member_ids: [userId] }),
@@ -980,8 +996,9 @@ function chatApp(currentUserId) {
         }
         // Check if message already exists in the DOM
         if (!document.getElementById(`msg-${detail.message.uuid}`)) {
+          const wasAtBottom = this._isNearBottom();
           await this._refreshCurrentMessages();
-          this.scrollToBottom();
+          if (wasAtBottom) this.scrollToBottom();
           await this.markAsRead(detail.conversation_id);
         }
       }
@@ -1038,6 +1055,12 @@ function chatApp(currentUserId) {
         } else {
           conv.unread_count = count;
         }
+      }
+    },
+
+    handleSSELinkPreview(detail) {
+      if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
+        this._refreshCurrentMessages();
       }
     },
 
@@ -1121,12 +1144,10 @@ function chatApp(currentUserId) {
       this.showInfoPanel = !this.showInfoPanel;
       if (this.showInfoPanel) {
         this.closeSearchPanel();
-        this.$nextTick(() => {
-          if (typeof lucide !== 'undefined') lucide.createIcons();
-        });
         if (this.activeConversation) {
           this.loadConversationStats(this.activeConversation.uuid);
           this.loadPinnedMessages(this.activeConversation.uuid);
+          this.loadConversationMedia(this.activeConversation.uuid);
           if (this.isBotConversation(this.activeConversation)) {
             this.loadBotMemories();
             this.loadScheduledMessages(this.activeConversation.uuid);
@@ -1151,6 +1172,55 @@ function chatApp(currentUserId) {
       this.loadingStats = false;
     },
 
+    // ── Shared media ────────────────────────────────────────
+    async loadConversationMedia(conversationId, append = false) {
+      if (append) {
+        this.loadingMoreMedia = true;
+      } else {
+        this.loadingMedia = true;
+        this.conversationMedia = [];
+        this.conversationMediaTotal = 0;
+      }
+      const offset = append ? this.conversationMedia.length : 0;
+      try {
+        const resp = await fetch(
+          `/api/v1/chat/conversations/${conversationId}/medias?type=${this.mediaFilter}&offset=${offset}&limit=24`,
+          { credentials: 'same-origin' },
+        );
+        if (resp.ok) {
+          const data = await resp.json();
+          if (append) {
+            this.conversationMedia.push(...data.results);
+          } else {
+            this.conversationMedia = data.results;
+          }
+          this.conversationMediaTotal = data.total;
+        }
+      } catch (e) {
+        console.error('Failed to load conversation media', e);
+      }
+      this.loadingMedia = false;
+      this.loadingMoreMedia = false;
+    },
+
+    loadMoreMedia() {
+      if (!this.activeConversation || this.loadingMoreMedia) return;
+      this.loadConversationMedia(this.activeConversation.uuid, true);
+    },
+
+    changeMediaFilter(filter) {
+      this.mediaFilter = filter;
+      if (this.activeConversation) {
+        this.loadConversationMedia(this.activeConversation.uuid);
+      }
+    },
+
+    formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    },
+
     // ── Search panel ────────────────────────────────────────
     toggleSearchPanel() {
       this.showSearchPanel = !this.showSearchPanel;
@@ -1158,7 +1228,6 @@ function chatApp(currentUserId) {
         this.showInfoPanel = false;
         this.$nextTick(() => {
           this.$refs.searchInput?.focus();
-          if (typeof lucide !== 'undefined') lucide.createIcons();
         });
       } else {
         this.closeSearchPanel();
@@ -1321,7 +1390,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
           body: JSON.stringify({ title: trimmed }),
         });
@@ -1354,7 +1423,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
           body: JSON.stringify({ description: trimmed }),
         });
@@ -1362,7 +1431,6 @@ function chatApp(currentUserId) {
           this.activeConversation.description = trimmed;
           const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
           if (conv) conv.description = trimmed;
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
         }
       } catch (e) {
         console.error('Failed to update description', e);
@@ -1383,7 +1451,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/clear`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok) {
@@ -1408,7 +1476,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 204) {
@@ -1432,7 +1500,6 @@ function chatApp(currentUserId) {
       this.addMemberHighlight = -1;
       this.$refs.addMemberDialog.showModal();
       this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
         this.$refs.addMemberSearchInput?.focus();
       });
     },
@@ -1494,9 +1561,6 @@ function chatApp(currentUserId) {
       this.addMemberResults = [];
       this.addMemberHighlight = -1;
       this.addMemberShowDropdown = false;
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      });
     },
 
     removeAddMember(userId) {
@@ -1509,7 +1573,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/members`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
           body: JSON.stringify({ user_ids: this.addMemberSelected.map(u => u.id) }),
         });
@@ -1520,9 +1584,6 @@ function chatApp(currentUserId) {
           if (conv) conv.members = updated.members;
           this.$refs.addMemberDialog.close();
           this.refreshConversationList();
-          this.$nextTick(() => {
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-          });
         }
       } catch (e) {
         console.error('Failed to add members', e);
@@ -1545,7 +1606,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/members/${userId}`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 204) {
@@ -1553,9 +1614,6 @@ function chatApp(currentUserId) {
           const conv = this.conversations.find(c => c.uuid === this.activeConversation.uuid);
           if (conv) conv.members = this.activeConversation.members;
           this.refreshConversationList();
-          this.$nextTick(() => {
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-          });
         }
       } catch (e) {
         console.error('Failed to remove member', e);
@@ -1615,7 +1673,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/avatar`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
           body: formData,
         });
@@ -1663,7 +1721,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/avatar`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 200) {
@@ -1693,7 +1751,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${uuid}/pin`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 201) {
@@ -1710,7 +1768,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${uuid}/pin`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 204) {
@@ -1731,9 +1789,6 @@ function chatApp(currentUserId) {
         });
         if (resp.ok) {
           this.pinnedMessages = await resp.json();
-          this.$nextTick(() => {
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-          });
         }
       } catch (e) {
         console.error('Failed to load pinned messages', e);
@@ -1745,7 +1800,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/messages/${messageId}/pin`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok) {
@@ -1762,7 +1817,7 @@ function chatApp(currentUserId) {
       try {
         const resp = await fetch(`/api/v1/chat/messages/${messageId}/pin`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
         if (resp.ok || resp.status === 204) {
@@ -1785,6 +1840,40 @@ function chatApp(currentUserId) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
         this._refreshCurrentMessages();
       }
+    },
+
+    // ── Typing indicators ───────────────────────────────────
+    handleSSETyping(detail) {
+      this.typingUsers = detail;
+      clearTimeout(this._typingHideTimer);
+      this._typingHideTimer = setTimeout(() => {
+        this.typingUsers = {};
+      }, 5000);
+    },
+
+    sendTypingSignal() {
+      if (!this.activeConversation) return;
+      const now = Date.now();
+      if (now - this._lastTypingSent < 3000) return;
+      this._lastTypingSent = now;
+      fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/typing`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+        credentials: 'same-origin',
+      }).catch(() => {});
+    },
+
+    activeTypingUsers() {
+      if (!this.activeConversation) return [];
+      return this.typingUsers[this.activeConversation.uuid] || [];
+    },
+
+    typingText() {
+      const users = this.activeTypingUsers();
+      if (users.length === 0) return '';
+      if (users.length === 1) return `${users[0].display_name} is typing`;
+      if (users.length === 2) return `${users[0].display_name} and ${users[1].display_name} are typing`;
+      return `${users[0].display_name} and ${users.length - 1} others are typing`;
     },
 
     onPinnedDragStart(event, uuid) {
@@ -1835,7 +1924,7 @@ function chatApp(currentUserId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           credentials: 'same-origin',
           body: JSON.stringify({ order }),
@@ -1867,7 +1956,6 @@ function chatApp(currentUserId) {
         if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 10;
         this.ctxMenu.x = x;
         this.ctxMenu.y = y;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
       });
     },
 
@@ -1886,11 +1974,9 @@ function chatApp(currentUserId) {
       switch (action) {
         case 'info':
           this.showInfoPanel = true;
-          this.$nextTick(() => {
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-          });
           if (this.activeConversation) {
             this.loadConversationStats(this.activeConversation.uuid);
+            this.loadConversationMedia(this.activeConversation.uuid);
           }
           break;
         case 'copy_link':
@@ -2246,15 +2332,12 @@ function chatApp(currentUserId) {
       const existing = new Set(this.pendingFiles.map(f => f.name + f.size));
       for (const f of fileList) {
         if (existing.has(f.name + f.size)) continue;
-        // Generate preview URL for images
-        if (f.type.startsWith('image/')) {
+        // Generate preview URL for images and videos
+        if (f.type.startsWith('image/') || f.type.startsWith('video/')) {
           f._preview = URL.createObjectURL(f);
         }
         this.pendingFiles.push(f);
       }
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      });
     },
 
     removeFile(idx) {
@@ -2276,6 +2359,10 @@ function chatApp(currentUserId) {
 
     isImageFile(file) {
       return file.type?.startsWith('image/');
+    },
+
+    isVideoFile(file) {
+      return file.type?.startsWith('video/');
     },
 
     handleDragEnter(e) {
@@ -2321,7 +2408,7 @@ function chatApp(currentUserId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           credentials: 'same-origin',
           body: JSON.stringify(body),
@@ -2390,7 +2477,7 @@ function chatApp(currentUserId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': this._csrf(),
+            'X-CSRFToken': getCSRFToken(),
           },
           credentials: 'same-origin',
           body: JSON.stringify({
@@ -2445,7 +2532,7 @@ function chatApp(currentUserId) {
       try {
         const res = await fetch(`/api/v1/chat/conversations/${convId}/messages/${errorMsgUuid}/retry`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
         });
         if (!res.ok) throw new Error('Retry failed');
       } catch (e) {
@@ -2462,7 +2549,7 @@ function chatApp(currentUserId) {
       try {
         await fetch(`/api/v1/chat/conversations/${convId}/bot-cancel`, {
           method: 'POST',
-          headers: { 'X-CSRFToken': this._csrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
       } catch (e) {
@@ -2501,10 +2588,6 @@ function chatApp(currentUserId) {
         console.error('Failed to load bot memories', e);
       }
       this.loadingBotMemories = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
-      this.$watch('memorySearch', () => {
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
-      });
     },
 
     async editMemory(mem) {
@@ -2523,7 +2606,7 @@ function chatApp(currentUserId) {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRFToken': this._csrf(),
+          'X-CSRFToken': getCSRFToken(),
         },
         credentials: 'same-origin',
         body: JSON.stringify({ content: content.trim() }),
@@ -2543,7 +2626,7 @@ function chatApp(currentUserId) {
       if (!ok) return;
       const resp = await fetch(`/api/v1/ai/memories/${mem.id}`, {
         method: 'DELETE',
-        headers: { 'X-CSRFToken': this._csrf() },
+        headers: { 'X-CSRFToken': getCSRFToken() },
         credentials: 'same-origin',
       });
       if (resp.ok) {
@@ -2567,7 +2650,6 @@ function chatApp(currentUserId) {
         console.error('Failed to load schedules', e);
       }
       this.loadingSchedules = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     scheduleTimingLabel(sched) {
@@ -2600,7 +2682,7 @@ function chatApp(currentUserId) {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
-              'X-CSRFToken': this._csrf(),
+              'X-CSRFToken': getCSRFToken(),
             },
             credentials: 'same-origin',
             body: JSON.stringify({ prompt: prompt.trim() }),
@@ -2629,7 +2711,7 @@ function chatApp(currentUserId) {
           `/api/v1/chat/conversations/${this.activeConversation.uuid}/schedules/${sched.uuid}`,
           {
             method: 'DELETE',
-            headers: { 'X-CSRFToken': this._csrf() },
+            headers: { 'X-CSRFToken': getCSRFToken() },
             credentials: 'same-origin',
           },
         );

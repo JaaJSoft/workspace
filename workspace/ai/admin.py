@@ -2,13 +2,13 @@ from django import forms
 from django.contrib import admin
 from django.utils.html import format_html
 
-from workspace.users.avatar_service import (
+from workspace.users.services.avatar import (
     delete_avatar,
     get_avatar_path,
     has_avatar,
 )
 
-from .models import AITask, BotProfile
+from .models import AITask, BotProfile, ConversationSummary
 
 
 class BotProfileForm(forms.ModelForm):
@@ -67,8 +67,8 @@ class BotProfileAdmin(admin.ModelAdmin):
     @staticmethod
     def _save_avatar(user, image_file):
         from PIL import Image, ImageOps
-        from workspace.common.image_service import save_image
-        from workspace.users.settings_service import set_setting
+        from workspace.common.services.image import save_image
+        from workspace.users.services.settings import set_setting
         from io import BytesIO
 
         img = Image.open(image_file)
@@ -92,11 +92,25 @@ class BotProfileAdmin(admin.ModelAdmin):
         set_setting(user, 'profile', 'has_avatar', True)
 
 
+@admin.register(ConversationSummary)
+class ConversationSummaryAdmin(admin.ModelAdmin):
+    list_display = ('conversation', 'up_to', 'content_preview', 'updated_at')
+    search_fields = ('conversation__title', 'content')
+    readonly_fields = ('conversation', 'up_to', 'content', 'updated_at')
+    raw_id_fields = ()
+
+    @admin.display(description='Summary')
+    def content_preview(self, obj):
+        if not obj.content:
+            return '—'
+        return obj.content[:120] + '…' if len(obj.content) > 120 else obj.content
+
+
 @admin.register(AITask)
 class AITaskAdmin(admin.ModelAdmin):
     list_display = ['uuid', 'task_type', 'status', 'owner', 'model_used', 'prompt_tokens', 'completion_tokens', 'created_at', 'completed_at']
     list_filter = ['task_type', 'status', 'model_used']
     search_fields = ['uuid', 'owner__username', 'result', 'error']
     raw_id_fields = ['owner', 'chat_message']
-    readonly_fields = ['uuid', 'created_at']
+    readonly_fields = ['uuid', 'created_at', 'raw_messages']
     date_hierarchy = 'created_at'

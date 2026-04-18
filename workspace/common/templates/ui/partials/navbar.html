@@ -65,7 +65,7 @@
         x-show="mobileSearchOpen"
         x-cloak
         @click.self="mobileSearchOpen = false"
-        class="sm:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-start justify-center p-4"
+        class="sm:hidden fixed inset-0 bg-black/40 backdrop-blur-md z-[60] flex flex-col"
         x-transition:enter="transition ease-out duration-200"
         x-transition:enter-start="opacity-0"
         x-transition:enter-end="opacity-100"
@@ -74,19 +74,19 @@
         x-transition:leave-end="opacity-0"
       >
         <div
-          class="w-full max-w-lg mt-16 bg-base-100 rounded-box shadow-2xl"
+          class="w-full bg-base-100 shadow-2xl flex flex-col max-h-[85dvh]"
           x-data="commandPaletteDropdown()"
           x-init="$watch('mobileSearchOpen', value => { if (value) { $nextTick(() => $refs.input?.focus()); open = true; } else { close(); } })"
           @click.stop
           x-transition:enter="transition ease-out duration-200"
-          x-transition:enter-start="opacity-0 scale-95"
-          x-transition:enter-end="opacity-100 scale-100"
+          x-transition:enter-start="opacity-0 -translate-y-2"
+          x-transition:enter-end="opacity-100 translate-y-0"
           x-transition:leave="transition ease-in duration-150"
-          x-transition:leave-start="opacity-100 scale-100"
-          x-transition:leave-end="opacity-0 scale-95"
+          x-transition:leave-start="opacity-100 translate-y-0"
+          x-transition:leave-end="opacity-0 -translate-y-2"
         >
           <!-- Mobile search header -->
-          <div class="p-4 border-b border-base-300 flex items-center gap-2">
+          <div class="px-3 py-2.5 border-b border-base-300 flex items-center gap-2">
             {% include 'ui/partials/search/search_input.html' with on_escape='mobileSearchOpen = false' %}
             <button
               @click="mobileSearchOpen = false"
@@ -97,7 +97,7 @@
           </div>
 
           <!-- Mobile search content -->
-          <div class="max-h-[60vh] overflow-y-auto">
+          <div class="flex-1 overflow-y-auto overscroll-contain">
             {% include 'ui/partials/search/quick_actions.html' with on_click='mobileSearchOpen = false' %}
             {% include 'ui/partials/search/search_results.html' with on_click='mobileSearchOpen = false' container_class='p-2' %}
           </div>
@@ -195,12 +195,10 @@
                   if (s === 'online') p.online.add(uid);
                   else if (s === 'away') p.away.add(uid);
                   else if (s === 'busy') p.busy.add(uid);
-                  const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value
-                    || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
                   await fetch('/api/v1/users/me/status', {
                     method: 'PUT',
                     credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
                     body: JSON.stringify({ status: s === 'online' ? 'auto' : s }),
                   });
                 },
@@ -266,6 +264,19 @@
               </a>
             </li>
 
+            <!-- What's new -->
+            <li>
+              <button
+                type="button"
+                onclick="window.dispatchEvent(new CustomEvent('changelog-open'))"
+                class="gap-3 hover:bg-warning/10 hover:text-warning transition-colors"
+              >
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                <span class="font-medium">What's new</span>
+                <span class="badge badge-xs badge-ghost text-base-content/50 ml-auto">{{ APP_VERSION }}</span>
+              </button>
+            </li>
+
             {% if user.is_staff or user.is_superuser %}
               <div class="divider my-1">
                 <span class="text-xs text-base-content/40 uppercase tracking-wider">Admin</span>
@@ -326,6 +337,51 @@
 <form id="logout-form" method="post" action="{% url 'logout' %}" style="display: none;">
   {% csrf_token %}
 </form>
+{% endif %}
+
+<!-- Changelog modal -->
+{% if user.is_authenticated %}
+<dialog id="changelog-dialog" class="modal"
+        x-data="{ loaded: false, loading: false, content: '' }"
+        @changelog-open.window="
+          $el.showModal();
+          if (!loaded && !loading) {
+            loading = true;
+            fetch('/changelog', { credentials: 'same-origin' })
+              .then(r => r.text())
+              .then(html => { content = html; loaded = true; loading = false; })
+              .catch(() => { loading = false; });
+          }
+        ">
+  <div class="modal-box w-11/12 max-w-2xl max-h-[80vh] p-0 flex flex-col">
+    <!-- Header -->
+    <div class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0">
+      <div class="rounded-lg bg-warning/10 p-2">
+        <i data-lucide="sparkles" class="w-5 h-5 text-warning"></i>
+      </div>
+      <div class="flex-1">
+        <h3 class="font-bold text-lg">What's new</h3>
+        <p class="text-xs text-base-content/50">Version {{ APP_VERSION }}</p>
+      </div>
+      <form method="dialog">
+        <button class="btn btn-ghost btn-sm btn-circle">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </form>
+    </div>
+
+    <!-- Body -->
+    <div class="flex-1 overflow-y-auto overscroll-contain">
+      <template x-if="loading">
+        <div class="flex items-center justify-center py-12">
+          <span class="loading loading-spinner loading-md text-base-content/30"></span>
+        </div>
+      </template>
+      <div x-show="loaded" x-html="content"></div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 {% endif %}
 
 {% include 'ui/partials/search/command_palette_dropdown_scripts.html' %}

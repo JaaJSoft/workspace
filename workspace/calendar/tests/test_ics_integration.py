@@ -86,7 +86,7 @@ class EndToEndICSTest(APITestCase):
         event = Event.objects.get(ical_uid='e2e-test-uid@example.com')
         self.assertEqual(event.title, 'Design Review')
         self.assertEqual(event.location, 'Conference Room B')
-        self.assertEqual(event.organizer_email, 'ext@company.com')
+        self.assertEqual(event.external_organizer, 'ext@company.com')
 
         # Verify invitation calendar was created
         cal = Calendar.objects.get(mail_account=self.account)

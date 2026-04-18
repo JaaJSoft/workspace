@@ -1,17 +1,17 @@
 {% comment %}
 Icon Picker Partial
 ===================
-Renders icon grid + color grid + save indicator.
+Renders icon grid + optional color grid + optional save indicator.
 Must be placed inside an element with an Alpine x-data context
-that provides: icons, colors, selectedIcon, selectedColor,
-selectIcon(), selectColor(), saving, saved.
+that provides: icons, selectedIcon, selectIcon().
+Optional: colors, selectedColor, selectColor(), saving, saved.
 {% endcomment %}
 
 <div class="space-y-3">
   <!-- Icon Selection -->
   <div>
     <label class="text-xs text-base-content/60 mb-1.5 block">Icon</label>
-    <div class="flex flex-wrap gap-1" x-ref="iconGrid" x-init="setTimeout(() => lucide.createIcons({nodes: $refs.iconGrid.querySelectorAll('[data-lucide]')}), 50)">
+    <div class="flex flex-wrap gap-1" x-ref="iconGrid">
       <template x-for="icon in icons" :key="icon">
         <button
           type="button"
@@ -26,11 +26,11 @@ selectIcon(), selectColor(), saving, saved.
     </div>
   </div>
 
-  <!-- Color Selection -->
-  <div>
+  <!-- Color Selection (hidden when colors is empty) -->
+  <div x-show="colors && colors.length" x-cloak>
     <label class="text-xs text-base-content/60 mb-1.5 block">Color</label>
-    <div class="flex flex-wrap gap-1" x-ref="colorGrid" x-init="setTimeout(() => lucide.createIcons({nodes: $refs.colorGrid.querySelectorAll('[data-lucide]')}), 50)">
-      <template x-for="color in colors" :key="color.class">
+    <div class="flex flex-wrap gap-1" x-ref="colorGrid">
+      <template x-for="color in (colors || [])" :key="color.class">
         <button
           type="button"
           class="btn btn-xs btn-square btn-ghost"
@@ -44,7 +44,7 @@ selectIcon(), selectColor(), saving, saved.
     </div>
   </div>
 
-  <!-- Save indicator -->
+  <!-- Save indicator (hidden when not saving) -->
   <div x-show="saving" class="text-xs text-base-content/60 flex items-center gap-1">
     <span class="loading loading-spinner loading-xs"></span>
     Saving...

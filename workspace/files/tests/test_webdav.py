@@ -2,8 +2,10 @@
 
 import base64
 import io
+import os
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
@@ -15,7 +17,7 @@ from workspace.files.webdav.resources import (
     FileResource,
     FolderResource,
     RootCollection,
-    _WriteBuffer,
+    _StreamingWriteBuffer,
     _copy_as,
     _resolve_parent,
 )
@@ -151,6 +153,24 @@ class ProviderTests(TestCase):
         res = self.provider.get_resource_inst("/secret.txt", self.environ)
         self.assertIsNone(res)
 
+    def test_duplicate_records_do_not_crash(self):
+        """get_resource_inst survives duplicate File rows (uses filter/first)."""
+        FileService.create_file(self.user, "dup.txt", mime_type="text/plain")
+        # Force-create a second record with the same path
+        File.objects.create(
+            owner=self.user, name="dup.txt", node_type=File.NodeType.FILE,
+            path="dup.txt", mime_type="text/plain",
+        )
+        self.assertEqual(
+            File.objects.filter(
+                owner=self.user, path="dup.txt", deleted_at__isnull=True,
+            ).count(),
+            2,
+        )
+        # Must not raise MultipleObjectsReturned
+        res = self.provider.get_resource_inst("/dup.txt", self.environ)
+        self.assertIsInstance(res, FileResource)
+
 
 # ── RootCollection ────────────────────────────────────────────────────
 
@@ -205,6 +225,19 @@ class RootCollectionTests(TestCase):
         res = self.root.create_empty_resource("new.txt")
         self.assertIsInstance(res, FileResource)
         self.assertTrue(File.objects.filter(owner=self.user, name="new.txt").exists())
+
+    def test_create_empty_resource_reuses_existing(self):
+        """Concurrent PUT retry must reuse the existing file, not create a duplicate."""
+        existing = FileService.create_file(self.user, "dup.txt", parent=None)
+        res = self.root.create_empty_resource("dup.txt")
+        self.assertIsInstance(res, FileResource)
+        self.assertEqual(
+            File.objects.filter(
+                owner=self.user, name="dup.txt", deleted_at__isnull=True,
+            ).count(),
+            1,
+        )
+        self.assertEqual(res._file.pk, existing.pk)
 
     def test_create_collection(self):
         self.root.create_collection("NewDir")
@@ -270,6 +303,46 @@ class FolderResourceTests(TestCase):
             ).exists()
         )
 
+    def test_create_empty_resource_reuses_existing(self):
+        """Concurrent PUT retry must reuse the existing file in the folder."""
+        existing = FileService.create_file(
+            self.user, "dup.txt", parent=self.folder
+        )
+        res = self.res.create_empty_resource("dup.txt")
+        self.assertEqual(
+            File.objects.filter(
+                name="dup.txt", parent=self.folder, deleted_at__isnull=True,
+            ).count(),
+            1,
+        )
+        self.assertEqual(res._file.pk, existing.pk)
+
+    def test_create_empty_resource_reuses_group_member_file(self):
+        """In a group folder, reuse a file created by another group member."""
+        group = Group.objects.create(name="Team")
+        self.user.groups.add(group)
+        other = User.objects.create_user(
+            username="davother", email="other@test.com", password="pass"
+        )
+        other.groups.add(group)
+
+        group_folder = FileService.create_folder(
+            self.user, "Shared", parent=self.folder, group=group,
+        )
+        existing = FileService.create_file(
+            other, "report.txt", parent=group_folder, group=group,
+        )
+
+        group_res = FolderResource("/Docs/Shared", self.environ, group_folder)
+        res = group_res.create_empty_resource("report.txt")
+        self.assertEqual(res._file.pk, existing.pk)
+        self.assertEqual(
+            File.objects.filter(
+                name="report.txt", parent=group_folder, deleted_at__isnull=True,
+            ).count(),
+            1,
+        )
+
     def test_create_collection(self):
         self.res.create_collection("Sub")
         self.assertTrue(
@@ -315,11 +388,21 @@ class FolderResourceTests(TestCase):
 # ── FileResource ──────────────────────────────────────────────────────
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class FileResourceTests(TestCase):
-    """Tests for FileResource."""
+    """Tests for FileResource.
+
+    Uses a real temporary FileSystemStorage (not InMemoryStorage) because
+    ``_StreamingWriteBuffer`` writes directly to the filesystem via
+    ``os.open`` / ``os.write``.
+    """
 
     def setUp(self):
+        import shutil
+        import tempfile
+        self._tmpdir = tempfile.mkdtemp()
+        self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
+        self._media_override.enable()
+
         self.user = User.objects.create_user(
             username="davfile", email="file@test.com", password="pass"
         )
@@ -329,6 +412,11 @@ class FileResourceTests(TestCase):
             self.user, "test.txt", content=content, mime_type="text/plain"
         )
         self.res = FileResource("/test.txt", self.environ, self.file)
+
+    def tearDown(self):
+        import shutil
+        self._media_override.disable()
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
 
     def test_content_length(self):
         self.assertEqual(self.res.get_content_length(), 11)
@@ -364,9 +452,10 @@ class FileResourceTests(TestCase):
 
         self.file.refresh_from_db()
         self.assertEqual(self.file.size, 11)
-        self.file.content.open("rb")
-        self.assertEqual(self.file.content.read(), b"new content")
-        self.file.content.close()
+        # Content was streamed directly to storage; read it back.
+        storage = self.file.content.storage
+        with storage.open(self.file.content.name, "rb") as f:
+            self.assertEqual(f.read(), b"new content")
 
     def test_end_write_with_errors_on_new_file(self):
         new = FileService.create_file(self.user, "fail.txt", mime_type="text/plain")
@@ -384,6 +473,33 @@ class FileResourceTests(TestCase):
         self.res.end_write(with_errors=True)
         self.file.refresh_from_db()
         self.assertTrue(File.objects.filter(pk=self.file.pk).exists())
+
+    def test_end_write_rejects_partial_upload(self):
+        """Incomplete transfer (size < Content-Length) must not save."""
+        from wsgidav.dav_error import DAVError
+
+        new = FileService.create_file(self.user, "partial.txt", mime_type="text/plain")
+        # Simulate Content-Length = 1000 but only 100 bytes received
+        env = _make_environ(user=self.user, CONTENT_LENGTH="1000")
+        res = FileResource("/partial.txt", env, new)
+        buf = res.begin_write()
+        buf.write(b"x" * 100)
+        buf.close()
+        with self.assertRaises(DAVError):
+            res.end_write(with_errors=False)
+        # New file (size=None) should be hard-deleted
+        self.assertFalse(File.objects.filter(pk=new.pk).exists())
+
+    def test_end_write_accepts_complete_upload(self):
+        """Complete transfer (size == Content-Length) must save."""
+        env = _make_environ(user=self.user, CONTENT_LENGTH="5")
+        res = FileResource("/test.txt", env, self.file)
+        buf = res.begin_write()
+        buf.write(b"hello")
+        buf.close()
+        res.end_write(with_errors=False)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.size, 5)
 
     def test_delete_soft_deletes(self):
         self.res.delete()
@@ -528,29 +644,127 @@ class CopyAsTests(TestCase):
         self.assertEqual(copy.name, "y.txt")
 
 
-class WriteBufferTests(TestCase):
-    """Tests for _WriteBuffer deferred-close wrapper."""
+class StreamingWriteBufferTests(TestCase):
+    """Tests for _StreamingWriteBuffer direct-to-storage writer."""
 
-    def test_write_and_read(self):
-        buf = _WriteBuffer()
+    def _make_buf(self, name="test.bin", flush_size=1024):
+        import tempfile
+        self._tmpdir = tempfile.mkdtemp()
+        path = os.path.join(self._tmpdir, name)
+        return _StreamingWriteBuffer(path, flush_size), path
+
+    def tearDown(self):
+        import shutil
+        if hasattr(self, "_tmpdir"):
+            shutil.rmtree(self._tmpdir, ignore_errors=True)
+
+    def test_write_and_finalize(self):
+        buf, path = self._make_buf()
         buf.write(b"hello ")
         buf.write(b"world")
-        buf.close()  # no-op
-        data = buf.read_all_and_close()
-        self.assertEqual(data, b"hello world")
+        buf.close()  # no-op, like wsgidav does
+        buf.finalize()
+        self.assertEqual(buf.size, 11)
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), b"hello world")
 
     def test_writelines(self):
-        buf = _WriteBuffer()
+        buf, path = self._make_buf()
         buf.writelines([b"a", b"b", b"c"])
-        data = buf.read_all_and_close()
-        self.assertEqual(data, b"abc")
+        buf.finalize()
+        self.assertEqual(buf.size, 3)
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), b"abc")
 
-    def test_real_close(self):
-        buf = _WriteBuffer()
-        buf.write(b"data")
-        buf.real_close()
-        with self.assertRaises(ValueError):
-            buf.read_all_and_close()
+    def test_flush_on_threshold(self):
+        """Data is flushed to disk when the buffer reaches flush_size."""
+        buf, path = self._make_buf(flush_size=8)
+        buf.write(b"1234")  # 4 bytes, below threshold
+        # File may be empty or contain data depending on OS buffering,
+        # but total size is tracked.
+        buf.write(b"5678ABCD")  # 12 bytes total, triggers flush
+        buf.finalize()
+        self.assertEqual(buf.size, 12)
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), b"12345678ABCD")
+
+    def test_abort_deletes_file(self):
+        buf, path = self._make_buf()
+        buf.write(b"partial data")
+        buf.abort()
+        self.assertFalse(os.path.exists(path))
+
+    def test_abort_then_missing_file_is_safe(self):
+        buf, path = self._make_buf()
+        os.unlink(path)  # already gone
+        buf.abort()  # should not raise
+
+
+# ── Lock storage selection ────────────────────────────────────────────
+
+
+class LockStorageBuilderTests(TestCase):
+    """Tests for ``_build_lock_storage`` backend selection.
+
+    Instantiation only: ``LockStorageRedis`` stores its connection params
+    and opens the connection lazily via ``.open()``, so these tests don't
+    need an actual Redis instance.
+    """
+
+    def _build(self):
+        from workspace.files.webdav.app import _build_lock_storage
+        return _build_lock_storage()
+
+    @override_settings(WEBDAV_LOCK_STORAGE_URL=None)
+    def test_dev_fallback_is_in_memory(self):
+        from wsgidav.lock_man.lock_storage import LockStorageDict
+        storage = self._build()
+        self.assertIsInstance(storage, LockStorageDict)
+
+    @override_settings(WEBDAV_LOCK_STORAGE_URL="redis://localhost:6379/3")
+    def test_redis_basic_url(self):
+        from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
+        storage = self._build()
+        self.assertIsInstance(storage, LockStorageRedis)
+        self.assertEqual(storage._redis_host, "localhost")
+        self.assertEqual(storage._redis_port, 6379)
+        self.assertEqual(storage._redis_db, 3)
+        self.assertIsNone(storage._redis_password)
+
+    @override_settings(
+        WEBDAV_LOCK_STORAGE_URL="redis://:s3cret@redis.internal:6380/3"
+    )
+    def test_redis_with_password_and_custom_port(self):
+        from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
+        storage = self._build()
+        self.assertIsInstance(storage, LockStorageRedis)
+        self.assertEqual(storage._redis_host, "redis.internal")
+        self.assertEqual(storage._redis_port, 6380)
+        self.assertEqual(storage._redis_db, 3)
+        self.assertEqual(storage._redis_password, "s3cret")
+
+    @override_settings(WEBDAV_LOCK_STORAGE_URL="redis://example.com/0")
+    def test_redis_defaults_when_port_omitted(self):
+        from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
+        storage = self._build()
+        self.assertIsInstance(storage, LockStorageRedis)
+        self.assertEqual(storage._redis_host, "example.com")
+        self.assertEqual(storage._redis_port, 6379)
+        self.assertEqual(storage._redis_db, 0)
+
+
+class CreateWebdavAppTests(TestCase):
+    """Smoke tests for the WsgiDAV app factory."""
+
+    @override_settings(WEBDAV_LOCK_STORAGE_URL=None)
+    def test_factory_returns_app_with_lock_manager(self):
+        """Dev fallback: app is built and locking is enabled (DAV level 2)."""
+        from workspace.files.webdav.app import create_webdav_app
+        app = create_webdav_app()
+        # With a LockStorageDict the lock manager must be present so that
+        # OPTIONS advertises ``DAV: 1,2``.
+        provider = app.provider_map["/"]
+        self.assertIsNotNone(provider.lock_manager)
 
 
 # ── Integration (full WSGI stack) ─────────────────────────────────────

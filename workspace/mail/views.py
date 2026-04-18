@@ -1,7 +1,8 @@
 import logging
 from collections import Counter, defaultdict
 
-from django.db.models import Count, Q
+from django.db import transaction
+from django.db.models import Count, Prefetch, Q
 from django.http import FileResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
@@ -10,7 +11,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import MailAccount, MailAttachment, MailFolder, MailMessage
+from workspace.common.mixins import CacheControlMixin
+
+from .models import MailAccount, MailAttachment, MailFolder, MailLabel, MailMessage, MailMessageLabel
+from .queries import user_account_ids
 from .serializers import (
     BatchActionSerializer,
     DraftSaveSerializer,
@@ -20,6 +24,10 @@ from .serializers import (
     MailFolderCreateSerializer,
     MailFolderSerializer,
     MailFolderUpdateSerializer,
+    MailLabelAssignSerializer,
+    MailLabelCreateSerializer,
+    MailLabelSerializer,
+    MailLabelUpdateSerializer,
     MailMessageDetailSerializer,
     MailMessageListSerializer,
     MailMessageUpdateSerializer,
@@ -29,9 +37,53 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
+def _bulk_refresh_counts(targets, group_key, grouped_qs, field_map):
+    """Apply a grouped aggregate onto many target rows via a single ``bulk_update``.
+
+    Shared plumbing for ``_refresh_folders_counts_bulk`` and ``_refresh_label_counts``:
+    both reduce to "GROUP BY FK_id on a source table, then push the aggregated
+    counts back onto a set of target rows". This helper handles the generic
+    part: build a ``{pk: row}`` lookup, zero-default rows absent from the
+    grouped result, set ``updated_at`` manually, and ``bulk_update``.
+
+    Args:
+        targets: List of already-loaded target model instances. The helper
+            does NOT re-fetch them — callers pass the objects they want
+            written back. Empty list is a no-op.
+        group_key: Field name present in each ``grouped_qs`` row that maps to
+            the target's primary key (e.g. ``'folder_id'``, ``'label_id'``).
+        grouped_qs: An iterable of dicts — typically a queryset evaluated via
+            ``.values(group_key).annotate(...)``. Rows are matched to targets
+            by ``row[group_key] == target.pk``.
+        field_map: ``{aggregate_alias: target_field_name}``. Targets absent
+            from ``grouped_qs`` receive ``0`` for every mapped field.
+
+    Notes:
+        - Django's ``bulk_update`` bypasses ``auto_now``; ``updated_at`` is set
+          manually to preserve the semantics of the original ``save()`` path.
+        - All ``targets`` must share the same model class.
+    """
+    if not targets:
+        return
+    by_pk = {row[group_key]: row for row in grouped_qs}
+    now = timezone.now()
+    for target in targets:
+        data = by_pk.get(target.pk, {})
+        for alias, field_name in field_map.items():
+            setattr(target, field_name, data.get(alias, 0))
+        target.updated_at = now
+    type(targets[0]).objects.bulk_update(
+        targets, list(field_map.values()) + ['updated_at'],
+    )
+
+
 def _refresh_folder_counts(folder):
-    """Recompute message_count and unread_count for a folder."""
-    from django.db.models import Count, Q
+    """Recompute message_count and unread_count for a single folder.
+
+    Single-folder fast path: 1 aggregate + 1 UPDATE via ``save()``. For N
+    folders, prefer ``_refresh_folders_counts_bulk`` which collapses the work
+    into 2 queries total regardless of N.
+    """
     counts = MailMessage.objects.filter(
         folder=folder, deleted_at__isnull=True,
     ).aggregate(
@@ -41,6 +93,61 @@ def _refresh_folder_counts(folder):
     folder.message_count = counts['message_count']
     folder.unread_count = counts['unread_count']
     folder.save(update_fields=['message_count', 'unread_count', 'updated_at'])
+
+
+def _refresh_folders_counts_bulk(folder_ids):
+    """Refresh message_count + unread_count for many folders in 2 queries.
+
+    Replaces the naive ``for folder in ...: _refresh_folder_counts(folder)``
+    pattern (2N queries) with a single ``GROUP BY folder_id`` aggregate and a
+    single ``bulk_update`` via :func:`_bulk_refresh_counts`.
+    """
+    folder_ids = list(folder_ids)
+    if not folder_ids:
+        return
+    grouped = MailMessage.objects.filter(
+        folder_id__in=folder_ids, deleted_at__isnull=True,
+    ).values('folder_id').annotate(
+        msg_count=Count('pk'),
+        unread_cnt=Count('pk', filter=Q(is_read=False)),
+    )
+    folders = list(MailFolder.objects.filter(uuid__in=folder_ids))
+    _bulk_refresh_counts(
+        folders, 'folder_id', grouped,
+        {'msg_count': 'message_count', 'unread_cnt': 'unread_count'},
+    )
+
+
+def _refresh_label_counts(labels):
+    """Recompute unread_count for one or more labels in 2 queries.
+
+    Accepts a single MailLabel, a queryset, or any iterable of MailLabels.
+    Uses a single ``GROUP BY label_id`` aggregate + ``bulk_update`` regardless
+    of N, instead of the previous 2N queries (1 COUNT + 1 UPDATE per label).
+    """
+    if isinstance(labels, MailLabel):
+        labels = [labels]
+    labels = list(labels)
+    if not labels:
+        return
+    grouped = MailMessageLabel.objects.filter(
+        label_id__in=[lbl.pk for lbl in labels],
+        message__is_read=False,
+        message__deleted_at__isnull=True,
+    ).values('label_id').annotate(
+        unread_cnt=Count('pk'),
+    )
+    _bulk_refresh_counts(
+        labels, 'label_id', grouped,
+        {'unread_cnt': 'unread_count'},
+    )
+
+
+def _refresh_message_label_counts(message):
+    """Refresh unread counts for all labels attached to a message."""
+    label_ids = MailMessageLabel.objects.filter(message=message).values_list('label_id', flat=True)
+    if label_ids:
+        _refresh_label_counts(MailLabel.objects.filter(pk__in=label_ids))
 
 
 @extend_schema(tags=['Mail'])
@@ -219,6 +326,106 @@ class MailAccountSyncView(APIView):
 
 
 @extend_schema(tags=['Mail'])
+class MailLabelListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="List labels for a mail account",
+        parameters=[OpenApiParameter('account', str, required=True)],
+    )
+    def get(self, request):
+        account_id = request.query_params.get('account')
+        if not account_id:
+            return Response(
+                {'detail': 'account query parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            account = MailAccount.objects.get(uuid=account_id, owner=request.user)
+        except MailAccount.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        labels = MailLabel.objects.filter(account=account)
+        return Response(MailLabelSerializer(labels, many=True).data)
+
+    @extend_schema(summary="Create a label", request=MailLabelCreateSerializer)
+    def post(self, request):
+        ser = MailLabelCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        try:
+            account = MailAccount.objects.get(
+                uuid=ser.validated_data['account_id'], owner=request.user,
+            )
+        except MailAccount.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if MailLabel.objects.filter(account=account, name=ser.validated_data['name']).exists():
+            return Response(
+                {'detail': 'A label with this name already exists for this account.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        label = MailLabel.objects.create(
+            account=account,
+            name=ser.validated_data['name'],
+            color=ser.validated_data.get('color', ''),
+            icon=ser.validated_data.get('icon', ''),
+        )
+        return Response(MailLabelSerializer(label).data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(tags=['Mail'])
+class MailLabelDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_label(self, request, uuid):
+        try:
+            label = MailLabel.objects.select_related('account').get(uuid=uuid)
+        except MailLabel.DoesNotExist:
+            return None
+        if label.account.owner != request.user:
+            return None
+        return label
+
+    @extend_schema(summary="Update a label", request=MailLabelUpdateSerializer)
+    def patch(self, request, uuid):
+        label = self._get_label(request, uuid)
+        if not label:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        ser = MailLabelUpdateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        new_name = ser.validated_data.get('name')
+        if new_name and new_name != label.name:
+            if MailLabel.objects.filter(account=label.account, name=new_name).exists():
+                return Response(
+                    {'detail': 'A label with this name already exists for this account.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        update_fields = ['updated_at']
+        for field in ('name', 'color', 'icon', 'position'):
+            if field in ser.validated_data:
+                setattr(label, field, ser.validated_data[field])
+                update_fields.append(field)
+        if len(update_fields) > 1:
+            label.save(update_fields=update_fields)
+
+        return Response(MailLabelSerializer(label).data)
+
+    @extend_schema(summary="Delete a label")
+    def delete(self, request, uuid):
+        label = self._get_label(request, uuid)
+        if not label:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        label.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=['Mail'])
 class MailFolderListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -385,6 +592,7 @@ class MailFolderMarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Mark all messages in a folder as read")
+    @transaction.atomic
     def post(self, request, uuid):
         try:
             folder = MailFolder.objects.select_related('account').get(uuid=uuid)
@@ -405,13 +613,15 @@ class MailFolderMarkReadView(APIView):
 
 
 @extend_schema(tags=['Mail'])
-class MailMessageListView(APIView):
+class MailMessageListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         summary="List messages in a folder",
         parameters=[
-            OpenApiParameter('folder', str, required=True),
+            OpenApiParameter('folder', str, required=False),
+            OpenApiParameter('label', str, required=False),
+            OpenApiParameter('inbox', str, required=False, description='Pass "all" to get messages from all inbox folders'),
             OpenApiParameter('page', int, required=False),
             OpenApiParameter('search', str, required=False),
             OpenApiParameter('unread', bool, required=False),
@@ -421,25 +631,53 @@ class MailMessageListView(APIView):
     )
     def get(self, request):
         folder_id = request.query_params.get('folder')
-        if not folder_id:
+        label_id = request.query_params.get('label')
+        inbox_mode = request.query_params.get('inbox')
+
+        if not folder_id and not label_id and inbox_mode != 'all':
             return Response(
-                {'detail': 'folder query parameter is required'},
+                {'detail': 'folder, label, or inbox=all query parameter is required'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            folder = MailFolder.objects.select_related('account').get(uuid=folder_id)
-        except MailFolder.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        folder = None
+        label = None
 
-        if folder.account.owner != request.user:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        if label_id:
+            try:
+                label = MailLabel.objects.select_related('account').get(uuid=label_id)
+            except MailLabel.DoesNotExist:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            if label.account.owner != request.user:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if folder_id:
+            try:
+                folder = MailFolder.objects.select_related('account').get(uuid=folder_id)
+            except MailFolder.DoesNotExist:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            if folder.account.owner != request.user:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Build base queryset
+        if inbox_mode == 'all' and not folder and not label:
+            qs = MailMessage.objects.filter(
+                account_id__in=user_account_ids(request.user),
+                folder__folder_type=MailFolder.FolderType.INBOX,
+                deleted_at__isnull=True,
+            )
+        elif folder:
+            qs = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
+        else:
+            # label-only: cross-folder for the label's account
+            qs = MailMessage.objects.filter(account=label.account, deleted_at__isnull=True)
+
+        if label:
+            qs = qs.filter(message_labels__label=label)
 
         page = int(request.query_params.get('page', 1))
         page_size = 50
         offset = (page - 1) * page_size
-
-        qs = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
 
         # Apply optional filters
         search = request.query_params.get('search', '').strip()
@@ -459,6 +697,9 @@ class MailMessageListView(APIView):
         total = qs.count()
         messages = (
             qs.annotate(attachments_count=Count('attachments'))
+            .prefetch_related(
+                Prefetch('message_labels', queryset=MailMessageLabel.objects.select_related('label').order_by('label__position', 'label__name'))
+            )
             .order_by('-date')[offset:offset + page_size]
         )
 
@@ -479,7 +720,10 @@ class MailMessageDetailView(APIView):
             msg = (
                 MailMessage.objects
                 .select_related('account', 'folder')
-                .prefetch_related('attachments')
+                .prefetch_related(
+                    'attachments',
+                    Prefetch('message_labels', queryset=MailMessageLabel.objects.select_related('label').order_by('label__position', 'label__name')),
+                )
                 .get(uuid=uuid)
             )
         except MailMessage.DoesNotExist:
@@ -531,8 +775,11 @@ class MailMessageDetailView(APIView):
         if 'ai_summary' in ser.validated_data:
             msg.ai_summary = ser.validated_data['ai_summary']
 
-        msg.save()
-        _refresh_folder_counts(msg.folder)
+        with transaction.atomic():
+            msg.save()
+            _refresh_folder_counts(msg.folder)
+            if 'is_read' in ser.validated_data:
+                _refresh_message_label_counts(msg)
         return Response(MailMessageDetailSerializer(msg).data)
 
     @extend_schema(summary="Soft-delete a message")
@@ -543,15 +790,17 @@ class MailMessageDetailView(APIView):
 
         from .services.imap import delete_message
 
-        msg.deleted_at = timezone.now()
-        msg.save(update_fields=['deleted_at', 'updated_at'])
+        with transaction.atomic():
+            msg.deleted_at = timezone.now()
+            msg.save(update_fields=['deleted_at', 'updated_at'])
+            _refresh_folder_counts(msg.folder)
+            _refresh_message_label_counts(msg)
 
         try:
             delete_message(msg.account, msg)
         except Exception:
             logger.warning("Failed to delete message on IMAP for %s", msg.uuid)
 
-        _refresh_folder_counts(msg.folder)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -629,7 +878,7 @@ class MailBatchActionView(APIView):
 
         messages = MailMessage.objects.filter(
             uuid__in=message_ids,
-            account__owner=request.user,
+            account_id__in=user_account_ids(request.user),
             deleted_at__isnull=True,
         ).select_related('account', 'folder')
 
@@ -701,12 +950,21 @@ class MailBatchActionView(APIView):
             except Exception:
                 logger.warning("Batch action '%s' failed for message %s", action, msg.uuid)
 
-        if to_bulk_update:
-            MailMessage.objects.bulk_update(to_bulk_update, list(bulk_update_fields))
+        with transaction.atomic():
+            if to_bulk_update:
+                MailMessage.objects.bulk_update(to_bulk_update, list(bulk_update_fields))
 
-        # Refresh counts for all affected folders
-        for folder in MailFolder.objects.filter(uuid__in=affected_folders):
-            _refresh_folder_counts(folder)
+            # Refresh counts for all affected folders in a single batch:
+            # 1 aggregate + 1 bulk_update instead of 2N queries.
+            _refresh_folders_counts_bulk(affected_folders)
+
+            # Refresh label counts for read/unread/delete actions
+            if action in ('mark_read', 'mark_unread', 'delete'):
+                affected_label_ids = MailMessageLabel.objects.filter(
+                    message__in=messages,
+                ).values_list('label_id', flat=True).distinct()
+                if affected_label_ids:
+                    _refresh_label_counts(MailLabel.objects.filter(pk__in=affected_label_ids))
 
         return Response({'processed': processed})
 
@@ -800,6 +1058,68 @@ class MailDraftView(APIView):
 
 
 @extend_schema(tags=['Mail'])
+class MailMessageLabelView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_message(self, request, uuid):
+        try:
+            msg = MailMessage.objects.select_related('account').get(uuid=uuid)
+        except MailMessage.DoesNotExist:
+            return None
+        if msg.account.owner != request.user:
+            return None
+        return msg
+
+    @extend_schema(summary="Assign labels to a message", request=MailLabelAssignSerializer)
+    @transaction.atomic
+    def post(self, request, uuid):
+        msg = self._get_message(request, uuid)
+        if not msg:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        ser = MailLabelAssignSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        labels = MailLabel.objects.filter(
+            uuid__in=ser.validated_data['label_ids'],
+            account=msg.account,
+        )
+        if labels.count() != len(ser.validated_data['label_ids']):
+            return Response(
+                {'detail': 'One or more labels do not belong to this account.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        MailMessageLabel.objects.bulk_create(
+            [MailMessageLabel(message=msg, label=lbl) for lbl in labels],
+            ignore_conflicts=True,
+        )
+        _refresh_label_counts(labels)
+        return Response({'status': 'ok'})
+
+    @extend_schema(summary="Remove labels from a message", request=MailLabelAssignSerializer)
+    @transaction.atomic
+    def delete(self, request, uuid):
+        msg = self._get_message(request, uuid)
+        if not msg:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        ser = MailLabelAssignSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        affected_labels = list(MailLabel.objects.filter(
+            pk__in=ser.validated_data['label_ids'],
+            account=msg.account,
+        ))
+        MailMessageLabel.objects.filter(
+            message=msg,
+            label_id__in=ser.validated_data['label_ids'],
+        ).delete()
+        _refresh_label_counts(affected_labels)
+        return Response({'status': 'ok'})
+
+
+@extend_schema(tags=['Mail'])
 class MailAttachmentDownloadView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -884,7 +1204,8 @@ class MailAttachmentSaveToFilesView(APIView):
 
 
 @extend_schema(tags=['Mail'])
-class ContactAutocompleteView(APIView):
+class ContactAutocompleteView(CacheControlMixin, APIView):
+    cache_max_age = 300
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -899,14 +1220,14 @@ class ContactAutocompleteView(APIView):
         if len(q) < 2:
             return Response([])
 
-        account_filter = Q(account__owner=request.user)
+        account_filter = Q(account_id__in=user_account_ids(request.user))
         account_id = request.query_params.get('account_id')
         if account_id:
             account_filter &= Q(account__uuid=account_id)
 
         q_lower = q.lower()
 
-        messages = (
+        rows = (
             MailMessage.objects
             .filter(account_filter, deleted_at__isnull=True)
             .filter(
@@ -915,19 +1236,19 @@ class ContactAutocompleteView(APIView):
                 | Q(cc_addresses__icontains=q)
             )
             .order_by('-date')
-            .only('from_address', 'to_addresses', 'cc_addresses')[:500]
+            .values('from_address', 'to_addresses', 'cc_addresses')[:500]
         )
 
         # Extract all addresses and count frequency
         email_count = Counter()
         email_names = defaultdict(Counter)
 
-        for msg in messages:
+        for row in rows:
             addresses = []
-            fa = msg.from_address
+            fa = row['from_address']
             if isinstance(fa, dict) and fa.get('email'):
                 addresses.append(fa)
-            for field in (msg.to_addresses, msg.cc_addresses):
+            for field in (row['to_addresses'], row['cc_addresses']):
                 if isinstance(field, list):
                     addresses.extend(
                         a for a in field if isinstance(a, dict) and a.get('email')

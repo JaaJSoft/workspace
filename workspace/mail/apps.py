@@ -34,8 +34,10 @@ class MailConfig(AppConfig):
 
         def _mail_pending_actions(user):
             from workspace.mail.models import MailMessage
+            from workspace.mail.queries import user_account_ids
             return MailMessage.objects.filter(
-                account__owner=user,
+                account_id__in=user_account_ids(user),
+                account__is_active=True,
                 is_read=False,
                 deleted_at__isnull=True,
             ).count()
@@ -61,3 +63,15 @@ class MailConfig(AppConfig):
         from workspace.ai.tool_registry import tool_registry
         from workspace.mail.ai_tools import MailToolProvider
         tool_registry.register_provider(MailToolProvider())
+
+        from workspace.core.activity_registry import ActivityProviderInfo, activity_registry
+        from workspace.mail.activity import MailActivityProvider
+        activity_registry.register(ActivityProviderInfo(
+            slug='mail',
+            label='Mail',
+            icon='mail',
+            color='warning',
+            provider_cls=MailActivityProvider,
+        ))
+
+        import workspace.mail.signals  # noqa: F401

@@ -11,6 +11,7 @@ from workspace.mail.models import MailAccount, MailAttachment, MailFolder, MailM
 
 User = get_user_model()
 
+# Event: 2026-03-01 14:00–15:00 UTC
 ICS_REQUEST = (
     "BEGIN:VCALENDAR\r\n"
     "METHOD:REQUEST\r\n"
@@ -47,6 +48,11 @@ ICS_CANCEL = (
     "END:VEVENT\r\n"
     "END:VCALENDAR\r\n"
 )
+
+# "now" well before the event → event is in the future
+BEFORE_EVENT = datetime(2026, 2, 1, tzinfo=timezone.utc)
+# "now" well after the event → event is in the past
+AFTER_EVENT = datetime(2026, 4, 1, tzinfo=timezone.utc)
 
 
 class ICSProcessorMixin:
@@ -85,10 +91,11 @@ class ICSProcessorMixin:
         return mail_msg
 
 
+@patch('workspace.calendar.services.ics_processor.django_tz.now', return_value=BEFORE_EVENT)
 @patch('workspace.calendar.services.ics_processor.notify')
 class ProcessRequestTest(ICSProcessorMixin, TestCase):
 
-    def test_creates_event_from_ics_request(self, mock_notify):
+    def test_creates_event_from_ics_request(self, mock_notify, _mock_now):
         mail_msg = self._create_mail_with_ics(ICS_REQUEST)
         process_calendar_email(mail_msg)
 
@@ -96,7 +103,7 @@ class ProcessRequestTest(ICSProcessorMixin, TestCase):
         self.assertEqual(event.title, 'Sprint Review')
         self.assertEqual(event.description, 'Weekly sprint review meeting')
         self.assertEqual(event.location, 'Room 42')
-        self.assertEqual(event.organizer_email, 'alice@example.com')
+        self.assertEqual(event.external_organizer, 'alice@example.com')
         self.assertEqual(event.ical_sequence, 0)
         self.assertEqual(event.owner, self.user)
         self.assertEqual(event.source_message, mail_msg)
@@ -110,7 +117,7 @@ class ProcessRequestTest(ICSProcessorMixin, TestCase):
         )
         self.assertFalse(event.all_day)
 
-    def test_creates_invitation_calendar_for_account(self, mock_notify):
+    def test_creates_invitation_calendar_for_account(self, mock_notify, _mock_now):
         mail_msg = self._create_mail_with_ics(ICS_REQUEST)
         process_calendar_email(mail_msg)
 
@@ -119,7 +126,7 @@ class ProcessRequestTest(ICSProcessorMixin, TestCase):
         self.assertEqual(cal.color, 'secondary')
         self.assertEqual(cal.owner, self.user)
 
-    def test_reuses_existing_invitation_calendar(self, mock_notify):
+    def test_reuses_existing_invitation_calendar(self, mock_notify, _mock_now):
         Calendar.objects.create(
             name='Invitations (bob@test.com)',
             color='secondary',
@@ -132,7 +139,7 @@ class ProcessRequestTest(ICSProcessorMixin, TestCase):
 
         self.assertEqual(Calendar.objects.filter(mail_account=self.account).count(), 1)
 
-    def test_creates_event_member_pending(self, mock_notify):
+    def test_creates_event_member_pending(self, mock_notify, _mock_now):
         mail_msg = self._create_mail_with_ics(ICS_REQUEST)
         process_calendar_email(mail_msg)
 
@@ -140,7 +147,7 @@ class ProcessRequestTest(ICSProcessorMixin, TestCase):
         member = EventMember.objects.get(event=event, user=self.user)
         self.assertEqual(member.status, EventMember.Status.PENDING)
 
-    def test_sends_notification_on_new_event(self, mock_notify):
+    def test_sends_notification_on_new_event(self, mock_notify, _mock_now):
         mail_msg = self._create_mail_with_ics(ICS_REQUEST)
         process_calendar_email(mail_msg)
 
@@ -153,7 +160,7 @@ class ProcessRequestTest(ICSProcessorMixin, TestCase):
             url=f'/calendar?event={event.pk}',
         )
 
-    def test_duplicate_ics_ignored(self, mock_notify):
+    def test_duplicate_ics_ignored(self, mock_notify, _mock_now):
         mail_msg1 = self._create_mail_with_ics(ICS_REQUEST, uid=1)
         process_calendar_email(mail_msg1)
 
@@ -170,10 +177,11 @@ class ProcessRequestTest(ICSProcessorMixin, TestCase):
         mock_notify.assert_not_called()
 
 
+@patch('workspace.calendar.services.ics_processor.django_tz.now', return_value=BEFORE_EVENT)
 @patch('workspace.calendar.services.ics_processor.notify')
 class ProcessUpdateTest(ICSProcessorMixin, TestCase):
 
-    def test_updates_event_with_higher_sequence(self, mock_notify):
+    def test_updates_event_with_higher_sequence(self, mock_notify, _mock_now):
         mail_msg1 = self._create_mail_with_ics(ICS_REQUEST, uid=1)
         process_calendar_email(mail_msg1)
 
@@ -196,7 +204,7 @@ class ProcessUpdateTest(ICSProcessorMixin, TestCase):
             url=f'/calendar?event={event.pk}',
         )
 
-    def test_ignores_lower_sequence(self, mock_notify):
+    def test_ignores_lower_sequence(self, mock_notify, _mock_now):
         # First create with the update (sequence=2)
         mail_msg1 = self._create_mail_with_ics(ICS_UPDATE, uid=1)
         process_calendar_email(mail_msg1)
@@ -214,10 +222,11 @@ class ProcessUpdateTest(ICSProcessorMixin, TestCase):
         mock_notify.assert_not_called()
 
 
+@patch('workspace.calendar.services.ics_processor.django_tz.now', return_value=BEFORE_EVENT)
 @patch('workspace.calendar.services.ics_processor.notify')
 class ProcessCancelTest(ICSProcessorMixin, TestCase):
 
-    def test_cancel_marks_event_cancelled(self, mock_notify):
+    def test_cancel_marks_event_cancelled(self, mock_notify, _mock_now):
         mail_msg1 = self._create_mail_with_ics(ICS_REQUEST, uid=1)
         process_calendar_email(mail_msg1)
 
@@ -229,7 +238,7 @@ class ProcessCancelTest(ICSProcessorMixin, TestCase):
         event = Event.objects.get(ical_uid='evt-abc-123@example.com')
         self.assertTrue(event.is_cancelled)
 
-    def test_cancel_notifies_user(self, mock_notify):
+    def test_cancel_notifies_user(self, mock_notify, _mock_now):
         mail_msg1 = self._create_mail_with_ics(ICS_REQUEST, uid=1)
         process_calendar_email(mail_msg1)
 
@@ -245,3 +254,48 @@ class ProcessCancelTest(ICSProcessorMixin, TestCase):
             title='Cancelled: Sprint Review',
             url=f'/calendar?event={event.pk}',
         )
+
+
+@patch('workspace.calendar.services.ics_processor.django_tz.now', return_value=AFTER_EVENT)
+@patch('workspace.calendar.services.ics_processor.notify')
+class PastEventNoNotificationTest(ICSProcessorMixin, TestCase):
+    """Past events are still created/updated/cancelled but must not trigger notifications."""
+
+    def test_no_notification_for_past_invitation(self, mock_notify, _mock_now):
+        mail_msg = self._create_mail_with_ics(ICS_REQUEST)
+        process_calendar_email(mail_msg)
+
+        # Event is still created
+        event = Event.objects.get(ical_uid='evt-abc-123@example.com')
+        self.assertEqual(event.title, 'Sprint Review')
+        member = EventMember.objects.get(event=event, user=self.user)
+        self.assertEqual(member.status, EventMember.Status.PENDING)
+        # No notification
+        mock_notify.assert_not_called()
+
+    def test_no_notification_for_past_update(self, mock_notify, _mock_now):
+        mail_msg1 = self._create_mail_with_ics(ICS_REQUEST, uid=1)
+        process_calendar_email(mail_msg1)
+
+        mail_msg2 = self._create_mail_with_ics(ICS_UPDATE, uid=2)
+        process_calendar_email(mail_msg2)
+
+        # Event is still updated
+        event = Event.objects.get(ical_uid='evt-abc-123@example.com')
+        self.assertEqual(event.title, 'Sprint Review (Updated)')
+        self.assertEqual(event.ical_sequence, 2)
+        # No notification at all
+        mock_notify.assert_not_called()
+
+    def test_no_notification_for_past_cancel(self, mock_notify, _mock_now):
+        mail_msg1 = self._create_mail_with_ics(ICS_REQUEST, uid=1)
+        process_calendar_email(mail_msg1)
+
+        mail_msg2 = self._create_mail_with_ics(ICS_CANCEL, uid=2)
+        process_calendar_email(mail_msg2)
+
+        # Event is still cancelled
+        event = Event.objects.get(ical_uid='evt-abc-123@example.com')
+        self.assertTrue(event.is_cancelled)
+        # No notification at all
+        mock_notify.assert_not_called()

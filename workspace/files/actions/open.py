@@ -1,3 +1,4 @@
+from workspace.files.services import FilePermission
 from . import ActionRegistry
 from .base import ActionCategory, BaseAction
 
@@ -11,12 +12,12 @@ class ViewAction(BaseAction):
     node_types = ('file',)
     keyboard_shortcut = 'Enter / Space'
 
-    def is_available(self, user, file_obj, *, is_owner, share_permission=None):
+    def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:
             return False
         if not file_obj.is_viewable():
             return False
-        return is_owner or share_permission is not None
+        return permission is not None
 
 
 @ActionRegistry.register
@@ -28,10 +29,10 @@ class OpenFolderAction(BaseAction):
     node_types = ('folder',)
     keyboard_shortcut = 'Enter'
 
-    def is_available(self, user, file_obj, *, is_owner, share_permission=None):
+    def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:
             return False
-        return is_owner
+        return permission is not None and permission >= FilePermission.EDIT
 
 
 @ActionRegistry.register
@@ -42,7 +43,7 @@ class OpenNewTabAction(BaseAction):
     category = ActionCategory.OPEN
     node_types = ('file',)
 
-    def is_available(self, user, file_obj, *, is_owner, share_permission=None):
+    def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:
             return False
-        return is_owner or share_permission is not None
+        return permission is not None

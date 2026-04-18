@@ -2,11 +2,15 @@ from datetime import datetime, time
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
+from django.urls import reverse
 from django.utils import timezone
 
 from workspace.calendar.upcoming import get_upcoming_for_user
-from workspace.core.activity_service import annotate_time_ago, get_recent_events, get_sources
+from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources
+from workspace.core.activity_registry import activity_registry
 from workspace.core.module_registry import registry
+
+from django.conf import settings as django_settings
 
 ACTIVITY_LIMIT = 10
 
@@ -43,6 +47,8 @@ def _get_activity_context(user, source=None, offset=0, search=None):
         'activity_search': search or '',
         'activity_has_more': has_more,
         'activity_next_offset': offset + ACTIVITY_LIMIT,
+        'activity_prefix': 'dashboard-activity',
+        'activity_base_url': reverse('dashboard:activity_feed'),
     }
 
 
@@ -57,6 +63,8 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
     context = {
         'modules': modules,
         'upcoming_events': _get_upcoming_events(user),
+        'usage_stats': activity_registry.get_stats(user.id),
+        'storage_quota': django_settings.STORAGE_QUOTA_BYTES,
     }
     if include_activity:
         context.update(_get_activity_context(user, source=activity_source))
@@ -88,7 +96,7 @@ def activity_feed(request):
             activity_source=source,
         )
         context.update(_get_activity_context(request.user, source=source, offset=offset, search=search))
-        template = 'dashboard/partials/activity_page.html' if append else 'dashboard/partials/activity_feed.html'
+        template = 'ui/partials/activity_page.html' if append else 'ui/partials/activity_feed.html'
         return render(request, template, context)
 
     context = _build_dashboard_context(request.user, activity_source=source)

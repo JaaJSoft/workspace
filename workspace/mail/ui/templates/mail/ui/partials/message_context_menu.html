@@ -49,6 +49,19 @@
       </button>
     </li>
     <hr class="my-1 border-base-300" />
+    <template x-for="label in _getMsgCtxAccountLabels()" :key="label.uuid">
+      <li>
+        <button type="button" class="gap-3 rounded focus:bg-base-content/10 active:!bg-base-content/10" @click.stop="toggleMsgLabel(label)">
+          <span :class="label.color && label.color !== 'ghost' ? 'text-' + label.color : 'text-base-content/50'">
+            <i :data-lucide="label.icon || 'tag'" class="w-4 h-4"></i>
+          </span>
+          <span class="truncate" x-text="label.name"></span>
+          <i data-lucide="check" class="w-3.5 h-3.5 text-warning"
+             x-show="_msgCtxHasLabel(label.uuid)" x-cloak></i>
+        </button>
+      </li>
+    </template>
+    <hr class="my-1 border-base-300" />
     <li>
       <button type="button" class="gap-3 rounded text-error" @click="msgCtxAction('delete')">
         <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -57,4 +70,3 @@
     </li>
   </ul>
 </div>
-

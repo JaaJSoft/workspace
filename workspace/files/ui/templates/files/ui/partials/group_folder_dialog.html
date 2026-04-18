@@ -1,0 +1,41 @@
+<!-- Create Group Folder Dialog -->
+<dialog id="create-group-folder-dialog" class="modal">
+  <div class="modal-box" x-data="{ selectedGroup: '' }">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
+      <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-secondary/10 text-secondary">
+        <i data-lucide="users" class="w-5 h-5"></i>
+      </div>
+      Create Group Folder
+    </h3>
+    {% if available_groups %}
+    <form @submit.prevent="if (selectedGroup) { window.dispatchEvent(new CustomEvent('create-group-folder', { detail: { groupId: parseInt(selectedGroup), groupName: $refs.groupSelect.options[$refs.groupSelect.selectedIndex].text } })); }">
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">Group</span>
+        </label>
+        <select x-model="selectedGroup" x-ref="groupSelect" class="select select-bordered w-full" required>
+          <option value="" disabled selected>Select a group</option>
+          {% for g in available_groups %}
+          <option value="{{ g.id }}">{{ g.name }}</option>
+          {% endfor %}
+        </select>
+        <label class="label">
+          <span class="label-text-alt">The folder will be named after the group</span>
+        </label>
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('create-group-folder-dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm" :disabled="!selectedGroup">Create</button>
+      </div>
+    </form>
+    {% else %}
+    <p class="text-base-content/60 text-sm">All your groups already have a folder.</p>
+    <div class="modal-action">
+      <button type="button" class="btn btn-sm" onclick="document.getElementById('create-group-folder-dialog').close()">Close</button>
+    </div>
+    {% endif %}
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

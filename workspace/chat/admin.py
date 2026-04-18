@@ -12,12 +12,22 @@ class ConversationMemberInline(admin.TabularInline):
     readonly_fields = ('uuid', 'joined_at')
 
 
+class ConversationSummaryInline(admin.StackedInline):
+    from workspace.ai.models import ConversationSummary
+    model = ConversationSummary
+    extra = 0
+    max_num = 1
+    readonly_fields = ('content', 'up_to', 'updated_at')
+    verbose_name = 'AI summary'
+    verbose_name_plural = 'AI summary'
+
+
 @admin.register(Conversation)
 class ConversationAdmin(admin.ModelAdmin):
     list_display = ('uuid', 'kind', 'title', 'created_by', 'created_at', 'updated_at')
     list_filter = ('kind',)
     search_fields = ('title', 'description', 'created_by__username')
-    inlines = [ConversationMemberInline]
+    inlines = [ConversationMemberInline, ConversationSummaryInline]
 
 
 class MessageAttachmentInline(admin.TabularInline):

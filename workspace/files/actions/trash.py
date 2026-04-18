@@ -1,3 +1,4 @@
+from workspace.files.services import FilePermission
 from . import ActionRegistry
 from .base import ActionCategory, BaseAction
 
@@ -11,10 +12,10 @@ class RestoreAction(BaseAction):
     node_types = ('file', 'folder')
     supports_bulk = True
 
-    def is_available(self, user, file_obj, *, is_owner, share_permission=None):
+    def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is None:
             return False
-        return is_owner
+        return permission is not None and permission >= FilePermission.EDIT
 
 
 @ActionRegistry.register
@@ -27,7 +28,7 @@ class PurgeAction(BaseAction):
     css_class = 'text-error'
     supports_bulk = True
 
-    def is_available(self, user, file_obj, *, is_owner, share_permission=None):
+    def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is None:
             return False
-        return is_owner
+        return permission is not None and permission >= FilePermission.EDIT

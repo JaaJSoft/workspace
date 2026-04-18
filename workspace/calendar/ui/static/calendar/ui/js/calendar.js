@@ -20,6 +20,13 @@ window.calendarApp = function calendarApp(calendarsData) {
     calendarModalMode: 'create',
     calendarForm: { uuid: null, name: '', color: 'primary' },
 
+    // External calendars
+    externalCalendars: [],
+    showExternalModal: false,
+    externalForm: { name: '', url: '', color: 'primary' },
+    savingExternal: false,
+    syncingExternal: {},  // { [calendar_uuid]: true }
+
     // Panel & modal state
     showPanel: false,
     showModal: false,
@@ -39,6 +46,7 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
     _panelRaw: null,
     eventOwner: null,
+    externalOrganizer: null,
     eventMembers: [],
     myInviteStatus: null,
     selectedMembers: [],
@@ -52,7 +60,7 @@ window.calendarApp = function calendarApp(calendarsData) {
     scopeResolve: null,
 
     // Context menu state
-    ctxMenu: { open: false, x: 0, y: 0, event: null, isOwner: false, inviteStatus: null },
+    ctxMenu: { open: false, x: 0, y: 0, event: null, isOwner: false, isExternal: false, inviteStatus: null },
 
     // Poll state
     showPollListModal: false,
@@ -73,11 +81,17 @@ window.calendarApp = function calendarApp(calendarsData) {
     pollSubmitting: false,
     pollFinalizeSlotId: null,
 
-    csrfToken() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value
-        || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
-        || '';
+    // Agenda view state (custom list view, not FullCalendar)
+    agenda: {
+      events: [],
+      nextAfter: null,
+      loading: false,
+      initialLoaded: false,
+      seenIds: new Set(),
     },
+
+    // Desktop hover capability (excludes touch-primary devices)
+    _hasHover: window.matchMedia('(hover: hover)').matches,
 
     init() {
       // Initialize visible calendars (all visible by default)
@@ -98,13 +112,11 @@ window.calendarApp = function calendarApp(calendarsData) {
       // Load preferences from API
       this._loadPrefs();
 
-      if (this.isMobile()) this.collapsed = true;
-      window.matchMedia('(max-width: 1023px)').addEventListener('change', (e) => {
-        if (e.matches) this.collapsed = true;
-      });
+      // Load external calendars
+      this._loadExternalCalendars();
 
-      this.$watch('collapsed', () => {
-        setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 350);
+      window.matchMedia('(max-width: 1023px)').addEventListener('change', () => {
+        if (this.calendar) this.$nextTick(() => this.calendar.updateSize());
       });
 
       this.$watch('showPanel', () => {
@@ -113,7 +125,6 @@ window.calendarApp = function calendarApp(calendarsData) {
 
       this.$nextTick(() => {
         this.initCalendar();
-        if (typeof lucide !== 'undefined') lucide.createIcons();
       });
     },
 
@@ -125,6 +136,12 @@ window.calendarApp = function calendarApp(calendarsData) {
         .then(data => {
           if (data?.value && typeof data.value === 'object') {
             this.prefs = { ...this._prefsDefaults, ...data.value };
+            // Migrate legacy view names: listWeek (original FC list view) and
+            // listAgenda (intermediate rename) → agenda (current name).
+            if (this.prefs.defaultView === 'listWeek' || this.prefs.defaultView === 'listAgenda') {
+              this.prefs.defaultView = 'agenda';
+              this._savePrefs();
+            }
             this._applyAllPrefs();
           }
         })
@@ -135,7 +152,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       fetch(this._prefsUrl, {
         method: 'PUT',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify({ value: this.prefs }),
       }).catch(() => {});
     },
@@ -155,9 +172,10 @@ window.calendarApp = function calendarApp(calendarsData) {
       // Only apply default view if URL didn't specify one
       const urlView = new URLSearchParams(window.location.search).get('view');
       if (!urlView && this.currentView !== this.prefs.defaultView) {
-        this.calendar.changeView(this.prefs.defaultView);
-        this.currentView = this.prefs.defaultView;
-        this._syncTitle();
+        // Route through changeView so that 'agenda' (custom Alpine view) is
+        // handled without calling FullCalendar.changeView('agenda') which
+        // would crash since FC doesn't know about the custom view.
+        this.changeView(this.prefs.defaultView);
       }
     },
 
@@ -166,9 +184,8 @@ window.calendarApp = function calendarApp(calendarsData) {
       this._savePrefs();
       if (this.calendar) {
         if (key === 'defaultView') {
-          this.calendar.changeView(value);
-          this.currentView = value;
-          this._syncTitle();
+          // Route through changeView for the same reason as _applyAllPrefs.
+          this.changeView(value);
         } else if (key === 'firstDay') {
           this.calendar.setOption('firstDay', value);
         } else if (key === 'weekNumbers') {
@@ -178,6 +195,7 @@ window.calendarApp = function calendarApp(calendarsData) {
           this.calendar.setOption('slotLabelFormat', this._timeFormatFC());
         } else if (key === 'showDeclined') {
           this.calendar.refetchEvents();
+          this.refetchAgenda();
         }
       }
     },
@@ -186,6 +204,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       const obj = {};
       this.ownedCalendars.forEach(c => obj[c.uuid] = true);
       this.subscribedCalendars.forEach(c => obj[c.uuid] = true);
+      this.externalCalendars.forEach(c => obj[c.uuid] = true);
       this.visibleCalendars = obj;
     },
 
@@ -203,6 +222,10 @@ window.calendarApp = function calendarApp(calendarsData) {
       return window.matchMedia('(max-width: 1023px)').matches;
     },
 
+    sidebarCollapsed() {
+      return this.isMobile() ? false : this.collapsed;
+    },
+
     toggleCollapse() {
       if (this.isMobile()) return;
       this.collapsed = !this.collapsed;
@@ -213,60 +236,113 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.visibleCalendars = { ...this.visibleCalendars, [uuid]: !this.visibleCalendars[uuid] };
       this._saveVisibility();
       if (this.calendar) this.calendar.refetchEvents();
+      this.refetchAgenda();
     },
 
     // --- View controls ---
     calendarPrev() {
+      if (this.currentView === 'agenda') return; // no-op in agenda
       if (this.calendar) { this.calendar.prev(); this._syncTitle(); this._syncUrl(); }
     },
     calendarNext() {
+      if (this.currentView === 'agenda') return; // no-op in agenda
       if (this.calendar) { this.calendar.next(); this._syncTitle(); this._syncUrl(); }
     },
     calendarToday() {
+      if (this.currentView === 'agenda') {
+        this.loadAgenda(); // reset to "from now"
+        this._syncTitle();
+        this._syncUrl();
+        return;
+      }
       if (this.calendar) { this.calendar.today(); this._syncTitle(); this._syncUrl(); }
     },
     changeView(view) {
-      if (this.calendar) {
-        this.ctxMenu.open = false;
-        this.calendar.changeView(view);
-        this.currentView = view;
-        this.calendar.setOption('selectable', view !== 'listWeek');
+      if (!this.calendar) return;
+      this.ctxMenu.open = false;
+
+      if (view === 'agenda') {
+        // Agenda is a custom Alpine view, not a FullCalendar view.
+        this.currentView = 'agenda';
+        if (this.agenda.events.length === 0) {
+          this.loadAgenda();
+        }
         this._syncTitle();
         this._syncUrl();
+        return;
       }
+
+      this.calendar.changeView(view);
+      this.currentView = view;
+      this.calendar.setOption('selectable', true);
+      this._syncTitle();
+      this._syncUrl();
     },
     _syncTitle() {
-      if (this.calendar) this.currentTitle = this.calendar.view.title;
+      if (this.currentView === 'agenda') {
+        this.currentTitle = 'Agenda';
+      } else if (this.calendar) {
+        this.currentTitle = this.calendar.view.title;
+      }
     },
 
     // --- URL state ---
+    // Map internal view names (FullCalendar identifiers + our custom 'agenda')
+    // to clean, user-facing URL slugs. Keeping the internal state as FC names
+    // avoids touching every calendar.changeView(...) / view.type callsite.
+    _viewToUrl(viewType) {
+      return {
+        dayGridMonth: 'month',
+        timeGridWeek: 'week',
+        timeGridDay:  'day',
+        agenda:       'agenda',
+      }[viewType] || viewType;
+    },
+
+    _viewFromUrl(slug) {
+      // Also accepts the legacy FC names for bookmark compat.
+      return {
+        month:         'dayGridMonth',
+        week:          'timeGridWeek',
+        day:           'timeGridDay',
+        agenda:        'agenda',
+        // legacy
+        dayGridMonth:  'dayGridMonth',
+        timeGridWeek:  'timeGridWeek',
+        timeGridDay:   'timeGridDay',
+        listWeek:      'agenda',
+        listAgenda:    'agenda',
+      }[slug] || null;
+    },
+
+    _buildUrlParams() {
+      // Always emit the current view in the URL, regardless of user preference.
+      // (We used to hide the param when it matched prefs.defaultView, but that
+      // made the URL lie about the current state and was confusing to debug.)
+      const params = new URLSearchParams();
+      const viewType = this.currentView;
+      params.set('view', this._viewToUrl(viewType));
+      // Store the current date as YYYY-MM-DD (skipped for agenda since it's always "from now")
+      if (viewType !== 'agenda' && this.calendar) {
+        const d = this.calendar.getDate();
+        const dateStr = d.toISOString().split('T')[0];
+        const today = new Date().toISOString().split('T')[0];
+        if (dateStr !== today) params.set('date', dateStr);
+      }
+      if (this.showPanel && this.form.uuid) params.set('event', this.form.uuid);
+      return params;
+    },
+
     _syncUrl() {
       if (!this.calendar) return;
-      const params = new URLSearchParams();
-      const view = this.calendar.view;
-      if (view.type !== this.prefs.defaultView) params.set('view', view.type);
-      // Store the current date as YYYY-MM-DD
-      const d = this.calendar.getDate();
-      const dateStr = d.toISOString().split('T')[0];
-      const today = new Date().toISOString().split('T')[0];
-      if (dateStr !== today) params.set('date', dateStr);
-      if (this.showPanel && this.form.uuid) params.set('event', this.form.uuid);
-      const qs = params.toString();
+      const qs = this._buildUrlParams().toString();
       const url = window.location.pathname + (qs ? '?' + qs : '');
       history.replaceState(null, '', url);
     },
 
     _pushUrl() {
       if (!this.calendar) return;
-      const params = new URLSearchParams();
-      const view = this.calendar.view;
-      if (view.type !== this.prefs.defaultView) params.set('view', view.type);
-      const d = this.calendar.getDate();
-      const dateStr = d.toISOString().split('T')[0];
-      const today = new Date().toISOString().split('T')[0];
-      if (dateStr !== today) params.set('date', dateStr);
-      if (this.showPanel && this.form.uuid) params.set('event', this.form.uuid);
-      const qs = params.toString();
+      const qs = this._buildUrlParams().toString();
       const url = window.location.pathname + (qs ? '?' + qs : '');
       history.pushState(null, '', url);
     },
@@ -280,7 +356,6 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.$nextTick(() => {
         const input = document.getElementById('calendar-form-name');
         if (input) { input.focus(); input.select(); }
-        if (typeof lucide !== 'undefined') lucide.createIcons();
       });
     },
 
@@ -291,7 +366,6 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.$nextTick(() => {
         const input = document.getElementById('calendar-form-name');
         if (input) { input.focus(); input.select(); }
-        if (typeof lucide !== 'undefined') lucide.createIcons();
       });
     },
 
@@ -303,7 +377,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch('/api/v1/calendar/calendars', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ name: name.trim(), color }),
         });
         if (resp.ok) {
@@ -312,13 +386,12 @@ window.calendarApp = function calendarApp(calendarsData) {
           this.visibleCalendars[cal.uuid] = true;
           this._saveVisibility();
           this.showCalendarModal = false;
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
         }
       } else {
         const resp = await fetch(`/api/v1/calendar/calendars/${uuid}`, {
           method: 'PUT',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ name: name.trim(), color }),
         });
         if (resp.ok) {
@@ -327,6 +400,7 @@ window.calendarApp = function calendarApp(calendarsData) {
           if (idx >= 0) this.ownedCalendars[idx] = updated;
           this.showCalendarModal = false;
           if (this.calendar) this.calendar.refetchEvents();
+          this.refetchAgenda();
         }
       }
     },
@@ -345,13 +419,131 @@ window.calendarApp = function calendarApp(calendarsData) {
       const resp = await fetch(`/api/v1/calendar/calendars/${cal.uuid}`, {
         method: 'DELETE',
         credentials: 'same-origin',
-        headers: { 'X-CSRFToken': this.csrfToken() },
+        headers: { 'X-CSRFToken': getCSRFToken() },
       });
       if (resp.ok || resp.status === 204) {
         this.ownedCalendars = this.ownedCalendars.filter(c => c.uuid !== cal.uuid);
         delete this.visibleCalendars[cal.uuid];
         this._saveVisibility();
         if (this.calendar) this.calendar.refetchEvents();
+        this.refetchAgenda();
+      }
+    },
+
+    // --- External Calendars ---
+    _loadExternalCalendars() {
+      fetch('/api/v1/calendar/external-calendars', { credentials: 'same-origin' })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => {
+          this.externalCalendars = data;
+          // Make newly loaded external calendars visible by default
+          const saved = localStorage.getItem('calendarVisible');
+          if (!saved) {
+            data.forEach(c => { this.visibleCalendars[c.uuid] = true; });
+            this.visibleCalendars = { ...this.visibleCalendars };
+          } else {
+            // Ensure new external calendars get visible if not yet tracked
+            let changed = false;
+            data.forEach(c => {
+              if (!(c.uuid in this.visibleCalendars)) {
+                this.visibleCalendars[c.uuid] = true;
+                changed = true;
+              }
+            });
+            if (changed) {
+              this.visibleCalendars = { ...this.visibleCalendars };
+              this._saveVisibility();
+            }
+          }
+          if (this.calendar) this.calendar.refetchEvents();
+          this.refetchAgenda();
+        })
+        .catch(() => {});
+    },
+
+    createExternalCalendar() {
+      const defaultColor = this.calendarColors[(this.ownedCalendars.length + this.externalCalendars.length) % this.calendarColors.length];
+      this.externalForm = { name: '', url: '', color: defaultColor };
+      this.showExternalModal = true;
+      this.$nextTick(() => {
+        const input = document.getElementById('external-form-url');
+        if (input) { input.focus(); }
+      });
+    },
+
+    async saveExternalCalendar() {
+      const { name, url, color } = this.externalForm;
+      if (!url.trim() || this.savingExternal) return;
+
+      this.savingExternal = true;
+      try {
+        const resp = await fetch('/api/v1/calendar/external-calendars', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ name: (name.trim() || 'External calendar'), url: url.trim(), color }),
+        });
+        if (resp.ok) {
+          const ext = await resp.json();
+          this.externalCalendars.push(ext);
+          this.visibleCalendars[ext.uuid] = true;
+          this._saveVisibility();
+          this.showExternalModal = false;
+          // The sync runs async on the backend; refetch events after a short delay
+          setTimeout(() => {
+            if (this.calendar) this.calendar.refetchEvents();
+            this.refetchAgenda();
+          }, 3000);
+        }
+      } finally {
+        this.savingExternal = false;
+      }
+    },
+
+    async deleteExternalCalendar(ext) {
+      const ok = await AppDialog.confirm({
+        title: 'Remove external calendar',
+        message: `Remove "${ext.name}" and all its synced events?`,
+        okLabel: 'Remove',
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!ok) return;
+
+      const resp = await fetch(`/api/v1/calendar/external-calendars/${ext.external_source.uuid}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+      });
+      if (resp.ok || resp.status === 204) {
+        this.externalCalendars = this.externalCalendars.filter(c => c.uuid !== ext.uuid);
+        delete this.visibleCalendars[ext.uuid];
+        this._saveVisibility();
+        if (this.calendar) this.calendar.refetchEvents();
+        this.refetchAgenda();
+      }
+    },
+
+    async syncExternalCalendar(ext) {
+      if (this.syncingExternal[ext.uuid]) return;
+      this.syncingExternal = { ...this.syncingExternal, [ext.uuid]: true };
+      try {
+        await fetch(`/api/v1/calendar/external-calendars/${ext.external_source.uuid}/sync`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+        });
+        // Refetch after a delay to allow backend sync
+        setTimeout(() => {
+          if (this.calendar) this.calendar.refetchEvents();
+          this.refetchAgenda();
+        }, 3000);
+      } finally {
+        // Keep spinner for a few seconds while backend syncs
+        setTimeout(() => {
+          this.syncingExternal = { ...this.syncingExternal, [ext.uuid]: false };
+        }, 3000);
       }
     },
 
@@ -361,20 +553,31 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (!calendarEl) return;
 
       const params = new URLSearchParams(window.location.search);
-      const urlView = params.get('view') || this.prefs.defaultView;
+      const urlSlug = params.get('view');
+      // URL uses clean slugs (month/week/day/agenda); translate to the
+      // internal view name, falling back to the user's default when absent.
+      // `_viewFromUrl` also accepts legacy slugs (dayGridMonth, listWeek, listAgenda).
+      let urlView = this._viewFromUrl(urlSlug) || this.prefs.defaultView;
       const urlDate = params.get('date');
 
+      // FullCalendar doesn't know about the custom agenda view.
+      // Initialize FullCalendar with a safe fallback view; if the URL asked
+      // for agenda, we'll render the custom Alpine block instead.
+      const fcInitialView = urlView === 'agenda' ? 'dayGridMonth' : urlView;
       this.currentView = urlView;
       this.calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: urlView,
+        initialView: fcInitialView,
         ...(urlDate ? { initialDate: urlDate } : {}),
         headerToolbar: false,
-        locale: 'fr',
+        // Follow the browser's language (e.g. en-US, fr-FR) so FullCalendar
+        // formats weekdays, months, and the toolbar title consistently with
+        // the rest of the UI (which uses `toLocaleDateString(undefined, ...)`).
+        locale: (navigator.language || 'en').toLowerCase(),
         firstDay: this.prefs.firstDay,
         weekNumbers: this.prefs.weekNumbers,
         nowIndicator: true,
         editable: false,
-        selectable: urlView !== 'listWeek',
+        selectable: true,
         selectMirror: true,
         dayMaxEvents: true,
         expandRows: true,
@@ -417,15 +620,21 @@ window.calendarApp = function calendarApp(calendarsData) {
         eventDidMount: (info) => {
           info.el.addEventListener('contextmenu', (e) => {
             e.preventDefault();
+            window._eventCardScheduleHide(info.el);
             this.openContextMenu(e, info.event.extendedProps._raw);
           });
-          // Event card popover on hover
-          info.el.addEventListener('mouseenter', () => {
-            window._eventCardShow(info.el, info.event.id);
-          });
-          info.el.addEventListener('mouseleave', () => {
-            window._eventCardScheduleHide(info.el);
-          });
+          // Event card popover on hover — desktop only.
+          // (hover: hover) excludes touch-primary devices where a tap would
+          // otherwise synthesize a mouseenter and pop the card after the click.
+          if (window.matchMedia('(hover: hover)').matches) {
+            info.el.addEventListener('mouseenter', () => {
+              if (this.ctxMenu.open) return;
+              window._eventCardShow(info.el, info.event.id);
+            });
+            info.el.addEventListener('mouseleave', () => {
+              window._eventCardScheduleHide(info.el);
+            });
+          }
           // Add recurring indicator
           const raw = info.event.extendedProps._raw;
           if (raw?.is_recurring) {
@@ -442,6 +651,13 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.calendar.render();
       this._syncTitle();
 
+      if (this.currentView === 'agenda') {
+        this.loadAgenda();
+      }
+
+      // Wire up the agenda infinite-scroll observer (runs alongside the
+      // explicit "Load more" button as a fallback).
+      this._setupAgendaObserver();
 
       const eventId = params.get('event');
       if (eventId) this.openEventById(eventId);
@@ -470,18 +686,20 @@ window.calendarApp = function calendarApp(calendarsData) {
       // Browser back/forward
       window.addEventListener('popstate', () => {
         const p = new URLSearchParams(window.location.search);
-        const view = p.get('view') || this.prefs.defaultView;
+        // Translate URL slug → internal view name (handles short slugs + legacy).
+        const view = this._viewFromUrl(p.get('view')) || this.prefs.defaultView;
         const date = p.get('date');
         const evt = p.get('event');
 
-        if (view !== this.calendar.view.type) {
-          this.calendar.changeView(view);
-          this.currentView = view;
+        if (view !== this.currentView) {
+          this.changeView(view);
         }
-        if (date) {
-          this.calendar.gotoDate(date);
-        } else {
-          this.calendar.today();
+        if (view !== 'agenda') {
+          if (date) {
+            this.calendar.gotoDate(date);
+          } else {
+            this.calendar.today();
+          }
         }
         this._syncTitle();
 
@@ -519,7 +737,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const isDeclined = isInvited && membership.status === 'declined';
 
         // Find calendar color
-        const cal = [...this.ownedCalendars, ...this.subscribedCalendars].find(c => c.uuid === event.calendar_id);
+        const cal = [...this.ownedCalendars, ...this.subscribedCalendars, ...this.externalCalendars].find(c => c.uuid === event.calendar_id);
         const color = cal?.color || 'primary';
 
         const classNames = [`event-color-${color}`];
@@ -537,6 +755,159 @@ window.calendarApp = function calendarApp(calendarsData) {
           extendedProps: { _raw: event },
         };
       });
+    },
+
+    // --- Agenda view (custom, not FullCalendar) ---
+
+    async loadAgenda() {
+      // Reset and fetch page 1 from "now".
+      const now = new Date();
+      this.agenda.events = [];
+      this.agenda.nextAfter = now.toISOString();
+      this.agenda.initialLoaded = false;
+      this.agenda.seenIds = new Set();
+      await this.loadMoreAgenda();
+      this.agenda.initialLoaded = true;
+    },
+
+    async loadMoreAgenda() {
+      if (this.agenda.loading || this.agenda.nextAfter === null) return;
+      this.agenda.loading = true;
+      try {
+        const calIds = Object.keys(this.visibleCalendars)
+          .filter(k => this.visibleCalendars[k]).join(',');
+        const params = new URLSearchParams({
+          after: this.agenda.nextAfter,
+          limit: '20',
+          calendar_ids: calIds,
+          show_declined: this.prefs.showDeclined ? 'true' : 'false',
+        });
+        const resp = await fetch(`/api/v1/calendar/events?${params}`, {
+          credentials: 'same-origin',
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        // Dedup boundary events (events with start == cursor may appear on
+        // both pages — see backend cursor stability note).
+        const fresh = (data.events || []).filter(e => !this.agenda.seenIds.has(e.uuid));
+        fresh.forEach(e => this.agenda.seenIds.add(e.uuid));
+        this.agenda.events = [...this.agenda.events, ...fresh];
+        this.agenda.nextAfter = data.next_after;
+      } finally {
+        this.agenda.loading = false;
+      }
+    },
+
+    refetchAgenda() {
+      // Re-load from scratch (filters/prefs changed, or an event was CRUD'd).
+      if (this.currentView === 'agenda') {
+        this.loadAgenda();
+      }
+    },
+
+    _setupAgendaObserver() {
+      // IntersectionObserver-driven infinite scroll for the agenda view.
+      // Watches the sentinel at the bottom of the list; when it comes within
+      // 300px of the viewport bottom, we fire loadMoreAgenda(). The method
+      // itself guards against concurrent fetches and exhausted cursors, so
+      // the observer can fire liberally without causing duplicate requests.
+      if (this._agendaObserver) return; // already set up
+      if (typeof IntersectionObserver === 'undefined') return; // fallback: button only
+
+      const sentinel = this.$refs.agendaSentinel;
+      if (!sentinel) return;
+
+      this._agendaObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          if (this.currentView !== 'agenda') continue;
+          if (!this.agenda.initialLoaded) continue; // wait for page 1 first
+          this.loadMoreAgenda();
+        }
+      }, {
+        // Pre-load 300px before the user reaches the bottom, for a smooth feel.
+        rootMargin: '300px 0px',
+        threshold: 0,
+      });
+
+      this._agendaObserver.observe(sentinel);
+    },
+
+    agendaByDay() {
+      // Regular method (not a getter — Alpine getters are not reliably reactive
+      // per the project memory note). Groups events by local date, and marks
+      // the "today" group so the template can highlight it with the accent color.
+      const groups = [];
+      let currentKey = null;
+      let currentGroup = null;
+
+      const todayDate = new Date();
+      const todayKey = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
+      const tomorrowDate = new Date(todayDate);
+      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      const tomorrowKey = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`;
+
+      for (const event of this.agenda.events) {
+        const d = new Date(event.start);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (key !== currentKey) {
+          currentKey = key;
+          // `undefined` locale → use the browser's default (OS/language settings)
+          const dateLabel = d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+          let label;
+          if (key === todayKey) {
+            label = `Today · ${dateLabel}`;
+          } else if (key === tomorrowKey) {
+            label = `Tomorrow · ${dateLabel}`;
+          } else {
+            label = dateLabel;
+          }
+          currentGroup = {
+            date: key,
+            label,
+            isToday: key === todayKey,
+            events: [],
+          };
+          groups.push(currentGroup);
+        }
+        currentGroup.events.push(event);
+      }
+      return groups;
+    },
+
+    formatAgendaEventTime(event) {
+      if (event.all_day) return 'All day';
+      const d = new Date(event.start);
+      const opts = this.prefs.timeFormat === '12h'
+        ? { hour: 'numeric', minute: '2-digit', hour12: true }
+        : { hour: '2-digit', minute: '2-digit', hour12: false };
+      // `undefined` locale → browser default
+      return d.toLocaleTimeString(undefined, opts);
+    },
+
+    agendaEventClasses(event) {
+      // Returns the space-separated class string for an agenda event row.
+      // `cal-<color>` selects the calendar color via a CSS custom property
+      // (see .agenda-event.cal-* rules in calendar.css). The FullCalendar-scoped
+      // `event-color-*` classes don't apply here because the agenda is rendered
+      // outside the .fc container.
+      const currentUserId = document.body.dataset.userId;
+      const isOwner = String(event.owner.id) === String(currentUserId);
+      const membership = (event.members || []).find(m => String(m.user.id) === String(currentUserId));
+      const isInvited = !isOwner && !!membership;
+      const isPending = isInvited && membership.status === 'pending';
+      const isDeclined = isInvited && membership.status === 'declined';
+
+      const cal = [...this.ownedCalendars, ...this.subscribedCalendars, ...this.externalCalendars]
+        .find(c => c.uuid === event.calendar_id);
+      const color = cal?.color || 'primary';
+
+      const classes = [`cal-${color}`];
+      if (isInvited) classes.push('event-invited');
+      if (isPending) classes.push('event-pending');
+      if (isDeclined) classes.push('event-declined');
+      return classes.join(' ');
     },
 
     // --- All-day toggle ---
@@ -562,6 +933,15 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
 
     // --- Create modal ---
+    createEventNow() {
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      const start = `${dateStr}T${timeStr}`;
+      this.openCreateModal(start, this._addHour(now.toISOString()), false);
+    },
+
     openCreateModal(start, end, allDay) {
       if (this.showModal) return; // prevent double-open from dateClick + select
       this.modalMode = 'create';
@@ -598,10 +978,11 @@ window.calendarApp = function calendarApp(calendarsData) {
       this._panelRaw = null;
       this.selectedMembers = [];
       this.eventOwner = null;
+      this.externalOrganizer = null;
       this.eventMembers = [];
       this.myInviteStatus = null;
       this.showModal = true;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     openViewPanel(event) {
@@ -626,12 +1007,13 @@ window.calendarApp = function calendarApp(calendarsData) {
         recurrence_end: event.recurrence_end ? this.toLocalDate(event.recurrence_end) : '',
       };
       this.eventOwner = event.owner;
+      this.externalOrganizer = event.external_organizer || '';
       this.eventMembers = event.members || [];
       this.selectedMembers = (event.members || []).map(m => m.user);
       this.myInviteStatus = isOwner ? null : ((event.members || []).find(m => String(m.user.id) === currentUserId)?.status || null);
       this.showPanel = true;
       this._pushUrl();
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     closePanel() {
@@ -673,7 +1055,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.form.recurrence_interval = this._panelRaw?.recurrence_interval || 1;
       this.form.recurrence_end = this._panelRaw?.recurrence_end ? this.toLocalDate(this._panelRaw.recurrence_end) : '';
       this.showModal = true;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     isOwner() {
@@ -730,13 +1112,14 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(url, {
           method,
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify(payload),
         });
         if (resp.ok) {
           const saved = await resp.json();
           this.showModal = false;
           this.calendar.refetchEvents();
+          this.refetchAgenda();
           if (this.modalMode === 'edit' && this.showPanel) {
             this._panelRaw = saved;
             this.form = {
@@ -753,9 +1136,10 @@ window.calendarApp = function calendarApp(calendarsData) {
               recurrence_end: saved.recurrence_end ? this.toLocalDate(saved.recurrence_end) : '',
             };
             this.eventOwner = saved.owner;
+            this.externalOrganizer = saved.external_organizer || '';
             this.eventMembers = saved.members;
             this.selectedMembers = saved.members.map(m => m.user);
-            this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+      
           }
         }
       } catch (e) {}
@@ -781,11 +1165,12 @@ window.calendarApp = function calendarApp(calendarsData) {
           const resp = await fetch(url, {
             method: 'DELETE',
             credentials: 'same-origin',
-            headers: { 'X-CSRFToken': this.csrfToken() },
+            headers: { 'X-CSRFToken': getCSRFToken() },
           });
           if (resp.ok || resp.status === 204) {
             this.showPanel = false;
             this.calendar.refetchEvents();
+            this.refetchAgenda();
           }
         } catch (e) {}
         this.deleting = false;
@@ -807,11 +1192,12 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/events/${this.form.uuid}`, {
           method: 'DELETE',
           credentials: 'same-origin',
-          headers: { 'X-CSRFToken': this.csrfToken() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
         });
         if (resp.ok || resp.status === 204) {
           this.showPanel = false;
           this.calendar.refetchEvents();
+          this.refetchAgenda();
         }
       } catch (e) {}
       this.deleting = false;
@@ -824,7 +1210,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/events/${targetUuid}/respond`, {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ status: newStatus }),
         });
         if (resp.ok) {
@@ -833,6 +1219,7 @@ window.calendarApp = function calendarApp(calendarsData) {
           const member = this.eventMembers.find(m => String(m.user.id) === currentUserId);
           if (member) member.status = newStatus;
           this.calendar.refetchEvents();
+          this.refetchAgenda();
         }
       } catch (e) {}
     },
@@ -884,17 +1271,12 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (key === 'm' || key === 'M') { e.preventDefault(); this.changeView('dayGridMonth'); return; }
       if (key === 'w' || key === 'W') { e.preventDefault(); this.changeView('timeGridWeek'); return; }
       if (key === 'd' || key === 'D') { e.preventDefault(); this.changeView('timeGridDay'); return; }
-      if (key === 'a' || key === 'A') { e.preventDefault(); this.changeView('listWeek'); return; }
+      if (key === 'a' || key === 'A') { e.preventDefault(); this.changeView('agenda'); return; }
 
       // New event
       if (key === 'n' || key === 'N') {
         e.preventDefault();
-        const now = new Date();
-        const pad = n => String(n).padStart(2, '0');
-        const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-        const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-        const start = `${dateStr}T${timeStr}`;
-        this.openCreateModal(start, this._addHour(now.toISOString()), false);
+        this.createEventNow();
         return;
       }
 
@@ -905,7 +1287,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       if (key === '?') {
         e.preventDefault();
         const dlg = document.getElementById('calendar-help-dialog');
-        if (dlg) { dlg.showModal(); lucide?.createIcons(); }
+        if (dlg) { dlg.showModal(); }
       }
     },
 
@@ -919,10 +1301,16 @@ window.calendarApp = function calendarApp(calendarsData) {
       // Store event data in form for actions that need it
       this.ctxMenu.event = rawEvent;
       this.ctxMenu.isOwner = isOwner;
+      this.ctxMenu.isExternal = this.externalCalendars.some(c => c.uuid === rawEvent.calendar_id);
       this.ctxMenu.inviteStatus = inviteStatus;
+
+      // Set initial position at cursor before opening so the menu doesn't
+      // flash at (0, 0). Overflow adjustment follows in $nextTick once the
+      // menu is rendered and we can measure its size.
+      this.ctxMenu.x = nativeEvent.clientX;
+      this.ctxMenu.y = nativeEvent.clientY;
       this.ctxMenu.open = true;
 
-      // Position with viewport overflow detection
       this.$nextTick(() => {
         const menuEl = this.$el.querySelector('[x-show="ctxMenu.open"]');
         if (!menuEl) return;
@@ -930,16 +1318,14 @@ window.calendarApp = function calendarApp(calendarsData) {
         const vw = window.innerWidth;
         const vh = window.innerHeight;
 
-        let x = nativeEvent.clientX;
-        let y = nativeEvent.clientY;
+        let x = this.ctxMenu.x;
+        let y = this.ctxMenu.y;
 
         if (x + menuRect.width > vw) x = vw - menuRect.width - 10;
         if (y + menuRect.height > vh) y = vh - menuRect.height - 10;
 
         this.ctxMenu.x = x;
         this.ctxMenu.y = y;
-
-        if (typeof lucide !== 'undefined') lucide.createIcons();
       });
     },
 
@@ -980,6 +1366,26 @@ window.calendarApp = function calendarApp(calendarsData) {
           this.$nextTick(() => this.respondToInvitation('declined'));
           break;
       }
+    },
+
+    // --- Event card actions ---
+    async handleEventCardAction(evt) {
+      const { action, eventId } = evt.detail;
+      if (!eventId) return;
+      // Hide any open popover
+      document.querySelectorAll('.event-card-popover').forEach(p => { p.style.display = 'none'; });
+
+      await this.openEventById(eventId);
+      if (!this._panelRaw) return;
+
+      this.$nextTick(() => {
+        switch (action) {
+          case 'edit': this.openEditModal(); break;
+          case 'delete': this.deleteEvent(); break;
+          case 'accept': this.respondToInvitation('accepted'); break;
+          case 'decline': this.respondToInvitation('declined'); break;
+        }
+      });
     },
 
     // --- Helpers ---
@@ -1064,7 +1470,11 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
 
     eventCalendarObj() {
-      return [...this.ownedCalendars, ...this.subscribedCalendars].find(c => c.uuid === this.form.calendar_id) || null;
+      return [...this.ownedCalendars, ...this.subscribedCalendars, ...this.externalCalendars].find(c => c.uuid === this.form.calendar_id) || null;
+    },
+
+    isExternalEvent() {
+      return this.externalCalendars.some(c => c.uuid === this.form.calendar_id);
     },
 
     eventCalendarColor() {
@@ -1100,7 +1510,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         this.scopeAction = action;
         this.scopeResolve = resolve;
         this.showScopeDialog = true;
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       });
     },
 
@@ -1125,7 +1535,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.showPollListModal = true;
       this.pollSearch = '';
       this.loadPolls();
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async loadPolls() {
@@ -1136,7 +1546,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         if (resp.ok) this.polls = await resp.json();
       } catch (e) {}
       this.pollsLoading = false;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     setPollFilter(filter) {
@@ -1154,18 +1564,18 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.showPollCreateModal = true;
       this.pollForm = { title: '', description: '', slots: [{ start: '', end: '', showEnd: false }, { start: '', end: '', showEnd: false }] };
       this.pollFormError = null;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     addPollSlot() {
       this.pollForm.slots.push({ start: '', end: '', showEnd: false });
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     removePollSlot(i) {
       if (this.pollForm.slots.length > 2) {
         this.pollForm.slots.splice(i, 1);
-        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+  
       }
     },
 
@@ -1182,7 +1592,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch('/api/v1/calendar/polls', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({
             title: this.pollForm.title.trim(),
             description: this.pollForm.description,
@@ -1215,7 +1625,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       this.pollFinalizeSlotId = null;
       this._setPollUrl(uuid);
       await this.loadPoll(uuid);
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     closePollDetail() {
@@ -1250,7 +1660,7 @@ window.calendarApp = function calendarApp(calendarsData) {
             }
           }
           this.pollMyVotes = myVotes;
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    
         }
       } catch (e) {}
       this.currentPollLoading = false;
@@ -1262,7 +1672,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       const idx = cycle.indexOf(current);
       const next = cycle[(idx + 1) % cycle.length];
       this.pollMyVotes = { ...this.pollMyVotes, [slotId]: next };
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async submitPollVotes() {
@@ -1274,13 +1684,13 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/vote`, {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ votes }),
         });
         if (resp.ok) {
           this.currentPoll = await resp.json();
           if (window.AppAlert) window.AppAlert.success('Votes saved!', { duration: 2000 });
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    
         }
       } catch (e) {}
       this.pollSubmitting = false;
@@ -1293,12 +1703,13 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/finalize`, {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ slot_id: this.pollFinalizeSlotId }),
         });
         if (resp.ok) {
           this.currentPoll = await resp.json();
           if (this.calendar) this.calendar.refetchEvents();
+          this.refetchAgenda();
           if (window.AppAlert) window.AppAlert.success('Poll finalized! Event created.', { duration: 3000 });
         }
       } catch (e) {}
@@ -1319,7 +1730,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/polls/${uuid}`, {
           method: 'DELETE',
           credentials: 'same-origin',
-          headers: { 'X-CSRFToken': this.csrfToken() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
         });
         if (resp.ok || resp.status === 204) {
           if (this.showPollDetailModal) {
@@ -1378,13 +1789,13 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/invite`, {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ user_ids: [user.id] }),
         });
         if (resp.ok) {
           this.currentPoll = await resp.json();
           if (window.AppAlert) window.AppAlert.success(`${user.username} invited!`, { duration: 2000 });
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    
         }
       } catch (e) {}
     },
@@ -1395,13 +1806,13 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}/invite`, {
           method: 'DELETE',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ user_ids: [userId] }),
         });
         if (resp.ok) {
           this.currentPoll = await resp.json();
           if (window.AppAlert) window.AppAlert.success('Invitation removed', { duration: 2000 });
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    
         }
       } catch (e) {}
     },
@@ -1430,7 +1841,7 @@ window.calendarApp = function calendarApp(calendarsData) {
       }
       this.pollFormError = null;
       this.showPollEditModal = true;
-      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+
     },
 
     async savePollEdit() {
@@ -1446,7 +1857,7 @@ window.calendarApp = function calendarApp(calendarsData) {
         const resp = await fetch(`/api/v1/calendar/polls/${this.currentPoll.uuid}`, {
           method: 'PATCH',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrfToken() },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({
             title: this.pollForm.title.trim(),
             description: this.pollForm.description,
@@ -1471,7 +1882,7 @@ window.calendarApp = function calendarApp(calendarsData) {
           }
           this.pollMyVotes = myVotes;
           if (window.AppAlert) window.AppAlert.success('Poll updated!', { duration: 2000 });
-          this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    
         } else {
           const data = await resp.json().catch(() => null);
           this.pollFormError = data?.detail || data?.slots?.[0] || 'Failed to update poll.';

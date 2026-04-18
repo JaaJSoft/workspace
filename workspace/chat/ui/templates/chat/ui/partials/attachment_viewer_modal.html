@@ -73,7 +73,7 @@
           this.downloadUrl = '/api/v1/chat/attachments/' + uuid;
           this.error = null;
 
-          var container = this.$refs.viewerContainer;
+          const container = this.$refs.viewerContainer;
 
           // Dispatch cleanup event before removing DOM
           window.dispatchEvent(new CustomEvent('viewer-cleanup'));
@@ -88,28 +88,28 @@
           this.$refs.dialog.showModal();
 
           try {
-            var response = await fetch('/chat/view-attachment/' + uuid);
+            const response = await fetch('/chat/view-attachment/' + uuid);
             if (!response.ok) {
               throw new Error('Failed to load viewer: ' + response.status);
             }
 
-            var rawHtml = await response.text();
+            const rawHtml = await response.text();
 
             // Parse HTML
-            var temp = document.createElement('template');
+            const temp = document.createElement('template');
             temp.innerHTML = rawHtml;
 
             // Extract and re-execute scripts
-            var scriptEls = temp.content.querySelectorAll('script');
-            var scripts = [];
-            var self = this;
+            const scriptEls = temp.content.querySelectorAll('script');
+            const scripts = [];
+            const self = this;
             scriptEls.forEach(function(el) {
               scripts.push(el.textContent);
               el.remove();
             });
 
             scripts.forEach(function(scriptContent) {
-              var newScript = document.createElement('script');
+              const newScript = document.createElement('script');
               newScript.textContent = scriptContent;
               document.head.appendChild(newScript);
               self.loadedScripts.push(newScript);
@@ -119,10 +119,6 @@
             while (temp.content.firstChild) {
               container.appendChild(temp.content.firstChild);
             }
-
-            this.$nextTick(function() {
-              if (typeof lucide !== 'undefined') lucide.createIcons();
-            });
           } catch (err) {
             this.error = err.message;
           } finally {
@@ -131,7 +127,7 @@
         },
 
         saveToFiles() {
-          var uuid = this.attachmentUuid;
+          const uuid = this.attachmentUuid;
           this.close();
           // Delegate to the chat component which already has the working flow
           window.dispatchEvent(new CustomEvent('chat-save-attachment-to-files', {
@@ -153,9 +149,9 @@
         },
 
         init() {
-          var self = this;
+          const self = this;
           this._openHandler = function(e) {
-            var d = e.detail;
+            const d = e.detail;
             self.openAttachment(d.uuid, d.name, d.mime_type);
           };
           window.addEventListener('open-chat-attachment-viewer', this._openHandler);

@@ -2,9 +2,11 @@ import logging
 from datetime import datetime, timezone
 
 import icalendar
+from django.db import transaction
+from django.utils import timezone as django_tz
 
 from workspace.calendar.models import Calendar, Event, EventMember
-from workspace.notifications.services import notify
+from workspace.notifications.services.notifications import notify
 
 logger = logging.getLogger(__name__)
 
@@ -69,21 +71,23 @@ def _handle_cancel(vevent, uid, mail_message):
     event.is_cancelled = True
     event.save(update_fields=['is_cancelled'])
 
-    notify(
-        recipient=user,
-        origin='calendar',
-        title=f'Cancelled: {event.title}',
-        url=f'/calendar?event={event.pk}',
-    )
+    if _is_future_event(event):
+        notify(
+            recipient=user,
+            origin='calendar',
+            title=f'Cancelled: {event.title}',
+            url=f'/calendar?event={event.pk}',
+        )
 
 
+@transaction.atomic
 def _create_event(vevent, uid, sequence, mail_message):
     """Create a new Event from a VEVENT component."""
     account = mail_message.account
     user = account.owner
     calendar = _get_or_create_invitation_calendar(account)
 
-    organizer_email = _extract_email(vevent.get('ORGANIZER'))
+    external_organizer = _extract_email(vevent.get('ORGANIZER'))
     dtstart = _to_datetime(vevent.get('DTSTART'))
     dtend = _to_datetime(vevent.get('DTEND'))
     all_day = _is_all_day(vevent.get('DTSTART'))
@@ -103,7 +107,7 @@ def _create_event(vevent, uid, sequence, mail_message):
         owner=user,
         ical_uid=uid,
         ical_sequence=sequence,
-        organizer_email=organizer_email,
+        external_organizer=external_organizer,
         source_message=mail_message,
     )
 
@@ -113,13 +117,14 @@ def _create_event(vevent, uid, sequence, mail_message):
         status=EventMember.Status.PENDING,
     )
 
-    notify(
-        recipient=user,
-        origin='calendar',
-        title=f'Invitation: {title}',
-        body=f'From {organizer_email}',
-        url=f'/calendar?event={event.pk}',
-    )
+    if _is_future_event(event):
+        notify(
+            recipient=user,
+            origin='calendar',
+            title=f'Invitation: {title}',
+            body=f'From {external_organizer}',
+            url=f'/calendar?event={event.pk}',
+        )
 
     return event
 
@@ -140,13 +145,14 @@ def _update_event(event, vevent, sequence, mail_message):
         'location', 'ical_sequence', 'source_message',
     ])
 
-    notify(
-        recipient=event.owner,
-        origin='calendar',
-        title=f'Updated: {event.title}',
-        body='The event has been updated',
-        url=f'/calendar?event={event.pk}',
-    )
+    if _is_future_event(event):
+        notify(
+            recipient=event.owner,
+            origin='calendar',
+            title=f'Updated: {event.title}',
+            body='The event has been updated',
+            url=f'/calendar?event={event.pk}',
+        )
 
 
 def _get_or_create_invitation_calendar(account):
@@ -165,6 +171,14 @@ def _get_or_create_invitation_calendar(account):
         owner=account.owner,
         mail_account=account,
     )
+
+
+def _is_future_event(event):
+    """Return True if the event ends (or starts) in the future."""
+    ref = event.end or event.start
+    if ref is None:
+        return True
+    return ref > django_tz.now()
 
 
 def _extract_email(organizer_prop):

@@ -134,6 +134,13 @@ class ModuleRegistry:
                     )
             self._commands.extend(commands)
 
+    def get_active_commands(self) -> list[CommandInfo]:
+        return sorted(
+            (cmd for cmd in self._commands
+             if (m := self._modules.get(cmd.module_slug)) and m.active),
+            key=lambda c: c.order,
+        )
+
     def search_commands(self, query: str) -> list[CommandInfo]:
         q = query.lower()
         name_matches = []

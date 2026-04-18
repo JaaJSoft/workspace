@@ -123,5 +123,10 @@ db.sqlite3*
 .claude/
 /thumbnails/
 /avatars/
-/chat/
 /mail/
+/chat/
+/mail/scripts/node_modules/
+/scripts/node_modules/
+/scripts/package.json
+/scripts/package-lock.json
+.superpowers/

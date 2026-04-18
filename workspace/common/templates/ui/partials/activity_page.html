@@ -1,0 +1,19 @@
+<ul id="{{ activity_prefix }}-list">
+  {% for event in activity_events %}
+    {% include 'dashboard/partials/activity_item.html' %}
+  {% endfor %}
+</ul>
+{% if activity_has_more %}
+<div id="{{ activity_prefix }}-load-more" class="text-center pt-2" @ajax:before.stop>
+  <a
+    href="{{ activity_base_url }}?{% if activity_source %}source={{ activity_source }}&{% endif %}{% if activity_search %}q={{ activity_search }}&{% endif %}offset={{ activity_next_offset }}"
+    class="btn btn-ghost btn-sm gap-2"
+    x-target="{{ activity_prefix }}-list {{ activity_prefix }}-load-more"
+  >
+    <i data-lucide="chevrons-down" class="w-4 h-4"></i>
+    Show older activity
+  </a>
+</div>
+{% else %}
+<div id="{{ activity_prefix }}-load-more"></div>
+{% endif %}

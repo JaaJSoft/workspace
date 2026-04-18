@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from workspace.chat.models import Message
-from workspace.chat.services import render_message_body, extract_mentions
+from workspace.chat.services.rendering import render_message_body, extract_mentions
 
 
 class Command(BaseCommand):

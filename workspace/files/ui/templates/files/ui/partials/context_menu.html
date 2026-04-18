@@ -210,11 +210,6 @@ function contextMenu() {
       }
 
       this.position = { x, y };
-
-      // Reinitialize Lucide icons
-      if (typeof lucide !== 'undefined') {
-        this.$nextTick(() => lucide.createIcons());
-      }
     },
 
     close() {
@@ -276,6 +271,7 @@ function contextMenu() {
               uuid: nd.uuid,
               name: nd.name,
               nodeType: nd.nodeType,
+              isGroupFolder: !!nd.isGroupFolder,
               state: action.state || {}
             }
           }));

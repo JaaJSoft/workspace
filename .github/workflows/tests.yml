@@ -6,12 +6,47 @@ on:
   pull_request:
     branches: [ main ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each entry pins a per-module line+branch coverage floor, rounded
+        # down to the nearest multiple of 5 and sitting at least 3 points
+        # below the current baseline to absorb flakiness.
+        # To raise a threshold, update the number here — never lower it.
+        include:
+          - module: ai
+            min_coverage: 55
+          - module: calendar
+            min_coverage: 75
+          - module: chat
+            min_coverage: 55
+          - module: common
+            min_coverage: 75
+          - module: core
+            min_coverage: 45
+          - module: dashboard
+            min_coverage: 95
+          - module: files
+            min_coverage: 65
+          - module: mail
+            min_coverage: 55
+          - module: notes
+            min_coverage: 45
+          - module: notifications
+            min_coverage: 80
+          - module: users
+            min_coverage: 85
+    name: Tests (${{ matrix.module }})
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -27,8 +62,52 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Run Django test suite
+      - name: Run Django test suite with coverage
         env:
           PYTHONWARNINGS: default
         run: |
-          uv run python manage.py test workspace -v 2
+          uv run coverage run manage.py test workspace.${{ matrix.module }} -v 2
+
+      - name: Module coverage report
+        if: always()
+        run: |
+          uv run coverage combine || true
+          uv run coverage report \
+            --include='workspace/${{ matrix.module }}/*' \
+            --fail-under=${{ matrix.min_coverage }}
+
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Only modules that actually have tests/e2e/ test cases.
+        # workspace.common hosts the shared PlaywrightTestCase base class
+        # but no tests of its own, so it is intentionally absent.
+        module:
+          - calendar
+    name: E2E (${{ matrix.module }})
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Install Playwright browsers
+        run: uv run playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        env:
+          E2E: '1'
+          PYTHONWARNINGS: default
+        run: |
+          uv run python manage.py test workspace.${{ matrix.module }}.tests.e2e -v 2

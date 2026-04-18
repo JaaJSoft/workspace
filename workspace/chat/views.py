@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
+from django.db import transaction
 from django.db.models import Count, F, Max, Min, OuterRef, Prefetch, Q, Subquery
 from django.db.models.functions import Greatest
 from django.http import FileResponse, HttpResponse
@@ -14,7 +15,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from . import avatar_service as group_avatar_service
+from workspace.common.mixins import CacheControlMixin
+
+from .services import avatar as group_avatar_service
 from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage, Reaction
 from .serializers import (
     ConversationCreateSerializer,
@@ -27,27 +30,12 @@ from .serializers import (
     ReactionToggleSerializer,
     ScheduledMessageSerializer,
 )
-from .services import (
-    extract_mentions,
-    get_or_create_dm,
-    get_unread_counts,
-    notify_conversation_members,
-    notify_new_message,
-    render_message_body,
-    user_conversation_ids,
-)
+from .services.conversations import get_active_membership, get_or_create_dm, get_unread_counts, user_conversation_ids
+from .services.notifications import notify_conversation_members, notify_new_message
+from .services.rendering import extract_mentions, render_message_body
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
-
-
-def _get_active_membership(user, conversation_id):
-    """Return the active membership or None."""
-    return ConversationMember.objects.filter(
-        conversation_id=conversation_id,
-        user=user,
-        left_at__isnull=True,
-    ).first()
 
 
 def _trigger_bot_response(conversation_id, message, sender):
@@ -75,7 +63,7 @@ def _trigger_bot_response(conversation_id, message, sender):
 
 
 @extend_schema(tags=['Chat'])
-class ConversationListView(APIView):
+class ConversationListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="List active conversations")
@@ -143,6 +131,7 @@ class ConversationListView(APIView):
         summary="Create a conversation",
         request=ConversationCreateSerializer,
     )
+    @transaction.atomic
     def post(self, request):
         serializer = ConversationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -168,7 +157,12 @@ class ConversationListView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        # DM: exactly one other user
+        # `created_members` is populated on the fresh-creation paths so the
+        # response can serialize without a post-INSERT refetch. On the
+        # get_or_create_dm path we may be returning a pre-existing DM whose
+        # live member state we don't hold in memory — keep the refetch there.
+        created_members = None
+
         if len(member_ids) == 1:
             other_user = users.first()
             if other_user.id == request.user.id:
@@ -176,49 +170,49 @@ class ConversationListView(APIView):
                     {'detail': 'Cannot create a DM with yourself.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            # Bot conversations: always create a new DM (no dedup)
             if hasattr(other_user, 'bot_profile'):
                 conversation = Conversation.objects.create(
                     kind=Conversation.Kind.DM,
                     created_by=request.user,
                 )
-                ConversationMember.objects.bulk_create([
+                created_members = [
                     ConversationMember(conversation=conversation, user=request.user),
                     ConversationMember(conversation=conversation, user=other_user),
-                ])
+                ]
+                ConversationMember.objects.bulk_create(created_members)
             else:
                 conversation = get_or_create_dm(request.user, other_user)
         else:
-            # Group conversation
             conversation = Conversation.objects.create(
                 kind=Conversation.Kind.GROUP,
                 title=title,
                 created_by=request.user,
             )
-            # Add creator + selected members
-            members_to_create = [
+            created_members = [
                 ConversationMember(conversation=conversation, user=request.user),
             ]
             for u in users:
                 if u.id != request.user.id:
-                    members_to_create.append(
+                    created_members.append(
                         ConversationMember(conversation=conversation, user=u),
                     )
-            ConversationMember.objects.bulk_create(members_to_create)
+            ConversationMember.objects.bulk_create(created_members)
 
-        # Refetch with prefetched members
-        conversation = (
-            Conversation.objects.filter(pk=conversation.pk)
-            .prefetch_related(
-                Prefetch(
-                    'members',
-                    queryset=ConversationMember.objects.filter(
-                        left_at__isnull=True,
-                    ).select_related('user', 'user__bot_profile'),
-                ),
+        if created_members is not None:
+            conversation._prefetched_objects_cache = {'members': created_members}
+        else:
+            conversation = (
+                Conversation.objects.filter(pk=conversation.pk)
+                .prefetch_related(
+                    Prefetch(
+                        'members',
+                        queryset=ConversationMember.objects.filter(
+                            left_at__isnull=True,
+                        ).select_related('user', 'user__bot_profile'),
+                    ),
+                )
+                .first()
             )
-            .first()
-        )
         return Response(
             ConversationDetailSerializer(conversation).data,
             status=status.HTTP_201_CREATED,
@@ -231,7 +225,7 @@ class ConversationDetailView(APIView):
 
     @extend_schema(summary="Get conversation detail")
     def get(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -260,7 +254,7 @@ class ConversationDetailView(APIView):
         }),
     )
     def patch(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -309,7 +303,7 @@ class ConversationDetailView(APIView):
 
     @extend_schema(summary="Leave conversation")
     def delete(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -322,7 +316,7 @@ class ConversationDetailView(APIView):
 
 
 @extend_schema(tags=['Chat'])
-class MessageListView(APIView):
+class MessageListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, JSONParser]
 
@@ -334,7 +328,7 @@ class MessageListView(APIView):
         ],
     )
     def get(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -352,6 +346,7 @@ class MessageListView(APIView):
                 queryset=Reaction.objects.select_related('user'),
             ),
             'attachments',
+            'link_previews__preview',
         )
 
         if before:
@@ -385,7 +380,7 @@ class MessageListView(APIView):
     def post(self, request, conversation_id):
         from workspace.files.services.files import FileService
 
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -450,36 +445,37 @@ class MessageListView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        message = Message.objects.create(
-            conversation_id=conversation_id,
-            author=request.user,
-            body=body,
-            body_html=body_html,
-            reply_to=reply_to,
-        )
-
-        for f in files:
-            mime_type = FileService.infer_mime_type(f.name, uploaded=f)
-            MessageAttachment.objects.create(
-                message=message,
-                file=f,
-                original_name=f.name,
-                mime_type=mime_type,
-                size=f.size,
+        with transaction.atomic():
+            message = Message.objects.create(
+                conversation_id=conversation_id,
+                author=request.user,
+                body=body,
+                body_html=body_html,
+                reply_to=reply_to,
             )
 
-        # Increment unread_count for other active members
-        ConversationMember.objects.filter(
-            conversation_id=conversation_id,
-            left_at__isnull=True,
-        ).exclude(user=request.user).update(
-            unread_count=F('unread_count') + 1,
-        )
+            for f in files:
+                mime_type = FileService.infer_mime_type(f.name, uploaded=f)
+                MessageAttachment.objects.create(
+                    message=message,
+                    file=f,
+                    original_name=f.name,
+                    mime_type=mime_type,
+                    size=f.size,
+                )
 
-        # Bump conversation updated_at
-        Conversation.objects.filter(pk=conversation_id).update(
-            updated_at=timezone.now(),
-        )
+            # Increment unread_count for other active members
+            ConversationMember.objects.filter(
+                conversation_id=conversation_id,
+                left_at__isnull=True,
+            ).exclude(user=request.user).update(
+                unread_count=F('unread_count') + 1,
+            )
+
+            # Bump conversation updated_at
+            Conversation.objects.filter(pk=conversation_id).update(
+                updated_at=timezone.now(),
+            )
 
         # Notify other members via SSE + push notifications
         conversation = Conversation.objects.get(pk=conversation_id)
@@ -488,8 +484,20 @@ class MessageListView(APIView):
         )
         notify_new_message(conversation, request.user, body, mentioned_user_ids=mentioned_user_ids, mention_everyone=has_everyone)
 
+        # Clear typing indicator now that the message is sent
+        from .services.typing import clear_typing
+        clear_typing(conversation_id, request.user.id)
+
         # Trigger AI response if a bot is in the conversation
         _trigger_bot_response(conversation_id, message, request.user)
+
+        # Enqueue link preview fetching for URLs in the message body
+        if body:
+            from .services.link_preview import extract_urls
+            urls = extract_urls(body)
+            if urls:
+                from .tasks import fetch_link_previews
+                fetch_link_previews.delay(str(message.pk), urls)
 
         msg = (
             Message.objects.filter(pk=message.pk)
@@ -500,6 +508,7 @@ class MessageListView(APIView):
                     queryset=Reaction.objects.select_related('user'),
                 ),
                 'attachments',
+                'link_previews__preview',
             )
             .first()
         )
@@ -518,7 +527,7 @@ class MessageDetailView(APIView):
         request=MessageEditSerializer,
     )
     def patch(self, request, conversation_id, message_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -579,14 +588,16 @@ class MessageDetailView(APIView):
                     queryset=Reaction.objects.select_related('user'),
                 ),
                 'attachments',
+                'link_previews__preview',
             )
             .first()
         )
         return Response(MessageSerializer(message).data)
 
     @extend_schema(summary="Delete a message (soft)")
+    @transaction.atomic
     def delete(self, request, conversation_id, message_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -659,7 +670,7 @@ class ReactionToggleView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        membership = _get_active_membership(request.user, message.conversation_id)
+        membership = get_active_membership(request.user, message.conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -711,8 +722,9 @@ class ConversationMembersView(APIView):
         summary="Add members to a group conversation",
         request=MemberAddSerializer,
     )
+    @transaction.atomic
     def post(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -790,7 +802,7 @@ class ConversationMemberRemoveView(APIView):
 
     @extend_schema(summary="Remove a member from a group conversation (creator only)")
     def delete(self, request, conversation_id, user_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -837,17 +849,23 @@ class MarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Mark conversation as read")
+    @transaction.atomic
     def post(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        membership.last_read_at = timezone.now()
-        membership.unread_count = 0
-        membership.save(update_fields=['last_read_at', 'unread_count'])
+        update_fields = []
+        if membership.unread_count > 0 or membership.last_read_at is None:
+            membership.last_read_at = timezone.now()
+            membership.unread_count = 0
+            update_fields = ['last_read_at', 'unread_count']
+
+        if update_fields:
+            membership.save(update_fields=update_fields)
 
         # Mark any unread chat notification for this conversation as read
         from workspace.notifications.models import Notification
@@ -869,12 +887,37 @@ class MarkReadView(APIView):
 
 
 @extend_schema(tags=['Chat'])
+class TypingIndicatorView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Signal typing", request=None, responses={200: None})
+    def post(self, request, conversation_id):
+        membership = get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {'detail': 'Not a member.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        from .services.typing import set_typing
+        set_typing(
+            conversation_id,
+            request.user.id,
+            request.user.get_full_name() or request.user.username,
+        )
+        notify_conversation_members(
+            Conversation(pk=conversation_id), exclude_user=request.user,
+        )
+        return Response({'status': 'ok'})
+
+
+@extend_schema(tags=['Chat'])
 class MessageReadersView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Get who has read a specific message")
     def get(self, request, conversation_id, message_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -966,7 +1009,7 @@ class GroupAvatarUploadView(APIView):
         },
     )
     def post(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1032,7 +1075,7 @@ class GroupAvatarUploadView(APIView):
         },
     )
     def delete(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1092,7 +1135,7 @@ class ConversationStatsView(APIView):
 
     @extend_schema(summary="Get conversation statistics")
     def get(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1132,6 +1175,72 @@ class ConversationStatsView(APIView):
 
 
 @extend_schema(tags=['Chat'])
+class ConversationMediaView(CacheControlMixin, APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="List media attachments in a conversation",
+        parameters=[
+            OpenApiParameter('type', str, enum=['images', 'files', 'all'], default='images',
+                             description='Filter by attachment type.'),
+            OpenApiParameter('offset', int, default=0),
+            OpenApiParameter('limit', int, default=24),
+        ],
+    )
+    def get(self, request, conversation_id):
+        membership = get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(
+                {'detail': 'Not a member of this conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        qs = MessageAttachment.objects.filter(
+            message__conversation_id=conversation_id,
+            message__deleted_at__isnull=True,
+        ).select_related('message__author').order_by('-created_at')
+
+        media_type = request.query_params.get('type', 'images')
+        if media_type == 'images':
+            qs = qs.filter(Q(mime_type__startswith='image/') | Q(mime_type__startswith='video/'))
+        elif media_type == 'files':
+            qs = qs.exclude(mime_type__startswith='image/').exclude(mime_type__startswith='video/')
+
+        total = qs.count()
+        offset = max(int(request.query_params.get('offset', 0)), 0)
+        limit = min(int(request.query_params.get('limit', 24)), 100)
+        items = qs[offset:offset + limit]
+
+        data = []
+        for att in items:
+            author = att.message.author
+            data.append({
+                'uuid': att.uuid,
+                'original_name': att.original_name,
+                'mime_type': att.mime_type,
+                'size': att.size,
+                'is_image': att.is_image,
+                'is_video': att.is_video,
+                'url': f'/api/v1/chat/attachments/{att.uuid}',
+                'created_at': att.created_at.isoformat(),
+                'message_uuid': att.message_id,
+                'author': {
+                    'id': author.id,
+                    'username': author.username,
+                    'first_name': author.first_name,
+                    'last_name': author.last_name,
+                },
+            })
+
+        return Response({
+            'results': data,
+            'total': total,
+            'offset': offset,
+            'limit': limit,
+        })
+
+
+@extend_schema(tags=['Chat'])
 class ConversationMessageSearchView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1148,7 +1257,7 @@ class ConversationMessageSearchView(APIView):
         ],
     )
     def get(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1233,7 +1342,7 @@ class ConversationPinView(APIView):
 
     @extend_schema(summary="Pin a conversation")
     def post(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1315,7 +1424,7 @@ class MessagePinToggleView(APIView):
         except Message.DoesNotExist:
             return Response({'detail': 'Message not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        membership = _get_active_membership(request.user, message.conversation_id)
+        membership = get_active_membership(request.user, message.conversation_id)
         if not membership:
             return Response({'detail': 'Not a member of this conversation.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -1343,7 +1452,7 @@ class MessagePinToggleView(APIView):
         except Message.DoesNotExist:
             return Response({'detail': 'Message not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        membership = _get_active_membership(request.user, message.conversation_id)
+        membership = get_active_membership(request.user, message.conversation_id)
         if not membership:
             return Response({'detail': 'Not a member of this conversation.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -1365,7 +1474,7 @@ class ConversationPinnedMessagesView(APIView):
 
     @extend_schema(summary="List pinned messages in a conversation")
     def get(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response({'detail': 'Not a member of this conversation.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -1396,7 +1505,7 @@ class AttachmentDownloadView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        membership = _get_active_membership(
+        membership = get_active_membership(
             request.user, attachment.message.conversation_id,
         )
         if not membership:
@@ -1412,6 +1521,7 @@ class AttachmentDownloadView(APIView):
         # Sanitize filename for Content-Disposition header
         safe_name = attachment.original_name.replace('"', '\\"').replace('\n', '').replace('\r', '')
         response['Content-Disposition'] = f'inline; filename="{safe_name}"'
+        response['Cache-Control'] = 'private, max-age=604800, immutable'
         return response
 
 
@@ -1441,7 +1551,7 @@ class AttachmentSaveToFilesView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        membership = _get_active_membership(
+        membership = get_active_membership(
             request.user, attachment.message.conversation_id,
         )
         if not membership:
@@ -1489,7 +1599,7 @@ class BotRetryView(APIView):
 
     @extend_schema(summary="Retry a failed bot response")
     def post(self, request, conversation_id, message_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -1526,7 +1636,7 @@ class ConversationClearView(APIView):
 
     @extend_schema(tags=['Chat'], summary="Clear all messages in a conversation")
     def delete(self, request, conversation_id):
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -1541,14 +1651,13 @@ class ConversationClearView(APIView):
                 except OSError:
                     logger.warning('Could not delete file %s', att.file.name)
 
-        # Delete all messages (hard delete, not soft)
-        count, _ = messages.delete()
-
-        # Reset unread counts
-        ConversationMember.objects.filter(
-            conversation_id=conversation_id,
-            left_at__isnull=True,
-        ).update(unread_count=0)
+        # Delete all messages (hard delete, not soft) + reset unread counts
+        with transaction.atomic():
+            count, _ = messages.delete()
+            ConversationMember.objects.filter(
+                conversation_id=conversation_id,
+                left_at__isnull=True,
+            ).update(unread_count=0)
 
         notify_conversation_members(
             Conversation.objects.get(pk=conversation_id),
@@ -1558,6 +1667,7 @@ class ConversationClearView(APIView):
         return Response({'deleted': count}, status=status.HTTP_200_OK)
 
 
+@extend_schema(tags=['Chat'])
 class BotCancelView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1565,7 +1675,7 @@ class BotCancelView(APIView):
     def post(self, request, conversation_id):
         from workspace.ai.models import AITask
 
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -1593,7 +1703,7 @@ class ScheduledMessageListView(APIView):
     def get(self, request, conversation_id):
         from workspace.ai.models import ScheduledMessage
 
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1625,7 +1735,7 @@ class ScheduledMessageDetailView(APIView):
     def patch(self, request, conversation_id, schedule_id):
         from workspace.ai.models import ScheduledMessage
 
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},
@@ -1653,7 +1763,7 @@ class ScheduledMessageDetailView(APIView):
 
         # Recompute next_run_at if any timing fields were changed
         if self.TIMING_FIELDS & set(request.data.keys()):
-            from workspace.users.settings_service import get_user_timezone
+            from workspace.users.services.settings import get_user_timezone
             updated.compute_next_run(user_tz=get_user_timezone(request.user))
             updated.save(update_fields=['next_run_at', 'is_active'])
 
@@ -1663,7 +1773,7 @@ class ScheduledMessageDetailView(APIView):
     def delete(self, request, conversation_id, schedule_id):
         from workspace.ai.models import ScheduledMessage
 
-        membership = _get_active_membership(request.user, conversation_id)
+        membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
                 {'detail': 'Not a member of this conversation.'},

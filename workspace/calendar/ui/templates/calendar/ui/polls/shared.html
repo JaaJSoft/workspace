@@ -9,6 +9,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="{% static 'ui/js/lucide.js' %}"></script>
   <script src="{% static 'calendar/ui/js/polls.js' %}"></script>
   <link rel="stylesheet" href="{% static 'calendar/ui/css/polls.css' %}" />
 </head>
@@ -263,6 +264,10 @@
   </div>
 
   <script>
+  // Initialize Lucide icons and observe DOM for dynamic icons (Alpine templates)
+  initLucideIcons();
+  observeLucideIcons();
+
   window.sharedPoll = function(token) {
     return {
       poll: null,
@@ -297,7 +302,6 @@
         }
         this.loading = false;
         if (this.poll) document.title = this.poll.title + ' — Workspace';
-        this.$nextTick(() => lucide.createIcons());
       },
 
       cycleVote(slotId) {
@@ -370,12 +374,12 @@
             }
             this.votesRestored = false;
             this.voteSubmitted = true;
+            this.$nextTick(() => lucide.createIcons());
           }
         } catch (e) {
           console.error('Failed to submit votes', e);
         }
         this.submitting = false;
-        this.$nextTick(() => lucide.createIcons());
       },
     };
   };

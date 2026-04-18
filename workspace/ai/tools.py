@@ -7,9 +7,51 @@ from django.conf import settings
 
 from .client import get_image_client
 from .models import UserMemory
-from .tool_registry import Param, ToolProvider, tool
+from pydantic import BaseModel, Field
+
+from .tool_registry import ToolProvider, tool
 
 logger = logging.getLogger(__name__)
+
+
+class SaveMemoryParams(BaseModel):
+    key: str = Field(description="A short category label (e.g. name, language, project, preference).")
+    content: str = Field(description="The fact to remember.")
+
+
+class DeleteMemoryParams(BaseModel):
+    key: str = Field(description="The key of the memory to delete.")
+
+
+class WebSearchParams(BaseModel):
+    query: str = Field(description="The search query.")
+
+
+class ReadWebpageParams(BaseModel):
+    url: str = Field(description="The URL of the webpage to read.")
+
+
+class GenerateImageParams(BaseModel):
+    prompt: str = Field(description="A detailed description of the image to generate.")
+    size: str = Field(default="1024x1024", description="Image size: 1024x1024, 1792x1024, or 1024x1792.")
+
+
+class EditImageParams(BaseModel):
+    prompt: str = Field(description="A description of the changes to apply to the image.")
+    size: str = Field(default="1024x1024", description="Output size: 1024x1024, 1792x1024, or 1024x1792.")
+
+
+class ScheduleMessageParams(BaseModel):
+    prompt: str = Field(description="The instruction/intent for the future message.")
+    at: str = Field(default="", description="ISO datetime for one-time scheduling (e.g. 2026-03-10T09:00). Mutually exclusive with every/interval.")
+    every: str = Field(default="", description="Recurrence unit: hours, days, weeks, months. Mutually exclusive with at.")
+    interval: int = Field(default=1, description="Recurrence interval (default 1).")
+    at_time: str = Field(default="", description="Time of day for daily/weekly/monthly recurrence (HH:MM, 24h format).")
+    on_day: int | None = Field(default=None, description="Day of week (0=Mon..6=Sun) for weekly, or day of month (1-31) for monthly.")
+
+
+class CancelScheduleParams(BaseModel):
+    schedule_id: str = Field(description="UUID of the schedule to cancel.")
 
 
 class CoreToolProvider(ToolProvider):
@@ -29,16 +71,13 @@ Call this when you need to address the user by name, check their email, or answe
         }
         return json.dumps(info)
 
-    @tool(badge_icon='🧠', badge_label='Retained', detail_key='key', params={
-        'key': Param('A short category label (e.g. name, language, project, preference).'),
-        'content': Param('The fact to remember.'),
-    })
+    @tool(badge_icon='🧠', badge_label='Retained', detail_key='key', params=SaveMemoryParams)
     def save_memory(self, args, user, bot, conversation_id, context):
         """Persistently save a fact about the user so you can recall it in future conversations. \
 Call this proactively when the user tells you their name, preferences, projects, or any personal detail worth remembering. \
 If the key already exists it will be updated."""
-        key = args.get('key', '').strip()[:100]
-        content = args.get('content', '').strip()
+        key = args.key.strip()[:100]
+        content = args.content.strip()
         if not key or not content:
             return 'Error: key and content are required'
         UserMemory.objects.update_or_create(
@@ -48,13 +87,11 @@ If the key already exists it will be updated."""
         logger.info('Memory saved: %s/%s — %s', user.username, bot.username, key)
         return f'Saved memory "{key}".'
 
-    @tool(badge_icon='🧠', badge_label='Forgot', detail_key='key', params={
-        'key': Param('The key of the memory to delete.'),
-    })
+    @tool(badge_icon='🧠', badge_label='Forgot', detail_key='key', params=DeleteMemoryParams)
     def delete_memory(self, args, user, bot, conversation_id, context):
         """Delete a previously saved memory. \
 Call this when the user explicitly asks you to forget something or when a stored fact is no longer correct."""
-        key = args.get('key', '').strip()
+        key = args.key.strip()
         deleted, _ = UserMemory.objects.filter(user=user, bot=bot, key=key).delete()
         if deleted:
             logger.info('Memory deleted: %s/%s — %s', user.username, bot.username, key)
@@ -68,7 +105,7 @@ Call this when the user asks what you look like, wants to see your avatar, or me
         if not bot:
             return 'Error: no bot context'
         from django.core.files.storage import default_storage
-        from workspace.users.avatar_service import get_avatar_path, has_avatar
+        from workspace.users.services.avatar import get_avatar_path, has_avatar
         if not has_avatar(bot):
             return 'You do not have an avatar set.'
         try:
@@ -86,18 +123,56 @@ Call this when the user asks what you look like, wants to see your avatar, or me
 
 
 
+class WebToolProvider(ToolProvider):
+    """Web search and page reading. Registered only when SEARXNG_URL is set."""
+
+    @tool(badge_icon='🔍', badge_label='Searched the web', detail_key='query', params=WebSearchParams)
+    def web_search(self, args, user, bot, conversation_id, context):
+        """Search the web for current information. \
+Call this when the user asks about recent events, news, facts you're unsure about, \
+or anything that requires up-to-date information you don't have."""
+        from .services.web import search
+
+        query = args.query.strip()
+        if not query:
+            return 'Error: query is required'
+
+        results = search(query, max_results=5)
+        if not results:
+            return 'No results found.'
+
+        return json.dumps(results, ensure_ascii=False)
+
+    @tool(badge_icon='🌐', badge_label='Read webpage', detail_key='url', params=ReadWebpageParams)
+    def read_webpage(self, args, user, bot, conversation_id, context):
+        """Fetch and extract the main text content of a webpage. \
+Call this when you need to read the content of a specific URL shared by the user \
+or found via web_search to get more details."""
+        from .services.web import fetch_and_extract
+
+        url = args.url.strip()
+        if not url:
+            return 'Error: url is required'
+
+        try:
+            text = fetch_and_extract(url)
+        except ValueError as exc:
+            return f'Error: {exc}'
+
+        if not text:
+            return 'Could not extract text content from this page.'
+        return text
+
+
 class ImageToolProvider(ToolProvider):
     """Registered only when AI_IMAGE_MODEL is configured."""
 
-    @tool(badge_icon='🎨', badge_label='Generated image', detail_key='prompt', params={
-        'prompt': Param('A detailed description of the image to generate.'),
-        'size': Param('Image size: 1024x1024, 1792x1024, or 1024x1792.', required=False),
-    })
+    @tool(badge_icon='🎨', badge_label='Generated image', detail_key='prompt', params=GenerateImageParams)
     def generate_image(self, args, user, bot, conversation_id, context):
         """Generate a brand-new image from a text description. \
-Call this when the user asks you to create, draw, generate, or make an image from scratch. \
+Call this when the user asks you to create, draw, generate, make an image from scratch, send a picture or a photo of itself, or any other image-related request. \
 Do NOT use this to modify an existing image — use edit_image instead."""
-        prompt = args.get('prompt', '').strip()
+        prompt = args.prompt.strip()
         if not prompt:
             return 'Error: prompt is required'
         if not conversation_id:
@@ -107,7 +182,7 @@ Do NOT use this to modify an existing image — use edit_image instead."""
         if not client:
             return 'Error: AI is not configured'
 
-        size = args.get('size', '1024x1024')
+        size = args.size
         if size not in ('1024x1024', '1792x1024', '1024x1792'):
             size = '1024x1024'
         logger.info(
@@ -140,19 +215,16 @@ Do NOT use this to modify an existing image — use edit_image instead."""
 
         return f'Image generated successfully for: {prompt}'
 
-    @tool(badge_icon='✏️', badge_label='Edited image', detail_key='prompt', params={
-        'prompt': Param('A description of the changes to apply to the image.'),
-        'size': Param('Output size: 1024x1024, 1792x1024, or 1024x1792.', required=False),
-    })
+    @tool(badge_icon='✏️', badge_label='Edited image', detail_key='prompt', params=EditImageParams)
     def edit_image(self, args, user, bot, conversation_id, context):
         """Edit an existing image from the conversation based on a text instruction. \
 Automatically uses the most recent image in the conversation as the source. \
 Call this when the user asks you to modify, change, update, transform, or edit a picture — \
 for example "make it darker", "remove the background", "add a hat". \
 Do NOT use this to create an image from scratch — use generate_image instead."""
-        from .image_service import ai_edit_image
+        from .services.image import ai_edit_image
 
-        prompt = args.get('prompt', '').strip()
+        prompt = args.prompt.strip()
         if not prompt:
             return 'Error: prompt is required'
         if not conversation_id:
@@ -177,7 +249,7 @@ Do NOT use this to create an image from scratch — use generate_image instead."
             logger.warning('Could not read attachment %s for editing', attachment.uuid)
             return 'Error: could not read the source image'
 
-        size = args.get('size', '1024x1024')
+        size = args.size
 
         try:
             image_data = ai_edit_image(source_data, prompt, size)
@@ -196,29 +268,24 @@ Do NOT use this to create an image from scratch — use generate_image instead."
 class ScheduleToolProvider(ToolProvider):
     """Scheduled message tools for bots."""
 
-    @tool(badge_icon='\u23f0', badge_label='Scheduled message', detail_key='prompt', params={
-        'prompt': Param('The instruction/intent for the future message.'),
-        'at': Param('ISO datetime for one-time scheduling (e.g. 2026-03-10T09:00). Mutually exclusive with every/interval.', required=False),
-        'every': Param('Recurrence unit: hours, days, weeks, months. Mutually exclusive with at.', required=False),
-        'interval': Param('Recurrence interval (default 1).', type='integer', required=False),
-        'at_time': Param('Time of day for daily/weekly/monthly recurrence (HH:MM, 24h format).', required=False),
-        'on_day': Param('Day of week (0=Mon..6=Sun) for weekly, or day of month (1-31) for monthly.', type='integer', required=False),
-    })
+    @tool(badge_icon='\u23f0', badge_label='Scheduled message', detail_key='prompt', params=ScheduleMessageParams)
     def schedule_message(self, args, user, bot, conversation_id, context):
         """Schedule a message to be sent later, either once at a specific time or on a recurring basis. \
-Call this when the user asks you to send a message later, set a reminder, or create a recurring message."""
-        from datetime import datetime, time, timedelta
+Call this when the user asks you to send a message later, set a reminder, or create a recurring message. \
+IMPORTANT: Before creating a new schedule, always call list_schedules first to check for existing \
+schedules with a similar prompt — update or cancel the old one instead of creating duplicates."""
+        from datetime import datetime, time, timedelta, timezone
         import calendar
-        from django.utils import timezone
-        from workspace.users.settings_service import get_user_timezone
+        from django.utils import timezone as dj_timezone
+        from workspace.users.services.settings import get_user_timezone
         from .models import ScheduledMessage
 
-        prompt = args.get('prompt', '').strip()
+        prompt = args.prompt.strip()
         if not prompt:
             return 'Error: prompt is required'
 
-        at = args.get('at', '').strip() if args.get('at') else ''
-        every = args.get('every', '').strip() if args.get('every') else ''
+        at = args.at.strip()
+        every = args.every.strip()
 
         if at and every:
             return 'Error: provide either "at" for one-time or "every" for recurring, not both'
@@ -226,7 +293,7 @@ Call this when the user asks you to send a message later, set a reminder, or cre
             return 'Error: provide either "at" (ISO datetime) for one-time or "every" (hours/days/weeks/months) for recurring'
 
         user_tz = get_user_timezone(user)
-        now = timezone.now()
+        now = dj_timezone.now()
 
         if at:
             # One-time schedule
@@ -257,12 +324,12 @@ Call this when the user asks you to send a message later, set a reminder, or cre
         if every not in valid_units:
             return f'Error: "every" must be one of {valid_units}'
 
-        interval = args.get('interval', 1)
-        if not isinstance(interval, int) or interval < 1:
+        interval = args.interval
+        if interval < 1:
             return 'Error: interval must be a positive integer'
 
-        at_time_str = args.get('at_time', '').strip() if args.get('at_time') else ''
-        on_day = args.get('on_day')
+        at_time_str = args.at_time.strip()
+        on_day = args.on_day
 
         recurrence_time = None
         if at_time_str:
@@ -274,8 +341,6 @@ Call this when the user asks you to send a message later, set a reminder, or cre
 
         recurrence_day = None
         if on_day is not None:
-            if not isinstance(on_day, int):
-                return 'Error: on_day must be an integer'
             recurrence_day = on_day
 
         # Compute first next_run_at — recurrence_time is in the user's timezone
@@ -352,15 +417,13 @@ Call this when the user asks you to send a message later, set a reminder, or cre
         next_local = next_run.astimezone(user_tz)
         return f'Scheduled recurring message ({detail}), next run: {next_local.strftime("%Y-%m-%d %H:%M")} ({user_tz}) (id: {schedule.uuid})'
 
-    @tool(badge_icon='\u274c', badge_label='Cancelled schedule', detail_key='schedule_id', params={
-        'schedule_id': Param('UUID of the schedule to cancel.'),
-    })
+    @tool(badge_icon='\u274c', badge_label='Cancelled schedule', detail_key='schedule_id', params=CancelScheduleParams)
     def cancel_schedule(self, args, user, bot, conversation_id, context):
         """Cancel an active scheduled message by its ID. \
 Call this when the user wants to stop or remove a previously scheduled message."""
         from .models import ScheduledMessage
 
-        schedule_id = args.get('schedule_id', '').strip()
+        schedule_id = args.schedule_id.strip()
         if not schedule_id:
             return 'Error: schedule_id is required'
 
@@ -382,7 +445,7 @@ Call this when the user wants to stop or remove a previously scheduled message."
     def list_schedules(self, args, user, bot, conversation_id, context):
         """List all active scheduled messages in this conversation. \
 Call this when the user wants to see what messages are scheduled or pending."""
-        from workspace.users.settings_service import get_user_timezone
+        from workspace.users.services.settings import get_user_timezone
         from .models import ScheduledMessage
 
         schedules = ScheduledMessage.objects.filter(

@@ -35,9 +35,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/app/.venv/bin:$PATH
 
-# System deps required at runtime (cairosvg needs libcairo)
+# System deps required at runtime (cairosvg needs libcairo, video frames need ffmpeg)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user

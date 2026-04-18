@@ -4,7 +4,10 @@ metadata:
   name: workspace-ingress
   namespace: workspace
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
     # Block /metrics from public access (Prometheus scrapes via ClusterIP)
     nginx.ingress.kubernetes.io/server-snippet: |
       location /metrics {

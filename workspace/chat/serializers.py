@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from workspace.ai.models import ScheduledMessage
 
-from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedMessage, Reaction
+from .models import Conversation, ConversationMember, LinkPreview, Message, MessageAttachment, MessageLinkPreview, PinnedMessage, Reaction
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -48,10 +48,11 @@ class PinnedMessageSerializer(serializers.ModelSerializer):
 class MessageAttachmentSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
     is_image = serializers.BooleanField(read_only=True)
+    is_video = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = MessageAttachment
-        fields = ['uuid', 'original_name', 'mime_type', 'size', 'is_image', 'url', 'created_at']
+        fields = ['uuid', 'original_name', 'mime_type', 'size', 'is_image', 'is_video', 'url', 'created_at']
 
     def get_url(self, obj):
         return f'/api/v1/chat/attachments/{obj.uuid}'
@@ -71,10 +72,20 @@ class ReplyToSerializer(serializers.ModelSerializer):
         return body[:200] + '\u2026' if len(body) > 200 else body
 
 
+class LinkPreviewSerializer(serializers.Serializer):
+    url = serializers.URLField(source='preview.url')
+    title = serializers.CharField(source='preview.title')
+    description = serializers.CharField(source='preview.description')
+    image_url = serializers.URLField(source='preview.image_url', allow_blank=True)
+    favicon_url = serializers.URLField(source='preview.favicon_url', allow_blank=True)
+    site_name = serializers.CharField(source='preview.site_name')
+
+
 class MessageSerializer(serializers.ModelSerializer):
     author = MemberUserSerializer()
     reactions = ReactionSerializer(many=True, read_only=True)
     attachments = MessageAttachmentSerializer(many=True, read_only=True)
+    link_previews = LinkPreviewSerializer(many=True, read_only=True)
     conversation_id = serializers.UUIDField()
     reply_to = ReplyToSerializer(read_only=True, allow_null=True)
 
@@ -83,7 +94,7 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = [
             'uuid', 'conversation_id', 'author', 'body', 'body_html',
             'edited_at', 'created_at', 'deleted_at',
-            'reactions', 'attachments', 'reply_to',
+            'reactions', 'attachments', 'link_previews', 'reply_to',
         ]
 
 
@@ -103,6 +114,7 @@ class LastMessageSerializer(serializers.ModelSerializer):
 
 class ConversationListSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
+    member_count = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.IntegerField(read_only=True, default=0)
     is_pinned = serializers.BooleanField(read_only=True, default=False)
@@ -114,9 +126,18 @@ class ConversationListSerializer(serializers.ModelSerializer):
         fields = [
             'uuid', 'kind', 'title', 'description', 'created_by_id',
             'created_at', 'updated_at', 'has_avatar',
-            'members', 'last_message', 'unread_count',
+            'members', 'member_count', 'last_message', 'unread_count',
             'is_pinned', 'pin_position', 'is_bot_conversation',
         ]
+
+    def get_member_count(self, obj):
+        # Members are prefetched (filtered to active) by the view, so len()
+        # of the cache is free. The fallback hits the DB only when an ad-hoc
+        # caller serializes a conversation without priming the prefetch.
+        cache = getattr(obj, '_prefetched_objects_cache', None)
+        if cache and 'members' in cache:
+            return len(cache['members'])
+        return obj.members.filter(left_at__isnull=True).count()
 
     def get_is_bot_conversation(self, obj):
         """Check if this conversation includes a bot member."""

@@ -1,0 +1,192 @@
+<!-- Security Tab -->
+<div x-show="tab === 'security'" x-cloak x-data="changePasswordForm()">
+  <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card-body">
+      <h2 class="card-title text-lg gap-2">
+        <i data-lucide="lock" class="w-5 h-5"></i>
+        Change Password
+      </h2>
+
+      <!-- Success/error feedback -->
+      <div x-ref="feedbackContainer"></div>
+
+      <!-- Form -->
+      <form @submit.prevent="submit()" class="mt-2 space-y-4">
+        {% csrf_token %}
+
+        <!-- Current password -->
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">Current Password</span></label>
+          <label class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors">
+            <i data-lucide="lock" class="w-4 h-4 text-base-content/40"></i>
+            <input
+              :type="showCurrent ? 'text' : 'password'"
+              x-model="currentPassword"
+              class="grow"
+              placeholder="Enter current password"
+              required
+              autocomplete="current-password"
+            />
+            <button type="button" @click="showCurrent = !showCurrent" class="btn btn-ghost btn-xs btn-circle" tabindex="-1">
+              <i x-show="!showCurrent" data-lucide="eye" class="w-4 h-4 text-base-content/40"></i>
+              <i x-show="showCurrent" data-lucide="eye-off" class="w-4 h-4 text-base-content/40"></i>
+            </button>
+          </label>
+        </div>
+
+        <!-- New password -->
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">New Password</span></label>
+          <label class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors">
+            <i data-lucide="key-round" class="w-4 h-4 text-base-content/40"></i>
+            <input
+              :type="showNew ? 'text' : 'password'"
+              x-model="newPassword"
+              class="grow"
+              placeholder="Enter new password"
+              required
+              autocomplete="new-password"
+            />
+            <button type="button" @click="showNew = !showNew" class="btn btn-ghost btn-xs btn-circle" tabindex="-1">
+              <i x-show="!showNew" data-lucide="eye" class="w-4 h-4 text-base-content/40"></i>
+              <i x-show="showNew" data-lucide="eye-off" class="w-4 h-4 text-base-content/40"></i>
+            </button>
+          </label>
+          <!-- Password rules (inline) -->
+          <template x-if="rules.length > 0">
+            <ul class="mt-2 space-y-0.5 text-xs">
+              <template x-for="rule in rules" :key="rule.code">
+                <li class="flex items-center gap-1.5 transition-colors duration-200"
+                    :class="{
+                      'text-success': ruleStatus(rule) === 'pass',
+                      'text-error': ruleStatus(rule) === 'fail',
+                      'text-base-content/40': ruleStatus(rule) === 'neutral'
+                    }">
+                  <!-- Pass icon -->
+                  <svg x-show="ruleStatus(rule) === 'pass'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  <!-- Fail icon -->
+                  <svg x-show="ruleStatus(rule) === 'fail'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  <!-- Neutral icon -->
+                  <svg x-show="ruleStatus(rule) === 'neutral'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/></svg>
+                  <span x-text="rule.text"></span>
+                </li>
+              </template>
+            </ul>
+          </template>
+        </div>
+
+        <!-- Confirm password -->
+        <div class="form-control">
+          <label class="label"><span class="label-text font-medium">Confirm New Password</span></label>
+          <label class="input input-bordered flex items-center gap-2 focus-within:border-primary/50 transition-colors"
+                 :class="{ 'input-error': confirmMismatch }">
+            <i data-lucide="key-round" class="w-4 h-4 text-base-content/40"></i>
+            <input
+              :type="showConfirm ? 'text' : 'password'"
+              x-model="confirmPassword"
+              class="grow"
+              placeholder="Confirm new password"
+              required
+              autocomplete="new-password"
+            />
+            <button type="button" @click="showConfirm = !showConfirm" class="btn btn-ghost btn-xs btn-circle" tabindex="-1">
+              <i x-show="!showConfirm" data-lucide="eye" class="w-4 h-4 text-base-content/40"></i>
+              <i x-show="showConfirm" data-lucide="eye-off" class="w-4 h-4 text-base-content/40"></i>
+            </button>
+          </label>
+          <label class="label" x-show="confirmMismatch" x-cloak>
+            <span class="label-text-alt text-error">Passwords do not match.</span>
+          </label>
+        </div>
+
+        <!-- Submit -->
+        <div class="form-control mt-6">
+          <button type="submit" class="btn btn-primary gap-2" :disabled="!canSubmit">
+            <span x-show="!loading"><i data-lucide="save" class="w-4 h-4"></i></span>
+            <span x-show="loading" class="loading loading-spinner loading-sm"></span>
+            <span x-text="loading ? 'Updating...' : 'Update Password'"></span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function changePasswordForm() {
+    return {
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+      showCurrent: false,
+      showNew: false,
+      showConfirm: false,
+      loading: false,
+      rules: [],
+      async init() {
+        try {
+          const res = await fetch('/api/v1/users/password-rules');
+          const data = await res.json();
+          this.rules = data.rules || [];
+        } catch (e) {
+          this.rules = [];
+        }
+      },
+      ruleStatus(rule) {
+        if (!this.newPassword) return 'neutral';
+        switch (rule.code) {
+          case 'min_length':
+            return this.newPassword.length >= rule.value ? 'pass' : 'fail';
+          case 'numeric':
+            return /[^0-9]/.test(this.newPassword) ? 'pass' : 'fail';
+          default:
+            return 'neutral';
+        }
+      },
+      get confirmMismatch() {
+        return this.confirmPassword && this.newPassword !== this.confirmPassword;
+      },
+      get canSubmit() {
+        return this.currentPassword && this.newPassword && this.confirmPassword && !this.confirmMismatch && !this.loading;
+      },
+      async submit() {
+        if (this.$refs.feedbackContainer) this.$refs.feedbackContainer.replaceChildren();
+        this.loading = true;
+        try {
+          const csrfToken = getCSRFToken();
+          const res = await fetch('/api/v1/users/me/password', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({
+              current_password: this.currentPassword,
+              new_password: this.newPassword,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            this.currentPassword = '';
+            this.newPassword = '';
+            this.confirmPassword = '';
+            this.showFeedback('success', data.message || 'Password updated successfully.');
+          } else {
+            const msgs = data.errors || ['An unexpected error occurred.'];
+            this.showFeedback('error', msgs.join(', '));
+          }
+        } catch (e) {
+          this.showFeedback('error', 'Network error. Please try again.');
+        } finally {
+          this.loading = false;
+        }
+      },
+      showFeedback(type, message) {
+        const container = this.$refs.feedbackContainer;
+        if (!container) return;
+        container.replaceChildren();
+        container.appendChild(InlineAlert.create({ type, message }));
+      },
+    };
+  }
+</script>

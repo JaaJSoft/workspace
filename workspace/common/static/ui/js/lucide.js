@@ -91,46 +91,42 @@ function initLucideIconsInElement(element) {
 /**
  * Observer-based Lucide initialization.
  * Watches for DOM changes and automatically initializes new Lucide icons.
- * Returns a function to stop observing.
+ * Only processes newly added nodes (not a full DOM rescan).
  *
  * @param {HTMLElement} root - The root element to observe (default: document.body)
  * @returns {Function} A function to disconnect the observer
  */
 function observeLucideIcons(root = document.body) {
   if (typeof lucide === 'undefined' || !lucide.createIcons) {
-    return () => {}; // Return no-op function
+    return () => {};
   }
 
+  let pending = null;
+
   const observer = new MutationObserver((mutations) => {
-    let shouldUpdate = false;
-
+    const icons = [];
     for (const mutation of mutations) {
-      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-        // Check if any added nodes have data-lucide attribute
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType === 1) { // Element node
-            if (node.hasAttribute?.('data-lucide') ||
-                node.querySelector?.('[data-lucide]')) {
-              shouldUpdate = true;
-              break;
-            }
-          }
-        }
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        // Skip SVG elements — Lucide copies data-lucide onto created <svg>,
+        // so without this check we'd re-process them in an infinite loop.
+        if (node instanceof SVGElement) continue;
+        if (node.hasAttribute?.('data-lucide')) icons.push(node);
+        const nested = node.querySelectorAll?.('[data-lucide]:not(svg)');
+        if (nested) icons.push(...nested);
       }
-      if (shouldUpdate) break;
     }
+    if (!icons.length) return;
 
-    if (shouldUpdate) {
-      initLucideIconsNextFrame();
-    }
+    // Debounce: batch multiple rapid mutations into one createIcons call
+    if (pending) cancelAnimationFrame(pending);
+    pending = requestAnimationFrame(() => {
+      lucide.createIcons({ nodes: icons });
+      pending = null;
+    });
   });
 
-  observer.observe(root, {
-    childList: true,
-    subtree: true
-  });
-
-  // Return disconnect function
+  observer.observe(root, { childList: true, subtree: true });
   return () => observer.disconnect();
 }
 

@@ -86,6 +86,7 @@ class Message(models.Model):
     )
     body = models.TextField()
     body_html = models.TextField(blank=True, default='')
+    tool_data = models.JSONField(null=True, blank=True)
     edited_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
@@ -122,6 +123,9 @@ class Reaction(models.Model):
                 fields=['message', 'user', 'emoji'],
                 name='unique_reaction',
             ),
+        ]
+        indexes = [
+            models.Index(fields=['message', 'emoji']),
         ]
 
     def __str__(self):
@@ -203,5 +207,52 @@ class MessageAttachment(models.Model):
     def is_image(self):
         return self.mime_type.startswith('image/')
 
+    @property
+    def is_video(self):
+        return self.mime_type.startswith('video/')
+
     def __str__(self):
         return f'{self.original_name} ({self.message_id})'
+
+
+class LinkPreview(models.Model):
+    """Cached OpenGraph metadata for a URL. Shared across messages."""
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    url = models.URLField(max_length=2048, unique=True, db_index=True)
+    title = models.CharField(max_length=500, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    image_url = models.URLField(max_length=2048, blank=True, default='')
+    favicon_url = models.URLField(max_length=500, blank=True, default='')
+    site_name = models.CharField(max_length=200, blank=True, default='')
+    fetched_at = models.DateTimeField(auto_now=True)
+    fetch_failed = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['url'], name='linkpreview_url'),
+        ]
+
+    def __str__(self):
+        return self.title or self.url[:80]
+
+
+class MessageLinkPreview(models.Model):
+    """Links a Message to its LinkPreview(s), preserving order."""
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='link_previews')
+    preview = models.ForeignKey(LinkPreview, on_delete=models.CASCADE, related_name='message_links')
+    position = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['message', 'preview'], name='unique_msg_link_preview'),
+        ]
+        ordering = ['position']
+        indexes = [
+            models.Index(fields=['message', 'position'], name='msglp_msg_pos'),
+            models.Index(fields=['created_at'], name='msglp_created_at'),
+        ]
+
+    def __str__(self):
+        return f'Preview {self.preview_id} on {self.message_id}'

@@ -11,15 +11,34 @@
 <div class="py-6 space-y-8">
 
   {# ── Hero ── #}
-  <section class="text-center space-y-1">
+  <section class="text-center space-y-1 relative">
     <h1 class="text-3xl font-semibold text-base-content" x-data x-text="(() => { const h = new Date().getHours(); const g = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; return g + ', {{ user.first_name|default:user.username }}.'; })()">Welcome back, {{ user.first_name|default:user.username }}.</h1>
     <p class="text-base-content/60" x-data="weatherWidget()" x-init="init()" x-cloak>
       <span x-text="label"></span>
     </p>
+
+    {# ── Usage popover ── #}
+    <div class="absolute right-0 top-0" x-data="usagePopover()" @click.outside="open = false">
+      <button
+        @click="toggle()"
+        class="btn btn-ghost btn-sm btn-square"
+        title="Workspace usage"
+      >
+        <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+      </button>
+      <div
+        x-show="open"
+        x-cloak
+        x-transition.opacity
+        class="absolute right-0 top-full mt-2 z-50 w-72 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
+      >
+        {% include 'dashboard/partials/usage_widget.html' %}
+      </div>
+    </div>
   </section>
 
   {# ── Search bar ── #}
-  <section id="dashboard-search" class="max-w-2xl mx-auto w-full" x-data="commandPaletteDropdown()" x-init="$nextTick(() => lucide.createIcons())">
+  <section id="dashboard-search" class="hidden sm:block max-w-2xl mx-auto w-full" x-data="commandPaletteDropdown()">
     <div class="relative">
       {% include 'ui/partials/search/search_input.html' with input_class='input-md text-base shadow-sm' show_kbd=True size='lg' %}
 
@@ -73,7 +92,7 @@
   {# ── Activity feed ── #}
   <section class="max-w-4xl mx-auto w-full">
     <div>
-      <div class="card bg-base-100 shadow border border-base-300" x-data="{ activityTab: '{{ activity_tab|default:"all" }}', activitySearch: '', searchOpen: false, loading: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }" @ajax:before="loading = true" @ajax:after="loading = false; $nextTick(() => lucide.createIcons())">
+      <div class="card bg-base-100 shadow border border-base-300" x-data="{ activityTab: '{{ activity_tab|default:"all" }}', activitySearch: '', searchOpen: false, loading: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }" @ajax:before="loading = true" @ajax:after="loading = false">
         <div class="card-body gap-4">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div class="space-y-1">
@@ -84,30 +103,7 @@
               <p class="text-sm text-base-content/60">What's happening across your workspace.</p>
             </div>
             <div class="flex items-center gap-2">
-            <div class="tabs tabs-boxed flex-wrap">
-              <a
-                :href="feedUrl.replace(/source=[^&]*/g, '').replace(/[?&]$/, '')"
-                class="tab gap-1.5"
-                :class="activityTab === 'all' ? 'tab-active' : ''"
-                @click="activityTab = 'all'"
-                x-target="dashboard-activity"
-              >
-                <i data-lucide="layers" class="w-3.5 h-3.5"></i>
-                All
-              </a>
-              {% for src in activity_sources %}
-              <a
-                :href="feedUrl.includes('source=') ? feedUrl.replace(/source=[^&]*/, 'source={{ src.slug }}') : feedUrl + (feedUrl.includes('?') ? '&' : '?') + 'source={{ src.slug }}'"
-                class="tab gap-1.5"
-                :class="activityTab === '{{ src.slug }}' ? 'tab-active' : ''"
-                @click="activityTab = '{{ src.slug }}'"
-                x-target="dashboard-activity"
-              >
-                <i data-lucide="{{ src.icon }}" class="w-3.5 h-3.5"></i>
-                {{ src.label }}
-              </a>
-              {% endfor %}
-            </div>
+            {% include "ui/partials/activity_tabs.html" with activity_prefix="dashboard-activity" %}
             <button
               class="btn btn-ghost btn-sm btn-square"
               :class="searchOpen && 'btn-active'"
@@ -116,29 +112,10 @@
             >
               <i data-lucide="search" class="w-4 h-4"></i>
             </button>
-            <a
-              :href="feedUrl"
-              class="btn btn-ghost btn-sm btn-square"
-              x-target="dashboard-activity"
-              title="Refresh"
-            >
-              <i data-lucide="refresh-cw" class="w-4 h-4" :class="loading && 'animate-spin'"></i>
-            </a>
+            {% include "ui/partials/refresh_button.html" with url_expr="feedUrl" target="dashboard-activity" %}
             </div>
           </div>
-          <div x-show="searchOpen" x-collapse x-cloak class="relative">
-            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none"></i>
-            <input
-              x-ref="activitySearchInput"
-              type="text"
-              x-model.debounce.400ms="activitySearch"
-              placeholder="Search activity..."
-              class="input input-bordered input-sm w-full pl-9"
-              @input.debounce.400ms="$nextTick(() => { $refs.activitySearchLink.click() })"
-              @keydown.escape="searchOpen = false; activitySearch = ''; $nextTick(() => $refs.activitySearchLink.click())"
-            >
-            <a x-ref="activitySearchLink" :href="feedUrl" x-target="dashboard-activity" class="hidden"></a>
-          </div>
+          {% include "ui/partials/activity_search.html" with activity_prefix="dashboard-activity" %}
 
           {# ── Activity skeleton ── #}
           <div x-show="loading" x-cloak class="animate-pulse">
@@ -157,7 +134,7 @@
           </div>
 
           <div x-show="!loading">
-            {% include 'dashboard/partials/activity_feed.html' %}
+            {% include 'ui/partials/activity_feed.html' %}
           </div>
         </div>
       </div>
@@ -168,7 +145,7 @@
 </div>
 
 <script>
-var _weatherCodes = {
+const _weatherCodes = {
   0:'clear-day',1:'clear-day',2:'partly-cloudy',3:'cloudy',
   45:'fog',48:'fog',
   51:'drizzle',53:'drizzle',55:'drizzle',56:'drizzle',57:'drizzle',
@@ -178,29 +155,77 @@ var _weatherCodes = {
   85:'snow',86:'snow',
   95:'thunderstorm',96:'thunderstorm',99:'thunderstorm',
 };
-var _weatherIcons = {
+const _weatherIcons = {
   'clear-day':'sun','clear-night':'moon','partly-cloudy':'cloud-sun',
   'cloudy':'cloud','fog':'cloud-fog','drizzle':'cloud-drizzle',
   'rain':'cloud-rain','snow':'snowflake','thunderstorm':'cloud-lightning',
 };
-var _WEATHER_CACHE_KEY = 'dashboard_weather';
-var _WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 min
+const _WEATHER_CACHE_KEY = 'dashboard_weather';
+const _WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 min
+
+function usagePopover() {
+  return {
+    open: false,
+    animated: false,
+    toggle() {
+      this.open = !this.open;
+      if (this.open) {
+        this.$nextTick(() => {
+          if (!this.animated) {
+            this.animated = true;
+            this._animateCounts();
+            this._animateStorage();
+          }
+        });
+      }
+    },
+    _animateCounts() {
+      const refs = ['countFiles', 'countMessages', 'countMail', 'countEvents'];
+      const duration = 600;
+      for (let i = 0; i < refs.length; i++) {
+        const el = this.$refs[refs[i]];
+        if (!el) continue;
+        const target = parseInt(el.dataset.target) || 0;
+        if (target === 0) { el.textContent = '0'; continue; }
+        this._countUp(el, target, duration);
+      }
+    },
+    _countUp(el, target, duration) {
+      const start = performance.now();
+      function tick(now) {
+        const progress = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        el.textContent = Math.round(eased * target).toLocaleString();
+        if (progress < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    },
+    _animateStorage() {
+      const bar = this.$refs.storageBar;
+      if (!bar) return;
+      const used = {{ usage_stats.files.total_size|default:"0" }};
+      const quota = {{ storage_quota }};
+      const pct = quota > 0 ? Math.min((used / quota) * 100, 100) : 0;
+      requestAnimationFrame(() => { bar.style.width = pct + '%'; });
+    },
+  };
+}
 
 function weatherWidget() {
   return {
     label: '',
     init() {
-      var now = new Date();
+      const now = new Date();
       this.label = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
       this._loadWeather();
     },
     _loadWeather() {
-      var self = this;
+      const self = this;
       // Check cache
       try {
-        var raw = localStorage.getItem(_WEATHER_CACHE_KEY);
+        const raw = localStorage.getItem(_WEATHER_CACHE_KEY);
         if (raw) {
-          var c = JSON.parse(raw);
+          const c = JSON.parse(raw);
           if (c.ts + _WEATHER_CACHE_TTL > Date.now()) {
             self._applyWeather(c.temp, c.code);
             return;
@@ -210,35 +235,34 @@ function weatherWidget() {
 
       if (!navigator.geolocation) return;
       navigator.geolocation.getCurrentPosition(function(pos) {
-        var lat = pos.coords.latitude.toFixed(2);
-        var lon = pos.coords.longitude.toFixed(2);
+        const lat = pos.coords.latitude.toFixed(2);
+        const lon = pos.coords.longitude.toFixed(2);
         fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current=temperature_2m,weather_code')
           .then(function(r) { return r.json(); })
           .then(function(data) {
-            var temp = Math.round(data.current.temperature_2m);
-            var code = data.current.weather_code;
+            const temp = Math.round(data.current.temperature_2m);
+            const code = data.current.weather_code;
             try { localStorage.setItem(_WEATHER_CACHE_KEY, JSON.stringify({ temp: temp, code: code, ts: Date.now() })); } catch(e) {}
             self._applyWeather(temp, code);
         }).catch(function() {});
       }, function() {}, { timeout: 5000 });
     },
     _applyWeather(temp, code) {
-      var condition = _weatherCodes[code] || 'cloudy';
-      var h = new Date().getHours();
+      let condition = _weatherCodes[code] || 'cloudy';
+      const h = new Date().getHours();
       if ((condition === 'clear-day') && (h < 6 || h >= 20)) condition = 'clear-night';
-      var icon = _weatherIcons[condition] || 'cloud';
-      var dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+      const icon = _weatherIcons[condition] || 'cloud';
+      const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
       this.label = dateStr + '  ·  ' + temp + '°C';
       // Inject lucide icon next to temperature
       this.$nextTick(() => {
-        var el = this.$el.querySelector('[data-weather-icon]');
+        const el = this.$el.querySelector('[data-weather-icon]');
         if (el) el.remove();
-        var span = document.createElement('i');
+        const span = document.createElement('i');
         span.setAttribute('data-lucide', icon);
         span.setAttribute('data-weather-icon', '');
         span.className = 'inline-block w-4 h-4 ml-1 -translate-y-px';
         this.$el.querySelector('span').appendChild(span);
-        lucide?.createIcons({ nodes: [span] });
       });
     },
   };

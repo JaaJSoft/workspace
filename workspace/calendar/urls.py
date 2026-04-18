@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from . import views_external
 from . import views_polls
 
 urlpatterns = [
@@ -18,4 +19,9 @@ urlpatterns = [
     path('api/v1/calendar/polls/<uuid:poll_id>/vote', views_polls.PollVoteView.as_view(), name='poll-vote'),
     path('api/v1/calendar/polls/<uuid:poll_id>/invite', views_polls.PollInviteView.as_view(), name='poll-invite'),
     path('api/v1/calendar/polls/<uuid:poll_id>/finalize', views_polls.PollFinalizeView.as_view(), name='poll-finalize'),
+
+    # External calendars
+    path('api/v1/calendar/external-calendars', views_external.ExternalCalendarListView.as_view(), name='external-calendar-list'),
+    path('api/v1/calendar/external-calendars/<uuid:ext_id>', views_external.ExternalCalendarDetailView.as_view(), name='external-calendar-detail'),
+    path('api/v1/calendar/external-calendars/<uuid:ext_id>/sync', views_external.ExternalCalendarSyncView.as_view(), name='external-calendar-sync'),
 ]

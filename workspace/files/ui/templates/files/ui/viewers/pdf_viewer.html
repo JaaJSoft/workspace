@@ -29,12 +29,6 @@ window.pdfViewerData = function pdfViewerData() {
   return {
     loading: true,
 
-    init() {
-      this.$nextTick(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      });
-    },
-
     onLoad() {
       this.loading = false;
     },

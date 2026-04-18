@@ -3,12 +3,16 @@ from datetime import timedelta
 
 from dateutil.parser import parse as dateutil_parse
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import OuterRef, Q, Prefetch, Subquery
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from workspace.common.cache import cache_response, invalidate
+from workspace.common.mixins import CacheControlMixin
 
 
 def _parse_dt(value):
@@ -24,10 +28,16 @@ def _parse_dt(value):
     except (ValueError, TypeError):
         return None
 
-from workspace.notifications.services import notify, notify_many
+from workspace.notifications.services.notifications import notify, notify_many
 from .models import Calendar, CalendarSubscription, Event, EventMember
-from .queries import visible_calendar_ids
+from .models_external import ExternalCalendar
+from .queries import visible_calendars, visible_calendar_ids
+
+
+def _is_external_calendar(calendar_id):
+    return ExternalCalendar.objects.filter(calendar_id=calendar_id).exists()
 from .recurrence import expand_recurring_events, make_virtual_occurrence
+from .upcoming import get_upcoming_page
 from .serializers import (
     CalendarCreateSerializer,
     CalendarSerializer,
@@ -72,6 +82,7 @@ def _update_event_fields(event, data, user):
     return None
 
 
+@transaction.atomic
 def _sync_members(event, member_ids, owner_id):
     """Sync event members from a list of user IDs.
     Returns a set of user IDs that were added or removed (already notified separately).
@@ -109,16 +120,14 @@ def _sync_members(event, member_ids, owner_id):
 # ---------- Calendar CRUD ----------
 
 @extend_schema(tags=['Calendar'])
-class CalendarListView(APIView):
+class CalendarListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
+    cache_max_age = 300
 
     @extend_schema(summary="List user's calendars (owned + subscribed)")
+    @cache_response(300)
     def get(self, request):
-        owned = Calendar.objects.filter(owner=request.user).select_related('owner')
-        sub_ids = CalendarSubscription.objects.filter(
-            user=request.user,
-        ).values_list('calendar_id', flat=True)
-        subscribed = Calendar.objects.filter(uuid__in=sub_ids).select_related('owner')
+        owned, subscribed = visible_calendars(request.user)
 
         return Response({
             'owned': CalendarSerializer(owned, many=True).data,
@@ -131,6 +140,7 @@ class CalendarListView(APIView):
         ser.is_valid(raise_exception=True)
         cal = Calendar.objects.create(owner=request.user, **ser.validated_data)
         cal = Calendar.objects.select_related('owner').get(pk=cal.pk)
+        invalidate('CalendarListView', user=request.user)
         return Response(CalendarSerializer(cal).data, status=status.HTTP_201_CREATED)
 
 
@@ -151,6 +161,7 @@ class CalendarDetailView(APIView):
             setattr(cal, k, v)
         cal.save()
         cal = Calendar.objects.select_related('owner').get(pk=cal.pk)
+        invalidate('CalendarListView', user=request.user)
         return Response(CalendarSerializer(cal).data)
 
     @extend_schema(summary="Delete a calendar")
@@ -160,24 +171,64 @@ class CalendarDetailView(APIView):
         except Calendar.DoesNotExist:
             return Response({'detail': 'Calendar not found.'}, status=status.HTTP_404_NOT_FOUND)
         cal.delete()
+        invalidate('CalendarListView', user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ---------- Event CRUD ----------
 
 @extend_schema(tags=['Calendar'])
-class EventListView(APIView):
+class EventListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        summary="List events in a date range",
+        summary="List events (range mode) or next N upcoming events (cursor mode)",
         parameters=[
-            OpenApiParameter(name='start', type=str, required=True),
-            OpenApiParameter(name='end', type=str, required=True),
+            OpenApiParameter(name='start', type=str, required=False, description='Range mode: start of window'),
+            OpenApiParameter(name='end', type=str, required=False, description='Range mode: end of window'),
+            OpenApiParameter(name='after', type=str, required=False, description='Cursor mode: return events starting at or after this datetime'),
+            OpenApiParameter(name='limit', type=int, required=False, description='Cursor mode: max events per page (default 20, max 100)'),
             OpenApiParameter(name='calendar_ids', type=str, required=False, description='Comma-separated calendar UUIDs'),
+            OpenApiParameter(name='show_declined', type=bool, required=False, description='Cursor mode: include declined events'),
         ],
     )
     def get(self, request):
+        after_param = request.query_params.get('after')
+        if after_param is not None and after_param.strip():
+            return self._get_cursor(request, after_param)
+        return self._get_range(request)
+
+    def _get_cursor(self, request, after_param):
+        after = _parse_dt(after_param)
+        if after is None:
+            return Response(
+                {'detail': 'Invalid "after" datetime.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            limit = int(request.query_params.get('limit', 20))
+        except (TypeError, ValueError):
+            limit = 20
+        limit = max(1, min(limit, 100))
+
+        calendar_ids_param = request.query_params.get('calendar_ids')
+        calendar_ids = None
+        if calendar_ids_param is not None:
+            calendar_ids = [c.strip() for c in calendar_ids_param.split(',') if c.strip()]
+
+        show_declined = request.query_params.get('show_declined', '').lower() in ('1', 'true', 'yes')
+
+        events, next_after = get_upcoming_page(
+            user=request.user,
+            after=after,
+            limit=limit,
+            calendar_ids=calendar_ids,
+            show_declined=show_declined,
+        )
+        return Response({'events': events, 'next_after': next_after})
+
+    def _get_range(self, request):
         start = request.query_params.get('start')
         end = request.query_params.get('end')
         if not start or not end:
@@ -235,6 +286,7 @@ class EventListView(APIView):
         return Response(all_events)
 
     @extend_schema(summary="Create an event", request=EventCreateSerializer)
+    @transaction.atomic
     def post(self, request):
         ser = EventCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -247,6 +299,11 @@ class EventListView(APIView):
             return Response(
                 {'detail': 'Calendar not found or not owned by you.'},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+        if _is_external_calendar(cal.pk):
+            return Response(
+                {'detail': 'Cannot create events in an external calendar.'},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         event = Event.objects.create(
@@ -290,7 +347,9 @@ class EventDetailView(APIView):
         event = _prefetch_event(Event.objects.filter(pk=event_id)).first()
         if not event:
             return None, Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
-        is_member = event.members.filter(user=user).exists()
+        # Members are already prefetched by _prefetch_event; iterate the
+        # cached list instead of issuing a redundant .filter().exists().
+        is_member = any(m.user_id == user.id for m in event.members.all())
         cal_ids = visible_calendar_ids(user)
         if event.calendar_id not in cal_ids and not is_member:
             return None, Response({'detail': 'No access.'}, status=status.HTTP_403_FORBIDDEN)
@@ -307,13 +366,15 @@ class EventDetailView(APIView):
         if original_start_str and event.is_recurring:
             original_start = _parse_dt(original_start_str)
             if original_start:
-                # Check for a materialized exception first
-                exc = Event.objects.filter(
+                # Materialized exception lookup goes straight through
+                # _prefetch_event — avoids the previous fetch-then-refetch
+                # pattern (bare lookup by (parent, original_start), then a
+                # second query to attach the prefetch).
+                exc = _prefetch_event(Event.objects.filter(
                     recurrence_parent=event,
                     original_start=original_start,
-                ).first()
+                )).first()
                 if exc:
-                    exc = _prefetch_event(Event.objects.filter(pk=exc.pk)).first()
                     return Response(EventSerializer(exc).data)
                 # Build virtual occurrence
                 occ = make_virtual_occurrence(event, original_start)
@@ -328,6 +389,8 @@ class EventDetailView(APIView):
             return err
         if event.owner_id != request.user.id:
             return Response({'detail': 'Only the owner can edit.'}, status=status.HTTP_403_FORBIDDEN)
+        if _is_external_calendar(event.calendar_id):
+            return Response({'detail': 'Cannot edit events from an external calendar.'}, status=status.HTTP_403_FORBIDDEN)
 
         ser = EventUpdateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -395,46 +458,48 @@ class EventDetailView(APIView):
             return Response(EventSerializer(exc).data)
 
         # Create new exception: inherit fields from master, apply overrides
-        duration = (master.end - master.start) if master.end else None
-        exc = Event.objects.create(
-            calendar=master.calendar,
-            title=data.get('title', master.title),
-            description=data.get('description', master.description),
-            start=data.get('start', original_start),
-            end=data.get('end', (original_start + duration) if duration else None),
-            all_day=data.get('all_day', master.all_day),
-            location=data.get('location', master.location),
-            owner=master.owner,
-            recurrence_parent=master,
-            original_start=original_start,
-        )
+        with transaction.atomic():
+            duration = (master.end - master.start) if master.end else None
+            exc = Event.objects.create(
+                calendar=master.calendar,
+                title=data.get('title', master.title),
+                description=data.get('description', master.description),
+                start=data.get('start', original_start),
+                end=data.get('end', (original_start + duration) if duration else None),
+                all_day=data.get('all_day', master.all_day),
+                location=data.get('location', master.location),
+                owner=master.owner,
+                recurrence_parent=master,
+                original_start=original_start,
+            )
 
-        # Copy members from master or from data
-        if 'member_ids' in data:
-            member_ids = set(data['member_ids']) - {user.id}
-            existing_ids = set(master.members.values_list('user_id', flat=True))
-            users = list(User.objects.filter(id__in=member_ids))
-            EventMember.objects.bulk_create([EventMember(event=exc, user=u) for u in users])
-            new_users = [u for u in users if u.id not in existing_ids]
-            if new_users:
-                notify_many(
-                    recipients=new_users,
-                    origin='calendar',
-                    title=f'Invited to "{exc.title}"',
-                    body=f'{user.username} invited you to an event.',
-                    url=f'/calendar?event={exc.pk}',
-                    actor=user,
-                )
-        else:
-            # Copy from master
-            EventMember.objects.bulk_create([
-                EventMember(event=exc, user=m.user, status=m.status)
-                for m in master.members.all()
-            ])
+            # Copy members from master or from data
+            if 'member_ids' in data:
+                member_ids = set(data['member_ids']) - {user.id}
+                existing_ids = set(master.members.values_list('user_id', flat=True))
+                users = list(User.objects.filter(id__in=member_ids))
+                EventMember.objects.bulk_create([EventMember(event=exc, user=u) for u in users])
+                new_users = [u for u in users if u.id not in existing_ids]
+                if new_users:
+                    notify_many(
+                        recipients=new_users,
+                        origin='calendar',
+                        title=f'Invited to "{exc.title}"',
+                        body=f'{user.username} invited you to an event.',
+                        url=f'/calendar?event={exc.pk}',
+                        actor=user,
+                    )
+            else:
+                # Copy from master
+                EventMember.objects.bulk_create([
+                    EventMember(event=exc, user=m.user, status=m.status)
+                    for m in master.members.all()
+                ])
 
         exc = _prefetch_event(Event.objects.filter(pk=exc.pk)).first()
         return Response(EventSerializer(exc).data)
 
+    @transaction.atomic
     def _edit_future_occurrences(self, master, data, original_start, user):
         """Split the series: truncate old master, create new master from original_start."""
         if not original_start:
@@ -502,12 +567,15 @@ class EventDetailView(APIView):
         return Response(EventSerializer(new_master).data)
 
     @extend_schema(summary="Delete an event")
+    @transaction.atomic
     def delete(self, request, event_id):
         event, err = self._get_event(event_id, request.user)
         if err:
             return err
         if event.owner_id != request.user.id:
             return Response({'detail': 'Only the owner can delete.'}, status=status.HTTP_403_FORBIDDEN)
+        if _is_external_calendar(event.calendar_id):
+            return Response({'detail': 'Cannot delete events from an external calendar.'}, status=status.HTTP_403_FORBIDDEN)
 
         scope = request.query_params.get('scope', 'all')
         original_start_str = request.query_params.get('original_start')
@@ -588,7 +656,7 @@ class EventRespondView(APIView):
         event = Event.objects.select_related('owner', 'calendar').get(pk=event_id)
 
         # Send iCalendar REPLY to external organizer if applicable
-        if event.organizer_email and event.source_message_id:
+        if event.external_organizer and event.source_message_id:
             from workspace.calendar.tasks import send_ics_reply
             send_ics_reply.delay(str(event.pk), request.user.id, membership.status)
 

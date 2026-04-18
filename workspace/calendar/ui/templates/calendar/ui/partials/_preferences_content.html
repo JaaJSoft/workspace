@@ -1,0 +1,59 @@
+<div class="space-y-3">
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">Default view</label>
+    <select class="select select-bordered select-sm w-full"
+      :value="prefs.defaultView"
+      @change="updatePref('defaultView', $event.target.value)">
+      <option value="dayGridMonth">Month</option>
+      <option value="timeGridWeek">Week</option>
+      <option value="timeGridDay">Day</option>
+      <option value="agenda">Agenda</option>
+    </select>
+  </div>
+  <hr class="border-base-300">
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">First day of week</label>
+    <select class="select select-bordered select-sm w-full"
+      :value="prefs.firstDay"
+      @change="updatePref('firstDay', parseInt($event.target.value))">
+      <option value="1">Monday</option>
+      <option value="0">Sunday</option>
+      <option value="6">Saturday</option>
+    </select>
+  </div>
+  <hr class="border-base-300">
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">Time format</label>
+    <select class="select select-bordered select-sm w-full"
+      :value="prefs.timeFormat"
+      @change="updatePref('timeFormat', $event.target.value)">
+      <option value="24h">24h (14:00)</option>
+      <option value="12h">12h (2:00 PM)</option>
+    </select>
+  </div>
+  <hr class="border-base-300">
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Show week numbers</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-accent"
+      :checked="prefs.weekNumbers"
+      @change="updatePref('weekNumbers', $event.target.checked)">
+  </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Default to all day</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-accent"
+      :checked="prefs.defaultAllDay"
+      @change="updatePref('defaultAllDay', $event.target.checked)">
+  </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Show declined events</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-accent"
+      :checked="prefs.showDeclined"
+      @change="updatePref('showDeclined', $event.target.checked)">
+  </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Poll vote notifications</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-accent"
+      :checked="prefs.notifyPollVotes"
+      @change="updatePref('notifyPollVotes', $event.target.checked)">
+  </label>
+</div>

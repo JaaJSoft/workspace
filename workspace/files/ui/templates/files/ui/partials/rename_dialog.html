@@ -1,0 +1,31 @@
+<!-- Rename Dialog -->
+<dialog id="rename-dialog" class="modal">
+  <div class="modal-box" x-data="{ uuid: '', name: '' }" @open-rename.window="uuid = $event.detail.uuid; name = $event.detail.name">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
+      <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-primary/10 text-primary">
+        <i data-lucide="pencil" class="w-5 h-5"></i>
+      </div>
+      Rename
+    </h3>
+    <form @submit.prevent="window.dispatchEvent(new CustomEvent('rename-item', { detail: { uuid: uuid, name: name } }))">
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">New name</span>
+        </label>
+        <input
+          x-model="name"
+          type="text"
+          class="input input-bordered w-full"
+          required
+        />
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('rename-dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Rename</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

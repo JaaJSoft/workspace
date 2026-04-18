@@ -1,0 +1,35 @@
+<div class="space-y-3">
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">Density</label>
+    <select class="select select-bordered select-sm w-full"
+      :value="prefs.density"
+      @change="update('density', $event.target.value)">
+      <option value="compact">Compact</option>
+      <option value="normal">Normal</option>
+      <option value="spacious">Spacious</option>
+    </select>
+  </div>
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">Preview lines</label>
+    <select class="select select-bordered select-sm w-full"
+      :value="prefs.previewLines"
+      @change="update('previewLines', parseInt($event.target.value))">
+      <option value="0">None</option>
+      <option value="1">1 line</option>
+      <option value="2">2 lines</option>
+    </select>
+  </div>
+  <hr class="border-base-300">
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Show labels in list</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-warning"
+      :checked="prefs.showLabels"
+      @change="update('showLabels', $event.target.checked)">
+  </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Confirm before delete</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-warning"
+      :checked="prefs.confirmBeforeDelete"
+      @change="update('confirmBeforeDelete', $event.target.checked)">
+  </label>
+</div>

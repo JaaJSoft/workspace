@@ -58,6 +58,12 @@ urlpatterns = [
         views.ConversationStatsView.as_view(),
         name='chat-conversation-stats',
     ),
+    # Media gallery
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/medias',
+        views.ConversationMediaView.as_view(),
+        name='chat-conversation-media',
+    ),
     # Read / Unread
     path(
         'api/v1/chat/conversations/<uuid:conversation_id>/read',
@@ -68,6 +74,12 @@ urlpatterns = [
         'api/v1/chat/unread-counts',
         views.UnreadCountsView.as_view(),
         name='chat-unread-counts',
+    ),
+    # Typing indicator
+    path(
+        'api/v1/chat/conversations/<uuid:conversation_id>/typing',
+        views.TypingIndicatorView.as_view(),
+        name='chat-typing',
     ),
     # Group avatars
     path(

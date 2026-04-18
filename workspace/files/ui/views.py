@@ -1,35 +1,76 @@
-from django.contrib.auth.decorators import login_required
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.db.models import Exists, OuterRef, Q, Subquery
-from django.shortcuts import get_object_or_404, render
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
+from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from ..models import File, FileFavorite, FileShare, PinnedFolder
+from workspace.files.services import FilePermission, FileService
+from workspace.users.services.settings import get_setting
 from .viewers import ViewerRegistry
-from workspace.users.settings_service import get_setting
+from ..models import File, FileFavorite, FileShare, FileShareLink, PinnedFolder
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
 
 
-def build_breadcrumbs(folder):
-    """Build breadcrumb trail from current folder to root."""
-    breadcrumbs = []
-    current = folder
-    while current:
+def build_breadcrumbs(folder, user=None):
+    """Build breadcrumb trail from current folder to root.
+
+    Uses the denormalized ``path`` field to fetch all ancestors in a single
+    query instead of walking the parent FK chain (which costs 1 query per
+    ancestor level).
+    """
+    path = folder.path or folder.get_path()
+    parts = path.split('/')
+
+    def _crumb(f):
+        return {
+            'label': f.name,
+            'url': f'/files/{f.uuid}',
+            'uuid': f.uuid,
+            'icon': f.icon or 'folder',
+            'icon_color': f.color or 'text-warning',
+        }
+
+    if len(parts) <= 1:
+        # Root-level folder — no ancestors to fetch
+        breadcrumbs = [_crumb(folder)]
+    else:
+        # Build ancestor path prefixes: "A", "A/B", … (excluding self)
+        ancestor_paths = ['/'.join(parts[:i]) for i in range(1, len(parts))]
+
+        # Scope to same owner+group to avoid cross-user path collisions
+        if folder.group_id:
+            scope = Q(group_id=folder.group_id)
+        else:
+            scope = Q(owner_id=folder.owner_id, group__isnull=True)
+
+        # Single query for ALL ancestors
+        ancestors = {
+            f.path: f
+            for f in File.objects.filter(
+                scope,
+                path__in=ancestor_paths,
+                node_type=File.NodeType.FOLDER,
+                deleted_at__isnull=True,
+            ).only('uuid', 'name', 'icon', 'color', 'path')
+        }
+
+        breadcrumbs = [
+            _crumb(ancestors[ap]) for ap in ancestor_paths if ap in ancestors
+        ]
+        breadcrumbs.append(_crumb(folder))
+
+    # Prepend root entry
+    if folder.group_id:
+        breadcrumbs.insert(0, {'label': 'Groups', 'icon': 'users'})
+    else:
+        label = user.get_full_name() or user.username if user else 'My Files'
         breadcrumbs.insert(0, {
-            'label': current.name,
-            'url': f'/files/{current.uuid}',
-            'icon': current.icon or 'folder',
-            'icon_color': current.color or 'text-warning',
+            'label': label,
+            'url': '/files',
+            'icon': 'hard-drive',
         })
-        current = current.parent
-    # Add root "Files" at the beginning
-    breadcrumbs.insert(0, {
-        'label': 'Files',
-        'url': '/files',
-        'icon': 'hard-drive',
-    })
     return breadcrumbs
 
 
@@ -50,37 +91,35 @@ def _build_context(request, folder=None, is_trash_view=False):
         not is_shared_view and
         str(request.GET.get('recent', '')).lower() in {'1', 'true', 'yes'}
     )
-    breadcrumbs = [{'label': 'Files', 'url': '/files', 'icon': 'hard-drive'}]
+    user_label = request.user.get_full_name() or request.user.username
+    files_root = {'label': user_label, 'url': '/files', 'icon': 'hard-drive'}
+    breadcrumbs = [files_root]
 
-    if is_shared_view:
-        breadcrumbs = [
-            {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
-            {'label': 'Shared with me', 'icon': 'share-2'},
-        ]
-    elif is_trash_view:
-        breadcrumbs = [
-            {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
-            {'label': 'Trash', 'icon': 'trash-2'},
-        ]
-    elif is_favorites_view:
-        breadcrumbs = [
-            {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
-            {'label': 'Favorites', 'icon': 'star'},
-        ]
-    elif is_recent_view:
-        breadcrumbs = [
-            {'label': 'Files', 'url': '/files', 'icon': 'hard-drive'},
-            {'label': 'Recent', 'icon': 'clock'},
-        ]
+    SPECIAL_VIEWS = {
+        'shared': {'label': 'Shared with me', 'icon': 'share-2'},
+        'trash': {'label': 'Trash', 'icon': 'trash-2'},
+        'favorites': {'label': 'Favorites', 'icon': 'star'},
+        'recent': {'label': 'Recent', 'icon': 'clock'},
+    }
+    active_special = (
+        'shared' if is_shared_view else
+        'trash' if is_trash_view else
+        'favorites' if is_favorites_view else
+        'recent' if is_recent_view else
+        None
+    )
+    if active_special:
+        breadcrumbs = [files_root, SPECIAL_VIEWS[active_special]]
     elif folder:
-        current_folder = get_object_or_404(
-            File,
+        current_folder = File.objects.filter(
+            FileService.accessible_files_q(request.user),
             uuid=folder,
-            owner=request.user,
             node_type=File.NodeType.FOLDER,
             deleted_at__isnull=True,
-        )
-        breadcrumbs = build_breadcrumbs(current_folder)
+        ).first()
+        if not current_folder:
+            raise Http404
+        breadcrumbs = build_breadcrumbs(current_folder, user=request.user)
 
     if is_shared_view:
         shared_file_ids = FileShare.objects.filter(
@@ -100,10 +139,9 @@ def _build_context(request, folder=None, is_trash_view=False):
         ).order_by('-deleted_at', 'name')
     elif is_favorites_view:
         nodes = File.objects.filter(
+            FileService.accessible_files_q(request.user),
             deleted_at__isnull=True,
             favorites__owner=request.user,
-        ).filter(
-            Q(owner=request.user) | Q(shares__shared_with=request.user)
         ).distinct().order_by('-node_type', 'name')
     elif is_recent_view:
         nodes = File.objects.filter(
@@ -111,15 +149,18 @@ def _build_context(request, folder=None, is_trash_view=False):
             deleted_at__isnull=True,
         ).order_by('-updated_at', 'name')
     elif current_folder:
-        nodes = File.objects.filter(
-            owner=request.user,
-            deleted_at__isnull=True,
-            parent=current_folder,
-        ).order_by('-node_type', 'name')
+        if current_folder.group_id:
+            nodes = File.objects.filter(
+                group=current_folder.group,
+                deleted_at__isnull=True,
+                parent=current_folder,
+            ).order_by('-node_type', 'name')
+        else:
+            nodes = FileService.user_files_qs(request.user).filter(
+                parent=current_folder,
+            ).order_by('-node_type', 'name')
     else:
-        nodes = File.objects.filter(
-            owner=request.user,
-            deleted_at__isnull=True,
+        nodes = FileService.user_files_qs(request.user).filter(
             parent__isnull=True,
         ).order_by('-node_type', 'name')
 
@@ -159,26 +200,14 @@ def _build_context(request, folder=None, is_trash_view=False):
         else:
             folder_stats['folder_count'] += 1
 
-    if is_shared_view:
-        page_title = 'Shared with me'
-        current_view_url = '/files?shared=1'
-        empty_title = 'Nothing shared with you'
-        empty_message = 'Files others share with you will appear here.'
-    elif is_trash_view:
-        page_title = 'Trash'
-        current_view_url = '/files/trash'
-        empty_title = 'Trash is empty'
-        empty_message = 'Items you delete stay here for a while.'
-    elif is_favorites_view:
-        page_title = 'Favorites'
-        current_view_url = '/files?favorites=1'
-        empty_title = 'No favorites yet'
-        empty_message = 'Star files or folders to see them here.'
-    elif is_recent_view:
-        page_title = 'Recent'
-        current_view_url = '/files?recent=1'
-        empty_title = 'No recent files'
-        empty_message = 'Files you create or edit will show up here.'
+    VIEW_META = {
+        'shared': ('Shared with me', '/files?shared=1', 'Nothing shared with you', 'Files others share with you will appear here.'),
+        'trash': ('Trash', '/files/trash', 'Trash is empty', 'Items you delete stay here for a while.'),
+        'favorites': ('Favorites', '/files?favorites=1', 'No favorites yet', 'Star files or folders to see them here.'),
+        'recent': ('Recent', '/files?recent=1', 'No recent files', 'Files you create or edit will show up here.'),
+    }
+    if active_special:
+        page_title, current_view_url, empty_title, empty_message = VIEW_META[active_special]
     elif current_folder:
         page_title = current_folder.name
         current_view_url = f'/files/{current_folder.uuid}'
@@ -190,24 +219,56 @@ def _build_context(request, folder=None, is_trash_view=False):
         empty_title = None
         empty_message = None
 
+    # Group folders the user has access to
+    group_folders = FileService.user_group_files_qs(request.user).filter(
+        parent__isnull=True,
+        node_type=File.NodeType.FOLDER,
+    ).select_related('group').order_by('name')
+
+    # Groups without a folder yet (for "Create group folder" action)
+    groups_with_folders = group_folders.values_list('group_id', flat=True)
+    available_groups = request.user.groups.exclude(id__in=groups_with_folders).order_by('name')
+
+    # Load pinned folders + their favorite status in a single query:
+    # annotate via the FK (folder_id) rather than re-fetching the File rows.
     pinned_folders_qs = PinnedFolder.objects.filter(
         owner=request.user,
         folder__deleted_at__isnull=True,
-    ).select_related('folder').order_by('position', 'created_at')
-
-    # Annotate pinned folders with is_favorite
-    pinned_folder_ids = [p.folder_id for p in pinned_folders_qs]
-    if pinned_folder_ids:
-        pinned_favorites = {
-            f.pk: f.is_favorite
-            for f in File.objects.filter(pk__in=pinned_folder_ids).annotate(
-                is_favorite=Exists(favorite_subquery)
+    ).select_related('folder').annotate(
+        _folder_is_favorite=Exists(
+            FileFavorite.objects.filter(
+                owner=request.user,
+                file_id=OuterRef('folder_id'),
             )
-        }
-        for pin in pinned_folders_qs:
-            pin.folder.is_favorite = pinned_favorites.get(pin.folder_id, False)
+        ),
+    ).order_by('position', 'created_at')
+
+    pinned_folder_ids = [p.folder_id for p in pinned_folders_qs]
+    for pin in pinned_folders_qs:
+        pin.folder.is_favorite = pin._folder_is_favorite
 
     parent_url = breadcrumbs[-2].get('url', '/files') if len(breadcrumbs) >= 2 else None
+
+    # Determine which sidebar item should be active.
+    # Breadcrumb dicts include 'uuid' for each folder entry, so we can
+    # resolve group-root and pinned-ancestor without walking parent FKs.
+    if active_special:
+        sidebar_active = active_special
+    elif current_folder and current_folder.group_id:
+        # breadcrumbs[0] = "Groups" header, breadcrumbs[1] = group root folder
+        sidebar_active = f'group:{breadcrumbs[1]["uuid"]}'
+    elif current_folder:
+        # Check if current folder or any ancestor is a pinned folder.
+        # Iterate self → root (reversed) to find the deepest pinned ancestor.
+        pinned_ids = set(pinned_folder_ids) if pinned_folder_ids else set()
+        sidebar_active = 'root'
+        for bc in reversed(breadcrumbs):
+            bc_uuid = bc.get('uuid')
+            if bc_uuid and bc_uuid in pinned_ids:
+                sidebar_active = f'pinned:{bc_uuid}'
+                break
+    else:
+        sidebar_active = 'root'
 
     file_prefs = get_setting(request.user, 'files', 'preferences', default={})
     breadcrumb_collapse = file_prefs.get('breadcrumbCollapse', 4) if isinstance(file_prefs, dict) else 4
@@ -233,8 +294,11 @@ def _build_context(request, folder=None, is_trash_view=False):
         'empty_title': empty_title,
         'empty_message': empty_message,
         'parent_url': parent_url,
+        'sidebar_active': sidebar_active,
         'pinned_folders': pinned_folders_qs,
         'breadcrumb_collapse': breadcrumb_collapse,
+        'group_folders': group_folders,
+        'available_groups': available_groups,
     }
 
 
@@ -270,18 +334,12 @@ def properties(request, uuid):
     # Try as owner first, then as shared recipient
     file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
     if not file_obj:
-        from django.http import Http404
         raise Http404
 
-    is_owner = file_obj.owner == request.user
-    share_permission = None
-    if not is_owner:
-        share_permission = FileShare.objects.filter(
-            file=file_obj, shared_with=request.user,
-        ).values_list('permission', flat=True).first()
-        if share_permission is None:
-            from django.http import Http404
-            raise Http404
+    perm = FileService.get_permission(request.user, file_obj)
+    if perm is None:
+        raise Http404
+    is_owner = perm >= FilePermission.MANAGE
 
     # Check if favorite
     is_favorite = FileFavorite.objects.filter(owner=request.user, file=file_obj).exists()
@@ -313,6 +371,20 @@ def properties(request, uuid):
             .order_by('created_at')
         )
 
+    # Share links (files only, owner sees stats)
+    share_links = []
+    if is_owner and file_obj.node_type == File.NodeType.FILE:
+        share_links = list(
+            FileShareLink.objects.filter(file=file_obj).order_by('-created_at')
+        )
+
+    PERMISSION_LABELS = {
+        FilePermission.VIEW: ('Read only', False),
+        FilePermission.WRITE: ('Read & write', True),
+        FilePermission.EDIT: ('Full access', True),
+    }
+    perm_label, perm_is_write = PERMISSION_LABELS.get(perm, (None, False))
+
     return render(request, 'files/ui/partials/properties_content.html', {
         'file': file_obj,
         'is_owner': is_owner,
@@ -321,38 +393,54 @@ def properties(request, uuid):
         'children_count': children_count,
         'total_size': total_size,
         'shares': shares,
-        'share_permission': share_permission,
+        'permission_label': perm_label,
+        'permission_is_write': perm_is_write,
+        'share_links': share_links,
     })
 
 
 @login_required
 def pinned_folders(request):
     """Return pinned folders partial for Alpine AJAX loading."""
-    # Get pinned folder IDs first
+    # Annotate is_favorite via the folder FK in the same query — avoids
+    # the previous double-fetch (one query for the join, a second one to
+    # re-load the same File rows just to attach the annotation).
     pinned_qs = PinnedFolder.objects.filter(
         owner=request.user,
         folder__deleted_at__isnull=True,
-    ).select_related('folder').order_by('position', 'created_at')
+    ).select_related('folder').annotate(
+        _folder_is_favorite=Exists(
+            FileFavorite.objects.filter(
+                owner=request.user,
+                file_id=OuterRef('folder_id'),
+            )
+        ),
+    ).order_by('position', 'created_at')
 
-    # Annotate folders with is_favorite
-    folder_ids = [p.folder_id for p in pinned_qs]
-    favorite_subquery = FileFavorite.objects.filter(
-        owner=request.user,
-        file_id=OuterRef('pk'),
-    )
-    folders_with_favorite = {
-        f.pk: f.is_favorite
-        for f in File.objects.filter(pk__in=folder_ids).annotate(
-            is_favorite=Exists(favorite_subquery)
-        )
-    }
-
-    # Attach is_favorite to each pinned folder's folder object
     for pin in pinned_qs:
-        pin.folder.is_favorite = folders_with_favorite.get(pin.folder_id, False)
+        pin.folder.is_favorite = pin._folder_is_favorite
 
     return render(request, 'files/ui/partials/pinned_folders.html', {
         'pinned_folders': pinned_qs,
+    })
+
+
+@login_required
+def group_folders_sidebar(request):
+    """Return group folders partial for Alpine AJAX refresh."""
+    group_folders = FileService.user_group_files_qs(request.user).filter(
+        parent__isnull=True,
+        node_type=File.NodeType.FOLDER,
+    ).select_related('group').order_by('name')
+
+    groups_with_folders = group_folders.values_list('group_id', flat=True)
+    available_groups = request.user.groups.exclude(
+        id__in=groups_with_folders
+    ).order_by('name')
+
+    return render(request, 'files/ui/partials/group_folders_section.html', {
+        'group_folders': group_folders,
+        'available_groups': available_groups,
     })
 
 
@@ -367,20 +455,12 @@ def view_file(request, uuid):
     # Get file — allow owner or shared-with user
     file_obj = File.objects.select_related('locked_by').filter(uuid=uuid, deleted_at__isnull=True).first()
     if not file_obj:
-        from django.http import Http404
         raise Http404
 
-    # Determine user_can_edit based on ownership / share permission
-    if file_obj.owner == request.user:
-        user_can_edit = True
-    else:
-        share = FileShare.objects.filter(
-            file=file_obj, shared_with=request.user,
-        ).values_list('permission', flat=True).first()
-        if share is None:
-            from django.http import Http404
-            raise Http404
-        user_can_edit = share == FileShare.Permission.READ_WRITE
+    perm = FileService.get_permission(request.user, file_obj)
+    if perm is None:
+        raise Http404
+    user_can_edit = perm >= FilePermission.WRITE
 
     # Only files can be viewed
     if file_obj.node_type != File.NodeType.FILE:
@@ -417,3 +497,58 @@ def view_file(request, uuid):
     html = viewer.render(request)
 
     return HttpResponse(html)
+
+
+@ensure_csrf_cookie
+def shared_file_view(request, token):
+    """Public standalone page for viewing a shared file."""
+    link = (
+        FileShareLink.objects
+        .select_related('file', 'created_by')
+        .filter(token=token, file__deleted_at__isnull=True)
+        .first()
+    )
+    if not link:
+        raise Http404
+
+    if link.is_expired:
+        return render(request, 'files/ui/shared_file.html', {
+            'expired': True,
+            'share_token': token,
+        })
+
+    # Password check via query param
+    access_token = request.GET.get('access_token', '')
+    password_verified = False
+    if link.has_password and access_token:
+        from django.core import signing
+        signer = signing.TimestampSigner(salt='file-share-link')
+        try:
+            value = signer.unsign(access_token, max_age=3600)
+            password_verified = (value == link.token)
+        except (signing.BadSignature, signing.SignatureExpired):
+            pass
+
+    # Render viewer HTML if accessible
+    viewer_html = ''
+    if not link.has_password or password_verified:
+        from workspace.files.ui.viewers import ViewerRegistry
+        ViewerClass = ViewerRegistry.get_viewer(link.file.mime_type) if link.file.mime_type else None
+        if ViewerClass:
+            viewer = ViewerClass(link.file)
+            viewer._user_can_edit = False
+            content_url = f'/api/v1/files/shared/{token}/content'
+            if access_token and password_verified:
+                content_url += f'?access_token={access_token}'
+            viewer._content_url = content_url
+            viewer_html = viewer.render(request)
+
+    return render(request, 'files/ui/shared_file.html', {
+        'share_token': token,
+        'file': link.file,
+        'link': link,
+        'viewer_html': viewer_html,
+        'needs_password': link.has_password and not password_verified,
+        'expired': False,
+        'download_url': f'/api/v1/files/shared/{token}/download' + (f'?access_token={access_token}' if access_token and password_verified else ''),
+    })

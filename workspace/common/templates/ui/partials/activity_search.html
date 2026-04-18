@@ -1,0 +1,13 @@
+<div x-show="searchOpen" x-collapse x-cloak class="relative">
+  <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none"></i>
+  <input
+    x-ref="activitySearchInput"
+    type="text"
+    x-model.debounce.400ms="activitySearch"
+    placeholder="Search activity..."
+    class="input input-bordered input-sm w-full pl-9"
+    @input.debounce.400ms="$nextTick(() => { $refs.activitySearchLink.click() })"
+    @keydown.escape="searchOpen = false; activitySearch = ''; $nextTick(() => $refs.activitySearchLink.click())"
+  >
+  <a x-ref="activitySearchLink" :href="feedUrl" x-target="{{ activity_prefix }}" class="hidden"></a>
+</div>

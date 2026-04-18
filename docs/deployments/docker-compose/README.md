@@ -73,9 +73,11 @@ All settings are configurable via environment variables or a `.env` file next to
 | `AI_BASE_URL` | *(empty)* | Custom base URL for the LLM API (Ollama, LM Studio, etc.) |
 | `AI_MODEL` | `gpt-5` | Default LLM model for chat and tasks |
 | `AI_MAX_TOKENS` | `2048` | Maximum tokens per AI response |
-| `AI_CHAT_CONTEXT_SIZE` | `150` | Number of recent messages included as context |
+| `AI_CHAT_CONTEXT_SIZE` | `30` | Recent messages kept in full; older ones are summarized |
 | `AI_IMAGE_MODEL` | `dall-e-3` | Model for image generation |
 | `AI_IMAGE_BASE_URL` | *(empty)* | Custom base URL for image generation (falls back to `AI_BASE_URL`) |
+| `SEARXNG_URL` | *(empty)* | SearXNG instance URL for web search (e.g. `http://searxng:8080`) |
+| `SEARXNG_BLOCKED_DOMAINS` | *(empty)* | Comma-separated list of domains the AI cannot fetch (e.g. `evil.com,spam.org`) |
 
 ### Example `.env`
 
@@ -110,6 +112,18 @@ The web service exposes port **8000**. In production, place a reverse proxy (ngi
 ```env
 CSRF_TRUSTED_ORIGINS=https://your-domain.com
 ```
+
+## Web Search (optional)
+
+To give the AI web search capabilities, deploy a [SearXNG](https://docs.searxng.org/) instance alongside the stack:
+
+1. Uncomment the `searxng` service in `docker-compose.yml`
+2. Set `SEARXNG_URL=http://searxng:8080` in your `.env`
+3. Restart: `docker compose up -d`
+
+The `searxng/` directory contains a `settings.yml` that enables the JSON API format required by Workspace. It is mounted into the container automatically.
+
+SearXNG requires no API keys — it aggregates results from public search engines.
 
 ## Limitations
 

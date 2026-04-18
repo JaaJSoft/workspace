@@ -1,0 +1,32 @@
+<!-- Mail Tab -->
+<div x-show="tab === 'mail'" x-cloak class="space-y-4">
+  <!-- AI Features -->
+  <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card-body">
+      <h2 class="card-title text-lg gap-2">
+        <i data-lucide="sparkles" class="w-5 h-5"></i>
+        AI Features
+      </h2>
+      <p class="text-sm text-base-content/60 mt-1">
+        Control AI-powered features for your mailbox.
+      </p>
+
+      <div class="form-control mt-4">
+        <label class="label cursor-pointer justify-start gap-3">
+          <input type="checkbox"
+                 class="toggle toggle-warning toggle-sm"
+                 :checked="getSetting('mail', 'ai_enabled', true)"
+                 @change="setSetting('mail', 'ai_enabled', $event.target.checked)"
+          />
+          <div>
+            <span class="label-text font-medium">Enable AI features for mail</span>
+            <p class="text-xs text-base-content/50 mt-0.5">
+              Auto-classify emails, generate summaries, and AI-assisted composition.
+              Disable to turn off all AI processing for your mail.
+            </p>
+          </div>
+        </label>
+      </div>
+    </div>
+  </div>
+</div>

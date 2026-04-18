@@ -38,7 +38,7 @@ class EventRespondReplyTest(APITestCase):
             start=datetime(2026, 3, 1, 14, 0, tzinfo=timezone.utc),
             end=datetime(2026, 3, 1, 15, 0, tzinfo=timezone.utc),
             owner=self.user, ical_uid='evt-123@example.com',
-            organizer_email='alice@external.com',
+            external_organizer='alice@external.com',
             source_message=self.mail_msg,
         )
         EventMember.objects.create(event=self.event, user=self.user)
@@ -61,7 +61,7 @@ class EventRespondReplyTest(APITestCase):
 
     @patch('workspace.calendar.tasks.send_ics_reply.delay')
     def test_no_reply_for_non_email_event(self, mock_send):
-        self.event.organizer_email = None
+        self.event.external_organizer = None
         self.event.source_message = None
         self.event.save()
         self.client.force_authenticate(self.user)

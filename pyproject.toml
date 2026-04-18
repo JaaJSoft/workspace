@@ -1,15 +1,16 @@
 [project]
 name = "workspace"
-version = "0.11.0"
+version = "0.17.0"
 description = "Django workspace project"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
-    "django>=6.0.3,<7.0",
-    "djangorestframework==3.16.1",
+    "django>=6.0.4,<7.0",
+    "djangorestframework==3.17.1",
     "django-filter==25.2",
     "drf-spectacular==0.29.0",
     "drf-orjson-renderer>=1.7.0",
+    "django-rest-knox>=5.0.0",
     "whitenoise>=6.11.0",
     "django-redis>=5.4.0",
     "django-simple-history>=3.8.0",
@@ -19,7 +20,7 @@ dependencies = [
     "redis>=7.1.0",
     # imaging
     "pillow>=11.0",
-    "cairosvg>=2.7.0",
+    "cairosvg>=2.9.0",
     # mail
     "cryptography>=44.0.0",
     "nh3>=0.2.20",
@@ -27,8 +28,9 @@ dependencies = [
     "icalendar>=6.1.0",
     # utils
     "mistune>=3.2.0",
+    "pygments>=2.20.0",
     "dj-database-url>=2.3.0",
-    "psycopg[binary,pool]>=3.2.0",
+    "psycopg[binary,pool]>=3.3.3",
     "python-dotenv>=1.2.1",
     # webdav
     "wsgidav>=4.3.0",
@@ -40,10 +42,13 @@ dependencies = [
     # push notifications
     "pywebpush>=2.3.0",
     # oauth2
-    "authlib>=1.5.0",
+    "authlib>=1.6.11",
     # ai
-    "openai>=1.0",
+    "openai>=2.32.0",
     "ollama>=0.6.1",
+    # web search & scraping
+    "httpx>=0.28.0",
+    "trafilatura>=2.0.0",
 ]
 
 [build-system]
@@ -52,5 +57,34 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "django-debug-toolbar==6.2.0",
+    "coverage[toml]>=7.6",
+    "django-debug-toolbar==6.3.0",
+    # End-to-end / UI tests. Playwright is only needed when E2E=1 is set;
+    # otherwise the E2E test cases are skipped (see workspace/common/tests/e2e/).
+    "playwright>=1.48",
+]
+
+[tool.coverage.run]
+source = ["workspace"]
+branch = true
+parallel = true
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "manage.py",
+    "workspace/settings.py",
+    "workspace/asgi.py",
+    "workspace/wsgi.py",
+    "workspace/celery.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+precision = 1
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
 ]

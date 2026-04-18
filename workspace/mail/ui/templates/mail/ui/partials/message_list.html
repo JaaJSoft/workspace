@@ -1,12 +1,22 @@
 <!-- Message list header -->
 <div class="px-4 py-3 border-b border-base-300 flex items-center gap-2 bg-base-100">
-  <h3 class="font-semibold text-sm flex-1 truncate" x-text="selectedFolder?.display_name || 'Messages'"></h3>
-  <button class="btn btn-ghost btn-xs btn-circle" @click="refreshFolder()"
-          :disabled="syncingAccounts[selectedFolder?.account_id] === true" title="Refresh">
+  <!-- Mobile sidebar toggle -->
+  <label for="mail-drawer" class="btn btn-ghost btn-sm btn-square lg:hidden cursor-pointer">
+    <i data-lucide="menu" class="w-5 h-5"></i>
+  </label>
+  <h3 class="font-semibold text-sm flex-1 truncate"
+      x-text="unifiedInbox ? 'All Inboxes' : (selectedLabel?.name || selectedFolder?.display_name || 'Messages')"></h3>
+  <button class="btn btn-ghost btn-sm lg:btn-xs btn-circle" @click="classifyFolder()"
+          :disabled="classifyingFolder" title="Classify with AI">
+    <i data-lucide="sparkles" class="w-3.5 h-3.5" x-show="!classifyingFolder"></i>
+    <span class="loading loading-spinner loading-xs" x-show="classifyingFolder" x-cloak></span>
+  </button>
+  <button class="btn btn-ghost btn-sm lg:btn-xs btn-circle" @click="refreshFolder()"
+          :disabled="unifiedInbox ? accounts.some(a => syncingAccounts[a.uuid]) : syncingAccounts[selectedFolder?.account_id || selectedLabel?.account_id] === true" title="Refresh">
     <i data-lucide="refresh-cw" class="w-3.5 h-3.5"
-       x-show="syncingAccounts[selectedFolder?.account_id] !== true"></i>
+       x-show="unifiedInbox ? !accounts.some(a => syncingAccounts[a.uuid]) : syncingAccounts[selectedFolder?.account_id || selectedLabel?.account_id] !== true"></i>
     <span class="loading loading-spinner loading-xs"
-          x-show="syncingAccounts[selectedFolder?.account_id] === true" x-cloak></span>
+          x-show="unifiedInbox ? accounts.some(a => syncingAccounts[a.uuid]) : syncingAccounts[selectedFolder?.account_id || selectedLabel?.account_id] === true" x-cloak></span>
   </button>
 </div>
 
@@ -94,8 +104,11 @@
 
   <template x-for="msg in messages" :key="msg.uuid">
     <div
-      class="flex items-start gap-2 px-3 py-2.5 border-b border-base-200 cursor-pointer transition-colors"
+      class="flex items-start gap-2 px-3 border-b border-base-200 cursor-pointer transition-colors"
       :class="{
+        'py-1.5': mailPrefs.density === 'compact',
+        'py-2.5': mailPrefs.density === 'normal' || !mailPrefs.density,
+        'py-3.5': mailPrefs.density === 'spacious',
         'bg-warning/5': selectedMessage?.uuid === msg.uuid,
         'hover:bg-base-200/50': selectedMessage?.uuid !== msg.uuid,
         'font-normal opacity-70': msg.is_read,
@@ -125,8 +138,25 @@
         </div>
         <!-- Subject -->
         <div class="text-sm truncate" :class="msg.is_read ? 'text-base-content/60' : ''" x-html="highlightSearch(msg.subject || '(no subject)')"></div>
+        <!-- Label badges -->
+        <div class="flex items-center gap-1 mt-0.5 flex-wrap" x-show="mailPrefs.showLabels && msg.labels?.length" x-cloak>
+          <template x-for="lbl in msg.labels.slice(0, 3)" :key="lbl.uuid">
+            <span class="badge badge-xs gap-0.5"
+                  :class="lbl.color ? ('badge-' + lbl.color) : 'badge-ghost'"
+                  x-text="lbl.name"></span>
+          </template>
+          <span class="badge badge-ghost badge-xs" x-show="msg.labels.length > 3"
+                x-text="'+' + (msg.labels.length - 3)"></span>
+        </div>
+        <!-- Account badge (unified inbox) -->
+        <div x-show="unifiedInbox && accounts.length > 1" x-cloak class="mt-0.5">
+          <span class="badge badge-ghost badge-xs truncate max-w-[10rem]" x-text="_getAccountEmail(msg.account_id)"></span>
+        </div>
         <!-- Snippet -->
-        <div class="text-xs text-base-content/50 truncate mt-0.5" x-html="highlightSearch(msg.snippet)"></div>
+        <div class="text-xs text-base-content/50 mt-0.5"
+             :class="mailPrefs.previewLines === 2 ? 'line-clamp-2' : 'truncate'"
+             x-show="mailPrefs.previewLines > 0"
+             x-html="highlightSearch(msg.snippet)"></div>
       </div>
 
       <!-- Indicators -->

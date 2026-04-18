@@ -10,6 +10,33 @@
  * @param {string} apiEndpoint - PATCH endpoint, e.g. '/api/v1/files/' or '/api/v1/mail/folders/'
  * @param {function} onSaved   - Optional callback(icon, color) after successful save
  */
+window.ICON_PICKER_ICONS = [
+  'folder', 'folder-open', 'briefcase', 'archive', 'box',
+  'book', 'bookmark', 'heart', 'star', 'flag',
+  'home', 'building', 'camera', 'music', 'video',
+  'image', 'file-text', 'code', 'database', 'server',
+  'cloud', 'download', 'upload', 'settings', 'wrench',
+  'lock', 'unlock', 'shield', 'key', 'user',
+  'users', 'mail', 'send', 'inbox', 'calendar',
+  'clock', 'zap', 'rocket', 'gift', 'shopping-bag',
+  'circle-dollar-sign', 'credit-card', 'gamepad-2', 'graduation-cap', 'trophy',
+  'tag', 'alert-triangle', 'check-circle', 'info', 'newspaper',
+  'bell', 'flame', 'eye', 'bug', 'sparkles',
+  'lightbulb', 'megaphone', 'message-circle', 'phone',
+];
+
+window.ICON_PICKER_COLORS = [
+  { name: 'Yellow', class: 'text-warning' },
+  { name: 'Blue', class: 'text-info' },
+  { name: 'Green', class: 'text-success' },
+  { name: 'Red', class: 'text-error' },
+  { name: 'Purple', class: 'text-secondary' },
+  { name: 'Pink', class: 'text-pink-500' },
+  { name: 'Orange', class: 'text-orange-500' },
+  { name: 'Cyan', class: 'text-cyan-500' },
+  { name: 'Gray', class: 'text-base-content/60' },
+];
+
 window.iconPicker = function iconPicker(uuid, initialIcon, initialColor, apiEndpoint, onSaved) {
   return {
     uuid: uuid,
@@ -19,33 +46,11 @@ window.iconPicker = function iconPicker(uuid, initialIcon, initialColor, apiEndp
     saved: false,
     saveTimeout: null,
 
-    init() {
-      setTimeout(() => lucide.createIcons(), 100);
-    },
+    init() {},
 
-    icons: [
-      'folder', 'folder-open', 'briefcase', 'archive', 'box',
-      'book', 'bookmark', 'heart', 'star', 'flag',
-      'home', 'building', 'camera', 'music', 'video',
-      'image', 'file-text', 'code', 'database', 'server',
-      'cloud', 'download', 'upload', 'settings', 'wrench',
-      'lock', 'unlock', 'shield', 'key', 'user',
-      'users', 'mail', 'send', 'inbox', 'calendar',
-      'clock', 'zap', 'rocket', 'gift', 'shopping-bag',
-      'circle-dollar-sign', 'credit-card', 'gamepad-2', 'graduation-cap', 'trophy'
-    ],
+    icons: window.ICON_PICKER_ICONS,
 
-    colors: [
-      { name: 'Yellow', class: 'text-warning' },
-      { name: 'Blue', class: 'text-info' },
-      { name: 'Green', class: 'text-success' },
-      { name: 'Red', class: 'text-error' },
-      { name: 'Purple', class: 'text-secondary' },
-      { name: 'Pink', class: 'text-pink-500' },
-      { name: 'Orange', class: 'text-orange-500' },
-      { name: 'Cyan', class: 'text-cyan-500' },
-      { name: 'Gray', class: 'text-base-content/60' },
-    ],
+    colors: window.ICON_PICKER_COLORS,
 
     selectIcon(icon) {
       this.selectedIcon = icon;
@@ -72,9 +77,6 @@ window.iconPicker = function iconPicker(uuid, initialIcon, initialColor, apiEndp
       icon.className = 'w-8 h-8 ' + this.selectedColor;
       container.appendChild(icon);
 
-      this.$nextTick(() => {
-        lucide.createIcons({ nodes: container.querySelectorAll('[data-lucide]') });
-      });
     },
 
     async save() {
@@ -88,7 +90,7 @@ window.iconPicker = function iconPicker(uuid, initialIcon, initialColor, apiEndp
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
-              'X-CSRFToken': this.getCsrfToken()
+              'X-CSRFToken': getCSRFToken()
             },
             body: JSON.stringify({
               icon: this.selectedIcon,
@@ -111,9 +113,5 @@ window.iconPicker = function iconPicker(uuid, initialIcon, initialColor, apiEndp
       }, 300);
     },
 
-    getCsrfToken() {
-      return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-             document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-    }
   };
 };

@@ -74,9 +74,42 @@ x-init="init()"
       </div>
     </div>
 
-    <!-- Conversation list -->
-    <div class="flex-1 overflow-y-auto py-4 px-3">
-      {% include "chat/ui/partials/conversation_list.html" %}
+    <!-- Search + conversation list (shared convSearch scope) -->
+    <div class="flex-1 min-h-0 flex flex-col"
+         x-data="{
+           convSearch: '',
+           refreshList() {
+             const base = '{% url 'chat_ui:conversation_list' %}';
+             const qs = this.convSearch.trim() ? '?q=' + encodeURIComponent(this.convSearch.trim()) : '';
+             this.$ajax(base + qs, { target: 'conversation-list' });
+           },
+         }">
+      <div class="px-3 pt-3" x-show="!collapsed" x-cloak>
+        <label class="input input-sm input-bordered w-full flex items-center gap-2">
+          <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+          <input
+            type="search"
+            class="grow [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
+            placeholder="Search conversations"
+            x-model="convSearch"
+            @input.debounce.300ms="refreshList()"
+            @keydown.escape.stop="convSearch = ''; refreshList()"
+          />
+          <button
+            type="button"
+            x-show="convSearch.length > 0"
+            x-cloak
+            @click="convSearch = ''; refreshList()"
+            class="btn btn-ghost btn-xs btn-square -mr-1"
+            title="Clear search"
+          >
+            <i data-lucide="x" class="w-3 h-3"></i>
+          </button>
+        </label>
+      </div>
+      <div class="flex-1 overflow-y-auto py-4 px-3">
+        {% include "chat/ui/partials/conversation_list.html" %}
+      </div>
     </div>
 
     <!-- New chat buttons (visible when collapsed) -->

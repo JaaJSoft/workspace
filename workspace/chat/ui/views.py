@@ -150,6 +150,10 @@ def conversation_list_view(request):
     """Partial: conversation list HTML for alpine-ajax refresh."""
     conv_list = _build_conversation_context(request.user)
 
+    search = (request.GET.get('q') or '').strip().lower()
+    if search:
+        conv_list = [c for c in conv_list if search in c.display_name.lower()]
+
     pinned = sorted(
         [c for c in conv_list if c.is_pinned],
         key=lambda c: (c.pin_position or 0, c.created_at),
@@ -160,6 +164,7 @@ def conversation_list_view(request):
         'pinned_conversations': pinned,
         'dm_conversations': [c for c in conv_list if c.kind == Conversation.Kind.DM and str(c.uuid) not in pinned_uuids],
         'group_conversations': [c for c in conv_list if c.kind == Conversation.Kind.GROUP and str(c.uuid) not in pinned_uuids],
+        'search_query': request.GET.get('q', ''),
     })
 
 

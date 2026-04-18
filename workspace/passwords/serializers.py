@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import LoginEntry, Vault
+from .models import LoginEntry, PasswordFolder, Vault
 
 
 # ---------------------------------------------------------------------------
@@ -255,3 +255,27 @@ class LoginEntryUpdateSerializer(serializers.ModelSerializer):
             'folder': {'required': False},
             'encrypted_name': {'required': False},
         }
+
+
+# ---------------------------------------------------------------------------
+# PasswordFolder
+# ---------------------------------------------------------------------------
+
+class FolderSerializer(serializers.ModelSerializer):
+    parent = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = PasswordFolder
+        fields = ['uuid', 'vault', 'parent', 'name', 'icon', 'color', 'order', 'created_at', 'updated_at']
+        read_only_fields = ['uuid', 'vault', 'created_at', 'updated_at']
+
+
+class FolderCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255)
+    parent = serializers.UUIDField(required=False, allow_null=True)
+    icon = serializers.CharField(max_length=50, required=False, default='folder')
+    color = serializers.CharField(max_length=50, required=False, default='')
+
+
+class FolderUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255)

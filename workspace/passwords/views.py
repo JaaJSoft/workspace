@@ -8,8 +8,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import LoginEntry
+from .models import LoginEntry, PasswordFolder
 from .serializers import (
+    FolderCreateSerializer,
+    FolderSerializer,
+    FolderUpdateSerializer,
     LoginEntryCreateSerializer,
     LoginEntrySerializer,
     LoginEntryUpdateSerializer,
@@ -20,6 +23,7 @@ from .serializers import (
     VaultUnlockResponseSerializer,
     VaultUnlockSerializer,
 )
+from .services.folders import FolderService
 from .services.vault import VaultService
 
 logger = logging.getLogger(__name__)
@@ -222,6 +226,70 @@ class VaultUnlockView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
         return Response(VaultUnlockResponseSerializer({'protected_vault_key': protected_key}).data)
+
+
+# ---------------------------------------------------------------------------
+# Folder endpoints
+# ---------------------------------------------------------------------------
+
+class FolderListCreateView(APIView):
+    """GET/POST /api/v1/passwords/vaults/<uuid>/folders"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, uuid):
+        vault = VaultService.get_vault(request.user, uuid)
+        if vault is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        folders = FolderService.list_folders(vault)
+        return Response(FolderSerializer(folders, many=True).data)
+
+    def post(self, request, uuid):
+        vault = VaultService.get_vault(request.user, uuid)
+        if vault is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = FolderCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
+        try:
+            folder = FolderService.create_folder(
+                vault, name=d['name'],
+                parent_uuid=str(d['parent']) if d.get('parent') else None,
+            )
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(FolderSerializer(folder).data, status=status.HTTP_201_CREATED)
+
+
+class FolderDetailView(APIView):
+    """PUT/DELETE /api/v1/passwords/folders/<uuid>"""
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_vault_for_folder(self, user, folder_uuid):
+        folder = PasswordFolder.objects.filter(uuid=folder_uuid).select_related('vault').first()
+        if folder is None:
+            return None, None
+        vault = VaultService.get_vault(user, folder.vault_id)
+        if vault is None:
+            return None, None
+        return vault, folder
+
+    def put(self, request, uuid):
+        vault, folder = self._get_vault_for_folder(request.user, uuid)
+        if vault is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = FolderUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated = FolderService.update_folder(vault, str(uuid), name=serializer.validated_data['name'])
+        return Response(FolderSerializer(updated).data)
+
+    def delete(self, request, uuid):
+        vault, folder = self._get_vault_for_folder(request.user, uuid)
+        if vault is None:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        FolderService.delete_folder(vault, str(uuid))
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------------------

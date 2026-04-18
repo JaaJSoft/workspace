@@ -165,6 +165,48 @@ if FileService.can_access(user, file_obj):
 
 ## Frontend Conventions
 
+### Server-rendered partial swaps — use alpine-ajax, never raw `fetch`
+
+Whenever a piece of UI needs to be refreshed from a Django partial (lists, feeds, sidebars, popovers, folder trees, anything rendered server-side), **use [alpine-ajax](https://alpine-ajax.js.org)**. The library is already loaded globally in `base.html`.
+
+**Never** write a hand-rolled `fetch(...).then(r.text()).then(html => el.innerHTML = html)`, `DOMParser` parsing of an HTML response, or `target.replaceWith(newNode)` + `Alpine.initTree()` pipeline. That pattern silently destroys every Alpine binding inside the swapped subtree (context menus, drag-and-drop handlers, `x-show` state, `x-model` bindings) because raw `innerHTML` assignment doesn't morph — it rebuilds the tree from scratch.
+
+#### How to trigger a swap
+
+**Declarative (user-triggered):** put `x-target="<target-id>"` on the `<a>` / `<form>` / `<button>` the user interacts with. The response must contain an element with matching `id`.
+
+```html
+<a href="{% url 'chat_ui:conversation_list' %}" x-target="conversation-list">Refresh</a>
+
+<div id="conversation-list">
+  {% include "chat/ui/partials/conversation_list.html" %}
+</div>
+```
+
+**Programmatic (from an Alpine expression or a component method):** use the `$ajax(url, options)` magic. This is the **only** supported way to initiate a request from JavaScript — do not fake a user click on a hidden link.
+
+```html
+<!-- Inline Alpine expression -->
+<input @input.debounce.300ms="$ajax('/chat/conversations?q=' + encodeURIComponent(query), { target: 'conversation-list' })">
+```
+
+```js
+// Inside a component method (x-data): `this.$ajax` is available just like `this.$refs`.
+refreshList() {
+  this.$ajax('/chat/conversations', { target: 'conversation-list' });
+}
+```
+
+Available `$ajax` options: `method` (default `'GET'`), `target` (id of the element to swap, **without** a `#`), `targets` (array, overrides `target`), `body`, `headers`, `focus`, `sync`.
+
+#### Lifecycle events
+
+`ajax:before`, `ajax:send`, `ajax:success`, `ajax:error`, `ajax:after` bubble up the DOM. Listen on the component root with `@ajax:error="showAlert('error', 'Failed')"` instead of wrapping the call in a `try/catch`.
+
+#### Server side
+
+Return the partial template directly — no JSON envelope, no wrapping. The endpoint often checks `request.headers.get('X-Alpine-Request')` so the same URL can serve the full page (browser refresh) and the fragment (alpine-ajax swap). Existing examples: `workspace/chat/ui/views.py:conversation_list_view`, `workspace/users/ui/views.py:profile_activity_feed`, `workspace/files/ui/views.py` (the `#folder-browser` branch).
+
 ### UI Partials
 
 Always use the existing UI partials located in `workspace/common/templates/ui/partials/` instead of writing inline HTML for common components.
@@ -197,6 +239,7 @@ Use the `dialogs` partial for modal dialogs instead of inline modal HTML.
 - `app_logo.html` - Application logo
 - `breadcrumbs.html` - Breadcrumb navigation
 - `navbar.html` - Navigation bar
+- `refresh_button.html` - Alpine-AJAX refresh button (spins while `loading` is truthy). Params: `url_expr`, `target`, optional `loading_expr` / `title` / `size`.
 - `user_avatar.html` - User avatar display
 
 ### File Actions

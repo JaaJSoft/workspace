@@ -234,9 +234,7 @@ function chatApp(currentUserId) {
     },
 
     refreshConversationList() {
-      const link = this.$refs.conversationListRefreshLink;
-      if (!link) return;
-      link.addEventListener('ajax:after', () => {
+      this.$el.addEventListener('ajax:after', () => {
         const target = document.getElementById('conversation-list');
         if (!target) return;
         for (const conv of this.conversations) {
@@ -246,7 +244,7 @@ function chatApp(currentUserId) {
           }
         }
       }, { once: true });
-      link.click();
+      this.$ajax('/chat/conversations', { target: 'conversation-list' });
     },
 
     async selectConversationById(uuid, updateUrl = true) {

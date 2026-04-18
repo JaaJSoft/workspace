@@ -17,6 +17,7 @@ and installs the browsers before running the suite.
 from __future__ import annotations
 
 import os
+import re
 import unittest
 
 # Playwright's sync API (``sync_playwright``) drives the browser over an
@@ -145,3 +146,45 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
             email=extra.pop("email", f"{username}@example.com"),
             **extra,
         )
+
+    def login_via_ui(self, username, password, *, wait_for_redirect=True):
+        """Log in through the actual login form.
+
+        Use this only when the test is exercising the login page itself;
+        for every other authenticated test use ``login_as`` (far faster —
+        no form, no network round-trip through the UI).
+
+        When ``wait_for_redirect`` is False the helper returns immediately
+        after clicking Submit, so failure-path tests can assert on the
+        error alert without racing Playwright's URL watcher.
+        """
+        self.page.goto(f"{self.live_server_url}/login")
+        self.page.locator('input[name="username"]').fill(username)
+        self.page.locator('input[name="password"]').fill(password)
+        self.page.get_by_role("button", name=re.compile("Sign In", re.I)).click()
+        if wait_for_redirect:
+            self.page.wait_for_url(lambda url: "/login" not in url)
+
+    def login_as(self, user):
+        """Authenticate the current browser context as ``user`` without the UI.
+
+        Creates a session in the test DB via Django's test ``Client`` and
+        copies the session cookie into the Playwright ``BrowserContext``.
+        Fast (~10 ms) — prefer this over ``login_via_ui`` for every test
+        that is not exercising the login page itself.
+
+        Works because ``StaticLiveServerTestCase`` runs the live server
+        against the same test database as the test runner, so a session
+        row written by the test ``Client`` is visible to the live server.
+        """
+        from django.conf import settings
+        from django.test import Client
+
+        client = Client()
+        client.force_login(user)
+        cookie = client.cookies[settings.SESSION_COOKIE_NAME]
+        self.context.add_cookies([{
+            "name": settings.SESSION_COOKIE_NAME,
+            "value": cookie.value,
+            "url": self.live_server_url,
+        }])

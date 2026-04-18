@@ -11,6 +11,29 @@
 
 Before any refactor or optimization, verify that at least one test covers the code being touched. If no test exists, **write the test first** (it must pass against the current code), then start the refactor. The test acts as a safety net to guarantee the behavior is preserved.
 
+### Changelog
+
+`CHANGELOG.md` is written for **end users**, not developers. Each release describes what changed from the user's perspective, in plain language.
+
+**Structure of a release entry:**
+
+1. `## <version>` heading
+2. `### Highlights` — one short paragraph (2–4 sentences) summarizing the theme of the release and what users will notice. No bullet list here.
+3. Then one `###` section per user-facing area (module name or feature theme: *Chat*, *Files & Notes*, *Calendar*, *WebDAV*, *Profile & UI*, *Performance*, *API Tokens*, *Fixes*, …).
+
+**What to include:** new features, visible improvements, behavior changes, user-visible bug fixes, performance gains phrased as *"faster X"* / *"quicker Y"*, new integrations or endpoints that users can call.
+
+**What to exclude (do not write these in the changelog):**
+- Refactors with no visible effect (`services.py` → `services/` package, extracting helpers, centralizing logic, moving code between modules)
+- Internal test additions, coverage thresholds, CI changes
+- Documentation-only changes (including CLAUDE.md updates)
+- Dependency bumps, unless they bring a user-visible feature or fix
+- Implementation details: library names (Knox, alpine-ajax, Celery…), query patterns (N+1, `bulk_update`, composite indexes, prefetch), internal APIs (`FileService.X`, `ActionRegistry`, `$ajax`), framework-specific terms (`transaction.atomic`, `x-target`, serializer fields)
+
+**Tone:** describe the outcome, not the mechanism. ✅ *"Faster conversation listings"* ❌ *"Added composite index on `conversation_member(user_id, left_at)`"*. ✅ *"Large uploads are more reliable on slow networks"* ❌ *"Streamed WebDAV PUT for TCP backpressure"*.
+
+**Process:** when preparing a release, read commits since the last tag (`git log v<last>..HEAD --oneline`), group them by user-facing theme, then translate each group into one bullet the user can understand. Commits that map to nothing user-visible are dropped — not every commit deserves an entry.
+
 ## Testing
 
 ### Structure

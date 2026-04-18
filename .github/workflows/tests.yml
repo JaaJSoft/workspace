@@ -86,6 +86,12 @@ jobs:
         # but no tests of its own, so it is intentionally absent.
         module:
           - calendar
+          - chat
+          - core
+          - dashboard
+          - files
+          - mail
+          - notes
           - users
           - chat
     name: E2E (${{ matrix.module }})

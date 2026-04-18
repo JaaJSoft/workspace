@@ -4,7 +4,6 @@ Covers the HTML partial returned for the chat sidebar (Alpine AJAX refresh),
 including the `?q=` search filter.
 """
 from django.test import TestCase
-from django.urls import reverse
 
 from workspace.chat.models import Conversation, ConversationMember
 

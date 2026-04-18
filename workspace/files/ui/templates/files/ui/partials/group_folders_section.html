@@ -3,11 +3,16 @@ Group Folders Sidebar Section
 =============================
 Renders the group folders section in the sidebar.
 
+Swapped in place via `$ajax('/files/group-folders', { target: 'group-folders-section' })`,
+so the `<div id="group-folders-section">` wrapper lives here (not in the parent
+template) — alpine-ajax needs the id in the response to morph it.
+
 Context variables:
 - group_folders: QuerySet of root File objects with group set
 - available_groups: QuerySet of Groups without a folder yet
 {% endcomment %}
 
+<div id="group-folders-section">
 {% if group_folders or available_groups %}
 <hr class="my-2 border-base-300" x-show="!collapsed">
 <!-- Expanded: title + create button -->
@@ -46,3 +51,4 @@ Context variables:
   {% endif %}
 </ul>
 {% endif %}
+</div>

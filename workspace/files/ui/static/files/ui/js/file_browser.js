@@ -276,7 +276,7 @@ window.fileBrowser = function fileBrowser() {
       return folderEl?.dataset.folder || '';
     },
 
-    async openPropertiesPanel(uuid, nodeType) {
+    openPropertiesPanel(uuid, nodeType) {
       // If same file and panel is already open, toggle close
       if (this.showPropertiesPanel && this.propertiesUuid === uuid) {
         this.closePropertiesPanel();
@@ -288,27 +288,18 @@ window.fileBrowser = function fileBrowser() {
       this.propertiesError = null;
       this.propertiesLoading = true;
       this.showPropertiesPanel = true;
-      this.$refs.propertiesContent.replaceChildren();
 
-      try {
-        const response = await fetch(`/files/properties/${uuid}`);
-        if (!response.ok) throw new Error('Failed to load properties');
-        const html = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        this.$refs.propertiesContent.replaceChildren(...doc.body.children);
-      } catch (err) {
-        this.propertiesError = err.message;
-      } finally {
-        this.propertiesLoading = false;
-      }
+      const onError = () => { this.propertiesError = 'Failed to load properties'; };
+      const onAfter = () => { this.propertiesLoading = false; };
+      this.$el.addEventListener('ajax:error', onError, { once: true });
+      this.$el.addEventListener('ajax:after', onAfter, { once: true });
+      this.$ajax(`/files/properties/${uuid}`, { target: 'properties-content' });
     },
 
     closePropertiesPanel() {
       this.showPropertiesPanel = false;
       this.propertiesUuid = null;
       this.propertiesError = null;
-      this.$refs.propertiesContent?.replaceChildren();
     },
 
     _initFileActions() {
@@ -2478,50 +2469,16 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
       }
     },
 
-    async refreshPinnedSection() {
-      try {
-        const response = await fetch('/files/pinned');
-        if (!response.ok) return;
-        const html = await response.text();
-        const currentList = document.getElementById('pinned-folders-list');
-        if (!currentList) return;
-
-        // Parse HTML safely using DOMParser and extract children
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const newItems = Array.from(doc.body.children);
-
-        // Replace content with parsed DOM nodes
-        currentList.replaceChildren(...newItems);
-        this.pinnedCount = currentList.querySelectorAll('li').length;
-
-        // Re-init Alpine on new content
-        if (window.Alpine?.initTree) {
-          window.Alpine.initTree(currentList);
-        }
-      } catch (error) {
-        // Silent fail for sidebar refresh
-      }
+    refreshPinnedSection() {
+      this.$el.addEventListener('ajax:after', () => {
+        const list = document.getElementById('pinned-folders-list');
+        if (list) this.pinnedCount = list.querySelectorAll('li').length;
+      }, { once: true });
+      this.$ajax('/files/pinned', { target: 'pinned-folders-list' });
     },
 
-    async refreshGroupFoldersSection() {
-      try {
-        const response = await fetch('/files/group-folders');
-        if (!response.ok) return;
-        const html = await response.text();
-        const container = document.getElementById('group-folders-section');
-        if (!container) return;
-
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const newContent = Array.from(doc.body.children);
-
-        container.replaceChildren(...newContent);
-
-        if (window.lucide) window.lucide.createIcons();
-      } catch (error) {
-        // Silent fail for sidebar refresh
-      }
+    refreshGroupFoldersSection() {
+      this.$ajax('/files/group-folders', { target: 'group-folders-section' });
     },
 
     async openContextMenu(event, nodeData) {

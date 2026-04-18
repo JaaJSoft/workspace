@@ -2,12 +2,16 @@
 Pinned Folders Partial
 ======================
 Renders the list of pinned folders for the sidebar.
-Loaded via Alpine AJAX.
+
+Swapped in place via `$ajax('/files/pinned', { target: 'pinned-folders-list' })`,
+so the outer `<ul id="pinned-folders-list">` wrapper is rendered here (not in the
+parent template) — alpine-ajax needs the id in the response to morph it.
 
 Context variables:
 - pinned_folders: QuerySet of PinnedFolder objects
 {% endcomment %}
 
+<ul class="space-y-0.5" id="pinned-folders-list">
 {% for pin in pinned_folders %}
 <li class="list-none pinned-folder-item" :class="collapsed ? 'flex justify-center' : ''"
     draggable="true"
@@ -32,3 +36,4 @@ Context variables:
   </span>
 </li>
 {% endfor %}
+</ul>

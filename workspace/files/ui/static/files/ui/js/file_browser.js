@@ -122,8 +122,7 @@ window.filePreferences = function filePreferences() {
       this._broadcast();
       // Breadcrumb collapse is rendered server-side; refresh to apply
       if (key === 'breadcrumbCollapse') {
-        const link = document.querySelector('[data-refresh-folder-browser]');
-        if (link) link.click();
+        this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
       }
     },
 
@@ -1345,44 +1344,7 @@ window.fileBrowser = function fileBrowser() {
     },
 
     refreshFolderBrowser() {
-      const refreshLink = document.querySelector('[data-refresh-folder-browser]');
-      if (refreshLink) {
-        refreshLink.click();
-        return;
-      }
-      const target = document.getElementById('folder-browser');
-      if (!target) return;
-      fetch(window.location.href, {
-        headers: {
-          'X-Alpine-Request': 'true'
-        }
-      })
-        .then((response) => {
-          if (!response.ok) {
-            this.showAlert('error', 'Failed to refresh items');
-            return null;
-          }
-          return response.text();
-        })
-        .then((html) => {
-          if (!html) return;
-          const wrapper = document.createElement('div');
-          wrapper.innerHTML = html;
-          const fresh = wrapper.querySelector('#folder-browser');
-          if (!fresh) {
-            this.showAlert('error', 'Failed to refresh items');
-            return;
-          }
-          if (window.Alpine?.mutateDom) {
-            window.Alpine.mutateDom(() => { target.replaceWith(fresh); });
-          } else {
-            target.replaceWith(fresh);
-          }
-          if (window.Alpine?.initTree) {
-            window.Alpine.initTree(fresh);
-          }
-        })
-        .catch(() => this.showAlert('error', 'Failed to refresh items'));
+      this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
     },
 
     showAlert(type, message) {
@@ -2501,8 +2463,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
         });
         if (response.ok) {
           window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
-          const refreshLink = document.querySelector('[data-refresh-folder-browser]');
-          if (refreshLink) refreshLink.click();
+          this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
         } else {
           let errData = {};
           try { errData = await response.json(); } catch (e) {}
@@ -2857,8 +2818,7 @@ window.shareModal = function shareModal() {
       await this.loadShares();
       window.dispatchEvent(new CustomEvent('shares-changed'));
       // Refresh the folder browser so the shared badge updates
-      const refreshLink = document.querySelector('[data-refresh-folder-browser]');
-      if (refreshLink) refreshLink.click();
+      this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
       this.closeModal();
     },
 

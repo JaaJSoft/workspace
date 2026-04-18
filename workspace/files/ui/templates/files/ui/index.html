@@ -149,7 +149,8 @@
 {% endblock %}
 
 {% block content %}
-<div x-data="fileBrowser()" class="h-full flex flex-col">
+<div x-data="fileBrowser()" class="h-full flex flex-col"
+     @ajax:error="showAlert('error', 'Failed to refresh items')">
   <!-- Persistent nav links for Alpine AJAX navigation (outside #folder-browser so they survive replacements) -->
   <a id="folder-nav-push" class="hidden" x-target.push="folder-browser"></a>
   <a id="folder-nav-replace" class="hidden" x-target.replace="folder-browser"></a>
@@ -194,12 +195,6 @@
                     </button>
                   </div>
                   {% include 'ui/partials/breadcrumbs.html' with breadcrumbs=breadcrumbs collapse=True collapse_after=breadcrumb_collapse x_target="folder-browser" x_target_history="push" %}
-                  <a
-                    href="{{ current_view_url }}"
-                    class="hidden"
-                    x-target="folder-browser"
-                    data-refresh-folder-browser
-                  ></a>
                 </div>
 
                 {% if is_trash_view %}

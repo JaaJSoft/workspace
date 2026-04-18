@@ -1,0 +1,133 @@
+<!-- Step 2: Master password setup -->
+<dialog id="setup-vault-dialog" class="modal">
+  <div class="modal-box max-w-md" x-data="setupVaultDialog()" @keydown.escape.prevent="">
+    <h3 class="font-bold text-lg mb-1 flex items-center gap-2">
+      <i data-lucide="shield-check" class="w-5 h-5 text-warning"></i>
+      Set master password
+    </h3>
+    <p class="text-sm text-base-content/60 mb-4">
+      This password encrypts your vault. It is never sent to the server — if you forget it, your data cannot be recovered.
+    </p>
+
+    <template x-if="error">
+      <div class="mb-4 text-error text-sm" x-text="error"></div>
+    </template>
+
+    <form @submit.prevent="submit()">
+      <div class="form-control mb-3">
+        <label class="label"><span class="label-text font-medium">Master password</span></label>
+        <div class="relative">
+          <input :type="showPw ? 'text' : 'password'" x-model="password"
+                 class="input input-bordered w-full pr-10 focus:border-warning focus:outline-warning/20"
+                 placeholder="Choose a strong password" required>
+          <button type="button"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/40 hover:text-base-content"
+                  @click="showPw = !showPw">
+            <i :data-lucide="showPw ? 'eye-off' : 'eye'" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <!-- Strength bar -->
+        <div class="mt-2 h-1.5 bg-base-300 rounded-full overflow-hidden">
+          <div class="h-full rounded-full transition-all duration-300"
+               :style="'width:' + strength + '%'"
+               :class="strength < 40 ? 'bg-error' : strength < 70 ? 'bg-warning' : 'bg-success'"></div>
+        </div>
+        <p class="text-xs mt-1"
+           :class="strength < 40 ? 'text-error' : strength < 70 ? 'text-warning' : 'text-success'"
+           x-text="strengthLabel"></p>
+      </div>
+
+      <div class="form-control mb-4">
+        <label class="label"><span class="label-text font-medium">Confirm master password</span></label>
+        <input :type="showPw ? 'text' : 'password'" x-model="confirm"
+               class="input input-bordered focus:border-warning focus:outline-warning/20"
+               :class="confirm && confirm !== password ? 'input-error' : ''"
+               placeholder="Repeat your password" required>
+        <p x-show="confirm && confirm !== password" class="text-error text-xs mt-1">
+          Passwords do not match.
+        </p>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" @click="cancel()">Cancel</button>
+        <button type="submit" class="btn btn-warning"
+                :disabled="loading || !password || password !== confirm || strength < 20">
+          <span x-show="loading" class="loading loading-spinner loading-sm"></span>
+          Create vault
+        </button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<script>
+function setupVaultDialog() {
+  return {
+    password: '',
+    confirm: '',
+    showPw: false,
+    loading: false,
+    error: '',
+
+    get strength() {
+      const p = this.password;
+      if (!p) return 0;
+      let score = Math.min(p.length * 4, 40);
+      if (/[A-Z]/.test(p)) score += 15;
+      if (/[0-9]/.test(p)) score += 15;
+      if (/[^A-Za-z0-9]/.test(p)) score += 20;
+      if (p.length >= 16) score += 10;
+      return Math.min(score, 100);
+    },
+
+    get strengthLabel() {
+      const s = this.strength;
+      if (s < 40) return 'Weak';
+      if (s < 70) return 'Fair';
+      return 'Strong';
+    },
+
+    cancel() {
+      this.password = '';
+      this.confirm = '';
+      this.error = '';
+      document.getElementById('setup-vault-dialog').close();
+    },
+
+    async submit() {
+      if (!window._pendingSetupVault) return;
+      const vault = window._pendingSetupVault;
+      this.loading = true;
+      this.error = '';
+      try {
+        const { clientMasterHash, protectedVaultKey } = await VaultCrypto.setupVault(
+          this.password, vault.kdf_salt, vault.kdf_iterations
+        );
+        const resp = await fetch(`/api/v1/passwords/vaults/${vault.uuid}/setup`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
+          },
+          body: JSON.stringify({
+            client_master_hash: clientMasterHash,
+            protected_vault_key: protectedVaultKey,
+          }),
+        });
+        if (!resp.ok) {
+          const data = await resp.json();
+          this.error = data.detail || 'Setup failed.';
+          return;
+        }
+        window._pendingSetupVault = null;
+        this.cancel();
+        window.location.href = `/passwords/${vault.uuid}`;
+      } catch {
+        this.error = 'An error occurred. Please try again.';
+      } finally {
+        this.loading = false;
+      }
+    },
+  };
+}
+</script>

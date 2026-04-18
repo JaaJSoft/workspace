@@ -1,0 +1,87 @@
+{% load static %}
+<!-- Step 1: Create vault — name and description -->
+<dialog id="create-vault-dialog" class="modal">
+  <div class="modal-box max-w-md" x-data="createVaultDialog()">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+      <i data-lucide="vault" class="w-5 h-5 text-warning"></i>
+      New vault
+    </h3>
+
+    <template x-if="error">
+      <div class="mb-4 text-error text-sm" x-text="error"></div>
+    </template>
+
+    <form @submit.prevent="submit()">
+      <div class="form-control mb-4">
+        <label class="label"><span class="label-text font-medium">Name</span></label>
+        <input type="text" x-model="name" placeholder="e.g. Personal, Work…"
+               class="input input-bordered focus:border-warning focus:outline-warning/20"
+               required autofocus>
+      </div>
+
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text font-medium">Description <span class="text-base-content/40">(optional)</span></span>
+        </label>
+        <input type="text" x-model="description" placeholder="A short description…"
+               class="input input-bordered focus:border-warning focus:outline-warning/20">
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" @click="close()">Cancel</button>
+        <button type="submit" class="btn btn-warning" :disabled="loading || !name.trim()">
+          <span x-show="loading" class="loading loading-spinner loading-sm"></span>
+          Continue
+        </button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<script>
+function createVaultDialog() {
+  return {
+    name: '',
+    description: '',
+    loading: false,
+    error: '',
+
+    close() {
+      this.name = '';
+      this.description = '';
+      this.error = '';
+      document.getElementById('create-vault-dialog').close();
+    },
+
+    async submit() {
+      if (!this.name.trim()) return;
+      this.loading = true;
+      this.error = '';
+      try {
+        const resp = await fetch('/api/v1/passwords/vaults', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
+          },
+          body: JSON.stringify({ name: this.name.trim(), description: this.description.trim() }),
+        });
+        if (!resp.ok) {
+          const data = await resp.json();
+          this.error = data.detail || 'Failed to create vault.';
+          return;
+        }
+        const vault = await resp.json();
+        window._pendingSetupVault = vault;
+        this.close();
+        document.getElementById('setup-vault-dialog').showModal();
+      } catch {
+        this.error = 'Network error. Please try again.';
+      } finally {
+        this.loading = false;
+      }
+    },
+  };
+}
+</script>

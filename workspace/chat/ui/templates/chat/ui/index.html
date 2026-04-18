@@ -89,7 +89,7 @@ x-init="init()"
           <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
           <input
             type="search"
-            class="grow"
+            class="grow [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
             placeholder="Search conversations"
             x-model="convSearch"
             @input.debounce.300ms="refreshList()"

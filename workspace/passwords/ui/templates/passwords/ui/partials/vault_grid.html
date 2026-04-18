@@ -1,0 +1,37 @@
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+  <template x-for="vault in filteredVaults" :key="vault.uuid">
+    <a :href="'/passwords/' + vault.uuid"
+       class="card bg-base-200 border border-base-300 hover:border-warning/50 hover:shadow-lg transition-all cursor-pointer group">
+      <div class="card-body p-4">
+        <div class="flex items-start justify-between mb-3">
+          <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
+            <i :data-lucide="vault.icon || 'vault'" class="w-5 h-5 text-warning"></i>
+          </div>
+          <span x-show="isUnlocked(vault.uuid)"
+                class="badge badge-success badge-sm gap-1">
+            <i data-lucide="lock-open" class="w-3 h-3"></i>
+            <span>Unlocked</span>
+          </span>
+          <span x-show="!isUnlocked(vault.uuid)"
+                class="badge badge-warning badge-sm badge-outline gap-1">
+            <i data-lucide="lock" class="w-3 h-3"></i>
+            <span>Locked</span>
+          </span>
+        </div>
+        <h3 class="font-semibold text-base-content truncate" x-text="vault.name"></h3>
+        <p class="text-xs text-base-content/50 truncate" x-text="vault.description || ''"></p>
+      </div>
+    </a>
+  </template>
+
+  <!-- New vault card -->
+  <button @click="openCreateVault()"
+          class="card bg-base-200 border border-dashed border-base-300 hover:border-warning/50 hover:bg-warning/5 transition-all cursor-pointer min-h-[120px]">
+    <div class="card-body p-4 flex flex-col items-center justify-center gap-2">
+      <div class="w-10 h-10 rounded-lg bg-base-300 flex items-center justify-center">
+        <i data-lucide="plus" class="w-5 h-5 text-base-content/40"></i>
+      </div>
+      <span class="text-sm text-base-content/40">New vault</span>
+    </div>
+  </button>
+</div>

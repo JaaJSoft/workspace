@@ -1,6 +1,7 @@
 <!-- Unlock overlay — rendered inside vault's x-data scope -->
 <div class="card bg-base-200 shadow-xl w-full max-w-sm mx-4"
-     x-data="{ unlockPassword: '', unlockShowPw: false, unlockLoading: false, unlockError: '' }">
+     x-data="{ unlockPassword: '', unlockShowPw: false, unlockLoading: false, unlockError: '' }"
+     x-effect="if (locked) { unlockPassword = ''; unlockError = ''; }">
   <div class="card-body items-center text-center gap-4">
     <div class="w-14 h-14 rounded-2xl bg-warning/10 flex items-center justify-center">
       <i data-lucide="{{ vault.icon|default:'vault' }}" class="w-7 h-7 text-warning"></i>

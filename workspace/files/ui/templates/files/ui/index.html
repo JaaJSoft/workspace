@@ -107,9 +107,7 @@
           :class="dragOver ? 'bg-primary/10 ring-2 ring-primary/40 ring-inset rounded-lg scale-[1.02]' : ''"
           class="transition-all duration-200"
         >
-          <ul class="space-y-0.5" id="pinned-folders-list" x-target="pinned-folders-list">
-            {% include 'files/ui/partials/pinned_folders.html' %}
-          </ul>
+          {% include 'files/ui/partials/pinned_folders.html' %}
           <!-- Drop hint when dragging (expanded only) -->
           <div x-show="dragOver && !collapsed" x-cloak x-transition
                class="text-xs text-primary font-medium text-center py-4 border-2 border-dashed border-primary/40 rounded-lg mt-2 bg-primary/5">
@@ -122,9 +120,7 @@
 
       <!-- Group Folders -->
       <div x-show="showGroups" x-transition>
-        <div id="group-folders-section">
-          {% include 'files/ui/partials/group_folders_section.html' %}
-        </div>
+        {% include 'files/ui/partials/group_folders_section.html' %}
       </div>
     </div>
 

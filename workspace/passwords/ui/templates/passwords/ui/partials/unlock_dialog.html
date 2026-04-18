@@ -29,7 +29,7 @@
           },
           body: JSON.stringify({ client_master_hash: clientMasterHash }),
         });
-        if (resp.status === 401) {
+        if (!resp.ok) {
           unlockError = 'Incorrect master password.';
           unlockPassword = '';
           unlockLoading = false;

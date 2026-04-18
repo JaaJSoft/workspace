@@ -223,7 +223,7 @@ class VaultUnlockView(APIView):
         if not ok:
             return Response(
                 {'detail': 'Invalid master password.'},
-                status=status.HTTP_401_UNAUTHORIZED,
+                status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(VaultUnlockResponseSerializer({'protected_vault_key': protected_key}).data)
 

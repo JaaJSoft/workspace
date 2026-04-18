@@ -1124,6 +1124,9 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         # Rename gate — consult the action registry so any future rule on
         # RenameAction.is_available (e.g., journal notes, shared files)
         # applies uniformly to direct PATCH calls, not just to UI menus.
+        # Only fires when the user already has EDIT+ permission — below that,
+        # the standard flow returns 404/403 and we must not preempt it
+        # (e.g. a VIEW-only shared user must still see 404, not 403).
         if 'name' in request.data:
             from workspace.files.actions import ActionRegistry
             target = File.objects.filter(
@@ -1131,13 +1134,14 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
             ).first()
             if target and request.data['name'] != target.name:
                 perm = FileService.get_permission(request.user, target)
-                if not ActionRegistry.is_action_available(
-                    'rename', request.user, target, permission=perm,
-                ):
-                    return Response(
-                        {'detail': 'Renaming this file is not allowed.'},
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
+                if perm is not None and perm >= FilePermission.EDIT:
+                    if not ActionRegistry.is_action_available(
+                        'rename', request.user, target, permission=perm,
+                    ):
+                        return Response(
+                            {'detail': 'Renaming this file is not allowed.'},
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
 
         try:
             response = super().partial_update(request, *args, **kwargs)

@@ -125,12 +125,15 @@ x-init="init()"
           class="input input-ghost input-sm font-semibold flex-1 min-w-0"
           :value="selectedNote ? noteName(selectedNote) : ''"
           @change="renameNote($event.target.value)"
+          :readonly="!canDoOnSelected('rename')"
+          :class="!canDoOnSelected('rename') ? 'cursor-not-allowed opacity-70' : ''"
+          :title="!canDoOnSelected('rename') ? 'Renaming is disabled for this note' : ''"
         >
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
         <button class="btn btn-ghost btn-sm btn-square" @click="toggleFavorite(selectedNote)"
-                :disabled="togglingFavorite"
-                :title="selectedNote?.is_favorite ? 'Remove from favorites' : 'Add to favorites'">
+                :disabled="togglingFavorite || !canDoOnSelected('toggle_favorite')"
+                :title="!canDoOnSelected('toggle_favorite') ? 'Unavailable for this note' : (selectedNote?.is_favorite ? 'Remove from favorites' : 'Add to favorites')">
           <span class="loading loading-spinner loading-xs" x-show="togglingFavorite" x-cloak></span>
           <i data-lucide="star" class="w-4 h-4 transition-colors" x-show="!togglingFavorite"
              :class="selectedNote?.is_favorite ? 'text-warning fill-warning' : ''"></i>
@@ -144,7 +147,9 @@ x-init="init()"
            title="Open in Files">
           <i data-lucide="hard-drive" class="w-4 h-4"></i>
         </a>
-        <button class="btn btn-ghost btn-sm btn-square text-error" @click="deleteNote()">
+        <button class="btn btn-ghost btn-sm btn-square text-error" @click="deleteNote()"
+                :disabled="!canDoOnSelected('delete')"
+                :title="!canDoOnSelected('delete') ? 'Unavailable for this note' : 'Delete note'">
           <i data-lucide="trash-2" class="w-4 h-4"></i>
         </button>
       </div>

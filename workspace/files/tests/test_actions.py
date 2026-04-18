@@ -9,6 +9,7 @@ from workspace.files.models import File, FileShare
 from workspace.files.actions import ActionRegistry
 from workspace.files.actions.base import ActionCategory
 from workspace.files.services import FilePermission
+from workspace.users.services.settings import set_setting
 
 MANAGE = FilePermission.MANAGE
 EDIT = FilePermission.EDIT
@@ -372,6 +373,81 @@ class RenameActionTests(TestCase):
         f = _make_file(self.user)
         action = ActionRegistry.get('rename')
         self.assertFalse(action.is_available(self.other, f, permission=WRITE))
+
+    def test_not_available_for_journal_note(self):
+        user = User.objects.create_user(
+            username='journal_user', email='j@test.com', password='x',
+        )
+        journal = File.objects.create(
+            owner=user, name='Journal', node_type=File.NodeType.FOLDER,
+        )
+        set_setting(user, 'notes', 'preferences', {
+            'journalFolderUuid': str(journal.uuid),
+        })
+        note = File.objects.create(
+            owner=user, name='2026-04-17.md', node_type=File.NodeType.FILE,
+            mime_type='text/markdown', parent=journal,
+        )
+        note.is_favorite = False
+        note.is_pinned = False
+        note.is_shared = False
+        note.has_children = False
+        note.deleted_at = None
+
+        action = ActionRegistry.get('rename')
+        self.assertFalse(action.is_available(user, note, permission=MANAGE))
+
+    def test_available_for_journal_subfolder_descendant(self):
+        user = User.objects.create_user(
+            username='subfolder_user', email='s@test.com', password='x',
+        )
+        journal = File.objects.create(
+            owner=user, name='Journal', node_type=File.NodeType.FOLDER,
+        )
+        sub = File.objects.create(
+            owner=user, name='Sub', node_type=File.NodeType.FOLDER, parent=journal,
+        )
+        set_setting(user, 'notes', 'preferences', {
+            'journalFolderUuid': str(journal.uuid),
+        })
+        note = File.objects.create(
+            owner=user, name='note.md', node_type=File.NodeType.FILE,
+            mime_type='text/markdown', parent=sub,
+        )
+        note.is_favorite = False
+        note.is_pinned = False
+        note.is_shared = False
+        note.has_children = False
+        note.deleted_at = None
+
+        action = ActionRegistry.get('rename')
+        self.assertTrue(action.is_available(user, note, permission=MANAGE))
+
+    def test_available_for_non_journal_note(self):
+        user = User.objects.create_user(
+            username='normal_user', email='n@test.com', password='x',
+        )
+        journal = File.objects.create(
+            owner=user, name='Journal', node_type=File.NodeType.FOLDER,
+        )
+        other = File.objects.create(
+            owner=user, name='Other', node_type=File.NodeType.FOLDER,
+        )
+        set_setting(user, 'notes', 'preferences', {
+            'journalFolderUuid': str(journal.uuid),
+        })
+        note = File.objects.create(
+            owner=user, name='note.md', node_type=File.NodeType.FILE,
+            mime_type='text/markdown', parent=other,
+        )
+        note.is_favorite = False
+        note.is_pinned = False
+        note.is_shared = False
+        note.has_children = False
+        note.deleted_at = None
+
+        action = ActionRegistry.get('rename')
+        self.assertTrue(action.is_available(user, note, permission=MANAGE))
 
 
 class CutCopyPasteActionTests(TestCase):

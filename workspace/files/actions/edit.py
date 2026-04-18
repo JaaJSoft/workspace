@@ -18,6 +18,11 @@ class RenameAction(BaseAction):
         # Cannot rename a root group folder
         if file_obj.group_id and file_obj.parent_id is None:
             return False
+        # Journal notes are auto-named by date; renaming would break the
+        # "today's note" auto-selection logic in the notes UI.
+        from workspace.notes.services.journal import is_journal_note
+        if is_journal_note(user, file_obj):
+            return False
         return permission is not None and permission >= FilePermission.EDIT
 
 

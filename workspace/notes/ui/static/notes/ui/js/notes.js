@@ -184,6 +184,11 @@ window.notesApp = function notesApp(config) {
         _loadedScripts: [],
         _loadGeneration: 0,
 
+        // Available actions on the currently selected note — driven by
+        // POST /api/v1/files/actions. Empty list = fail-safe (buttons disabled).
+        selectedNoteActionIds: [],
+        _actionsFetchGen: 0,
+
         async init() {
             this.collapsed = localStorage.getItem('notes-sidebar-collapsed') === 'true';
 
@@ -529,10 +534,42 @@ window.notesApp = function notesApp(config) {
 
         // ── Note selection ──────────────────────────────────
 
+        canDoOnSelected(actionId) {
+            return this.selectedNoteActionIds.indexOf(actionId) !== -1;
+        },
+
+        async _fetchActionsForSelected(uuid) {
+            const gen = ++this._actionsFetchGen;
+            try {
+                const resp = await fetch('/api/v1/files/actions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken(),
+                    },
+                    body: JSON.stringify({ uuids: [uuid] }),
+                });
+                if (gen !== this._actionsFetchGen) return;
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (gen !== this._actionsFetchGen) return;
+                const list = data[uuid] || [];
+                this.selectedNoteActionIds = list.map(function(a) { return a.id; });
+            } catch (e) {
+                if (gen === this._actionsFetchGen) {
+                    this.selectedNoteActionIds = [];
+                }
+            }
+        },
+
         async selectNote(note) {
             this.selectedNote = note;
+            this.selectedNoteActionIds = [];
             this.updateUrl({push: this.isMobile()});
             await this.$nextTick();
+            // Fetch available actions in parallel with the viewer — both are
+            // independent HTTP calls, no sequential dependency.
+            this._fetchActionsForSelected(note.uuid);
             await this.loadViewer(note);
         },
 
@@ -627,6 +664,7 @@ window.notesApp = function notesApp(config) {
 
         async renameNote(newName) {
             if (!this.selectedNote || !newName) return;
+            if (!this.canDoOnSelected('rename')) return;
             if (!newName.endsWith('.md')) newName += '.md';
             if (newName === this.selectedNote.name) return;
 
@@ -646,6 +684,7 @@ window.notesApp = function notesApp(config) {
 
         async deleteNote() {
             if (!this.selectedNote) return;
+            if (!this.canDoOnSelected('delete')) return;
             if (window._notesPrefsCache.confirmBeforeDelete) {
                 const ok = await AppDialog.confirm({
                     title: 'Delete note',
@@ -679,6 +718,15 @@ window.notesApp = function notesApp(config) {
 
         async toggleFavorite(note) {
             if (!note || this.togglingFavorite) return;
+            // Gate only when toggling from the editor toolbar (selected note).
+            // List/context-menu calls already filter on their own fetched action list.
+            if (
+                this.selectedNote
+                && note.uuid === this.selectedNote.uuid
+                && !this.canDoOnSelected('toggle_favorite')
+            ) {
+                return;
+            }
             this.togglingFavorite = true;
             const isFav = note.is_favorite;
             const resp = await fetch('/api/v1/files/' + note.uuid + '/favorite', {

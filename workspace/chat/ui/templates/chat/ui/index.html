@@ -75,7 +75,15 @@ x-init="init()"
     </div>
 
     <!-- Search + conversation list (shared convSearch scope) -->
-    <div class="flex-1 min-h-0 flex flex-col" x-data="{ convSearch: '' }">
+    <div class="flex-1 min-h-0 flex flex-col"
+         x-data="{
+           convSearch: '',
+           refreshList() {
+             const base = '{% url 'chat_ui:conversation_list' %}';
+             const qs = this.convSearch.trim() ? '?q=' + encodeURIComponent(this.convSearch.trim()) : '';
+             this.$ajax(base + qs, { target: 'conversation-list' });
+           },
+         }">
       <div class="px-3 pt-3" x-show="!collapsed" x-cloak>
         <label class="input input-sm input-bordered w-full flex items-center gap-2">
           <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
@@ -84,14 +92,14 @@ x-init="init()"
             class="grow"
             placeholder="Search conversations"
             x-model="convSearch"
-            @input.debounce.300ms="$refs.convSearchLink.click()"
-            @keydown.escape.stop="convSearch = ''; $refs.convSearchLink.click()"
+            @input.debounce.300ms="refreshList()"
+            @keydown.escape.stop="convSearch = ''; refreshList()"
           />
           <button
             type="button"
             x-show="convSearch.length > 0"
             x-cloak
-            @click="convSearch = ''; $refs.convSearchLink.click()"
+            @click="convSearch = ''; refreshList()"
             class="btn btn-ghost btn-xs btn-square -mr-1"
             title="Clear search"
           >
@@ -99,12 +107,6 @@ x-init="init()"
           </button>
         </label>
       </div>
-      <a
-        x-ref="convSearchLink"
-        class="hidden"
-        :href="'{% url 'chat_ui:conversation_list' %}' + (convSearch.trim() ? '?q=' + encodeURIComponent(convSearch.trim()) : '')"
-        x-target="conversation-list"
-      >Search</a>
       <div class="flex-1 overflow-y-auto py-4 px-3">
         {% include "chat/ui/partials/conversation_list.html" %}
       </div>

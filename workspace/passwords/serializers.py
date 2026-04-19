@@ -82,7 +82,7 @@ class VaultCreateSerializer(serializers.Serializer):
         help_text="Lucide icon name.",
     )
     color = serializers.CharField(
-        max_length=50, required=False, default='primary',
+        max_length=50, required=False, default='text-warning',
         help_text="DaisyUI/Tailwind colour class.",
     )
 

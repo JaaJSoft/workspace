@@ -42,7 +42,7 @@ class Vault(models.Model):
     name = models.CharField(max_length=100, default='Personal')
     description = models.TextField(blank=True, default='')
     icon = models.CharField(max_length=50, blank=True, default='vault')
-    color = models.CharField(max_length=50, blank=True, default='primary')
+    color = models.CharField(max_length=50, blank=True, default='text-warning')
 
     # Master password verification (server-side, one-way)
     master_password_hash = models.CharField(max_length=255, blank=True, default='')
@@ -63,6 +63,7 @@ class Vault(models.Model):
     kdf_parallelism = models.PositiveIntegerField(null=True, blank=True)
 
     is_setup = models.BooleanField(default=False)  # True once master password is configured
+    is_favorite = models.BooleanField(default=False, db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

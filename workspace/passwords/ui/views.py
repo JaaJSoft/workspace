@@ -18,6 +18,9 @@ def index(request):
             'icon': v.icon,
             'color': v.color,
             'is_setup': v.is_setup,
+            'is_favorite': v.is_favorite,
+            'is_owner': v.user_id == request.user.pk,
+            'updated_at': v.updated_at.isoformat(),
         }
         for v in vaults
     ])

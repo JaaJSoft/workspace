@@ -1,9 +1,11 @@
 {% load static %}
-<!-- Step 1: Create vault — name and description -->
+<!-- Step 1: Create vault — name, description, icon, color -->
 <dialog id="create-vault-dialog" class="modal">
   <div class="modal-box max-w-md" x-data="createVaultDialog()">
     <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
-      <i data-lucide="vault" class="w-5 h-5 text-warning"></i>
+      <span :class="selectedColor || 'text-warning'">
+        <i :data-lucide="selectedIcon || 'vault'" class="w-5 h-5"></i>
+      </span>
       New vault
     </h3>
 
@@ -27,6 +29,11 @@
                class="input input-bordered focus:border-warning focus:outline-warning/20">
       </div>
 
+      <!-- Icon & color picker -->
+      <div class="mb-4">
+        {% include "ui/partials/icon_picker.html" %}
+      </div>
+
       <div class="modal-action">
         <button type="button" class="btn btn-ghost" @click="close()">Cancel</button>
         <button type="submit" class="btn btn-warning" :disabled="loading || !name.trim()">
@@ -47,10 +54,26 @@ function createVaultDialog() {
     loading: false,
     error: '',
 
+    // Icon picker state (required by ui/partials/icon_picker.html)
+    icons: window.ICON_PICKER_ICONS,
+    colors: window.ICON_PICKER_COLORS,
+    selectedIcon: 'vault',
+    selectedColor: 'text-warning',
+
+    selectIcon(icon) {
+      this.selectedIcon = icon;
+    },
+
+    selectColor(cls) {
+      this.selectedColor = cls;
+    },
+
     close() {
       this.name = '';
       this.description = '';
       this.error = '';
+      this.selectedIcon = 'vault';
+      this.selectedColor = 'text-warning';
       document.getElementById('create-vault-dialog').close();
     },
 
@@ -65,7 +88,12 @@ function createVaultDialog() {
             'Content-Type': 'application/json',
             'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
           },
-          body: JSON.stringify({ name: this.name.trim(), description: this.description.trim() }),
+          body: JSON.stringify({
+            name: this.name.trim(),
+            description: this.description.trim(),
+            icon: this.selectedIcon,
+            color: this.selectedColor,
+          }),
         });
         if (!resp.ok) {
           const data = await resp.json();

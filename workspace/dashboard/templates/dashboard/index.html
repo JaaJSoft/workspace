@@ -84,10 +84,12 @@
     {% include 'dashboard/partials/modules_grid.html' %}
   </section>
 
-  {# ── Upcoming events ── #}
-  <section>
-    {% include 'dashboard/partials/upcoming_events.html' %}
-  </section>
+  {% if show_upcoming_events %}
+    {# ── Upcoming events (loaded async via alpine-ajax) ── #}
+    <section>
+      {% include 'dashboard/partials/upcoming_skeleton.html' %}
+    </section>
+  {% endif %}
 
   {# ── Activity feed ── #}
   <section class="max-w-4xl mx-auto w-full">

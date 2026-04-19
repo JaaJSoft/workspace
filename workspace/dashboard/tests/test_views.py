@@ -1,8 +1,12 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
+from workspace.users.services.settings import set_setting
 from workspace.dashboard.views import (
     _build_dashboard_context,
     _get_activity_context,
@@ -66,12 +70,14 @@ class BuildDashboardContextTests(TestCase):
         self.assertIn('mail', slugs)
 
     @patch('workspace.dashboard.views.registry')
-    def test_context_includes_upcoming_events(self, mock_registry):
+    def test_context_does_not_include_upcoming_events(self, mock_registry):
+        """Upcoming events load async via /dashboard/upcoming — not via the
+        main context."""
         mock_registry.get_for_template.return_value = []
         mock_registry.get_pending_action_counts.return_value = {}
 
         context = _build_dashboard_context(self.user)
-        self.assertIn('upcoming_events', context)
+        self.assertNotIn('upcoming_events', context)
 
     @patch('workspace.dashboard.views.registry')
     def test_context_includes_usage_stats(self, mock_registry):
@@ -277,6 +283,9 @@ class IndexViewTests(TestCase):
             username='viewuser', password='pass123',
         )
 
+    def tearDown(self):
+        cache.clear()
+
     def test_requires_login(self):
         resp = self.client.get('/')
         self.assertEqual(resp.status_code, 302)
@@ -284,7 +293,7 @@ class IndexViewTests(TestCase):
 
     @patch('workspace.dashboard.views._build_dashboard_context')
     def test_returns_200_for_authenticated_user(self, mock_ctx):
-        mock_ctx.return_value = {'modules': [], 'upcoming_events': [], 'usage_stats': {}}
+        mock_ctx.return_value = {'modules': [], 'usage_stats': {}}
         self.client.login(username='viewuser', password='pass123')
         resp = self.client.get('/')
         self.assertEqual(resp.status_code, 200)
@@ -295,6 +304,26 @@ class IndexViewTests(TestCase):
         self.client.login(username='viewuser', password='pass123')
         resp = self.client.get('/')
         self.assertEqual(resp.context['activity_tab'], 'all')
+
+    def test_show_upcoming_events_defaults_to_true(self):
+        self.client.login(username='viewuser', password='pass123')
+        resp = self.client.get('/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="dashboard-upcoming"')
+
+    def test_show_upcoming_events_false_hides_section(self):
+        set_setting(self.user, 'dashboard', 'show_upcoming_events', False)
+        self.client.login(username='viewuser', password='pass123')
+        resp = self.client.get('/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'id="dashboard-upcoming"')
+
+    def test_show_upcoming_events_false_no_ajax_trigger(self):
+        set_setting(self.user, 'dashboard', 'show_upcoming_events', False)
+        self.client.login(username='viewuser', password='pass123')
+        resp = self.client.get('/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, '/dashboard/upcoming')
 
 
 # ── activity_feed view ──────────────────────────────────────────
@@ -389,3 +418,137 @@ class ActivityFeedViewTests(TestCase):
         mock_activity.assert_called_once()
         call_kwargs = mock_activity.call_args.kwargs
         self.assertEqual(call_kwargs['search'], 'deploy')
+
+
+# ── upcoming_fragment view ──────────────────────────────────────
+
+class UpcomingFragmentViewTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='fragmentuser', password='pass123',
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_requires_login(self):
+        resp = self.client.get('/dashboard/upcoming')
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('login', resp.url)
+
+    @patch('workspace.dashboard.views._get_upcoming_events')
+    def test_returns_partial_template(self, mock_upcoming):
+        mock_upcoming.return_value = []
+        self.client.login(username='fragmentuser', password='pass123')
+
+        resp = self.client.get('/dashboard/upcoming')
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, 'dashboard/partials/upcoming_events.html')
+
+    @patch('workspace.dashboard.views._get_upcoming_events')
+    def test_passes_events_to_template(self, mock_upcoming):
+        mock_upcoming.return_value = ['event-sentinel']
+        self.client.login(username='fragmentuser', password='pass123')
+
+        resp = self.client.get('/dashboard/upcoming')
+
+        self.assertEqual(resp.context['upcoming_events'], ['event-sentinel'])
+
+    @patch('workspace.dashboard.views._get_upcoming_events')
+    def test_empty_state_rendered(self, mock_upcoming):
+        mock_upcoming.return_value = []
+        self.client.login(username='fragmentuser', password='pass123')
+
+        resp = self.client.get('/dashboard/upcoming')
+
+        self.assertContains(resp, 'No upcoming events today.')
+
+    @patch('workspace.dashboard.views._get_upcoming_events')
+    def test_response_contains_swap_target_id(self, mock_upcoming):
+        mock_upcoming.return_value = []
+        self.client.login(username='fragmentuser', password='pass123')
+
+        resp = self.client.get('/dashboard/upcoming')
+
+        # The response must contain an element with id="dashboard-upcoming"
+        # so alpine-ajax can find it during the swap.
+        self.assertContains(resp, 'id="dashboard-upcoming"')
+
+    @patch('workspace.dashboard.views._get_upcoming_events')
+    def test_show_upcoming_empty_false_hides_empty_state(self, mock_upcoming):
+        mock_upcoming.return_value = []
+        set_setting(self.user, 'dashboard', 'show_upcoming_empty', False)
+        self.client.login(username='fragmentuser', password='pass123')
+
+        resp = self.client.get('/dashboard/upcoming')
+
+        self.assertNotContains(resp, 'No upcoming events today.')
+        # Wrapper must still render so alpine-ajax can swap it.
+        self.assertContains(resp, 'id="dashboard-upcoming"')
+
+    @patch('workspace.dashboard.views._get_upcoming_events')
+    def test_show_upcoming_empty_ignored_when_events_present(self, mock_upcoming):
+        # Build a minimal event-like object that the template can iterate.
+        from types import SimpleNamespace
+        fake_event = SimpleNamespace(
+            uuid='01900000-0000-0000-0000-000000000000',
+            title='Fake event',
+            all_day=True,
+            start=None,
+            calendar=SimpleNamespace(color='accent'),
+        )
+        mock_upcoming.return_value = [fake_event]
+        set_setting(self.user, 'dashboard', 'show_upcoming_empty', False)
+        self.client.login(username='fragmentuser', password='pass123')
+
+        resp = self.client.get('/dashboard/upcoming')
+
+        self.assertContains(resp, 'Fake event')
+        self.assertNotContains(resp, 'No upcoming events today.')
+
+
+# ── query budget guard ──────────────────────────────────────────
+
+class IndexViewQueryBudgetTests(TestCase):
+    """Regression guard: ensure upcoming-events expansion never runs on the
+    dashboard's critical render path.
+
+    Post-fix baseline is 5 calendar_event queries:
+      - 2 from the pending-action provider (one_off + masters)
+      - 2 COUNT queries from calendar activity get_stats
+      - 1 SELECT from get_recent_events (activity feed)
+    Re-adding the upcoming-events expansion adds 2 more queries, pushing
+    the total above the threshold of 5 and failing this test."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='budgetuser', password='pass123',
+        )
+        self.client.login(username='budgetuser', password='pass123')
+
+    def test_index_does_not_expand_upcoming_on_critical_path(self):
+        with CaptureQueriesContext(connection) as ctx:
+            resp = self.client.get('/')
+        self.assertEqual(resp.status_code, 200)
+
+        calendar_event_queries = [
+            q['sql'] for q in ctx.captured_queries
+            if 'FROM "calendar_event"' in q['sql']
+        ]
+        # Baseline (post-fix) is 5 queries hitting the calendar_event table:
+        #   - 2 from the pending-action provider (one_off + masters)
+        #   - 2 COUNT queries from calendar activity get_stats
+        #   - 1 SELECT from get_recent_events (activity feed)
+        # Mail queries containing 'has_calendar_event' as a column name are
+        # excluded by the case-sensitive FROM "calendar_event" filter.
+        # Adding the upcoming-events expansion back (one_off + masters = 2 extra)
+        # would push the count above 5, so this threshold catches that regression.
+        self.assertLessEqual(
+            len(calendar_event_queries),
+            5,
+            f'Dashboard index should run at most 5 calendar_event queries '
+            f'(pending-action provider + activity stats only). Found '
+            f'{len(calendar_event_queries)}: {calendar_event_queries}',
+        )

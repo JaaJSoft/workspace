@@ -186,6 +186,41 @@ if FileService.can_access(user, file_obj):
     ...
 ```
 
+### User Settings — always go through `workspace.users.services.settings`
+
+Per-user preferences live in the `UserSetting(user, module, key, value)` model and are wrapped by service helpers that maintain a **5-minute cache** on reads and **invalidate that cache on every write**. Never touch `UserSetting.objects` directly from views, serializers, tasks, or other services — the cache will go stale and subsequent reads will silently return the previous value until the TTL expires or the process restarts.
+
+```python
+from workspace.users.services.settings import (
+    get_setting, set_setting, delete_setting, get_module_settings,
+)
+
+# Read with default (cached, 5-min TTL):
+show = get_setting(user, 'dashboard', 'show_upcoming_events', default=True)
+
+# Write (updates DB AND invalidates cache):
+set_setting(user, 'dashboard', 'show_upcoming_events', False)
+
+# Delete (DB row removed AND cache invalidated):
+delete_setting(user, 'dashboard', 'show_upcoming_events')
+
+# Read all keys for a module at once (no cache, one query):
+prefs = get_module_settings(user, 'dashboard')
+```
+
+**Rules:**
+- Never call `UserSetting.objects.create/update/delete/update_or_create` from application code — use `set_setting`/`delete_setting` instead. Raw ORM bypasses the cache invalidation and causes "F5 reverts my setting" bugs.
+- The REST endpoint `PUT/DELETE /api/v1/settings/<module>/<key>` already delegates to these helpers — new UI that toggles a setting should just call it (fire-and-forget `fetch` is the idiom, see `themePickerForm()` and `dashboardPrefsForm()` in `settings_preferences.html`).
+- In tests that call `set_setting`/`delete_setting`, **always `cache.clear()` in `tearDown`**. Django's `LocMemCache` is process-global and is NOT reset between `TestCase` runs, so leaked cache entries can cause order-dependent failures.
+
+```python
+from django.core.cache import cache
+
+class MyTests(TestCase):
+    def tearDown(self):
+        cache.clear()
+```
+
 ## Frontend Conventions
 
 ### Server-rendered partial swaps — use alpine-ajax, never raw `fetch`

@@ -4,7 +4,8 @@
        class="card bg-base-200 border border-base-300 hover:border-warning/50 hover:shadow-lg transition-all cursor-pointer group">
       <div class="card-body p-4">
         <div class="flex items-start justify-between mb-3">
-          <div class="w-10 h-10 rounded-lg bg-base-300 flex items-center justify-center">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center"
+               :class="(vault.color && vault.color.startsWith('text-') && !vault.color.includes('/')) ? vault.color.replace('text-', 'bg-') + '/10' : 'bg-base-300'">
             <i :data-lucide="vault.icon || 'vault'" class="w-5 h-5"
                :class="(vault.color && vault.color.startsWith('text-')) ? vault.color : 'text-warning'"></i>
           </div>

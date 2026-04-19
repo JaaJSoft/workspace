@@ -34,16 +34,44 @@ x-init="init()"
 
     <!-- Navigation -->
     <div class="flex-1 overflow-y-auto py-2 px-3">
-      <ul class="space-y-1">
-        {% include "ui/partials/drawer_item.html" with href="/passwords" icon="vault" label="All vaults" color="warning" active=True tooltip="All vaults" %}
-        {% include "ui/partials/drawer_item.html" with href="/passwords?shared=1" icon="users" label="Shared with me" color="warning" tooltip="Shared with me" %}
-      </ul>
+
+      <!-- Quick Access -->
+      <div class="mb-2">
+        <div class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider"
+             x-show="!collapsed">
+          <span class="flex items-center gap-2">
+            <i data-lucide="zap" class="w-3 h-3"></i>
+            Quick Access
+          </span>
+        </div>
+        <ul class="space-y-1">
+          {% include "ui/partials/drawer_item.html" with icon="vault" label="All vaults" color="warning" active_binding="activeFilter === 'all'" onclick="setFilter('all')" tooltip="All vaults" %}
+          {% include "ui/partials/drawer_item.html" with icon="star" label="Favorites" color="warning" active_binding="activeFilter === 'favorites'" onclick="setFilter('favorites')" tooltip="Favorites" %}
+          {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" color="warning" active_binding="activeFilter === 'recent'" onclick="setFilter('recent')" tooltip="Recent" %}
+          {% include "ui/partials/drawer_item.html" with icon="users" label="Shared with me" color="warning" active_binding="activeFilter === 'shared'" onclick="setFilter('shared')" tooltip="Shared with me" %}
+        </ul>
+      </div>
+
+      <!-- Tags -->
+      <div class="mb-2">
+        <div class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider flex items-center justify-between"
+             x-show="!collapsed">
+          <span class="flex items-center gap-2">
+            <i data-lucide="tag" class="w-3 h-3"></i>
+            Tags
+          </span>
+        </div>
+        <div x-show="!collapsed" class="px-2 py-1 text-xs text-base-content/30 italic">
+          No tags yet
+        </div>
+      </div>
+
     </div>
 
     <!-- Help -->
     <div class="px-3 pb-2">
       <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="warning" tooltip="Help" %}
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="warning" tooltip="Help" onclick="document.getElementById('passwords-help-dialog').showModal()" %}
       </ul>
     </div>
 
@@ -68,11 +96,11 @@ x-init="init()"
              class="input input-bordered input-sm w-full pl-9 focus:border-warning focus:outline-warning/20">
     </div>
     <div class="join">
-      <button @click="setView('grid')" class="btn btn-sm join-item"
+      <button @click="setViewMode('grid')" class="btn btn-sm join-item"
               :class="viewMode === 'grid' ? 'btn-warning' : 'btn-ghost'">
         <i data-lucide="layout-grid" class="w-4 h-4"></i>
       </button>
-      <button @click="setView('list')" class="btn btn-sm join-item"
+      <button @click="setViewMode('list')" class="btn btn-sm join-item"
               :class="viewMode === 'list' ? 'btn-warning' : 'btn-ghost'">
         <i data-lucide="list" class="w-4 h-4"></i>
       </button>
@@ -86,7 +114,7 @@ x-init="init()"
   <!-- Vault display -->
   <div class="flex-1 overflow-y-auto">
     <!-- Empty state -->
-    <div x-show="filteredVaults.length === 0 && !search"
+    <div x-show="filteredVaults.length === 0 && !search && activeFilter === 'all'"
          class="flex flex-col items-center justify-center h-full gap-4 text-base-content/40 py-16">
       <i data-lucide="vault" class="w-16 h-16 opacity-20"></i>
       <p class="text-lg font-medium">No vaults yet</p>
@@ -97,11 +125,11 @@ x-init="init()"
       </button>
     </div>
 
-    <!-- No search results -->
-    <div x-show="filteredVaults.length === 0 && search"
+    <!-- No results for filter/search -->
+    <div x-show="filteredVaults.length === 0 && (search || activeFilter !== 'all')"
          class="flex flex-col items-center justify-center h-full gap-2 text-base-content/40 py-16">
       <i data-lucide="search-x" class="w-12 h-12 opacity-20"></i>
-      <p>No vaults match "<span x-text="search"></span>"</p>
+      <p x-text="search ? 'No vaults match \'' + search + '\'' : 'Nothing here yet'"></p>
     </div>
 
     <!-- Grid view -->
@@ -118,6 +146,7 @@ x-init="init()"
 
 {% include "passwords/ui/partials/create_vault_dialog.html" %}
 {% include "passwords/ui/partials/setup_vault_dialog.html" %}
+{% include "passwords/ui/partials/help_dialog.html" %}
 
 <script src="{% static 'passwords/ui/js/vault-crypto.js' %}"></script>
 <script src="{% static 'passwords/ui/js/passwords-index.js' %}"></script>

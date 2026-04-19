@@ -3,6 +3,7 @@ function passwordsIndex(vaultsData) {
     vaults: vaultsData,
     viewMode: localStorage.getItem('passwords_view') || 'grid',
     search: '',
+    activeFilter: 'all',   // 'all' | 'favorites' | 'recent' | 'shared'
     collapsed: localStorage.getItem('passwords_sidebar_collapsed') === 'true',
 
     init() {
@@ -12,18 +13,38 @@ function passwordsIndex(vaultsData) {
     },
 
     get filteredVaults() {
-      if (!this.search) return this.vaults;
-      const q = this.search.toLowerCase();
-      return this.vaults.filter(v => v.name.toLowerCase().includes(q));
+      let vaults = this.vaults;
+
+      // Apply sidebar filter
+      if (this.activeFilter === 'favorites') {
+        vaults = vaults.filter(v => v.is_favorite);
+      } else if (this.activeFilter === 'recent') {
+        // Sort by updated_at descending, show all
+        vaults = [...vaults].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      } else if (this.activeFilter === 'shared') {
+        vaults = vaults.filter(v => !v.is_owner);
+      }
+
+      // Apply search on top
+      if (this.search) {
+        const q = this.search.toLowerCase();
+        vaults = vaults.filter(v => v.name.toLowerCase().includes(q));
+      }
+
+      return vaults;
     },
 
     isUnlocked(vaultUuid) {
       return sessionStorage.getItem('vault_unlocked_' + vaultUuid) === '1';
     },
 
-    setView(mode) {
+    setViewMode(mode) {
       this.viewMode = mode;
       localStorage.setItem('passwords_view', mode);
+    },
+
+    setFilter(filter) {
+      this.activeFilter = filter;
     },
 
     toggleCollapse() {

@@ -342,18 +342,16 @@
 <!-- Changelog modal -->
 {% if user.is_authenticated %}
 <dialog id="changelog-dialog" class="modal"
-        x-data="{ loaded: false, loading: false, content: '' }"
+        x-data="{ loaded: false, loading: false }"
         @changelog-open.window="
           $el.showModal();
           if (!loaded && !loading) {
             loading = true;
-            fetch('/changelog', { credentials: 'same-origin' })
-              .then(r => r.text())
-              .then(html => { content = html; loaded = true; loading = false; })
-              .catch(() => { loading = false; });
+            $ajax('/changelog', { target: 'changelog-content' })
+              .finally(() => { loaded = true; loading = false; });
           }
         ">
-  <div class="modal-box w-11/12 max-w-2xl max-h-[80vh] p-0 flex flex-col">
+  <div class="modal-box w-11/12 max-w-3xl max-h-[80vh] p-0 flex flex-col">
     <!-- Header -->
     <div class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0">
       <div class="rounded-lg bg-warning/10 p-2">
@@ -371,13 +369,13 @@
     </div>
 
     <!-- Body -->
-    <div class="flex-1 overflow-y-auto overscroll-contain">
-      <template x-if="loading">
+    <div class="flex-1 overflow-y-auto overscroll-contain" data-cl-scroller>
+      <template x-if="loading && !loaded">
         <div class="flex items-center justify-center py-12">
           <span class="loading loading-spinner loading-md text-base-content/30"></span>
         </div>
       </template>
-      <div x-show="loaded" x-html="content"></div>
+      <div id="changelog-content"></div>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>

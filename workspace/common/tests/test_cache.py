@@ -5,7 +5,13 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 from rest_framework.views import APIView
 
-from workspace.common.cache import _build_key, cache_response, invalidate
+from workspace.common.cache import (
+    _build_key,
+    cached,
+    cached_response,
+    invalidate,
+    invalidate_tags,
+)
 
 User = get_user_model()
 factory = APIRequestFactory()
@@ -16,7 +22,7 @@ factory = APIRequestFactory()
 class PerUserView(APIView):
     call_count = 0
 
-    @cache_response(300)
+    @cached_response(300)
     def get(self, request):
         PerUserView.call_count += 1
         return Response({'value': PerUserView.call_count})
@@ -25,18 +31,18 @@ class PerUserView(APIView):
 class GlobalView(APIView):
     call_count = 0
 
-    @cache_response(300, per_user=False)
+    @cached_response(300, per_user=False)
     def get(self, request):
         GlobalView.call_count += 1
         return Response({'value': GlobalView.call_count})
 
 
 class ErrorView(APIView):
-    @cache_response(300)
+    @cached_response(300)
     def get(self, request):
         return Response({'error': 'bad'}, status=400)
 
-    @cache_response(300)
+    @cached_response(300)
     def post(self, request):
         return Response({'created': True}, status=201)
 
@@ -89,7 +95,7 @@ class BuildKeyTests(TestCase):
         self.assertEqual(key, 'view:MyView')
 
 
-# ── cache_response decorator tests ───────────────────────────────────
+# ── cached_response decorator tests ──────────────────────────────────
 
 class CacheResponsePerUserTests(TestCase):
 
@@ -254,3 +260,93 @@ class InvalidateTests(TestCase):
         view(req1)  # re-executes → count 3
         view(req2)  # still cached → count stays 3
         self.assertEqual(PerUserView.call_count, 3)
+
+
+# ── cached + invalidate_tags tests ────────────────────────────────
+
+class CachedTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.calls = []
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_memoizes_by_args(self):
+        @cached(key=lambda x: f'k:{x}', ttl=60)
+        def f(x):
+            self.calls.append(x)
+            return x * 2
+
+        self.assertEqual(f(1), 2)
+        self.assertEqual(f(1), 2)
+        self.assertEqual(f(2), 4)
+        self.assertEqual(self.calls, [1, 2])
+
+    def test_static_key_and_no_tags(self):
+        @cached(key='global:v', ttl=60)
+        def f():
+            self.calls.append(1)
+            return 'value'
+
+        self.assertEqual(f(), 'value')
+        self.assertEqual(f(), 'value')
+        self.assertEqual(self.calls, [1])
+
+    def test_tag_invalidation_evicts_single_entry(self):
+        @cached(
+            key=lambda x: f'k:{x}', ttl=60,
+            tags=lambda x: [f't:{x}'],
+        )
+        def f(x):
+            self.calls.append(x)
+            return x
+
+        f(1); f(1)
+        invalidate_tags('t:1')
+        f(1)
+        self.assertEqual(self.calls, [1, 1])
+
+    def test_tag_invalidation_does_not_affect_other_tags(self):
+        @cached(
+            key=lambda x: f'k:{x}', ttl=60,
+            tags=lambda x: [f't:{x}'],
+        )
+        def f(x):
+            self.calls.append(x)
+            return x
+
+        f(1); f(2)
+        invalidate_tags('t:1')
+        f(1); f(2)
+        self.assertEqual(self.calls, [1, 2, 1])
+
+    def test_multi_tag_any_tag_evicts_entry(self):
+        @cached(
+            key=lambda a, b: f'k:{a}:{b}', ttl=60,
+            tags=lambda a, b: [f'a:{a}', f'b:{b}'],
+        )
+        def f(a, b):
+            self.calls.append((a, b))
+            return (a, b)
+
+        f(1, 2)
+        invalidate_tags('a:1')
+        f(1, 2)
+        invalidate_tags('b:2')
+        f(1, 2)
+        self.assertEqual(self.calls, [(1, 2), (1, 2), (1, 2)])
+
+    def test_caches_falsy_values(self):
+        """None/0/'' must still be cached — using a sentinel to detect miss."""
+        @cached(key='k', ttl=60)
+        def f():
+            self.calls.append(1)
+            return None
+
+        f(); f(); f()
+        self.assertEqual(self.calls, [1])
+
+    def test_invalidate_unknown_tag_is_safe(self):
+        # No entries with this tag — should not error
+        invalidate_tags('never-used')

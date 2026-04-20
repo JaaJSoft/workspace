@@ -41,9 +41,11 @@ class MimeTypeServiceCacheTest(TestCase):
         mime_service.invalidate_cache()
 
     def test_cold_cache_builds(self):
-        self.assertIsNone(cache.get(mime_service.CACHE_KEY))
-        mime_service.get_rule("text/plain")
-        self.assertIsNotNone(cache.get(mime_service.CACHE_KEY))
+        """First lookup hits the DB; second one does not."""
+        with self.assertNumQueries(1):
+            mime_service.get_rule("text/plain")
+        with self.assertNumQueries(0):
+            mime_service.get_rule("text/plain")
 
     def test_warm_cache_zero_queries(self):
         # warm the cache
@@ -53,30 +55,30 @@ class MimeTypeServiceCacheTest(TestCase):
             mime_service.get_rule("image/png")
             mime_service.get_rule("application/pdf")
 
-    def test_invalidation_clears_cache(self):
-        mime_service.get_rule("text/plain")
-        self.assertIsNotNone(cache.get(mime_service.CACHE_KEY))
+    def test_invalidation_reloads_from_db(self):
+        mime_service.get_rule("text/plain")  # warm
         mime_service.invalidate_cache()
-        self.assertIsNone(cache.get(mime_service.CACHE_KEY))
+        with self.assertNumQueries(1):
+            mime_service.get_rule("text/plain")
 
     def test_signal_invalidation_on_save(self):
-        mime_service.get_rule("text/plain")
-        self.assertIsNotNone(cache.get(mime_service.CACHE_KEY))
+        mime_service.get_rule("text/plain")  # warm
         MimeTypeRule.objects.create(
             pattern="application/x-test", priority=10,
             icon="file", color="text-info", category="unknown",
         )
-        self.assertIsNone(cache.get(mime_service.CACHE_KEY))
+        with self.assertNumQueries(1):
+            mime_service.get_rule("text/plain")
 
     def test_signal_invalidation_on_delete(self):
         rule = MimeTypeRule.objects.create(
             pattern="application/x-todelete", priority=10,
             icon="file", color="text-info", category="unknown",
         )
-        mime_service.get_rule("text/plain")
-        self.assertIsNotNone(cache.get(mime_service.CACHE_KEY))
+        mime_service.get_rule("text/plain")  # warm
         rule.delete()
-        self.assertIsNone(cache.get(mime_service.CACHE_KEY))
+        with self.assertNumQueries(1):
+            mime_service.get_rule("text/plain")
 
 
 class MimeTypeServiceLookupTest(TestCase):

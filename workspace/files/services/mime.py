@@ -1,8 +1,8 @@
 """Centralized MIME type lookup service backed by MimeTypeRule and Django cache."""
 
-from django.core.cache import cache
+from workspace.common.cache import cached, invalidate_tags
 
-CACHE_KEY = "mime_type_rules"
+_TAG = 'files:mime-rules'
 
 _DEFAULT = {
     "icon": "file",
@@ -12,7 +12,8 @@ _DEFAULT = {
 }
 
 
-def _build_cache():
+@cached(key='files:mime-rules', ttl=None, tags=[_TAG])
+def _get_data():
     from workspace.files.models import MimeTypeRule
 
     rules = MimeTypeRule.objects.order_by("priority", "pattern")
@@ -30,17 +31,7 @@ def _build_cache():
             wildcards.append({"prefix": r.pattern[:-1], **entry})
         else:
             exact[r.pattern] = entry
-
-    data = {"exact": exact, "wildcards": wildcards}
-    cache.set(CACHE_KEY, data, timeout=None)
-    return data
-
-
-def _get_data():
-    data = cache.get(CACHE_KEY)
-    if data is None:
-        data = _build_cache()
-    return data
+    return {"exact": exact, "wildcards": wildcards}
 
 
 def get_rule(mime_type):
@@ -85,4 +76,4 @@ def is_viewable(mime_type):
 
 
 def invalidate_cache():
-    cache.delete(CACHE_KEY)
+    invalidate_tags(_TAG)

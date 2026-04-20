@@ -5,15 +5,11 @@ from pathlib import Path
 
 import mistune
 from django.conf import settings
-from django.core.cache import cache
+
+from workspace.common.cache import cached
 
 _CHANGELOG_PATH = Path(settings.BASE_DIR) / 'CHANGELOG.md'
-_CACHE_KEY_PREFIX = 'changelog'
 _TITLE_SEPARATORS = (' \u2014 ', ' \u2013 ', ' - ', ': ')
-
-
-def _make_cache_key():
-    return f'{_CACHE_KEY_PREFIX}:{settings.APP_VERSION}'
 
 
 def _split_version_and_title(heading):
@@ -48,11 +44,11 @@ def _parse_changelog():
     return entries
 
 
+@cached(key=lambda: f'changelog:{settings.APP_VERSION}', ttl=None)
 def get_changelog_entries():
-    """Return parsed changelog entries, cached by app version."""
-    key = _make_cache_key()
-    entries = cache.get(key)
-    if entries is None:
-        entries = _parse_changelog()
-        cache.set(key, entries, timeout=None)
-    return entries
+    """Return parsed changelog entries, cached for the lifetime of the deploy.
+
+    The key embeds ``APP_VERSION`` so a redeploy bumps the effective key
+    without any explicit invalidation step.
+    """
+    return _parse_changelog()

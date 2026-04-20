@@ -51,9 +51,11 @@ class NotifyTests(TestCase):
     @patch('workspace.notifications.services.notifications.send_push_notification')
     @patch('workspace.notifications.services.notifications.notify_sse')
     def test_invalidates_unread_cache(self, mock_sse, mock_push):
-        cache.set(f'notif:unread:{self.alice.pk}', 0, 300)
+        # Warm the cache with the pre-notify count
+        self.assertEqual(get_unread_count(self.alice), 0)
         notify(recipient=self.alice, origin='chat', title='Test')
-        self.assertIsNone(cache.get(f'notif:unread:{self.alice.pk}'))
+        # After notify, the cache must reflect the new unread count
+        self.assertEqual(get_unread_count(self.alice), 1)
 
 
 class NotifyManyTests(TestCase):

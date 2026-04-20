@@ -9,9 +9,11 @@ from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
 
+from workspace.common.cache import invalidate_tags
+
 from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
-from .services.notifications import get_unread_count, _invalidate_unread
+from .services.notifications import _user_tag, get_unread_count
 
 
 @extend_schema(tags=['Notifications'])
@@ -73,7 +75,7 @@ class NotificationDetailView(APIView):
         if notif.read_at is None:
             notif.read_at = timezone.now()
             notif.save(update_fields=['read_at'])
-            _invalidate_unread(request.user.id)
+            invalidate_tags(_user_tag(request.user.id))
         return Response(NotificationSerializer(notif).data)
 
     @extend_schema(summary="Delete a notification")
@@ -97,7 +99,7 @@ class NotificationReadAllView(APIView):
         count = Notification.objects.filter(
             recipient=request.user, read_at__isnull=True,
         ).update(read_at=timezone.now())
-        _invalidate_unread(request.user.id)
+        invalidate_tags(_user_tag(request.user.id))
         return Response({'marked': count})
 
 

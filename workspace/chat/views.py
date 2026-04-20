@@ -15,6 +15,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.cache import cached, invalidate_tags
 from workspace.common.mixins import CacheControlMixin
 
 from .services import avatar as group_avatar_service
@@ -1487,39 +1488,55 @@ class ConversationPinnedMessagesView(APIView):
         return Response(PinnedMessageSerializer(pins, many=True).data)
 
 
+@cached(
+    key=lambda user, attachment_id: f'att:{user.pk}:{attachment_id}',
+    ttl=60,
+    tags=lambda user, attachment_id: [f'att:{attachment_id}'],
+)
+def _get_attachment_meta(user, attachment_id):
+    """Return ``{file, mime, name}`` for an attachment the user can access, else None.
+
+    Both "not found" and "not a member" collapse into ``None`` — callers return 404
+    in both cases so we don't leak which attachments exist to outsiders.
+    """
+    row = (
+        MessageAttachment.objects
+        .filter(uuid=attachment_id)
+        .values('file', 'mime_type', 'original_name', 'message__conversation_id')
+        .first()
+    )
+    if row is None or not get_active_membership(user, row['message__conversation_id']):
+        return None
+    return {
+        'file': row['file'],
+        'mime': row['mime_type'],
+        'name': row['original_name'],
+    }
+
+
 @extend_schema(tags=['Chat'])
 class AttachmentDownloadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Download a chat attachment")
     def get(self, request, attachment_id):
-        try:
-            attachment = (
-                MessageAttachment.objects
-                .select_related('message')
-                .get(uuid=attachment_id)
-            )
-        except MessageAttachment.DoesNotExist:
+        meta = _get_attachment_meta(request.user, attachment_id)
+        if meta is None:
             return Response(
                 {'detail': 'Attachment not found.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-
-        membership = get_active_membership(
-            request.user, attachment.message.conversation_id,
-        )
-        if not membership:
+        try:
+            fh = default_storage.open(meta['file'], 'rb')
+        except (FileNotFoundError, OSError):
+            invalidate_tags(f'att:{attachment_id}')
             return Response(
-                {'detail': 'Not a member of this conversation.'},
-                status=status.HTTP_403_FORBIDDEN,
+                {'detail': 'Attachment not found.'},
+                status=status.HTTP_404_NOT_FOUND,
             )
-
-        response = FileResponse(
-            attachment.file.open('rb'),
-            content_type=attachment.mime_type,
-        )
+        response = FileResponse(fh, content_type=meta['mime'])
         # Sanitize filename for Content-Disposition header
-        safe_name = attachment.original_name.replace('"', '\\"').replace('\n', '').replace('\r', '')
+        safe_name = meta['name'].replace('"', '\\"').replace('\n', '').replace('\r', '')
         response['Content-Disposition'] = f'inline; filename="{safe_name}"'
         response['Cache-Control'] = 'private, max-age=604800, immutable'
         return response

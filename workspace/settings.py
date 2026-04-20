@@ -217,6 +217,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'workspace.core.context_processors.workspace_modules',
                 'workspace.ai.context_processors.ai_context',
+                'workspace.users.context_processors.user_preferences',
                 # Expose `request_processing_ms` au template
                 # 'workspace.ui.context_processors.request_timing',
             ],

@@ -46,9 +46,9 @@ x-init="init()"
         </div>
         <ul class="space-y-1">
           {% include "ui/partials/drawer_item.html" with icon="vault" label="All vaults" color="warning" active_binding="activeFilter === 'all'" onclick="setFilter('all')" tooltip="All vaults" %}
-          {% include "ui/partials/drawer_item.html" with icon="star" label="Favorites" color="warning" active_binding="activeFilter === 'favorites'" onclick="setFilter('favorites')" tooltip="Favorites" %}
-          {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" color="warning" active_binding="activeFilter === 'recent'" onclick="setFilter('recent')" tooltip="Recent" %}
-          {% include "ui/partials/drawer_item.html" with icon="users" label="Shared with me" color="warning" active_binding="activeFilter === 'shared'" onclick="setFilter('shared')" tooltip="Shared with me" %}
+          {% include "ui/partials/drawer_item.html" with icon="star" label="Favorites" color="warning" disabled=True title_binding="'Work in progress'" %}
+          {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" color="warning" disabled=True title_binding="'Work in progress'" %}
+          {% include "ui/partials/drawer_item.html" with icon="users" label="Shared with me" color="warning" disabled=True title_binding="'Work in progress'" %}
         </ul>
       </div>
 

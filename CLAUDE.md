@@ -223,6 +223,25 @@ class MyTests(TestCase):
 
 ## Frontend Conventions
 
+### Alpine `init()` is auto-called — never add `x-init="init()"` on top of it
+
+If your `x-data` component defines an `init()` method (`x-data="myApp()"` where `myApp` returns an object with `init() { ... }`), Alpine **automatically** invokes it when the element mounts. Adding `x-init="init()"` next to `x-data="myApp()"` runs `init()` a **second time**, silently:
+
+```html
+<!-- ❌ WRONG — init() runs twice -->
+<div x-data="chatApp()" x-init="init()"></div>
+
+<!-- ✅ Correct — Alpine auto-calls init() once -->
+<div x-data="chatApp()"></div>
+```
+
+The bug is invisible: the second pass overwrites the first with the same data, no console warning, no broken UI. The visible cost is **double API calls and double event-listener registration** for everything in `init()`. We hit this in 4 modules (chat, mail, notes, dashboard) and the only diagnostic was a network-level audit.
+
+**Rules:**
+- Component objects with an `init()` method must rely on Alpine's auto-call. Do **not** also write `x-init="init()"`.
+- `x-init` is only for **inline expressions** on components that don't define an `init()` method (e.g., `<div x-data="{ open: false }" x-init="$watch('open', ...)">`).
+- When adding event listeners inside `init()`, remember they will be added once per mount — if you ever do see two listeners firing, suspect a duplicate `x-init` or a duplicate `x-data` instantiation of the same component (see `filePreferences()` in `files/ui/index.html`, instantiated twice intentionally — its `init()` should be guarded against re-fetching).
+
 ### Server-rendered partial swaps — use alpine-ajax, never raw `fetch`
 
 Whenever a piece of UI needs to be refreshed from a Django partial (lists, feeds, sidebars, popovers, folder trees, anything rendered server-side), **use [alpine-ajax](https://alpine-ajax.js.org)**. The library is already loaded globally in `base.html`.

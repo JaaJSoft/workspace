@@ -13,7 +13,7 @@
   {# ── Hero ── #}
   <section class="text-center space-y-1 relative">
     <h1 class="text-3xl font-semibold text-base-content" x-data x-text="(() => { const h = new Date().getHours(); const g = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; return g + ', {{ user.first_name|default:user.username }}.'; })()">Welcome back, {{ user.first_name|default:user.username }}.</h1>
-    <p class="text-base-content/60" x-data="weatherWidget()" x-init="init()" x-cloak>
+    <p class="text-base-content/60" x-data="weatherWidget()" x-cloak>
       <span x-text="label"></span>
     </p>
 

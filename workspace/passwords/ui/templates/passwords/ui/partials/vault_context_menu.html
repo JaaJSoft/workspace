@@ -1,0 +1,144 @@
+<!-- vault_context_menu.html — floating context menu + rename folder dialog -->
+
+<!-- Context menu -->
+<div
+  x-show="contextMenu.open"
+  x-cloak
+  @click.outside="closeContextMenu()"
+  @keydown.escape.window="closeContextMenu()"
+  class="fixed z-[100] shadow-xl bg-base-100 border border-base-300 rounded-lg w-56 p-1"
+  :style="`top: ${contextMenu.y}px; left: ${contextMenu.x}px;`"
+>
+  <template x-if="contextMenu.target">
+    <ul class="menu menu-sm p-0">
+
+      <!-- ── Entry actions ── -->
+      <template x-if="contextMenu.target.nodeType === 'entry'">
+        <div>
+          <li>
+            <button type="button" class="gap-3 rounded"
+                    @click="copyToClipboard(contextMenu.target.password); closeContextMenu()">
+              <i data-lucide="copy" class="w-4 h-4"></i>
+              Copy password
+            </button>
+          </li>
+          <li>
+            <button type="button" class="gap-3 rounded"
+                    @click="copyToClipboard(contextMenu.target.username); closeContextMenu()">
+              <i data-lucide="user" class="w-4 h-4"></i>
+              Copy username
+            </button>
+          </li>
+          <hr class="my-1 border-base-300"/>
+          <li>
+            <button type="button" class="gap-3 rounded"
+                    @click="toggleFavorite(contextMenu.target.uuid, contextMenu.target.is_favorite); closeContextMenu()">
+              <i data-lucide="star" class="w-4 h-4"
+                 :class="contextMenu.target.is_favorite ? 'text-warning fill-current' : ''"></i>
+              <span x-text="contextMenu.target.is_favorite ? 'Remove from favorites' : 'Add to favorites'"></span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="gap-3 rounded"
+                    @click="movePicker = { open: true, entryUuid: contextMenu.target.uuid }; closeContextMenu()">
+              <i data-lucide="folder-input" class="w-4 h-4"></i>
+              Move to folder
+            </button>
+          </li>
+          <hr class="my-1 border-base-300"/>
+          <li>
+            <button type="button" class="gap-3 rounded text-error"
+                    @click="trashEntry(contextMenu.target.uuid); closeContextMenu()">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+              Move to trash
+            </button>
+          </li>
+        </div>
+      </template>
+
+      <!-- ── Folder actions ── -->
+      <template x-if="contextMenu.target.nodeType === 'folder'">
+        <div>
+          <li>
+            <button type="button" class="gap-3 rounded"
+                    @click="openRenameDialog(contextMenu.target.uuid, contextMenu.target.name)">
+              <i data-lucide="pencil" class="w-4 h-4"></i>
+              Rename
+            </button>
+          </li>
+          <hr class="my-1 border-base-300"/>
+          <li>
+            <button type="button" class="gap-3 rounded text-error"
+                    @click="deleteFolder(contextMenu.target.uuid)">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+              Delete folder
+            </button>
+          </li>
+        </div>
+      </template>
+
+    </ul>
+  </template>
+</div>
+
+<!-- Move-to-folder dialog -->
+<dialog id="vault-move-dialog" class="modal" :class="movePicker.open ? 'modal-open' : ''">
+  <div class="modal-box max-w-sm">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+      <i data-lucide="folder-input" class="w-5 h-5 text-warning"></i>
+      Move to folder
+    </h3>
+    <ul class="menu menu-sm bg-base-200 rounded-lg p-1 max-h-64 overflow-y-auto">
+      <li>
+        <button type="button" class="gap-3"
+                @click="moveEntryToFolder(movePicker.entryUuid, null)">
+          <i data-lucide="vault" class="w-4 h-4 text-warning"></i>
+          <span class="font-medium">Vault root (no folder)</span>
+        </button>
+      </li>
+      <hr class="my-1 border-base-300" x-show="folders.length > 0"/>
+      <template x-for="f in folders" :key="f.uuid">
+        <li>
+          <button type="button" class="gap-3"
+                  @click="moveEntryToFolder(movePicker.entryUuid, f.uuid)">
+            <i :data-lucide="f.icon || 'folder'" class="w-4 h-4"
+               :class="f.color || 'text-warning'"></i>
+            <span x-text="f.name"></span>
+          </button>
+        </li>
+      </template>
+    </ul>
+    <div class="modal-action">
+      <button type="button" class="btn btn-ghost btn-sm"
+              @click="movePicker = { open: false, entryUuid: null }">Cancel</button>
+    </div>
+  </div>
+  <div class="modal-backdrop" @click="movePicker = { open: false, entryUuid: null }"></div>
+</dialog>
+
+<!-- Rename folder dialog -->
+<dialog id="vault-rename-dialog" class="modal" :class="renameDialog.open ? 'modal-open' : ''">
+  <div class="modal-box max-w-sm">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+      <i data-lucide="pencil" class="w-5 h-5 text-warning"></i>
+      Rename folder
+    </h3>
+    <form @submit.prevent="submitRenameFolder()">
+      <div class="form-control mb-4">
+        <input type="text"
+               x-model="renameDialog.name"
+               class="input input-bordered focus:border-warning focus:outline-warning/20"
+               placeholder="Folder name"
+               required
+               x-effect="renameDialog.open && $nextTick(() => $el.focus())" />
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost btn-sm"
+                @click="renameDialog = { open: false, uuid: null, name: '' }">Cancel</button>
+        <button type="submit" class="btn btn-warning btn-sm"
+                :disabled="!renameDialog.name.trim()">Rename</button>
+      </div>
+    </form>
+  </div>
+  <div class="modal-backdrop" @click="renameDialog = { open: false, uuid: null, name: '' }"></div>
+</dialog>

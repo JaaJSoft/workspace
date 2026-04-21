@@ -52,7 +52,7 @@ x-init="init()"
         </div>
         <ul class="space-y-1">
           {% include "ui/partials/drawer_item.html" with icon="key-round" label="All entries" color="warning" active_binding="sidebarView === 'all'" onclick="setSidebarView('all')" tooltip="All entries" %}
-          {% include "ui/partials/drawer_item.html" with icon="star" label="Favorites" color="warning" disabled=True title_binding="'Work in progress'" %}
+          {% include "ui/partials/drawer_item.html" with icon="star" label="Favorites" color="warning" active_binding="sidebarView === 'favorites'" onclick="setSidebarView('favorites')" tooltip="Favorites" %}
           {% include "ui/partials/drawer_item.html" with icon="trash-2" label="Trash" color="error" active_binding="sidebarView === 'trash'" onclick="setSidebarView('trash')" tooltip="Trash" %}
         </ul>
       </div>

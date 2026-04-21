@@ -98,6 +98,10 @@ function vaultBrowser(vaultData) {
         items = this.entries
           .filter(e => e.deleted_at)
           .map(e => ({ ...e, nodeType: 'entry' }));
+      } else if (this.sidebarView === 'favorites') {
+        items = this.entries
+          .filter(e => !e.deleted_at && e.is_favorite)
+          .map(e => ({ ...e, nodeType: 'entry' }));
       } else {
         const folderItems = this.folders
           .filter(f => f.parent === this.currentFolderUuid)
@@ -154,6 +158,10 @@ function vaultBrowser(vaultData) {
       if (this.sidebarView === 'trash') {
         const trashCount = this.entries.filter(e => e.deleted_at).length;
         return { total: trashCount, folders: 0, entries: trashCount };
+      }
+      if (this.sidebarView === 'favorites') {
+        const favCount = this.entries.filter(e => !e.deleted_at && e.is_favorite).length;
+        return { total: favCount, folders: 0, entries: favCount };
       }
       const fCount = this.folders.filter(f => f.parent === this.currentFolderUuid).length;
       const eCount = this.entries.filter(e => !e.deleted_at && e.folder === this.currentFolderUuid).length;

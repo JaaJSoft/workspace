@@ -95,7 +95,7 @@
       </div>
 
       <!-- Title -->
-      <h1 class="text-2xl font-bold text-base-content" x-text="sidebarView === 'trash' ? 'Trash' : currentFolderName"></h1>
+      <h1 class="text-2xl font-bold text-base-content" x-text="sidebarView === 'trash' ? 'Trash' : sidebarView === 'favorites' ? 'Favorites' : currentFolderName"></h1>
     </div>
   </div>
 </div>

@@ -10,9 +10,12 @@
        class="flex flex-col items-center justify-center h-full gap-4 text-base-content/40 py-16">
     <i data-lucide="folder-open" class="w-14 h-14 opacity-20"></i>
     <p class="text-lg font-medium"
-       x-text="sidebarView === 'trash' ? 'Trash is empty' : 'This folder is empty'"></p>
-    <p class="text-sm" x-show="sidebarView !== 'trash'">
+       x-text="sidebarView === 'trash' ? 'Trash is empty' : sidebarView === 'favorites' ? 'No favorites yet' : 'This folder is empty'"></p>
+    <p class="text-sm" x-show="sidebarView === 'all'">
       Use the <strong>+ New</strong> button to create a folder or entry.
+    </p>
+    <p class="text-sm" x-show="sidebarView === 'favorites'">
+      Star an entry to add it to your favorites.
     </p>
   </div>
 

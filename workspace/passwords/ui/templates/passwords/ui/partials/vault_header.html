@@ -35,14 +35,12 @@
             </button>
           </div>
 
-          <!-- Home button -->
+          <!-- Refresh button -->
           <button type="button"
-            class="btn btn-ghost btn-sm btn-square transition-colors"
-            :class="currentFolderUuid ? 'text-base-content/60 hover:text-warning' : 'text-base-content/20'"
-            :disabled="!currentFolderUuid"
-            title="Go to vault root"
-            @click="navigateToFolder(null)">
-            <i data-lucide="house" class="w-4 h-4"></i>
+            class="btn btn-ghost btn-sm btn-square text-base-content/60 hover:text-warning transition-colors"
+            title="Refresh"
+            @click="loadFolders(); loadEntries()">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
           </button>
 
           <!-- Breadcrumb (Alpine-driven, not server-rendered) -->
@@ -61,8 +59,7 @@
                     <i data-lucide="vault" class="w-3.5 h-3.5 flex-shrink-0"></i>
                   </template>
                   <template x-if="crumb.uuid !== null">
-                    <i :data-lucide="(folders.find(f => f.uuid === crumb.uuid) || {}).icon || 'folder'"
-                       class="w-3.5 h-3.5 flex-shrink-0"></i>
+                    <i data-lucide="folder" class="w-3.5 h-3.5 flex-shrink-0"></i>
                   </template>
                   <span class="truncate max-w-[100px]" x-text="crumb.name"></span>
                 </button>

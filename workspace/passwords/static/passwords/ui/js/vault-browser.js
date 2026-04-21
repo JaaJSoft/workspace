@@ -152,7 +152,8 @@ function vaultBrowser(vaultData) {
     get statusCounts() {
       // Counts BEFORE filters — total in current folder/view
       if (this.sidebarView === 'trash') {
-        return { total: this.entries.filter(e => e.deleted_at).length, folders: 0, entries: this.entries.filter(e => e.deleted_at).length };
+        const trashCount = this.entries.filter(e => e.deleted_at).length;
+        return { total: trashCount, folders: 0, entries: trashCount };
       }
       const fCount = this.folders.filter(f => f.parent === this.currentFolderUuid).length;
       const eCount = this.entries.filter(e => !e.deleted_at && e.folder === this.currentFolderUuid).length;
@@ -189,11 +190,13 @@ function vaultBrowser(vaultData) {
 
     async loadEntries() {
       if (!this.vaultKey) return;
-      const r = await fetch(`/api/v1/passwords/entries?vault=${this.vault.uuid}`);
-      if (!r.ok) return;
-      this.rawEntries = await r.json();
-      await this._decryptEntries();
-      this._refreshIcons();
+      try {
+        const r = await fetch(`/api/v1/passwords/entries?vault=${this.vault.uuid}`);
+        if (!r.ok) return;
+        this.rawEntries = await r.json();
+        await this._decryptEntries();
+        this._refreshIcons();
+      } catch {}
     },
 
     async _decryptEntries() {
@@ -265,8 +268,7 @@ function vaultBrowser(vaultData) {
     },
 
     goUp() {
-      const target = this.parentFolderUuid !== undefined ? this.parentFolderUuid : null;
-      this.navigateToFolder(target);
+      this.navigateToFolder(this.parentFolderUuid);
     },
 
     setSidebarView(view) {
@@ -440,8 +442,10 @@ function vaultBrowser(vaultData) {
             this.activeEntry = { ...this.activeEntry, folder: folderUuid };
           }
         }
-      } finally { this._setLoading(uuid, false); }
-      this.movePicker = { open: false, entryUuid: null };
+      } finally {
+        this._setLoading(uuid, false);
+        this.movePicker = { open: false, entryUuid: null };
+      }
     },
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -504,8 +508,9 @@ function vaultBrowser(vaultData) {
         body: JSON.stringify(body),
       });
       if (!r.ok) return null;
+      const data = await r.json();
       await this.loadEntries();
-      return r.json();
+      return data;
     },
 
     async createFolder(name) {

@@ -1,12 +1,12 @@
 <!-- Create entry dialog — rendered inside vault's x-data scope -->
 <dialog id="create-entry-dialog" class="modal"
         x-data="{
-          form: { name: '', username: '', password: '', url: '', folder: '' },
+          form: { name: '', username: '', password: '', url: '' },
           showPw: true,
           loading: false,
           error: '',
           close() {
-            this.form = { name: '', username: '', password: '', url: '', folder: '' };
+            this.form = { name: '', username: '', password: '', url: '' };
             this.error = '';
             document.getElementById('create-entry-dialog').close();
           },
@@ -70,18 +70,6 @@
         </label>
         <input type="url" x-model="form.url" placeholder="https://example.com"
                class="input input-bordered focus:border-warning focus:outline-warning/20">
-      </div>
-
-      <div class="form-control mb-4">
-        <label class="label">
-          <span class="label-text font-medium">Folder <span class="text-base-content/40">(optional)</span></span>
-        </label>
-        <select x-model="form.folder" class="select select-bordered focus:border-warning">
-          <option value="">No folder</option>
-          <template x-for="folder in folders" :key="folder.uuid">
-            <option :value="folder.uuid" x-text="folder.name"></option>
-          </template>
-        </select>
       </div>
 
       <div class="modal-action">

@@ -35,6 +35,16 @@
             </button>
           </div>
 
+          <!-- Home button -->
+          <button type="button"
+            class="btn btn-ghost btn-sm btn-square transition-colors"
+            :class="currentFolderUuid ? 'text-base-content/60 hover:text-warning' : 'text-base-content/20'"
+            :disabled="!currentFolderUuid"
+            title="Go to vault root"
+            @click="navigateToFolder(null)">
+            <i data-lucide="house" class="w-4 h-4"></i>
+          </button>
+
           <!-- Breadcrumb (Alpine-driven, not server-rendered) -->
           <nav class="flex items-center gap-1 text-sm min-w-0 overflow-hidden">
             <template x-for="(crumb, idx) in breadcrumbs" :key="crumb.uuid || '__root__'">
@@ -42,11 +52,19 @@
                 <span x-show="idx > 0" class="text-base-content/30 flex-shrink-0">/</span>
                 <button
                   type="button"
+                  class="flex items-center gap-1 min-w-0"
                   @click="navigateToFolder(crumb.uuid)"
                   :class="idx === breadcrumbs.length - 1
-                    ? 'text-base-content font-medium truncate max-w-[120px]'
-                    : 'text-base-content/50 hover:text-warning transition-colors truncate max-w-[80px]'"
-                  x-text="crumb.name">
+                    ? 'text-base-content font-medium'
+                    : 'text-base-content/50 hover:text-warning transition-colors'">
+                  <template x-if="crumb.uuid === null">
+                    <i data-lucide="vault" class="w-3.5 h-3.5 flex-shrink-0"></i>
+                  </template>
+                  <template x-if="crumb.uuid !== null">
+                    <i :data-lucide="(folders.find(f => f.uuid === crumb.uuid) || {}).icon || 'folder'"
+                       class="w-3.5 h-3.5 flex-shrink-0"></i>
+                  </template>
+                  <span class="truncate max-w-[100px]" x-text="crumb.name"></span>
                 </button>
               </span>
             </template>

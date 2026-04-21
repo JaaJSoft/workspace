@@ -251,6 +251,7 @@ function vaultBrowser(vaultData) {
       this.currentFolderUuid = uuid;
       this.selectedUuids = new Set();
       this.search = '';
+      this._refreshIcons();
     },
 
     goBack() {
@@ -258,6 +259,7 @@ function vaultBrowser(vaultData) {
       this.folderHistoryIndex--;
       this.currentFolderUuid = this.folderHistory[this.folderHistoryIndex];
       this.selectedUuids = new Set();
+      this._refreshIcons();
     },
 
     goForward() {
@@ -265,6 +267,7 @@ function vaultBrowser(vaultData) {
       this.folderHistoryIndex++;
       this.currentFolderUuid = this.folderHistory[this.folderHistoryIndex];
       this.selectedUuids = new Set();
+      this._refreshIcons();
     },
 
     goUp() {
@@ -279,6 +282,7 @@ function vaultBrowser(vaultData) {
       this.search = '';
       this.selectedUuids = new Set();
       this.closePropertiesPanel();
+      this._refreshIcons();
     },
 
     toggleCollapse() {

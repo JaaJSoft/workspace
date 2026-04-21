@@ -1,6 +1,4 @@
 """Tests for workspace.calendar.ui.views."""
-import json
-
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
@@ -37,28 +35,28 @@ class CalendarIndexViewTests(TestCase):
         self.client.get('/calendar')
         self.assertTrue(Calendar.objects.filter(owner=self.user, name='Personal').exists())
 
-    def test_context_has_calendars_json(self):
+    def test_context_has_calendars(self):
         self.client.login(username='caluser', password='pass123')
         resp = self.client.get('/calendar')
-        self.assertIn('calendars_json', resp.context)
-        data = json.loads(resp.context['calendars_json'])
+        self.assertIn('calendars', resp.context)
+        data = resp.context['calendars']
         self.assertIn('owned', data)
         self.assertIn('subscribed', data)
         # Default 'Personal' calendar created on first hit:
         self.assertEqual(len(data['owned']), 1)
         self.assertEqual(data['owned'][0]['name'], 'Personal')
 
-    # ── prefs_json — server-rendered to avoid double-fetch on init ──
+    # ── prefs — server-rendered to avoid double-fetch on init ──
     # The view passes the raw dict; the template renders it via |json_script
     # into <script id="calendar-prefs-data" type="application/json">.
 
-    def test_context_has_prefs_json_empty_dict_when_no_prefs_stored(self):
+    def test_context_has_prefs_empty_dict_when_no_prefs_stored(self):
         self.client.login(username='caluser', password='pass123')
         resp = self.client.get('/calendar')
-        self.assertIn('prefs_json', resp.context)
-        self.assertEqual(resp.context['prefs_json'], {})
+        self.assertIn('prefs', resp.context)
+        self.assertEqual(resp.context['prefs'], {})
 
-    def test_context_prefs_json_reflects_stored_settings(self):
+    def test_context_prefs_reflects_stored_settings(self):
         set_setting(self.user, 'calendar', 'preferences', {
             'defaultView': 'agenda',
             'firstDay': 0,
@@ -67,7 +65,7 @@ class CalendarIndexViewTests(TestCase):
         })
         self.client.login(username='caluser', password='pass123')
         resp = self.client.get('/calendar')
-        prefs = resp.context['prefs_json']
+        prefs = resp.context['prefs']
         self.assertEqual(prefs['defaultView'], 'agenda')
         self.assertEqual(prefs['firstDay'], 0)
         self.assertTrue(prefs['weekNumbers'])

@@ -666,7 +666,7 @@ x-data="chatApp({{ user.id }})"
 {% include "chat/ui/partials/attachment_viewer_modal.html" %}
 
 <!-- Embedded conversation data for fast Alpine init -->
-<script id="conversations-data" type="application/json">{{ conversations_json|safe }}</script>
+{{ conversations|json_script:"conversations-data" }}
 {% if initial_conversation_uuid %}<script id="initial-conversation" type="application/json">"{{ initial_conversation_uuid }}"</script>{% endif %}
 {% endblock %}
 

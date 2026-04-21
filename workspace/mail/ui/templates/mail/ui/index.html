@@ -483,8 +483,8 @@ x-data="mailApp()"
 </dialog>
 
 <!-- Embedded data -->
-<script id="accounts-data" type="application/json">{{ accounts_json|safe }}</script>
-<script id="oauth-providers-data" type="application/json">{{ oauth_providers_json|safe }}</script>
+{{ accounts|json_script:"accounts-data" }}
+{{ oauth_providers|json_script:"oauth-providers-data" }}
 {% endblock %}
 
 {% block extra_scripts %}

@@ -1,5 +1,3 @@
-import orjson
-
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -15,11 +13,6 @@ def index(request):
     accounts = MailAccount.objects.filter(owner=request.user, is_active=True)
 
     return render(request, 'mail/ui/index.html', {
-        'accounts': accounts,
-        'accounts_json': orjson.dumps(
-            MailAccountSerializer(accounts, many=True).data,
-        ).decode(),
-        'oauth_providers_json': orjson.dumps(
-            get_available_providers(),
-        ).decode(),
+        'accounts': MailAccountSerializer(accounts, many=True).data,
+        'oauth_providers': get_available_providers(),
     })

@@ -1,5 +1,3 @@
-import orjson
-
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import Http404
@@ -49,11 +47,11 @@ def index(request):
     return render(request, 'calendar/ui/index.html', {
         'owned_calendars': owned,
         'subscribed_calendars': subscribed,
-        'calendars_json': orjson.dumps({
+        'calendars': {
             'owned': CalendarSerializer(owned, many=True).data,
             'subscribed': CalendarSerializer(subscribed, many=True).data,
-        }).decode(),
-        'prefs_json': prefs,
+        },
+        'prefs': prefs,
         'poll_count': poll_count,
     })
 

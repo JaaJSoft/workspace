@@ -2,7 +2,6 @@
 
 import logging
 
-import orjson
 from django.http import HttpResponseBadRequest, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
@@ -150,5 +149,5 @@ def oauth2_callback(request):
 def _render_callback(request, result):
     """Render the callback page with postMessage."""
     return render(request, 'mail/oauth2_callback.html', {
-        'result_json': orjson.dumps(result).decode(),
+        'result': result,
     })

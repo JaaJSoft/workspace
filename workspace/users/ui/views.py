@@ -1,4 +1,3 @@
-import json
 from datetime import date as date_type, timedelta
 
 from django.contrib.auth.decorators import login_required
@@ -204,7 +203,6 @@ def settings_view(request):
         'profile_role': get_setting(request.user, 'profile', 'role') or '',
         'banner_palette': palette_raw,
         'banner_palettes': BANNER_PALETTES,
-        'banner_palette_json': json.dumps(palette_raw).replace('</', '<\\/'),
         'show_upcoming_events': get_setting(request.user, 'dashboard', 'show_upcoming_events', default=True),
         'show_upcoming_empty': get_setting(request.user, 'dashboard', 'show_upcoming_empty', default=True),
     })

@@ -242,6 +242,59 @@ The bug is invisible: the second pass overwrites the first with the same data, n
 - `x-init` is only for **inline expressions** on components that don't define an `init()` method (e.g., `<div x-data="{ open: false }" x-init="$watch('open', ...)">`).
 - When adding event listeners inside `init()`, remember they will be added once per mount — if you ever do see two listeners firing, suspect a duplicate `x-init` or a duplicate `x-data` instantiation of the same component (see `filePreferences()` in `files/ui/index.html`, instantiated twice intentionally — its `init()` should be guarded against re-fetching).
 
+### Embedding view data into JS — use `|json_script`, never `orjson.dumps + |safe`
+
+When a Django view needs to hand off data to client-side JS (initial state, server-rendered preferences, serialized querysets that would otherwise force a redundant API call), **pass the raw Python object in context** and render it with Django's built-in `|json_script` filter:
+
+```python
+# View — pass the raw dict/list (NOT a JSON string)
+return render(request, 'mail/ui/index.html', {
+    'accounts': MailAccountSerializer(accounts, many=True).data,
+    'oauth_providers': get_available_providers(),
+})
+```
+
+```django
+{# Template — |json_script renders <script id="..." type="application/json">...</script> #}
+{{ accounts|json_script:"accounts-data" }}
+{{ oauth_providers|json_script:"oauth-providers-data" }}
+```
+
+```js
+// JS — read from the DOM
+const accounts = JSON.parse(document.getElementById('accounts-data').textContent);
+const providers = JSON.parse(document.getElementById('oauth-providers-data').textContent);
+```
+
+**Never** do this:
+
+```python
+# ❌ Manual dump in the view
+'accounts_json': orjson.dumps(serializer.data).decode(),
+```
+```django
+{# ❌ Inline raw JSON via |safe — XSS surface, no auto-escaping of </script> #}
+<script id="accounts-data" type="application/json">{{ accounts_json|safe }}</script>
+```
+
+**Why `|json_script` is mandatory here:**
+- It escapes `<`, `>`, `&`, `'`, `\u2028`, `\u2029` as JS-safe Unicode escapes — `</script>` injection is impossible even if the data contains user-controlled strings. Manual `|safe` defeats Django's auto-escape entirely; you'd have to remember to do `.replace('</', '<\\/')` everywhere (and inevitably forget once).
+- It produces a `<script type="application/json">` block, which the browser parses as data, not code — no eval, no parser tricks.
+- It's built into Django (since 2.1) — no extra import, no `orjson`/`json` boilerplate in the view.
+
+**Naming convention — drop `_json` from context variable names:** the value passed to the template is now a Python dict/list, not a JSON string. Naming it `accounts_json` is a lie. Always name the context variable for what it *is*:
+
+| ❌ Old name | ✅ New name | Type at the view boundary |
+|---|---|---|
+| `accounts_json` | `accounts` | dict / list |
+| `prefs_json` | `prefs` | dict |
+| `calendars_json` | `calendars` | dict |
+| `folders_json` | `folders` | list |
+
+The script tag's `id` attribute is the right place for the `*-data` suffix (e.g., `id="accounts-data"`), not the Python context key.
+
+**Exception** — when a context variable name collides with another already in context (e.g., a view passes both a queryset of accounts and the serialized version), check whether the queryset version is actually used in the template. It is often **dead context** (the template only reads `accounts` from the JS side via the embedded script tag). If so, delete the dead key; don't keep both.
+
 ### Server-rendered partial swaps — use alpine-ajax, never raw `fetch`
 
 Whenever a piece of UI needs to be refreshed from a Django partial (lists, feeds, sidebars, popovers, folder trees, anything rendered server-side), **use [alpine-ajax](https://alpine-ajax.js.org)**. The library is already loaded globally in `base.html`.

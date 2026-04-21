@@ -1,4 +1,11 @@
-window.calendarApp = function calendarApp(calendarsData) {
+window.calendarApp = function calendarApp() {
+  // Read server-rendered calendars from <script id="calendars-data" type="application/json">.
+  let calendarsData = { owned: [], subscribed: [] };
+  const calsEl = document.getElementById('calendars-data');
+  if (calsEl) {
+    try { calendarsData = JSON.parse(calsEl.textContent); } catch (e) {}
+  }
+
   return {
     calendar: null,
     currentView: 'dayGridMonth',

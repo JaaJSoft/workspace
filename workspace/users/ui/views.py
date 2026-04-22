@@ -11,7 +11,7 @@ from workspace.core.activity_registry import activity_registry
 from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources
 from workspace.users.services import avatar as avatar_service, presence as presence_service
 from workspace.users.banner_palettes import BANNER_PALETTES, gradient_from_palette_value
-from workspace.users.services.settings import get_module_settings, get_setting
+from workspace.users.services.settings import get_module_settings
 
 ACTIVITY_LIMIT = 10
 
@@ -195,17 +195,19 @@ def profile_activity_feed(request, username):
 @login_required
 def settings_view(request):
     from django.conf import settings as django_settings
-    palette_raw = get_setting(request.user, 'profile', 'banner_palette')
+    # Batch reads per module — 2 queries instead of one per key.
+    profile_settings = get_module_settings(request.user, 'profile')
+    dashboard_settings = get_module_settings(request.user, 'dashboard')
     return render(request, 'users/ui/settings.html', {
         'has_avatar': avatar_service.has_avatar(request.user),
         'usage_stats': activity_registry.get_stats(request.user.id),
         'storage_quota': django_settings.STORAGE_QUOTA_BYTES,
-        'profile_bio': get_setting(request.user, 'profile', 'bio') or '',
-        'profile_role': get_setting(request.user, 'profile', 'role') or '',
-        'banner_palette': palette_raw,
+        'profile_bio': profile_settings.get('bio') or '',
+        'profile_role': profile_settings.get('role') or '',
+        'banner_palette': profile_settings.get('banner_palette'),
         'banner_palettes': BANNER_PALETTES,
-        'show_upcoming_events': get_setting(request.user, 'dashboard', 'show_upcoming_events', default=True),
-        'show_upcoming_empty': get_setting(request.user, 'dashboard', 'show_upcoming_empty', default=True),
+        'show_upcoming_events': dashboard_settings.get('show_upcoming_events', True),
+        'show_upcoming_empty': dashboard_settings.get('show_upcoming_empty', True),
     })
 
 

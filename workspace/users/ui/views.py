@@ -10,8 +10,8 @@ from django.utils import timezone
 from workspace.core.activity_registry import activity_registry
 from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources
 from workspace.users.services import avatar as avatar_service, presence as presence_service
-from workspace.users.banner_palettes import BANNER_PALETTES, resolve_banner_gradient
-from workspace.users.services.settings import get_setting
+from workspace.users.banner_palettes import BANNER_PALETTES, gradient_from_palette_value
+from workspace.users.services.settings import get_module_settings, get_setting
 
 ACTIVITY_LIMIT = 10
 
@@ -138,10 +138,11 @@ def profile_view(request, username=None):
     # Heatmap
     heatmap = _build_heatmap_data(user_id, viewer_id=viewer_id)
 
-    # Profile fields
-    profile_bio = get_setting(profile_user, 'profile', 'bio')
-    profile_role = get_setting(profile_user, 'profile', 'role')
-    banner_gradient = resolve_banner_gradient(profile_user)
+    # Profile fields — single query for all three keys instead of one per get_setting
+    profile_settings = get_module_settings(profile_user, 'profile')
+    profile_bio = profile_settings.get('bio')
+    profile_role = profile_settings.get('role')
+    banner_gradient = gradient_from_palette_value(profile_settings.get('banner_palette'))
 
     # Activity feed
     activity_ctx = _get_profile_activity_context(profile_user.username, user_id, viewer_id=viewer_id)

@@ -16,9 +16,8 @@ BANNER_PALETTES = {
 _HEX_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
 
 
-def resolve_banner_gradient(user):
-    """Return a CSS linear-gradient string for the user's banner, or None for default."""
-    value = get_setting(user, 'profile', 'banner_palette')
+def gradient_from_palette_value(value):
+    """Return a CSS linear-gradient string for a raw ``banner_palette`` value, or None."""
     if value is None:
         return None
     if isinstance(value, str) and value in BANNER_PALETTES:
@@ -29,6 +28,11 @@ def resolve_banner_gradient(user):
         if all(_HEX_RE.match(c or '') for c in (f, v, t)):
             return f"linear-gradient(135deg, {f}, {v}, {t})"
     return None
+
+
+def resolve_banner_gradient(user):
+    """Return a CSS linear-gradient string for the user's banner, or None for default."""
+    return gradient_from_palette_value(get_setting(user, 'profile', 'banner_palette'))
 
 
 def validate_profile_setting(key, value):

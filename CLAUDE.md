@@ -204,7 +204,7 @@ set_setting(user, 'dashboard', 'show_upcoming_events', False)
 # Delete (DB row removed AND cache invalidated):
 delete_setting(user, 'dashboard', 'show_upcoming_events')
 
-# Read all keys for a module at once (no cache, one query):
+# Read all keys for a module at once (cached 5 min, invalidated on any set/delete in that module):
 prefs = get_module_settings(user, 'dashboard')
 ```
 

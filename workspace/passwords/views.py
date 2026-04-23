@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import LoginEntry, PasswordFolder
+from .models import PasswordFolder
 from .serializers import (
     FolderCreateSerializer,
     FolderSerializer,
@@ -257,7 +257,8 @@ class FolderListCreateView(APIView):
                 parent_uuid=str(d['parent']) if d.get('parent') else None,
             )
         except ValueError as exc:
-            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning("Folder creation failed: %s", exc)
+            return Response({'detail': 'Invalid folder data.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response(FolderSerializer(folder).data, status=status.HTTP_201_CREATED)
 
 

@@ -16,7 +16,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
 
-from workspace.passwords.models import UserKeyPair, Vault, VaultGroupAccess, VaultMember
+from workspace.passwords.models import UserKeyPair, VaultGroupAccess, VaultMember
 from workspace.passwords.services.sharing import SharingService
 from workspace.passwords.services.vault import VaultService
 

@@ -86,7 +86,7 @@ function createVaultDialog() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
+            'X-CSRFToken': getCSRFToken(),
           },
           body: JSON.stringify({
             name: this.name.trim(),

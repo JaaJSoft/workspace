@@ -12,7 +12,7 @@
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
 {% block drawer_attrs %}
-x-data="passwordsIndex({{ vaults_json }})"
+x-data="passwordsIndex(JSON.parse(document.getElementById('vaults-data').textContent))"
 x-init="init()"
 {% endblock %}
 
@@ -148,6 +148,7 @@ x-init="init()"
 {% include "passwords/ui/partials/setup_vault_dialog.html" %}
 {% include "passwords/ui/partials/help_dialog.html" %}
 
+{{ vaults|json_script:"vaults-data" }}
 <script src="{% static 'passwords/ui/js/vault-crypto.js' %}"></script>
 <script src="{% static 'passwords/ui/js/passwords-index.js' %}"></script>
 {% endblock %}

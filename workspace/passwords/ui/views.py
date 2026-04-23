@@ -1,5 +1,3 @@
-import json
-
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.shortcuts import render
@@ -9,8 +7,8 @@ from workspace.passwords.services.vault import VaultService
 
 @login_required
 def index(request):
-    vaults = list(VaultService.list_vaults(request.user))
-    vaults_json = json.dumps([
+    vaults = VaultService.list_vaults(request.user)
+    vaults_data = [
         {
             'uuid': str(v.uuid),
             'name': v.name,
@@ -23,8 +21,8 @@ def index(request):
             'updated_at': v.updated_at.isoformat(),
         }
         for v in vaults
-    ])
-    return render(request, 'passwords/ui/index.html', {'vaults_json': vaults_json})
+    ]
+    return render(request, 'passwords/ui/index.html', {'vaults': vaults_data})
 
 
 @login_required
@@ -32,7 +30,7 @@ def vault_detail(request, uuid):
     vault = VaultService.get_vault(request.user, uuid)
     if vault is None:
         raise Http404
-    vault_json = json.dumps({
+    vault_data = {
         'uuid': str(vault.uuid),
         'name': vault.name,
         'description': vault.description,
@@ -43,5 +41,5 @@ def vault_detail(request, uuid):
         'kdf_iterations': vault.kdf_iterations,
         'kdf_salt': vault.kdf_salt,
         'protected_vault_key': vault.protected_vault_key,
-    })
-    return render(request, 'passwords/ui/vault.html', {'vault': vault, 'vault_json': vault_json})
+    }
+    return render(request, 'passwords/ui/vault.html', {'vault': vault, 'vault_data': vault_data})

@@ -12,7 +12,7 @@
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
 {% block drawer_attrs %}
-x-data="vaultBrowser({{ vault_json }})"
+x-data="vaultBrowser(JSON.parse(document.getElementById('vault-data').textContent))"
 x-init="init()"
 {% endblock %}
 
@@ -109,6 +109,7 @@ x-init="init()"
 {% include "passwords/ui/partials/create_folder_dialog.html" %}
 {% include "passwords/ui/partials/vault_context_menu.html" %}
 
+{{ vault_data|json_script:"vault-data" }}
 <script src="{% static 'passwords/ui/js/vault-crypto.js' %}"></script>
 <script src="{% static 'passwords/ui/js/vault-browser.js' %}"></script>
 {% endblock %}

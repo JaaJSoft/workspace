@@ -42,7 +42,7 @@ dependencies = [
     # push notifications
     "pywebpush>=2.3.0",
     # oauth2
-    "authlib>=1.6.11",
+    "authlib>=1.7.0",
     # ai
     "openai>=2.32.0",
     "ollama>=0.6.1",
@@ -57,7 +57,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "coverage[toml]>=7.6",
+    "coverage[toml]>=7.13.5",
     "django-debug-toolbar==6.3.0",
     # End-to-end / UI tests. Playwright is only needed when E2E=1 is set;
     # otherwise the E2E test cases are skipped (see workspace/common/tests/e2e/).

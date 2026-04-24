@@ -2487,7 +2487,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "coverage", extras = ["toml"], specifier = ">=7.6" },
+    { name = "coverage", extras = ["toml"], specifier = ">=7.13.5" },
     { name = "django-debug-toolbar", specifier = "==6.3.0" },
     { name = "playwright", specifier = ">=1.48" },
 ]

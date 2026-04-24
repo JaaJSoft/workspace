@@ -181,10 +181,6 @@ function vaultBrowser(vaultData) {
       this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
-    getCsrf() {
-      return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
-    },
-
     // ═════════════════════════════════════════════════════════════════════════
     // Data loading
     // ═════════════════════════════════════════════════════════════════════════
@@ -401,7 +397,7 @@ function vaultBrowser(vaultData) {
     async _patchEntry(uuid, fields) {
       return fetch(`/api/v1/passwords/entries/${uuid}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCsrf() },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify(fields),
       });
     },
@@ -430,7 +426,7 @@ function vaultBrowser(vaultData) {
       try {
         const r = await fetch(`/api/v1/passwords/entries/${uuid}`, {
           method: 'DELETE',
-          headers: { 'X-CSRFToken': this.getCsrf() },
+          headers: { 'X-CSRFToken': getCSRFToken() },
         });
         if (r.ok) {
           const now = new Date().toISOString();
@@ -474,7 +470,7 @@ function vaultBrowser(vaultData) {
       if (!uuid || !name.trim()) return;
       const r = await fetch(`/api/v1/passwords/folders/${uuid}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCsrf() },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify({ name: name.trim() }),
       });
       if (r.ok) {
@@ -488,7 +484,7 @@ function vaultBrowser(vaultData) {
     async deleteFolder(uuid) {
       const r = await fetch(`/api/v1/passwords/folders/${uuid}`, {
         method: 'DELETE',
-        headers: { 'X-CSRFToken': this.getCsrf() },
+        headers: { 'X-CSRFToken': getCSRFToken() },
       });
       if (r.ok) {
         this.folders = this.folders.filter(f => f.uuid !== uuid);
@@ -516,7 +512,7 @@ function vaultBrowser(vaultData) {
       };
       const r = await fetch('/api/v1/passwords/entries', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCsrf() },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify(body),
       });
       if (!r.ok) return null;
@@ -528,7 +524,7 @@ function vaultBrowser(vaultData) {
     async createFolder(name) {
       const r = await fetch(`/api/v1/passwords/vaults/${this.vault.uuid}/folders`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCsrf() },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify({ name, parent: this.currentFolderUuid }),
       });
       if (r.ok) await this.loadFolders();

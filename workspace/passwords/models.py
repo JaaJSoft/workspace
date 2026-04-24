@@ -70,9 +70,6 @@ class Vault(models.Model):
 
     class Meta:
         ordering = ['created_at']
-        indexes = [
-            models.Index(fields=['user'], name='vault_user_idx'),
-        ]
 
     def __str__(self):
         return f'{self.user} / {self.name}'
@@ -100,10 +97,6 @@ class PasswordFolder(models.Model):
 
     class Meta:
         ordering = ['order', 'name']
-        indexes = [
-            models.Index(fields=['vault'], name='folder_vault_idx'),
-            models.Index(fields=['parent'], name='folder_parent_idx'),
-        ]
 
     def __str__(self):
         return self.name
@@ -128,9 +121,6 @@ class PasswordTag(models.Model):
         ordering = ['name']
         constraints = [
             models.UniqueConstraint(fields=['vault', 'name'], name='tag_vault_name_uniq'),
-        ]
-        indexes = [
-            models.Index(fields=['vault'], name='tag_vault_idx'),
         ]
 
     def __str__(self):
@@ -175,9 +165,7 @@ class PasswordEntry(models.Model):
     folder = models.ForeignKey(
         PasswordFolder, on_delete=models.SET_NULL, null=True, blank=True, related_name='entries'
     )
-    tags = models.ManyToManyField(
-        PasswordTag, through='PasswordEntryTag', blank=True, related_name='entries'
-    )
+    tags = models.ManyToManyField(PasswordTag, blank=True, related_name='entries')
 
     # Discriminator – kept in plaintext for server-side filtering without decryption
     type = models.CharField(
@@ -215,18 +203,6 @@ class PasswordEntry(models.Model):
 
     def __str__(self):
         return f'{self.type} entry {self.uuid}'
-
-
-class PasswordEntryTag(models.Model):
-    """Explicit through-table for the Entry ↔ Tag many-to-many."""
-
-    entry = models.ForeignKey(PasswordEntry, on_delete=models.CASCADE)
-    tag = models.ForeignKey(PasswordTag, on_delete=models.CASCADE)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=['entry', 'tag'], name='entry_tag_uniq'),
-        ]
 
 
 # ── Login ────────────────────────────────────────────────────────────────────
@@ -376,9 +352,6 @@ class VaultGroupAccess(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['vault', 'group'], name='vault_group_uniq'),
-        ]
-        indexes = [
-            models.Index(fields=['vault'], name='vault_group_vault_idx'),
         ]
 
     def __str__(self):

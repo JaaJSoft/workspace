@@ -100,6 +100,8 @@ kubectl apply -f ingress.yaml
 | `DEBUG`                | `0`                             | Set to `1` to enable debug mode           |
 | `ALLOWED_HOSTS`        | `workspace.example.com`         | Comma-separated list of allowed hostnames |
 | `CSRF_TRUSTED_ORIGINS` | `https://workspace.example.com` | Comma-separated list of trusted origins   |
+| `USE_X_FORWARDED_HOST` | *(empty)*                       | Set to `1` when the ingress rewrites `Host` (Cloudflare, cloud LBs) |
+| `USE_X_FORWARDED_PORT` | *(empty)*                       | Set to `1` when the ingress rewrites the public port |
 | `GUNICORN_WORKERS`     | `3`                             | Number of Gunicorn workers                |
 | `GUNICORN_LOG_LEVEL`   | `info`                          | Gunicorn log level                        |
 | `DJANGO_LOG_LEVEL`     | `INFO`                          | Django log level                          |

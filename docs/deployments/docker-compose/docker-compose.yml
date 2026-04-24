@@ -8,6 +8,8 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-me-to-a-real-secret-key}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-}
+      - USE_X_FORWARDED_HOST=${USE_X_FORWARDED_HOST:-}
+      - USE_X_FORWARDED_PORT=${USE_X_FORWARDED_PORT:-}
       - DATABASE_URL=sqlite:////app/data/db.sqlite3
       - MEDIA_ROOT=/app/data
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-6}

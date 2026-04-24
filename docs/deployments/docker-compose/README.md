@@ -53,6 +53,8 @@ All settings are configurable via environment variables or a `.env` file next to
 | `SECRET_KEY`           | `change-me-to-a-real-secret-key` | Django secret key. **Must be changed.**   |
 | `ALLOWED_HOSTS`        | `*`                              | Comma-separated list of allowed hostnames |
 | `CSRF_TRUSTED_ORIGINS` | *(empty)*                        | Comma-separated list of trusted origins   |
+| `USE_X_FORWARDED_HOST` | *(empty)*                        | Set to `1` when the proxy rewrites `Host` (Cloudflare, cloud LBs) |
+| `USE_X_FORWARDED_PORT` | *(empty)*                        | Set to `1` when the proxy rewrites the public port |
 | `GUNICORN_WORKERS`     | `6`                              | Number of Gunicorn workers                |
 | `WEBPUSH_VAPID_PRIVATE_KEY` | *(empty)*                   | VAPID private key (PEM). Generate with `manage.py generate_vapid_keys` |
 | `WEBPUSH_VAPID_PUBLIC_KEY`  | *(empty)*                   | VAPID public key (base64url)              |
@@ -112,6 +114,8 @@ The web service exposes port **8000**. In production, place a reverse proxy (ngi
 ```env
 CSRF_TRUSTED_ORIGINS=https://your-domain.com
 ```
+
+See [Reverse Proxy in the deployment overview](../README.md#reverse-proxy) for the headers the proxy must forward, optional `USE_X_FORWARDED_HOST/PORT` settings, and an important security warning when running without a proxy.
 
 ## Web Search (optional)
 

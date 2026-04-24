@@ -60,6 +60,9 @@ if not DEBUG:
     CSRF_COOKIE_HTTPONLY = False  # Must be False for JavaScript to read it if needed
     SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'true').lower() in {'1', 'true', 'yes', 'on'}
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Trust X-Forwarded-Proto from proxy
+    # Trust X-Forwarded-Host/Port — only enable when the proxy rewrites them (Cloudflare, cloud LBs)
+    USE_X_FORWARDED_HOST = os.getenv('USE_X_FORWARDED_HOST', '').lower() in {'1', 'true', 'yes', 'on'}
+    USE_X_FORWARDED_PORT = os.getenv('USE_X_FORWARDED_PORT', '').lower() in {'1', 'true', 'yes', 'on'}
 
 # Application version (from env, defaults to 'dev')
 APP_VERSION = os.getenv('APP_VERSION') or 'dev'

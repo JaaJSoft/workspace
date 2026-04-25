@@ -7,6 +7,8 @@ data:
   DEBUG: "0"
   ALLOWED_HOSTS: "workspace.example.com,localhost"
   CSRF_TRUSTED_ORIGINS: "https://workspace.example.com"
+  USE_X_FORWARDED_HOST: ""  # set to "1" if the ingress rewrites the Host header
+  USE_X_FORWARDED_PORT: ""  # set to "1" if the ingress rewrites the public port
   GUNICORN_WORKERS: "3"
   GUNICORN_LOG_LEVEL: "info"
   DJANGO_LOG_LEVEL: "INFO"

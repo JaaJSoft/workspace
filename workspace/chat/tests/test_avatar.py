@@ -5,6 +5,7 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.chat.models import Conversation
 from workspace.chat.services.avatar import (
     delete_group_avatar,
     get_group_avatar_etag,
@@ -12,7 +13,6 @@ from workspace.chat.services.avatar import (
     has_group_avatar,
     process_and_save_group_avatar,
 )
-from workspace.chat.models import Conversation
 
 User = get_user_model()
 

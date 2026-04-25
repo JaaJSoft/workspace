@@ -4,11 +4,10 @@ import json
 import logging
 
 from django.conf import settings
+from pydantic import BaseModel, Field
 
 from .client import get_image_client
 from .models import UserMemory
-from pydantic import BaseModel, Field
-
 from .tool_registry import ToolProvider, tool
 
 logger = logging.getLogger(__name__)

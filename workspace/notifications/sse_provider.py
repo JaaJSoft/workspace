@@ -1,4 +1,5 @@
 import logging
+
 from workspace.core.sse_registry import SSEProvider
 from .services.notifications import get_unread_count
 

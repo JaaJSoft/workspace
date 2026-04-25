@@ -3,7 +3,6 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.chat.models import ConversationMember, Message
-
 from .test_chat import ChatTestMixin
 
 

@@ -1,6 +1,5 @@
 """End-to-end test: .ics email received -> event created -> user responds -> REPLY sent."""
 
-from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from unittest.mock import patch

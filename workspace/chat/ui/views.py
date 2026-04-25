@@ -2,13 +2,13 @@ from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import OuterRef, Prefetch, Subquery
-from django.db.models import Q
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.chat.models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage
+from workspace.chat.models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, \
+    PinnedMessage
 from workspace.chat.serializers import ConversationListSerializer
 from workspace.chat.services.conversations import get_active_membership, get_unread_counts, user_conversation_ids
 from workspace.files.ui.viewers import ViewerRegistry

@@ -1,4 +1,3 @@
-import base64
 import time
 import time as _time
 from unittest.mock import MagicMock, patch

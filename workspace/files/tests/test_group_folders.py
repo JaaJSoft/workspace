@@ -5,8 +5,8 @@ from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.db import IntegrityError
 from django.test import TestCase, override_settings
-from rest_framework.test import APITestCase
 from rest_framework import status
+from rest_framework.test import APITestCase
 
 from workspace.files.models import File
 from workspace.files.services import FileService

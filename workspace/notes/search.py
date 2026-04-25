@@ -1,5 +1,4 @@
 from workspace.core.module_registry import SearchResult, SearchTag
-from workspace.files.models import File
 from workspace.files.services import FileService
 
 

@@ -18,9 +18,8 @@ from rest_framework.views import APIView
 from workspace.common.cache import cached, invalidate_tags
 from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
-
-from .services import avatar as group_avatar_service
-from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage, Reaction
+from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage, \
+    Reaction
 from .serializers import (
     ConversationCreateSerializer,
     ConversationDetailSerializer,
@@ -32,6 +31,7 @@ from .serializers import (
     ReactionToggleSerializer,
     ScheduledMessageSerializer,
 )
+from .services import avatar as group_avatar_service
 from .services.conversations import get_active_membership, get_or_create_dm, get_unread_counts, user_conversation_ids
 from .services.notifications import notify_conversation_members, notify_new_message
 from .services.rendering import extract_mentions, render_message_body
@@ -150,7 +150,6 @@ class ConversationListView(CacheControlMixin, APIView):
             )
 
         # Check bot access permissions
-        from workspace.ai.models import BotProfile
         bot_users = users.filter(bot_profile__isnull=False).select_related('bot_profile')
         for bot_user in bot_users:
             if not bot_user.bot_profile.is_accessible_by(request.user):

@@ -1,11 +1,11 @@
 from io import BytesIO
 from unittest.mock import patch
 
+from PIL import Image
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
-from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 

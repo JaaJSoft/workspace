@@ -1,10 +1,10 @@
 from django.conf import settings
-from django.utils import timezone
-
-from workspace.common.uuids import uuid_v7_or_v4
 from django.contrib.auth.models import Group
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
+
+from workspace.common.uuids import uuid_v7_or_v4
 
 
 class BotProfile(models.Model):

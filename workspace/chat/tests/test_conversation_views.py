@@ -13,7 +13,6 @@ from rest_framework.test import APITestCase
 
 from workspace.ai.models import BotProfile
 from workspace.chat.models import Conversation, ConversationMember
-
 from .test_chat import ChatTestMixin
 
 User = get_user_model()

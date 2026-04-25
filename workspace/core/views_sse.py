@@ -1,8 +1,7 @@
-import time
 import logging
+import time
 
 import orjson
-
 from django.http import StreamingHttpResponse
 from prometheus_client import Gauge
 

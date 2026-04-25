@@ -9,8 +9,8 @@ from django.utils import timezone
 
 from workspace.core.activity_registry import activity_registry
 from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources
-from workspace.users.services import avatar as avatar_service, presence as presence_service
 from workspace.users.banner_palettes import BANNER_PALETTES, gradient_from_palette_value
+from workspace.users.services import avatar as avatar_service, presence as presence_service
 from workspace.users.services.settings import get_module_settings
 
 ACTIVITY_LIMIT = 10

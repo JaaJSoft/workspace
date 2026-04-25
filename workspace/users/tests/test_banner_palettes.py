@@ -3,11 +3,10 @@ from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.users.banner_palettes import (
-    BANNER_PALETTES,
     resolve_banner_gradient,
     validate_profile_setting,
 )
-from workspace.users.services.settings import delete_setting, set_setting
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 

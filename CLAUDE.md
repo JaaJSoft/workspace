@@ -221,6 +221,25 @@ class MyTests(TestCase):
         cache.clear()
 ```
 
+### Logging — sanitize user-controlled values with `scrub()`
+
+Any value taken from request data, request headers, URL path/query, filenames, DB rows that originated in user input (a stored push-subscription endpoint, a free-text title, an email/domain, etc.), or third-party API responses **must** pass through `scrub()` before reaching a `logger.X(...)` call. This prevents log injection (CWE-117): without it, `\r\n` in user input forges fake log lines and breaks SIEM parsers.
+
+```python
+from workspace.common.logging import scrub
+
+logger.info("Autodiscover failed for domain %s", scrub(domain))
+logger.warning("Push failed for %s: %s", scrub(sub.endpoint[:60]), e)
+logger.exception("Activity provider '%s' failed", scrub(source))
+```
+
+**Rules:**
+
+- Sanitize at the logger call site even when the value looks "safe" (a validated UUID, an enum slug, an email that passed `EmailField`). Validation runs at the view boundary, but the same value flows through Celery tasks, signals, and services to loggers far from where it was checked. CodeQL traces taint, not validation — the `py/log-injection` alert fires regardless.
+- Never log full request bodies or headers. If you must, scrub them.
+- Internal/system values that never touched user input (settings keys, hard-coded enum members, `__name__`, computed counts) don't need `scrub()`. Apply it to the *tainted* fields, not the whole format string.
+- The helper lives in `workspace/common/logging_safe.py`. The `str(...).replace('\r','').replace('\n','')` chain inside is the exact form CodeQL recognizes as a sanitizer for `py/log-injection` — do not refactor the replaces away or wrap them in another helper.
+
 ## Frontend Conventions
 
 ### Alpine `init()` is auto-called — never add `x-init="init()"` on top of it

@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
 
 from .models import MailAccount, MailAttachment, MailFolder, MailLabel, MailMessage, MailMessageLabel
@@ -175,7 +176,7 @@ class MailAutodiscoverView(APIView):
         try:
             settings = autodiscover(domain)
         except Exception:
-            logger.info("Autodiscover failed for domain %s", domain)
+            logger.info("Autodiscover failed for domain %s", scrub(domain))
             settings = None
 
         if not settings or not settings.get('imap') or not settings.get('smtp'):

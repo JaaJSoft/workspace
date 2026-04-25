@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.cache import cached, invalidate_tags
+from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
 
 from .services import avatar as group_avatar_service
@@ -60,7 +61,7 @@ def _trigger_bot_response(conversation_id, message, sender):
                 bot_member.user_id,
             )
         except Exception:
-            logger.exception('Failed to trigger bot response for conversation=%s', conversation_id)
+            logger.exception('Failed to trigger bot response for conversation=%s', scrub(conversation_id))
 
 
 @extend_schema(tags=['Chat'])

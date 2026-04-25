@@ -6,6 +6,7 @@ from celery import shared_task
 from django.conf import settings
 from pywebpush import webpush, WebPushException
 
+from workspace.common.logging import scrub
 from workspace.users.services.presence import is_active
 
 logger = logging.getLogger(__name__)
@@ -61,8 +62,8 @@ def send_push_notification(notification_uuid: str):
             status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
             if status_code in (404, 410):
                 sub.delete()
-                logger.info("Deleted expired push subscription %s", sub.endpoint[:60])
+                logger.info("Deleted expired push subscription %s", scrub(sub.endpoint[:60]))
             else:
-                logger.warning("Push failed for %s: %s", sub.endpoint[:60], e)
+                logger.warning("Push failed for %s: %s", scrub(sub.endpoint[:60]), e)
         except Exception:
-            logger.exception("Unexpected error sending push to %s", sub.endpoint[:60])
+            logger.exception("Unexpected error sending push to %s", scrub(sub.endpoint[:60]))

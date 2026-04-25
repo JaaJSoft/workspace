@@ -45,7 +45,7 @@ class _StreamingWriteBuffer:
         self._fd = os.open(
             self._full_path,
             os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-            0o644,
+            0o600,
         )
 
     def write(self, data):

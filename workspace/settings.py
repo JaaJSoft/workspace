@@ -514,6 +514,13 @@ STATIC_ROOT = _static_root
 MEDIA_ROOT = os.getenv('MEDIA_ROOT', BASE_DIR)
 MEDIA_URL = '/media/'
 
+# Restrict uploaded-file permissions to the owning process (owner-only).
+# Uploads are served back through Django's FileResponse, never read directly
+# by another user (no nginx X-Accel-Redirect, no separate webserver UID), so
+# world/group access is unnecessary and triggers CodeQL CWE-732.
+FILE_UPLOAD_PERMISSIONS = 0o600
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
+
 # Storage backends (Django 5 style)
 STORAGES = {
     "default": {

@@ -7,7 +7,12 @@ from django.db.models import Q
 
 from workspace.calendar.models import Event, EventMember
 from workspace.calendar.queries import visible_events_q
-from workspace.calendar.recurrence import _build_rrule
+from workspace.calendar.recurrence import (
+    _build_rrule,
+    _member_dict,
+    make_virtual_occurrence,
+    next_occurrences_after,
+)
 
 
 class VirtualOccurrence:
@@ -98,8 +103,6 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
     None if there are no more events.
     """
     from workspace.calendar.serializers import EventSerializer
-    from workspace.calendar.recurrence import (
-        next_occurrences_after, make_virtual_occurrence, )
 
     user_q = visible_events_q(user)
     declined_q = Q(members__user=user, members__status=EventMember.Status.DECLINED)
@@ -158,8 +161,6 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
             ).values_list('recurrence_parent_id', 'original_start')
         ):
             exception_keys.add((str(parent_id), orig_start.isoformat()))
-
-    from workspace.calendar.recurrence import _member_dict
 
     recurring_data = []
     for master in masters:

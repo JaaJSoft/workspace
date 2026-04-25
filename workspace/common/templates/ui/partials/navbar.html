@@ -243,9 +243,9 @@
             <!-- Profile -->
             <li class="{% if request.resolver_match.view_name == 'users_ui:profile' %}disabled{% endif %}">
               <a
-                href="{% url 'users_ui:profile' %}"
+                href="{% if request.resolver_match.view_name == 'users_ui:profile' %}#{% else %}{% url 'users_ui:profile' %}{% endif %}"
                 class="gap-3 {% if request.resolver_match.view_name != 'users_ui:profile' %}hover:bg-primary/10 hover:text-primary{% endif %} transition-colors"
-                {% if request.resolver_match.view_name == 'users_ui:profile' %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
+                {% if request.resolver_match.view_name == 'users_ui:profile' %}style="opacity: 0.4;" aria-disabled="true" tabindex="-1"{% endif %}
               >
                 <i data-lucide="user" class="w-4 h-4"></i>
                 <span class="font-medium">Profile</span>
@@ -255,9 +255,9 @@
             <!-- Settings -->
             <li class="{% if request.resolver_match.view_name == 'users_ui:settings' %}disabled{% endif %}">
               <a
-                href="{% url 'users_ui:settings' %}"
+                href="{% if request.resolver_match.view_name == 'users_ui:settings' %}#{% else %}{% url 'users_ui:settings' %}{% endif %}"
                 class="gap-3 {% if request.resolver_match.view_name != 'users_ui:settings' %}hover:bg-info/10 hover:text-info{% endif %} transition-colors"
-                {% if request.resolver_match.view_name == 'users_ui:settings' %}style="opacity: 0.4;" onclick="event.preventDefault();"{% endif %}
+                {% if request.resolver_match.view_name == 'users_ui:settings' %}style="opacity: 0.4;" aria-disabled="true" tabindex="-1"{% endif %}
               >
                 <i data-lucide="settings" class="w-4 h-4"></i>
                 <span class="font-medium">Settings</span>

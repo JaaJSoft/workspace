@@ -52,6 +52,11 @@ COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 # Copy the code
 COPY --chown=appuser:appuser . .
 
+# Run as non-root from this point on so collectstatic creates /app/staticfiles
+# with the correct owner. FILE_UPLOAD_DIRECTORY_PERMISSIONS=0o700 means a
+# directory created by root cannot be read by appuser at runtime.
+USER appuser
+
 # Collect static files in the image
 ENV DJANGO_SETTINGS_MODULE=workspace.settings
 RUN SECRET_KEY=build-secret DEBUG=0 python manage.py collectstatic --noinput
@@ -60,8 +65,6 @@ RUN SECRET_KEY=build-secret DEBUG=0 python manage.py collectstatic --noinput
 ENV GUNICORN_WORKERS=3 \
     GUNICORN_LOG_LEVEL=info \
     GUNICORN_ACCESS_LOGFORMAT="%(h)s %(l)s %(u)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\" %(D)s"
-
-USER appuser
 EXPOSE 8000
 
 # Start command (exec replaces shell so gunicorn receives signals as PID 1)

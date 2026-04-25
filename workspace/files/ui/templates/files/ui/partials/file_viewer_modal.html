@@ -302,6 +302,19 @@
           }
         },
 
+        async _openFileFromUuid(fileUuid) {
+          if (!isValidUuid(fileUuid)) return;
+          try {
+            const response = await fetch('/api/v1/files/' + fileUuid);
+            if (response.ok) {
+              const fileData = await response.json();
+              this.openFile(fileData.uuid, fileData.name, fileData.mime_type, false);
+            }
+          } catch (err) {
+            console.error('Failed to open file from URL:', err);
+          }
+        },
+
         async init() {
           // Prevent multiple initializations
           if (this._initialized) {
@@ -349,16 +362,7 @@
             const fileUuid = urlParams.get('open');
 
             if (fileUuid && fileUuid !== this.fileUuid) {
-              // Open parameter present and different from current - open it
-              try {
-                const response = await fetch('/api/v1/files/' + fileUuid);
-                if (response.ok) {
-                  const fileData = await response.json();
-                  this.openFile(fileData.uuid, fileData.name, fileData.mime_type, false);
-                }
-              } catch (err) {
-                console.error('Failed to open file from URL:', err);
-              }
+              await this._openFileFromUuid(fileUuid);
             } else if (!fileUuid && this.open) {
               // No open parameter but viewer is open - close it
               window.dispatchEvent(new CustomEvent('viewer-cleanup'));
@@ -379,17 +383,7 @@
           const urlParams = new URLSearchParams(window.location.search);
           const fileUuid = urlParams.get('open');
           if (fileUuid) {
-            try {
-              // Fetch file info from API
-              const response = await fetch('/api/v1/files/' + fileUuid);
-              if (response.ok) {
-                const fileData = await response.json();
-                // Open file without updating URL (already in URL)
-                this.openFile(fileData.uuid, fileData.name, fileData.mime_type, false);
-              }
-            } catch (err) {
-              console.error('Failed to open file from URL:', err);
-            }
+            await this._openFileFromUuid(fileUuid);
           }
         }
       };

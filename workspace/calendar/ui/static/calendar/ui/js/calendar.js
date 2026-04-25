@@ -1014,6 +1014,7 @@ window.calendarApp = function calendarApp() {
     },
 
     async openEventById(eventId) {
+      if (!isValidUuid(eventId)) return;
       this.loadingEvent = true;
       this.showPanel = true;
       try {
@@ -1638,6 +1639,7 @@ window.calendarApp = function calendarApp() {
     },
 
     async loadPoll(uuid) {
+      if (!isValidUuid(uuid)) return;
       this.currentPollLoading = true;
       try {
         const resp = await fetch(`/api/v1/calendar/polls/${uuid}`, { credentials: 'same-origin' });

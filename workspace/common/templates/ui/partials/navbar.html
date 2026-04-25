@@ -189,7 +189,7 @@
                 async setStatus(s) {
                   this.current = s;
                   this.open = false;
-                  const uid = {{ user.id }};
+                  const uid = "{{ user.id|escapejs }}";
                   const p = $store.presence;
                   p.online.delete(uid); p.away.delete(uid); p.busy.delete(uid);
                   if (s === 'online') p.online.add(uid);

@@ -60,6 +60,9 @@ if not DEBUG:
     CSRF_COOKIE_HTTPONLY = False  # Must be False for JavaScript to read it if needed
     SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'true').lower() in {'1', 'true', 'yes', 'on'}
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Trust X-Forwarded-Proto from proxy
+    # Trust X-Forwarded-Host/Port — only enable when the proxy rewrites them (Cloudflare, cloud LBs)
+    USE_X_FORWARDED_HOST = os.getenv('USE_X_FORWARDED_HOST', '').lower() in {'1', 'true', 'yes', 'on'}
+    USE_X_FORWARDED_PORT = os.getenv('USE_X_FORWARDED_PORT', '').lower() in {'1', 'true', 'yes', 'on'}
 
 # Application version (from env, defaults to 'dev')
 APP_VERSION = os.getenv('APP_VERSION') or 'dev'
@@ -217,6 +220,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'workspace.core.context_processors.workspace_modules',
                 'workspace.ai.context_processors.ai_context',
+                'workspace.users.context_processors.user_preferences',
                 # Expose `request_processing_ms` au template
                 # 'workspace.ui.context_processors.request_timing',
             ],
@@ -509,6 +513,13 @@ STATIC_ROOT = _static_root
 # Media files (user uploads)
 MEDIA_ROOT = os.getenv('MEDIA_ROOT', BASE_DIR)
 MEDIA_URL = '/media/'
+
+# Restrict uploaded-file permissions to the owning process (owner-only).
+# Uploads are served back through Django's FileResponse, never read directly
+# by another user (no nginx X-Accel-Redirect, no separate webserver UID), so
+# world/group access is unnecessary and triggers CodeQL CWE-732.
+FILE_UPLOAD_PERMISSIONS = 0o600
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
 
 # Storage backends (Django 5 style)
 STORAGES = {

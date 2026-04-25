@@ -1,8 +1,8 @@
 from io import BytesIO
 
+from PIL import Image
 from django.core.files.storage import default_storage
 from django.test import TestCase
-from PIL import Image
 
 from workspace.common.services.image import (
     delete_image,

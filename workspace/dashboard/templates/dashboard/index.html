@@ -13,7 +13,7 @@
   {# ── Hero ── #}
   <section class="text-center space-y-1 relative">
     <h1 class="text-3xl font-semibold text-base-content" x-data x-text="(() => { const h = new Date().getHours(); const g = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; return g + ', {{ user.first_name|default:user.username }}.'; })()">Welcome back, {{ user.first_name|default:user.username }}.</h1>
-    <p class="text-base-content/60" x-data="weatherWidget()" x-init="init()" x-cloak>
+    <p class="text-base-content/60" x-data="weatherWidget()" x-cloak>
       <span x-text="label"></span>
     </p>
 
@@ -84,10 +84,12 @@
     {% include 'dashboard/partials/modules_grid.html' %}
   </section>
 
-  {# ── Upcoming events ── #}
-  <section>
-    {% include 'dashboard/partials/upcoming_events.html' %}
-  </section>
+  {% if show_upcoming_events %}
+    {# ── Upcoming events (loaded async via alpine-ajax) ── #}
+    <section>
+      {% include 'dashboard/partials/upcoming_skeleton.html' %}
+    </section>
+  {% endif %}
 
   {# ── Activity feed ── #}
   <section class="max-w-4xl mx-auto w-full">

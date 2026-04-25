@@ -11,7 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from workspace.common.cache import cache_response, invalidate
+from workspace.common.cache import cached_response, invalidate
 from workspace.common.mixins import CacheControlMixin
 
 
@@ -29,7 +29,7 @@ def _parse_dt(value):
         return None
 
 from workspace.notifications.services.notifications import notify, notify_many
-from .models import Calendar, CalendarSubscription, Event, EventMember
+from .models import Calendar, Event, EventMember
 from .models_external import ExternalCalendar
 from .queries import visible_calendars, visible_calendar_ids
 
@@ -125,7 +125,7 @@ class CalendarListView(CacheControlMixin, APIView):
     cache_max_age = 300
 
     @extend_schema(summary="List user's calendars (owned + subscribed)")
-    @cache_response(300)
+    @cached_response(300)
     def get(self, request):
         owned, subscribed = visible_calendars(request.user)
 

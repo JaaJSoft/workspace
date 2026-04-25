@@ -30,6 +30,48 @@
       </div>
     </div>
   </div>
+
+  <div class="card bg-base-100 border border-base-300 shadow-sm mt-4" x-data="dashboardPrefsForm()">
+    <div class="card-body">
+      <h2 class="card-title text-lg gap-2">
+        <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+        Dashboard
+      </h2>
+      <p class="text-sm text-base-content/60 mt-1">Control which widgets appear on your dashboard.</p>
+
+      <div class="mt-4 space-y-3">
+        <label class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-medium">Show upcoming events</div>
+            <div class="text-xs text-base-content/60">Display today's calendar events on the dashboard.</div>
+          </div>
+          <input
+            type="checkbox"
+            class="toggle toggle-primary"
+            x-model="showUpcoming"
+            @change="save('show_upcoming_events', showUpcoming)"
+          >
+        </label>
+
+        <label
+          class="flex items-center justify-between gap-4"
+          :class="{ 'opacity-40 pointer-events-none': !showUpcoming }"
+        >
+          <div>
+            <div class="font-medium">Show empty state</div>
+            <div class="text-xs text-base-content/60">Display "No upcoming events today." when the list is empty.</div>
+          </div>
+          <input
+            type="checkbox"
+            class="toggle toggle-primary"
+            x-model="showEmpty"
+            @change="save('show_upcoming_empty', showEmpty)"
+            :disabled="!showUpcoming"
+          >
+        </label>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -61,6 +103,20 @@
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
           body: JSON.stringify({ value: id }),
+        });
+      },
+    };
+  }
+
+  function dashboardPrefsForm() {
+    return {
+      showUpcoming: {{ show_upcoming_events|yesno:"true,false" }},
+      showEmpty: {{ show_upcoming_empty|yesno:"true,false" }},
+      save(key, value) {
+        fetch('/api/v1/settings/dashboard/' + key, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ value: value }),
         });
       },
     };

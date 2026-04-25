@@ -1,6 +1,8 @@
 from unittest.mock import patch, MagicMock
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
 User = get_user_model()

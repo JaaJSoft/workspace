@@ -15,10 +15,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.cache import cached, invalidate_tags
+from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
-
-from .services import avatar as group_avatar_service
-from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage, Reaction
+from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, PinnedMessage, \
+    Reaction
 from .serializers import (
     ConversationCreateSerializer,
     ConversationDetailSerializer,
@@ -30,6 +31,7 @@ from .serializers import (
     ReactionToggleSerializer,
     ScheduledMessageSerializer,
 )
+from .services import avatar as group_avatar_service
 from .services.conversations import get_active_membership, get_or_create_dm, get_unread_counts, user_conversation_ids
 from .services.notifications import notify_conversation_members, notify_new_message
 from .services.rendering import extract_mentions, render_message_body
@@ -59,7 +61,7 @@ def _trigger_bot_response(conversation_id, message, sender):
                 bot_member.user_id,
             )
         except Exception:
-            logger.exception('Failed to trigger bot response for conversation=%s', conversation_id)
+            logger.exception('Failed to trigger bot response for conversation=%s', scrub(conversation_id))
 
 
 @extend_schema(tags=['Chat'])
@@ -148,7 +150,6 @@ class ConversationListView(CacheControlMixin, APIView):
             )
 
         # Check bot access permissions
-        from workspace.ai.models import BotProfile
         bot_users = users.filter(bot_profile__isnull=False).select_related('bot_profile')
         for bot_user in bot_users:
             if not bot_user.bot_profile.is_accessible_by(request.user):
@@ -1487,39 +1488,55 @@ class ConversationPinnedMessagesView(APIView):
         return Response(PinnedMessageSerializer(pins, many=True).data)
 
 
+@cached(
+    key=lambda user, attachment_id: f'att:{user.pk}:{attachment_id}',
+    ttl=60,
+    tags=lambda user, attachment_id: [f'att:{attachment_id}'],
+)
+def _get_attachment_meta(user, attachment_id):
+    """Return ``{file, mime, name}`` for an attachment the user can access, else None.
+
+    Both "not found" and "not a member" collapse into ``None`` — callers return 404
+    in both cases so we don't leak which attachments exist to outsiders.
+    """
+    row = (
+        MessageAttachment.objects
+        .filter(uuid=attachment_id)
+        .values('file', 'mime_type', 'original_name', 'message__conversation_id')
+        .first()
+    )
+    if row is None or not get_active_membership(user, row['message__conversation_id']):
+        return None
+    return {
+        'file': row['file'],
+        'mime': row['mime_type'],
+        'name': row['original_name'],
+    }
+
+
 @extend_schema(tags=['Chat'])
 class AttachmentDownloadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Download a chat attachment")
     def get(self, request, attachment_id):
-        try:
-            attachment = (
-                MessageAttachment.objects
-                .select_related('message')
-                .get(uuid=attachment_id)
-            )
-        except MessageAttachment.DoesNotExist:
+        meta = _get_attachment_meta(request.user, attachment_id)
+        if meta is None:
             return Response(
                 {'detail': 'Attachment not found.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-
-        membership = get_active_membership(
-            request.user, attachment.message.conversation_id,
-        )
-        if not membership:
+        try:
+            fh = default_storage.open(meta['file'], 'rb')
+        except (FileNotFoundError, OSError):
+            invalidate_tags(f'att:{attachment_id}')
             return Response(
-                {'detail': 'Not a member of this conversation.'},
-                status=status.HTTP_403_FORBIDDEN,
+                {'detail': 'Attachment not found.'},
+                status=status.HTTP_404_NOT_FOUND,
             )
-
-        response = FileResponse(
-            attachment.file.open('rb'),
-            content_type=attachment.mime_type,
-        )
+        response = FileResponse(fh, content_type=meta['mime'])
         # Sanitize filename for Content-Disposition header
-        safe_name = attachment.original_name.replace('"', '\\"').replace('\n', '').replace('\r', '')
+        safe_name = meta['name'].replace('"', '\\"').replace('\n', '').replace('\r', '')
         response['Content-Disposition'] = f'inline; filename="{safe_name}"'
         response['Cache-Control'] = 'private, max-age=604800, immutable'
         return response

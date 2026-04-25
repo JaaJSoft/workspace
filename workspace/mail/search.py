@@ -4,8 +4,7 @@ from collections import Counter, defaultdict
 from django.db.models import Q
 
 from workspace.core.module_registry import SearchResult, SearchTag
-
-from .models import MailAccount, MailMessage
+from .models import MailMessage
 from .queries import user_account_ids
 
 

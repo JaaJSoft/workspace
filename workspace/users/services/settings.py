@@ -13,19 +13,21 @@ from __future__ import annotations
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from django.core.cache import cache
-
+from workspace.common.cache import cached, invalidate_tags
 from workspace.users.models import UserSetting
 
 UTC = ZoneInfo('UTC')
 
 _CACHE_TTL = 300  # 5 minutes
-_SENTINEL = object()  # distinguishes "not in cache" from any cached value
 _DB_MISS = '__SETTING_NOT_FOUND__'
 
 
-def _cache_key(user_id: int, module: str, key: str) -> str:
+def _key_tag(user_id: int, module: str, key: str) -> str:
     return f'usetting:{user_id}:{module}:{key}'
+
+
+def _module_tag(user_id: int, module: str) -> str:
+    return f'usetting_mod:{user_id}:{module}'
 
 
 def get_user_timezone(user) -> ZoneInfo:
@@ -39,19 +41,23 @@ def get_user_timezone(user) -> ZoneInfo:
         return UTC
 
 
+@cached(
+    key=lambda user, module, key: f'usetting:{user.pk}:{module}:{key}',
+    ttl=_CACHE_TTL,
+    tags=lambda user, module, key: [_key_tag(user.pk, module, key)],
+)
+def _get_setting_raw(user, module: str, key: str) -> Any:
+    """Return the raw stored value, or ``_DB_MISS`` if the setting doesn't exist."""
+    try:
+        return UserSetting.objects.get(user=user, module=module, key=key).value
+    except UserSetting.DoesNotExist:
+        return _DB_MISS
+
+
 def get_setting(user, module: str, key: str, *, default: Any = None) -> Any:
     """Return the value of a single setting, or *default* if it does not exist."""
-    ck = _cache_key(user.pk, module, key)
-    cached = cache.get(ck, _SENTINEL)
-    if cached is not _SENTINEL:
-        return default if cached == _DB_MISS else cached
-    try:
-        value = UserSetting.objects.get(user=user, module=module, key=key).value
-    except UserSetting.DoesNotExist:
-        cache.set(ck, _DB_MISS, _CACHE_TTL)
-        return default
-    cache.set(ck, value, _CACHE_TTL)
-    return value
+    value = _get_setting_raw(user, module, key)
+    return default if value == _DB_MISS else value
 
 
 def set_setting(user, module: str, key: str, value: Any) -> UserSetting:
@@ -60,7 +66,10 @@ def set_setting(user, module: str, key: str, value: Any) -> UserSetting:
         user=user, module=module, key=key,
         defaults={'value': value},
     )
-    cache.set(_cache_key(user.pk, module, key), value, _CACHE_TTL)
+    invalidate_tags(
+        _key_tag(user.pk, module, key),
+        _module_tag(user.pk, module),
+    )
     return obj
 
 
@@ -69,10 +78,18 @@ def delete_setting(user, module: str, key: str) -> bool:
     deleted, _ = UserSetting.objects.filter(
         user=user, module=module, key=key,
     ).delete()
-    cache.delete(_cache_key(user.pk, module, key))
+    invalidate_tags(
+        _key_tag(user.pk, module, key),
+        _module_tag(user.pk, module),
+    )
     return deleted > 0
 
 
+@cached(
+    key=lambda user, module: f'usetting_mod:{user.pk}:{module}',
+    ttl=_CACHE_TTL,
+    tags=lambda user, module: [_module_tag(user.pk, module)],
+)
 def get_module_settings(user, module: str) -> dict[str, Any]:
     """Return all settings for a given module as a ``{key: value}`` dict."""
     return {

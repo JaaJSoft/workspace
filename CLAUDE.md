@@ -186,7 +186,133 @@ if FileService.can_access(user, file_obj):
     ...
 ```
 
+### User Settings — always go through `workspace.users.services.settings`
+
+Per-user preferences live in the `UserSetting(user, module, key, value)` model and are wrapped by service helpers that maintain a **5-minute cache** on reads and **invalidate that cache on every write**. Never touch `UserSetting.objects` directly from views, serializers, tasks, or other services — the cache will go stale and subsequent reads will silently return the previous value until the TTL expires or the process restarts.
+
+```python
+from workspace.users.services.settings import (
+    get_setting, set_setting, delete_setting, get_module_settings,
+)
+
+# Read with default (cached, 5-min TTL):
+show = get_setting(user, 'dashboard', 'show_upcoming_events', default=True)
+
+# Write (updates DB AND invalidates cache):
+set_setting(user, 'dashboard', 'show_upcoming_events', False)
+
+# Delete (DB row removed AND cache invalidated):
+delete_setting(user, 'dashboard', 'show_upcoming_events')
+
+# Read all keys for a module at once (cached 5 min, invalidated on any set/delete in that module):
+prefs = get_module_settings(user, 'dashboard')
+```
+
+**Rules:**
+- Never call `UserSetting.objects.create/update/delete/update_or_create` from application code — use `set_setting`/`delete_setting` instead. Raw ORM bypasses the cache invalidation and causes "F5 reverts my setting" bugs.
+- The REST endpoint `PUT/DELETE /api/v1/settings/<module>/<key>` already delegates to these helpers — new UI that toggles a setting should just call it (fire-and-forget `fetch` is the idiom, see `themePickerForm()` and `dashboardPrefsForm()` in `settings_preferences.html`).
+- In tests that call `set_setting`/`delete_setting`, **always `cache.clear()` in `tearDown`**. Django's `LocMemCache` is process-global and is NOT reset between `TestCase` runs, so leaked cache entries can cause order-dependent failures.
+
+```python
+from django.core.cache import cache
+
+class MyTests(TestCase):
+    def tearDown(self):
+        cache.clear()
+```
+
+### Logging — sanitize user-controlled values with `scrub()`
+
+Any value taken from request data, request headers, URL path/query, filenames, DB rows that originated in user input (a stored push-subscription endpoint, a free-text title, an email/domain, etc.), or third-party API responses **must** pass through `scrub()` before reaching a `logger.X(...)` call. This prevents log injection (CWE-117): without it, `\r\n` in user input forges fake log lines and breaks SIEM parsers.
+
+```python
+from workspace.common.logging import scrub
+
+logger.info("Autodiscover failed for domain %s", scrub(domain))
+logger.warning("Push failed for %s: %s", scrub(sub.endpoint[:60]), e)
+logger.exception("Activity provider '%s' failed", scrub(source))
+```
+
+**Rules:**
+
+- Sanitize at the logger call site even when the value looks "safe" (a validated UUID, an enum slug, an email that passed `EmailField`). Validation runs at the view boundary, but the same value flows through Celery tasks, signals, and services to loggers far from where it was checked. CodeQL traces taint, not validation — the `py/log-injection` alert fires regardless.
+- Never log full request bodies or headers. If you must, scrub them.
+- Internal/system values that never touched user input (settings keys, hard-coded enum members, `__name__`, computed counts) don't need `scrub()`. Apply it to the *tainted* fields, not the whole format string.
+- The helper lives in `workspace/common/logging_safe.py`. The `str(...).replace('\r','').replace('\n','')` chain inside is the exact form CodeQL recognizes as a sanitizer for `py/log-injection` — do not refactor the replaces away or wrap them in another helper.
+
 ## Frontend Conventions
+
+### Alpine `init()` is auto-called — never add `x-init="init()"` on top of it
+
+If your `x-data` component defines an `init()` method (`x-data="myApp()"` where `myApp` returns an object with `init() { ... }`), Alpine **automatically** invokes it when the element mounts. Adding `x-init="init()"` next to `x-data="myApp()"` runs `init()` a **second time**, silently:
+
+```html
+<!-- ❌ WRONG — init() runs twice -->
+<div x-data="chatApp()" x-init="init()"></div>
+
+<!-- ✅ Correct — Alpine auto-calls init() once -->
+<div x-data="chatApp()"></div>
+```
+
+The bug is invisible: the second pass overwrites the first with the same data, no console warning, no broken UI. The visible cost is **double API calls and double event-listener registration** for everything in `init()`. We hit this in 4 modules (chat, mail, notes, dashboard) and the only diagnostic was a network-level audit.
+
+**Rules:**
+- Component objects with an `init()` method must rely on Alpine's auto-call. Do **not** also write `x-init="init()"`.
+- `x-init` is only for **inline expressions** on components that don't define an `init()` method (e.g., `<div x-data="{ open: false }" x-init="$watch('open', ...)">`).
+- When adding event listeners inside `init()`, remember they will be added once per mount — if you ever do see two listeners firing, suspect a duplicate `x-init` or a duplicate `x-data` instantiation of the same component (see `filePreferences()` in `files/ui/index.html`, instantiated twice intentionally — its `init()` should be guarded against re-fetching).
+
+### Embedding view data into JS — use `|json_script`, never `orjson.dumps + |safe`
+
+When a Django view needs to hand off data to client-side JS (initial state, server-rendered preferences, serialized querysets that would otherwise force a redundant API call), **pass the raw Python object in context** and render it with Django's built-in `|json_script` filter:
+
+```python
+# View — pass the raw dict/list (NOT a JSON string)
+return render(request, 'mail/ui/index.html', {
+    'accounts': MailAccountSerializer(accounts, many=True).data,
+    'oauth_providers': get_available_providers(),
+})
+```
+
+```django
+{# Template — |json_script renders <script id="..." type="application/json">...</script> #}
+{{ accounts|json_script:"accounts-data" }}
+{{ oauth_providers|json_script:"oauth-providers-data" }}
+```
+
+```js
+// JS — read from the DOM
+const accounts = JSON.parse(document.getElementById('accounts-data').textContent);
+const providers = JSON.parse(document.getElementById('oauth-providers-data').textContent);
+```
+
+**Never** do this:
+
+```python
+# ❌ Manual dump in the view
+'accounts_json': orjson.dumps(serializer.data).decode(),
+```
+```django
+{# ❌ Inline raw JSON via |safe — XSS surface, no auto-escaping of </script> #}
+<script id="accounts-data" type="application/json">{{ accounts_json|safe }}</script>
+```
+
+**Why `|json_script` is mandatory here:**
+- It escapes `<`, `>`, `&`, `'`, `\u2028`, `\u2029` as JS-safe Unicode escapes — `</script>` injection is impossible even if the data contains user-controlled strings. Manual `|safe` defeats Django's auto-escape entirely; you'd have to remember to do `.replace('</', '<\\/')` everywhere (and inevitably forget once).
+- It produces a `<script type="application/json">` block, which the browser parses as data, not code — no eval, no parser tricks.
+- It's built into Django (since 2.1) — no extra import, no `orjson`/`json` boilerplate in the view.
+
+**Naming convention — drop `_json` from context variable names:** the value passed to the template is now a Python dict/list, not a JSON string. Naming it `accounts_json` is a lie. Always name the context variable for what it *is*:
+
+| ❌ Old name | ✅ New name | Type at the view boundary |
+|---|---|---|
+| `accounts_json` | `accounts` | dict / list |
+| `prefs_json` | `prefs` | dict |
+| `calendars_json` | `calendars` | dict |
+| `folders_json` | `folders` | list |
+
+The script tag's `id` attribute is the right place for the `*-data` suffix (e.g., `id="accounts-data"`), not the Python context key.
+
+**Exception** — when a context variable name collides with another already in context (e.g., a view passes both a queryset of accounts and the serialized version), check whether the queryset version is actually used in the template. It is often **dead context** (the template only reads `accounts` from the JS side via the embedded script tag). If so, delete the dead key; don't keep both.
 
 ### Server-rendered partial swaps — use alpine-ajax, never raw `fetch`
 

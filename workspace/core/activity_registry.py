@@ -5,6 +5,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 
+from workspace.common.logging import scrub
+
 logger = logging.getLogger(__name__)
 
 
@@ -117,7 +119,7 @@ class ActivityRegistry:
                     event.setdefault("source_color", info.color)
                 return events
             except Exception:
-                logger.exception("Activity provider '%s' failed in get_recent_events", source)
+                logger.exception("Activity provider '%s' failed in get_recent_events", scrub(source))
                 return []
 
         fetch_count = limit + offset

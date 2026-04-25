@@ -1,12 +1,12 @@
-import os
 import posixpath
 import secrets
+
+from django.contrib.auth import get_user_model
 from django.db import models, transaction
 from django.db.models import Value
 from django.db.models.functions import Concat, Substr
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
-from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from workspace.common.uuids import uuid_v7_or_v4

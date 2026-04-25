@@ -28,7 +28,7 @@
           x-show="open"
           x-cloak
           @click.outside="close()"
-          class="absolute z-[100] mt-2 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
+          class="absolute z-[100] mt-3 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
         >
           <!-- Quick actions & Search results -->
           {% include 'ui/partials/search/quick_actions.html' %}
@@ -150,7 +150,7 @@
       {% include 'ui/partials/notifications.html' %}
 
       <!-- User menu dropdown -->
-      <div class="dropdown dropdown-end">
+      <div class="dropdown dropdown-end leading-[0]">
         <label tabindex="0" class="btn btn-ghost btn-circle btn-sm cursor-pointer">
           {% include 'ui/partials/user_avatar.html' with user=user size='sm' show_ring=True %}
         </label>

@@ -1,13 +1,10 @@
 {% load static %}
 <!doctype html>
-<html lang="en">
+<html lang="en"{% if user_theme %} data-theme="{{ user_theme }}"{% endif %}>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{% block title %}Workspace{% endblock %}</title>
-
-  <!-- Apply saved theme immediately to prevent white flash -->
-  <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');</script>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
@@ -24,6 +21,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="{% static 'ui/js/lucide.js' %}"></script>
   <script src="{% static 'ui/js/csrf.js' %}"></script>
+  <script src="{% static 'ui/js/uuid.js' %}"></script>
   <style>.lucide { pointer-events: none; }</style>
 
   <!-- Favicon -->
@@ -193,66 +191,35 @@
       }).observe(document.body, { childList: true, subtree: true });
     })();
 
-    // Theme toggle functionality
+    // Theme toggle: server-rendered value is the source of truth,
+    // the toggle just persists the change.
     (function () {
       const themeToggle = document.getElementById('themeToggle');
-      if (themeToggle) {
-        const saved = localStorage.getItem('theme') || 'light';
-        themeToggle.checked = saved === 'dark';
+      if (!themeToggle) return;
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      themeToggle.checked = current === 'dark';
 
-        themeToggle.addEventListener('change', function() {
-          const newTheme = this.checked ? 'dark' : 'light';
-          document.documentElement.setAttribute('data-theme', newTheme);
-          localStorage.setItem('theme', newTheme);
-          // Persist to user settings API
-          fetch('/api/v1/settings/core/theme', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-            body: JSON.stringify({ value: newTheme }),
-          }).catch(() => {});
-        });
-      }
+      themeToggle.addEventListener('change', function() {
+        const newTheme = this.checked ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', newTheme);
+        fetch('/api/v1/settings/core/theme', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ value: newTheme }),
+        }).catch(() => {});
+      });
     })();
 
-    {% if user.is_authenticated %}
-    // Sync theme from server — runs after paint to avoid blocking.
-    // Gated behind auth: /api/v1/settings is IsAuthenticated-only and a 401
-    // here would be caught by the global fetch wrapper below and turned
-    // into a redirect to /login?next=<current>, which is both spurious
-    // (the user may already be on /login or an error page) and noisy.
-    (function () {
-      fetch('/api/v1/settings/core/theme')
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (!data || !data.value) return;
-          const serverTheme = data.value;
-          if (serverTheme !== localStorage.getItem('theme')) {
-            localStorage.setItem('theme', serverTheme);
-            document.documentElement.setAttribute('data-theme', serverTheme);
-            const toggle = document.getElementById('themeToggle');
-            if (toggle) toggle.checked = (serverTheme === 'dark');
-          }
-        })
-        .catch(() => {});
-    })();
-
-    // Auto-detect timezone and store once (only if not already set).
-    // Same auth-gating rationale as the theme sync above.
+    {% if user.is_authenticated and not user_timezone %}
+    // Auto-detect + persist the browser timezone the first time the user signs in.
     (function () {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (!tz) return;
-      const csrfToken = getCSRFToken();
-      fetch('/api/v1/settings/core/timezone')
-        .then(function(r) { return r.ok ? r.json() : null; })
-        .then(function(data) {
-          if (data && data.value) return;  // already set, don't overwrite
-          fetch('/api/v1/settings/core/timezone', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ value: tz }),
-          }).catch(function() {});
-        })
-        .catch(function() {});
+      fetch('/api/v1/settings/core/timezone', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ value: tz }),
+      }).catch(function() {});
     })();
     {% endif %}
 

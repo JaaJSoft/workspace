@@ -1,14 +1,15 @@
 from django.urls import path, include
 from rest_framework.routers import SimpleRouter
+
 from .views import FileViewSet
-from .views_tags import TagViewSet, FileTagView
-from .views_thumbnails import GenerateThumbnailsView
 from .views_share_links import (
     SharedFileMetaView,
     SharedFileVerifyView,
     SharedFileContentView,
     SharedFileDownloadView,
 )
+from .views_tags import TagViewSet, FileTagView
+from .views_thumbnails import GenerateThumbnailsView
 
 router = SimpleRouter(trailing_slash=False)
 router.register(r'files', FileViewSet, basename='file')

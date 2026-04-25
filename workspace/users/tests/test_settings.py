@@ -4,7 +4,6 @@ from django.test import TestCase
 
 from workspace.users.models import UserSetting
 from workspace.users.services.settings import (
-    _cache_key,
     delete_setting,
     get_all_settings,
     get_module_settings,
@@ -170,10 +169,14 @@ class SettingCacheTests(TestCase):
             result = get_setting(self.user, 'core', 'key', default='fallback')
             self.assertIsNone(result)
 
-    def test_set_setting_updates_cache(self):
+    def test_set_setting_invalidates_cache(self):
         set_setting(self.user, 'core', 'theme', 'light')
+        # Warm cache with the old value
+        self.assertEqual(get_setting(self.user, 'core', 'theme'), 'light')
         set_setting(self.user, 'core', 'theme', 'dark')
-        # get_setting should return updated value without extra DB hit
+        # Next read reflects the new value (cache was invalidated)
+        self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dark')
+        # And is now cached — second read is a hit
         with self.assertNumQueries(0):
             self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dark')
 
@@ -184,3 +187,37 @@ class SettingCacheTests(TestCase):
         delete_setting(self.user, 'core', 'theme')
         # Cache should be cleared — next get hits DB and returns default
         self.assertIsNone(get_setting(self.user, 'core', 'theme'))
+
+    def test_get_module_settings_caches_result(self):
+        set_setting(self.user, 'profile', 'bio', 'hi')
+        set_setting(self.user, 'profile', 'role', 'dev')
+        # First call warms the module cache
+        self.assertEqual(
+            get_module_settings(self.user, 'profile'),
+            {'bio': 'hi', 'role': 'dev'},
+        )
+        # Second call served from cache — no DB hit
+        with self.assertNumQueries(0):
+            self.assertEqual(
+                get_module_settings(self.user, 'profile'),
+                {'bio': 'hi', 'role': 'dev'},
+            )
+
+    def test_set_setting_invalidates_module_cache(self):
+        set_setting(self.user, 'profile', 'bio', 'old')
+        # Warm module cache
+        get_module_settings(self.user, 'profile')
+        set_setting(self.user, 'profile', 'bio', 'new')
+        # Next read must reflect the new value, not the cached old one
+        self.assertEqual(
+            get_module_settings(self.user, 'profile'),
+            {'bio': 'new'},
+        )
+
+    def test_delete_setting_invalidates_module_cache(self):
+        set_setting(self.user, 'profile', 'bio', 'hi')
+        # Warm module cache
+        get_module_settings(self.user, 'profile')
+        delete_setting(self.user, 'profile', 'bio')
+        # Deleted key must disappear from the module dict
+        self.assertEqual(get_module_settings(self.user, 'profile'), {})

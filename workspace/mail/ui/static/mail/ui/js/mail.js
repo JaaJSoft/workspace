@@ -803,6 +803,7 @@ function mailApp() {
     },
 
     async _openMessageById(uuid) {
+      if (!isValidUuid(uuid)) return;
       const res = await this._fetch(`/api/v1/mail/messages/${uuid}`);
       if (res.ok) {
         this.messageDetail = await res.json();

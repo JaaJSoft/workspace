@@ -14,11 +14,13 @@
 
 {% block drawer_class %}lg:drawer-open{% endblock %}
 {% block drawer_id %}calendar-drawer{% endblock %}
-{% block drawer_attrs %}x-data="calendarApp({{ calendars_json }})" @calendar-member-selected.window="addMember($event)" @poll-invitee-selected.window="addPollInvitee($event)" @keydown.window="handleKeydown($event)" @eventcard-action.window="handleEventCardAction($event)"{% endblock %}
+{% block drawer_attrs %}x-data="calendarApp()" @calendar-member-selected.window="addMember($event)" @poll-invitee-selected.window="addPollInvitee($event)" @keydown.window="handleKeydown($event)" @eventcard-action.window="handleEventCardAction($event)"{% endblock %}
 
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
 {% block drawer_sidebar %}
+{{ calendars|json_script:"calendars-data" }}
+{{ prefs|json_script:"calendar-prefs-data" }}
 <div class="drawer-side z-40 h-full">
   <label for="calendar-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 

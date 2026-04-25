@@ -7,7 +7,12 @@ from django.db.models import Q
 
 from workspace.calendar.models import Event, EventMember
 from workspace.calendar.queries import visible_events_q
-from workspace.calendar.recurrence import _build_rrule
+from workspace.calendar.recurrence import (
+    _build_rrule,
+    _member_dict,
+    make_virtual_occurrence,
+    next_occurrences_after,
+)
 
 
 class VirtualOccurrence:
@@ -33,11 +38,21 @@ def get_upcoming_for_user(user, now, end_of_today):
     # Exclude events the user explicitly declined
     declined_q = Q(members__user=user, members__status=EventMember.Status.DECLINED)
 
-    # One-off events + materialized exceptions with start today
+    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # One-off events + materialized exceptions still relevant today:
+    # - timed: not yet finished (end >= now, or no end and start >= now)
+    # - all-day: stored as start at 00:00 with end=None — always visible the
+    #   whole day, so include any all-day event whose start falls today.
+    relevance_q = (
+        Q(end__gte=now)
+        | Q(all_day=False, end__isnull=True, start__gte=now)
+        | Q(all_day=True, end__isnull=True, start__gte=start_of_today)
+    )
     one_off = list(
         Event.objects.filter(
             user_q,
-            start__gte=now,
+            relevance_q,
             start__lte=end_of_today,
             is_cancelled=False,
             recurrence_frequency__isnull=True,
@@ -98,9 +113,6 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
     None if there are no more events.
     """
     from workspace.calendar.serializers import EventSerializer
-    from workspace.calendar.recurrence import (
-        next_occurrences_after, make_virtual_occurrence, make_exception_dict,
-    )
 
     user_q = visible_events_q(user)
     declined_q = Q(members__user=user, members__status=EventMember.Status.DECLINED)
@@ -159,8 +171,6 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
             ).values_list('recurrence_parent_id', 'original_start')
         ):
             exception_keys.add((str(parent_id), orig_start.isoformat()))
-
-    from workspace.calendar.recurrence import _member_dict
 
     recurring_data = []
     for master in masters:

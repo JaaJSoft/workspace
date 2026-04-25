@@ -1,7 +1,7 @@
 """Public API views for file share links (no authentication required)."""
 
-from django.core import signing
 from django.contrib.auth.hashers import check_password
+from django.core import signing
 from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -13,7 +13,6 @@ from rest_framework.views import APIView
 
 from workspace.files.models import FileShareLink
 from workspace.files.utils import FileTypeDetector
-
 
 SIGNER = signing.TimestampSigner(salt='file-share-link')
 ACCESS_TOKEN_MAX_AGE = 3600  # 1 hour

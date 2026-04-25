@@ -574,6 +574,7 @@ window.notesApp = function notesApp(config) {
         },
 
         async selectNoteById(uuid) {
+            if (!isValidUuid(uuid)) return;
             const resp = await fetch('/api/v1/files/' + uuid);
             if (resp.ok) {
                 const note = await resp.json();

@@ -397,7 +397,6 @@ class FileResourceTests(TestCase):
     """
 
     def setUp(self):
-        import shutil
         import tempfile
         self._tmpdir = tempfile.mkdtemp()
         self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)

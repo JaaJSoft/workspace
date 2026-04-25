@@ -1,6 +1,6 @@
-import time
 import logging
 import threading
+import time
 
 from django.db.models import Q
 from django.utils import timezone

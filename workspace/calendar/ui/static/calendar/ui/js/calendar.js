@@ -1,4 +1,11 @@
-window.calendarApp = function calendarApp(calendarsData) {
+window.calendarApp = function calendarApp() {
+  // Read server-rendered calendars from <script id="calendars-data" type="application/json">.
+  let calendarsData = { owned: [], subscribed: [] };
+  const calsEl = document.getElementById('calendars-data');
+  if (calsEl) {
+    try { calendarsData = JSON.parse(calsEl.textContent); } catch (e) {}
+  }
+
   return {
     calendar: null,
     currentView: 'dayGridMonth',
@@ -109,8 +116,25 @@ window.calendarApp = function calendarApp(calendarsData) {
         this._showAllCalendars();
       }
 
-      // Load preferences from API
-      this._loadPrefs();
+      // Hydrate preferences from server-rendered JSON (embedded via Django's
+      // |json_script filter). Avoids an extra GET /api/v1/settings/calendar/preferences
+      // which would resolve after FC is already mounted with default firstDay/weekNumbers/view,
+      // forcing a second render — and a second /api/v1/calendar/events fetch.
+      const prefsEl = document.getElementById('calendar-prefs-data');
+      if (prefsEl) {
+        try {
+          const prefsData = JSON.parse(prefsEl.textContent);
+          if (prefsData && typeof prefsData === 'object') {
+            this.prefs = { ...this._prefsDefaults, ...prefsData };
+            // Migrate legacy view names: listWeek (original FC list view) and
+            // listAgenda (intermediate rename) → agenda (current name).
+            if (this.prefs.defaultView === 'listWeek' || this.prefs.defaultView === 'listAgenda') {
+              this.prefs.defaultView = 'agenda';
+              this._savePrefs();
+            }
+          }
+        } catch (e) {}
+      }
 
       // Load external calendars
       this._loadExternalCalendars();
@@ -130,24 +154,6 @@ window.calendarApp = function calendarApp(calendarsData) {
 
     _prefsUrl: '/api/v1/settings/calendar/preferences',
 
-    _loadPrefs() {
-      fetch(this._prefsUrl, { credentials: 'same-origin' })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (data?.value && typeof data.value === 'object') {
-            this.prefs = { ...this._prefsDefaults, ...data.value };
-            // Migrate legacy view names: listWeek (original FC list view) and
-            // listAgenda (intermediate rename) → agenda (current name).
-            if (this.prefs.defaultView === 'listWeek' || this.prefs.defaultView === 'listAgenda') {
-              this.prefs.defaultView = 'agenda';
-              this._savePrefs();
-            }
-            this._applyAllPrefs();
-          }
-        })
-        .catch(() => {});
-    },
-
     _savePrefs() {
       fetch(this._prefsUrl, {
         method: 'PUT',
@@ -163,28 +169,14 @@ window.calendarApp = function calendarApp(calendarsData) {
         : { hour: '2-digit', minute: '2-digit', hour12: false };
     },
 
-    _applyAllPrefs() {
-      if (!this.calendar) return;
-      this.calendar.setOption('firstDay', this.prefs.firstDay);
-      this.calendar.setOption('weekNumbers', this.prefs.weekNumbers);
-      this.calendar.setOption('eventTimeFormat', this._timeFormatFC());
-      this.calendar.setOption('slotLabelFormat', this._timeFormatFC());
-      // Only apply default view if URL didn't specify one
-      const urlView = new URLSearchParams(window.location.search).get('view');
-      if (!urlView && this.currentView !== this.prefs.defaultView) {
-        // Route through changeView so that 'agenda' (custom Alpine view) is
-        // handled without calling FullCalendar.changeView('agenda') which
-        // would crash since FC doesn't know about the custom view.
-        this.changeView(this.prefs.defaultView);
-      }
-    },
-
     updatePref(key, value) {
       this.prefs = { ...this.prefs, [key]: value };
       this._savePrefs();
       if (this.calendar) {
         if (key === 'defaultView') {
-          // Route through changeView for the same reason as _applyAllPrefs.
+          // Route through changeView so that 'agenda' (custom Alpine view) is
+          // handled without calling FullCalendar.changeView('agenda') which
+          // would crash since FC doesn't know about the custom view.
           this.changeView(value);
         } else if (key === 'firstDay') {
           this.calendar.setOption('firstDay', value);
@@ -1022,6 +1014,7 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
 
     async openEventById(eventId) {
+      if (!isValidUuid(eventId)) return;
       this.loadingEvent = true;
       this.showPanel = true;
       try {
@@ -1646,6 +1639,7 @@ window.calendarApp = function calendarApp(calendarsData) {
     },
 
     async loadPoll(uuid) {
+      if (!isValidUuid(uuid)) return;
       this.currentPollLoading = true;
       try {
         const resp = await fetch(`/api/v1/calendar/polls/${uuid}`, { credentials: 'same-origin' });

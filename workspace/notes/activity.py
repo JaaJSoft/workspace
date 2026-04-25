@@ -1,5 +1,3 @@
-from datetime import date
-
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 

@@ -105,6 +105,7 @@
   </div>
 
   <!-- Banner Palette -->
+  {{ banner_palette|json_script:"banner-palette-data" }}
   <div class="card bg-base-100 border border-base-300 shadow-sm mt-4" x-data="bannerPaletteForm()">
     <div class="card-body">
       <h2 class="card-title text-lg gap-2">
@@ -338,7 +339,7 @@
   }
 
   function bannerPaletteForm() {
-    const raw = {{ banner_palette_json|safe }};
+    const raw = JSON.parse(document.getElementById('banner-palette-data').textContent);
     const isPreset = typeof raw === 'string';
     const isCustom = raw && typeof raw === 'object' && raw.from;
     return {

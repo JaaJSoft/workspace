@@ -54,8 +54,8 @@ def _sidebar_context(user):
     ).order_by('name')
 
     return {
-        'folders_json': folders,
-        'group_folders_json': group_folders,
+        'folders': folders,
+        'group_folders': group_folders,
         'tags': tags,
         'available_groups': available_groups,
     }

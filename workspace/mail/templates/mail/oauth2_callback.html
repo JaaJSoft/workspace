@@ -3,9 +3,10 @@
 <head><title>Connecting account...</title></head>
 <body>
 <p id="status">Connecting your account...</p>
+{{ result|json_script:"oauth2-result" }}
 <script>
 (function() {
-  const result = {{ result_json|safe }};
+  const result = JSON.parse(document.getElementById('oauth2-result').textContent);
   let sent = false;
 
   // BroadcastChannel: works even when window.opener is null (cross-origin redirects)

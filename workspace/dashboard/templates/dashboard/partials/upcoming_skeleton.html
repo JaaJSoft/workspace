@@ -1,0 +1,7 @@
+<div
+  id="dashboard-upcoming"
+  class="flex flex-wrap justify-center gap-2 min-h-10"
+  x-data="{}"
+  x-init="$ajax('{% url 'dashboard:upcoming_fragment' %}')"
+  @ajax:error="$el.replaceChildren()"
+></div>

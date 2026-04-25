@@ -93,6 +93,17 @@ window.isActionLoading = function (uuid) {
 window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list', mosaicTileSize: 3, showPinned: true, showGroups: true };
 window._filePrefsCache = { ...window._filePrefsDefaults };
 
+// Fetch once at script load — shared across all filePreferences() instances.
+window._filePrefsReady = fetch('/api/v1/settings/files/preferences', { credentials: 'same-origin' })
+  .then(r => r.ok ? r.json() : null)
+  .then(data => {
+    if (data && data.value && typeof data.value === 'object') {
+      window._filePrefsCache = { ...window._filePrefsDefaults, ...data.value };
+      window.dispatchEvent(new CustomEvent('preferences-changed', { detail: window._filePrefsCache }));
+    }
+  })
+  .catch(() => {});
+
 window.getFilePrefs = function() {
   return window._filePrefsCache;
 };
@@ -104,16 +115,12 @@ window.filePreferences = function filePreferences() {
     prefs: { ...window._filePrefsCache },
     _saveTimer: null,
 
-    init() {
-      fetch(API_URL, { credentials: 'same-origin' })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (data && data.value && typeof data.value === 'object') {
-            this.prefs = { ...window._filePrefsDefaults, ...data.value };
-            this._broadcast();
-          }
-        })
-        .catch(() => {});
+    async init() {
+      await window._filePrefsReady;
+      this.prefs = { ...window._filePrefsCache };
+      window.addEventListener('preferences-changed', (e) => {
+        this.prefs = { ...e.detail };
+      });
     },
 
     update(key, value) {

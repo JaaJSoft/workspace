@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+
 from workspace.common.uuids import uuid_v7_or_v4
 
 

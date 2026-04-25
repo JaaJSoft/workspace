@@ -1,14 +1,17 @@
 from io import BytesIO
 from unittest.mock import patch
 
+from PIL import Image
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from PIL import Image
+from django.core.cache import cache
+from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
 from workspace.users.models import UserSetting
+from workspace.users.services.settings import get_setting, set_setting
 
 User = get_user_model()
 
@@ -448,6 +451,29 @@ class SettingDetailTests(UserTestMixin, APITestCase):
         resp = self.client.get(self._url('core', 'theme'))
         self.assertEqual(resp.status_code, 404)
 
+    def test_put_invalidates_cache_so_get_setting_sees_fresh_value(self):
+        # Prime the cache with the default-miss sentinel.
+        self.assertEqual(get_setting(self.user, 'core', 'theme', default='light'), 'light')
+
+        resp = self.client.put(self._url('core', 'theme'), {'value': 'dark'}, format='json')
+        self.assertEqual(resp.status_code, 200)
+
+        # Without cache invalidation, this returns the stale 'light' default.
+        self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dark')
+
+    def test_delete_invalidates_cache_so_get_setting_sees_removal(self):
+        set_setting(self.user, 'core', 'theme', 'dark')
+        self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dark')
+
+        resp = self.client.delete(self._url('core', 'theme'))
+        self.assertEqual(resp.status_code, 204)
+
+        # Without cache invalidation, this still returns the stale 'dark'.
+        self.assertEqual(get_setting(self.user, 'core', 'theme', default='fallback'), 'fallback')
+
+    def tearDown(self):
+        cache.clear()
+
 
 # ── UserGroupsView ──────────────────────────────────────────────
 
@@ -489,3 +515,36 @@ class UserGroupsTests(UserTestMixin, APITestCase):
         other.groups.add(group)
         resp = self.client.get(self.URL)
         self.assertEqual(resp.data, [])
+
+
+# ── SettingsViewDashboardContext ────────────────────────────────
+
+class SettingsViewDashboardContextTests(TestCase):
+    """Smoke tests that the settings page exposes the dashboard toggles."""
+
+    SETTINGS_URL = '/users/settings'
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='settingsuser', password='pass123',
+        )
+        self.client.login(username='settingsuser', password='pass123')
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_show_upcoming_events_default_true_in_context(self):
+        resp = self.client.get(self.SETTINGS_URL)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['show_upcoming_events'], True)
+
+    def test_show_upcoming_empty_default_true_in_context(self):
+        resp = self.client.get(self.SETTINGS_URL)
+        self.assertEqual(resp.context['show_upcoming_empty'], True)
+
+    def test_stored_false_values_reflected_in_context(self):
+        set_setting(self.user, 'dashboard', 'show_upcoming_events', False)
+        set_setting(self.user, 'dashboard', 'show_upcoming_empty', False)
+        resp = self.client.get(self.SETTINGS_URL)
+        self.assertEqual(resp.context['show_upcoming_events'], False)
+        self.assertEqual(resp.context['show_upcoming_empty'], False)

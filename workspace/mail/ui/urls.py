@@ -1,7 +1,7 @@
 from django.urls import path
 
-from . import views
 from workspace.mail.views_oauth2 import oauth2_callback
+from . import views
 
 app_name = 'mail_ui'
 

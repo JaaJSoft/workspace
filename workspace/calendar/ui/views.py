@@ -1,15 +1,13 @@
-import orjson
-
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import render
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.calendar.models import Calendar, CalendarSubscription, Event, EventMember, Poll, PollInvitee, PollVote
+from workspace.calendar.models import Calendar, Event, EventMember, Poll, PollInvitee, PollVote
 from workspace.calendar.queries import visible_calendars, visible_events_q
 from workspace.calendar.serializers import CalendarSerializer
+from workspace.users.services.settings import get_setting
 
 
 def _ensure_default_calendar(user):
@@ -40,13 +38,19 @@ def index(request):
     ).values_list('slot__poll_id', flat=True).distinct()
     poll_count = invited_poll_ids.exclude(poll_id__in=voted_poll_ids).count()
 
+    # Server-render preferences so calendarApp() boots with correct view/firstDay/etc.
+    # without an extra GET /api/v1/settings/calendar/preferences (which would force a
+    # second FullCalendar render — and a second /api/v1/calendar/events fetch).
+    prefs = get_setting(request.user, 'calendar', 'preferences', default={}) or {}
+
     return render(request, 'calendar/ui/index.html', {
         'owned_calendars': owned,
         'subscribed_calendars': subscribed,
-        'calendars_json': orjson.dumps({
+        'calendars': {
             'owned': CalendarSerializer(owned, many=True).data,
             'subscribed': CalendarSerializer(subscribed, many=True).data,
-        }).decode(),
+        },
+        'prefs': prefs,
         'poll_count': poll_count,
     })
 

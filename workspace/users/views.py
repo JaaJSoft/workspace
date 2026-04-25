@@ -1,7 +1,11 @@
+from datetime import timedelta
+
 from django.conf import settings as django_settings
 from django.contrib.auth import password_validation, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
+from django.db import transaction
+from django.db.models import Exists, OuterRef, Q
 from django.http import FileResponse, HttpResponse
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -9,23 +13,18 @@ from drf_spectacular.utils import (
     extend_schema,
     inline_serializer,
 )
+from knox.models import AuthToken
 from rest_framework import serializers, status
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from django.db import transaction
-from django.db.models import Exists, OuterRef, Q
-
-from datetime import timedelta
-
-from knox.models import AuthToken
-
 from workspace.common.mixins import CacheControlMixin
 from workspace.files.models import File
-from workspace.users.services import avatar as avatar_service, presence as presence_service
 from workspace.users.models import APITokenLabel, UserSetting
+from workspace.users.services import avatar as avatar_service, presence as presence_service
+from workspace.users.services.settings import delete_setting, set_setting
 
 
 @extend_schema(tags=['Users'])
@@ -493,10 +492,7 @@ class SettingDetailView(APIView):
     )
     def put(self, request, module, key):
         value = request.data.get('value')
-        obj, _ = UserSetting.objects.update_or_create(
-            user=request.user, module=module, key=key,
-            defaults={'value': value},
-        )
+        obj = set_setting(request.user, module, key, value)
         return Response({'module': obj.module, 'key': obj.key, 'value': obj.value})
 
     @extend_schema(
@@ -504,10 +500,7 @@ class SettingDetailView(APIView):
         responses={204: None},
     )
     def delete(self, request, module, key):
-        deleted, _ = UserSetting.objects.filter(
-            user=request.user, module=module, key=key,
-        ).delete()
-        if not deleted:
+        if not delete_setting(request.user, module, key):
             return Response(
                 {'detail': 'Setting not found.'},
                 status=status.HTTP_404_NOT_FOUND,

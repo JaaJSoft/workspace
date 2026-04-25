@@ -1,16 +1,16 @@
 from datetime import datetime, time
 
+from django.conf import settings as django_settings
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
 
 from workspace.calendar.upcoming import get_upcoming_for_user
-from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources
 from workspace.core.activity_registry import activity_registry
 from workspace.core.module_registry import registry
-
-from django.conf import settings as django_settings
+from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources
+from workspace.users.services.settings import get_setting
 
 ACTIVITY_LIMIT = 10
 
@@ -62,7 +62,7 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
 
     context = {
         'modules': modules,
-        'upcoming_events': _get_upcoming_events(user),
+        'show_upcoming_events': get_setting(user, 'dashboard', 'show_upcoming_events', default=True),
         'usage_stats': activity_registry.get_stats(user.id),
         'storage_quota': django_settings.STORAGE_QUOTA_BYTES,
     }
@@ -77,6 +77,21 @@ def index(request):
     context = _build_dashboard_context(request.user)
     context['activity_tab'] = 'all'
     return render(request, 'dashboard/index.html', context)
+
+
+@login_required
+def upcoming_fragment(request):
+    """Dashboard upcoming-events widget, loaded async via alpine-ajax."""
+    return render(
+        request,
+        'dashboard/partials/upcoming_events.html',
+        {
+            'upcoming_events': _get_upcoming_events(request.user),
+            'show_upcoming_empty': get_setting(
+                request.user, 'dashboard', 'show_upcoming_empty', default=True,
+            ),
+        },
+    )
 
 
 @login_required

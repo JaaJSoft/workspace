@@ -193,14 +193,17 @@ class PresenceSSEProviderTests(_SnapshotResetMixin, TestCase):
 
 class BotIdsCacheTests(_SnapshotResetMixin, TestCase):
     def test_bot_ids_are_cached(self):
+        # ai/0002_create_default_bot may have seeded a row when AI_API_KEY is
+        # set (e.g. in local dev via .env), so don't assume the table is empty.
         from workspace.ai.models import BotProfile
         bot_user = User.objects.create_user(username='bot1', password='pass')
         BotProfile.objects.create(user=bot_user)
 
         ids = PresenceSSEProvider._get_bot_ids()
-        self.assertEqual(ids, [bot_user.id])
+        self.assertIn(bot_user.id, ids)
 
-        # Delete the profile; cached result must be returned on the next call.
+        # Delete the profile; the cached call must still return the same list
+        # (stale reads for up to the TTL are the property under test).
         BotProfile.objects.filter(user=bot_user).delete()
         ids_after = PresenceSSEProvider._get_bot_ids()
-        self.assertEqual(ids_after, [bot_user.id])
+        self.assertEqual(ids_after, ids)

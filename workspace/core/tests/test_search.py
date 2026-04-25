@@ -152,7 +152,6 @@ class CalendarEventSearchTests(TestCase):
         self.assertIn('Sprint Planning', names)
 
     def test_excludes_cancelled(self):
-        from workspace.calendar.models import Event
         from workspace.calendar.search import search_events
         self.event.is_cancelled = True
         self.event.save()

@@ -6,7 +6,6 @@ including the `?q=` search filter.
 from django.test import TestCase
 
 from workspace.chat.models import Conversation, ConversationMember
-
 from .test_chat import ChatTestMixin
 
 

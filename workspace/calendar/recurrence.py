@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from dateutil.rrule import rrule, DAILY, WEEKLY, MONTHLY, YEARLY
 
 FREQ_MAP = {

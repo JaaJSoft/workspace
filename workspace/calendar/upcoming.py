@@ -99,8 +99,7 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
     """
     from workspace.calendar.serializers import EventSerializer
     from workspace.calendar.recurrence import (
-        next_occurrences_after, make_virtual_occurrence, make_exception_dict,
-    )
+        next_occurrences_after, make_virtual_occurrence, )
 
     user_q = visible_events_q(user)
     declined_q = Q(members__user=user, members__status=EventMember.Status.DECLINED)

@@ -7,10 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from workspace.common.mixins import CacheControlMixin
-
 from workspace.common.cache import invalidate_tags
-
+from workspace.common.mixins import CacheControlMixin
 from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
 from .services.notifications import _user_tag, get_unread_count

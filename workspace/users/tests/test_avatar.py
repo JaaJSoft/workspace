@@ -1,10 +1,10 @@
 from io import BytesIO
 from unittest.mock import patch
 
+from PIL import Image
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
-from PIL import Image
 
 from workspace.users.services import avatar as avatar_service
 from workspace.users.services.settings import get_setting, set_setting

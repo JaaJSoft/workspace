@@ -1,12 +1,11 @@
-from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.files.models import MimeTypeRule
 from workspace.files.services import mime as mime_service
-from workspace.files.utils import FileTypeDetector, FileCategory
 from workspace.files.ui.viewers import (
     ViewerRegistry, TextViewer, ImageViewer, MarkdownViewer, PDFViewer, MediaViewer,
 )
+from workspace.files.utils import FileTypeDetector, FileCategory
 
 
 class MimeTypeRuleModelTest(TestCase):

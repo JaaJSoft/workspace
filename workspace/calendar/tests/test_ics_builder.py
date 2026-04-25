@@ -1,6 +1,6 @@
-import icalendar
 from datetime import datetime, timezone
 
+import icalendar
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 

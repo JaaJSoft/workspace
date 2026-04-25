@@ -4,7 +4,6 @@ import logging
 
 from celery import shared_task
 from django.contrib.auth import get_user_model
-from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 User = get_user_model()

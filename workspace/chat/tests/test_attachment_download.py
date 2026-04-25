@@ -142,7 +142,6 @@ class AttachmentDownloadTests(APITestCase):
     def test_missing_file_invalidates_cache_and_returns_404(self):
         """If the underlying file has disappeared, the cache is flushed and the
         next request re-validates from the DB (which still sees the metadata)."""
-        from django.core.cache import cache
         from django.core.files.storage import default_storage
 
         self.client.force_authenticate(self.owner)

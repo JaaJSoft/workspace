@@ -7,7 +7,6 @@ from workspace.users.services.avatar import (
     get_avatar_path,
     has_avatar,
 )
-
 from .models import AITask, BotProfile, ConversationSummary
 
 

@@ -1,11 +1,11 @@
 from datetime import timedelta
 from io import BytesIO
 
+from PIL import Image
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.utils import timezone
-from PIL import Image
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -1383,7 +1383,6 @@ class ChatActivityProviderTests(ChatTestMixin, TestCase):
     # ── daily counts ───────────────────────────────────────────
 
     def test_daily_counts_for_creator(self):
-        from datetime import date as d
         today = self.group.created_at.date()
         counts = self.provider.get_daily_counts(
             self.creator.id, today, today,
@@ -1391,7 +1390,6 @@ class ChatActivityProviderTests(ChatTestMixin, TestCase):
         self.assertEqual(counts.get(today), 1)
 
     def test_daily_counts_excludes_dm(self):
-        from datetime import date as d
         today = self.dm.created_at.date()
         # creator created both a group and a dm, but only group should count
         counts = self.provider.get_daily_counts(

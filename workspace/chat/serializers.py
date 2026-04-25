@@ -1,8 +1,7 @@
 from rest_framework import serializers
 
 from workspace.ai.models import ScheduledMessage
-
-from .models import Conversation, ConversationMember, LinkPreview, Message, MessageAttachment, MessageLinkPreview, PinnedMessage, Reaction
+from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedMessage, Reaction
 
 
 class MemberUserSerializer(serializers.Serializer):

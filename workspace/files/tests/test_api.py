@@ -1,10 +1,9 @@
-from django.test import TestCase
 from django.contrib.auth import get_user_model
-from django.core.files.base import ContentFile
-from rest_framework.test import APITestCase
-from rest_framework import status
-
 from django.contrib.auth.models import Group
+from django.core.files.base import ContentFile
+from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileFavorite, PinnedFolder
 from workspace.users.services.settings import set_setting
@@ -911,7 +910,6 @@ class DownloadAPITests(APITestCase):
 
     def test_download_file(self):
         """Test downloading a single file returns attachment disposition."""
-        import zipfile
         file_obj = File(
             owner=self.user,
             name='report.txt',

@@ -6,13 +6,13 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
-from workspace.users.services.settings import set_setting
 from workspace.dashboard.views import (
     _build_dashboard_context,
     _get_activity_context,
     _get_upcoming_events,
     ACTIVITY_LIMIT,
 )
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 

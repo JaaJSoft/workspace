@@ -1,13 +1,13 @@
-from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.test import TestCase
 from django.utils import timezone
-from rest_framework.test import APITestCase
 from rest_framework import status
+from rest_framework.test import APITestCase
 
-from workspace.files.models import File, FileShare
 from workspace.files.actions import ActionRegistry
 from workspace.files.actions.base import ActionCategory
+from workspace.files.models import File, FileShare
 from workspace.files.services import FilePermission
 from workspace.users.services.settings import set_setting
 

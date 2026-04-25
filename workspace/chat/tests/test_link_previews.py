@@ -1,10 +1,9 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
-from workspace.chat.services.link_preview import extract_urls, fetch_opengraph
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
@@ -12,6 +11,7 @@ from workspace.chat.models import (
     Message,
     MessageLinkPreview,
 )
+from workspace.chat.services.link_preview import extract_urls, fetch_opengraph
 
 User = get_user_model()
 

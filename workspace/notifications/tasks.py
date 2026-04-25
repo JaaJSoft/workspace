@@ -1,7 +1,6 @@
 import logging
 
 import orjson
-
 from celery import shared_task
 from django.conf import settings
 from pywebpush import webpush, WebPushException

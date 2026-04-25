@@ -1,17 +1,16 @@
 from datetime import datetime, time
 
+from django.conf import settings as django_settings
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
 
 from workspace.calendar.upcoming import get_upcoming_for_user
-from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources
 from workspace.core.activity_registry import activity_registry
 from workspace.core.module_registry import registry
+from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources
 from workspace.users.services.settings import get_setting
-
-from django.conf import settings as django_settings
 
 ACTIVITY_LIMIT = 10
 

@@ -1,11 +1,10 @@
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import render
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.calendar.models import Calendar, CalendarSubscription, Event, EventMember, Poll, PollInvitee, PollVote
+from workspace.calendar.models import Calendar, Event, EventMember, Poll, PollInvitee, PollVote
 from workspace.calendar.queries import visible_calendars, visible_events_q
 from workspace.calendar.serializers import CalendarSerializer
 from workspace.users.services.settings import get_setting

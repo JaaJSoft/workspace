@@ -1,6 +1,6 @@
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from .models import Tag
 from .serializers_tags import TagSerializer
@@ -26,7 +26,7 @@ class TagViewSet(viewsets.ModelViewSet):
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
-from .models import File, FileTag
+from .models import FileTag
 from workspace.files.services import FileService
 
 

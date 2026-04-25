@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
 from workspace.ai.models import AITask, BotProfile
-from workspace.ai.tools import CoreToolProvider, GenerateImageParams, EditImageParams
+from workspace.ai.tools import GenerateImageParams, EditImageParams
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
@@ -508,7 +508,6 @@ class ClassifyMailMessagesTests(TestCase):
         from workspace.ai.tasks import classify_mail_messages
         classify_mail_messages(str(ai_task.uuid))
 
-        from workspace.mail.models import MailMessageLabel
         self.assertEqual(self.msg1.message_labels.count(), 1)
         self.assertEqual(self.msg1.message_labels.first().label.name, 'Urgent')
 
@@ -533,7 +532,6 @@ class ClassifyMailMessagesTests(TestCase):
         from workspace.ai.tasks import classify_mail_messages
         classify_mail_messages(str(ai_task.uuid))
 
-        from workspace.mail.models import MailMessageLabel
         self.assertEqual(self.msg1.message_labels.count(), 2)
 
     @patch('workspace.ai.client.get_ai_client')
@@ -557,7 +555,6 @@ class ClassifyMailMessagesTests(TestCase):
         from workspace.ai.tasks import classify_mail_messages
         classify_mail_messages(str(ai_task.uuid))
 
-        from workspace.mail.models import MailMessageLabel
         self.assertEqual(self.msg1.message_labels.count(), 3)
 
     @patch('workspace.ai.client.get_ai_client')

@@ -1,4 +1,4 @@
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.db.models.functions import TruncDate
 
 from workspace.core.activity_registry import ActivityProvider

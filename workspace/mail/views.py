@@ -13,7 +13,6 @@ from rest_framework.views import APIView
 
 from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
-
 from .models import MailAccount, MailAttachment, MailFolder, MailLabel, MailMessage, MailMessageLabel
 from .queries import user_account_ids
 from .serializers import (

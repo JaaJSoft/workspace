@@ -211,7 +211,7 @@
         <tbody>
           {% for node in nodes %}
           <tr
-            class="hover group {% if node.node_type == 'folder' %}cursor-pointer{% endif %} transition-opacity"
+            class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.is_viewable %}cursor-pointer{% endif %} transition-opacity"
             :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-primary/10' : '')"
             @mouseenter="hoveredUuid = '{{ node.uuid }}'"
             @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
@@ -267,6 +267,8 @@
                 >
                   {{ node.name }}
                 </a>
+              {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
+                <span class="font-medium block truncate group-hover:text-primary group-hover:underline" title="{{ node.name }}">{{ node.name }}</span>
               {% else %}
                 <span class="font-medium block truncate" title="{{ node.name }}">{{ node.name }}</span>
               {% endif %}

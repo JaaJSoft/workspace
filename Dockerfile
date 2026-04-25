@@ -52,6 +52,11 @@ COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 # Copy the code
 COPY --chown=appuser:appuser . .
 
+# /app itself is owned by root (created by WORKDIR), so appuser cannot create
+# subdirectories in it. Hand the working tree over to appuser before switching
+# user, otherwise `collectstatic` fails to mkdir /app/staticfiles.
+RUN chown appuser:appuser /app
+
 # Run as non-root from this point on so collectstatic creates /app/staticfiles
 # with the correct owner. FILE_UPLOAD_DIRECTORY_PERMISSIONS=0o700 means a
 # directory created by root cannot be read by appuser at runtime.

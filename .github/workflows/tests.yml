@@ -119,3 +119,40 @@ jobs:
           PYTHONWARNINGS: default
         run: |
           uv run python manage.py test workspace.${{ matrix.module }}.tests.e2e -v 2
+
+  webdav-mount:
+    runs-on: ubuntu-latest
+    name: WebDAV (davfs2 mount)
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Install davfs2
+        run: |
+          sudo apt-get update
+          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y davfs2
+          # The test runner already wraps mount.davfs in `sudo -n` when
+          # the binary is not SUID; the GitHub-hosted runner ships with
+          # passwordless sudo so no further config is needed.
+          sudo modprobe fuse || true
+
+      - name: Run WebDAV mount tests
+        env:
+          # Turn missing prerequisites into hard failures: a regression
+          # in the CI image (davfs2 missing, sudo broken, …) must be
+          # loud, not silently skipped.
+          WORKSPACE_DAVFS2_TESTS: '1'
+          PYTHONWARNINGS: default
+        run: |
+          uv run python manage.py test workspace.files.tests.test_webdav_mount -v 2

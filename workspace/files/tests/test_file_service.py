@@ -532,8 +532,6 @@ class TestMoveOnStorage(TestCase):
             self.assertTrue(os.path.isdir(self._storage_path('Src', 'Child')))
 
             FileService.move(child, dest)
-            child.parent = dest
-            child.save()
 
             self.assertFalse(os.path.isdir(self._storage_path('Src', 'Child')))
             self.assertTrue(os.path.isdir(self._storage_path('Dest', 'Child')))
@@ -547,8 +545,6 @@ class TestMoveOnStorage(TestCase):
             self.assertTrue(os.path.isdir(self._storage_path('Parent', 'Child')))
 
             FileService.move(child, None)
-            child.parent = None
-            child.save()
 
             self.assertFalse(os.path.isdir(self._storage_path('Parent', 'Child')))
             self.assertTrue(os.path.isdir(self._storage_path('Child')))
@@ -567,8 +563,6 @@ class TestMoveOnStorage(TestCase):
             self.assertTrue(old_content_name.startswith('files/users/moveuser/Src/'))
 
             FileService.move(src, dest)
-            src.parent = dest
-            src.save()
 
             f.refresh_from_db()
             new_content_name = f.content.name.replace('\\', '/')
@@ -591,8 +585,6 @@ class TestMoveOnStorage(TestCase):
             self.assertTrue(os.path.isfile(old_full_path))
 
             FileService.move(f, dest)
-            f.parent = dest
-            f.save()
 
             self.assertFalse(os.path.isfile(old_full_path))
             new_full_path = os.path.join(self.media_root, f.content.name)
@@ -608,8 +600,6 @@ class TestMoveOnStorage(TestCase):
             )
 
             FileService.move(f, None)
-            f.parent = None
-            f.save()
 
             new_path = f.content.name.replace('\\', '/')
             self.assertNotIn('Folder', new_path)

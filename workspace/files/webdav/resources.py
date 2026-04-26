@@ -110,6 +110,12 @@ class RootCollection(DAVCollection):
     def get_last_modified(self):
         return self._user.date_joined.timestamp()
 
+    def get_display_name(self):
+        # WsgiDAV defaults to the URL basename, which is empty for the
+        # root collection — Windows Mini-Redirector then shows a blank
+        # entry in Explorer.  A static label avoids that.
+        return "workspace"
+
     def get_member_names(self):
         self._prefetch_members()
         return [f.name for f in self._members_cache]
@@ -411,6 +417,10 @@ class FileResource(DAVNonCollection):
         return True
 
     def get_etag(self):
+        # WsgiDAV's contract (util.checked_etag): return the bare value
+        # without quotes — wsgidav adds them when serializing the HTTP
+        # ``ETag:`` header.  Returning a quoted string here triggers a
+        # 500.
         return f"{self._file.uuid}-{self._file.updated_at.timestamp()}"
 
 

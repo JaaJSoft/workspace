@@ -15,7 +15,6 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
-from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.notes.ui.views import _ensure_default_folders
 

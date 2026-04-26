@@ -412,7 +412,7 @@ class FolderResourceMoveStorageTests(TestCase):
     def test_move_recursive_migrates_descendant_content(self):
         """Moving a folder via WebDAV must update descendant content paths."""
         src = FileService.create_folder(self.user, "Src")
-        dest = FileService.create_folder(self.user, "Dest")
+        FileService.create_folder(self.user, "Dest")
         note = FileService.create_file(
             self.user, "note.txt", parent=src,
             content=ContentFile(b"hello", name="note.txt"),
@@ -601,7 +601,7 @@ class FileResourceTests(TestCase):
         storage path while the DB row pointed at the new parent — subsequent
         reads served stale storage state.
         """
-        folder = FileService.create_folder(self.user, "Target")
+        FileService.create_folder(self.user, "Target")
         old_full_path = os.path.join(self._tmpdir, self.file.content.name)
         self.assertTrue(os.path.isfile(old_full_path))
 

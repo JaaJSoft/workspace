@@ -991,6 +991,35 @@ class WebDAVIntegrationTests(TestCase):
         self.assertNotIn("<D:displayname></D:displayname>", body_str)
         self.assertNotIn("<D:displayname/>", body_str)
 
+    def test_lock_response_content_type_is_xml(self):
+        """LOCK response Content-Type must be a valid media type.
+
+        WsgiDAV 4.3.3 has a typo (``application; charset=utf-8`` —
+        missing ``/xml``) that davfs2 treats as a fatal protocol
+        error, abandoning the locked resource and returning EIO on
+        the subsequent ``open(O_CREAT)``.  Our app factory wraps
+        wsgidav with a middleware that rewrites the header; this
+        test pins the contract from the wire.
+        """
+        body = (
+            b'<?xml version="1.0" encoding="utf-8"?>'
+            b'<lockinfo xmlns="DAV:">'
+            b'<lockscope><exclusive/></lockscope>'
+            b'<locktype><write/></locktype>'
+            b'<owner><href>test</href></owner>'
+            b'</lockinfo>'
+        )
+        code, headers, _ = self._request(
+            "LOCK", "/locked.txt", body=body,
+            headers={"Content-Type": "application/xml", "Timeout": "Second-180"},
+        )
+        self.assertIn(code, (200, 201))
+        ct = headers.get("Content-Type") or headers.get("content-type")
+        self.assertIsNotNone(ct, f"no Content-Type in {headers!r}")
+        # Must have a valid type/subtype
+        self.assertIn("/", ct.split(";")[0],
+                      f"Content-Type missing subtype: {ct!r}")
+
     def test_etag_header_is_quoted(self):
         """The HTTP ``ETag:`` response header must be a quoted-string.
 

@@ -254,7 +254,11 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         url = self._dav_url()
         # Tuned mount options:
         #   delay_upload=0   — push to server immediately on close()
-        #   cache_size=1     — minimum (MiB), less stale data to chase
+        #   cache_size=50    — default-ish (MiB).  ``cache_size=1`` looks
+        #                      attractive for "less stale data" but it
+        #                      breaks ``open(O_CREAT)`` outright (EIO):
+        #                      davfs2 needs room for the in-flight write
+        #                      cache file before the upload completes.
         #   gui_optimize=0   — disable directory pre-fetch
         #   use_locks=0      — skip LOCK/UNLOCK round-trips (test isolation)
         #   uid/gid          — remap ownership so the unprivileged test user
@@ -266,7 +270,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
             "dir_mode=755",
             "file_mode=644",
             "delay_upload=0",
-            "cache_size=1",
+            "cache_size=50",
             "gui_optimize=0",
             "use_locks=0",
         ])
@@ -360,34 +364,46 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
     # --- mount sanity ----------------------------------------------------- #
 
-    def test_mount_lists_empty(self):
-        """Fresh user → ls on the mountpoint returns nothing."""
-        entries = list(self.mp.iterdir())
-        self.assertEqual(entries, [])
+    def test_mount_is_a_directory(self):
+        """The mountpoint resolves as a directory and a non-existent
+        child reports correctly (smoke test for the FUSE round-trip).
+
+        We deliberately do **not** use ``iterdir()`` / ``scandir()``:
+        ``getdents64`` returns EINVAL on davfs2 mounts under recent
+        Linux kernels (independent of our server).  Stat-based checks
+        (``.exists()`` → ``getattr`` → PROPFIND Depth 0) work fine.
+        """
+        self.assertTrue(self.mp.is_dir())
+        self.assertFalse((self.mp / "definitely-not-here.bin").exists())
 
     def test_mount_sees_preexisting_file(self):
-        """File created server-side appears under the mountpoint."""
+        """File created server-side is visible via ``stat`` on the mount."""
         FileService.create_file(self.user, "preexisting.txt", mime_type="text/plain")
-        # davfs2 caches directory listings; force a refresh by re-stat'ing
-        # the mountpoint after a brief beat.
-        self._wait_until(
-            lambda: "preexisting.txt" in (p.name for p in self.mp.iterdir()),
-            timeout=10,
+        # Stat-based check — works even though readdir doesn't.
+        self.assertTrue(
+            self._wait_until(
+                lambda: (self.mp / "preexisting.txt").exists(),
+                timeout=10,
+            ),
+            "server-side file never became visible via stat()",
         )
-        names = sorted(p.name for p in self.mp.iterdir())
-        self.assertIn("preexisting.txt", names)
 
     # --- create / write --------------------------------------------------- #
 
     def test_touch_creates_empty_file(self):
-        """``touch foo`` → server stores an empty File row."""
+        """``touch foo`` → server stores an empty File row.
+
+        davfs2 does LOCK + PUT (empty body) + UNLOCK.  The LOCK-null
+        row appears with ``size=None`` first; only after the empty PUT
+        completes does ``size`` flip to ``0`` — so the wait targets
+        ``size=0`` explicitly, not just the row's existence.
+        """
         target = self.mp / "empty.txt"
         target.touch()
         self._fsync_close(target)
         f = self._wait_for_file(
-            owner=self.user, name="empty.txt", deleted_at__isnull=True,
+            owner=self.user, name="empty.txt", size=0, deleted_at__isnull=True,
         )
-        self.assertEqual(f.size, 0)
         self.assertEqual(f.node_type, File.NodeType.FILE)
 
     def test_write_then_read_roundtrip(self):
@@ -395,9 +411,10 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         target = self.mp / "hello.txt"
         target.write_bytes(b"hello davfs\n")
         f = self._wait_for_file(
-            owner=self.user, name="hello.txt", deleted_at__isnull=True,
+            owner=self.user, name="hello.txt",
+            size=len(b"hello davfs\n"),
+            deleted_at__isnull=True,
         )
-        self.assertEqual(f.size, len(b"hello davfs\n"))
         # Read back through the mount — exercises GET on the same connection
         # davfs2 just used for PUT, after its local cache settles.
         self.assertEqual(target.read_bytes(), b"hello davfs\n")
@@ -487,21 +504,24 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
             owner=self.user, name="inside.txt", parent=parent, size=32,
         )
 
-    def test_listing_reflects_server_state(self):
-        """``ls`` after server-side mutations sees the new entries.
+    def test_stat_reflects_server_state(self):
+        """Server-side mutations are visible via stat on the mountpoint.
 
-        davfs2 caches directory listings; with ``gui_optimize=0`` and a
-        small cache they expire quickly enough for tests.
+        Verifies both a folder and a file land — relies on ``.exists()``
+        (PROPFIND Depth 0) rather than ``iterdir()`` (broken by the
+        davfs2/getdents64 kernel-side limitation).
         """
         FileService.create_folder(self.user, "DirA")
         FileService.create_file(self.user, "fileA.txt", mime_type="text/plain")
-        self._wait_until(
-            lambda: {p.name for p in self.mp.iterdir()} >= {"DirA", "fileA.txt"},
-            timeout=10,
-        )
-        names = {p.name for p in self.mp.iterdir()}
-        self.assertIn("DirA", names)
-        self.assertIn("fileA.txt", names)
+        for name, kind in (("DirA", "is_dir"), ("fileA.txt", "is_file")):
+            ok = self._wait_until(
+                lambda n=name: (self.mp / n).exists(), timeout=10,
+            )
+            self.assertTrue(ok, f"server-side {name!r} not visible via stat")
+            self.assertTrue(
+                getattr(self.mp / name, kind)(),
+                f"{name!r} has wrong type",
+            )
 
     # --- delete ----------------------------------------------------------- #
 
@@ -538,7 +558,9 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         """``mv a b`` → MOVE same-folder → name changes, content preserved."""
         src = self.mp / "src.txt"
         src.write_bytes(b"move me")
-        self._wait_for_file(owner=self.user, name="src.txt")
+        # Make sure the PUT is fully landed before MOVE — otherwise we
+        # race the rename against a still-empty row.
+        self._wait_for_file(owner=self.user, name="src.txt", size=7)
 
         src.rename(self.mp / "dst.txt")
         self._wait_for_file(
@@ -554,7 +576,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         FileService.create_folder(self.user, "Inbox")
         src = self.mp / "letter.txt"
         src.write_bytes(b"hi")
-        self._wait_for_file(owner=self.user, name="letter.txt")
+        self._wait_for_file(owner=self.user, name="letter.txt", size=2)
         self._wait_until(lambda: (self.mp / "Inbox").exists(), timeout=10)
 
         src.rename(self.mp / "Inbox" / "letter.txt")
@@ -564,18 +586,22 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         )
         self._wait_for_file(
             owner=self.user, name="letter.txt", parent=inbox,
-            deleted_at__isnull=True,
+            size=2, deleted_at__isnull=True,
         )
 
     def test_cp_duplicates_file(self):
-        """``cp a b`` → COPY → both rows live, content matches."""
+        """``cp a b`` → both rows live with matching content.
+
+        GNU ``cp`` on a davfs2 mount does open(src)+read+open(dst,O_CREAT)+
+        write — i.e. GET on the server then a fresh LOCK+PUT for the
+        destination, not a WebDAV ``COPY`` method.
+        """
         src = self.mp / "orig.txt"
         src.write_bytes(b"copy me")
-        self._wait_for_file(owner=self.user, name="orig.txt")
+        # Wait for the source PUT to land *with content* — without the
+        # size filter we'd race ``cp`` against an empty source.
+        self._wait_for_file(owner=self.user, name="orig.txt", size=7)
 
-        # cp shells out by default; subprocess keeps cp's exact behavior
-        # (some clients implement copy as GET + PUT, others as COPY —
-        # GNU cp on a davfs2 mount goes through the COPY method).
         r = subprocess.run(
             ["cp", str(src), str(self.mp / "dup.txt")],
             capture_output=True, text=True, timeout=30,
@@ -583,12 +609,12 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
 
         dup = self._wait_for_file(
-            owner=self.user, name="dup.txt", deleted_at__isnull=True,
+            owner=self.user, name="dup.txt", size=7, deleted_at__isnull=True,
         )
-        # Original is still there:
         self.assertTrue(
             File.objects.filter(
-                owner=self.user, name="orig.txt", deleted_at__isnull=True,
+                owner=self.user, name="orig.txt", size=7,
+                deleted_at__isnull=True,
             ).exists()
         )
         dup.content.open("rb")

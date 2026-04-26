@@ -346,6 +346,67 @@ class FileAPITests(APITestCase):
         file.refresh_from_db()
         self.assertEqual(file.path, 'Folder2/file.txt')
 
+    def test_patch_same_parent_is_noop(self):
+        """PATCH with the file's existing parent must succeed without error.
+
+        The serializer no longer short-circuits on parent equality before
+        calling FileService.move() — move() handles the noop internally.
+        Regression guard for that contract.
+        """
+        folder = File.objects.create(
+            owner=self.user, name='Folder', node_type=File.NodeType.FOLDER,
+        )
+        file = File.objects.create(
+            owner=self.user, name='file.txt',
+            node_type=File.NodeType.FILE, parent=folder,
+        )
+        response = self.client.patch(f'/api/v1/files/{file.uuid}', {
+            'parent': str(folder.uuid),
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        file.refresh_from_db()
+        self.assertEqual(file.parent_id, folder.uuid)
+
+    def test_patch_parent_and_content_together(self):
+        """A single PATCH with both `parent` and `content` must apply both.
+
+        Order matters in the serializer: move runs first (so the file's
+        storage path resolves under the new parent), then content is
+        written. Regression guard: a previous arrangement could leave the
+        new bytes at the old storage path or skip the move entirely.
+        """
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        src = File.objects.create(
+            owner=self.user, name='Src', node_type=File.NodeType.FOLDER,
+        )
+        dest = File.objects.create(
+            owner=self.user, name='Dest', node_type=File.NodeType.FOLDER,
+        )
+        file = File.objects.create(
+            owner=self.user, name='note.txt',
+            node_type=File.NodeType.FILE, parent=src,
+        )
+        file.content = ContentFile(b'old', name='note.txt')
+        file.save()
+
+        new_content = SimpleUploadedFile(
+            'note.txt', b'new bytes here', content_type='text/plain',
+        )
+        response = self.client.patch(
+            f'/api/v1/files/{file.uuid}',
+            {'parent': str(dest.uuid), 'content': new_content},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        file.refresh_from_db()
+        self.assertEqual(file.parent_id, dest.uuid)
+        self.assertEqual(file.size, len(b'new bytes here'))
+        # Read back to confirm the bytes actually live at the storage path
+        # the row points at — not at the old src/ location.
+        with file.content.storage.open(file.content.name, 'rb') as fh:
+            self.assertEqual(fh.read(), b'new bytes here')
+
     def test_move_file_to_root(self):
         """Test moving a file to root (parent=null)."""
         folder = File.objects.create(

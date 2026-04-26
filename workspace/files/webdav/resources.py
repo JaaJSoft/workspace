@@ -100,6 +100,16 @@ class RootCollection(DAVCollection):
     def get_display_info(self):
         return {"type": "Directory"}
 
+    def get_creation_date(self):
+        # davfs2 marks the directory cache invalid when the parent
+        # collection lacks ``creationdate`` / ``getlastmodified`` —
+        # readdir then returns EINVAL and open(O_CREAT) returns EIO.
+        # Use the user's join date: stable, never zero, no extra query.
+        return self._user.date_joined.timestamp()
+
+    def get_last_modified(self):
+        return self._user.date_joined.timestamp()
+
     def get_member_names(self):
         self._prefetch_members()
         return [f.name for f in self._members_cache]

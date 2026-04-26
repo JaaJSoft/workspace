@@ -963,6 +963,21 @@ class WebDAVIntegrationTests(TestCase):
         self.assertEqual(code, 207)
         self.assertNotIn(b"gone.txt", body)
 
+    def test_propfind_root_has_timestamps(self):
+        """The root response must expose ``getlastmodified`` and ``creationdate``.
+
+        Without these, ``davfs2`` rejects the directory cache (readdir
+        → EINVAL, open(O_CREAT) on any child → EIO).  Other WebDAV
+        clients tolerate the omission, but the ``davfs2`` Linux mount
+        client does not.
+        """
+        # Depth: 0 — only the root entry is returned, so any match
+        # belongs to the root collection.
+        code, _, body = self._request("PROPFIND", "/", headers={"Depth": "0"})
+        self.assertEqual(code, 207)
+        self.assertIn(b"getlastmodified", body)
+        self.assertIn(b"creationdate", body)
+
     # ── MKCOL ──
 
     def test_mkcol_creates_folder(self):

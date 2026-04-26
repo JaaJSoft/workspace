@@ -413,6 +413,76 @@ class FileAPITests(APITestCase):
         # Should fail validation - parent folder not found
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_update_content_resets_has_thumbnail(self):
+        """PATCH content must invalidate any cached thumbnail flag.
+
+        Regression: before the FileSerializer was routed through
+        FileService.update_content, the API path left has_thumbnail untouched,
+        so an image whose bytes were replaced kept serving the stale thumbnail.
+        """
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        file = File.objects.create(
+            owner=self.user, name='photo.png', node_type=File.NodeType.FILE,
+            has_thumbnail=True,
+        )
+        file.content = ContentFile(b'old', name='photo.png')
+        file.save()
+
+        new_content = SimpleUploadedFile('photo.png', b'new bytes', content_type='image/png')
+        resp = self.client.patch(
+            f'/api/v1/files/{file.uuid}',
+            {'content': new_content},
+            format='multipart',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        file.refresh_from_db()
+        self.assertFalse(file.has_thumbnail)
+
+    def test_update_content_bumps_updated_at(self):
+        """PATCH content must advance updated_at."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        file = File.objects.create(
+            owner=self.user, name='doc.txt', node_type=File.NodeType.FILE,
+        )
+        file.content = ContentFile(b'old', name='doc.txt')
+        file.save()
+        original_updated_at = file.updated_at
+
+        new_content = SimpleUploadedFile('doc.txt', b'new', content_type='text/plain')
+        resp = self.client.patch(
+            f'/api/v1/files/{file.uuid}',
+            {'content': new_content},
+            format='multipart',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        file.refresh_from_db()
+        self.assertGreater(file.updated_at, original_updated_at)
+
+    def test_update_content_persists_new_size(self):
+        """PATCH content must persist the new byte size on the row."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        file = File.objects.create(
+            owner=self.user, name='doc.txt', node_type=File.NodeType.FILE,
+            size=3,
+        )
+        file.content = ContentFile(b'old', name='doc.txt')
+        file.save()
+
+        new_content = SimpleUploadedFile(
+            'doc.txt', b'much longer content', content_type='text/plain',
+        )
+        resp = self.client.patch(
+            f'/api/v1/files/{file.uuid}',
+            {'content': new_content},
+            format='multipart',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        file.refresh_from_db()
+        self.assertEqual(file.size, len(b'much longer content'))
+
 
 class CopyAPITests(APITestCase):
     """Tests for the copy endpoint."""

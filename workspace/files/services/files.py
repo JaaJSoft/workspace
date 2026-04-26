@@ -290,21 +290,40 @@ class FileService:
         return file_obj
 
     @staticmethod
-    def update_content(file_obj, content, *, name=None):
+    def update_content(file_obj, content, *, name=None, mime_type=None):
         """Replace a file's content, updating size and MIME type.
 
         Args:
             content: An uploaded file object.
             name: Optional new name (used for MIME inference).
+            mime_type: Optional explicit MIME type that overrides inference.
 
         Returns:
             The updated File instance.
         """
         effective_name = name or file_obj.name
         file_obj.size = content.size
-        file_obj.mime_type = FileService.infer_mime_type(effective_name, uploaded=content)
+        file_obj.mime_type = mime_type or FileService.infer_mime_type(
+            effective_name, uploaded=content,
+        )
         file_obj.has_thumbnail = False
         file_obj.content = content
+        file_obj.save()
+        return file_obj
+
+    @staticmethod
+    def replace_content_storage(file_obj, *, storage_path, size):
+        """Point *file_obj* at content already written to *storage_path*.
+
+        Used by streaming uploads (WebDAV PUT) where bytes land on storage
+        independently of the DB row. Bumps size, MIME type, has_thumbnail and
+        saves. The MIME type is inferred from the filename only — no upload
+        object is available at this stage.
+        """
+        file_obj.size = size
+        file_obj.mime_type = FileService.infer_mime_type(file_obj.name)
+        file_obj.has_thumbnail = False
+        file_obj.content.name = storage_path
         file_obj.save()
         return file_obj
 

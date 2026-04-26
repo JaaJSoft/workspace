@@ -361,11 +361,11 @@ class FileResource(DAVNonCollection):
                     self._user, self._file.name,
                     parent=self._file.parent,
                 )
-            self._file.size = buf.size
-            self._file.mime_type = FileService.infer_mime_type(self._file.name)
-            self._file.has_thumbnail = False
-            self._file.content.name = self._storage_path
-            self._file.save()
+            FileService.replace_content_storage(
+                self._file,
+                storage_path=self._storage_path,
+                size=buf.size,
+            )
 
         logger.info(
             "PUT completed for %s by %s (%d bytes, %.2fs)",

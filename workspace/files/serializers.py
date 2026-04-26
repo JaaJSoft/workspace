@@ -255,27 +255,17 @@ class FileSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        # Handle content update
-        if 'content' in validated_data:
-            uploaded = validated_data.get('content')
-            if instance.node_type == File.NodeType.FILE and uploaded is not None:
-                validated_data['size'] = uploaded.size
-                if not validated_data.get('mime_type'):
-                    validated_data['mime_type'] = FileService.infer_mime_type(
-                        validated_data.get('name', instance.name),
-                        uploaded=uploaded,
-                    )
-            else:
-                validated_data['size'] = None
+        # Pop content + caller-supplied mime_type so they go through FileService
+        # rather than the default ModelSerializer assignment loop.
+        content_provided = 'content' in validated_data
+        uploaded = validated_data.pop('content', None)
+        explicit_mime_type = validated_data.pop('mime_type', None)
 
         # Handle rename via FileService (storage moves)
         if 'name' in validated_data:
             new_name = validated_data['name']
             if instance.name != new_name:
                 FileService.rename(instance, new_name)
-                # rename() already sets instance.name and saves,
-                # but super().update() will set it again from validated_data
-                # which is fine since it's the same value now.
 
         # Handle move via FileService (storage moves)
         if 'parent' in validated_data:
@@ -285,7 +275,24 @@ class FileSerializer(serializers.ModelSerializer):
             if old_parent_id != new_parent_id:
                 FileService.move(instance, new_parent, acting_user=self.context['request'].user)
 
-        return super().update(instance, validated_data)
+        instance = super().update(instance, validated_data)
+
+        if content_provided:
+            if instance.node_type == File.NodeType.FILE and uploaded is not None:
+                FileService.update_content(
+                    instance, uploaded,
+                    name=instance.name,
+                    mime_type=explicit_mime_type,
+                )
+            else:
+                instance.content = uploaded
+                instance.size = None
+                instance.save(update_fields=['content', 'size'])
+        elif explicit_mime_type is not None:
+            instance.mime_type = explicit_mime_type
+            instance.save(update_fields=['mime_type'])
+
+        return instance
 
 
 class FileCommentAuthorSerializer(serializers.Serializer):

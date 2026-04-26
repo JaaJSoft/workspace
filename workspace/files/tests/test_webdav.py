@@ -456,6 +456,31 @@ class FileResourceTests(TestCase):
         with storage.open(self.file.content.name, "rb") as f:
             self.assertEqual(f.read(), b"new content")
 
+    def test_end_write_resets_has_thumbnail(self):
+        """A streamed PUT must invalidate any cached thumbnail flag."""
+        self.file.has_thumbnail = True
+        self.file.save(update_fields=["has_thumbnail"])
+
+        buf = self.res.begin_write(content_type="text/plain")
+        buf.write(b"new content")
+        buf.close()
+        self.res.end_write(with_errors=False)
+
+        self.file.refresh_from_db()
+        self.assertFalse(self.file.has_thumbnail)
+
+    def test_end_write_bumps_updated_at(self):
+        """A streamed PUT must advance updated_at."""
+        original_updated_at = self.file.updated_at
+
+        buf = self.res.begin_write(content_type="text/plain")
+        buf.write(b"new content")
+        buf.close()
+        self.res.end_write(with_errors=False)
+
+        self.file.refresh_from_db()
+        self.assertGreater(self.file.updated_at, original_updated_at)
+
     def test_end_write_with_errors_on_new_file(self):
         new = FileService.create_file(self.user, "fail.txt", mime_type="text/plain")
         res = FileResource("/fail.txt", self.environ, new)

@@ -263,6 +263,106 @@ class TestUpdateContent(TestCase):
         f.refresh_from_db()
         self.assertIn('json', f.mime_type)
 
+    def test_resets_has_thumbnail(self):
+        """A new content payload must invalidate any cached thumbnail."""
+        f = FileService.create_file(
+            self.user, 'photo.png', content=ContentFile(b'old', name='photo.png'),
+        )
+        f.has_thumbnail = True
+        f.save(update_fields=['has_thumbnail'])
+
+        FileService.update_content(f, ContentFile(b'new bytes', name='photo.png'))
+        f.refresh_from_db()
+        self.assertFalse(f.has_thumbnail)
+
+    def test_bumps_updated_at(self):
+        """`updated_at` must advance after a content update."""
+        f = FileService.create_file(
+            self.user, 'doc.txt', content=ContentFile(b'a', name='doc.txt'),
+        )
+        original_updated_at = f.updated_at
+
+        FileService.update_content(f, ContentFile(b'bb', name='doc.txt'))
+        f.refresh_from_db()
+        self.assertGreater(f.updated_at, original_updated_at)
+
+    def test_replaces_bytes_on_disk(self):
+        """Reading the file back must return the new bytes, not the old."""
+        f = FileService.create_file(
+            self.user, 'doc.txt', content=ContentFile(b'old', name='doc.txt'),
+        )
+        FileService.update_content(f, ContentFile(b'fresh content', name='doc.txt'))
+        f.refresh_from_db()
+        with f.content.storage.open(f.content.name, 'rb') as fh:
+            self.assertEqual(fh.read(), b'fresh content')
+
+    def test_mime_type_override_takes_precedence(self):
+        """Passing `mime_type=` skips inference."""
+        f = FileService.create_file(
+            self.user, 'data.bin', content=ContentFile(b'x', name='data.bin'),
+        )
+        FileService.update_content(
+            f, ContentFile(b'y', name='data.bin'), mime_type='application/x-custom',
+        )
+        f.refresh_from_db()
+        self.assertEqual(f.mime_type, 'application/x-custom')
+
+
+@override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.InMemoryStorage')
+class TestReplaceContentStorage(TestCase):
+    """Tests for FileService.replace_content_storage()."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='svcuser_rcs', email='svc_rcs@test.com', password='pass',
+        )
+
+    def test_updates_size_and_mime_type(self):
+        f = FileService.create_file(
+            self.user, 'note.md', content=ContentFile(b'old', name='note.md'),
+        )
+        FileService.replace_content_storage(
+            f, storage_path='custom/path/note.md', size=4096,
+        )
+        f.refresh_from_db()
+        self.assertEqual(f.size, 4096)
+        self.assertIn('markdown', f.mime_type)
+
+    def test_resets_has_thumbnail(self):
+        f = FileService.create_file(
+            self.user, 'photo.png', content=ContentFile(b'old', name='photo.png'),
+        )
+        f.has_thumbnail = True
+        f.save(update_fields=['has_thumbnail'])
+
+        FileService.replace_content_storage(
+            f, storage_path='custom/path/photo.png', size=10,
+        )
+        f.refresh_from_db()
+        self.assertFalse(f.has_thumbnail)
+
+    def test_bumps_updated_at(self):
+        f = FileService.create_file(
+            self.user, 'doc.txt', content=ContentFile(b'a', name='doc.txt'),
+        )
+        original_updated_at = f.updated_at
+
+        FileService.replace_content_storage(
+            f, storage_path='custom/path/doc.txt', size=2,
+        )
+        f.refresh_from_db()
+        self.assertGreater(f.updated_at, original_updated_at)
+
+    def test_points_content_name_at_storage_path(self):
+        f = FileService.create_file(
+            self.user, 'doc.txt', content=ContentFile(b'a', name='doc.txt'),
+        )
+        FileService.replace_content_storage(
+            f, storage_path='dav/streamed/doc.txt', size=11,
+        )
+        f.refresh_from_db()
+        self.assertEqual(f.content.name, 'dav/streamed/doc.txt')
+
 
 @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.InMemoryStorage')
 class TestCopy(TestCase):

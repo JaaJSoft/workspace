@@ -628,6 +628,146 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
             size=2, deleted_at__isnull=True,
         )
 
+    def test_mv_from_subfolder_to_root(self):
+        """``mv folder/file .`` → MOVE → file ends up parentless."""
+        FileService.create_folder(self.user, "Outbox")
+        outbox = File.objects.get(
+            owner=self.user, name="Outbox", deleted_at__isnull=True,
+        )
+        self.assertTrue(
+            self._wait_until(
+                lambda: (self.mp / "Outbox").exists(), timeout=10,
+            ),
+            "Outbox folder never became visible via stat()",
+        )
+        nested = self.mp / "Outbox" / "note.txt"
+        nested.write_bytes(b"hi")
+        self._wait_for_file(
+            owner=self.user, name="note.txt", parent=outbox, size=2,
+        )
+
+        nested.rename(self.mp / "note.txt")
+        self._wait_for_file(
+            owner=self.user, name="note.txt", parent__isnull=True,
+            size=2, deleted_at__isnull=True,
+        )
+        self._wait_for_no_file(
+            owner=self.user, name="note.txt", parent=outbox,
+            deleted_at__isnull=True,
+        )
+
+    def test_mv_between_sibling_folders(self):
+        """``mv A/file B/file`` → MOVE → parent switches from A to B."""
+        FileService.create_folder(self.user, "A")
+        FileService.create_folder(self.user, "B")
+        a = File.objects.get(owner=self.user, name="A", deleted_at__isnull=True)
+        b = File.objects.get(owner=self.user, name="B", deleted_at__isnull=True)
+        for name in ("A", "B"):
+            self.assertTrue(
+                self._wait_until(
+                    lambda n=name: (self.mp / n).exists(), timeout=10,
+                ),
+                f"{name} folder never became visible via stat()",
+            )
+
+        src = self.mp / "A" / "doc.txt"
+        src.write_bytes(b"d")
+        self._wait_for_file(owner=self.user, name="doc.txt", parent=a, size=1)
+
+        src.rename(self.mp / "B" / "doc.txt")
+        self._wait_for_file(
+            owner=self.user, name="doc.txt", parent=b,
+            size=1, deleted_at__isnull=True,
+        )
+        self._wait_for_no_file(
+            owner=self.user, name="doc.txt", parent=a,
+            deleted_at__isnull=True,
+        )
+
+    def test_mv_with_rename_across_folders(self):
+        """``mv A/old.txt B/new.txt`` → MOVE → parent and name change together."""
+        FileService.create_folder(self.user, "A")
+        FileService.create_folder(self.user, "B")
+        a = File.objects.get(owner=self.user, name="A", deleted_at__isnull=True)
+        b = File.objects.get(owner=self.user, name="B", deleted_at__isnull=True)
+        for name in ("A", "B"):
+            self.assertTrue(
+                self._wait_until(
+                    lambda n=name: (self.mp / n).exists(), timeout=10,
+                ),
+                f"{name} folder never became visible via stat()",
+            )
+
+        src = self.mp / "A" / "old.txt"
+        src.write_bytes(b"x")
+        self._wait_for_file(owner=self.user, name="old.txt", parent=a, size=1)
+
+        src.rename(self.mp / "B" / "new.txt")
+        self._wait_for_file(
+            owner=self.user, name="new.txt", parent=b,
+            size=1, deleted_at__isnull=True,
+        )
+        self._wait_for_no_file(
+            owner=self.user, name="old.txt", parent=a,
+            deleted_at__isnull=True,
+        )
+
+    def test_mv_renames_folder_in_place(self):
+        """``mv old new`` on a folder → MOVE → folder renamed, parent unchanged."""
+        FileService.create_folder(self.user, "OldName")
+        self.assertTrue(
+            self._wait_until(
+                lambda: (self.mp / "OldName").exists(), timeout=10,
+            ),
+            "OldName folder never became visible via stat()",
+        )
+        (self.mp / "OldName").rename(self.mp / "NewName")
+        self._wait_for_file(
+            owner=self.user, name="NewName",
+            node_type=File.NodeType.FOLDER,
+            parent__isnull=True, deleted_at__isnull=True,
+        )
+        self._wait_for_no_file(
+            owner=self.user, name="OldName", parent__isnull=True,
+            deleted_at__isnull=True,
+        )
+
+    def test_mv_folder_into_another_folder(self):
+        """``mv A B/`` → MOVE → folder A becomes a child of B with its content."""
+        FileService.create_folder(self.user, "Movable")
+        FileService.create_folder(self.user, "Parent")
+        movable = File.objects.get(
+            owner=self.user, name="Movable", deleted_at__isnull=True,
+        )
+        parent = File.objects.get(
+            owner=self.user, name="Parent", deleted_at__isnull=True,
+        )
+        for name in ("Movable", "Parent"):
+            self.assertTrue(
+                self._wait_until(
+                    lambda n=name: (self.mp / n).exists(), timeout=10,
+                ),
+                f"{name} folder never became visible via stat()",
+            )
+
+        # Place a file inside Movable so we can confirm descendants follow.
+        (self.mp / "Movable" / "child.txt").write_bytes(b"c")
+        self._wait_for_file(
+            owner=self.user, name="child.txt", parent=movable, size=1,
+        )
+
+        (self.mp / "Movable").rename(self.mp / "Parent" / "Movable")
+        moved = self._wait_for_file(
+            owner=self.user, name="Movable",
+            node_type=File.NodeType.FOLDER, parent=parent,
+            deleted_at__isnull=True,
+        )
+        # Child must still live under the moved folder.
+        self._wait_for_file(
+            owner=self.user, name="child.txt", parent=moved,
+            size=1, deleted_at__isnull=True,
+        )
+
     def test_cp_duplicates_file(self):
         """``cp a b`` → both rows live with matching content.
 

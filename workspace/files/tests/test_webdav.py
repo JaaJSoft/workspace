@@ -370,6 +370,14 @@ class FolderResourceTests(TestCase):
         self.assertEqual(self.folder.name, "Renamed")
         self.assertEqual(self.folder.parent, target)
 
+    def test_move_recursive_rename_in_place(self):
+        """move_recursive with same parent only renames (no parent change)."""
+        original_parent = self.folder.parent
+        self.res.move_recursive("/Renamed")
+        self.folder.refresh_from_db()
+        self.assertEqual(self.folder.name, "Renamed")
+        self.assertEqual(self.folder.parent, original_parent)
+
     def test_copy_move_single_copies(self):
         """copy_move_single always copies (used by WsgiDAV's copy flow)."""
         target = FileService.create_folder(self.user, "Dest")
@@ -593,6 +601,17 @@ class FileResourceTests(TestCase):
         self.file.refresh_from_db()
         self.assertEqual(self.file.name, "moved.txt")
         self.assertEqual(self.file.parent, folder)
+
+    def test_copy_move_single_move_rename_in_place(self):
+        """copy_move_single(is_move=True) with same parent only renames."""
+        original_parent = self.file.parent
+        self.res.copy_move_single("/renamed.txt", is_move=True)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.name, "renamed.txt")
+        self.assertEqual(self.file.parent, original_parent)
+        # Bytes follow the rename.
+        new_full_path = os.path.join(self._tmpdir, self.file.content.name)
+        self.assertTrue(os.path.isfile(new_full_path))
 
     def test_copy_move_single_move_migrates_content_storage(self):
         """A WebDAV MOVE on a file must migrate its bytes on disk.
@@ -1177,6 +1196,175 @@ class WebDAVIntegrationTests(TestCase):
         # Child should follow
         self.assertTrue(
             File.objects.filter(parent=moved, name="child.txt", deleted_at__isnull=True).exists()
+        )
+
+    def test_move_file_rename_in_place(self):
+        """MOVE with same parent and new name = rename."""
+        content = ContentFile(b"data", name="old.txt")
+        FileService.create_file(
+            self.user, "old.txt", content=content, mime_type="text/plain"
+        )
+        code, _, _ = self._request(
+            "MOVE", "/old.txt",
+            headers={"Destination": "http://testserver/dav/new.txt"},
+        )
+        self.assertIn(code, (201, 204))
+        self.assertFalse(
+            File.objects.filter(
+                owner=self.user, name="old.txt", deleted_at__isnull=True,
+            ).exists()
+        )
+        renamed = File.objects.get(
+            owner=self.user, name="new.txt", deleted_at__isnull=True,
+        )
+        self.assertIsNone(renamed.parent)
+
+    def test_move_folder_rename_in_place(self):
+        """MOVE on a folder with same parent and new name = rename."""
+        FileService.create_folder(self.user, "Old")
+        code, _, _ = self._request(
+            "MOVE", "/Old/",
+            headers={"Destination": "http://testserver/dav/New/"},
+        )
+        self.assertIn(code, (201, 204))
+        self.assertFalse(
+            File.objects.filter(
+                owner=self.user, name="Old", deleted_at__isnull=True,
+            ).exists()
+        )
+        self.assertTrue(
+            File.objects.filter(
+                owner=self.user, name="New",
+                node_type=File.NodeType.FOLDER, deleted_at__isnull=True,
+            ).exists()
+        )
+
+    def test_move_file_subfolder_to_root(self):
+        """MOVE a file from a subfolder back to the root collection."""
+        sub = FileService.create_folder(self.user, "Sub")
+        FileService.create_file(
+            self.user, "x.txt", parent=sub,
+            content=ContentFile(b"x", name="x.txt"), mime_type="text/plain",
+        )
+        code, _, _ = self._request(
+            "MOVE", "/Sub/x.txt",
+            headers={"Destination": "http://testserver/dav/x.txt"},
+        )
+        self.assertIn(code, (201, 204))
+        moved = File.objects.get(
+            owner=self.user, name="x.txt", deleted_at__isnull=True,
+        )
+        self.assertIsNone(moved.parent)
+        self.assertFalse(
+            File.objects.filter(
+                owner=self.user, name="x.txt", parent=sub,
+                deleted_at__isnull=True,
+            ).exists()
+        )
+
+    def test_move_file_between_sibling_folders(self):
+        """MOVE a file from one folder to a sibling folder."""
+        a = FileService.create_folder(self.user, "A")
+        b = FileService.create_folder(self.user, "B")
+        FileService.create_file(
+            self.user, "doc.txt", parent=a,
+            content=ContentFile(b"d", name="doc.txt"), mime_type="text/plain",
+        )
+        code, _, _ = self._request(
+            "MOVE", "/A/doc.txt",
+            headers={"Destination": "http://testserver/dav/B/doc.txt"},
+        )
+        self.assertIn(code, (201, 204))
+        moved = File.objects.get(
+            owner=self.user, name="doc.txt", deleted_at__isnull=True,
+        )
+        self.assertEqual(moved.parent, b)
+        self.assertFalse(
+            File.objects.filter(
+                owner=self.user, name="doc.txt", parent=a,
+                deleted_at__isnull=True,
+            ).exists()
+        )
+
+    def test_move_file_with_rename_to_other_folder(self):
+        """MOVE that combines a parent change and a name change."""
+        a = FileService.create_folder(self.user, "A")
+        b = FileService.create_folder(self.user, "B")
+        FileService.create_file(
+            self.user, "old.txt", parent=a,
+            content=ContentFile(b"x", name="old.txt"), mime_type="text/plain",
+        )
+        code, _, _ = self._request(
+            "MOVE", "/A/old.txt",
+            headers={"Destination": "http://testserver/dav/B/new.txt"},
+        )
+        self.assertIn(code, (201, 204))
+        moved = File.objects.get(
+            owner=self.user, name="new.txt", parent=b,
+            deleted_at__isnull=True,
+        )
+        self.assertEqual(moved.size, 1)
+        self.assertFalse(
+            File.objects.filter(
+                owner=self.user, name="old.txt", parent=a,
+                deleted_at__isnull=True,
+            ).exists()
+        )
+
+    def test_move_overwrite_default_replaces_destination(self):
+        """MOVE without ``Overwrite`` header defaults to overwrite (RFC 4918 §10.6)."""
+        FileService.create_file(
+            self.user, "src.txt",
+            content=ContentFile(b"new", name="src.txt"), mime_type="text/plain",
+        )
+        FileService.create_file(
+            self.user, "dest.txt",
+            content=ContentFile(b"old", name="dest.txt"), mime_type="text/plain",
+        )
+        code, _, _ = self._request(
+            "MOVE", "/src.txt",
+            headers={"Destination": "http://testserver/dav/dest.txt"},
+        )
+        self.assertIn(code, (201, 204))
+        # Source is gone, only one dest.txt remains and it has the new bytes.
+        self.assertFalse(
+            File.objects.filter(
+                owner=self.user, name="src.txt", deleted_at__isnull=True,
+            ).exists()
+        )
+        live = File.objects.filter(
+            owner=self.user, name="dest.txt", deleted_at__isnull=True,
+        )
+        self.assertEqual(live.count(), 1)
+
+    def test_move_overwrite_false_with_existing_destination_returns_412(self):
+        """MOVE with ``Overwrite: F`` to an existing target must return 412 (RFC 4918 §10.6)."""
+        FileService.create_file(
+            self.user, "src.txt",
+            content=ContentFile(b"a", name="src.txt"), mime_type="text/plain",
+        )
+        FileService.create_file(
+            self.user, "dest.txt",
+            content=ContentFile(b"b", name="dest.txt"), mime_type="text/plain",
+        )
+        code, _, _ = self._request(
+            "MOVE", "/src.txt",
+            headers={
+                "Destination": "http://testserver/dav/dest.txt",
+                "Overwrite": "F",
+            },
+        )
+        self.assertEqual(code, 412)
+        # Both files must still exist, untouched.
+        self.assertTrue(
+            File.objects.filter(
+                owner=self.user, name="src.txt", deleted_at__isnull=True,
+            ).exists()
+        )
+        self.assertTrue(
+            File.objects.filter(
+                owner=self.user, name="dest.txt", deleted_at__isnull=True,
+            ).exists()
         )
 
     # ── COPY ──

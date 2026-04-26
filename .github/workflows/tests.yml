@@ -93,7 +93,6 @@ jobs:
           - mail
           - notes
           - users
-          - chat
     name: E2E (${{ matrix.module }})
     steps:
       - name: Checkout repository

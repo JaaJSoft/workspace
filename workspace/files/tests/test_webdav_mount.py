@@ -67,7 +67,18 @@ def _mount_davfs_path() -> str | None:
 
 
 def _can_mount_directly(path: str) -> bool:
-    """True iff the current process can invoke ``mount.davfs`` without sudo."""
+    """True iff the current process can invoke ``mount.davfs`` without sudo.
+
+    SUID is necessary but not strictly sufficient for unprivileged
+    mounting — davfs2 also wants the user in the ``davfs2`` group and a
+    matching ``user``/``users`` line in ``/etc/fstab``.  We don't probe
+    those here: when the SUID-only check is wrong, the actual
+    ``mount.davfs`` invocation fails loudly with a clear stderr, and
+    ``_check_prereqs`` then falls through to ``sudo -n`` (which is what
+    every CI runner has).  The only way this matters is the rare local
+    dev box that has SUID set, no davfs2 group, and no passwordless
+    sudo — they get a hard mount failure instead of a clean skip.
+    """
     if os.geteuid() == 0:
         return True
     try:
@@ -260,7 +271,13 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         #                      davfs2 needs room for the in-flight write
         #                      cache file before the upload completes.
         #   gui_optimize=0   — disable directory pre-fetch
-        #   use_locks=0      — skip LOCK/UNLOCK round-trips (test isolation)
+        #   use_locks=0      — disables davfs2's *persistent* lock-for-
+        #                      write-protection feature.  davfs2 still
+        #                      sends a LOCK + UNLOCK around every PUT
+        #                      (verified via syslog), so our wsgidav
+        #                      LOCK Content-Type middleware in
+        #                      ``app.py`` is exercised by every write
+        #                      test in this suite.
         #   uid/gid          — remap ownership so the unprivileged test user
         #                      can read/write files even when mount runs as root
         opts = ",".join([
@@ -322,6 +339,11 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
                 if pred():
                     return True
             except Exception:
+                # Tolerate transient failures while polling — davfs2's
+                # cache can briefly raise FileNotFoundError between an
+                # operation and the cache refresh.  The final
+                # ``bool(pred())`` after the timeout will surface any
+                # error that's still reproducible.
                 pass
             time.sleep(interval)
         return bool(pred())
@@ -410,7 +432,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         """``echo data > foo`` then ``cat foo`` returns the same bytes."""
         target = self.mp / "hello.txt"
         target.write_bytes(b"hello davfs\n")
-        f = self._wait_for_file(
+        self._wait_for_file(
             owner=self.user, name="hello.txt",
             size=len(b"hello davfs\n"),
             deleted_at__isnull=True,
@@ -528,28 +550,40 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
     def test_rm_soft_deletes_file(self):
         """``rm foo`` → DELETE → File.deleted_at is set."""
         FileService.create_file(self.user, "to_remove.txt", mime_type="text/plain")
-        self._wait_until(
-            lambda: (self.mp / "to_remove.txt").exists(), timeout=10,
+        self.assertTrue(
+            self._wait_until(
+                lambda: (self.mp / "to_remove.txt").exists(), timeout=10,
+            ),
+            "server-side file never became visible via stat()",
         )
         (self.mp / "to_remove.txt").unlink()
-        self._wait_until(
-            lambda: File.objects.get(
-                owner=self.user, name="to_remove.txt"
-            ).deleted_at is not None,
-            timeout=self.DB_POLL_TIMEOUT,
+        self.assertTrue(
+            self._wait_until(
+                lambda: File.objects.get(
+                    owner=self.user, name="to_remove.txt"
+                ).deleted_at is not None,
+                timeout=self.DB_POLL_TIMEOUT,
+            ),
+            "file row was not soft-deleted after unlink()",
         )
-        f = File.objects.get(owner=self.user, name="to_remove.txt")
-        self.assertIsNotNone(f.deleted_at)
 
     def test_rmdir_removes_empty_folder(self):
         FileService.create_folder(self.user, "tobedel")
-        self._wait_until(lambda: (self.mp / "tobedel").exists(), timeout=10)
+        self.assertTrue(
+            self._wait_until(
+                lambda: (self.mp / "tobedel").exists(), timeout=10,
+            ),
+            "server-side folder never became visible via stat()",
+        )
         (self.mp / "tobedel").rmdir()
-        self._wait_until(
-            lambda: File.objects.get(
-                owner=self.user, name="tobedel"
-            ).deleted_at is not None,
-            timeout=self.DB_POLL_TIMEOUT,
+        self.assertTrue(
+            self._wait_until(
+                lambda: File.objects.get(
+                    owner=self.user, name="tobedel"
+                ).deleted_at is not None,
+                timeout=self.DB_POLL_TIMEOUT,
+            ),
+            "folder row was not soft-deleted after rmdir()",
         )
 
     # --- move / copy ------------------------------------------------------ #
@@ -577,7 +611,12 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         src = self.mp / "letter.txt"
         src.write_bytes(b"hi")
         self._wait_for_file(owner=self.user, name="letter.txt", size=2)
-        self._wait_until(lambda: (self.mp / "Inbox").exists(), timeout=10)
+        self.assertTrue(
+            self._wait_until(
+                lambda: (self.mp / "Inbox").exists(), timeout=10,
+            ),
+            "Inbox folder never became visible via stat()",
+        )
 
         src.rename(self.mp / "Inbox" / "letter.txt")
 

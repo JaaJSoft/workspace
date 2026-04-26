@@ -247,8 +247,7 @@ class FolderResource(DAVCollection):
             FileService.rename(self._file, new_name)
 
         if dest_parent != self._file.parent:
-            self._file.parent = dest_parent
-            self._file.save()
+            FileService.move(self._file, dest_parent, acting_user=self._user)
 
     def support_recursive_delete(self):
         return True
@@ -387,8 +386,7 @@ class FileResource(DAVNonCollection):
             if new_name != self._file.name:
                 FileService.rename(self._file, new_name)
             if dest_parent != self._file.parent:
-                self._file.parent = dest_parent
-                self._file.save()
+                FileService.move(self._file, dest_parent, acting_user=self._user)
             self._moved = True
         else:
             _copy_as(self._file, dest_parent, self._user, new_name)

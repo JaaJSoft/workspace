@@ -385,6 +385,55 @@ class FolderResourceTests(TestCase):
         self.assertIsNone(self.folder.deleted_at)
 
 
+class FolderResourceMoveStorageTests(TestCase):
+    """Tests for FolderResource.move_recursive against real FileSystemStorage.
+
+    Verifies that descendant content storage paths follow the move (which
+    requires going through FileService.move() rather than touching .parent
+    directly).
+    """
+
+    def setUp(self):
+        import tempfile
+        self._tmpdir = tempfile.mkdtemp()
+        self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
+        self._media_override.enable()
+
+        self.user = User.objects.create_user(
+            username="davmove", email="dmv@test.com", password="pass",
+        )
+        self.environ = _make_environ(user=self.user)
+
+    def tearDown(self):
+        import shutil
+        self._media_override.disable()
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
+
+    def test_move_recursive_migrates_descendant_content(self):
+        """Moving a folder via WebDAV must update descendant content paths."""
+        src = FileService.create_folder(self.user, "Src")
+        dest = FileService.create_folder(self.user, "Dest")
+        note = FileService.create_file(
+            self.user, "note.txt", parent=src,
+            content=ContentFile(b"hello", name="note.txt"),
+        )
+        old_full_path = os.path.join(self._tmpdir, note.content.name)
+        self.assertTrue(os.path.isfile(old_full_path))
+
+        res = FolderResource("/Src", self.environ, src)
+        res.move_recursive("/Dest/Src")
+
+        note.refresh_from_db()
+        new_content_name = note.content.name.replace('\\', '/')
+        self.assertTrue(
+            new_content_name.startswith('files/users/davmove/Dest/Src/'),
+            f'Expected new path under Dest/Src/, got {new_content_name}',
+        )
+        new_full_path = os.path.join(self._tmpdir, note.content.name)
+        self.assertTrue(os.path.isfile(new_full_path))
+        self.assertFalse(os.path.isfile(old_full_path))
+
+
 # ── FileResource ──────────────────────────────────────────────────────
 
 
@@ -544,6 +593,28 @@ class FileResourceTests(TestCase):
         self.file.refresh_from_db()
         self.assertEqual(self.file.name, "moved.txt")
         self.assertEqual(self.file.parent, folder)
+
+    def test_copy_move_single_move_migrates_content_storage(self):
+        """A WebDAV MOVE on a file must migrate its bytes on disk.
+
+        Regression: bypassing FileService.move() left the bytes at the old
+        storage path while the DB row pointed at the new parent — subsequent
+        reads served stale storage state.
+        """
+        folder = FileService.create_folder(self.user, "Target")
+        old_full_path = os.path.join(self._tmpdir, self.file.content.name)
+        self.assertTrue(os.path.isfile(old_full_path))
+
+        self.res.copy_move_single("/Target/moved.txt", is_move=True)
+        self.file.refresh_from_db()
+
+        # New content.name must reflect the new parent.
+        new_content_name = self.file.content.name.replace('\\', '/')
+        self.assertIn('Target/', new_content_name)
+        # And the bytes must actually live there.
+        new_full_path = os.path.join(self._tmpdir, self.file.content.name)
+        self.assertTrue(os.path.isfile(new_full_path))
+        self.assertFalse(os.path.isfile(old_full_path))
 
     def test_copy_move_single_copy(self):
         folder = FileService.create_folder(self.user, "CopyDest")

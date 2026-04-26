@@ -15,6 +15,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import transaction
 
+from workspace.common.logging import scrub
 from workspace.files.models import File
 
 
@@ -541,7 +542,7 @@ class FileService:
         new_path = posixpath.join(dir_path, new_filename)
 
         if not default_storage.exists(old_path):
-            logger.warning("Old file does not exist: '%s'", old_path)
+            logger.warning("Old file does not exist: '%s'", scrub(old_path))
             return
 
         file_handle = None
@@ -560,7 +561,7 @@ class FileService:
             try:
                 default_storage.delete(old_path)
             except Exception as e:
-                logger.warning("Could not delete old file '%s': %s", old_path, e)
+                logger.warning("Could not delete old file '%s': %s", scrub(old_path), scrub(e))
 
     @staticmethod
     def _rename_folder_storage(folder, old_folder_name, new_folder_name):
@@ -583,7 +584,7 @@ class FileService:
             pass
         except OSError as e:
             logger.warning("Could not rename folder '%s' -> '%s': %s",
-                           storage_path, new_storage_path, e)
+                           scrub(storage_path), scrub(new_storage_path), scrub(e))
 
         # Update content.name in the DB for every descendant file.
         FileService._update_descendant_content_names(
@@ -733,7 +734,7 @@ class FileService:
             pass
         except OSError as e:
             logger.warning("Could not move folder '%s' -> '%s': %s",
-                           old_storage_path, new_storage_path, e)
+                           scrub(old_storage_path), scrub(new_storage_path), scrub(e))
 
         # Update content.name for all descendant files
         folder_path = folder.path or folder.get_path()
@@ -780,7 +781,7 @@ class FileService:
         except NotImplementedError:
             # Fallback for non-local storage backends
             if not default_storage.exists(old_path):
-                logger.warning("File does not exist on storage: '%s'", old_path)
+                logger.warning("File does not exist on storage: '%s'", scrub(old_path))
                 return
             file_handle = None
             try:
@@ -796,9 +797,9 @@ class FileService:
                 try:
                     default_storage.delete(old_path)
                 except Exception as e:
-                    logger.warning("Could not delete old file '%s': %s", old_path, e)
+                    logger.warning("Could not delete old file '%s': %s", scrub(old_path), scrub(e))
         except OSError as e:
-            logger.warning("Could not move file '%s' -> '%s': %s", old_path, new_path, e)
+            logger.warning("Could not move file '%s' -> '%s': %s", scrub(old_path), scrub(new_path), scrub(e))
 
     @staticmethod
     def _unique_copy_name(base_name, node_type, existing_names):

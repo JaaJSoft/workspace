@@ -267,13 +267,12 @@ class FileSerializer(serializers.ModelSerializer):
             if instance.name != new_name:
                 FileService.rename(instance, new_name)
 
-        # Handle move via FileService (storage moves)
+        # Handle move via FileService (storage moves). Pop so super().update()
+        # below doesn't re-assign parent + re-save — FileService.move() already
+        # does both, and noops when the parent is unchanged.
         if 'parent' in validated_data:
-            new_parent = validated_data['parent']
-            old_parent_id = instance.parent_id
-            new_parent_id = new_parent.pk if new_parent else None
-            if old_parent_id != new_parent_id:
-                FileService.move(instance, new_parent, acting_user=self.context['request'].user)
+            new_parent = validated_data.pop('parent')
+            FileService.move(instance, new_parent, acting_user=self.context['request'].user)
 
         instance = super().update(instance, validated_data)
 

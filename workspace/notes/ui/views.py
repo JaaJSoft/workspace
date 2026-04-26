@@ -96,8 +96,7 @@ def _ensure_default_folders(user):
         # Check for legacy root-level Journal
         root_journal = folders.filter(name='Journal', parent__isnull=True).first()
         if root_journal:
-            root_journal.parent = notes_folder
-            root_journal.save(update_fields=['parent'])
+            FileService.move(root_journal, notes_folder)
             journal_folder = root_journal
             changed = True
 

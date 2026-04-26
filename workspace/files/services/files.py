@@ -223,8 +223,11 @@ class FileService:
     def move(file_obj, new_parent, *, acting_user=None):
         """Move a file or folder to a new parent, handling physical storage.
 
-        Must be called BEFORE the parent is updated on the instance.
-        The caller (serializer) handles updating the parent field and saving.
+        Migrates storage paths (file bytes / folder directory) and propagates
+        the destination's group ownership to descendants. The caller passes
+        *file_obj* with its CURRENT parent — this method updates ``parent``
+        on the instance and saves it. Pass ``acting_user`` for group→personal
+        moves so the new owner can be assigned.
         """
         old_parent_id = file_obj.parent_id
         new_parent_id = new_parent.pk if new_parent else None

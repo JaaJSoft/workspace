@@ -100,6 +100,22 @@ class RootCollection(DAVCollection):
     def get_display_info(self):
         return {"type": "Directory"}
 
+    def get_creation_date(self):
+        # davfs2 marks the directory cache invalid when the parent
+        # collection lacks ``creationdate`` / ``getlastmodified`` —
+        # readdir then returns EINVAL and open(O_CREAT) returns EIO.
+        # Use the user's join date: stable, never zero, no extra query.
+        return self._user.date_joined.timestamp()
+
+    def get_last_modified(self):
+        return self._user.date_joined.timestamp()
+
+    def get_display_name(self):
+        # WsgiDAV defaults to the URL basename, which is empty for the
+        # root collection — Windows Mini-Redirector then shows a blank
+        # entry in Explorer.  A static label avoids that.
+        return "workspace"
+
     def get_member_names(self):
         self._prefetch_members()
         return [f.name for f in self._members_cache]
@@ -401,6 +417,10 @@ class FileResource(DAVNonCollection):
         return True
 
     def get_etag(self):
+        # WsgiDAV's contract (util.checked_etag): return the bare value
+        # without quotes — wsgidav adds them when serializing the HTTP
+        # ``ETag:`` header.  Returning a quoted string here triggers a
+        # 500.
         return f"{self._file.uuid}-{self._file.updated_at.timestamp()}"
 
 

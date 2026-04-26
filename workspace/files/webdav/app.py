@@ -61,6 +61,42 @@ def _build_lock_storage():
     )
 
 
+class _LockContentTypeFix:
+    """Work around a wsgidav 4.3.3 typo in the LOCK response.
+
+    ``wsgidav.request_server`` line 1255 emits ``Content-Type: application;
+    charset=utf-8`` instead of ``application/xml; charset=utf-8`` for
+    successful LOCK responses.  davfs2 (Linux mount client) treats the
+    malformed value as a fatal protocol error, abandons the file it just
+    locked, and the subsequent ``open(O_CREAT)`` returns EIO.
+
+    Pass-through ``__getattr__`` keeps the wrapped ``WsgiDAVApp`` introspectable
+    (``.provider_map``, ``.config`` etc) — used by tests.
+    """
+
+    _BAD = "application; charset=utf-8"
+    _GOOD = "application/xml; charset=utf-8"
+
+    def __init__(self, app):
+        self._app = app
+
+    def __call__(self, environ, start_response):
+        if environ.get("REQUEST_METHOD") != "LOCK":
+            return self._app(environ, start_response)
+
+        def fixed_start_response(status, headers, exc_info=None):
+            patched = [
+                (h, self._GOOD if h.lower() == "content-type" and v == self._BAD else v)
+                for h, v in headers
+            ]
+            return start_response(status, patched, exc_info)
+
+        return self._app(environ, fixed_start_response)
+
+    def __getattr__(self, name):
+        return getattr(self._app, name)
+
+
 def create_webdav_app():
     """Build and return a configured ``WsgiDAVApp``."""
     config = {
@@ -83,4 +119,4 @@ def create_webdav_app():
             "enable": False,
         },
     }
-    return WsgiDAVApp(config)
+    return _LockContentTypeFix(WsgiDAVApp(config))

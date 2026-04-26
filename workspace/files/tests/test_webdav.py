@@ -963,6 +963,85 @@ class WebDAVIntegrationTests(TestCase):
         self.assertEqual(code, 207)
         self.assertNotIn(b"gone.txt", body)
 
+    def test_propfind_root_has_timestamps(self):
+        """The root response must expose ``getlastmodified`` and ``creationdate``.
+
+        Without these, ``davfs2`` rejects the directory cache (readdir
+        → EINVAL, open(O_CREAT) on any child → EIO).  Other WebDAV
+        clients tolerate the omission, but the ``davfs2`` Linux mount
+        client does not.
+        """
+        # Depth: 0 — only the root entry is returned, so any match
+        # belongs to the root collection.
+        code, _, body = self._request("PROPFIND", "/", headers={"Depth": "0"})
+        self.assertEqual(code, 207)
+        self.assertIn(b"getlastmodified", body)
+        self.assertIn(b"creationdate", body)
+
+    def test_propfind_root_has_non_empty_displayname(self):
+        """Root must expose a non-empty ``displayname``.
+
+        Windows Mini-Redirector shows a blank entry in Explorer when the
+        root's displayname is empty (WsgiDAV's default for an empty
+        basename).
+        """
+        code, _, body = self._request("PROPFIND", "/", headers={"Depth": "0"})
+        self.assertEqual(code, 207)
+        body_str = body.decode("utf-8", errors="replace")
+        self.assertNotIn("<D:displayname></D:displayname>", body_str)
+        self.assertNotIn("<D:displayname/>", body_str)
+
+    def test_lock_response_content_type_is_xml(self):
+        """LOCK response Content-Type must be a valid media type.
+
+        WsgiDAV 4.3.3 has a typo (``application; charset=utf-8`` —
+        missing ``/xml``) that davfs2 treats as a fatal protocol
+        error, abandoning the locked resource and returning EIO on
+        the subsequent ``open(O_CREAT)``.  Our app factory wraps
+        wsgidav with a middleware that rewrites the header; this
+        test pins the contract from the wire.
+        """
+        body = (
+            b'<?xml version="1.0" encoding="utf-8"?>'
+            b'<lockinfo xmlns="DAV:">'
+            b'<lockscope><exclusive/></lockscope>'
+            b'<locktype><write/></locktype>'
+            b'<owner><href>test</href></owner>'
+            b'</lockinfo>'
+        )
+        code, headers, _ = self._request(
+            "LOCK", "/locked.txt", body=body,
+            headers={"Content-Type": "application/xml", "Timeout": "Second-180"},
+        )
+        self.assertIn(code, (200, 201))
+        ct = headers.get("Content-Type") or headers.get("content-type")
+        self.assertIsNotNone(ct, f"no Content-Type in {headers!r}")
+        # Must have a valid type/subtype
+        self.assertIn("/", ct.split(";")[0],
+                      f"Content-Type missing subtype: {ct!r}")
+
+    def test_etag_header_is_quoted(self):
+        """The HTTP ``ETag:`` response header must be a quoted-string.
+
+        Per RFC 7232 §2.3 + RFC 4918, ``ETag`` is a quoted entity-tag.
+        Cyberduck and Office Online refuse to cache responses whose
+        ETag header is unquoted.
+
+        WsgiDAV adds the quotes when serializing the header (and
+        rejects ``get_etag()`` results that already contain quotes via
+        ``util.checked_etag``), but this test pins the contract from
+        the wire side so a regression in either layer surfaces.
+        """
+        FileService.create_file(self.user, "tagged.txt", mime_type="text/plain")
+        code, headers, _ = self._request("HEAD", "/tagged.txt")
+        self.assertEqual(code, 200)
+        etag = headers.get("ETag") or headers.get("Etag") or headers.get("etag")
+        self.assertIsNotNone(etag, f"no ETag header in {headers!r}")
+        self.assertTrue(
+            etag.startswith('"') and etag.endswith('"'),
+            f"ETag header must be a quoted-string, got {etag!r}",
+        )
+
     # ── MKCOL ──
 
     def test_mkcol_creates_folder(self):

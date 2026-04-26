@@ -17,10 +17,15 @@ These tests require:
     * ``mount.davfs`` available in PATH
     * either running as root, or ``mount.davfs`` being SUID-root, or
       passwordless ``sudo -n`` available
+    * a kernel with full FUSE readdir support (e.g. stock Ubuntu — some
+      sandboxed/custom kernels accept the FUSE mount call but reject
+      readdir with EINVAL)
 
-When any prerequisite is missing the tests are skipped — except in CI,
-where setting ``WORKSPACE_DAVFS2_TESTS=1`` turns missing prerequisites
-into a hard failure so a regression in the CI image is loud.
+They are **opt-in**: by default they are skipped, mirroring the
+``E2E=1`` pattern of ``PlaywrightTestCase``.  Set
+``WORKSPACE_DAVFS2_TESTS=1`` to run them.  In that mode a missing
+prerequisite turns into a hard failure so a CI image regression is
+loud rather than silently skipped.
 """
 
 from __future__ import annotations
@@ -38,6 +43,7 @@ from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.test import LiveServerTestCase, override_settings
+from django.test.testcases import LiveServerThread
 
 from workspace.files.models import File
 from workspace.files.services import FileService
@@ -49,7 +55,7 @@ User = get_user_model()
 # Prerequisite detection
 # --------------------------------------------------------------------------- #
 
-REQUIRE = os.environ.get("WORKSPACE_DAVFS2_TESTS", "").lower() in {"1", "true", "yes", "on"}
+ENABLED = os.environ.get("WORKSPACE_DAVFS2_TESTS", "").lower() in {"1", "true", "yes", "on"}
 
 
 def _mount_davfs_path() -> str | None:
@@ -110,10 +116,59 @@ def _sudo_prefix() -> list[str]:
     return ["sudo", "-n"]
 
 
-# When the env var is set we *want* failures to surface (CI), so don't
-# decorate the class with ``skipUnless``.  Otherwise — local dev — skip
-# silently when the binary or perms are missing.
-_SKIP_SILENTLY = _PREREQ_REASON is not None and not REQUIRE
+# Skip-reason for the class decorator.  Two layers:
+#   * ``WORKSPACE_DAVFS2_TESTS`` not set → skip silently (default for
+#     local ``manage.py test`` runs and the per-module CI matrix).
+#   * Set, but prerequisites missing → run the class anyway so the
+#     ``setUpClass`` raises and the failure is loud, not silent.
+if not ENABLED:
+    _SKIP_REASON = "set WORKSPACE_DAVFS2_TESTS=1 to run davfs2 mount tests"
+elif _PREREQ_REASON is not None:
+    _SKIP_REASON = None  # let setUpClass raise loudly
+else:
+    _SKIP_REASON = None
+
+
+# --------------------------------------------------------------------------- #
+# Live-server thread that serves the *workspace* WSGI app (not Django's bare
+# WSGIHandler).  ``LiveServerTestCase`` hardcodes ``WSGIHandler()`` in its
+# thread, which means our /dav dispatcher in ``workspace.wsgi.application``
+# is never reached — every request hits Django's URL resolver and /dav/
+# returns 404.  Subclassing the thread to plug our dispatcher in fixes that.
+# --------------------------------------------------------------------------- #
+
+
+class _WorkspaceDavLiveServerThread(LiveServerThread):
+    """Variant of ``LiveServerThread`` that serves ``workspace.wsgi.application``.
+
+    Static/media handlers are intentionally dropped: davfs2 never asks
+    for ``/static/`` or ``/media/`` URLs, and those handlers are wrappers
+    that ultimately delegate to ``WSGIHandler()`` — exactly what we are
+    trying to bypass for the /dav prefix.
+    """
+
+    def run(self):
+        from django.db import connections
+
+        if self.connections_override:
+            for alias, conn in self.connections_override.items():
+                connections[alias] = conn
+        try:
+            from workspace.wsgi import application as workspace_app
+
+            self.httpd = self._create_server(
+                connections_override=self.connections_override,
+            )
+            if self.port == 0:
+                self.port = self.httpd.server_address[1]
+            self.httpd.set_app(workspace_app)
+            self.is_ready.set()
+            self.httpd.serve_forever()
+        except Exception as e:
+            self.error = e
+            self.is_ready.set()
+        finally:
+            connections.close_all()
 
 
 # --------------------------------------------------------------------------- #
@@ -121,7 +176,7 @@ _SKIP_SILENTLY = _PREREQ_REASON is not None and not REQUIRE
 # --------------------------------------------------------------------------- #
 
 
-@unittest.skipIf(_SKIP_SILENTLY, _PREREQ_REASON or "")
+@unittest.skipIf(_SKIP_REASON is not None, _SKIP_REASON or "")
 @override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class WebDAVDavfs2MountTests(LiveServerTestCase):
     """Boot a live server, mount its ``/dav`` endpoint via davfs2, exercise it.
@@ -137,6 +192,9 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
     # even when Django picked ``localhost`` (which can resolve to ::1).
     host = "127.0.0.1"
 
+    # Serve the workspace WSGI dispatcher so /dav reaches WsgiDAV.
+    server_thread_class = _WorkspaceDavLiveServerThread
+
     # Polling budget for davfs2's deferred upload on close().  CI runners
     # are slow enough that 15s is a comfortable upper bound; the
     # ``delay_upload=0`` mount option keeps the typical wait under 1s.
@@ -144,13 +202,14 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
     @classmethod
     def setUpClass(cls):
-        super().setUpClass()
-        # Final hard check: when REQUIRE is set, fail loudly here so the
-        # class-skip decorator doesn't silently swallow a CI misconfig.
-        if REQUIRE and _PREREQ_REASON is not None:
+        # Loud failure when prerequisites are missing but the env var
+        # said run.  Caller asked for these tests; tell them why we
+        # can't deliver instead of silently skipping.
+        if _PREREQ_REASON is not None:
             raise RuntimeError(
                 f"WORKSPACE_DAVFS2_TESTS=1 but prerequisites missing: {_PREREQ_REASON}"
             )
+        super().setUpClass()
         cls._tmp_root = Path(tempfile.mkdtemp(prefix="dav-mount-tests-"))
 
     @classmethod
@@ -562,19 +621,21 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
 
 class PrereqSelfCheck(unittest.TestCase):
-    """One always-runnable test that documents the env and explains skips."""
+    """Always-runnable test that surfaces why mount tests will be skipped."""
 
     def test_explain_environment(self):
-        # Always passes; the assertion only fires when something would
-        # silently swallow a misconfigured WORKSPACE_DAVFS2_TESTS=1 run.
-        if REQUIRE and _PREREQ_REASON is not None:
+        # When the env var is set, prerequisites must be in place — fail
+        # loudly so a CI image regression is impossible to miss.
+        if ENABLED and _PREREQ_REASON is not None:
             self.fail(
-                f"WORKSPACE_DAVFS2_TESTS=1 set but: {_PREREQ_REASON}"
+                f"WORKSPACE_DAVFS2_TESTS=1 but: {_PREREQ_REASON}"
             )
-        # Otherwise just make the reason discoverable in -v output.
-        if _PREREQ_REASON:
+        # Otherwise just print the reason in -v output for visibility.
+        if not ENABLED:
             sys.stderr.write(
-                f"[davfs2] mount tests will be skipped: {_PREREQ_REASON}\n"
+                "[davfs2] mount tests skipped (set WORKSPACE_DAVFS2_TESTS=1 to run)\n"
             )
+        elif _PREREQ_REASON:
+            sys.stderr.write(f"[davfs2] {_PREREQ_REASON}\n")
 
 

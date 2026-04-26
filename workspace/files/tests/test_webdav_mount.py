@@ -359,22 +359,51 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         finally:
             f.content.close()
 
-    def test_large_file_streams_through(self):
-        """A file larger than the streaming-buffer threshold is stored intact.
+    def test_16mib_file_streams_through(self):
+        """A 16 MiB upload streams through ``_StreamingWriteBuffer`` intact.
 
-        Exercises the chunked write path in ``_StreamingWriteBuffer`` —
-        a single in-memory buffer would obviously work for tiny inputs.
+        The buffer flushes every ``DjangoFile.DEFAULT_CHUNK_SIZE`` (64 KiB),
+        so 16 MiB triggers ~256 flushes — that's the path real photo/
+        video uploads take, and the one TCP-backpressure was designed for.
+        Content is verified by SHA-256 to avoid keeping two 16 MiB buffers
+        in memory at once.
         """
-        size = 2 * 1024 * 1024  # 2 MiB
-        payload = (b"abcdefgh" * (size // 8))[:size]
+        import hashlib
+
+        size = 16 * 1024 * 1024  # 16 MiB
+        pattern = bytes(range(256))  # all byte values, catches alignment bugs
+        payload = (pattern * (size // 256))[:size]
+        self.assertEqual(len(payload), size)
+        expected_sha = hashlib.sha256(payload).hexdigest()
+
         target = self.mp / "big.bin"
         target.write_bytes(payload)
-        f = self._wait_for_file(owner=self.user, name="big.bin", size=size)
+
+        # 16 MiB on a slow CI runner can take longer than the default
+        # 15 s budget, so wait on the size landing in DB explicitly.
+        ok = self._wait_until(
+            lambda: File.objects.filter(
+                owner=self.user, name="big.bin", size=size,
+                deleted_at__isnull=True,
+            ).exists(),
+            timeout=60.0,
+        )
+        self.assertTrue(ok, "16 MiB upload never reached the DB with full size")
+
+        f = File.objects.get(
+            owner=self.user, name="big.bin", deleted_at__isnull=True,
+        )
+        h = hashlib.sha256()
         f.content.open("rb")
         try:
-            self.assertEqual(f.content.read(), payload)
+            for chunk in iter(lambda: f.content.read(1024 * 1024), b""):
+                h.update(chunk)
         finally:
             f.content.close()
+        self.assertEqual(
+            h.hexdigest(), expected_sha,
+            "server-side bytes differ from what the client uploaded",
+        )
 
     # --- folders ---------------------------------------------------------- #
 

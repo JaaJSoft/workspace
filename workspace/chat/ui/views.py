@@ -135,8 +135,7 @@ def chat_view(request, conversation_uuid=None):
 
     return render(request, 'chat/ui/index.html', {
         'pinned_conversations': pinned,
-        'dm_conversations': [c for c in conv_list if c.kind == Conversation.Kind.DM and str(c.uuid) not in pinned_uuids],
-        'group_conversations': [c for c in conv_list if c.kind == Conversation.Kind.GROUP and str(c.uuid) not in pinned_uuids],
+        'other_conversations': [c for c in conv_list if str(c.uuid) not in pinned_uuids],
         'conversations': serializer.data,
         'initial_conversation_uuid': str(conversation_uuid) if conversation_uuid else '',
     })
@@ -159,8 +158,7 @@ def conversation_list_view(request):
 
     return render(request, 'chat/ui/partials/conversation_list.html', {
         'pinned_conversations': pinned,
-        'dm_conversations': [c for c in conv_list if c.kind == Conversation.Kind.DM and str(c.uuid) not in pinned_uuids],
-        'group_conversations': [c for c in conv_list if c.kind == Conversation.Kind.GROUP and str(c.uuid) not in pinned_uuids],
+        'other_conversations': [c for c in conv_list if str(c.uuid) not in pinned_uuids],
         'search_query': request.GET.get('q', ''),
     })
 

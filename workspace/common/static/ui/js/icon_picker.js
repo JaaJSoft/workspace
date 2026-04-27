@@ -11,7 +11,7 @@
  * @param {function} onSaved   - Optional callback(icon, color) after successful save
  */
 window.ICON_PICKER_ICONS = [
-  'folder', 'folder-open', 'briefcase', 'archive', 'box',
+  'vault', 'folder', 'folder-open', 'briefcase', 'archive', 'box',
   'book', 'bookmark', 'heart', 'star', 'flag',
   'home', 'building', 'camera', 'music', 'video',
   'image', 'file-text', 'code', 'database', 'server',

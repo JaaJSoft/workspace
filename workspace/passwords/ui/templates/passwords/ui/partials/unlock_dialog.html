@@ -1,0 +1,74 @@
+<!-- Unlock overlay — rendered inside vault's x-data scope -->
+<div class="card bg-base-200 shadow-xl w-full max-w-sm mx-4"
+     x-data="{ unlockPassword: '', unlockShowPw: false, unlockLoading: false, unlockError: '' }"
+     x-effect="if (locked) { unlockPassword = ''; unlockError = ''; }">
+  <div class="card-body items-center text-center gap-4">
+    <div class="w-14 h-14 rounded-2xl bg-warning/10 flex items-center justify-center">
+      <i data-lucide="{{ vault.icon|default:'vault' }}" class="w-7 h-7 text-warning"></i>
+    </div>
+    <div>
+      <h2 class="text-xl font-bold">{{ vault.name }}</h2>
+      <p class="text-sm text-base-content/50 mt-1">Enter your master password to unlock this vault.</p>
+    </div>
+
+    <div x-show="unlockError" class="w-full">
+      <p class="text-error text-sm" x-text="unlockError"></p>
+    </div>
+
+    <form @submit.prevent="
+      unlockLoading = true;
+      unlockError = '';
+      (async () => {
+        const clientMasterHash = await VaultCrypto.deriveClientMasterHash(
+          unlockPassword, vault.kdf_salt, vault.kdf_iterations
+        );
+        const resp = await fetch('/api/v1/passwords/vaults/' + vault.uuid + '/unlock', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          body: JSON.stringify({ client_master_hash: clientMasterHash }),
+        });
+        if (!resp.ok) {
+          unlockError = 'Incorrect master password.';
+          unlockPassword = '';
+          unlockLoading = false;
+          return;
+        }
+        if (!resp.ok) {
+          unlockError = 'Could not unlock vault. Please try again.';
+          unlockLoading = false;
+          return;
+        }
+        const ok = await unlock(unlockPassword);
+        if (!ok) {
+          unlockError = 'Decryption failed. Please check your password.';
+          unlockPassword = '';
+        }
+        unlockLoading = false;
+      })();
+    " class="w-full">
+      <div class="form-control mb-4">
+        <div class="relative">
+          <input :type="unlockShowPw ? 'text' : 'password'"
+                 x-model="unlockPassword"
+                 class="input input-bordered w-full pr-10 focus:border-warning focus:outline-warning/20"
+                 placeholder="Master password"
+                 autofocus
+                 required>
+          <button type="button"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/40 hover:text-base-content"
+                  @click="unlockShowPw = !unlockShowPw">
+            <i :data-lucide="unlockShowPw ? 'eye-off' : 'eye'" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-warning w-full gap-2" :disabled="unlockLoading">
+        <span x-show="unlockLoading" class="loading loading-spinner loading-sm"></span>
+        <i x-show="!unlockLoading" data-lucide="lock-open" class="w-4 h-4"></i>
+        Unlock
+      </button>
+    </form>
+  </div>
+</div>

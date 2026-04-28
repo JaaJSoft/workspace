@@ -126,9 +126,9 @@ class Event(models.Model):
         indexes = [
             models.Index(fields=['start', 'end']),
             models.Index(fields=['owner', 'start']),
-            models.Index(fields=['calendar', 'start']),
+            # (calendar, start) covered by (calendar, is_cancelled, start) below.
+            # (recurrence_frequency, start) had no caller filtering on it.
             models.Index(fields=['recurrence_parent', 'original_start']),
-            models.Index(fields=['recurrence_frequency', 'start']),
             models.Index(fields=['ical_uid'], name='event_ical_uid'),
             models.Index(fields=['calendar', 'is_cancelled', 'start'], name='event_cal_cancel_start'),
         ]
@@ -301,7 +301,7 @@ class PollVote(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=['voter_token']),
+            # voter_token alone covered by (slot, voter_token); all callers scope by slot.
             models.Index(fields=['slot', 'choice']),
             models.Index(fields=['slot', 'voter_token']),
         ]

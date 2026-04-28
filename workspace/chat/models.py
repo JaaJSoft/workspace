@@ -26,7 +26,6 @@ class Conversation(models.Model):
         ordering = ['-updated_at']
         indexes = [
             models.Index(fields=['-updated_at']),
-            models.Index(fields=['kind'], name='conv_kind'),
         ]
 
     def __str__(self):
@@ -94,8 +93,9 @@ class Message(models.Model):
     class Meta:
         ordering = ['created_at']
         indexes = [
+            # B-tree is bidirectional in PostgreSQL and SQLite: this single index
+            # serves both ASC and DESC ordering on (conversation, created_at).
             models.Index(fields=['conversation', 'created_at']),
-            models.Index(fields=['conversation', '-created_at']),
             models.Index(fields=['deleted_at'], name='msg_deleted_at'),
         ]
 
@@ -218,7 +218,7 @@ class MessageAttachment(models.Model):
 class LinkPreview(models.Model):
     """Cached OpenGraph metadata for a URL. Shared across messages."""
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
-    url = models.URLField(max_length=2048, unique=True, db_index=True)
+    url = models.URLField(max_length=2048, unique=True)
     title = models.CharField(max_length=500, blank=True, default='')
     description = models.TextField(blank=True, default='')
     image_url = models.URLField(max_length=2048, blank=True, default='')
@@ -226,11 +226,6 @@ class LinkPreview(models.Model):
     site_name = models.CharField(max_length=200, blank=True, default='')
     fetched_at = models.DateTimeField(auto_now=True)
     fetch_failed = models.BooleanField(default=False)
-
-    class Meta:
-        indexes = [
-            models.Index(fields=['url'], name='linkpreview_url'),
-        ]
 
     def __str__(self):
         return self.title or self.url[:80]
@@ -251,7 +246,6 @@ class MessageLinkPreview(models.Model):
         ordering = ['position']
         indexes = [
             models.Index(fields=['message', 'position'], name='msglp_msg_pos'),
-            models.Index(fields=['created_at'], name='msglp_created_at'),
         ]
 
     def __str__(self):

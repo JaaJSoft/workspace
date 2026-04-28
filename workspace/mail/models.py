@@ -222,7 +222,7 @@ class MailMessage(models.Model):
             models.Index(fields=['account', 'deleted_at', '-date']),
             models.Index(fields=['account', 'is_starred', '-date']),
             models.Index(fields=['account', 'message_id']),
-            models.Index(fields=['folder', 'imap_uid']),
+            # (folder, imap_uid) already covered by UniqueConstraint above.
             models.Index(fields=['account', 'is_read', 'deleted_at'], name='mail_acct_read_del'),
         ]
 

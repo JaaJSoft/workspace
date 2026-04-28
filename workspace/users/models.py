@@ -50,7 +50,7 @@ class UserSetting(models.Model):
         on_delete=models.CASCADE,
         related_name='settings',
     )
-    module = models.CharField(max_length=64, db_index=True)
+    module = models.CharField(max_length=64)
     key = models.CharField(max_length=128)
     value = models.JSONField(default=None, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -658,7 +658,9 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
         if not force:
             queryset = queryset.filter(deleted_at__lt=cutoff)
-        file_count, _ = queryset.delete()
+        # select_related('owner') avoids N+1 in the pre_delete signal,
+        # which reads instance.owner.username for each File.
+        file_count, _ = queryset.select_related('owner').delete()
         return Response({
             'deleted': file_count,
             'retention_days': retention_days,

@@ -218,7 +218,7 @@ class ScheduledMessage(models.Model):
     recurrence_time = models.TimeField(null=True, blank=True)
     recurrence_day = models.PositiveIntegerField(null=True, blank=True)
 
-    next_run_at = models.DateTimeField(db_index=True)
+    next_run_at = models.DateTimeField()
     last_run_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
@@ -227,6 +227,17 @@ class ScheduledMessage(models.Model):
 
     class Meta:
         ordering = ['next_run_at']
+        indexes = [
+            # Partial index for the dispatch worker, which only ever queries
+            # active schedules with `next_run_at <= now`. Skips inactive rows
+            # entirely, keeping the index small even after many one-shot
+            # schedules have completed.
+            models.Index(
+                fields=['next_run_at'],
+                name='scheduled_active_next_run',
+                condition=models.Q(is_active=True),
+            ),
+        ]
 
     def __str__(self):
         return f'ScheduledMessage {self.uuid} ({self.kind} — {self.conversation_id})'

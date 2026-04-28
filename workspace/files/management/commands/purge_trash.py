@@ -54,7 +54,9 @@ class Command(BaseCommand):
         if dry_run:
             return
 
-        qs.delete()
+        # select_related('owner') avoids N+1 in the pre_delete signal,
+        # which reads instance.owner.username for each File.
+        qs.select_related('owner').delete()
         self.stdout.write(self.style.SUCCESS(
             f"Purged {files_count} files and {folders_count} folders."
         ))

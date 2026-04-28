@@ -61,7 +61,9 @@ def purge_trash(self):
         "Trash purge: deleting %d files and %d folders older than %d days",
         files_count, folders_count, retention_days,
     )
-    qs.delete()
+    # select_related('owner') avoids N+1 in the pre_delete signal,
+    # which reads instance.owner.username for each File.
+    qs.select_related('owner').delete()
 
     logger.info("Trash purge complete.")
     return {

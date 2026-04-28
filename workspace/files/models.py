@@ -160,6 +160,14 @@ class File(models.Model):
             models.Index(fields=['locked_by', 'lock_expires_at'], name='file_lock_idx'),
             models.Index(fields=['owner', 'deleted_at', 'node_type'], name='file_owner_del_type'),
             models.Index(fields=['parent', 'deleted_at', 'name'], name='file_parent_del_name'),
+            # `text_pattern_ops` makes this index usable for `path__startswith`
+            # under non-C UTF-8 collations (PostgreSQL). Silently ignored on SQLite,
+            # which falls back to a regular B-tree (also usable for prefix LIKE).
+            models.Index(
+                fields=['path'],
+                name='file_path_idx',
+                opclasses=['text_pattern_ops'],
+            ),
         ]
         constraints = [
             models.CheckConstraint(

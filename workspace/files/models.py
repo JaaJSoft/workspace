@@ -552,7 +552,7 @@ class FileShareLink(models.Model):
     created_by = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='+'
     )
-    token = models.CharField(max_length=44, unique=True, db_index=True, default=_generate_share_link_token)
+    token = models.CharField(max_length=44, unique=True, default=_generate_share_link_token)
     password = models.CharField(max_length=128, blank=True, default='')
     expires_at = models.DateTimeField(null=True, blank=True)
     view_count = models.PositiveIntegerField(default=0)

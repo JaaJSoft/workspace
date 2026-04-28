@@ -44,10 +44,5 @@ class PushSubscription(models.Model):
     auth = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        indexes = [
-            models.Index(fields=['user']),
-        ]
-
     def __str__(self):
         return f'PushSubscription({self.user.username}, {self.endpoint[:40]}...)'

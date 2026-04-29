@@ -51,7 +51,13 @@ def render_read_receipt(message, conversation_kind):
 
 @register.inclusion_tag('chat/ui/partials/_reactions.html')
 def render_reactions(message, current_user):
-    """Group reactions by emoji and check if current user reacted."""
+    """Group reactions by emoji and check if current user reacted.
+
+    Callers MUST `prefetch_related('reactions__user')` on the message
+    queryset, otherwise iterating reactions hits the DB once per row to
+    resolve `r.user.username`. The two main view sites (chat
+    `conversation_messages_view` and the SSE provider) already do this.
+    """
     reactions = list(message.reactions.all())
     if not reactions:
         return {'groups': [], 'message_uuid': message.uuid}

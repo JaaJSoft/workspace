@@ -84,10 +84,27 @@ def sync_external_calendar_task(external_calendar_uuid):
 
 @shared_task(name='calendar.sync_all_external_calendars', ignore_result=True)
 def sync_all_external_calendars():
-    """Dispatch sync tasks for all active external calendars."""
+    """Dispatch sync tasks for active external calendars due for sync.
+
+    Filters on `last_synced_at` so the `(is_active, last_synced_at)`
+    composite index is used end-to-end. The 900s threshold matches
+    the default `sync_interval` and the typical celery-beat cadence;
+    `last_synced_at IS NULL` covers calendars never synced before.
+    """
+    from datetime import timedelta
+
+    from django.db.models import Q
+    from django.utils import timezone
+
     from workspace.calendar.models_external import ExternalCalendar
 
-    for ext_uuid in ExternalCalendar.objects.filter(
-        is_active=True,
-    ).values_list('uuid', flat=True):
+    threshold = timezone.now() - timedelta(seconds=900)
+    for ext_uuid in (
+        ExternalCalendar.objects
+        .filter(
+            Q(last_synced_at__lt=threshold) | Q(last_synced_at__isnull=True),
+            is_active=True,
+        )
+        .values_list('uuid', flat=True)
+    ):
         sync_external_calendar_task.delay(str(ext_uuid))

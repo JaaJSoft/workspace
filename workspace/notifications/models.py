@@ -28,7 +28,16 @@ class Notification(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['recipient', '-created_at']),
-            models.Index(fields=['recipient', 'read_at']),
+            # Partial index for the unread badge query
+            # `filter(recipient=u, read_at__isnull=True).count()`. Excluding
+            # read rows keeps the index small (badge accuracy matters far
+            # more than read-history queries, which never filter on read_at
+            # in isolation — see workspace/notifications/views.py).
+            models.Index(
+                fields=['recipient'],
+                name='notif_unread_partial',
+                condition=models.Q(read_at__isnull=True),
+            ),
             models.Index(fields=['recipient', 'origin', 'read_at'], name='notif_rcpt_origin_read'),
         ]
 

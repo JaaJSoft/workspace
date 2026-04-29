@@ -58,11 +58,10 @@ class BotProfile(models.Model):
             return True
         if self.created_by_id == user.id:
             return True
-        if self.allowed_users.filter(pk=user.pk).exists():
-            return True
-        if self.allowed_groups.filter(user=user).exists():
-            return True
-        return False
+        # Single round-trip combining the two M2M checks.
+        return BotProfile.objects.filter(pk=self.pk).filter(
+            Q(allowed_users=user) | Q(allowed_groups__user=user)
+        ).exists()
 
     @classmethod
     def accessible_by(cls, user):

@@ -14,6 +14,11 @@ SSE_CONNECTIONS = Gauge(
     'Number of active global SSE connections',
 )
 
+# Force a periodic reconnect so workers/providers cycle and stale state clears.
+# Aligned with the nginx ingress proxy-read-timeout (600s); the browser
+# auto-reconnects via EventSource and resumes from Last-Event-Id.
+_MAX_CONNECTION_SECONDS = 600
+
 
 def _format_sse(event_type, data, event_id=None):
     """Format an SSE event string.
@@ -124,7 +129,7 @@ def _event_stream_pubsub(request, redis):
         last_keepalive = start_time
 
         while True:
-            if time.monotonic() - start_time > 60:
+            if time.monotonic() - start_time > _MAX_CONNECTION_SECONDS:
                 return
 
             # Block up to 5s waiting for message (gevent-friendly)
@@ -183,7 +188,7 @@ def _event_stream_polling(request):
     try:
         while True:
             elapsed = time.time() - start_time
-            if elapsed > 60:
+            if elapsed > _MAX_CONNECTION_SECONDS:
                 return
 
             now = time.time()

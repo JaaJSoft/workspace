@@ -118,7 +118,7 @@ class CallLlmMetricsTests(TestCase):
 )
 class ImageRequestMetricsTests(TestCase):
     @patch('workspace.ai.tools.get_image_client')
-    def test_successful_image_request_increments_ok_counter(self, mock_get_client):
+    def test_successful_generate_increments_ok_counter(self, mock_get_client):
         import base64
 
         from workspace.ai.tools import GenerateImageParams, ImageToolProvider
@@ -129,7 +129,7 @@ class ImageRequestMetricsTests(TestCase):
         client.images.generate.return_value = response
         mock_get_client.return_value = client
 
-        labels = {'model': 'dall-e-3', 'status': 'ok'}
+        labels = {'model': 'dall-e-3', 'op': 'generate', 'status': 'ok'}
         before = _sample('ai_image_requests_total', labels)
 
         ImageToolProvider().generate_image(
@@ -140,14 +140,14 @@ class ImageRequestMetricsTests(TestCase):
         self.assertEqual(_sample('ai_image_requests_total', labels) - before, 1)
 
     @patch('workspace.ai.tools.get_image_client')
-    def test_image_error_increments_error_counter(self, mock_get_client):
+    def test_generate_error_increments_error_counter(self, mock_get_client):
         from workspace.ai.tools import GenerateImageParams, ImageToolProvider
 
         client = MagicMock()
         client.images.generate.side_effect = RuntimeError('upstream down')
         mock_get_client.return_value = client
 
-        labels = {'model': 'dall-e-3', 'status': 'error'}
+        labels = {'model': 'dall-e-3', 'op': 'generate', 'status': 'error'}
         before = _sample('ai_image_requests_total', labels)
 
         result = ImageToolProvider().generate_image(
@@ -156,4 +156,46 @@ class ImageRequestMetricsTests(TestCase):
         )
 
         self.assertTrue(result.startswith('Error'))
+        self.assertEqual(_sample('ai_image_requests_total', labels) - before, 1)
+
+    @patch('workspace.ai.services.image.get_image_client')
+    def test_successful_edit_increments_ok_counter(self, mock_get_client):
+        # Mock the OpenAI-compatible endpoint to succeed on the first try.
+        import base64
+
+        from workspace.ai.services.image import ai_edit_image
+
+        client = MagicMock()
+        response = MagicMock()
+        response.data = [MagicMock(b64_json=base64.b64encode(b'edited').decode())]
+        client.images.edit.return_value = response
+        mock_get_client.return_value = client
+
+        labels = {'model': 'dall-e-3', 'op': 'edit', 'status': 'ok'}
+        before = _sample('ai_image_requests_total', labels)
+
+        result = ai_edit_image(b'source-bytes', 'make it blue')
+
+        self.assertEqual(result, b'edited')
+        self.assertEqual(_sample('ai_image_requests_total', labels) - before, 1)
+
+    @patch('workspace.ai.services.image._edit_via_ollama')
+    @patch('workspace.ai.services.image.get_image_client')
+    def test_edit_error_increments_error_counter_after_both_backends_fail(
+        self, mock_get_client, mock_ollama,
+    ):
+        from workspace.ai.services.image import ai_edit_image
+
+        # OpenAI path raises, Ollama fallback also raises → final RuntimeError.
+        client = MagicMock()
+        client.images.edit.side_effect = RuntimeError('openai down')
+        mock_get_client.return_value = client
+        mock_ollama.side_effect = RuntimeError('ollama down')
+
+        labels = {'model': 'dall-e-3', 'op': 'edit', 'status': 'error'}
+        before = _sample('ai_image_requests_total', labels)
+
+        with self.assertRaises(RuntimeError):
+            ai_edit_image(b'source-bytes', 'make it red')
+
         self.assertEqual(_sample('ai_image_requests_total', labels) - before, 1)

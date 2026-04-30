@@ -21,6 +21,6 @@ AI_TOKENS = Counter(
 
 AI_IMAGE_REQUESTS = Counter(
     f'{_P}_image_requests_total',
-    'Image generation requests issued, by model and status (ok/error)',
-    ['model', 'status'],
+    'Image requests issued, by model, op (generate/edit) and status (ok/error)',
+    ['model', 'op', 'status'],
 )

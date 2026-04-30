@@ -199,12 +199,12 @@ Do NOT use this to modify an existing image — use edit_image instead."""
             )
         except Exception as e:
             AI_IMAGE_REQUESTS.labels(
-                model=settings.AI_IMAGE_MODEL, status='error',
+                model=settings.AI_IMAGE_MODEL, op='generate', status='error',
             ).inc()
             logger.exception('Image generation failed')
             return f'Error: image generation failed — {e}'
         AI_IMAGE_REQUESTS.labels(
-            model=settings.AI_IMAGE_MODEL, status='ok',
+            model=settings.AI_IMAGE_MODEL, op='generate', status='ok',
         ).inc()
 
         image_data = base64.b64decode(response.data[0].b64_json)

@@ -43,6 +43,8 @@ def ai_edit_image(source_data: bytes, prompt: str, size: str = '1024x1024') -> b
         settings.AI_IMAGE_MODEL, size, prompt,
     )
 
+    from workspace.ai.metrics import AI_IMAGE_REQUESTS
+
     # Try OpenAI-compatible endpoint first, fall back to Ollama native API
     try:
         image_file = io.BytesIO(source_data)
@@ -55,9 +57,15 @@ def ai_edit_image(source_data: bytes, prompt: str, size: str = '1024x1024') -> b
             image_data = _edit_via_ollama(source_data, prompt)
             logger.info('Image edited via Ollama native API: model=%s bytes=%d', settings.AI_IMAGE_MODEL, len(image_data))
         except Exception as ollama_err:
+            AI_IMAGE_REQUESTS.labels(
+                model=settings.AI_IMAGE_MODEL, op='edit', status='error',
+            ).inc()
             logger.exception('Image edit failed on both OpenAI and Ollama backends')
             raise RuntimeError(f'image edit failed — {ollama_err}') from ollama_err
 
+    AI_IMAGE_REQUESTS.labels(
+        model=settings.AI_IMAGE_MODEL, op='edit', status='ok',
+    ).inc()
     return image_data
 
 

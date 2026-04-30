@@ -188,6 +188,7 @@ Do NOT use this to modify an existing image — use edit_image instead."""
             'Starting image generation: model=%s size=%s prompt=%.80s',
             settings.AI_IMAGE_MODEL, size, prompt,
         )
+        from workspace.ai.metrics import AI_IMAGE_REQUESTS
         try:
             response = client.images.generate(
                 model=settings.AI_IMAGE_MODEL,
@@ -197,8 +198,14 @@ Do NOT use this to modify an existing image — use edit_image instead."""
                 response_format='b64_json',
             )
         except Exception as e:
+            AI_IMAGE_REQUESTS.labels(
+                model=settings.AI_IMAGE_MODEL, status='error',
+            ).inc()
             logger.exception('Image generation failed')
             return f'Error: image generation failed — {e}'
+        AI_IMAGE_REQUESTS.labels(
+            model=settings.AI_IMAGE_MODEL, status='ok',
+        ).inc()
 
         image_data = base64.b64decode(response.data[0].b64_json)
         logger.info(

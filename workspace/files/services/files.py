@@ -16,6 +16,7 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 
 from workspace.common.logging import scrub
+from workspace.files.metrics import FILES_UPLOAD_BYTES
 from workspace.files.models import File
 
 
@@ -157,6 +158,8 @@ class FileService:
         if content is not None:
             file_obj.content = content
         file_obj.save()
+        if size:
+            FILES_UPLOAD_BYTES.inc(size)
         return file_obj
 
     @staticmethod
@@ -313,6 +316,8 @@ class FileService:
         file_obj.has_thumbnail = False
         file_obj.content = content
         file_obj.save()
+        if file_obj.size:
+            FILES_UPLOAD_BYTES.inc(file_obj.size)
         return file_obj
 
     @staticmethod
@@ -329,6 +334,8 @@ class FileService:
         file_obj.has_thumbnail = False
         file_obj.content.name = storage_path
         file_obj.save()
+        if size:
+            FILES_UPLOAD_BYTES.inc(size)
         return file_obj
 
     @staticmethod

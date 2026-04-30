@@ -221,14 +221,18 @@ def _extract_text_tool_calls(content: str):
 
 def _call_llm(messages: list[dict], model: str | None = None, max_tokens: int | None = None, tools: list | None = None) -> dict:
     """Call an LLM via OpenAI SDK and return a dict with content and usage info."""
+    import time
+
     from workspace.ai.client import get_ai_client
+    from workspace.ai.metrics import AI_REQUEST_DURATION, AI_TOKENS
 
     client = get_ai_client()
     if not client:
         raise RuntimeError('AI is not configured (AI_API_KEY missing)')
 
+    effective_model = model or settings.AI_MODEL
     kwargs = {
-        'model': model or settings.AI_MODEL,
+        'model': effective_model,
         'messages': messages,
         'max_tokens': max_tokens or settings.AI_MAX_TOKENS,
     }
@@ -236,7 +240,27 @@ def _call_llm(messages: list[dict], model: str | None = None, max_tokens: int | 
         kwargs['tools'] = tools
         kwargs['tool_choice'] = 'auto'
 
-    response = client.chat.completions.create(**kwargs)
+    started = time.monotonic()
+    try:
+        response = client.chat.completions.create(**kwargs)
+    except Exception:
+        AI_REQUEST_DURATION.labels(
+            model=effective_model, status='error',
+        ).observe(time.monotonic() - started)
+        raise
+    AI_REQUEST_DURATION.labels(
+        model=response.model or effective_model, status='ok',
+    ).observe(time.monotonic() - started)
+
+    if response.usage:
+        if response.usage.prompt_tokens:
+            AI_TOKENS.labels(
+                model=response.model or effective_model, kind='prompt',
+            ).inc(response.usage.prompt_tokens)
+        if response.usage.completion_tokens:
+            AI_TOKENS.labels(
+                model=response.model or effective_model, kind='completion',
+            ).inc(response.usage.completion_tokens)
 
     choice = response.choices[0]
     content = _strip_thinking(choice.message.content or '')

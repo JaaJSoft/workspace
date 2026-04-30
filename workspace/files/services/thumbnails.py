@@ -6,7 +6,17 @@ from io import BytesIO
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
+from workspace.files.metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
+
 logger = logging.getLogger(__name__)
+
+
+def _mime_family(mime_type):
+    """Return a low-cardinality label value for the metric ('jpeg', 'png', ...)."""
+    if not mime_type or '/' not in mime_type:
+        return 'unknown'
+    subtype = mime_type.split('/', 1)[1].lower()
+    return subtype.split('+', 1)[0] or 'unknown'
 
 # Raster image MIME types that Pillow can handle
 _RASTER_MIME_TYPES = frozenset({
@@ -65,48 +75,53 @@ def generate_thumbnail(file_obj):
     from PIL import Image, ImageOps
 
     if not file_obj.content or not can_generate_thumbnail(file_obj.mime_type):
+        FILES_THUMBNAIL_RESULT.labels(result='skipped').inc()
         return False
 
+    family = _mime_family(file_obj.mime_type)
     try:
-        file_obj.content.open('rb')
+        with FILES_THUMBNAIL_DURATION.labels(mime_family=family).time():
+            file_obj.content.open('rb')
 
-        if file_obj.mime_type in _SVG_MIME_TYPES:
-            svg_data = file_obj.content.read()
-            img = _rasterize_svg(svg_data)
-        else:
-            img = Image.open(file_obj.content)
+            if file_obj.mime_type in _SVG_MIME_TYPES:
+                svg_data = file_obj.content.read()
+                img = _rasterize_svg(svg_data)
+            else:
+                img = Image.open(file_obj.content)
 
-            # Auto-rotate based on EXIF orientation
-            try:
-                img = ImageOps.exif_transpose(img)
-            except Exception:
-                pass
+                # Auto-rotate based on EXIF orientation
+                try:
+                    img = ImageOps.exif_transpose(img)
+                except Exception:
+                    pass
 
-        # Convert to RGB for WebP output
-        if img.mode in ('RGBA', 'LA', 'PA', 'P'):
-            background = Image.new('RGB', img.size, (255, 255, 255))
-            if img.mode == 'P':
-                img = img.convert('RGBA')
-            alpha = img.split()[-1] if img.mode.endswith('A') else None
-            background.paste(img, mask=alpha)
-            img = background
-        elif img.mode != 'RGB':
-            img = img.convert('RGB')
+            # Convert to RGB for WebP output
+            if img.mode in ('RGBA', 'LA', 'PA', 'P'):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                alpha = img.split()[-1] if img.mode.endswith('A') else None
+                background.paste(img, mask=alpha)
+                img = background
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
 
-        img.thumbnail(THUMBNAIL_MAX_SIZE, Image.LANCZOS)
+            img.thumbnail(THUMBNAIL_MAX_SIZE, Image.LANCZOS)
 
-        buf = BytesIO()
-        img.save(buf, format=THUMBNAIL_FORMAT, quality=THUMBNAIL_QUALITY)
-        buf.seek(0)
+            buf = BytesIO()
+            img.save(buf, format=THUMBNAIL_FORMAT, quality=THUMBNAIL_QUALITY)
+            buf.seek(0)
 
-        thumb_path = get_thumbnail_path(file_obj.uuid)
-        if default_storage.exists(thumb_path):
-            default_storage.delete(thumb_path)
-        default_storage.save(thumb_path, ContentFile(buf.read()))
+            thumb_path = get_thumbnail_path(file_obj.uuid)
+            if default_storage.exists(thumb_path):
+                default_storage.delete(thumb_path)
+            default_storage.save(thumb_path, ContentFile(buf.read()))
 
+        FILES_THUMBNAIL_RESULT.labels(result='success').inc()
         return True
     except Exception:
         logger.warning("Failed to generate thumbnail for %s", file_obj.uuid, exc_info=True)
+        FILES_THUMBNAIL_RESULT.labels(result='failed').inc()
         return False
     finally:
         try:

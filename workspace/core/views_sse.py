@@ -3,15 +3,42 @@ import time
 
 import orjson
 from django.http import StreamingHttpResponse
-from prometheus_client import Gauge
+
+from workspace.common.metrics import safe_counter, safe_gauge, safe_histogram
 
 from .sse_registry import sse_registry
 
 logger = logging.getLogger(__name__)
 
-SSE_CONNECTIONS = Gauge(
-    'sse_active_connections',
+# All metric names in this file MUST start with "sse_".
+_P = 'sse'
+
+SSE_CONNECTIONS = safe_gauge(
+    f'{_P}_active_connections',
     'Number of active global SSE connections',
+)
+
+SSE_EVENTS_EMITTED = safe_counter(
+    f'{_P}_events_emitted_total',
+    'SSE events sent to clients, by provider and event name',
+    ['provider', 'event'],
+)
+
+SSE_PROVIDER_POLL_DURATION = safe_histogram(
+    f'{_P}_provider_poll_duration_seconds',
+    'Time spent inside provider.poll() during a single call',
+    ['provider'],
+)
+
+SSE_FORCED_RECONNECTS = safe_counter(
+    f'{_P}_forced_reconnects_total',
+    'Streams closed because the server-side connection budget was reached',
+    ['transport'],
+)
+
+SSE_PUBSUB_MESSAGES = safe_counter(
+    f'{_P}_pubsub_messages_total',
+    'Redis Pub/Sub messages received on the per-user SSE channel',
 )
 
 # Force a periodic reconnect so workers/providers cycle and stale state clears.
@@ -73,6 +100,7 @@ def _emit_initial_events(providers, user_id):
     for slug, provider in providers.items():
         try:
             for event_name, data, event_id in provider.get_initial_events():
+                SSE_EVENTS_EMITTED.labels(provider=slug, event=event_name).inc()
                 yield _format_sse(f'{slug}.{event_name}', data, event_id)
         except Exception:
             logger.exception(
@@ -84,8 +112,12 @@ def _emit_initial_events(providers, user_id):
 def _poll_provider(slug, provider, cache_value, user_id):
     """Poll a single provider and yield any SSE events."""
     try:
-        events = provider.poll(cache_value)
+        # Force-evaluate inside the timer so we measure the actual work even if
+        # the provider returns a generator.
+        with SSE_PROVIDER_POLL_DURATION.labels(provider=slug).time():
+            events = list(provider.poll(cache_value))
         for event_name, data, event_id in events:
+            SSE_EVENTS_EMITTED.labels(provider=slug, event=event_name).inc()
             yield _format_sse(
                 f'{slug}.{event_name}', data, event_id,
             )
@@ -130,6 +162,7 @@ def _event_stream_pubsub(request, redis):
 
         while True:
             if time.monotonic() - start_time > _MAX_CONNECTION_SECONDS:
+                SSE_FORCED_RECONNECTS.labels(transport='pubsub').inc()
                 return
 
             # Block up to 5s waiting for message (gevent-friendly)
@@ -146,6 +179,7 @@ def _event_stream_pubsub(request, redis):
                 for slug, provider in providers.items():
                     yield from _poll_provider(slug, provider, None, user_id)
             elif message['type'] == 'message':
+                SSE_PUBSUB_MESSAGES.inc()
                 try:
                     # Targeted: only poll the provider that published
                     data = orjson.loads(message['data'])
@@ -189,6 +223,7 @@ def _event_stream_polling(request):
         while True:
             elapsed = time.time() - start_time
             if elapsed > _MAX_CONNECTION_SECONDS:
+                SSE_FORCED_RECONNECTS.labels(transport='polling').inc()
                 return
 
             now = time.time()

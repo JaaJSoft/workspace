@@ -64,3 +64,6 @@ class FilesConfig(AppConfig):
         from workspace.ai.tool_registry import tool_registry
         from workspace.files.ai_tools import FilesToolProvider
         tool_registry.register_provider(FilesToolProvider())
+
+        # Register Prometheus metrics + storage-bytes collector.
+        from workspace.files import metrics  # noqa: F401

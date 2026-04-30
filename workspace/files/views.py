@@ -24,6 +24,7 @@ User = get_user_model()
 
 from django.http import Http404
 
+from .metrics import FILES_DOWNLOAD_BYTES
 from .models import File, FileComment, FileFavorite, FileShare, FileShareLink, PinnedFolder
 from .serializers import (
     FileCommentCreateSerializer,
@@ -775,6 +776,8 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
                 response = HttpResponse(content, content_type=file_obj.mime_type)
                 response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
                 self._set_file_cache_headers(response, file_obj)
+                if file_obj.size:
+                    FILES_DOWNLOAD_BYTES.inc(file_obj.size)
                 return response
             except Exception:
                 # Fallback to binary if UTF-8 fails
@@ -794,6 +797,8 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
         self._set_file_cache_headers(response, file_obj)
 
+        if file_obj.size:
+            FILES_DOWNLOAD_BYTES.inc(file_obj.size)
         return response
 
     @staticmethod
@@ -894,6 +899,8 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
                 filename=file_obj.name,
             )
             self._set_file_cache_headers(response, file_obj)
+            if file_obj.size:
+                FILES_DOWNLOAD_BYTES.inc(file_obj.size)
             return response
 
         # Folder download as ZIP
@@ -923,8 +930,10 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
         buf.seek(0)
 
         zip_name = f"{file_obj.name}.zip"
-        response = HttpResponse(buf.read(), content_type='application/zip')
+        zip_bytes = buf.getvalue()
+        response = HttpResponse(zip_bytes, content_type='application/zip')
         response['Content-Disposition'] = f'attachment; filename="{zip_name}"'
+        FILES_DOWNLOAD_BYTES.inc(len(zip_bytes))
         return response
 
     @extend_schema(

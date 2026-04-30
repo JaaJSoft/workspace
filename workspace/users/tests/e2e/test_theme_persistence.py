@@ -42,16 +42,26 @@ class ThemePersistenceTests(PlaywrightTestCase):
         # Only the visible (preferences) tab has these buttons.
         dark_button = self.page.get_by_role("button", name="Dark", exact=True)
         expect(dark_button).to_be_visible()
-        dark_button.click()
+
+        # Wait specifically for the ``PUT /api/v1/settings/core/theme``
+        # response triggered by the click. ``wait_for_load_state(
+        # "networkidle")`` does not work here: the SSE long-poll on
+        # ``/api/v1/stream`` keeps the page "busy" indefinitely, so
+        # networkidle never fires and the test would time out.
+        with self.page.expect_response(
+            lambda r: (
+                r.request.method == "PUT"
+                and "/api/v1/settings/core/theme" in r.url
+            )
+        ) as put_resp:
+            dark_button.click()
+        assert put_resp.value.ok, (
+            f"theme PUT failed: {put_resp.value.status} {put_resp.value.url}"
+        )
 
         # Optimistic UI: ``applyTheme`` mutates ``data-theme`` synchronously
         # before the network request completes — assert it landed.
         expect(self.page.locator("html")).to_have_attribute("data-theme", "dark")
-
-        # Wait for ``PUT /api/v1/settings/core/theme`` to settle. Without
-        # this, ``page.reload()`` races with ``set_setting()`` and the
-        # context processor may still read the prior value from cache.
-        self.page.wait_for_load_state("networkidle")
 
         # F5 — Django re-renders ``<html>`` from scratch using
         # ``user_preferences``, which calls ``get_setting()``. If the

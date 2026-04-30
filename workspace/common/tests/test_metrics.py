@@ -30,9 +30,9 @@ class GetOrCreateTests(TestCase):
     def test_existing_instance_remains_usable(self):
         # The reused instance must still produce samples — i.e. we did not
         # accidentally swap it for a no-op.
-        c = safe_counter('test_helper_usable_total', 'doc', ['x'])
-        c2 = safe_counter('test_helper_usable_total', 'doc', ['x'])
-        c2.labels(x='a').inc()
+        safe_counter('test_helper_usable_total', 'doc', ['x'])  # first registration
+        reused = safe_counter('test_helper_usable_total', 'doc', ['x'])
+        reused.labels(x='a').inc()
         sample = REGISTRY.get_sample_value(
             'test_helper_usable_total', {'x': 'a'},
         )

@@ -46,13 +46,14 @@ def safe_register(collector):
 def _get_or_create(cls, name, doc, labels, **kwargs):
     try:
         return cls(name, doc, labels, **kwargs)
-    except ValueError:
-        # The constructor implicitly registers the metric and raises on the
-        # second attempt. Fish the existing instance out so the caller can
-        # keep using the same module-level reference.
+    except ValueError as exc:
+        # We only swallow the duplicated-timeseries case. Any other ValueError
+        # (e.g. a real parameter mismatch like changed labels/doc) must surface
+        # so it can be fixed at the call site instead of silently masked.
+        if 'Duplicated timeseries' not in str(exc):
+            raise
         existing = REGISTRY._names_to_collectors.get(name)
         if existing is None:
-            # The ValueError was about something else; surface it.
             raise
         logger.debug('Reusing existing metric %s on re-import', name)
         return existing

@@ -48,6 +48,21 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
     # Override in subclasses if you need a different browser (``firefox``, ``webkit``).
     BROWSER_NAME = "chromium"
     HEADLESS = True
+    # When True, the test fails if the browser raised any uncaught JS
+    # exception (``pageerror``) or any same-origin request failed during
+    # the test. Third-party CDN failures and navigation-aborted requests
+    # (``net::ERR_ABORTED``, fired e.g. when an in-flight SSE long-poll
+    # is cancelled by ``page.goto`` / teardown) are tolerated — they're
+    # operational, not regressions in our code.
+    #
+    # Default is **opt-in** for now: ``base.html`` currently emits
+    # uncaught exceptions on every page load when the navbar reads
+    # ``$store.notifications.*`` / ``$store.push.*`` before the
+    # ``alpine:init`` handler has registered the stores. Flipping this
+    # to True today would fail every smoke test on the branch. Once the
+    # store-init race is fixed, flip the default and individual smoke
+    # tests gain an anti-regression guard for free.
+    STRICT_NO_JS_ERRORS = False
 
     @classmethod
     def setUpClass(cls):
@@ -97,12 +112,58 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
         # runs before tearDown and has reliable access to the current
         # exception info, unlike fiddling with ``self._outcome``.
         self.addCleanup(self._dump_diagnostics)
+        # Cleanups run LIFO, so this assertion fires BEFORE the dump,
+        # which is what we want: the dump's ``sys.exc_info()`` check then
+        # picks up our AssertionError and prints the captured browser
+        # state alongside it.
+        self.addCleanup(self._assert_no_js_errors)
 
     def tearDown(self):
         try:
             self.context.close()
         finally:
             super().tearDown()
+
+    def _assert_no_js_errors(self):
+        """Fail the test if the browser surfaced uncaught JS exceptions
+        or genuine same-origin network failures.
+
+        Catches the bug class that smoke tests miss: an Alpine component
+        that throws on init, a ``|json_script`` ID that doesn't exist,
+        a misconfigured CSP. ``pageerror`` captures uncaught JS
+        exceptions; ``requestfailed`` captures network-level failures
+        (DNS, TCP reset, blocked by browser). Note this does *not*
+        observe HTTP responses — a 401 / 500 that the UI swallows
+        without raising will not be caught here; add a ``response``
+        listener if you need that signal.
+
+        Tolerated:
+
+        * Third-party CDN failures (cropper, lucide…) — flake
+          independently of the code under test.
+        * ``net::ERR_ABORTED`` on any URL — fired when the browser
+          cancels an in-flight request because the page navigated or
+          tore down (typical for the SSE ``/api/v1/stream`` long-poll
+          on logout / teardown). Aborts are intentional, not failures.
+        """
+        if not self.STRICT_NO_JS_ERRORS:
+            return
+
+        own_failed = [
+            r for r in self._failed_requests
+            if self.live_server_url in r and "ERR_ABORTED" not in r
+        ]
+        if not self._page_errors and not own_failed:
+            return
+
+        parts = ["Browser surfaced errors during the test:"]
+        if self._page_errors:
+            parts.append("  page errors:")
+            parts.extend(f"    - {e}" for e in self._page_errors)
+        if own_failed:
+            parts.append("  same-origin failed requests:")
+            parts.extend(f"    - {r}" for r in own_failed)
+        raise AssertionError("\n".join(parts))
 
     def _dump_diagnostics(self):
         """Print captured browser diagnostics — only when something failed."""

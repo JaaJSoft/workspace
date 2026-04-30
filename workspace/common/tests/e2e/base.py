@@ -48,6 +48,12 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
     # Override in subclasses if you need a different browser (``firefox``, ``webkit``).
     BROWSER_NAME = "chromium"
     HEADLESS = True
+    # When True, the test fails if the browser raised any uncaught JS
+    # exception (``pageerror``) or any same-origin request failed during
+    # the test. Third-party CDN failures are tolerated — they're
+    # operational flakes, not regressions in our code. Override to False
+    # in subclasses that intentionally trigger an in-app error path.
+    STRICT_NO_JS_ERRORS = True
 
     @classmethod
     def setUpClass(cls):
@@ -97,12 +103,49 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
         # runs before tearDown and has reliable access to the current
         # exception info, unlike fiddling with ``self._outcome``.
         self.addCleanup(self._dump_diagnostics)
+        # Cleanups run LIFO, so this assertion fires BEFORE the dump,
+        # which is what we want: the dump's ``sys.exc_info()`` check then
+        # picks up our AssertionError and prints the captured browser
+        # state alongside it.
+        self.addCleanup(self._assert_no_js_errors)
 
     def tearDown(self):
         try:
             self.context.close()
         finally:
             super().tearDown()
+
+    def _assert_no_js_errors(self):
+        """Fail the test if the browser surfaced uncaught JS or same-origin
+        network errors.
+
+        Catches the bug class that smoke tests miss: an Alpine component
+        that throws on init, a ``|json_script`` ID that doesn't exist,
+        a fetch returning 401/500 that the UI swallows. ``pageerror``
+        captures uncaught JS exceptions; ``requestfailed`` captures
+        network-level failures (DNS, TCP reset, blocked by browser).
+
+        Third-party CDN failures (cropper, lucide…) are tolerated: they
+        flake independently of the code under test.
+        """
+        if not self.STRICT_NO_JS_ERRORS:
+            return
+
+        own_failed = [
+            r for r in self._failed_requests
+            if self.live_server_url in r
+        ]
+        if not self._page_errors and not own_failed:
+            return
+
+        parts = ["Browser surfaced errors during the test:"]
+        if self._page_errors:
+            parts.append("  page errors:")
+            parts.extend(f"    - {e}" for e in self._page_errors)
+        if own_failed:
+            parts.append("  same-origin failed requests:")
+            parts.extend(f"    - {r}" for r in own_failed)
+        raise AssertionError("\n".join(parts))
 
     def _dump_diagnostics(self):
         """Print captured browser diagnostics — only when something failed."""

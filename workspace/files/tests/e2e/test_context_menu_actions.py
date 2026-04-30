@@ -72,7 +72,10 @@ class ContextMenuMatchesActionsEndpointTests(PlaywrightTestCase):
         api_payload = api_response.json()
         api_actions = api_payload.get(str(f.uuid), [])
 
-        row = self.page.locator(f'tr[data-uuid="{f.uuid}"]')
+        # ``data-uuid`` is set on both the list-view ``<tr>`` and the
+        # mosaic-view ``<div>``; we don't care which layout the user
+        # has set as default — both render the same context menu.
+        row = self.page.locator(f'[data-uuid="{f.uuid}"]').first
         expect(row).to_be_visible()
         assert api_actions, (
             f"endpoint returned no actions for {f.uuid}; "

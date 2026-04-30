@@ -36,27 +36,31 @@ class DialogEscapeTests(PlaywrightTestCase):
         # could be swapped without changing UX).
         self.page.get_by_title("New conversation (Alt+N)").click()
 
-        # The dialog is opened via ``showModal()`` — when open, the
-        # native ``<dialog>`` element receives the ``open`` attribute
-        # and daisyui's ``.modal`` styles make it visible. We assert
-        # both: visibility is what the user perceives, ``[open]`` is
-        # the precise state of the native element.
-        #
-        # We target the dialog by its unique ``<h3>`` heading rather than
-        # by ``has_text``, because the chat help dialog also contains the
-        # text "New conversation" (in a keyboard-shortcut table row).
+        # The dialog is opened via ``showModal()``, which sets the
+        # native ``[open]`` attribute. We target it by its unique
+        # ``<h3>`` heading: matching by ``has_text`` would also catch
+        # the chat help dialog (which lists "New conversation" in a
+        # keyboard-shortcut table row).
         dialog = self.page.locator("dialog.modal").filter(
             has=self.page.get_by_role("heading", name="New conversation", exact=True),
         )
-        expect(dialog).to_be_visible()
         expect(dialog).to_have_attribute("open", "")
 
-        # Press Escape. ``<dialog>`` element fires ``cancel`` natively
-        # AND the Alpine ``@keydown.escape`` handler calls ``close()``
-        # — either path must close the dialog.
+        # Click inside the dialog to put keyboard focus on the search
+        # input. The trigger click that opened the dialog left focus on
+        # the trigger button (outside the dialog), and a global
+        # ``page.keyboard.press("Escape")`` from there never bubbles to
+        # the dialog's ``@keydown.escape`` handler. Clicking the input
+        # is the same focus transfer a user would naturally do before
+        # pressing Escape.
+        dialog.locator("input").first.click()
         self.page.keyboard.press("Escape")
 
-        # daisyui hides ``dialog:not([open])`` via CSS, so visibility
-        # tracks the ``open`` attribute. Assert the user-visible outcome.
-        expect(dialog).not_to_be_visible()
+        # Assert the close via the native ``[open]`` attribute, not CSS
+        # visibility. daisyUI styles ``.modal`` with ``display: grid``
+        # and a fade-out opacity transition, so a *just*-closed dialog
+        # stays in the layout for ~150 ms while opacity animates to 0
+        # and Playwright's ``to_be_visible`` flags it as still visible.
+        # The ``[open]`` attribute is the source of truth and flips
+        # synchronously when ``dialog.close()`` is called.
         expect(dialog).not_to_have_attribute("open", "")

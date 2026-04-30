@@ -45,49 +45,35 @@ class ContextMenuMatchesActionsEndpointTests(PlaywrightTestCase):
         )
 
         self.login_as(user)
-        self.page.goto(f"{self.live_server_url}/files")
 
-        # Wait until the row exists and the in-page ``fetchActions()``
-        # call (fired in ``fileBrowser().init()``) has populated
-        # ``actionsMap`` for our file. Without this wait the right-click
-        # races with the API request and the menu opens with an empty
-        # ``actions: []`` array.
+        # ``fileBrowser().init()`` fires ``POST /api/v1/files/actions``
+        # for all visible row UUIDs as the page mounts. Capturing that
+        # response gives us *both* the canonical API payload (which the
+        # UI is supposed to mirror) AND a synchronization point: by the
+        # time ``expect_response`` resolves, the browser has the body in
+        # hand and the JS handler has assigned ``this.actionsMap``.
+        # This is more reliable than polling Alpine's internal state
+        # via ``Alpine.evaluate(...)`` from a wait_for_function, which
+        # is fragile to selector-attribute escaping
+        # (``[x-data="fileBrowser()"]`` with the parens) and to whatever
+        # name the component happens to use today.
+        with self.page.expect_response(
+            lambda r: (
+                r.request.method == "POST"
+                and "/api/v1/files/actions" in r.url
+            )
+        ) as resp_info:
+            self.page.goto(f"{self.live_server_url}/files")
+        api_response = resp_info.value
+        assert api_response.ok, (
+            f"actions endpoint returned {api_response.status} "
+            f"{api_response.url}"
+        )
+        api_payload = api_response.json()
+        api_actions = api_payload.get(str(f.uuid), [])
+
         row = self.page.locator(f'tr[data-uuid="{f.uuid}"]')
         expect(row).to_be_visible()
-        self.page.wait_for_function(
-            "(uuid) => {"
-            "  const root = document.querySelector('[x-data=\"fileBrowser()\"]');"
-            "  if (!root) return false;"
-            "  const map = Alpine.evaluate(root, 'actionsMap');"
-            "  return Array.isArray(map?.[uuid]) && map[uuid].length > 0;"
-            "}",
-            arg=str(f.uuid),
-        )
-
-        # Independent source of truth: hit the same endpoint the page
-        # uses, with the same cookies, via the browser's own fetch. This
-        # gives us the JSON the UI is *supposed* to mirror.
-        api_response = self.page.evaluate(
-            """
-            async (uuid) => {
-              const resp = await fetch('/api/v1/files/actions', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-CSRFToken': getCSRFToken(),
-                },
-                body: JSON.stringify({ uuids: [uuid] }),
-              });
-              return { status: resp.status, body: await resp.json() };
-            }
-            """,
-            arg=str(f.uuid),
-        )
-        assert api_response["status"] == 200, (
-            f"actions endpoint returned {api_response['status']}: "
-            f"{api_response['body']!r}"
-        )
-        api_actions = api_response["body"].get(str(f.uuid), [])
         assert api_actions, (
             f"endpoint returned no actions for {f.uuid}; "
             f"the rest of this test would compare empty sets"
@@ -108,7 +94,7 @@ class ContextMenuMatchesActionsEndpointTests(PlaywrightTestCase):
         # which dispatches ``open-context-menu`` to the menu component.
         row.click(button="right")
 
-        menu = self.page.locator('[x-data="contextMenu()"]')
+        menu = self.page.locator('[x-data*="contextMenu"]')
         expect(menu).to_be_visible()
 
         # Read the visible label of each ``<li>`` in the menu.
@@ -120,7 +106,7 @@ class ContextMenuMatchesActionsEndpointTests(PlaywrightTestCase):
         menu_labels = self.page.evaluate(
             """
             () => {
-              const root = document.querySelector('[x-data="contextMenu()"]');
+              const root = document.querySelector('[x-data*="contextMenu"]');
               if (!root) return [];
               const labels = [];
               for (const li of root.querySelectorAll('li')) {

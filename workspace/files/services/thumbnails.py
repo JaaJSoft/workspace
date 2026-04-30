@@ -96,11 +96,16 @@ def generate_thumbnail(file_obj):
             else:
                 img = Image.open(file_obj.content)
 
-                # Auto-rotate based on EXIF orientation
+                # Auto-rotate based on EXIF orientation. A malformed EXIF
+                # block must not abort thumbnail generation; we log at debug
+                # level for diagnosability and continue with the un-rotated image.
                 try:
                     img = ImageOps.exif_transpose(img)
                 except Exception:
-                    pass
+                    logger.debug(
+                        'EXIF transpose failed for %s, continuing with un-rotated image',
+                        file_obj.uuid, exc_info=True,
+                    )
 
             # Convert to RGB for WebP output
             if img.mode in ('RGBA', 'LA', 'PA', 'P'):
@@ -131,10 +136,12 @@ def generate_thumbnail(file_obj):
         FILES_THUMBNAIL_RESULT.labels(result='failed').inc()
         return False
     finally:
+        # Best-effort cleanup: a close() that fails after the body has been
+        # processed (or failed) is not actionable; we drop it at debug level.
         try:
             file_obj.content.close()
         except Exception:
-            pass
+            logger.debug('Failed to close content for %s', file_obj.uuid, exc_info=True)
 
 
 def delete_thumbnail(uuid):

@@ -116,4 +116,10 @@ class _CeleryQueueLengthCollector:
         yield gauge
 
 
-REGISTRY.register(_CeleryQueueLengthCollector())
+# Guarded against double-registration: in test harnesses or autoreload setups
+# the module can be re-imported in the same interpreter, which would otherwise
+# raise ValueError on duplicate metric names.
+try:
+    REGISTRY.register(_CeleryQueueLengthCollector())
+except ValueError:
+    logger.debug('Celery queue length collector already registered')

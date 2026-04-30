@@ -6,17 +6,24 @@ from io import BytesIO
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
-from workspace.files.metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
+from ..metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
 
 logger = logging.getLogger(__name__)
 
+# Whitelist of MIME subtypes used as the `mime_family` metric label.
+# Anything not in this set is reported as 'other' so the label cardinality
+# stays bounded even if THUMBNAIL_MIME_TYPES is later widened by mistake.
+_KNOWN_MIME_FAMILIES = frozenset({'jpeg', 'png', 'webp', 'bmp', 'tiff', 'gif', 'svg'})
+
 
 def _mime_family(mime_type):
-    """Return a low-cardinality label value for the metric ('jpeg', 'png', ...)."""
+    """Return a bounded label value for the metric ('jpeg', 'png', ..., 'other')."""
     if not mime_type or '/' not in mime_type:
         return 'unknown'
-    subtype = mime_type.split('/', 1)[1].lower()
-    return subtype.split('+', 1)[0] or 'unknown'
+    subtype = mime_type.split('/', 1)[1].lower().split('+', 1)[0] or 'unknown'
+    if subtype == 'unknown':
+        return 'unknown'
+    return subtype if subtype in _KNOWN_MIME_FAMILIES else 'other'
 
 # Raster image MIME types that Pillow can handle
 _RASTER_MIME_TYPES = frozenset({

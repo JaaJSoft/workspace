@@ -100,13 +100,16 @@ class _CeleryQueueLengthCollector:
 
             import redis
             client = redis.Redis.from_url(broker)
-            for name in queue_names:
-                try:
-                    length = client.llen(name)
-                except Exception:
-                    logger.exception("LLEN failed for celery queue '%s'", name)
-                    continue
-                gauge.add_metric([name], length)
+            try:
+                for name in queue_names:
+                    try:
+                        length = client.llen(name)
+                    except Exception:
+                        logger.exception("LLEN failed for celery queue '%s'", name)
+                        continue
+                    gauge.add_metric([name], length)
+            finally:
+                client.close()
         except Exception:
             logger.exception('celery_queue_length collector failed')
             return

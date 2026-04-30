@@ -16,8 +16,9 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 
 from workspace.common.logging import scrub
-from workspace.files.metrics import FILES_UPLOAD_BYTES
-from workspace.files.models import File
+
+from ..metrics import FILES_UPLOAD_BYTES
+from ..models import File
 
 
 class FilePermission(enum.IntEnum):

@@ -43,7 +43,7 @@ def ai_edit_image(source_data: bytes, prompt: str, size: str = '1024x1024') -> b
         settings.AI_IMAGE_MODEL, size, prompt,
     )
 
-    from workspace.ai.metrics import AI_IMAGE_REQUESTS
+    from ..metrics import AI_IMAGE_REQUESTS
 
     # Try OpenAI-compatible endpoint first, fall back to Ollama native API
     try:

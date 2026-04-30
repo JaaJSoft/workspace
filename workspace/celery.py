@@ -6,8 +6,9 @@ import time
 
 from celery import Celery
 from celery.signals import task_failure, task_postrun, task_prerun, task_retry
-from prometheus_client import Counter, Histogram
-from prometheus_client.core import REGISTRY, GaugeMetricFamily
+from prometheus_client.core import GaugeMetricFamily
+
+from workspace.common.metrics import safe_counter, safe_histogram, safe_register
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'workspace.settings')
 
@@ -25,13 +26,13 @@ app.autodiscover_tasks()
 # ---------------------------------------------------------------------------
 _P = 'celery'
 
-CELERY_TASK_DURATION = Histogram(
+CELERY_TASK_DURATION = safe_histogram(
     f'{_P}_task_duration_seconds',
     'Time between task_prerun and task_postrun for one execution attempt',
     ['task'],
 )
 
-CELERY_TASKS_TOTAL = Counter(
+CELERY_TASKS_TOTAL = safe_counter(
     f'{_P}_tasks_total',
     'Task executions completed, by task name and final state (success/failure/retry)',
     ['task', 'state'],
@@ -116,10 +117,4 @@ class _CeleryQueueLengthCollector:
         yield gauge
 
 
-# Guarded against double-registration: in test harnesses or autoreload setups
-# the module can be re-imported in the same interpreter, which would otherwise
-# raise ValueError on duplicate metric names.
-try:
-    REGISTRY.register(_CeleryQueueLengthCollector())
-except ValueError:
-    logger.debug('Celery queue length collector already registered')
+safe_register(_CeleryQueueLengthCollector())

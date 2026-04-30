@@ -3,7 +3,8 @@ import time
 
 import orjson
 from django.http import StreamingHttpResponse
-from prometheus_client import Counter, Gauge, Histogram
+
+from workspace.common.metrics import safe_counter, safe_gauge, safe_histogram
 
 from .sse_registry import sse_registry
 
@@ -12,30 +13,30 @@ logger = logging.getLogger(__name__)
 # All metric names in this file MUST start with "sse_".
 _P = 'sse'
 
-SSE_CONNECTIONS = Gauge(
+SSE_CONNECTIONS = safe_gauge(
     f'{_P}_active_connections',
     'Number of active global SSE connections',
 )
 
-SSE_EVENTS_EMITTED = Counter(
+SSE_EVENTS_EMITTED = safe_counter(
     f'{_P}_events_emitted_total',
     'SSE events sent to clients, by provider and event name',
     ['provider', 'event'],
 )
 
-SSE_PROVIDER_POLL_DURATION = Histogram(
+SSE_PROVIDER_POLL_DURATION = safe_histogram(
     f'{_P}_provider_poll_duration_seconds',
     'Time spent inside provider.poll() during a single call',
     ['provider'],
 )
 
-SSE_FORCED_RECONNECTS = Counter(
+SSE_FORCED_RECONNECTS = safe_counter(
     f'{_P}_forced_reconnects_total',
     'Streams closed because the server-side connection budget was reached',
     ['transport'],
 )
 
-SSE_PUBSUB_MESSAGES = Counter(
+SSE_PUBSUB_MESSAGES = safe_counter(
     f'{_P}_pubsub_messages_total',
     'Redis Pub/Sub messages received on the per-user SSE channel',
 )

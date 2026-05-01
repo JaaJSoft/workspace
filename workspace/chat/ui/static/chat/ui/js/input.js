@@ -98,7 +98,11 @@ window.chatInputMixin = function chatInputMixin() {
       const ta = this.getMessageInput();
 
       // ── Mention autocomplete navigation ──
-      if (this.mentionActive) {
+      // Only intercept nav and selection keys when there are results to act on.
+      // Without this guard, ArrowDown/Up would compute (n+1) % 0 -> NaN, and
+      // Enter/Tab would be swallowed even though there's nothing to insert
+      // (so a regular Enter wouldn't send the message).
+      if (this.mentionActive && this.mentionResults.length > 0) {
         if (e.key === 'ArrowDown') {
           e.preventDefault();
           this.mentionHighlight = (this.mentionHighlight + 1) % this.mentionResults.length;
@@ -118,11 +122,12 @@ window.chatInputMixin = function chatInputMixin() {
           }
           return;
         }
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          this.closeMentionDropdown();
-          return;
-        }
+      }
+      // Escape always dismisses the dropdown if it's open, even when empty.
+      if (this.mentionActive && e.key === 'Escape') {
+        e.preventDefault();
+        this.closeMentionDropdown();
+        return;
       }
 
       // Enter (without shift) → send / save edit

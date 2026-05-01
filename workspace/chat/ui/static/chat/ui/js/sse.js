@@ -43,17 +43,45 @@ window.chatSseMixin = function chatSseMixin() {
       }
     },
 
+    // Re-fetch the messages container while preserving the user's scroll
+    // position. Without this, every SSE-driven refresh (reactions, edits,
+    // link previews, pin / unpin, read receipts) would jump the viewport
+    // because innerHTML replacement resets scrollTop to 0. We keep the
+    // existing simple behaviour: if the user was at the bottom we stay
+    // there (so live conversations keep scrolling with new messages),
+    // otherwise we restore scrollTop after the DOM swap so the user
+    // doesn't lose their reading position when scrolled up.
+    async _refreshMessagesPreservingScroll() {
+      const container = this.$refs.messagesContainer;
+      if (!container) {
+        await this._refreshCurrentMessages();
+        return;
+      }
+      const wasAtBottom = this._isNearBottom();
+      const prevScrollTop = container.scrollTop;
+      const prevScrollHeight = container.scrollHeight;
+      await this._refreshCurrentMessages();
+      this.$nextTick(() => {
+        if (wasAtBottom) {
+          this.scrollToBottom();
+        } else {
+          // Adjust by the height delta so the same content stays in view.
+          container.scrollTop = prevScrollTop + (container.scrollHeight - prevScrollHeight);
+        }
+      });
+    },
+
     handleSSEMessageDeleted(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
         // Re-fetch to get proper grouping after deletion
-        this._refreshCurrentMessages();
+        this._refreshMessagesPreservingScroll();
         this.loadPinnedMessages(this.activeConversation.uuid);
       }
     },
 
     async handleSSEReaction(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        await this._refreshCurrentMessages();
+        await this._refreshMessagesPreservingScroll();
       }
     },
 
@@ -75,20 +103,20 @@ window.chatSseMixin = function chatSseMixin() {
 
     handleSSELinkPreview(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        this._refreshCurrentMessages();
+        this._refreshMessagesPreservingScroll();
       }
     },
 
     handleSSEMessagePinned(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
         this.loadPinnedMessages(this.activeConversation.uuid);
-        this._refreshCurrentMessages();
+        this._refreshMessagesPreservingScroll();
       }
     },
 
     handleSSERead(detail) {
       if (this.activeConversation && detail.conversation_id === this.activeConversation.uuid) {
-        this._refreshCurrentMessages();
+        this._refreshMessagesPreservingScroll();
       }
     },
 

@@ -96,6 +96,13 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       this.editingMessageUuid = null;
       this.replyingTo = null;
       this.messageBody = this._restoreDraft(conv.uuid);
+      // Revoke any object URLs from previous pending file previews so
+      // dropped attachments don't leak blob:// URLs across conversation
+      // switches (image / video previews allocate a URL via
+      // URL.createObjectURL in input.js addFiles).
+      for (const f of this.pendingFiles || []) {
+        if (f._preview) URL.revokeObjectURL(f._preview);
+      }
       this.pendingFiles = [];
       this.pinnedMessages = [];
       this.botTyping = false;

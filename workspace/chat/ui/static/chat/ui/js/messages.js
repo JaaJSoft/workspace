@@ -74,14 +74,26 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       const scrollContainer = this.$refs.messagesContainer;
       const prevScrollHeight = scrollContainer.scrollHeight;
+      // Race protection: if the user switches conversations while the
+      // page-up fetch is in flight, prepending older messages from the
+      // previous conversation into the new list would corrupt the view.
+      const targetUuid = this.activeConversation.uuid;
 
       try {
         const resp = await fetch(
-          `/chat/${this.activeConversation.uuid}/messages?before=${firstUuid}`,
+          `/chat/${targetUuid}/messages?before=${firstUuid}`,
           { credentials: 'same-origin' }
         );
+        if (this.activeConversation?.uuid !== targetUuid) {
+          this.loadingMoreMessages = false;
+          return;
+        }
         if (resp.ok) {
           const html = await resp.text();
+          if (this.activeConversation?.uuid !== targetUuid) {
+            this.loadingMoreMessages = false;
+            return;
+          }
           const parser = new DOMParser();
           const doc = parser.parseFromString(html, 'text/html');
           const newList = doc.getElementById('message-list');
@@ -340,16 +352,23 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
 
     async _refreshCurrentMessages() {
-      // Reload server-rendered messages for the active conversation
+      // Reload server-rendered messages for the active conversation.
+      // Race protection: if the user switches conversations while the
+      // fetch is in flight, the response we get back is for the previous
+      // conversation; capture the target uuid up front and bail if the
+      // active conversation no longer matches when we're about to mutate.
       if (!this.activeConversation) return;
       const container = document.getElementById('messages-container');
+      const targetUuid = this.activeConversation.uuid;
       try {
         const resp = await fetch(
-          `/chat/${this.activeConversation.uuid}/messages`,
+          `/chat/${targetUuid}/messages`,
           { credentials: 'same-origin' }
         );
+        if (this.activeConversation?.uuid !== targetUuid) return;
         if (resp.ok) {
           const html = await resp.text();
+          if (this.activeConversation?.uuid !== targetUuid) return;
           if (container) {
             container.innerHTML = html;
             this._initMessagesDom(container);

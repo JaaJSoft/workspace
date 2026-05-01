@@ -1,7 +1,7 @@
 """Tests for Prometheus instrumentation in the AI module.
 
 Targets the call sites where the LLM/image SDK is invoked:
-- workspace.ai.tasks._call_llm  → ai_request_duration_seconds, ai_tokens_total
+- workspace.ai.services.llm._call_llm  → ai_request_duration_seconds, ai_tokens_total
 - workspace.ai.tools.GenerateImageTool → ai_image_requests_total
 """
 
@@ -37,7 +37,7 @@ class CallLlmMetricsTests(TestCase):
         )
         mock_get_client.return_value = client
 
-        from workspace.ai.tasks import _call_llm
+        from workspace.ai.services.llm import _call_llm
 
         before_ok = _sample(
             'ai_request_duration_seconds_count',
@@ -76,7 +76,7 @@ class CallLlmMetricsTests(TestCase):
         client.chat.completions.create.side_effect = RuntimeError('boom')
         mock_get_client.return_value = client
 
-        from workspace.ai.tasks import _call_llm
+        from workspace.ai.services.llm import _call_llm
 
         before_err = _sample(
             'ai_request_duration_seconds_count',
@@ -103,7 +103,7 @@ class CallLlmMetricsTests(TestCase):
         )
         mock_get_client.return_value = client
 
-        from workspace.ai.tasks import _call_llm
+        from workspace.ai.services.llm import _call_llm
 
         labels_completion = {'model': 'gpt-4o-mini', 'kind': 'completion'}
         before = _sample('ai_tokens_total', labels_completion)

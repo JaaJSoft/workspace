@@ -585,7 +585,7 @@ class CleanLlmContentTests(TestCase):
     """Tests for _clean_llm_content — stripping LLM artifacts."""
 
     def setUp(self):
-        from workspace.ai.tasks import _clean_llm_content
+        from workspace.ai.services.llm import _clean_llm_content
         self.clean = _clean_llm_content
 
     def test_strips_bracketed_timestamp_prefix(self):

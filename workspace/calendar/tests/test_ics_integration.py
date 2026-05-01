@@ -69,7 +69,7 @@ class EndToEndICSTest(APITestCase):
     @patch('workspace.calendar.services.ics_processor.notify')
     def test_full_flow_receive_and_accept(self, mock_notify):
         # Step 1: Parse the email (simulates what IMAP sync does)
-        from workspace.mail.services.imap import _parse_message
+        from workspace.mail.services.imap_parse import _parse_message
 
         raw = _build_raw_email()
         mail_msg = _parse_message(raw, self.account, self.folder, uid=1, flags_str='')

@@ -1,6 +1,6 @@
 """Tests for workspace.mail.tasks Celery entry points.
 
-The tasks delegate to workspace.mail.services.imap.sync_account, which we
+The tasks delegate to workspace.mail.services.imap_sync.sync_account, which we
 patch so the suite doesn't touch any real IMAP server.
 """
 
@@ -39,7 +39,7 @@ class SyncAllAccountsTaskTests(TestCase):
         _make_account(self.alice, email='old@example.com', is_active=False)
 
         with mock.patch(
-            'workspace.mail.services.imap.sync_account'
+            'workspace.mail.services.imap_sync.sync_account'
         ) as sync_mock:
             result = mail_tasks.sync_all_accounts.run()
 
@@ -56,7 +56,7 @@ class SyncAllAccountsTaskTests(TestCase):
                 raise RuntimeError('IMAP offline')
 
         with mock.patch(
-            'workspace.mail.services.imap.sync_account',
+            'workspace.mail.services.imap_sync.sync_account',
             side_effect=_fake_sync,
         ):
             result = mail_tasks.sync_all_accounts.run()
@@ -69,7 +69,7 @@ class SyncAllAccountsTaskTests(TestCase):
 
     def test_empty_account_list_returns_zero(self):
         with mock.patch(
-            'workspace.mail.services.imap.sync_account'
+            'workspace.mail.services.imap_sync.sync_account'
         ) as sync_mock:
             result = mail_tasks.sync_all_accounts.run()
 
@@ -84,7 +84,7 @@ class SyncSingleAccountTaskTests(TestCase):
 
     def test_not_found_when_account_missing(self):
         with mock.patch(
-            'workspace.mail.services.imap.sync_account'
+            'workspace.mail.services.imap_sync.sync_account'
         ) as sync_mock:
             result = mail_tasks.sync_single_account.run(account_uuid=str(uuid4()))
 
@@ -94,7 +94,7 @@ class SyncSingleAccountTaskTests(TestCase):
     def test_not_found_when_account_is_inactive(self):
         account = _make_account(self.alice, is_active=False)
         with mock.patch(
-            'workspace.mail.services.imap.sync_account'
+            'workspace.mail.services.imap_sync.sync_account'
         ) as sync_mock:
             result = mail_tasks.sync_single_account.run(account_uuid=str(account.uuid))
 
@@ -104,7 +104,7 @@ class SyncSingleAccountTaskTests(TestCase):
     def test_happy_path(self):
         account = _make_account(self.alice)
         with mock.patch(
-            'workspace.mail.services.imap.sync_account'
+            'workspace.mail.services.imap_sync.sync_account'
         ) as sync_mock:
             result = mail_tasks.sync_single_account.run(account_uuid=str(account.uuid))
 
@@ -114,7 +114,7 @@ class SyncSingleAccountTaskTests(TestCase):
     def test_sync_failure_records_error_on_account(self):
         account = _make_account(self.alice)
         with mock.patch(
-            'workspace.mail.services.imap.sync_account',
+            'workspace.mail.services.imap_sync.sync_account',
             side_effect=RuntimeError('bad credentials'),
         ):
             result = mail_tasks.sync_single_account.run(account_uuid=str(account.uuid))

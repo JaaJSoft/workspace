@@ -23,7 +23,7 @@ class SyncCalendarHookTest(TestCase):
             folder_type='inbox', uid_validity=1, last_sync_uid=0,
         )
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_sync.connect_imap')
     @patch('workspace.calendar.services.ics_processor.process_calendar_emails')
     def test_sync_skips_ics_processor_when_no_new_messages(self, mock_process, mock_connect):
         """Pre-existing ICS messages are NOT re-processed on every sync.
@@ -31,7 +31,7 @@ class SyncCalendarHookTest(TestCase):
         Calendar reprocessing must be scoped to messages actually parsed in
         the current sync pass, otherwise every sync pays O(all_cal_messages).
         """
-        from workspace.mail.services.imap import sync_folder_messages
+        from workspace.mail.services.imap_sync import sync_folder_messages
 
         MailMessage.objects.create(
             account=self.account, folder=self.folder,
@@ -52,16 +52,16 @@ class SyncCalendarHookTest(TestCase):
 
     @patch('workspace.ai.tasks.classify_mail_messages.delay')
     @patch('workspace.ai.client.is_ai_enabled', return_value=False)
-    @patch('workspace.mail.services.imap._reconcile_folder')
-    @patch('workspace.mail.services.imap._parse_message')
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_sync._reconcile_folder')
+    @patch('workspace.mail.services.imap_sync._parse_message')
+    @patch('workspace.mail.services.imap_sync.connect_imap')
     @patch('workspace.calendar.services.ics_processor.process_calendar_emails')
     def test_sync_calls_ics_processor_for_newly_parsed_messages(
         self, mock_process, mock_connect, mock_parse, _mock_reconcile,
         _mock_ai_enabled, _mock_classify_delay,
     ):
         """Newly parsed ICS messages are handed to process_calendar_emails."""
-        from workspace.mail.services.imap import sync_folder_messages
+        from workspace.mail.services.imap_sync import sync_folder_messages
 
         # Pretend UID 2 is a fresh ICS email that _parse_message returns.
         new_msg = MailMessage.objects.create(

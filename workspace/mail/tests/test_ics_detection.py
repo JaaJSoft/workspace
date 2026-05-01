@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.mail.models import MailAccount, MailAttachment, MailFolder
-from workspace.mail.services.imap import _parse_message
+from workspace.mail.services.imap_parse import _parse_message
 
 User = get_user_model()
 

@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
-from workspace.mail.services.imap import _reconcile_folder
+from workspace.mail.services.imap_sync import _reconcile_folder
 
 User = get_user_model()
 
@@ -237,7 +237,7 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
 class SyncReconciliationIntegrationTests(ReconcileFolderMixin, TestCase):
     """Tests that sync_folder_messages always runs reconciliation."""
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_sync.connect_imap')
     def test_reconciliation_runs_with_no_new_messages(self, mock_connect):
         """Reconciliation runs even when there are no new UIDs to fetch."""
         self.folder.last_sync_uid = 500
@@ -274,7 +274,7 @@ class SyncReconciliationIntegrationTests(ReconcileFolderMixin, TestCase):
         conn.logout.return_value = ('OK', [b'BYE'])
         mock_connect.return_value = conn
 
-        from workspace.mail.services.imap import sync_folder_messages
+        from workspace.mail.services.imap_sync import sync_folder_messages
         sync_folder_messages(self.account, self.folder)
 
         # Reconciliation should have soft-deleted the message

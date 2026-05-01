@@ -285,6 +285,12 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<!-- Initial preferences embedded server-side so JS doesn't need to fetch
+     /api/v1/settings/files/{preferences,viewer} on page load (which would
+     404 on first visit and surface as a console error). -->
+{{ file_prefs|json_script:"file-prefs-data" }}
+{{ viewer_prefs|json_script:"viewer-prefs-data" }}
+
 <!-- Monaco Editor for text/code viewing and editing -->
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 

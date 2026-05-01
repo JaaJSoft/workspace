@@ -322,16 +322,16 @@
           }
           this._initialized = true;
 
-          // Load viewer preferences
-          try {
-            const prefsResp = await fetch(VIEWER_PREFS_URL, { credentials: 'same-origin' });
-            if (prefsResp.ok) {
-              const data = await prefsResp.json();
-              if (data && data.value && typeof data.value === 'object') {
-                if (data.value.expanded !== undefined) this.expanded = data.value.expanded;
-              }
-            }
-          } catch (e) {}
+          // Initial viewer prefs are embedded server-side via |json_script
+          // (see index.html). Reading from the DOM avoids a redundant fetch
+          // and the 404 a fresh user would hit on the settings endpoint.
+          const prefsEl = document.getElementById('viewer-prefs-data');
+          if (prefsEl) {
+            try {
+              const initial = JSON.parse(prefsEl.textContent) || {};
+              if (initial.expanded !== undefined) this.expanded = initial.expanded;
+            } catch (_) {}
+          }
 
           this._keydownHandler = (e) => this.handleKeydown(e);
           this._openFileHandler = (e) => {

@@ -11,6 +11,19 @@ window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true,
     try { initial = JSON.parse(el.textContent) || {}; } catch (_) { initial = {}; }
   }
   window._filePrefsCache = { ...window._filePrefsDefaults, ...initial };
+
+  // Every existing consumer (filePreferences, fileTableControls,
+  // sidebarCollapse, viewToggle) reads window._filePrefsCache directly in
+  // its factory body, so initial state is correct without an event. We
+  // still dispatch one broadcast once Alpine has mounted as a safety net
+  // for future components wired only to the listener path - the cost is
+  // a single CustomEvent, the failure mode it prevents is silent
+  // "stuck on defaults" bugs that are hard to diagnose.
+  document.addEventListener('alpine:initialized', () => {
+    window.dispatchEvent(new CustomEvent('preferences-changed', {
+      detail: window._filePrefsCache,
+    }));
+  }, { once: true });
 })();
 // Kept as a resolved Promise so existing `await window._filePrefsReady`
 // callers (e.g. filePreferences().init()) still work without changes.

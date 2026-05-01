@@ -33,7 +33,7 @@
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
 {% block drawer_sidebar %}
-<div class="drawer-side z-40 h-full" x-data="sidebarCollapse()"
+<div class="drawer-side z-40 h-full" x-data="sidebarCollapse()">
   <label for="files-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
   <!-- Sidebar -->
@@ -293,6 +293,12 @@
 
 <!-- File actions (shared) & browser -->
 <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
-<script src="{% static 'files/ui/js/file_browser.js' %}"></script>
+<script src="{% static 'files/ui/js/core.js' %}"></script>
+<script src="{% static 'files/ui/js/preferences.js' %}"></script>
+<script src="{% static 'files/ui/js/browser.js' %}"></script>
+<script src="{% static 'files/ui/js/table.js' %}"></script>
+<script src="{% static 'files/ui/js/pinned.js' %}"></script>
+<script src="{% static 'files/ui/js/share_modal.js' %}"></script>
+<script src="{% static 'files/ui/js/comments.js' %}"></script>
 
 {% endblock %}

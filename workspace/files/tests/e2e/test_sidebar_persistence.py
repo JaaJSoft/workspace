@@ -2,7 +2,7 @@
 
 The files module persists the sidebar collapse state in
 ``localStorage['sidebarCollapsed']`` (see ``sidebarCollapse()`` in
-``files/ui/static/files/ui/js/file_browser.js``). A backend test cannot
+``files/ui/static/files/ui/js/preferences.js``). A backend test cannot
 reach this code path — it lives entirely in the browser, with the
 write happening in ``toggleCollapse()`` and the read happening in the
 component's initial ``x-data`` binding when the page mounts.

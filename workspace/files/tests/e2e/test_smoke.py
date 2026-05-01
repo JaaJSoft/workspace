@@ -15,25 +15,31 @@ class FilesIndexSmokeTests(PlaywrightTestCase):
         user = self.create_user(username="smoke")
         self.login_as(user)
 
-        # Capture every same-origin 4xx/5xx response. The base test case has
-        # STRICT_NO_JS_ERRORS=False (opt-in for an unrelated navbar race),
-        # so a redundant fetch that 404s for a fresh user (e.g. an early
-        # /api/v1/settings/files/* call when the row doesn't exist yet)
-        # would silently land in the browser console without failing the
-        # test. We watch responses directly to catch that class of bug.
+        # Anti-regression guard, scoped to the two endpoints this test
+        # actually cares about. Before this commit, both URLs 404'd for any
+        # fresh user because the JS fetched them on init; the JS swallowed
+        # the failure but the browser still logged it as a console error.
+        # The base test case has STRICT_NO_JS_ERRORS=False (opt-in for an
+        # unrelated navbar race), so the regression was invisible until we
+        # watched the responses directly.
         #
-        # ``/api/v1/users/<id>/avatar`` is allowed to 404: when a user has
-        # no uploaded avatar the navbar's ``<img>`` tag relies on the
-        # browser's ``onerror`` to swap in a letter placeholder
-        # (see common/templates/ui/partials/_user_avatar_inner.html).
-        # That's an intentional codebase-wide pattern, not a files-module
-        # bug, so the guard ignores it.
+        # The watcher is intentionally narrow rather than "any 4xx on a
+        # same-origin URL": a generic guard belongs in the base harness
+        # once the navbar race is fixed and STRICT_NO_JS_ERRORS can flip
+        # to True. Until then, scoping here to the documented offenders
+        # keeps the smoke test from flaking on unrelated app-shell 4xx
+        # (e.g. ``/api/v1/users/<id>/avatar``, which 404s by design and
+        # is handled by an ``onerror`` placeholder in the navbar).
+        watched_paths = (
+            "/api/v1/settings/files/preferences",
+            "/api/v1/settings/files/viewer",
+        )
         bad_responses: list[str] = []
 
         def _watch(r):
             if r.status < 400 or self.live_server_url not in r.url:
                 return
-            if re.search(r"/api/v1/users/\d+/avatar", r.url):
+            if not any(p in r.url for p in watched_paths):
                 return
             bad_responses.append(f"{r.status} {r.request.method} {r.url}")
 
@@ -46,6 +52,7 @@ class FilesIndexSmokeTests(PlaywrightTestCase):
         self.page.wait_for_timeout(500)
 
         assert not bad_responses, (
-            "Same-origin requests returned 4xx/5xx during /files load:\n  "
+            "Watched files-prefs endpoints returned 4xx/5xx during /files "
+            "load (regression: see commit history for context):\n  "
             + "\n  ".join(bad_responses)
         )

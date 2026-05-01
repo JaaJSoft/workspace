@@ -270,8 +270,13 @@ def _build_context(request, folder=None, is_trash_view=False):
     else:
         sidebar_active = 'root'
 
-    file_prefs = get_setting(request.user, 'files', 'preferences', default={})
-    breadcrumb_collapse = file_prefs.get('breadcrumbCollapse', 4) if isinstance(file_prefs, dict) else 4
+    file_prefs = get_setting(request.user, 'files', 'preferences', default={}) or {}
+    if not isinstance(file_prefs, dict):
+        file_prefs = {}
+    breadcrumb_collapse = file_prefs.get('breadcrumbCollapse', 4)
+    viewer_prefs = get_setting(request.user, 'files', 'viewer', default={}) or {}
+    if not isinstance(viewer_prefs, dict):
+        viewer_prefs = {}
 
     return {
         'nodes': nodes,
@@ -297,6 +302,8 @@ def _build_context(request, folder=None, is_trash_view=False):
         'sidebar_active': sidebar_active,
         'pinned_folders': pinned_folders_qs,
         'breadcrumb_collapse': breadcrumb_collapse,
+        'file_prefs': file_prefs,
+        'viewer_prefs': viewer_prefs,
         'group_folders': group_folders,
         'available_groups': available_groups,
     }

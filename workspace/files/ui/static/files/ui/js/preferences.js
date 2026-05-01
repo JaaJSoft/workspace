@@ -1,17 +1,33 @@
 // --- File browser preferences ---
 window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list', mosaicTileSize: 3, showPinned: true, showGroups: true };
-window._filePrefsCache = { ...window._filePrefsDefaults };
 
-// Fetch once at script load — shared across all filePreferences() instances.
-window._filePrefsReady = fetch('/api/v1/settings/files/preferences', { credentials: 'same-origin' })
-  .then(r => r.ok ? r.json() : null)
-  .then(data => {
-    if (data && data.value && typeof data.value === 'object') {
-      window._filePrefsCache = { ...window._filePrefsDefaults, ...data.value };
-      window.dispatchEvent(new CustomEvent('preferences-changed', { detail: window._filePrefsCache }));
-    }
-  })
-  .catch(() => {});
+// Initial prefs are embedded server-side via |json_script (see index.html).
+// Reading from the DOM avoids a redundant fetch and the 404 a fresh user
+// would otherwise hit on /api/v1/settings/files/preferences.
+(function bootFilePrefs() {
+  let initial = {};
+  const el = document.getElementById('file-prefs-data');
+  if (el) {
+    try { initial = JSON.parse(el.textContent) || {}; } catch (_) { initial = {}; }
+  }
+  window._filePrefsCache = { ...window._filePrefsDefaults, ...initial };
+
+  // Every existing consumer (filePreferences, fileTableControls,
+  // sidebarCollapse, viewToggle) reads window._filePrefsCache directly in
+  // its factory body, so initial state is correct without an event. We
+  // still dispatch one broadcast once Alpine has mounted as a safety net
+  // for future components wired only to the listener path - the cost is
+  // a single CustomEvent, the failure mode it prevents is silent
+  // "stuck on defaults" bugs that are hard to diagnose.
+  document.addEventListener('alpine:initialized', () => {
+    window.dispatchEvent(new CustomEvent('preferences-changed', {
+      detail: window._filePrefsCache,
+    }));
+  }, { once: true });
+})();
+// Kept as a resolved Promise so existing `await window._filePrefsReady`
+// callers (e.g. filePreferences().init()) still work without changes.
+window._filePrefsReady = Promise.resolve();
 
 window.getFilePrefs = function() {
   return window._filePrefsCache;

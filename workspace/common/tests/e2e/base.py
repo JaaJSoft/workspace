@@ -83,10 +83,32 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
             cls._playwright.stop()
             super().tearDownClass()
 
+    # Stub the global SSE long-poll. The default ``StaticLiveServerTestCase``
+    # uses an in-memory SQLite database, and the SSE handler in
+    # ``workspace/core/views_sse.py`` issues blocking ``time.sleep(1)`` loops
+    # that hold a SQLite connection while polling providers. When a test
+    # navigates / reloads / tears down, the new HTTP request from the
+    # browser races the in-flight SSE thread for the same SQLite handle,
+    # surfacing as ``sqlite3.InterfaceError: bad parameter or other API
+    # misuse`` and as flaky 500s on ``/files``, ``/chat`` etc. We're not
+    # exercising SSE in any e2e test today (see ``test_theme_persistence``
+    # which explicitly notes the long-poll prevents ``networkidle``), so
+    # the safest fix is to short-circuit ``/api/v1/stream`` with an empty
+    # 204 - the browser still sees the endpoint exist, it just doesn't
+    # open a long-lived connection.
+    # Override to ``False`` in any test that genuinely wants to drive SSE.
+    STUB_GLOBAL_SSE = True
+
     def setUp(self):
         super().setUp()
         self.context = self.browser.new_context()
         self.page = self.context.new_page()
+
+        if self.STUB_GLOBAL_SSE:
+            self.context.route(
+                "**/api/v1/stream**",
+                lambda route: route.fulfill(status=204, body=""),
+            )
 
         # Diagnostics: capture in-browser errors + failed requests so a
         # test failure's root cause lands directly in the CI log, without

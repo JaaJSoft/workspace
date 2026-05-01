@@ -1,0 +1,110 @@
+{# Calendar Create/Edit modal and External Calendar (ICS) modal. #}
+{# Included from index.html inside the main content block. #}
+<!-- Calendar Create/Edit Modal -->
+<dialog class="modal" :class="showCalendarModal && 'modal-open'" @click.self="showCalendarModal = false" @keydown.escape.window="showCalendarModal = false">
+  <div class="modal-box w-11/12 max-w-sm">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <span class="w-8 h-8 rounded-full flex items-center justify-center"
+              :class="calendarModalMode === 'create' ? 'bg-accent/10 text-accent' : 'bg-primary/10 text-primary'">
+          <i :data-lucide="calendarModalMode === 'create' ? 'calendar-plus' : 'pencil'" class="w-4 h-4"></i>
+        </span>
+        <span x-text="calendarModalMode === 'create' ? 'New calendar' : 'Edit calendar'"></span>
+      </h3>
+      <button type="button" class="btn btn-sm btn-circle btn-ghost" @click="showCalendarModal = false">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form @submit.prevent="saveCalendar()" class="space-y-4">
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Name</span></div>
+        <input id="calendar-form-name" type="text" class="input input-bordered input-sm w-full"
+               x-model="calendarForm.name" placeholder="Calendar name" required />
+      </label>
+
+      <div>
+        <div class="label"><span class="label-text">Color</span></div>
+        <div class="flex flex-wrap gap-2">
+          <template x-for="c in calendarColors" :key="c">
+            <button type="button"
+                    class="w-8 h-8 rounded-full flex items-center justify-center transition-all border-2"
+                    :class="calendarForm.color === c
+                      ? 'border-base-content scale-110 ring-2 ring-base-content/20'
+                      : 'border-transparent hover:scale-105'"
+                    :style="'background-color: oklch(var(--' + ({primary:'p',secondary:'s',accent:'a',info:'in',success:'su',warning:'wa',error:'er'}[c]) + '))'"
+                    @click="calendarForm.color = c">
+              <i data-lucide="check" class="w-4 h-4" x-show="calendarForm.color === c"
+                 :style="'color: oklch(var(--' + ({primary:'pc',secondary:'sc',accent:'ac',info:'inc',success:'suc',warning:'wac',error:'erc'}[c]) + '))'"></i>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm btn-ghost" @click="showCalendarModal = false">Cancel</button>
+        <button type="submit" class="btn btn-sm btn-primary" :disabled="savingCalendar || !calendarForm.name.trim()">
+          <span class="loading loading-spinner loading-xs" x-show="savingCalendar"></span>
+          <span x-text="calendarModalMode === 'create' ? 'Create' : 'Save'"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- External Calendar Modal -->
+<dialog class="modal" :class="showExternalModal && 'modal-open'" @click.self="showExternalModal = false" @keydown.escape.window="showExternalModal && (showExternalModal = false)">
+  <div class="modal-box w-11/12 max-w-sm">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <span class="w-8 h-8 rounded-full flex items-center justify-center bg-info/10 text-info">
+          <i data-lucide="globe" class="w-4 h-4"></i>
+        </span>
+        Add external calendar
+      </h3>
+      <button type="button" class="btn btn-sm btn-circle btn-ghost" @click="showExternalModal = false">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form @submit.prevent="saveExternalCalendar()" class="space-y-4">
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">ICS URL</span></div>
+        <input id="external-form-url" type="url" class="input input-bordered input-sm w-full"
+               x-model="externalForm.url" placeholder="https://calendar.google.com/...ical" required />
+      </label>
+
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Name</span></div>
+        <input type="text" class="input input-bordered input-sm w-full"
+               x-model="externalForm.name" placeholder="My external calendar" />
+      </label>
+
+      <div>
+        <div class="label"><span class="label-text">Color</span></div>
+        <div class="flex flex-wrap gap-2">
+          <template x-for="c in calendarColors" :key="c">
+            <button type="button"
+                    class="w-8 h-8 rounded-full flex items-center justify-center transition-all border-2"
+                    :class="externalForm.color === c
+                      ? 'border-base-content scale-110 ring-2 ring-base-content/20'
+                      : 'border-transparent hover:scale-105'"
+                    :style="'background-color: oklch(var(--' + ({primary:'p',secondary:'s',accent:'a',info:'in',success:'su',warning:'wa',error:'er'}[c]) + '))'"
+                    @click="externalForm.color = c">
+              <i data-lucide="check" class="w-4 h-4" x-show="externalForm.color === c"
+                 :style="'color: oklch(var(--' + ({primary:'pc',secondary:'sc',accent:'ac',info:'inc',success:'suc',warning:'wac',error:'erc'}[c]) + '))'"></i>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm btn-ghost" @click="showExternalModal = false" :disabled="savingExternal">Cancel</button>
+        <button type="submit" class="btn btn-sm btn-primary" :disabled="!externalForm.url.trim() || savingExternal">
+          <span class="loading loading-spinner loading-xs" x-show="savingExternal"></span>
+          <span x-text="savingExternal ? 'Adding...' : 'Add'"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+</dialog>

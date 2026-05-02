@@ -6,6 +6,7 @@
 
 - Never commit automatically. Only commit when I explicitly ask for it.
 - Do not use git worktrees. Work directly on the current branch.
+- Never mention "Claude", "Claude Code", "CLAUDE.md", or any AI/assistant attribution in commit messages, commit titles, PR titles, or PR descriptions. The user wants commits and PRs to read as if a human wrote them. This includes the trailing "🤖 Generated with [Claude Code]" footer and the "Co-Authored-By: Claude" trailer - omit both. References to project rules should cite the rule itself ("per the no-logic-change refactor contract"), not the file ("per CLAUDE.md").
 
 ### Refactoring & Optimization
 

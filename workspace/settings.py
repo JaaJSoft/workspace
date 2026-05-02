@@ -463,6 +463,13 @@ if TESTING:
     ]
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.InMemoryStorage'
 
+    if (
+        DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3'
+        and os.environ.get('E2E', '').lower() in {'1', 'true', 'yes', 'on'}
+    ):
+        DATABASES['default'].setdefault('TEST', {})
+        DATABASES['default']['TEST']['NAME'] = str(BASE_DIR / 'test_db.sqlite3')
+
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 

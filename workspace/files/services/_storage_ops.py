@@ -128,6 +128,8 @@ def rename_folder_storage(folder, old_folder_name, new_folder_name):
         if os.path.isdir(old_full):
             os.rename(old_full, new_full)
     except NotImplementedError:
+        # Some storage backends (for example remote/object storage) do not
+        # implement filesystem paths/renames; skip best-effort disk rename.
         pass
     except OSError as e:
         logger.warning("Could not rename folder '%s' -> '%s': %s",

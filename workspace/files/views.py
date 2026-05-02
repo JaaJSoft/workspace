@@ -1223,7 +1223,12 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
                 },
                 'locked_at': f.locked_at,
                 'lock_expires_at': f.lock_expires_at,
-                'is_expired': f.lock_expires_at is not None and f.lock_expires_at < now,
+                # ``<= now`` matches the acquire predicate
+                # (``Q(lock_expires_at__lte=now)``) and ``is_locked()`` /
+                # the PATCH guard's ``> now`` complement, so a client
+                # never sees ``is_expired=False`` for a lock that an
+                # acquire would simultaneously treat as free.
+                'is_expired': f.lock_expires_at is not None and f.lock_expires_at <= now,
             })
 
         if request.method == 'GET':

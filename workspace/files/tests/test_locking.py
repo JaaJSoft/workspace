@@ -201,6 +201,26 @@ class FileLockAPITests(APITestCase):
         self.file.refresh_from_db()
         self.assertIsNone(self.file.locked_by_id)
 
+    # ── Expiry boundary ──────────────────────────────────
+
+    def test_is_expired_true_at_exact_boundary(self):
+        """At ``lock_expires_at == now``, GET reports ``is_expired=True`` -
+        matching the acquire predicate ``lock_expires_at <= now``. Without
+        this alignment a client could see ``is_expired=False`` and still
+        fail to acquire at the same instant.
+        """
+        boundary = timezone.now() + timedelta(minutes=1)
+        File.objects.filter(pk=self.file.pk).update(
+            locked_by=self.user,
+            locked_at=boundary - timedelta(minutes=5),
+            lock_expires_at=boundary,
+        )
+        self.client.force_authenticate(self.user)
+        with patch('workspace.files.views.timezone.now', return_value=boundary):
+            resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data['is_expired'])
+
     def test_release_lock_404_for_user_without_access(self):
         """Outsiders can't release someone else's lock either."""
         self.client.force_authenticate(self.user)

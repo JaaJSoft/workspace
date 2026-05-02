@@ -47,7 +47,11 @@ def ensure_folder_on_storage(folder):
         full_path = default_storage.path(storage_path)
         os.makedirs(full_path, exist_ok=True)
     except NotImplementedError:
-        pass
+        logger.debug(
+            "Storage backend does not support local filesystem paths; "
+            "skipping directory creation for '%s'.",
+            scrub(storage_path),
+        )
 
 
 def rename_file_storage(file_obj, new_name):

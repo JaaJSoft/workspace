@@ -117,6 +117,7 @@ crashlytics-build.properties
 fabric.properties
 .playwright-mcp/
 db.sqlite3*
+test_db.sqlite3*
 
 /files/
 /NUL

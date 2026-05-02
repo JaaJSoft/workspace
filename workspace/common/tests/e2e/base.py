@@ -83,20 +83,15 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
             cls._playwright.stop()
             super().tearDownClass()
 
-    # Stub the global SSE long-poll. The default ``StaticLiveServerTestCase``
-    # uses an in-memory SQLite database, and the SSE handler in
-    # ``workspace/core/views_sse.py`` issues blocking ``time.sleep(1)`` loops
-    # that hold a SQLite connection while polling providers. When a test
-    # navigates / reloads / tears down, the new HTTP request from the
-    # browser races the in-flight SSE thread for the same SQLite handle,
-    # surfacing as ``sqlite3.InterfaceError: bad parameter or other API
-    # misuse`` and as flaky 500s on ``/files``, ``/chat`` etc. We're not
-    # exercising SSE in any e2e test today (see ``test_theme_persistence``
-    # which explicitly notes the long-poll prevents ``networkidle``), so
-    # the safest fix is to short-circuit ``/api/v1/stream`` with an empty
-    # 204 - the browser still sees the endpoint exist, it just doesn't
-    # open a long-lived connection.
-    # Override to ``False`` in any test that genuinely wants to drive SSE.
+    # The SSE handler in ``workspace/core/views_sse.py`` is a 600s long-poll
+    # that runs in a server worker thread. The thread doesn't observe
+    # client disconnect between ``time.sleep(1)`` ticks, so when a test
+    # ends its in-flight stream keeps holding a DB connection. On Windows
+    # this prevents Django's test runner from deleting the test SQLite
+    # file at suite teardown (``PermissionError: file is in use``). No
+    # e2e test today drives SSE, so short-circuiting ``/api/v1/stream``
+    # with a 204 keeps the page happy without leaking a worker thread.
+    # Set to ``False`` for tests that genuinely need SSE.
     STUB_GLOBAL_SSE = True
 
     def setUp(self):

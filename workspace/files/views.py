@@ -1196,7 +1196,11 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get', 'post', 'delete'], url_path='lock')
     def lock(self, request, uuid=None):
+        # Gate on access (owned + group + shared-with). Without this filter
+        # any authenticated user with a UUID could probe lock state and
+        # acquire/release locks on files they have no rights to.
         file_obj = File.objects.filter(
+            FileService.accessible_files_q(request.user),
             uuid=uuid, deleted_at__isnull=True,
         ).select_related('locked_by').first()
         if not file_obj:
@@ -1226,9 +1230,21 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
             return _lock_response(file_obj)
 
         if request.method == 'DELETE':
-            File.objects.filter(pk=file_obj.pk).update(
+            # Release is allowed only when the lock is the requester's, or
+            # already cleared / expired (in which case it's a cleanup no-op
+            # callers can rely on). Anything else - someone else's active
+            # lock - returns 403, otherwise the 409 that POST returns
+            # against an active lock would be trivially bypassed by issuing
+            # DELETE then POST.
+            cleared = File.objects.filter(pk=file_obj.pk).filter(
+                Q(locked_by=request.user)
+                | Q(locked_by__isnull=True)
+                | Q(lock_expires_at__lte=now),
+            ).update(
                 locked_by=None, locked_at=None, lock_expires_at=None,
             )
+            if not cleared:
+                return Response(status=status.HTTP_403_FORBIDDEN)
             from workspace.files.sse_provider import push_file_event
             push_file_event(file_obj, 'lock_released', request.user.username, exclude_user_id=request.user.pk)
             return Response(status=status.HTTP_204_NO_CONTENT)

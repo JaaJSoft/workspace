@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.files.models import File
+from workspace.files.models import File, FileShare
 
 User = get_user_model()
 
@@ -18,11 +18,25 @@ class FileLockAPITests(APITestCase):
         self.user = User.objects.create_user(
             username='alice', email='alice@test.com', password='pass123',
         )
+        # ``other`` is a collaborator: alice's file is shared with him r/w,
+        # so he can hit the lock endpoint - just like in the real flow
+        # where two co-authors race to acquire on the same shared file.
         self.other = User.objects.create_user(
             username='bob', email='bob@test.com', password='pass123',
         )
+        # ``outsider`` has no access to alice's file - used to assert that
+        # a UUID alone doesn't grant lock visibility / mutation rights.
+        self.outsider = User.objects.create_user(
+            username='eve', email='eve@test.com', password='pass123',
+        )
         self.file = File.objects.create(
             owner=self.user, name='doc.md', node_type=File.NodeType.FILE,
+        )
+        FileShare.objects.create(
+            file=self.file,
+            shared_by=self.user,
+            shared_with=self.other,
+            permission=FileShare.Permission.READ_WRITE,
         )
 
     def _url(self, uuid=None):
@@ -82,11 +96,28 @@ class FileLockAPITests(APITestCase):
         self.file.refresh_from_db()
         self.assertIsNone(self.file.locked_by_id)
 
-    def test_force_unlock_by_other_user(self):
-        """Any user with access can force-release a lock."""
+    def test_other_user_cannot_force_release_active_lock(self):
+        """A collaborator can't clear an active lock held by someone else.
+
+        Otherwise the 409 the POST acquire returns against an active lock
+        would be trivially bypassed by issuing DELETE then POST.
+        """
         self.client.force_authenticate(self.user)
         self.client.post(self._url())
 
+        self.client.force_authenticate(self.other)
+        resp = self.client.delete(self._url())
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.locked_by, self.user)
+
+    def test_other_user_can_clear_expired_lock(self):
+        """An expired lock is cleanup-only, anyone with access can clear it."""
+        File.objects.filter(pk=self.file.pk).update(
+            locked_by=self.user,
+            locked_at=timezone.now() - timedelta(minutes=10),
+            lock_expires_at=timezone.now() - timedelta(minutes=5),
+        )
         self.client.force_authenticate(self.other)
         resp = self.client.delete(self._url())
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
@@ -153,6 +184,33 @@ class FileLockAPITests(APITestCase):
     def test_lock_requires_authentication(self):
         resp = self.client.post(self._url())
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    # ── Access control ───────────────────────────────────
+
+    def test_get_lock_404_for_user_without_access(self):
+        """Knowing a file UUID doesn't grant lock visibility."""
+        self.client.force_authenticate(self.outsider)
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_acquire_lock_404_for_user_without_access(self):
+        """Outsiders can't acquire on a file they have no rights to."""
+        self.client.force_authenticate(self.outsider)
+        resp = self.client.post(self._url())
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.file.refresh_from_db()
+        self.assertIsNone(self.file.locked_by_id)
+
+    def test_release_lock_404_for_user_without_access(self):
+        """Outsiders can't release someone else's lock either."""
+        self.client.force_authenticate(self.user)
+        self.client.post(self._url())
+
+        self.client.force_authenticate(self.outsider)
+        resp = self.client.delete(self._url())
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.locked_by, self.user)
 
     # ── Concurrent acquire (atomicity) ───────────────────
 

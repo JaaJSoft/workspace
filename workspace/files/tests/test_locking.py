@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -152,3 +153,38 @@ class FileLockAPITests(APITestCase):
     def test_lock_requires_authentication(self):
         resp = self.client.post(self._url())
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    # ── Concurrent acquire (atomicity) ───────────────────
+
+    def test_acquire_under_race_does_not_overwrite_holder(self):
+        """If the lock gets taken between the view's read and its update,
+        the conditional UPDATE matches 0 rows and the view returns 409 -
+        the original holder's lock survives unchanged.
+
+        Simulates the race window by hooking ``QuerySet.first`` to inject
+        alice's acquire just after bob's view reads the file as free.
+        """
+        from django.db.models.query import QuerySet
+
+        real_first = QuerySet.first
+        file_pk = self.file.pk
+        injector_user = self.user
+
+        def first_then_inject(qs_self):
+            result = real_first(qs_self)
+            if isinstance(result, File) and result.pk == file_pk and result.locked_by_id is None:
+                now = timezone.now()
+                File.objects.filter(pk=file_pk).update(
+                    locked_by=injector_user,
+                    locked_at=now,
+                    lock_expires_at=now + timedelta(minutes=5),
+                )
+            return result
+
+        self.client.force_authenticate(self.other)
+        with patch.object(QuerySet, 'first', first_then_inject):
+            resp = self.client.post(self._url())
+
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.locked_by, self.user)

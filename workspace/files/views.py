@@ -1242,19 +1242,23 @@ class FileViewSet(CacheControlMixin, viewsets.ModelViewSet):
             file_obj.refresh_from_db()
             return _lock_response(file_obj)
 
-        if file_obj.locked_by_id is not None and file_obj.lock_expires_at and file_obj.lock_expires_at > now:
-            # Conflict — locked by someone else
-            return Response(
-                _lock_response(file_obj).data,
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        # Acquire (unlocked or expired)
-        File.objects.filter(pk=file_obj.pk).update(
+        # Acquire (unlocked or expired). The "is free?" predicate lives in
+        # the UPDATE's WHERE clause so two concurrent acquires that both
+        # read the row as free can't both win - the loser sees count=0
+        # and returns 409 instead of silently overwriting the winner.
+        acquired = File.objects.filter(pk=file_obj.pk).filter(
+            Q(locked_by__isnull=True) | Q(lock_expires_at__lte=now)
+        ).update(
             locked_by=request.user,
             locked_at=now,
             lock_expires_at=now + self.LOCK_TTL,
         )
+        if not acquired:
+            file_obj.refresh_from_db()
+            return Response(
+                _lock_response(file_obj).data,
+                status=status.HTTP_409_CONFLICT,
+            )
         file_obj.refresh_from_db()
         return _lock_response(file_obj)
 

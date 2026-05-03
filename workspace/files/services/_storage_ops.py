@@ -159,7 +159,12 @@ def move_folder_storage(folder, new_parent, *, new_owner=None):
             os.makedirs(os.path.dirname(new_full), exist_ok=True)
             os.rename(old_full, new_full)
     except NotImplementedError:
-        pass
+        logger.debug(
+            "Storage backend does not provide local filesystem paths; "
+            "skipping folder rename '%s' -> '%s'.",
+            scrub(old_storage_path),
+            scrub(new_storage_path),
+        )
     except OSError as e:
         logger.warning("Could not move folder '%s' -> '%s': %s",
                        scrub(old_storage_path), scrub(new_storage_path), scrub(e))

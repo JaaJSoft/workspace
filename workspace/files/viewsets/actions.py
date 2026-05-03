@@ -161,6 +161,7 @@ class ActionsMixin:
     def ai_edit(self, request, uuid=None):
         """Edit an image file using AI based on a text prompt."""
         import base64
+        import binascii
 
         if not getattr(settings, 'AI_IMAGE_MODEL', ''):
             raise Http404
@@ -185,8 +186,11 @@ class ActionsMixin:
             if isinstance(source_b64, str) and not source_b64.strip():
                 return Response({'error': 'source_image cannot be empty'}, status=status.HTTP_400_BAD_REQUEST)
             try:
-                source_data = base64.b64decode(source_b64)
-            except Exception:
+                # validate=True rejects characters outside the base64 alphabet
+                # and bad padding instead of silently producing garbage bytes
+                # that would otherwise be sent to the paid AI service.
+                source_data = base64.b64decode(source_b64, validate=True)
+            except (binascii.Error, ValueError, TypeError):
                 return Response({'error': 'invalid base64 in source_image'}, status=status.HTTP_400_BAD_REQUEST)
         else:
             try:

@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -199,6 +200,56 @@ class CopyAPITests(APITestCase):
         response = self.client.post(f'/api/v1/files/{folder.uuid}/copy', {
             'parent': str(child.uuid)
         })
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_copy_into_group_subfolder_owned_by_another_member(self):
+        """Regression: a group member must be able to copy into a folder
+        owned by another member of the same group. The previous code
+        hard-coded ``owner=request.user`` on the parent lookup, which
+        rejected this legitimate case with 'Parent folder not found.'"""
+        group = Group.objects.create(name='Marketing')
+        alice = User.objects.create_user(username='alice', password='pw')
+        alice.groups.add(group)
+        self.user.groups.add(group)
+
+        # alice creates the group root and a subfolder.
+        group_root = File.objects.create(
+            owner=alice, name='Marketing', node_type=File.NodeType.FOLDER, group=group,
+        )
+        group_sub = File.objects.create(
+            owner=alice, name='Reports', node_type=File.NodeType.FOLDER,
+            group=group, parent=group_root,
+        )
+        # testuser (group member, not owner of the folder) copies a file into it.
+        my_file = File.objects.create(
+            owner=self.user, name='draft.txt', node_type=File.NodeType.FILE,
+            mime_type='text/plain',
+        )
+
+        response = self.client.post(
+            f'/api/v1/files/{my_file.uuid}/copy',
+            {'parent': str(group_sub.uuid)},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_copy_into_unrelated_user_folder_still_400(self):
+        """Negative control: someone else's personal folder is still
+        rejected with 400, even after access widening."""
+        other = User.objects.create_user(username='stranger', password='pw')
+        their_folder = File.objects.create(
+            owner=other, name='Theirs', node_type=File.NodeType.FOLDER,
+        )
+        my_file = File.objects.create(
+            owner=self.user, name='mine.txt', node_type=File.NodeType.FILE,
+            mime_type='text/plain',
+        )
+
+        response = self.client.post(
+            f'/api/v1/files/{my_file.uuid}/copy',
+            {'parent': str(their_folder.uuid)},
+            format='json',
+        )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_copy_preserves_icon_and_color(self):

@@ -8,7 +8,7 @@ from rest_framework.response import Response
 
 from workspace.files.models import File
 from workspace.files.serializers import FileSerializer
-from workspace.files.services import FileService
+from workspace.files.services import FilePermission, FileService
 
 
 class CopyMixin:
@@ -47,20 +47,29 @@ class CopyMixin:
         file_obj = self.get_object()
         parent_uuid = request.data.get('parent')
 
-        # Resolve parent folder
+        # Resolve parent folder. Use the access-aware permission check rather
+        # than ``owner=request.user``: group members must be able to copy into
+        # folders owned by another member of the same group. EDIT is the same
+        # threshold ``RenameAction``/``DeleteAction`` use for write operations.
         parent = None
         if parent_uuid:
             try:
-                parent = File.objects.get(
+                parent = File.objects.filter(
                     uuid=parent_uuid,
-                    owner=request.user,
                     node_type=File.NodeType.FOLDER,
                     deleted_at__isnull=True,
+                ).first()
+            except (ValidationError, ValueError):
+                # Malformed UUID strings -> 400 instead of 500.
+                return Response(
+                    {'detail': 'Parent folder not found.'},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
-            except (File.DoesNotExist, ValidationError, ValueError):
-                # ValidationError covers malformed UUID strings; ValueError
-                # catches the legacy raise paths. Without these, ?parent=foo
-                # returns 500 instead of a clean 400.
+
+            perm = FileService.get_permission(request.user, parent) if parent else None
+            if perm is None or perm < FilePermission.EDIT:
+                # Same generic 400 whether the folder is missing or the user
+                # has no write access - avoids leaking folder existence.
                 return Response(
                     {'detail': 'Parent folder not found.'},
                     status=status.HTTP_400_BAD_REQUEST

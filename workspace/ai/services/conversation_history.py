@@ -8,7 +8,6 @@ from workspace.ai.services.video import extract_video_frames
 logger = logging.getLogger(__name__)
 
 _TRUNCATE_BODY_LIMIT = 500  # max chars for old messages outside the recent window
-SUMMARY_BUFFER = 10  # re-summarise when unsummarised old messages exceed window by this many
 
 
 def build_conversation_history(conversation_id, bot_profile, human_user):

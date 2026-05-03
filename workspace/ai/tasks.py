@@ -5,10 +5,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from workspace.ai.services.conversation_history import (
-    SUMMARY_BUFFER,
-    build_conversation_history,
-)
+from workspace.ai.services.conversation_history import build_conversation_history
 from workspace.ai.services.llm import (
     call_llm,
     clean_llm_content,
@@ -22,6 +19,12 @@ from workspace.ai.services.responses import (
 from workspace.ai.services.tool_loop import run_tool_loop
 
 logger = logging.getLogger(__name__)
+
+# Re-summarise when the count of unsummarised old messages exceeds the recent
+# window by this many. Lives here because it's a dispatch-policy constant -
+# only the post-response trigger below reads it; ``build_conversation_history``
+# uses ``ConversationSummary.up_to`` directly and does not care about the buffer.
+SUMMARY_BUFFER = 10
 
 
 @shared_task(name='ai.generate_chat_response', bind=True, max_retries=0)

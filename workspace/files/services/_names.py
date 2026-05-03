@@ -64,7 +64,7 @@ def validate_move_target(file_obj, new_parent, user=None):
             raise ValueError('Cannot move a folder into one of its descendants.')
 
     if new_parent.group_id:
-        if user and not user.groups.filter(id=new_parent.group_id).exists():
+        if not user or not user.groups.filter(id=new_parent.group_id).exists():
             raise ValueError('You are not a member of this group.')
     else:
         effective_user_id = user.id if user else file_obj.owner_id

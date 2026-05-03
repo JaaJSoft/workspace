@@ -352,6 +352,15 @@ class GroupValidationTests(TestCase):
         with self.assertRaises(ValueError):
             FileService.validate_move_target(personal, self.group_root, user=self.outsider)
 
+    def test_move_to_group_folder_denied_when_user_missing(self):
+        # Without a user we cannot prove group membership, so authorization
+        # must fail closed -- the default user=None must not bypass the check.
+        personal = File.objects.create(
+            owner=self.outsider, name='doc.txt', node_type=File.NodeType.FILE, mime_type='text/plain',
+        )
+        with self.assertRaises(ValueError):
+            FileService.validate_move_target(personal, self.group_root)
+
     def test_move_from_group_to_personal_allowed(self):
         group_file = File.objects.create(
             owner=self.alice, name='doc.txt', node_type=File.NodeType.FILE,

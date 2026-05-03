@@ -12,6 +12,10 @@
 
 Before any refactor or optimization, verify that at least one test covers the code being touched. If no test exists, **write the test first** (it must pass against the current code), then start the refactor. The test acts as a safety net to guarantee the behavior is preserved.
 
+### Bug Fixes
+
+Every bug fix must ship with a regression test. Write the test alongside the fix and **verify it fails against the buggy code** (e.g. by stashing the fix, running the test, then re-applying), so you have evidence the test actually pins the bug down rather than accidentally passing for unrelated reasons. Without this proof the test is decorative: a future regression of the same bug would slip through CI. The test belongs in the same module's `tests/` package as the code being fixed.
+
 ### Changelog
 
 `CHANGELOG.md` is written for **end users**, not developers. Each release describes what changed from the user's perspective, in plain language.

@@ -37,7 +37,7 @@ class FileSyncService:
     def sync_user_recursive(self, user) -> SyncResult:
         """Full recursive sync for a single user."""
         result = SyncResult()
-        user_dir = os.path.join(default_storage.location, 'files', user.username)
+        user_dir = os.path.join(default_storage.location, 'files', 'users', user.username)
 
         if not os.path.isdir(user_dir):
             return result
@@ -46,7 +46,7 @@ class FileSyncService:
             user=user,
             disk_path=user_dir,
             parent_db=None,
-            storage_prefix=f'files/{user.username}',
+            storage_prefix=f'files/users/{user.username}',
             result=result,
         )
         return result
@@ -56,14 +56,14 @@ class FileSyncService:
         result = SyncResult()
 
         if parent_db is None:
-            disk_path = os.path.join(default_storage.location, 'files', user.username)
-            storage_prefix = f'files/{user.username}'
+            disk_path = os.path.join(default_storage.location, 'files', 'users', user.username)
+            storage_prefix = f'files/users/{user.username}'
         else:
             disk_path = os.path.join(
-                default_storage.location, 'files', user.username,
+                default_storage.location, 'files', 'users', user.username,
                 *parent_db.path.split('/') if parent_db.path else [parent_db.name],
             )
-            storage_prefix = f'files/{user.username}/{parent_db.path or parent_db.name}'
+            storage_prefix = f'files/users/{user.username}/{parent_db.path or parent_db.name}'
 
         if not os.path.isdir(disk_path):
             return result

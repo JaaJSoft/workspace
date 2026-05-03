@@ -70,5 +70,11 @@ def editor_action(self, task_id: str):
     except AITask.DoesNotExist:
         logger.error('Editor action task not found: %s', scrub(task_id))
         return {'status': 'error', 'error': 'Task not found'}
-    except Exception as e:
-        return {'status': 'error', 'error': str(e)}
+    except Exception:
+        # ai_task_lifecycle has already marked the AITask row FAILED, fired
+        # notify_sse, and called logger.exception(). Re-raise so Celery's
+        # result backend records the task as FAILED too - otherwise
+        # ``celery_tasks_total{state='success'}`` would tick on a failed
+        # task and Flower / monitoring would miss it. ``max_retries=0`` so
+        # this does not actually retry.
+        raise

@@ -99,18 +99,21 @@ def update_descendant_content_names(folder, old_seg, new_seg):
         ).exclude(content='').exclude(content__isnull=True)
     )
 
+    # Anchor the rename to the folder's actual storage prefix, not the first
+    # path segment that happens to match ``old_seg`` -- otherwise nested
+    # same-named folders (or a folder whose name collides with an ancestor
+    # segment such as the username) would be rewritten in the wrong place.
+    old_storage_prefix = folder_storage_path(folder).replace('\\', '/')
+    parent_storage = posixpath.dirname(old_storage_prefix)
+    new_storage_prefix = posixpath.join(parent_storage, new_seg)
+
     updated = []
     for child in descendants:
         if not child.content.name:
             continue
-        segments = child.content.name.split('/')
-        for i, seg in enumerate(segments):
-            if seg == old_seg:
-                segments[i] = new_seg
-                break
-        new_path = '/'.join(segments)
-        if new_path != child.content.name:
-            child.content.name = new_path
+        content_name = child.content.name.replace('\\', '/')
+        if content_name == old_storage_prefix or content_name.startswith(old_storage_prefix + '/'):
+            child.content.name = new_storage_prefix + content_name[len(old_storage_prefix):]
             updated.append(child)
 
     if updated:

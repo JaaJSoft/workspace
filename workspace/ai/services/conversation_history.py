@@ -7,17 +7,17 @@ from workspace.ai.services.video import extract_video_frames
 
 logger = logging.getLogger(__name__)
 
-_TRUNCATE_BODY_LIMIT = 500  # max chars for old messages outside the recent window
-
 
 def build_conversation_history(conversation_id, bot_profile, human_user):
     """Build the LLM message history for a conversation.
 
-    Loads recent messages, reconstructs tool-call rounds, includes vision
-    attachments when the bot supports it, and truncates old message bodies
-    that fall outside the recent context window.
+    Loads up to ``AI_CHAT_CONTEXT_SIZE`` recent messages, reconstructs
+    tool-call rounds, and includes vision attachments when the bot
+    supports them. Older messages that fall outside the window are
+    represented by ``ConversationSummary`` (refreshed by
+    ``ai.update_conversation_summary``).
 
-    Returns (history, summary_text).
+    Returns ``(history, summary_text)``.
     """
     from workspace.ai.models import ConversationSummary
     from workspace.chat.models import Message
@@ -55,19 +55,13 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
                     last_visual_msg_uuid = str(msg.uuid)
                     break
 
-    # Number of old messages (outside recent window) not covered by a summary
-    truncate_count = max(0, len(msgs_to_use) - recent_window) if not summary_text else 0
-
     _user_tz = get_user_timezone(human_user) if human_user else None
 
     history = []
-    for idx, msg in enumerate(reversed(msgs_to_use)):
+    for msg in reversed(msgs_to_use):
         is_bot = hasattr(msg.author, 'bot_profile')
         role = 'assistant' if is_bot else 'user'
         body = msg.body
-
-        if idx < truncate_count and len(body) > _TRUNCATE_BODY_LIMIT:
-            body = body[:_TRUNCATE_BODY_LIMIT] + '…'
 
         # Inject a system message with the timestamp before each message
         # so the LLM has temporal context without polluting message content.

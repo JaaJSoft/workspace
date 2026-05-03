@@ -14,15 +14,15 @@ _RAW_TOOL_CALL_RE = re.compile(r'</?tool_call>', re.IGNORECASE)
 _TIMESTAMP_PREFIX_RE = re.compile(r'^\[?\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]?\s*')
 
 
-def _clean_llm_content(content: str) -> str:
+def clean_llm_content(content: str) -> str:
     """Strip artifacts that LLMs sometimes leak into their replies."""
     content = _RAW_TOOL_CALL_RE.sub('', content)
     content = _TIMESTAMP_PREFIX_RE.sub('', content)
     return content.strip()
 
 
-def _serialize_response(result):
-    """Serialize an _call_llm result dict for storage."""
+def serialize_response(result):
+    """Serialize an call_llm result dict for storage."""
     tc = result.get('tool_calls')
     return {
         'content': result.get('content', ''),
@@ -36,7 +36,7 @@ def _serialize_response(result):
     }
 
 
-def _sanitize_messages_for_storage(messages):
+def sanitize_messages_for_storage(messages):
     """Strip large base64 image data and truncate huge text from messages."""
     sanitized = []
     for msg in messages:
@@ -58,7 +58,7 @@ def _sanitize_messages_for_storage(messages):
     return sanitized
 
 
-def _truncate_tool_result(text, max_len=2000):
+def truncate_tool_result(text, max_len=2000):
     """Truncate tool result strings for storage, stripping image data."""
     if not text:
         return text
@@ -75,7 +75,7 @@ def _truncate_tool_result(text, max_len=2000):
     return text
 
 
-def _build_tool_content(tool_result: str):
+def build_tool_content(tool_result: str):
     """Convert a tool result string into API content, handling image payloads."""
     try:
         parsed = json.loads(tool_result)
@@ -97,7 +97,7 @@ def _strip_thinking(content: str) -> str:
     return _THINK_RE.sub('', content).strip()
 
 
-def _extract_text_tool_calls(content: str):
+def extract_text_tool_calls(content: str):
     """Parse tool calls that a model emitted as plain text instead of structured output.
 
     Handles two formats:
@@ -136,7 +136,7 @@ def _extract_text_tool_calls(content: str):
     return None, content
 
 
-def _call_llm(messages: list[dict], model: str | None = None, max_tokens: int | None = None, tools: list | None = None) -> dict:
+def call_llm(messages: list[dict], model: str | None = None, max_tokens: int | None = None, tools: list | None = None) -> dict:
     """Call an LLM via OpenAI SDK and return a dict with content and usage info."""
     from workspace.ai.client import get_ai_client
     from workspace.ai.metrics import AI_REQUEST_DURATION, AI_TOKENS
@@ -181,7 +181,7 @@ def _call_llm(messages: list[dict], model: str | None = None, max_tokens: int | 
     # Apply both strip and clean here so downstream consumers (summaries, mail
     # composer, titles, ...) see normalized text regardless of which path they
     # took.
-    content = _clean_llm_content(_strip_thinking(choice.message.content or ''))
+    content = clean_llm_content(_strip_thinking(choice.message.content or ''))
     return {
         'content': content,
         'tool_calls': choice.message.tool_calls,

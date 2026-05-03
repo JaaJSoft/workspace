@@ -26,7 +26,7 @@ def _get_video_duration(video_path):
         return None
 
 
-def _extract_video_frames(att):
+def extract_video_frames(att):
     """Extract evenly-spaced frames from a video attachment (max _VIDEO_MAX_FRAMES).
 
     Returns (frame_parts, description) where frame_parts is a list of image_url

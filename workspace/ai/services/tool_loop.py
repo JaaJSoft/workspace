@@ -3,11 +3,11 @@ import json
 import logging
 
 from workspace.ai.services.llm import (
-    _build_tool_content,
-    _call_llm,
-    _extract_text_tool_calls,
-    _serialize_response,
-    _truncate_tool_result,
+    build_tool_content,
+    call_llm,
+    extract_text_tool_calls,
+    serialize_response,
+    truncate_tool_result,
 )
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ def _track_tool_usage(tool_call, tool_result, used_tools):
     used_tools.append((name, tool_registry.get_detail(name, args)))
 
 
-def _render_tool_badges(used_tools):
+def render_tool_badges(used_tools):
     """Render HTML badges for tools used during response generation."""
     from workspace.ai.tool_registry import tool_registry
 
@@ -66,7 +66,7 @@ def _render_tool_badges(used_tools):
     )
 
 
-def _run_tool_loop(messages, model, human_user, bot_user, conversation_id):
+def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
     """Run the tool call loop and return (result, used_tools, tool_context, rounds, tool_data).
 
     Calls the AI model, executes any tool calls it returns, and re-calls
@@ -81,7 +81,7 @@ def _run_tool_loop(messages, model, human_user, bot_user, conversation_id):
     from workspace.ai.tool_registry import tool_registry
 
     tools = tool_registry.get_definitions()
-    result = _call_llm(messages, model=model, tools=tools)
+    result = call_llm(messages, model=model, tools=tools)
 
     used_tools = []
     tool_context = {}
@@ -91,7 +91,7 @@ def _run_tool_loop(messages, model, human_user, bot_user, conversation_id):
     for _ in range(max_tool_rounds):
         # Fallback: parse tool calls from text if model didn't use native function calling
         if not result.get('tool_calls') and result.get('content'):
-            raw_calls, remaining = _extract_text_tool_calls(result['content'])
+            raw_calls, remaining = extract_text_tool_calls(result['content'])
             if raw_calls:
                 import types
                 import uuid as _uuid
@@ -112,11 +112,11 @@ def _run_tool_loop(messages, model, human_user, bot_user, conversation_id):
                 )
 
         if not result.get('tool_calls'):
-            rounds.append({'response': _serialize_response(result)})
+            rounds.append({'response': serialize_response(result)})
             break
 
         round_data = {
-            'response': _serialize_response(result),
+            'response': serialize_response(result),
             'tool_executions': [],
         }
 
@@ -147,7 +147,7 @@ def _run_tool_loop(messages, model, human_user, bot_user, conversation_id):
                 tc, user=human_user, bot=bot_user,
                 conversation_id=conversation_id, context=tool_context,
             )
-            tool_content = _build_tool_content(tool_result)
+            tool_content = build_tool_content(tool_result)
             messages.append({
                 'role': 'tool',
                 'tool_call_id': tc.id,
@@ -159,7 +159,7 @@ def _run_tool_loop(messages, model, human_user, bot_user, conversation_id):
                 'tool_call_id': tc.id,
                 'name': tc.function.name,
                 'arguments': tc.function.arguments,
-                'result': _truncate_tool_result(tool_result),
+                'result': truncate_tool_result(tool_result),
             })
             # Store a text-only version for history reconstruction
             td_result_content = tool_result
@@ -171,14 +171,14 @@ def _run_tool_loop(messages, model, human_user, bot_user, conversation_id):
                 )
             td_round['results'].append({
                 'tool_call_id': tc.id,
-                'content': _truncate_tool_result(td_result_content),
+                'content': truncate_tool_result(td_result_content),
             })
 
         tool_data.append(td_round)
         rounds.append(round_data)
-        result = _call_llm(messages, model=model, tools=tools)
+        result = call_llm(messages, model=model, tools=tools)
     else:
         # Max rounds reached - capture the final response
-        rounds.append({'response': _serialize_response(result)})
+        rounds.append({'response': serialize_response(result)})
 
     return result, used_tools, tool_context, rounds, tool_data or None

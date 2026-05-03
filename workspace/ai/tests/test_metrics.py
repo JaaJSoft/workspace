@@ -1,7 +1,7 @@
 """Tests for Prometheus instrumentation in the AI module.
 
 Targets the call sites where the LLM/image SDK is invoked:
-- workspace.ai.services.llm._call_llm  → ai_request_duration_seconds, ai_tokens_total
+- workspace.ai.services.llm.call_llm  → ai_request_duration_seconds, ai_tokens_total
 - workspace.ai.tools.GenerateImageTool → ai_image_requests_total
 """
 
@@ -37,7 +37,7 @@ class CallLlmMetricsTests(TestCase):
         )
         mock_get_client.return_value = client
 
-        from workspace.ai.services.llm import _call_llm
+        from workspace.ai.services.llm import call_llm
 
         before_ok = _sample(
             'ai_request_duration_seconds_count',
@@ -50,7 +50,7 @@ class CallLlmMetricsTests(TestCase):
             'ai_tokens_total', {'model': 'gpt-4o-mini', 'kind': 'completion'},
         )
 
-        _call_llm(messages=[{'role': 'user', 'content': 'hi'}])
+        call_llm(messages=[{'role': 'user', 'content': 'hi'}])
 
         self.assertEqual(
             _sample(
@@ -76,14 +76,14 @@ class CallLlmMetricsTests(TestCase):
         client.chat.completions.create.side_effect = RuntimeError('boom')
         mock_get_client.return_value = client
 
-        from workspace.ai.services.llm import _call_llm
+        from workspace.ai.services.llm import call_llm
 
         before_err = _sample(
             'ai_request_duration_seconds_count',
             {'model': 'gpt-4o-mini', 'status': 'error'},
         )
         with self.assertRaises(RuntimeError):
-            _call_llm(messages=[{'role': 'user', 'content': 'hi'}])
+            call_llm(messages=[{'role': 'user', 'content': 'hi'}])
 
         self.assertEqual(
             _sample(
@@ -103,11 +103,11 @@ class CallLlmMetricsTests(TestCase):
         )
         mock_get_client.return_value = client
 
-        from workspace.ai.services.llm import _call_llm
+        from workspace.ai.services.llm import call_llm
 
         labels_completion = {'model': 'gpt-4o-mini', 'kind': 'completion'}
         before = _sample('ai_tokens_total', labels_completion)
-        _call_llm(messages=[{'role': 'user', 'content': 'x'}])
+        call_llm(messages=[{'role': 'user', 'content': 'x'}])
         # Counter not bumped for the zero-token kind.
         self.assertEqual(_sample('ai_tokens_total', labels_completion), before)
 

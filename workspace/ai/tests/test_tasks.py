@@ -582,11 +582,11 @@ class ClassifyMailMessagesTests(TestCase):
 
 
 class CleanLlmContentTests(TestCase):
-    """Tests for _clean_llm_content — stripping LLM artifacts."""
+    """Tests for clean_llm_content — stripping LLM artifacts."""
 
     def setUp(self):
-        from workspace.ai.services.llm import _clean_llm_content
-        self.clean = _clean_llm_content
+        from workspace.ai.services.llm import clean_llm_content
+        self.clean = clean_llm_content
 
     def test_strips_bracketed_timestamp_prefix(self):
         self.assertEqual(self.clean('[2026-04-10 20:07] Hello!'), 'Hello!')

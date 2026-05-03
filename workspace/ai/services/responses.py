@@ -3,14 +3,14 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 
-from workspace.ai.services.llm import _clean_llm_content
-from workspace.ai.services.tool_loop import _render_tool_badges
+from workspace.ai.services.llm import clean_llm_content
+from workspace.ai.services.tool_loop import render_tool_badges
 
 logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
-def _post_bot_message(conversation, bot_user, result, used_tools, tool_context, ai_task, raw_messages=None, tool_data=None):
+def post_bot_message(conversation, bot_user, result, used_tools, tool_context, ai_task, raw_messages=None, tool_data=None):
     """Create the bot message, attach images, update unread counts, notify, and complete AITask.
 
     Returns (body, bot_message).
@@ -22,11 +22,11 @@ def _post_bot_message(conversation, bot_user, result, used_tools, tool_context, 
     from workspace.chat.services.notifications import notify_conversation_members
     from workspace.chat.services.rendering import render_message_body
 
-    body = _clean_llm_content(result['content'])
+    body = clean_llm_content(result['content'])
     body_html = render_message_body(body)
 
     if used_tools:
-        body_html += _render_tool_badges(used_tools)
+        body_html += render_tool_badges(used_tools)
 
     bot_message = Message.objects.create(
         conversation_id=conversation.pk,
@@ -83,7 +83,7 @@ def _post_bot_message(conversation, bot_user, result, used_tools, tool_context, 
 
 
 @transaction.atomic
-def _handle_generation_error(conversation, bot_user, ai_task, error):
+def handle_generation_error(conversation, bot_user, ai_task, error):
     """Handle a failed bot response: post error message, update counts, notify."""
     from django.db.models import F
 

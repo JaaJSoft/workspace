@@ -6,20 +6,20 @@ from django.db import transaction
 from django.utils import timezone
 
 from workspace.ai.services.conversation_history import (
-    _SUMMARY_BUFFER,
-    _build_conversation_history,
+    SUMMARY_BUFFER,
+    build_conversation_history,
 )
 from workspace.ai.services.llm import (
-    _call_llm,
-    _clean_llm_content,
-    _sanitize_messages_for_storage,
-    _serialize_response,
+    call_llm,
+    clean_llm_content,
+    sanitize_messages_for_storage,
+    serialize_response,
 )
 from workspace.ai.services.responses import (
-    _handle_generation_error,
-    _post_bot_message,
+    handle_generation_error,
+    post_bot_message,
 )
-from workspace.ai.services.tool_loop import _run_tool_loop
+from workspace.ai.services.tool_loop import run_tool_loop
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
     trigger_message = Message.objects.filter(pk=message_id).select_related('author').first()
     human_user = trigger_message.author if trigger_message else None
 
-    history, summary_text = _build_conversation_history(
+    history, summary_text = build_conversation_history(
         conversation_id, bot_profile, human_user,
     )
 
@@ -65,25 +65,25 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
     )
 
     try:
-        initial_messages = _sanitize_messages_for_storage(list(messages))
+        initial_messages = sanitize_messages_for_storage(list(messages))
 
-        result, used_tools, tool_context, rounds, tool_data = _run_tool_loop(
+        result, used_tools, tool_context, rounds, tool_data = run_tool_loop(
             messages, bot_profile.get_model(),
             human_user, bot_user, conversation_id,
         )
 
         # Auto-retry once if the model returned an empty response
-        body_preview = _clean_llm_content(result.get('content') or '')
+        body_preview = clean_llm_content(result.get('content') or '')
         if not body_preview and not tool_context.get('images'):
             logger.warning('Empty response, retrying once: conversation=%s', conversation_id)
-            result, used_tools, tool_context, retry_rounds, retry_td = _run_tool_loop(
+            result, used_tools, tool_context, retry_rounds, retry_td = run_tool_loop(
                 messages, bot_profile.get_model(),
                 human_user, bot_user, conversation_id,
             )
             rounds.extend(retry_rounds)
             if retry_td:
                 tool_data = (tool_data or []) + retry_td
-            body_preview = _clean_llm_content(result.get('content') or '')
+            body_preview = clean_llm_content(result.get('content') or '')
             if not body_preview and not tool_context.get('images'):
                 raise RuntimeError('Empty response from model')
 
@@ -95,7 +95,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
             logger.info('Bot response cancelled: conversation=%s', conversation_id)
             return {'status': 'cancelled'}
 
-        body, bot_message = _post_bot_message(
+        body, bot_message = post_bot_message(
             conversation, bot_user, result, used_tools, tool_context, ai_task,
             raw_messages, tool_data=tool_data,
         )
@@ -119,7 +119,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
                     deleted_at__isnull=True,
                     created_at__gt=_cs.up_to,
                 ).count()
-                needs_summary = unsummarized > _recent + _SUMMARY_BUFFER
+                needs_summary = unsummarized > _recent + SUMMARY_BUFFER
             if needs_summary:
                 update_conversation_summary.delay(str(conversation_id))
 
@@ -129,7 +129,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
 
     except Exception as e:
         logger.exception('Bot response failed: conversation=%s', conversation_id)
-        _handle_generation_error(conversation, bot_user, ai_task, e)
+        handle_generation_error(conversation, bot_user, ai_task, e)
         return {'status': 'error', 'error': str(e)}
 
 
@@ -216,7 +216,7 @@ def update_conversation_summary(self, conversation_id: str):
     ]
 
     try:
-        result = _call_llm(
+        result = call_llm(
             prompt_messages,
             model=settings.AI_SMALL_MODEL or settings.AI_MODEL,
             max_tokens=4096,
@@ -280,7 +280,7 @@ def summarize(self, task_id: str):
     messages = build_summarize_messages(message.subject or '', body)
 
     try:
-        result = _call_llm(messages, model=settings.AI_SMALL_MODEL)
+        result = call_llm(messages, model=settings.AI_SMALL_MODEL)
         with transaction.atomic():
             ai_task.status = AITask.Status.COMPLETED
             ai_task.result = result['content']
@@ -288,8 +288,8 @@ def summarize(self, task_id: str):
             ai_task.prompt_tokens = result['prompt_tokens']
             ai_task.completion_tokens = result['completion_tokens']
             ai_task.raw_messages = {
-                'messages': _sanitize_messages_for_storage(messages),
-                'response': _serialize_response(result),
+                'messages': sanitize_messages_for_storage(messages),
+                'response': serialize_response(result),
             }
             ai_task.completed_at = timezone.now()
             ai_task.save()
@@ -359,15 +359,15 @@ def editor_action(self, task_id: str):
 
     try:
         messages = builder()
-        result = _call_llm(messages)
+        result = call_llm(messages)
         ai_task.status = AITask.Status.COMPLETED
         ai_task.result = result['content']
         ai_task.model_used = result['model']
         ai_task.prompt_tokens = result['prompt_tokens']
         ai_task.completion_tokens = result['completion_tokens']
         ai_task.raw_messages = {
-            'messages': _sanitize_messages_for_storage(messages),
-            'response': _serialize_response(result),
+            'messages': sanitize_messages_for_storage(messages),
+            'response': serialize_response(result),
         }
         ai_task.completed_at = timezone.now()
         ai_task.save()
@@ -442,15 +442,15 @@ def compose_email(self, task_id: str):
                 sender_name=sender_name, sender_email=sender_email,
             )
 
-        result = _call_llm(messages)
+        result = call_llm(messages)
         ai_task.status = AITask.Status.COMPLETED
         ai_task.result = result['content']
         ai_task.model_used = result['model']
         ai_task.prompt_tokens = result['prompt_tokens']
         ai_task.completion_tokens = result['completion_tokens']
         ai_task.raw_messages = {
-            'messages': _sanitize_messages_for_storage(messages),
-            'response': _serialize_response(result),
+            'messages': sanitize_messages_for_storage(messages),
+            'response': serialize_response(result),
         }
         ai_task.completed_at = timezone.now()
         ai_task.save()
@@ -499,7 +499,7 @@ def generate_conversation_title(self, conversation_id: str):
     excerpt = '\n'.join(m for m in messages if m)
 
     try:
-        result = _call_llm(
+        result = call_llm(
             [
                 {
                     'role': 'system',
@@ -602,7 +602,7 @@ def generate_scheduled_response(self, schedule_id: str):
 
     human_user = User.objects.filter(pk=schedule.created_by_id).first()
 
-    history, summary_text = _build_conversation_history(
+    history, summary_text = build_conversation_history(
         str(conversation.pk), bot_profile, human_user,
     )
 
@@ -634,25 +634,25 @@ def generate_scheduled_response(self, schedule_id: str):
     )
 
     try:
-        initial_messages = _sanitize_messages_for_storage(list(messages))
+        initial_messages = sanitize_messages_for_storage(list(messages))
 
-        result, used_tools, tool_context, rounds, tool_data = _run_tool_loop(
+        result, used_tools, tool_context, rounds, tool_data = run_tool_loop(
             messages, bot_profile.get_model(),
             human_user, bot_user, str(conversation.pk),
         )
 
         # Auto-retry once if the model returned an empty response
-        body_preview = _clean_llm_content(result.get('content') or '')
+        body_preview = clean_llm_content(result.get('content') or '')
         if not body_preview and not tool_context.get('images'):
             logger.warning('Empty scheduled response, retrying once: schedule=%s', schedule_id)
-            result, used_tools, tool_context, retry_rounds, retry_td = _run_tool_loop(
+            result, used_tools, tool_context, retry_rounds, retry_td = run_tool_loop(
                 messages, bot_profile.get_model(),
                 human_user, bot_user, str(conversation.pk),
             )
             rounds.extend(retry_rounds)
             if retry_td:
                 tool_data = (tool_data or []) + retry_td
-            body_preview = _clean_llm_content(result.get('content') or '')
+            body_preview = clean_llm_content(result.get('content') or '')
             if not body_preview and not tool_context.get('images'):
                 ai_task.status = ai_task.Status.COMPLETED
                 ai_task.result = '[EMPTY]'
@@ -667,7 +667,7 @@ def generate_scheduled_response(self, schedule_id: str):
         raw_messages = {'messages': initial_messages, 'rounds': rounds}
 
         # Let the bot skip if it judges the message is no longer relevant
-        body = _clean_llm_content(result['content'])
+        body = clean_llm_content(result['content'])
         if body == '[SKIP]':
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = '[SKIP]'
@@ -680,7 +680,7 @@ def generate_scheduled_response(self, schedule_id: str):
             logger.info('Scheduled response skipped (bot judged irrelevant): schedule=%s', schedule_id)
             return {'status': 'skipped', 'reason': 'bot_judged_irrelevant'}
 
-        body, bot_message = _post_bot_message(
+        body, bot_message = post_bot_message(
             conversation, bot_user, result, used_tools, tool_context, ai_task,
             raw_messages, tool_data=tool_data,
         )
@@ -702,7 +702,7 @@ def generate_scheduled_response(self, schedule_id: str):
                     deleted_at__isnull=True,
                     created_at__gt=_cs.up_to,
                 ).count()
-                needs_summary = unsummarized > _recent + _SUMMARY_BUFFER
+                needs_summary = unsummarized > _recent + SUMMARY_BUFFER
             if needs_summary:
                 update_conversation_summary.delay(str(conversation.pk))
 
@@ -712,7 +712,7 @@ def generate_scheduled_response(self, schedule_id: str):
 
     except Exception as e:
         logger.exception('Scheduled response failed: schedule=%s', schedule_id)
-        _handle_generation_error(conversation, bot_user, ai_task, e)
+        handle_generation_error(conversation, bot_user, ai_task, e)
         return {'status': 'error', 'error': str(e)}
 
 
@@ -785,7 +785,7 @@ def classify_mail_messages(self, task_id: str):
                     })
 
                 messages = build_classify_messages(emails, label_names)
-                result = _call_llm(messages, model=settings.AI_SMALL_MODEL)
+                result = call_llm(messages, model=settings.AI_SMALL_MODEL)
 
                 model_used = result['model']
                 total_prompt += result['prompt_tokens'] or 0

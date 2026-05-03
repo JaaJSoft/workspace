@@ -3,15 +3,15 @@ import logging
 
 from django.conf import settings
 
-from workspace.ai.services.video import _extract_video_frames
+from workspace.ai.services.video import extract_video_frames
 
 logger = logging.getLogger(__name__)
 
 _TRUNCATE_BODY_LIMIT = 500  # max chars for old messages outside the recent window
-_SUMMARY_BUFFER = 10  # re-summarise when unsummarised old messages exceed window by this many
+SUMMARY_BUFFER = 10  # re-summarise when unsummarised old messages exceed window by this many
 
 
-def _build_conversation_history(conversation_id, bot_profile, human_user):
+def build_conversation_history(conversation_id, bot_profile, human_user):
     """Build the LLM message history for a conversation.
 
     Loads recent messages, reconstructs tool-call rounds, includes vision
@@ -111,7 +111,7 @@ def _build_conversation_history(conversation_id, bot_profile, human_user):
                     except Exception:
                         logger.warning('Could not read attachment %s', att.uuid)
                 elif att.is_video:
-                    frames, desc = _extract_video_frames(att)
+                    frames, desc = extract_video_frames(att)
                     if desc:
                         video_descriptions.append(desc)
                     media_parts.extend(frames)

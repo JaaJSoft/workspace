@@ -321,3 +321,30 @@ class FileCommentCreateSerializer(serializers.Serializer):
 
 class FileCommentEditSerializer(serializers.Serializer):
     body = serializers.CharField()
+
+
+class PinnedReorderSerializer(serializers.Serializer):
+    """Validate the payload of ``POST /api/v1/files/pinned/reorder``.
+
+    All checks live in ``validate_order`` so errors render as a flat list of
+    strings on the ``order`` key. The orjson renderer used project-wide cannot
+    serialize the int-keyed dicts that DRF's per-item ``ListField(child=...)``
+    validation produces, so we cannot delegate UUID parsing to ``UUIDField``.
+    """
+
+    order = serializers.ListField()
+
+    def validate_order(self, value):
+        import uuid as uuid_module
+
+        parsed = []
+        for item in value:
+            if not isinstance(item, str):
+                raise serializers.ValidationError('order items must be UUID strings.')
+            try:
+                parsed.append(uuid_module.UUID(item))
+            except ValueError:
+                raise serializers.ValidationError(f'Invalid UUID: {item}')
+        if len(set(parsed)) != len(parsed):
+            raise serializers.ValidationError('Duplicate UUIDs in order.')
+        return parsed

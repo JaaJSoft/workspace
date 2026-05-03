@@ -1,13 +1,12 @@
 """Favorite + pin actions for FileViewSet."""
 
-import uuid as uuid_module
-
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from workspace.files.models import File, FileFavorite, PinnedFolder
+from workspace.files.serializers import PinnedReorderSerializer
 from workspace.files.services import FileService
 
 
@@ -125,25 +124,9 @@ class FavoritesMixin:
     @action(detail=False, methods=['post'], url_path='pinned/reorder')
     def pinned_reorder(self, request):
         """Reorder pinned folders."""
-        order = request.data.get('order', [])
-        if not isinstance(order, list):
-            return Response({'detail': 'order must be a list of UUIDs.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Validate every item is a UUID string. Without this, a payload like
-        # {"order": [{}, "..."]} crashes on ``item in pinned_map`` because
-        # dict/list keys are unhashable - producing a 500 instead of a 400.
-        normalized = []
-        for item in order:
-            if not isinstance(item, str):
-                return Response({'detail': 'order items must be UUID strings.'}, status=status.HTTP_400_BAD_REQUEST)
-            try:
-                normalized.append(str(uuid_module.UUID(item)))
-            except ValueError:
-                return Response({'detail': f'Invalid UUID: {item}'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Reject duplicates so the renumbering below is well-defined.
-        if len(set(normalized)) != len(normalized):
-            return Response({'detail': 'Duplicate UUIDs in order.'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = PinnedReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order = serializer.validated_data['order']  # list[UUID]
 
         # Fetch existing pins, preserving previous order for any that the
         # caller did not mention (handles concurrent unpin gracefully -
@@ -152,17 +135,17 @@ class FavoritesMixin:
         pins = list(
             PinnedFolder.objects.filter(owner=request.user).order_by('position', 'created_at')
         )
-        by_uuid = {str(p.folder_id): p for p in pins}
+        by_uuid = {p.folder_id: p for p in pins}
 
         new_sequence = []
         seen = set()
-        for u in normalized:
+        for u in order:
             pin = by_uuid.get(u)
             if pin is not None:
                 new_sequence.append(pin)
                 seen.add(u)
         for p in pins:
-            if str(p.folder_id) not in seen:
+            if p.folder_id not in seen:
                 new_sequence.append(p)
 
         # Renumber positions deterministically 0..N-1 so duplicates cannot

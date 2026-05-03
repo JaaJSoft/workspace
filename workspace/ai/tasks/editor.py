@@ -10,6 +10,7 @@ from workspace.ai.services.llm import (
     sanitize_messages_for_storage,
     serialize_response,
 )
+from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +64,11 @@ def editor_action(self, task_id: str):
             }
 
             logger.info('Editor action complete: task=%s action=%s tokens=%s+%s',
-                        task_id, action, result['prompt_tokens'], result['completion_tokens'])
+                        scrub(task_id), scrub(action),
+                        result['prompt_tokens'], result['completion_tokens'])
             return {'status': 'ok', 'task_id': task_id}
     except AITask.DoesNotExist:
-        logger.error('Editor action task not found: %s', task_id)
+        logger.error('Editor action task not found: %s', scrub(task_id))
         return {'status': 'error', 'error': 'Task not found'}
     except Exception as e:
         return {'status': 'error', 'error': str(e)}

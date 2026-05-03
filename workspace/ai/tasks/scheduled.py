@@ -13,6 +13,7 @@ from workspace.ai.services.llm import (
 )
 from workspace.ai.services.responses import handle_generation_error, post_bot_message
 from workspace.ai.services.tool_loop import run_tool_loop
+from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ def generate_scheduled_response(self, schedule_id: str):
     try:
         schedule = ScheduledMessage.objects.get(pk=schedule_id)
     except ScheduledMessage.DoesNotExist:
-        logger.error('Scheduled message not found: %s', schedule_id)
+        logger.error('Scheduled message not found: %s', scrub(schedule_id))
         return {'status': 'error', 'error': 'Schedule not found'}
 
     if not schedule.is_active:
@@ -72,7 +73,7 @@ def generate_scheduled_response(self, schedule_id: str):
         bot_profile = BotProfile.objects.get(user=bot_user)
         conversation = Conversation.objects.get(pk=schedule.conversation_id)
     except (User.DoesNotExist, BotProfile.DoesNotExist, Conversation.DoesNotExist):
-        logger.error('Scheduled response failed: schedule=%s - bot or conversation not found', schedule_id)
+        logger.error('Scheduled response failed: schedule=%s - bot or conversation not found', scrub(schedule_id))
         return {'status': 'error', 'error': 'Not found'}
 
     human_user = User.objects.filter(pk=schedule.created_by_id).first()
@@ -119,7 +120,7 @@ def generate_scheduled_response(self, schedule_id: str):
         # Auto-retry once if the model returned an empty response.
         body_preview = clean_llm_content(result.get('content') or '')
         if not body_preview and not tool_context.get('images'):
-            logger.warning('Empty scheduled response, retrying once: schedule=%s', schedule_id)
+            logger.warning('Empty scheduled response, retrying once: schedule=%s', scrub(schedule_id))
             result, used_tools, tool_context, retry_rounds, retry_td = run_tool_loop(
                 messages, bot_profile.get_model(),
                 human_user, bot_user, str(conversation.pk),
@@ -136,7 +137,7 @@ def generate_scheduled_response(self, schedule_id: str):
                 ai_task.completion_tokens = result.get('completion_tokens')
                 ai_task.completed_at = timezone.now()
                 ai_task.save()
-                logger.warning('Scheduled response empty after retry: schedule=%s', schedule_id)
+                logger.warning('Scheduled response empty after retry: schedule=%s', scrub(schedule_id))
                 return {'status': 'skipped', 'reason': 'empty_response'}
 
         raw_messages = {'messages': initial_messages, 'rounds': rounds}
@@ -152,7 +153,7 @@ def generate_scheduled_response(self, schedule_id: str):
             ai_task.raw_messages = raw_messages
             ai_task.completed_at = timezone.now()
             ai_task.save()
-            logger.info('Scheduled response skipped (bot judged irrelevant): schedule=%s', schedule_id)
+            logger.info('Scheduled response skipped (bot judged irrelevant): schedule=%s', scrub(schedule_id))
             return {'status': 'skipped', 'reason': 'bot_judged_irrelevant'}
 
         body, bot_message = post_bot_message(
@@ -165,10 +166,11 @@ def generate_scheduled_response(self, schedule_id: str):
         maybe_dispatch_summary_update(str(conversation.pk), summary_text)
 
         logger.info('Scheduled response generated: schedule=%s conversation=%s tokens=%s+%s',
-                    schedule_id, conversation.pk, result['prompt_tokens'], result['completion_tokens'])
+                    scrub(schedule_id), scrub(conversation.pk),
+                    result['prompt_tokens'], result['completion_tokens'])
         return {'status': 'ok', 'message_id': str(bot_message.uuid)}
 
     except Exception as e:
-        logger.exception('Scheduled response failed: schedule=%s', schedule_id)
+        logger.exception('Scheduled response failed: schedule=%s', scrub(schedule_id))
         handle_generation_error(conversation, bot_user, ai_task, e)
         return {'status': 'error', 'error': str(e)}

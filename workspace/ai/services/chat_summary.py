@@ -8,8 +8,10 @@ when to fire that task from another bot-response handler.
 import logging
 
 from django.conf import settings
+from django.db.models import Q
 
 from workspace.ai.services.llm import call_llm
+from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
@@ -112,24 +114,37 @@ def update_summary(conversation_id: str) -> dict:
             logger.warning(
                 'Empty summary from model (tokens=%s+%s), skipping: conversation=%s',
                 result.get('prompt_tokens'), result.get('completion_tokens'),
-                conversation_id,
+                scrub(conversation_id),
             )
             return {'status': 'error', 'error': 'Empty summary from model'}
 
-        ConversationSummary.objects.update_or_create(
+        # Guard ``up_to`` so it can only move forward: if two summary jobs for
+        # the same conversation overlap, the older one (with an older
+        # cutoff_time) must not overwrite a newer summary. ``upsert`` with a
+        # filter that excludes "newer than us" rows keeps the write monotonic.
+        updated = ConversationSummary.objects.filter(
             conversation_id=conversation_id,
-            defaults={'content': summary_content, 'up_to': cutoff_time},
+        ).filter(Q(up_to__isnull=True) | Q(up_to__lte=cutoff_time)).update(
+            content=summary_content, up_to=cutoff_time,
         )
+        if not updated:
+            # Either the row does not exist yet, or a more recent summary won
+            # the race. Try to create the row; if it already exists with a
+            # newer up_to, leave it alone.
+            ConversationSummary.objects.get_or_create(
+                conversation_id=conversation_id,
+                defaults={'content': summary_content, 'up_to': cutoff_time},
+            )
 
         logger.info(
             'Conversation summary updated: conversation=%s messages_summarized=%d tokens=%s+%s',
-            conversation_id, len(new_messages),
+            scrub(conversation_id), len(new_messages),
             result['prompt_tokens'], result['completion_tokens'],
         )
         return {'status': 'ok'}
 
     except Exception as e:
-        logger.exception('Conversation summary failed: conversation=%s', conversation_id)
+        logger.exception('Conversation summary failed: conversation=%s', scrub(conversation_id))
         return {'status': 'error', 'error': str(e)}
 
 

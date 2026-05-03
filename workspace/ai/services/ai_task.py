@@ -14,6 +14,8 @@ from contextlib import contextmanager
 
 from django.utils import timezone
 
+from workspace.common.logging import scrub
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,7 +60,7 @@ def ai_task_lifecycle(task_id, *, log_label):
     try:
         yield ai_task
     except Exception as e:
-        logger.exception('%s failed: task=%s', log_label, task_id)
+        logger.exception('%s failed: task=%s', log_label, scrub(task_id))
         ai_task.status = AITask.Status.FAILED
         ai_task.error = str(e)
         ai_task.completed_at = timezone.now()

@@ -20,6 +20,7 @@ from workspace.ai.services.llm import (
 )
 from workspace.ai.services.responses import handle_generation_error, post_bot_message
 from workspace.ai.services.tool_loop import run_tool_loop
+from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,8 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         bot_profile = BotProfile.objects.get(user=bot_user)
         conversation = Conversation.objects.get(pk=conversation_id)
     except (User.DoesNotExist, BotProfile.DoesNotExist, Conversation.DoesNotExist):
-        logger.error('Bot response failed: conversation=%s bot=%s not found', conversation_id, bot_user_id)
+        logger.error('Bot response failed: conversation=%s bot=%s not found',
+                     scrub(conversation_id), scrub(bot_user_id))
         return {'status': 'error', 'error': 'Not found'}
 
     trigger_message = Message.objects.filter(pk=message_id).select_related('author').first()
@@ -80,7 +82,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         # Auto-retry once if the model returned an empty response.
         body_preview = clean_llm_content(result.get('content') or '')
         if not body_preview and not tool_context.get('images'):
-            logger.warning('Empty response, retrying once: conversation=%s', conversation_id)
+            logger.warning('Empty response, retrying once: conversation=%s', scrub(conversation_id))
             result, used_tools, tool_context, retry_rounds, retry_td = run_tool_loop(
                 messages, bot_profile.get_model(),
                 human_user, bot_user, conversation_id,
@@ -97,7 +99,7 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         # Guard: check if the task was cancelled while we were waiting for OpenAI.
         ai_task.refresh_from_db(fields=['status'])
         if ai_task.status == AITask.Status.FAILED:
-            logger.info('Bot response cancelled: conversation=%s', conversation_id)
+            logger.info('Bot response cancelled: conversation=%s', scrub(conversation_id))
             return {'status': 'cancelled'}
 
         body, bot_message = post_bot_message(
@@ -115,11 +117,11 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         maybe_dispatch_summary_update(conversation_id, summary_text)
 
         logger.info('Bot response generated: conversation=%s tokens=%s+%s',
-                    conversation_id, result['prompt_tokens'], result['completion_tokens'])
+                    scrub(conversation_id), result['prompt_tokens'], result['completion_tokens'])
         return {'status': 'ok', 'message_id': str(bot_message.uuid)}
 
     except Exception as e:
-        logger.exception('Bot response failed: conversation=%s', conversation_id)
+        logger.exception('Bot response failed: conversation=%s', scrub(conversation_id))
         handle_generation_error(conversation, bot_user, ai_task, e)
         return {'status': 'error', 'error': str(e)}
 
@@ -173,7 +175,7 @@ def generate_conversation_title(self, conversation_id: str):
                 },
                 {'role': 'user', 'content': excerpt},
             ],
-            model=settings.AI_SMALL_MODEL,
+            model=settings.AI_SMALL_MODEL or settings.AI_MODEL,
             max_tokens=2048,
         )
         title = result['content'].strip().strip('"\'')
@@ -183,5 +185,5 @@ def generate_conversation_title(self, conversation_id: str):
             notify_conversation_members(conversation)
         return {'status': 'ok', 'title': title}
     except Exception as e:
-        logger.exception('Title generation failed: conversation=%s', conversation_id)
+        logger.exception('Title generation failed: conversation=%s', scrub(conversation_id))
         return {'status': 'error', 'error': str(e)}

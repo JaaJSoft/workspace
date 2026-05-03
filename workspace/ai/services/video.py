@@ -4,6 +4,8 @@ import os
 import subprocess
 import tempfile
 
+from workspace.common.logging import scrub
+
 logger = logging.getLogger(__name__)
 
 _VIDEO_MAX_FRAMES = 30  # cap frames sent to the model to limit context size
@@ -82,5 +84,5 @@ def extract_video_frames(att):
                     'image_url': {'url': f'data:image/jpeg;base64,{b64}'},
                 })
     except Exception:
-        logger.warning('Could not extract frames from video %s', att.uuid)
+        logger.warning('Could not extract frames from video %s', scrub(att.uuid))
     return parts, description

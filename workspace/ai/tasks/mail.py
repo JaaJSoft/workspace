@@ -1,6 +1,7 @@
 """Mail-related AI Celery tasks (summarize, compose, classify)."""
 
 import logging
+import re
 from collections import defaultdict
 
 import orjson
@@ -14,8 +15,12 @@ from workspace.ai.services.llm import (
     sanitize_messages_for_storage,
     serialize_response,
 )
+from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
+
+# Tolerate LLM outputs wrapped in ``` / ```json fences instead of strict JSON.
+_FENCE_RE = re.compile(r'^```(?:json)?\s*|\s*```$', re.DOTALL)
 
 
 @shared_task(name='ai.summarize', bind=True, max_retries=0)
@@ -62,10 +67,10 @@ def summarize(self, task_id: str):
                 message.save(update_fields=['ai_summary'])
 
             logger.info('Summarize complete: task=%s tokens=%s+%s',
-                        task_id, result['prompt_tokens'], result['completion_tokens'])
+                        scrub(task_id), result['prompt_tokens'], result['completion_tokens'])
             return {'status': 'ok', 'task_id': task_id}
     except AITask.DoesNotExist:
-        logger.error('Summarize task not found: %s', task_id)
+        logger.error('Summarize task not found: %s', scrub(task_id))
         return {'status': 'error', 'error': 'Task not found'}
     except Exception as e:
         return {'status': 'error', 'error': str(e)}
@@ -133,10 +138,10 @@ def compose_email(self, task_id: str):
             }
 
             logger.info('Compose complete: task=%s tokens=%s+%s',
-                        task_id, result['prompt_tokens'], result['completion_tokens'])
+                        scrub(task_id), result['prompt_tokens'], result['completion_tokens'])
             return {'status': 'ok', 'task_id': task_id}
     except AITask.DoesNotExist:
-        logger.error('Compose task not found: %s', task_id)
+        logger.error('Compose task not found: %s', scrub(task_id))
         return {'status': 'error', 'error': 'Task not found'}
     except Exception as e:
         return {'status': 'error', 'error': str(e)}
@@ -180,6 +185,10 @@ def classify_mail_messages(self, task_id: str):
             total_prompt = 0
             total_completion = 0
             model_used = ''
+            # Collect every label assignment first; commit them in a single
+            # transaction at the end so a later batch failing on bad JSON does
+            # not leave half the messages partially labelled.
+            all_links = []
 
             for account_id, account_msgs in msgs_by_account.items():
                 account_labels = list(MailLabel.objects.filter(account_id=account_id))
@@ -207,16 +216,19 @@ def classify_mail_messages(self, task_id: str):
                     total_prompt += result['prompt_tokens'] or 0
                     total_completion += result['completion_tokens'] or 0
 
+                    # Tolerate ```json fences and stray whitespace - small models
+                    # often emit fenced code blocks despite the prompt asking for
+                    # plain JSON.
+                    raw_content = _FENCE_RE.sub('', (result['content'] or '').strip())
                     try:
-                        items = orjson.loads(result['content'])
-                    except (ValueError, TypeError):
-                        logger.warning('Classify: malformed JSON response for task %s', task_id)
-                        raise ValueError('Malformed JSON response from LLM')
+                        items = orjson.loads(raw_content)
+                    except (ValueError, TypeError) as e:
+                        logger.warning('Classify: malformed JSON response for task %s', scrub(task_id))
+                        raise ValueError('Malformed JSON response from LLM') from e
 
                     if not isinstance(items, list):
                         raise ValueError('Expected JSON array from LLM')
 
-                    links_to_create = []
                     for item in items:
                         if not isinstance(item, dict):
                             continue
@@ -238,25 +250,24 @@ def classify_mail_messages(self, task_id: str):
                                 continue
                             label = label_by_lower.get(raw_name.lower())
                             if label:
-                                links_to_create.append(
+                                all_links.append(
                                     MailMessageLabel(message=msg, label=label)
                                 )
                                 count += 1
 
-                    if links_to_create:
-                        MailMessageLabel.objects.bulk_create(links_to_create, ignore_conflicts=True)
-
             with transaction.atomic():
+                if all_links:
+                    MailMessageLabel.objects.bulk_create(all_links, ignore_conflicts=True)
                 ai_task.result = f'Classified {len(msgs)} messages'
                 ai_task.model_used = model_used
                 ai_task.prompt_tokens = total_prompt
                 ai_task.completion_tokens = total_completion
 
             logger.info('Classify complete: task=%s messages=%d tokens=%d+%d',
-                        task_id, len(msgs), total_prompt, total_completion)
+                        scrub(task_id), len(msgs), total_prompt, total_completion)
             return {'status': 'ok', 'task_id': task_id}
     except AITask.DoesNotExist:
-        logger.error('Classify task not found: %s', task_id)
+        logger.error('Classify task not found: %s', scrub(task_id))
         return {'status': 'error', 'error': 'Task not found'}
     except Exception as e:
         return {'status': 'error', 'error': str(e)}

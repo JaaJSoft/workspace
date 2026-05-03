@@ -4,6 +4,7 @@ import logging
 from django.conf import settings
 
 from workspace.ai.services.video import extract_video_frames
+from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
                             },
                         })
                     except Exception:
-                        logger.warning('Could not read attachment %s', att.uuid)
+                        logger.warning('Could not read attachment %s', scrub(att.uuid))
                 elif att.is_video:
                     frames, desc = extract_video_frames(att)
                     if desc:

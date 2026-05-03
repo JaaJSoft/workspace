@@ -82,7 +82,17 @@ class FavoritesMixin:
             folder__deleted_at__isnull=True,
         ).select_related('folder').order_by('position', 'created_at')
         folder_ids = [p.folder_id for p in pinned_qs]
-        queryset = self.get_queryset().filter(pk__in=folder_ids, deleted_at__isnull=True)
+        # Use the access-aware filter so pinned group subfolders are included.
+        # ``self.get_queryset()`` is owner-scoped (group__isnull=True) and would
+        # silently drop any pinned group folder.
+        queryset = FileService.annotate_for_serializer(
+            File.objects.filter(
+                FileService.accessible_files_q(request.user),
+                pk__in=folder_ids,
+                deleted_at__isnull=True,
+            ),
+            request.user,
+        )
         # Preserve pin order
         order_map = {fid: i for i, fid in enumerate(folder_ids)}
         folders = sorted(queryset, key=lambda f: order_map.get(f.pk, 0))

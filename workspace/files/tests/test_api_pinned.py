@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -143,6 +144,29 @@ class PinnedFolderAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['uuid'], str(folder1.uuid))
+
+    def test_list_includes_pinned_group_subfolder(self):
+        """Pinned group subfolders must appear in the listing.
+
+        Regression: ``pinned`` previously used the owner-scoped queryset
+        (``group__isnull=True``), so a successfully pinned group subfolder
+        was silently dropped from the sidebar listing.
+        """
+        group = Group.objects.create(name='Marketing')
+        self.user.groups.add(group)
+        group_root = File.objects.create(
+            owner=self.user, name='Marketing', node_type=File.NodeType.FOLDER, group=group,
+        )
+        group_sub = File.objects.create(
+            owner=self.user, name='Reports', node_type=File.NodeType.FOLDER,
+            group=group, parent=group_root,
+        )
+        PinnedFolder.objects.create(owner=self.user, folder=group_sub, position=0)
+
+        response = self.client.get('/api/v1/files/pinned')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        uuids = [item['uuid'] for item in response.data]
+        self.assertIn(str(group_sub.uuid), uuids)
 
     def test_reorder_pinned_folders(self):
         """Test reordering pinned folders."""

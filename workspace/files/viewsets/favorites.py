@@ -1,5 +1,7 @@
 """Favorite + pin actions for FileViewSet."""
 
+import uuid as uuid_module
+
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
@@ -127,20 +129,49 @@ class FavoritesMixin:
         if not isinstance(order, list):
             return Response({'detail': 'order must be a list of UUIDs.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Get existing pinned folders for user
-        pinned_map = {
-            str(p.folder_id): p
-            for p in PinnedFolder.objects.filter(owner=request.user)
-        }
+        # Validate every item is a UUID string. Without this, a payload like
+        # {"order": [{}, "..."]} crashes on ``item in pinned_map`` because
+        # dict/list keys are unhashable - producing a 500 instead of a 400.
+        normalized = []
+        for item in order:
+            if not isinstance(item, str):
+                return Response({'detail': 'order items must be UUID strings.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                normalized.append(str(uuid_module.UUID(item)))
+            except ValueError:
+                return Response({'detail': f'Invalid UUID: {item}'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Update positions based on new order
+        # Reject duplicates so the renumbering below is well-defined.
+        if len(set(normalized)) != len(normalized):
+            return Response({'detail': 'Duplicate UUIDs in order.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Fetch existing pins, preserving previous order for any that the
+        # caller did not mention (handles concurrent unpin gracefully -
+        # silently skipping unknown UUIDs is fine, but unmentioned pins must
+        # land somewhere or we get duplicate positions).
+        pins = list(
+            PinnedFolder.objects.filter(owner=request.user).order_by('position', 'created_at')
+        )
+        by_uuid = {str(p.folder_id): p for p in pins}
+
+        new_sequence = []
+        seen = set()
+        for u in normalized:
+            pin = by_uuid.get(u)
+            if pin is not None:
+                new_sequence.append(pin)
+                seen.add(u)
+        for p in pins:
+            if str(p.folder_id) not in seen:
+                new_sequence.append(p)
+
+        # Renumber positions deterministically 0..N-1 so duplicates cannot
+        # appear, regardless of which subset the caller listed.
         to_update = []
-        for position, uuid in enumerate(order):
-            if uuid in pinned_map:
-                pin = pinned_map[uuid]
-                if pin.position != position:
-                    pin.position = position
-                    to_update.append(pin)
+        for i, pin in enumerate(new_sequence):
+            if pin.position != i:
+                pin.position = i
+                to_update.append(pin)
 
         if to_update:
             PinnedFolder.objects.bulk_update(to_update, ['position'])

@@ -1,3 +1,5 @@
+import uuid as uuid_module
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from rest_framework import status
@@ -193,3 +195,78 @@ class PinnedFolderAPITests(APITestCase):
         pins = PinnedFolder.objects.filter(owner=self.user).order_by('position')
         self.assertEqual(pins[0].folder, folder2)
         self.assertEqual(pins[1].folder, folder1)
+
+    def _make_pin(self, name, position):
+        folder = File.objects.create(
+            owner=self.user, name=name, node_type=File.NodeType.FOLDER,
+        )
+        PinnedFolder.objects.create(owner=self.user, folder=folder, position=position)
+        return folder
+
+    def test_reorder_rejects_non_string_items_with_400(self):
+        """Regression: ``{} in pinned_map`` raised TypeError -> 500."""
+        self._make_pin('A', 0)
+        response = self.client.post('/api/v1/files/pinned/reorder', {
+            'order': [{}, 'whatever'],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reorder_rejects_invalid_uuid_with_400(self):
+        self._make_pin('A', 0)
+        response = self.client.post('/api/v1/files/pinned/reorder', {
+            'order': ['not-a-uuid'],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reorder_rejects_duplicate_uuids_with_400(self):
+        """Regression: duplicate input caused duplicate position values."""
+        a = self._make_pin('A', 0)
+        self._make_pin('B', 1)
+        response = self.client.post('/api/v1/files/pinned/reorder', {
+            'order': [str(a.uuid), str(a.uuid)],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reorder_partial_list_does_not_create_duplicate_positions(self):
+        """Regression: omitting a pin from the order kept its old position,
+        which collided with the new position assigned to a moved pin."""
+        a = self._make_pin('A', 0)
+        b = self._make_pin('B', 1)
+        c = self._make_pin('C', 2)
+
+        # Move C to the front, leave A and B unspecified.
+        response = self.client.post('/api/v1/files/pinned/reorder', {
+            'order': [str(c.uuid)],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        positions = list(
+            PinnedFolder.objects.filter(owner=self.user)
+            .order_by('position').values_list('position', flat=True)
+        )
+        self.assertEqual(positions, [0, 1, 2])  # No duplicates, contiguous
+
+        ordered = list(
+            PinnedFolder.objects.filter(owner=self.user)
+            .order_by('position').values_list('folder_id', flat=True)
+        )
+        self.assertEqual(ordered[0], c.uuid)
+        self.assertIn(a.uuid, ordered[1:])
+        self.assertIn(b.uuid, ordered[1:])
+
+    def test_reorder_ignores_unknown_uuids(self):
+        """Concurrent unpin in another tab must not 400 the reorder."""
+        a = self._make_pin('A', 0)
+        b = self._make_pin('B', 1)
+        ghost = uuid_module.uuid4()
+
+        response = self.client.post('/api/v1/files/pinned/reorder', {
+            'order': [str(b.uuid), str(ghost), str(a.uuid)],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        ordered = list(
+            PinnedFolder.objects.filter(owner=self.user)
+            .order_by('position').values_list('folder_id', flat=True)
+        )
+        self.assertEqual(ordered, [b.uuid, a.uuid])

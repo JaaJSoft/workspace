@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from django.db.models import Max
 from drf_spectacular.utils import extend_schema, inline_serializer
@@ -76,11 +77,27 @@ class ConversationPinReorderView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Normalize entries up front. Unhashable JSON shapes (list/dict) would
+        # otherwise crash at pin_map.get(uuid_str) with TypeError. Strings that
+        # don't parse as UUIDs are kept as-is and silently miss the lookup,
+        # matching the existing behaviour for unknown conversation IDs.
+        normalized_order = []
+        for entry in order:
+            if isinstance(entry, uuid.UUID):
+                normalized_order.append(str(entry))
+            elif isinstance(entry, str):
+                normalized_order.append(entry)
+            else:
+                return Response(
+                    {'detail': '"order" entries must be UUID strings.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         pins = PinnedConversation.objects.filter(owner=request.user)
         pin_map = {str(p.conversation_id): p for p in pins}
 
         to_update = []
-        for i, uuid_str in enumerate(order):
+        for i, uuid_str in enumerate(normalized_order):
             pin = pin_map.get(uuid_str)
             if pin:
                 pin.position = i

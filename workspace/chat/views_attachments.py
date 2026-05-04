@@ -90,7 +90,7 @@ class AttachmentSaveToFilesView(APIView):
         }),
     )
     def post(self, request, attachment_id):
-        from django.core.files.base import ContentFile
+        from django.core.files.base import File as DjangoFile
         from workspace.files.services.files import FileService
 
         try:
@@ -138,15 +138,26 @@ class AttachmentSaveToFilesView(APIView):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-        with attachment.file.open('rb') as f:
-            content = ContentFile(f.read(), name=attachment.original_name)
-        file_obj = FileService.create_file(
-            owner=request.user,
-            name=attachment.original_name,
-            parent=parent,
-            content=content,
-            mime_type=attachment.mime_type,
-        )
+        # Stream-copy the source blob into a fresh storage path. We wrap
+        # the opened FieldFile in django.core.files.File so the destination
+        # FileField sees _committed=False and storage.save() runs (FieldFile
+        # itself is committed and would be reused as-is, leaving the two
+        # rows pointing at the same blob). FileFound/OSError mirrors the
+        # download view's handling for a vanished blob.
+        try:
+            with attachment.file.open('rb') as f:
+                file_obj = FileService.create_file(
+                    owner=request.user,
+                    name=attachment.original_name,
+                    parent=parent,
+                    content=DjangoFile(f, name=attachment.original_name),
+                    mime_type=attachment.mime_type,
+                )
+        except (FileNotFoundError, OSError):
+            return Response(
+                {'detail': 'Attachment not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         return Response(
             {'detail': 'File saved.', 'file_uuid': str(file_obj.uuid)},

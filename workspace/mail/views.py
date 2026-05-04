@@ -1155,7 +1155,7 @@ class MailAttachmentSaveToFilesView(APIView):
         }),
     )
     def post(self, request, uuid):
-        from django.core.files.base import ContentFile
+        from django.core.files.base import File as DjangoFile
         from workspace.files.models import File
         from workspace.files.services.files import FileService
 
@@ -1195,14 +1195,33 @@ class MailAttachmentSaveToFilesView(APIView):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-        content = ContentFile(attachment.content.read(), name=attachment.filename)
-        file_obj = FileService.create_file(
-            owner=request.user,
-            name=attachment.filename,
-            parent=parent,
-            content=content,
-            mime_type=attachment.content_type,
-        )
+        # Stream-copy the attachment blob into a fresh storage path. Wrapping
+        # the opened FieldFile in django.core.files.File flips _committed=False
+        # so the destination FileField sees the file as new and storage.save()
+        # runs (a FieldFile passed directly is _committed=True and would make
+        # both rows point at the same blob).
+        #
+        # The try/except is intentionally narrow: only a missing source blob
+        # is mapped to 404. Operational errors from FileService.create_file
+        # (disk full / perm denied / remote storage flake on the destination
+        # side) propagate so middleware returns 500 - they're not "attachment
+        # not found" and lying to the client would mask the real issue.
+        try:
+            src = attachment.content.open('rb')
+        except FileNotFoundError:
+            return Response(
+                {'detail': 'Attachment not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        with src as f:
+            file_obj = FileService.create_file(
+                owner=request.user,
+                name=attachment.filename,
+                parent=parent,
+                content=DjangoFile(f, name=attachment.filename),
+                mime_type=attachment.content_type,
+            )
 
         return Response(
             {'detail': 'File saved.', 'file_uuid': str(file_obj.uuid)},

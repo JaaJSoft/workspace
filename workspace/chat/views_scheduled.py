@@ -78,11 +78,17 @@ class ScheduledMessageDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         updated = serializer.save()
 
-        # Recompute next_run_at if any timing fields were changed
+        # Recompute next_run_at if any timing fields were changed.
+        # ONCE schedules can't go through compute_next_run(): it deactivates
+        # them on the assumption it's being called post-fire by the dispatcher.
         if self.TIMING_FIELDS & set(request.data.keys()):
-            from workspace.users.services.settings import get_user_timezone
-            updated.compute_next_run(user_tz=get_user_timezone(request.user))
-            updated.save(update_fields=['next_run_at', 'is_active'])
+            if updated.kind == ScheduledMessage.Kind.ONCE:
+                updated.next_run_at = updated.scheduled_at
+                updated.save(update_fields=['next_run_at'])
+            else:
+                from workspace.users.services.settings import get_user_timezone
+                updated.compute_next_run(user_tz=get_user_timezone(request.user))
+                updated.save(update_fields=['next_run_at', 'is_active'])
 
         return Response(ScheduledMessageSerializer(updated).data)
 

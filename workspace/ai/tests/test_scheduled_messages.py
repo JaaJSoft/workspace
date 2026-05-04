@@ -401,6 +401,46 @@ class ScheduledMessageAPITests(APITestCase):
         self.schedule.refresh_from_db()
         self.assertEqual(self.schedule.prompt, 'Updated greeting')
 
+    def test_update_once_schedule_reschedules_without_deactivating(self):
+        """Regression: PATCHing scheduled_at on a one-time schedule must
+        update next_run_at and keep is_active=True. The view used to call
+        compute_next_run() unconditionally, which deactivates ONCE kinds
+        and silently cancelled the rescheduled message.
+        """
+        original_at = timezone.now() + timedelta(hours=1)
+        once = ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt='One-time greeting',
+            kind=ScheduledMessage.Kind.ONCE,
+            scheduled_at=original_at,
+            next_run_at=original_at,
+        )
+        new_at = timezone.now() + timedelta(hours=5)
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            self._detail_url(schedule_id=once.uuid),
+            data={'scheduled_at': new_at.isoformat()},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        once.refresh_from_db()
+        self.assertTrue(
+            once.is_active,
+            'one-time schedule must stay active after reschedule',
+        )
+        self.assertAlmostEqual(
+            once.next_run_at.timestamp(),
+            new_at.timestamp(),
+            delta=1,
+        )
+        self.assertAlmostEqual(
+            once.scheduled_at.timestamp(),
+            new_at.timestamp(),
+            delta=1,
+        )
+
     def test_delete_schedule(self):
         self.client.force_authenticate(self.user)
         resp = self.client.delete(self._detail_url())

@@ -1,5 +1,4 @@
 import logging
-import uuid
 
 from django.core.files.storage import default_storage
 from django.http import FileResponse
@@ -10,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.cache import cached, invalidate_tags
+from workspace.common.uuids import parse_uuid_or_none
 from .models import MessageAttachment
 from .services.conversations import get_active_membership
 
@@ -119,9 +119,8 @@ class AttachmentSaveToFilesView(APIView):
         parent = None
         folder_id = request.data.get('folder_id')
         if folder_id:
-            try:
-                folder_uuid = uuid.UUID(str(folder_id))
-            except (ValueError, TypeError):
+            folder_uuid = parse_uuid_or_none(folder_id)
+            if folder_uuid is None:
                 return Response(
                     {'detail': '"folder_id" must be a valid UUID.'},
                     status=status.HTTP_400_BAD_REQUEST,

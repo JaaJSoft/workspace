@@ -1,5 +1,4 @@
 import logging
-import uuid
 
 from django.db.models import Max
 from drf_spectacular.utils import extend_schema, inline_serializer
@@ -8,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.uuids import parse_uuid_or_none
 from .models import Message, PinnedConversation, PinnedMessage
 from .serializers import PinnedMessageSerializer
 from .services.conversations import get_active_membership
@@ -78,20 +78,17 @@ class ConversationPinReorderView(APIView):
             )
 
         # Normalize entries up front. Unhashable JSON shapes (list/dict) would
-        # otherwise crash at pin_map.get(uuid_str) with TypeError. Strings that
-        # don't parse as UUIDs are kept as-is and silently miss the lookup,
-        # matching the existing behaviour for unknown conversation IDs.
+        # otherwise crash at pin_map.get(uuid_str) with TypeError. Unknown but
+        # parseable UUIDs are kept and silently miss the lookup below.
         normalized_order = []
         for entry in order:
-            if isinstance(entry, uuid.UUID):
-                normalized_order.append(str(entry))
-            elif isinstance(entry, str):
-                normalized_order.append(entry)
-            else:
+            parsed = parse_uuid_or_none(entry)
+            if parsed is None:
                 return Response(
                     {'detail': '"order" entries must be UUID strings.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            normalized_order.append(str(parsed))
 
         pins = PinnedConversation.objects.filter(owner=request.user)
         pin_map = {str(p.conversation_id): p for p in pins}

@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.uuids import parse_uuid_or_none
 from .models import MailAccount, MailAttachment, MailFolder, MailLabel, MailMessage, MailMessageLabel
 from .queries import user_account_ids
 from .serializers import (
@@ -1175,9 +1176,15 @@ class MailAttachmentSaveToFilesView(APIView):
         parent = None
         folder_id = request.data.get('folder_id')
         if folder_id:
+            folder_uuid = parse_uuid_or_none(folder_id)
+            if folder_uuid is None:
+                return Response(
+                    {'detail': '"folder_id" must be a valid UUID.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             try:
                 parent = File.objects.get(
-                    uuid=folder_id,
+                    uuid=folder_uuid,
                     owner=request.user,
                     node_type=File.NodeType.FOLDER,
                     deleted_at__isnull=True,

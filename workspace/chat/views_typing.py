@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ..common.logging import scrub
 from .models import Conversation, ConversationMember, Message, MessageAttachment
 from .services.conversations import get_active_membership, get_unread_counts
 from .services.notifications import notify_conversation_members
@@ -83,7 +84,7 @@ class ConversationClearView(APIView):
                     try:
                         f.delete(save=False)
                     except OSError:
-                        logger.warning('Could not delete file %s', f.name)
+                        logger.warning('Could not delete file %s', scrub(f.name))
 
             transaction.on_commit(_cleanup_files)
 

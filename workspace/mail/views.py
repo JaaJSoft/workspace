@@ -1155,7 +1155,7 @@ class MailAttachmentSaveToFilesView(APIView):
         }),
     )
     def post(self, request, uuid):
-        from django.core.files.base import ContentFile
+        from django.core.files.base import File as DjangoFile
         from workspace.files.models import File
         from workspace.files.services.files import FileService
 
@@ -1195,14 +1195,26 @@ class MailAttachmentSaveToFilesView(APIView):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-        content = ContentFile(attachment.content.read(), name=attachment.filename)
-        file_obj = FileService.create_file(
-            owner=request.user,
-            name=attachment.filename,
-            parent=parent,
-            content=content,
-            mime_type=attachment.content_type,
-        )
+        # Stream-copy the attachment blob into a fresh storage path. Wrapping
+        # the opened FieldFile in django.core.files.File flips _committed=False
+        # so the destination FileField sees the file as new and storage.save()
+        # runs (a FieldFile passed directly is _committed=True and would make
+        # both rows point at the same blob). FileNotFoundError/OSError mirror
+        # the chat save-to-files handling for a vanished blob.
+        try:
+            with attachment.content.open('rb') as f:
+                file_obj = FileService.create_file(
+                    owner=request.user,
+                    name=attachment.filename,
+                    parent=parent,
+                    content=DjangoFile(f, name=attachment.filename),
+                    mime_type=attachment.content_type,
+                )
+        except (FileNotFoundError, OSError):
+            return Response(
+                {'detail': 'Attachment not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         return Response(
             {'detail': 'File saved.', 'file_uuid': str(file_obj.uuid)},

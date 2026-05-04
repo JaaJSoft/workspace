@@ -1,8 +1,12 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from workspace.files.models import File
 from workspace.mail.models import (
     MailAccount,
     MailAttachment,
@@ -65,3 +69,32 @@ class MailAttachmentSaveToFilesTests(APITestCase):
         resp = self.client.post(self.url, data={}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertIn('file_uuid', resp.data)
+
+    def test_save_creates_independent_copy(self):
+        """The saved file must be a real copy of the attachment blob, not a
+        shared reference. The destination File's storage path must differ
+        from the source attachment's path - otherwise deleting the mail
+        message later would orphan the saved file. Pins the FieldFile-vs-
+        File _committed pitfall.
+        """
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(self.url, data={}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+        saved = File.objects.get(uuid=resp.data['file_uuid'])
+        self.assertNotEqual(saved.content.name, self.attachment.content.name)
+        with saved.content.open('rb') as f:
+            self.assertEqual(f.read(), b'pdf')
+
+    def test_missing_blob_returns_404(self):
+        """Regression: if the underlying attachment blob has gone missing,
+        attachment.content.open('rb') raises FileNotFoundError/OSError.
+        Used to escape the existing `except MailAttachment.DoesNotExist:`
+        and surface as 500. Must mirror the chat save-to-files 404.
+        """
+        self.client.force_authenticate(self.user)
+        with patch.object(
+            default_storage, 'open', side_effect=FileNotFoundError('gone'),
+        ):
+            resp = self.client.post(self.url, data={}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

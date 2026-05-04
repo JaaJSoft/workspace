@@ -219,3 +219,20 @@ class ScheduledMessageSerializer(serializers.ModelSerializer):
 
     def get_bot_display_name(self, obj):
         return obj.bot.get_full_name() or obj.bot.username
+
+    def validate(self, attrs):
+        # ONCE schedules derive next_run_at from scheduled_at, which is non-null
+        # in the model. Resolve the effective (kind, scheduled_at) pair against
+        # the existing instance for partial updates so we can't half-mutate a
+        # recurring row into ONCE without supplying a fire time.
+        kind = attrs.get('kind', getattr(self.instance, 'kind', None))
+        if kind == ScheduledMessage.Kind.ONCE:
+            if 'scheduled_at' in attrs:
+                scheduled_at = attrs['scheduled_at']
+            else:
+                scheduled_at = getattr(self.instance, 'scheduled_at', None)
+            if scheduled_at is None:
+                raise serializers.ValidationError({
+                    'scheduled_at': 'scheduled_at is required when kind is "once".',
+                })
+        return attrs

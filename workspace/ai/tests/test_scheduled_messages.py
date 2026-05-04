@@ -401,6 +401,20 @@ class ScheduledMessageAPITests(APITestCase):
         self.schedule.refresh_from_db()
         self.assertEqual(self.schedule.prompt, 'Updated greeting')
 
+    def test_update_kind_to_once_without_scheduled_at_returns_400(self):
+        """Regression: PATCHing kind=once on a recurring schedule without
+        providing scheduled_at used to crash with IntegrityError on
+        next_run_at (non-null) and surface as 500. Must reject with 4xx.
+        """
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            self._detail_url(),
+            data={'kind': 'once'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('scheduled_at', str(resp.data).lower())
+
     def test_update_once_schedule_reschedules_without_deactivating(self):
         """Regression: PATCHing scheduled_at on a one-time schedule must
         update next_run_at and keep is_active=True. The view used to call

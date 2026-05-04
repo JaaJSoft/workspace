@@ -23,6 +23,7 @@ from .serializers import (
 from .services.conversations import get_active_membership
 from .services.notifications import notify_conversation_members, notify_new_message
 from .services.rendering import extract_mentions, render_message_body
+from ..common.logging import scrub
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ class MessageListView(CacheControlMixin, APIView):
             except Message.DoesNotExist:
                 # Unknown cursor: treat as "no cursor" and return the most
                 # recent page instead of erroring out.
-                logger.debug('Ignoring unknown ?before cursor: %s', before)
+                logger.debug('Ignoring unknown ?before cursor: %s', scrub(before))
 
         # Get limit+1 to check has_more
         messages = messages.order_by('-created_at')[:limit + 1]

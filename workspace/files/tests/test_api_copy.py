@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
@@ -5,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
+from workspace.files.storage import OverwriteStorage
 
 User = get_user_model()
 
@@ -85,6 +88,45 @@ class CopyAPITests(APITestCase):
         copy = File.objects.get(uuid=response.data['uuid'])
         self.assertEqual(copy.size, 12)
         self.assertTrue(copy.content)
+
+    def test_destination_save_failure_does_not_log_source_missing(self):
+        """When the destination storage fails (e.g. disk full, perm denied
+        on the destination path, remote storage flake), the warning
+        'Source blob missing' must NOT be emitted: the source is fine, the
+        issue is on the destination side. The try/except around copy_node's
+        source-open step must be narrow enough that destination-side
+        OSErrors propagate without misattributed logging.
+
+        Calls the service directly rather than the API: the OSError aborts
+        the request transaction, which causes a TransactionManagementError
+        cascade through the test client. The service-level call exercises
+        the same copy_node code path without that infrastructure noise.
+        """
+        from workspace.files.services.files import FileService
+
+        file = File(
+            owner=self.user,
+            name='legit-source.txt',
+            node_type=File.NodeType.FILE,
+            mime_type='text/plain',
+        )
+        file.content = ContentFile(b'src-data', name='legit-source.txt')
+        file.size = 8
+        file.save()
+
+        with patch(
+            'workspace.files.services._storage_ops.logger.warning',
+        ) as mock_warn, patch.object(
+            OverwriteStorage, '_save', side_effect=OSError('disk full'),
+        ):
+            with self.assertRaises(OSError):
+                FileService.copy(file, None, self.user)
+
+        misattributed = [
+            call for call in mock_warn.call_args_list
+            if call.args and 'Source blob missing' in call.args[0]
+        ]
+        self.assertEqual(misattributed, [])
 
     def test_copy_file_creates_independent_blob(self):
         """The copied file's storage path must differ from the source's, and

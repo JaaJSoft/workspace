@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from django.core.files.storage import default_storage
 from django.http import FileResponse
@@ -119,8 +120,15 @@ class AttachmentSaveToFilesView(APIView):
         folder_id = request.data.get('folder_id')
         if folder_id:
             try:
+                folder_uuid = uuid.UUID(str(folder_id))
+            except (ValueError, TypeError):
+                return Response(
+                    {'detail': '"folder_id" must be a valid UUID.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
                 parent = File.objects.get(
-                    uuid=folder_id,
+                    uuid=folder_uuid,
                     owner=request.user,
                     node_type=File.NodeType.FOLDER,
                     deleted_at__isnull=True,

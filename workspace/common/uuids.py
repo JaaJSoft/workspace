@@ -28,3 +28,19 @@ def uuid_v7_or_v4() -> uuid.UUID:
         # In case accessing or calling uuid7 raises unexpectedly, ignore and fallback.
         pass
     return uuid.uuid4()
+
+
+def parse_uuid_or_none(value) -> uuid.UUID | None:
+    """Parse *value* as a UUID, returning None on malformed/missing input.
+
+    Use at the view boundary so that a non-UUID query param or body field
+    can be turned into a 4xx by the caller, rather than crashing deep in
+    Django's UUIDField cleaning layer (which would surface as a 500).
+    Accepts strings, existing UUID objects, or anything stringifiable.
+    """
+    if value is None:
+        return None
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, TypeError):
+        return None

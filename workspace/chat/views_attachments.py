@@ -16,22 +16,31 @@ logger = logging.getLogger(__name__)
 
 
 @cached(
-    key=lambda user, attachment_id: f'att:{user.pk}:{attachment_id}',
+    key=lambda attachment_id: f'att:meta:{attachment_id}',
     ttl=60,
-    tags=lambda user, attachment_id: [f'att:{attachment_id}'],
+    tags=lambda attachment_id: [f'att:{attachment_id}'],
 )
+def _get_attachment_meta_db(attachment_id):
+    """Fetch immutable attachment metadata. Cached per attachment, not per user.
+
+    Returns the raw row dict (or None). Callers must check authorisation
+    separately - membership is mutable and must NOT be memoised here.
+    """
+    return (
+        MessageAttachment.objects
+        .filter(uuid=attachment_id)
+        .values('file', 'mime_type', 'original_name', 'message__conversation_id')
+        .first()
+    )
+
+
 def _get_attachment_meta(user, attachment_id):
     """Return ``{file, mime, name}`` for an attachment the user can access, else None.
 
     Both "not found" and "not a member" collapse into ``None`` - callers return 404
     in both cases so we don't leak which attachments exist to outsiders.
     """
-    row = (
-        MessageAttachment.objects
-        .filter(uuid=attachment_id)
-        .values('file', 'mime_type', 'original_name', 'message__conversation_id')
-        .first()
-    )
+    row = _get_attachment_meta_db(attachment_id)
     if row is None or not get_active_membership(user, row['message__conversation_id']):
         return None
     return {

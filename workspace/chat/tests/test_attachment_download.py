@@ -122,10 +122,13 @@ class AttachmentDownloadTests(APITestCase):
             self._consume(resp)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-    def test_second_request_hits_permission_cache(self):
+    def test_second_request_hits_meta_cache(self):
+        """Second request reuses the cached attachment metadata, but still
+        re-checks membership on every call (so revocations take effect
+        immediately)."""
         self._warm(self.owner)
         self._consume(self.client.get(self.url(self.attachment.uuid)))  # populate cache
-        with self.assertNumQueries(0):
+        with self.assertNumQueries(1):
             resp = self.client.get(self.url(self.attachment.uuid))
             self._consume(resp)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -136,6 +139,29 @@ class AttachmentDownloadTests(APITestCase):
         self._consume(self.client.get(self.url(self.attachment.uuid)))
 
         self.client.force_authenticate(self.outsider)
+        resp = self.client.get(self.url(self.attachment.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_member_who_leaves_after_caching_is_rejected(self):
+        """Regression: caching the resolved meta (including the membership
+        decision) used to keep a user authorised for up to 60s after they
+        were kicked or left the conversation. Authorisation must be checked
+        on every request, not memoised alongside the immutable metadata.
+        """
+        # Warm the cache: member can download.
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(self.attachment.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self._consume(resp)
+
+        # Member leaves the conversation. The leave path doesn't invalidate
+        # the attachment cache, so the cache is still warm for this user.
+        cm = ConversationMember.objects.get(
+            conversation=self.group, user=self.member,
+        )
+        cm.left_at = timezone.now()
+        cm.save(update_fields=['left_at'])
+
         resp = self.client.get(self.url(self.attachment.uuid))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 

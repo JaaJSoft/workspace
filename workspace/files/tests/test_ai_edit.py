@@ -93,3 +93,20 @@ class AIEditEndpointTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_502_BAD_GATEWAY)
         self.assertIn('error', resp.json())
+
+    @patch('workspace.ai.services.image.ai_edit_image')
+    def test_edit_rejects_malformed_base64_source_image(self, mock_edit):
+        """Regression: b64decode without validate=True silently strips
+        non-alphabet characters and decodes garbage bytes, which then get
+        sent to the paid AI service. The input ``'abcd!efgh'`` happens to
+        produce 6 valid bytes when chars outside the alphabet are stripped,
+        so it specifically exercises the silent-corruption path - strict
+        validation must reject it instead."""
+        resp = self.client.post(
+            f'/api/v1/files/{self.file.uuid}/ai-edit',
+            {'prompt': 'add a hat', 'source_image': 'abcd!efgh'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('invalid base64', resp.json()['error'])
+        mock_edit.assert_not_called()

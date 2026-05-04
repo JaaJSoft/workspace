@@ -27,10 +27,10 @@ dependencies = [
     "myl-discovery>=0.6.4",
     "icalendar>=7.1.0",
     # utils
-    "mistune>=3.2.0",
+    "mistune>=3.2.1",
     "pygments>=2.20.0",
     "dj-database-url>=2.3.0",
-    "psycopg[binary,pool]>=3.3.3",
+    "psycopg[binary,pool]>=3.3.4",
     "python-dotenv>=1.2.1",
     # webdav
     "wsgidav>=4.3.0",

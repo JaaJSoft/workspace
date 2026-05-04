@@ -202,7 +202,7 @@ class GenerateScheduledResponseTests(TestCase):
         ConversationMember.objects.create(conversation=self.conversation, user=self.user)
         ConversationMember.objects.create(conversation=self.conversation, user=self.bot_user)
 
-    @patch('workspace.ai.tasks._call_llm')
+    @patch('workspace.ai.services.tool_loop.call_llm')
     def test_generates_message_and_deactivates_once(self, mock_llm):
         mock_llm.return_value = {
             'content': 'Hello!',
@@ -240,7 +240,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertFalse(schedule.is_active)
         self.assertIsNotNone(schedule.last_run_at)
 
-    @patch('workspace.ai.tasks._call_llm')
+    @patch('workspace.ai.services.tool_loop.call_llm')
     def test_recurring_stays_active(self, mock_llm):
         mock_llm.return_value = {
             'content': 'Check-in time!',
@@ -274,7 +274,7 @@ class GenerateScheduledResponseTests(TestCase):
         # next_run_at should have advanced (at least 1 hour in the future from last_run_at)
         self.assertGreater(schedule.next_run_at, schedule.last_run_at)
 
-    @patch('workspace.ai.tasks._call_llm')
+    @patch('workspace.ai.services.tool_loop.call_llm')
     def test_skips_inactive_schedule(self, mock_llm):
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
@@ -292,7 +292,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertEqual(result['status'], 'skipped')
         mock_llm.assert_not_called()
 
-    @patch('workspace.ai.tasks._call_llm')
+    @patch('workspace.ai.services.tool_loop.call_llm')
     def test_empty_response_skips_message(self, mock_llm):
         """Scheduled messages with empty AI responses should not post empty messages."""
         mock_llm.return_value = {

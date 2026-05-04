@@ -86,6 +86,34 @@ class CopyAPITests(APITestCase):
         self.assertEqual(copy.size, 12)
         self.assertTrue(copy.content)
 
+    def test_copy_file_creates_independent_blob(self):
+        """The copied file's storage path must differ from the source's, and
+        the bytes must round-trip. Pins down the FieldFile-vs-File _committed
+        pitfall: if the source FieldFile were ever passed straight through to
+        the destination FileField, Django would skip storage.save() and the
+        two rows would point at the same blob - delete the source later and
+        the copy goes blank.
+        """
+        file = File(
+            owner=self.user,
+            name='source.txt',
+            node_type=File.NodeType.FILE,
+            mime_type='text/plain',
+        )
+        file.content = ContentFile(b'payload-bytes', name='source.txt')
+        file.size = 13
+        file.save()
+
+        response = self.client.post(
+            f'/api/v1/files/{file.uuid}/copy', {'parent': None}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        copy = File.objects.get(uuid=response.data['uuid'])
+        self.assertNotEqual(copy.content.name, file.content.name)
+        with copy.content.open('rb') as f:
+            self.assertEqual(f.read(), b'payload-bytes')
+
     def test_copy_folder_empty(self):
         """Test copying an empty folder."""
         folder = File.objects.create(

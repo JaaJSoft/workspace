@@ -10,7 +10,7 @@ import logging
 import os
 import posixpath
 
-from django.core.files.base import ContentFile
+from django.core.files.base import ContentFile, File as DjangoFile
 from django.core.files.storage import default_storage
 
 from workspace.common.logging import scrub
@@ -281,15 +281,25 @@ def copy_node(node, parent, owner, _sibling_names=None):
     )
 
     if node.node_type == File.NodeType.FILE and node.content:
+        # Stream the source blob into a fresh storage path. Wrapping the
+        # opened FieldFile in django.core.files.File flips _committed=False
+        # so the destination FileField triggers storage.save(), which copies
+        # via content.chunks() (default 64KB) instead of buffering everything
+        # in memory. A FieldFile passed directly would be _committed=True and
+        # the two rows would silently share the same blob.
         try:
-            node.content.open('rb')
-            data = node.content.read()
-        finally:
-            node.content.close()
-        copied.content = ContentFile(data, name=new_name)
-        copied.size = node.size
-
-    copied.save()
+            with node.content.open('rb') as src:
+                copied.content = DjangoFile(src, name=new_name)
+                copied.size = node.size
+                copied.save()
+        except (FileNotFoundError, OSError):
+            logger.warning(
+                'Source blob missing while copying %s',
+                scrub(node.content.name),
+            )
+            raise
+    else:
+        copied.save()
 
     if node.node_type == File.NodeType.FOLDER:
         # The folder was just created - no children yet, so start empty.

@@ -1199,21 +1199,28 @@ class MailAttachmentSaveToFilesView(APIView):
         # the opened FieldFile in django.core.files.File flips _committed=False
         # so the destination FileField sees the file as new and storage.save()
         # runs (a FieldFile passed directly is _committed=True and would make
-        # both rows point at the same blob). FileNotFoundError/OSError mirror
-        # the chat save-to-files handling for a vanished blob.
+        # both rows point at the same blob).
+        #
+        # The try/except is intentionally narrow: only a missing source blob
+        # is mapped to 404. Operational errors from FileService.create_file
+        # (disk full / perm denied / remote storage flake on the destination
+        # side) propagate so middleware returns 500 - they're not "attachment
+        # not found" and lying to the client would mask the real issue.
         try:
-            with attachment.content.open('rb') as f:
-                file_obj = FileService.create_file(
-                    owner=request.user,
-                    name=attachment.filename,
-                    parent=parent,
-                    content=DjangoFile(f, name=attachment.filename),
-                    mime_type=attachment.content_type,
-                )
-        except (FileNotFoundError, OSError):
+            src = attachment.content.open('rb')
+        except FileNotFoundError:
             return Response(
                 {'detail': 'Attachment not found.'},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        with src as f:
+            file_obj = FileService.create_file(
+                owner=request.user,
+                name=attachment.filename,
+                parent=parent,
+                content=DjangoFile(f, name=attachment.filename),
+                mime_type=attachment.content_type,
             )
 
         return Response(

@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
+from workspace.files.storage import OverwriteStorage
 from workspace.mail.models import (
     MailAccount,
     MailAttachment,
@@ -98,3 +99,36 @@ class MailAttachmentSaveToFilesTests(APITestCase):
         ):
             resp = self.client.post(self.url, data={}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_destination_save_failure_is_not_404(self):
+        """Regression: a destination-side OSError (disk full on the dest
+        path, perm denied, remote storage flake) used to be lumped under
+        the source-blob 404 because the try/except wrapped both
+        attachment.content.open() AND FileService.create_file. The view
+        must only translate FileNotFoundError from the source open into
+        404; destination-side errors propagate (5xx via middleware).
+
+        Calls the view's post() directly with a manually-built request
+        rather than the test client: a destination OSError aborts the
+        request transaction and causes a TransactionManagementError
+        cascade through the test client's renderers. The direct call
+        exercises the same view code with the same patched failure mode
+        without that infrastructure noise.
+        """
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from workspace.mail.views import MailAttachmentSaveToFilesView
+
+        factory = APIRequestFactory()
+        request = factory.post(self.url, data={}, format='json')
+        force_authenticate(request, user=self.user)
+        view = MailAttachmentSaveToFilesView.as_view()
+
+        with patch.object(
+            OverwriteStorage, '_save', side_effect=OSError('disk full'),
+        ):
+            try:
+                resp = view(request, uuid=self.attachment.uuid)
+            except OSError:
+                return  # OK: error propagated rather than mistranslated.
+        self.assertNotEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

@@ -1,5 +1,6 @@
 import logging
 
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -158,8 +159,16 @@ class MailDraftView(APIView):
 
         try:
             delete_draft(msg.account, msg)
-        except Exception:
-            logger.warning("Failed to delete draft on IMAP for %s", msg.uuid)
+        except Exception as e:
+            logger.warning("Failed to delete draft on IMAP for %s: %s", msg.uuid, e)
+            # Fall back to a local soft-delete so the user gets immediate
+            # feedback. delete_draft would have set deleted_at after the IMAP
+            # call but never reached that line due to the exception, leaving
+            # the draft active in DB while the user thinks it was removed.
+            # The next sync will reconcile if the server still has the message.
+            if msg.deleted_at is None:
+                msg.deleted_at = timezone.now()
+                msg.save(update_fields=['deleted_at', 'updated_at'])
 
         from .views import _refresh_folder_counts
         _refresh_folder_counts(msg.folder)

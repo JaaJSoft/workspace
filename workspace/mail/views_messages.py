@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
@@ -113,11 +114,11 @@ class MailMessageListView(CacheControlMixin, APIView):
                 | Q(snippet__icontains=search)
                 | Q(from_address__icontains=search)
             )
-        if request.query_params.get('unread'):
+        if is_truthy(request.query_params.get('unread')):
             qs = qs.filter(is_read=False)
-        if request.query_params.get('starred'):
+        if is_truthy(request.query_params.get('starred')):
             qs = qs.filter(is_starred=True)
-        if request.query_params.get('attachments'):
+        if is_truthy(request.query_params.get('attachments')):
             qs = qs.filter(has_attachments=True)
 
         total = qs.count()

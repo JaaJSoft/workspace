@@ -29,8 +29,16 @@ class MailAttachmentDownloadView(APIView):
         if attachment.message.account.owner != request.user:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        # A vanished blob (storage cleanup, migration, manual deletion) would
+        # otherwise propagate as a bare 500. 404 is more truthful and mirrors
+        # MailAttachmentSaveToFilesView below.
+        try:
+            src = attachment.content.open('rb')
+        except FileNotFoundError:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
         return FileResponse(
-            attachment.content.open('rb'),
+            src,
             content_type=attachment.content_type,
             as_attachment=True,
             filename=attachment.filename,

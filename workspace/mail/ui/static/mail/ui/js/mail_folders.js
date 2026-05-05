@@ -400,12 +400,16 @@ window.mailFoldersMixin = function mailFoldersMixin() {
       const accountUuid = folder.account_id;
       const allFolders = this.folders[accountUuid] || [];
 
-      // Collect own descendants (cannot move into self or own children)
-      const delimiter = folder.name.includes('/') ? '/' : '.';
-      const ownPrefix = folder.name + delimiter;
+      // Collect own descendants (cannot move into self or own children).
+      // IMAP delimiters vary by server (Gmail uses '/', Dovecot often '.').
+      // The real delimiter is on the account but not exposed in the folder
+      // serializer, so we test both common separators - the names of a given
+      // account's children only use one of them, so no false positives in
+      // practice.
+      const ownPrefixes = [folder.name + '/', folder.name + '.'];
       const excluded = new Set([folder.uuid]);
       for (const f of allFolders) {
-        if (f.name.startsWith(ownPrefix)) excluded.add(f.uuid);
+        if (ownPrefixes.some(p => f.name.startsWith(p))) excluded.add(f.uuid);
       }
 
       // Build target options: root + eligible folders

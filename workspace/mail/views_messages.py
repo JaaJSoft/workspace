@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
 from .models import MailFolder, MailLabel, MailMessage, MailMessageLabel
 from .queries import user_account_ids
@@ -282,8 +283,8 @@ class MailBatchActionView(APIView):
                     msg.save(update_fields=['deleted_at', 'updated_at'])
                     try:
                         delete_message(msg.account, msg)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("IMAP delete failed for message %s: %s", msg.uuid, e)
                 elif action == 'move' and target_folder:
                     if target_folder.account_id != msg.account_id:
                         continue
@@ -304,8 +305,8 @@ class MailBatchActionView(APIView):
                     to_bulk_update.append(msg)
                     try:
                         imap_fn(msg.account, msg)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("IMAP %s failed for message %s: %s", scrub(action), msg.uuid, e)
                 processed += 1
             except Exception:
                 logger.warning("Batch action '%s' failed for message %s", action, msg.uuid)

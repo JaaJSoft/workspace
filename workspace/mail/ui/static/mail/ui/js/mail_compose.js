@@ -365,16 +365,18 @@ window.mailComposeMixin = function mailComposeMixin() {
     },
 
     async _refreshDraftsFolderCounts() {
-      for (const acc of this.accounts) {
-        const flds = this.folders[acc.uuid] || [];
-        const draftsFolder = flds.find(f => f.folder_type === 'drafts');
-        if (draftsFolder) {
-          await this.loadFolders(acc.uuid);
-          if (this.selectedFolder?.uuid === draftsFolder.uuid) {
-            await this.loadMessages();
-          }
-          break;
-        }
+      // Refresh the Drafts folder of the account the draft was saved to, not
+      // the first account that happens to have a Drafts folder. Otherwise a
+      // user composing on a non-default account would see the badge update on
+      // the wrong account and a stale badge on the right one.
+      const composeUuid = this.compose?.account_id;
+      if (!composeUuid) return;
+      const flds = this.folders[composeUuid] || [];
+      const draftsFolder = flds.find(f => f.folder_type === 'drafts');
+      if (!draftsFolder) return;
+      await this.loadFolders(composeUuid);
+      if (this.selectedFolder?.uuid === draftsFolder.uuid) {
+        await this.loadMessages();
       }
     },
 

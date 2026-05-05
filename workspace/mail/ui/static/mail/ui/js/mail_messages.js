@@ -203,33 +203,53 @@ window.mailMessagesMixin = function mailMessagesMixin() {
     async toggleRead(msg, forceRead) {
       this.actionInProgress = true;
       const newVal = forceRead !== undefined ? forceRead : !msg.is_read;
+      const oldVal = msg.is_read;
+      const listMsg = this.messages.find(m => m.uuid === msg.uuid);
+      const ref = listMsg || msg;
+      const changed = oldVal !== newVal;
       // Optimistic UI update
-      if (msg.is_read !== newVal) {
-        const listMsg = this.messages.find(m => m.uuid === msg.uuid);
-        const ref = listMsg || msg;
+      if (changed) {
         ref.is_read = newVal;
         if (listMsg && msg !== listMsg) msg.is_read = newVal;
         this._adjustUnreadCount(ref, newVal ? -1 : 1);
       }
-      await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
-        method: 'PATCH',
-        body: { is_read: newVal },
-      });
-      this.actionInProgress = false;
+      try {
+        const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
+          method: 'PATCH',
+          body: { is_read: newVal },
+        });
+        if (!res.ok) throw new Error('PATCH failed');
+      } catch (e) {
+        // Rollback the optimistic mutation so the UI doesn't lie.
+        if (changed) {
+          ref.is_read = oldVal;
+          if (listMsg && msg !== listMsg) msg.is_read = oldVal;
+          this._adjustUnreadCount(ref, newVal ? 1 : -1);
+        }
+      } finally {
+        this.actionInProgress = false;
+      }
     },
 
     async toggleStar(msg) {
       this.actionInProgress = true;
-      // Optimistic UI update
       const newVal = !msg.is_starred;
-      msg.is_starred = newVal;
       const listMsg = this.messages.find(m => m.uuid === msg.uuid);
+      // Optimistic UI update
+      msg.is_starred = newVal;
       if (listMsg && listMsg !== msg) listMsg.is_starred = newVal;
-      await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
-        method: 'PATCH',
-        body: { is_starred: newVal },
-      });
-      this.actionInProgress = false;
+      try {
+        const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, {
+          method: 'PATCH',
+          body: { is_starred: newVal },
+        });
+        if (!res.ok) throw new Error('PATCH failed');
+      } catch (e) {
+        msg.is_starred = !newVal;
+        if (listMsg && listMsg !== msg) listMsg.is_starred = !newVal;
+      } finally {
+        this.actionInProgress = false;
+      }
     },
 
     async deleteMessage(msg) {
@@ -246,8 +266,16 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       this.actionInProgress = true;
       // Optimistic UI update
       this._optimisticRemoveMessages([msg.uuid]);
-      await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, { method: 'DELETE' });
-      this.actionInProgress = false;
+      try {
+        const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('DELETE failed');
+      } catch (e) {
+        // Reinserting a removed message at its original position in a paged
+        // list is fragile; reload to reconcile with the server.
+        await this.loadMessages();
+      } finally {
+        this.actionInProgress = false;
+      }
     },
 
     // ----- Batch actions -----
@@ -291,11 +319,19 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       if (action === 'move' && targetFolderId) {
         body.target_folder_id = targetFolderId;
       }
-      await this._fetch('/api/v1/mail/messages/batch-action', {
-        method: 'POST',
-        body,
-      });
-      this.batchInProgress = false;
+      try {
+        const res = await this._fetch('/api/v1/mail/messages/batch-action', {
+          method: 'POST',
+          body,
+        });
+        if (!res.ok) throw new Error('Batch action failed');
+      } catch (e) {
+        // Rolling back optimistic flag/remove changes for an arbitrary batch
+        // is fragile; reload from the server to reconcile.
+        await this.loadMessages();
+      } finally {
+        this.batchInProgress = false;
+      }
     },
 
     // ----- Message context menu -----

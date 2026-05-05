@@ -7,6 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.logging import scrub
+
 from .models import MailAccount, MailFolder, MailMessage
 from .serializers import (
     DraftSaveSerializer,
@@ -160,7 +162,7 @@ class MailDraftView(APIView):
         try:
             delete_draft(msg.account, msg)
         except Exception as e:
-            logger.warning("Failed to delete draft on IMAP for %s: %s", msg.uuid, e)
+            logger.warning("Failed to delete draft on IMAP for %s: %s", msg.uuid, scrub(e))
             # Fall back to a local soft-delete so the user gets immediate
             # feedback. delete_draft would have set deleted_at after the IMAP
             # call but never reached that line due to the exception, leaving

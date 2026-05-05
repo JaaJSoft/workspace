@@ -143,7 +143,7 @@ class MailMessageDetailView(APIView):
                     'attachments',
                     Prefetch('message_labels', queryset=MailMessageLabel.objects.select_related('label').order_by('label__position', 'label__name')),
                 )
-                .get(uuid=uuid)
+                .get(uuid=uuid, deleted_at__isnull=True)
             )
         except MailMessage.DoesNotExist:
             return None
@@ -292,14 +292,20 @@ class MailBatchActionView(APIView):
                     try:
                         delete_message(msg.account, msg)
                     except Exception as e:
-                        logger.warning("IMAP delete failed for message %s: %s", msg.uuid, e)
+                        logger.warning("IMAP delete failed for message %s: %s", msg.uuid, scrub(e))
                 elif action == 'move' and target_folder:
                     if target_folder.account_id != msg.account_id:
                         continue
                     try:
                         move_message(msg.account, msg, target_folder)
-                    except Exception:
-                        logger.warning("IMAP move failed for message %s", msg.uuid)
+                    except Exception as e:
+                        # Skip the local DB update so this row stays consistent
+                        # with what IMAP actually has. Updating msg.folder here
+                        # would create a split-brain state: the next sync would
+                        # find the message still in the source folder server
+                        # side and soft-delete the (now mis-located) row.
+                        logger.warning("IMAP move failed for message %s: %s", msg.uuid, scrub(e))
+                        continue
                     msg.folder = target_folder
                     msg.save(update_fields=['folder', 'updated_at'])
                     # Use .pk to match msg.folder_id added above. _refresh_folders_counts_bulk
@@ -314,7 +320,7 @@ class MailBatchActionView(APIView):
                     try:
                         imap_fn(msg.account, msg)
                     except Exception as e:
-                        logger.warning("IMAP %s failed for message %s: %s", scrub(action), msg.uuid, e)
+                        logger.warning("IMAP %s failed for message %s: %s", scrub(action), msg.uuid, scrub(e))
                 processed += 1
             except Exception:
                 logger.warning("Batch action '%s' failed for message %s", action, msg.uuid)

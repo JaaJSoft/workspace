@@ -87,7 +87,7 @@ def append_to_sent(account, raw_message_bytes):
     Checks first whether the server already auto-copied the message
     (Gmail, Outlook, etc.) by searching for its Message-ID to avoid duplicates.
     """
-    from workspace.mail.models import MailFolder
+    from ..models import MailFolder
 
     sent_folder = (
         MailFolder.objects
@@ -143,7 +143,7 @@ def save_draft(account, raw_message_bytes, old_uid=None):
     If old_uid is provided, deletes the previous draft first.
     Returns the created MailMessage.
     """
-    from workspace.mail.models import MailFolder
+    from ..models import MailFolder
     from workspace.mail.services.imap_sync import sync_folder_messages
 
     drafts_folder = (
@@ -188,7 +188,7 @@ def save_draft(account, raw_message_bytes, old_uid=None):
     sync_folder_messages(account, drafts_folder)
 
     # Return the most recently created MailMessage in drafts
-    from workspace.mail.models import MailMessage
+    from ..models import MailMessage
     return (
         MailMessage.objects
         .filter(folder=drafts_folder, deleted_at__isnull=True)

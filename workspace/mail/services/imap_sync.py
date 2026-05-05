@@ -25,7 +25,7 @@ FETCH_BATCH_SIZE = 50
 
 def sync_folders(account):
     """Sync the list of IMAP folders for the given account to the database."""
-    from workspace.mail.models import MailFolder
+    from ..models import MailFolder
 
     conn = connect_imap(account)
     try:
@@ -97,7 +97,7 @@ def _get_uidvalidity(conn):
 
 def sync_folder_messages(account, folder):
     """Incrementally sync messages for one folder."""
-    from workspace.mail.models import MailMessage
+    from ..models import MailMessage
 
     conn = connect_imap(account)
     try:
@@ -205,7 +205,7 @@ def sync_folder_messages(account, folder):
         # time and never flipped later, so old messages never need a
         # second pass).
         if new_message_uuids:
-            from workspace.mail.models import MailMessage as _MailMsg
+            from ..models import MailMessage as _MailMsg
             cal_messages = _MailMsg.objects.filter(
                 folder=folder,
                 has_calendar_event=True,
@@ -229,7 +229,7 @@ def _reconcile_folder(conn, folder):
 
     Also updates flags (read/starred) for messages that still exist.
     """
-    from workspace.mail.models import MailMessage
+    from ..models import MailMessage
 
     local_msgs = MailMessage.objects.filter(
         folder=folder, deleted_at__isnull=True,
@@ -317,7 +317,7 @@ def _reconcile_folder(conn, folder):
 def _update_folder_counts(folder):
     """Update message_count and unread_count from database."""
     from django.db.models import Count, Q
-    from workspace.mail.models import MailMessage
+    from ..models import MailMessage
 
     counts = MailMessage.objects.filter(
         folder=folder, deleted_at__isnull=True,
@@ -332,7 +332,7 @@ def _update_folder_counts(folder):
 
 def sync_account(account):
     """Full sync: folders then messages for each folder."""
-    from workspace.mail.models import MailFolder
+    from ..models import MailFolder
 
     sync_folders(account)
     for folder in MailFolder.objects.filter(account=account):

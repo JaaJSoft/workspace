@@ -17,7 +17,7 @@ def create_folder(account, folder_name, parent_name=''):
     If parent_name is provided, the folder is created as a subfolder:
     ``parent_name + delimiter + folder_name``.
     """
-    from workspace.mail.models import MailFolder
+    from ..models import MailFolder
 
     if parent_name:
         full_name = f'{parent_name}{account.imap_delimiter}{folder_name}'
@@ -92,7 +92,7 @@ def move_folder(account, folder, new_parent_name):
     Uses IMAP RENAME to change the folder's full path. Also updates all
     child folders in the DB whose ``name`` starts with the old prefix.
     """
-    from workspace.mail.models import MailFolder
+    from ..models import MailFolder
 
     delimiter = account.imap_delimiter or '/'
     old_name = folder.name

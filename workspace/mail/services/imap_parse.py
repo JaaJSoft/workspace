@@ -91,7 +91,7 @@ def _collect_attachment(part, attachments_data, is_inline=False):
 @transaction.atomic
 def _parse_message(raw_email, account, folder, uid, flags_str):
     """Parse a raw email and save it as a MailMessage."""
-    from workspace.mail.models import MailAttachment, MailMessage
+    from ..models import MailAttachment, MailMessage
 
     # Check if already exists
     if MailMessage.objects.filter(folder=folder, imap_uid=uid).exists():

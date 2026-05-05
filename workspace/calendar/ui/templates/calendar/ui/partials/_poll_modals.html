@@ -68,7 +68,7 @@
       </div>
 
       <!-- Empty state: search no results -->
-      <div x-show="!pollsLoading && polls.length > 0 && filteredPolls.length === 0" class="text-center py-12">
+      <div x-show="!pollsLoading && polls.length > 0 && filteredPolls().length === 0" class="text-center py-12">
         <div class="w-12 h-12 rounded-full bg-base-200 flex items-center justify-center mx-auto mb-3">
           <i data-lucide="search-x" class="w-5 h-5 opacity-40"></i>
         </div>
@@ -77,8 +77,8 @@
       </div>
 
       <!-- Poll list -->
-      <div x-show="!pollsLoading && filteredPolls.length > 0" class="space-y-1.5">
-        <template x-for="poll in filteredPolls" :key="poll.uuid">
+      <div x-show="!pollsLoading && filteredPolls().length > 0" class="space-y-1.5">
+        <template x-for="poll in filteredPolls()" :key="poll.uuid">
           <div class="group flex items-center gap-3 rounded-lg px-3 py-2.5 cursor-pointer transition-colors
                       hover:bg-base-200/60 active:bg-base-200"
                @click="openPollDetail(poll.uuid)">

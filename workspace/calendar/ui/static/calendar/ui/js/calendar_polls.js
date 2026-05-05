@@ -5,9 +5,15 @@
 // the standalone /polls/<token> guest-vote page).
 window.calendarPollsMixin = function calendarPollsMixin() {
   return {
-    get filteredPolls() {
-      if (!this.pollSearch.trim()) return this.polls;
-      const q = this.pollSearch.toLowerCase();
+    // Note: must be a method (not a getter). Mixins are spread into the data
+    // object via `...calendarPollsMixin()`, and spreading evaluates getters
+    // at composition time - which both crashes (this.pollSearch is undefined
+    // at spread time) and loses reactivity. Methods are evaluated per render
+    // against the merged `this`, so they see live state.
+    filteredPolls() {
+      const search = (this.pollSearch || '').trim();
+      if (!search) return this.polls;
+      const q = search.toLowerCase();
       return this.polls.filter(p => p.title.toLowerCase().includes(q));
     },
 

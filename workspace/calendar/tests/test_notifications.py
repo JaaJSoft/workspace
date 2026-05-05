@@ -182,11 +182,12 @@ class EventRespondNotificationTests(CalendarNotificationTestBase):
 
     def test_decline_notifies_owner(self):
         self.client.force_authenticate(self.member)
-        self.client.post(
+        resp = self.client.post(
             self.url(self.event.uuid),
             {'status': 'declined'},
             format='json',
         )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
         notifs = self._notifs_for(self.owner)
         self.assertEqual(notifs.count(), 1)
         self.assertIn('declined', notifs.first().title)
@@ -195,9 +196,10 @@ class EventRespondNotificationTests(CalendarNotificationTestBase):
         """If the owner is somehow also a member, responding should not self-notify."""
         EventMember.objects.create(event=self.event, user=self.owner)
         self.client.force_authenticate(self.owner)
-        self.client.post(
+        resp = self.client.post(
             self.url(self.event.uuid),
             {'status': 'accepted'},
             format='json',
         )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(self._notifs_for(self.owner).count(), 0)

@@ -43,23 +43,25 @@ class EventCreateNotificationTests(CalendarNotificationTestBase):
 
     def test_create_event_without_members_no_notification(self):
         self.client.force_authenticate(self.owner)
-        self.client.post(self.url, {
+        resp = self.client.post(self.url, {
             'calendar_id': str(self.calendar.uuid),
             'title': 'Solo',
             'start': (timezone.now() + timedelta(days=1)).isoformat(),
             'end': (timezone.now() + timedelta(days=1, hours=1)).isoformat(),
         }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Notification.objects.filter(origin='calendar').count(), 0)
 
     def test_create_event_owner_not_notified(self):
         self.client.force_authenticate(self.owner)
-        self.client.post(self.url, {
+        resp = self.client.post(self.url, {
             'calendar_id': str(self.calendar.uuid),
             'title': 'Planning',
             'start': (timezone.now() + timedelta(days=1)).isoformat(),
             'end': (timezone.now() + timedelta(days=1, hours=1)).isoformat(),
             'member_ids': [self.member.id, self.owner.id],
         }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(self._notifs_for(self.owner).count(), 0)
 
 
@@ -85,11 +87,12 @@ class EventUpdateNotificationTests(CalendarNotificationTestBase):
 
     def test_update_event_does_not_notify_owner(self):
         self.client.force_authenticate(self.owner)
-        self.client.put(
+        resp = self.client.put(
             self.url(self.event.uuid),
             {'title': 'Renamed'},
             format='json',
         )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(self._notifs_for(self.owner).count(), 0)
 
     def test_add_member_notifies_new_member(self):
@@ -135,7 +138,8 @@ class EventDeleteNotificationTests(CalendarNotificationTestBase):
 
     def test_delete_event_does_not_notify_owner(self):
         self.client.force_authenticate(self.owner)
-        self.client.delete(self.url(self.event.uuid))
+        resp = self.client.delete(self.url(self.event.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(self._notifs_for(self.owner).count(), 0)
 
     def test_delete_event_without_members_no_notification(self):
@@ -147,7 +151,8 @@ class EventDeleteNotificationTests(CalendarNotificationTestBase):
             owner=self.owner,
         )
         self.client.force_authenticate(self.owner)
-        self.client.delete(self.url(event_no_members.uuid))
+        resp = self.client.delete(self.url(event_no_members.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(Notification.objects.filter(origin='calendar').count(), 0)
 
     def test_delete_event_notifies_multiple_members(self):

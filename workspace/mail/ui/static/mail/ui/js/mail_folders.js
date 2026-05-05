@@ -279,6 +279,12 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         folder.unread_count = 0;
         this.messages.forEach(m => { m.is_read = true; });
         if (this.messageDetail) this.messageDetail.is_read = true;
+        // Backend recomputed MailLabel.unread_count for affected labels;
+        // pull fresh values so sidebar label badges don't stay stale.
+        // Recomputing locally from this.messages would under-count: that
+        // array only holds the current page, so messages in other pages or
+        // folders attached to the same label wouldn't be considered.
+        await this.fetchLabels(folder.account_id);
       }
     },
 

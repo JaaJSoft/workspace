@@ -76,7 +76,9 @@ def _collect_attachment(part, attachments_data, is_inline=False):
         filename = f'attachment.{ext}'
 
     payload = part.get_payload(decode=True)
-    if payload:
+    # Accept empty bytes (b'') as a valid zero-byte attachment; only skip when
+    # decoding produced no payload at all (None).
+    if payload is not None:
         attachments_data.append({
             'filename': filename,
             'content_type': part.get_content_type(),

@@ -292,9 +292,9 @@ class MailAccountTestView(APIView):
         smtp_ok, smtp_error = test_smtp_connection(account)
 
         if imap_error:
-            logger.warning("IMAP test failed for %s: %s", account.email, imap_error)
+            logger.warning("IMAP test failed for %s: %s", scrub(account.email), scrub(imap_error))
         if smtp_error:
-            logger.warning("SMTP test failed for %s: %s", account.email, smtp_error)
+            logger.warning("SMTP test failed for %s: %s", scrub(account.email), scrub(smtp_error))
 
         return Response({
             'imap': {'success': imap_ok, 'error': None if imap_ok else 'Connection failed'},
@@ -321,7 +321,7 @@ class MailAccountSyncView(APIView):
         except Exception as e:
             account.last_sync_error = str(e)
             account.save(update_fields=['last_sync_error', 'updated_at'])
-            logger.exception("Failed to sync account %s", account.email)
+            logger.exception("Failed to sync account %s", scrub(account.email))
             return Response(
                 {'status': 'error', 'error': 'Sync failed'},
                 status=status.HTTP_502_BAD_GATEWAY,

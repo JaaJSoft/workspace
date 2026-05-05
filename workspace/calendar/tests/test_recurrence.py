@@ -267,8 +267,9 @@ class RecurrenceExpansionTests(CalendarTestMixin, APITestCase):
 
     url = '/api/v1/calendar/events'
 
-    def _create_recurring(self, freq='weekly', interval=1, start_offset=0, end_offset=None, recurrence_end=None):
-        start = timezone.now() + timedelta(days=start_offset)
+    def _create_recurring(self, freq='weekly', interval=1, start_offset=0, end_offset=None, recurrence_end=None, now=None):
+        base = now if now is not None else timezone.now()
+        start = base + timedelta(days=start_offset)
         return Event.objects.create(
             calendar=self.calendar,
             title='Recurring',
@@ -281,11 +282,12 @@ class RecurrenceExpansionTests(CalendarTestMixin, APITestCase):
         )
 
     def test_weekly_event_expands(self):
-        self._create_recurring(freq='weekly', start_offset=0)
+        now = timezone.now()
+        self._create_recurring(freq='weekly', start_offset=0, now=now)
         self.client.force_authenticate(self.owner)
         params = {
-            'start': timezone.now().isoformat(),
-            'end': (timezone.now() + timedelta(days=28)).isoformat(),
+            'start': now.isoformat(),
+            'end': (now + timedelta(days=28)).isoformat(),
         }
         resp = self.client.get(self.url, params)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -293,23 +295,25 @@ class RecurrenceExpansionTests(CalendarTestMixin, APITestCase):
         self.assertGreaterEqual(len(recurring), 4)
 
     def test_recurring_with_end_date(self):
-        recurrence_end = timezone.now() + timedelta(days=14)
-        self._create_recurring(freq='weekly', start_offset=0, recurrence_end=recurrence_end)
+        now = timezone.now()
+        recurrence_end = now + timedelta(days=14)
+        self._create_recurring(freq='weekly', start_offset=0, recurrence_end=recurrence_end, now=now)
         self.client.force_authenticate(self.owner)
         params = {
-            'start': timezone.now().isoformat(),
-            'end': (timezone.now() + timedelta(days=60)).isoformat(),
+            'start': now.isoformat(),
+            'end': (now + timedelta(days=60)).isoformat(),
         }
         resp = self.client.get(self.url, params)
         recurring = [e for e in resp.data if e.get('is_recurring')]
         self.assertLessEqual(len(recurring), 3)
 
     def test_daily_with_interval(self):
-        self._create_recurring(freq='daily', interval=2, start_offset=0)
+        now = timezone.now()
+        self._create_recurring(freq='daily', interval=2, start_offset=0, now=now)
         self.client.force_authenticate(self.owner)
         params = {
-            'start': timezone.now().isoformat(),
-            'end': (timezone.now() + timedelta(days=10)).isoformat(),
+            'start': now.isoformat(),
+            'end': (now + timedelta(days=10)).isoformat(),
         }
         resp = self.client.get(self.url, params)
         recurring = [e for e in resp.data if e.get('is_recurring')]

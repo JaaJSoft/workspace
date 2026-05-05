@@ -97,10 +97,14 @@ def move_folder(account, folder, new_parent_name):
     delimiter = account.imap_delimiter or '/'
     old_name = folder.name
 
+    # Use the wire-encoded leaf from folder.name, not folder.display_name:
+    # display_name is Unicode-decoded (mUTF-7 -> Unicode) for the UI, while
+    # IMAP RENAME must receive the original mUTF-7 wire form.
+    leaf = old_name.rsplit(delimiter, 1)[-1]
     if new_parent_name:
-        new_name = f'{new_parent_name}{delimiter}{folder.display_name}'
+        new_name = f'{new_parent_name}{delimiter}{leaf}'
     else:
-        new_name = folder.display_name
+        new_name = leaf
 
     if new_name == old_name:
         return folder

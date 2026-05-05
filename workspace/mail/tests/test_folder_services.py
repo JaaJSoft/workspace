@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
-from workspace.mail.services.imap_folders import create_folder, delete_folder, rename_folder
+from workspace.mail.services.imap_folders import create_folder, delete_folder, move_folder, rename_folder
 from workspace.mail.services.imap_mailbox import _quote_mailbox
 
 User = get_user_model()
@@ -232,3 +232,51 @@ class RenameFolderTests(IMAPFolderServiceMixin, TestCase):
             rename_folder(self.account, self.folder, 'FailName')
 
         mock_conn.logout.assert_called_once()
+
+
+class MoveFolderTests(IMAPFolderServiceMixin, TestCase):
+    """Tests for move_folder IMAP service."""
+
+    @patch('workspace.mail.services.imap_folders.connect_imap')
+    def test_move_folder_uses_wire_encoded_leaf_not_display_name(self, mock_connect):
+        """A folder with non-ASCII chars must be renamed using its mUTF-7
+        wire-encoded leaf, not the Unicode-decoded display_name. Otherwise the
+        IMAP RENAME would push raw Unicode to the server and produce a
+        ghost/inaccessible folder."""
+        # &AOk-tudes is IMAP Modified UTF-7 for "Études"
+        folder = MailFolder.objects.create(
+            account=self.account,
+            name='Important/&AOk-tudes',
+            display_name='Études',  # decoded for UI
+            folder_type='other',
+        )
+        mock_conn = self._mock_conn()
+        mock_connect.return_value = mock_conn
+
+        move_folder(self.account, folder, 'Archive')
+
+        # The new name on the wire must use the original mUTF-7 leaf, not
+        # the decoded "Études".
+        mock_conn.rename.assert_called_once_with(
+            _quote_mailbox('Important/&AOk-tudes'),
+            _quote_mailbox('Archive/&AOk-tudes'),
+        )
+
+    @patch('workspace.mail.services.imap_folders.connect_imap')
+    def test_move_folder_to_root_uses_wire_leaf(self, mock_connect):
+        """Moving to root (no parent) must also use the wire-encoded leaf."""
+        folder = MailFolder.objects.create(
+            account=self.account,
+            name='Old/&AOk-tudes',
+            display_name='Études',
+            folder_type='other',
+        )
+        mock_conn = self._mock_conn()
+        mock_connect.return_value = mock_conn
+
+        move_folder(self.account, folder, '')
+
+        mock_conn.rename.assert_called_once_with(
+            _quote_mailbox('Old/&AOk-tudes'),
+            _quote_mailbox('&AOk-tudes'),
+        )

@@ -190,3 +190,26 @@ class UnifiedInboxListTests(UnifiedInboxTestMixin, APITestCase):
         self.client.force_authenticate(self.user)
         resp = self.client.get(URL)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_invalid_page_non_numeric_falls_back_to_1(self):
+        """A non-numeric page param must not crash the view with a 500 -
+        fall back to page 1 instead."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(URL, {'inbox': 'all', 'page': 'abc'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['page'], 1)
+
+    def test_invalid_page_zero_falls_back_to_1(self):
+        """page=0 would compute offset=-50 and trigger Django's
+        'Negative indexing is not supported' assertion - fall back to 1."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(URL, {'inbox': 'all', 'page': '0'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['page'], 1)
+
+    def test_invalid_page_negative_falls_back_to_1(self):
+        """A negative page value must not produce a negative offset."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(URL, {'inbox': 'all', 'page': '-3'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['page'], 1)

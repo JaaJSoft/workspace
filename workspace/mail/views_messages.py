@@ -86,7 +86,15 @@ class MailMessageListView(CacheControlMixin, APIView):
         if label:
             qs = qs.filter(message_labels__label=label)
 
-        page = int(request.query_params.get('page', 1))
+        # Accept any input but fall back to page 1 for non-numeric, zero, or
+        # negative values. A negative offset would otherwise hit Django's
+        # "Negative indexing is not supported" and surface as a 500.
+        try:
+            page = int(request.query_params.get('page', 1))
+            if page < 1:
+                page = 1
+        except (TypeError, ValueError):
+            page = 1
         page_size = 50
         offset = (page - 1) * page_size
 

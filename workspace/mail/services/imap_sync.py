@@ -335,12 +335,14 @@ def sync_account(account):
     from ..models import MailFolder
 
     sync_folders(account)
+    error_occurred = False
     for folder in MailFolder.objects.filter(account=account):
         try:
             sync_folder_messages(account, folder)
         except Exception:
             logger.exception("Failed to sync folder %s for %s", folder.name, account.email)
+            error_occurred = True
 
     account.last_sync_at = dj_timezone.now()
-    account.last_sync_error = ''
+    account.last_sync_error = 'Some folders failed to sync.' if error_occurred else ''
     account.save(update_fields=['last_sync_at', 'last_sync_error', 'updated_at'])

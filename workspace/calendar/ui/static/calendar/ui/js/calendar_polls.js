@@ -179,7 +179,10 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       const idx = cycle.indexOf(current);
       const next = cycle[(idx + 1) % cycle.length];
       this.pollMyVotes = { ...this.pollMyVotes, [slotId]: next };
-
+      // Lucide replaced the <i> with <svg> on first render. Mutating
+      // :data-lucide reactively only updates the attribute on the existing
+      // svg - Lucide won't re-render. Force it.
+      this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
     },
 
     async submitPollVotes() {

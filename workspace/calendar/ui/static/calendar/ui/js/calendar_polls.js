@@ -19,14 +19,21 @@ window.calendarPollsMixin = function calendarPollsMixin() {
     },
 
     async loadPolls() {
+      const requestId = this.pollsRequestId = (this.pollsRequestId || 0) + 1;
       this.pollsLoading = true;
       try {
         const status = this.pollShowClosed ? 'all' : 'open';
         const resp = await fetch(`/api/v1/calendar/polls?filter=${this.pollFilter}&status=${status}`, { credentials: 'same-origin' });
-        if (resp.ok) this.polls = await resp.json();
+        if (requestId !== this.pollsRequestId) return;
+        if (resp.ok) {
+          const polls = await resp.json();
+          if (requestId !== this.pollsRequestId) return;
+          this.polls = polls;
+        }
       } catch (e) {}
-      this.pollsLoading = false;
-
+      if (requestId === this.pollsRequestId) {
+        this.pollsLoading = false;
+      }
     },
 
     setPollFilter(filter) {

@@ -87,6 +87,7 @@ window.calendarApp = function calendarApp() {
     currentPoll: null,
     currentPollLoading: false,
     pollMyVotes: {},
+    _loadPollRequestId: 0,
     pollSubmitting: false,
     pollFinalizeSlotId: null,
 

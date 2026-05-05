@@ -126,6 +126,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
     },
 
     async loadPoll(uuid) {
+      const requestId = ++this._loadPollRequestId;
       if (!isValidUuid(uuid)) {
         // Bail without leaving the modal stuck on its loading spinner if the
         // ?poll= query param was malformed.
@@ -137,21 +138,26 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       this.currentPollLoading = true;
       try {
         const resp = await fetch(`/api/v1/calendar/polls/${uuid}`, { credentials: 'same-origin' });
+        if (requestId !== this._loadPollRequestId) return;
         if (resp.ok) {
-          this.currentPoll = await resp.json();
+          const poll = await resp.json();
+          if (requestId !== this._loadPollRequestId) return;
           // Pre-populate my votes
           const userId = String(document.body.dataset.userId);
           const myVotes = {};
-          for (const vote of (this.currentPoll.votes || [])) {
+          for (const vote of (poll.votes || [])) {
             if (vote.user && String(vote.user.id) === userId) {
               myVotes[vote.slot_id] = vote.choice;
             }
           }
+          this.currentPoll = poll;
           this.pollMyVotes = myVotes;
 
         }
       } catch (e) {}
-      this.currentPollLoading = false;
+      if (requestId === this._loadPollRequestId) {
+        this.currentPollLoading = false;
+      }
     },
 
     pollCycleVote(slotId) {

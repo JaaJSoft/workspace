@@ -234,6 +234,29 @@ class TestRename(TestCase):
         folder.refresh_from_db()
         self.assertEqual(folder.name, 'NewFolder')
 
+    def test_rename_nested_same_named_folder_only_rewrites_target_segment(self):
+        # Layout: Docs/Sub/Docs/file.txt -- the inner "Docs" shares its name
+        # with the outer "Docs". Renaming the inner one must rewrite only the
+        # last segment of the storage path, not the first one matching "Docs".
+        outer = FileService.create_folder(self.user, 'Docs')
+        sub = FileService.create_folder(self.user, 'Sub', parent=outer)
+        inner = FileService.create_folder(self.user, 'Docs', parent=sub)
+        f = FileService.create_file(
+            self.user, 'file.txt', parent=inner,
+            content=ContentFile(b'data', name='file.txt'),
+        )
+        self.assertEqual(
+            f.content.name,
+            f'files/users/{self.user.username}/Docs/Sub/Docs/file.txt',
+        )
+
+        FileService.rename(inner, 'New')
+        f.refresh_from_db()
+        self.assertEqual(
+            f.content.name,
+            f'files/users/{self.user.username}/Docs/Sub/New/file.txt',
+        )
+
 
 @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.InMemoryStorage')
 class TestUpdateContent(TestCase):

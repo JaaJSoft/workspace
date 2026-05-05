@@ -1,9 +1,13 @@
-"""Tests for workspace.chat.services.avatar."""
+"""Tests for workspace.chat.services.avatar and the GroupAvatar* views."""
 
+from io import BytesIO
 from unittest import mock
 
+from PIL import Image
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 from workspace.chat.models import Conversation
 from workspace.chat.services.avatar import (
@@ -13,6 +17,8 @@ from workspace.chat.services.avatar import (
     has_group_avatar,
     process_and_save_group_avatar,
 )
+
+from .test_chat import ChatTestMixin
 
 User = get_user_model()
 
@@ -98,3 +104,107 @@ class GroupAvatarServiceTests(TestCase):
             return_value=None,
         ):
             self.assertIsNone(get_group_avatar_etag(self.conversation.uuid))
+
+
+def _make_test_image():
+    """Create a minimal in-memory PNG for upload tests."""
+    buf = BytesIO()
+    img = Image.new('RGB', (100, 100), color='red')
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    buf.name = 'test.png'
+    return buf
+
+
+class GroupAvatarUploadTests(ChatTestMixin, APITestCase):
+    """Tests for POST /api/v1/chat/conversations/<id>/avatar"""
+
+    def url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}/avatar'
+
+    def test_unauthenticated_rejected(self):
+        image = _make_test_image()
+        resp = self.client.post(self.url(self.group.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_outsider_cannot_upload(self):
+        self.client.force_authenticate(self.outsider)
+        image = _make_test_image()
+        resp = self.client.post(self.url(self.group.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_member_can_upload(self):
+        self.client.force_authenticate(self.member)
+        image = _make_test_image()
+        resp = self.client.post(self.url(self.group.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.group.refresh_from_db()
+        self.assertTrue(self.group.has_avatar)
+
+    def test_dm_returns_400(self):
+        self.client.force_authenticate(self.creator)
+        image = _make_test_image()
+        resp = self.client.post(self.url(self.dm.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class GroupAvatarDeleteTests(ChatTestMixin, APITestCase):
+    """Tests for DELETE /api/v1/chat/conversations/<id>/avatar"""
+
+    def url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}/avatar'
+
+    def _upload_avatar(self):
+        """Helper to upload an avatar as creator first."""
+        self.client.force_authenticate(self.creator)
+        image = _make_test_image()
+        self.client.post(self.url(self.group.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+
+    def test_member_can_delete(self):
+        self._upload_avatar()
+        self.client.force_authenticate(self.member)
+        resp = self.client.delete(self.url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.group.refresh_from_db()
+        self.assertFalse(self.group.has_avatar)
+
+    def test_outsider_cannot_delete(self):
+        self._upload_avatar()
+        self.client.force_authenticate(self.outsider)
+        resp = self.client.delete(self.url(self.group.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class GroupAvatarRetrieveTests(ChatTestMixin, APITestCase):
+    """Tests for GET /api/v1/chat/conversations/<id>/avatar/image"""
+
+    def upload_url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}/avatar'
+
+    def retrieve_url(self, conv_id):
+        return f'/api/v1/chat/conversations/{conv_id}/avatar/image'
+
+    def test_404_when_no_avatar(self):
+        resp = self.client.get(self.retrieve_url(self.group.uuid))
+        self.assertEqual(resp.status_code, 404)
+
+    def test_retrieve_after_upload(self):
+        self.client.force_authenticate(self.creator)
+        image = _make_test_image()
+        self.client.post(self.upload_url(self.group.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+        self.client.logout()
+        resp = self.client.get(self.retrieve_url(self.group.uuid))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'image/webp')

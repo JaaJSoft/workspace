@@ -12,6 +12,10 @@
 
 Before any refactor or optimization, verify that at least one test covers the code being touched. If no test exists, **write the test first** (it must pass against the current code), then start the refactor. The test acts as a safety net to guarantee the behavior is preserved.
 
+### Bug Fixes
+
+Every bug fix must ship with a regression test. Write the test alongside the fix and **verify it fails against the buggy code** (e.g. by stashing the fix, running the test, then re-applying), so you have evidence the test actually pins the bug down rather than accidentally passing for unrelated reasons. Without this proof the test is decorative: a future regression of the same bug would slip through CI. The test belongs in the same module's `tests/` package as the code being fixed.
+
 ### Changelog
 
 `CHANGELOG.md` is written for **end users**, not developers. Each release describes what changed from the user's perspective, in plain language.
@@ -240,6 +244,36 @@ logger.exception("Activity provider '%s' failed", scrub(source))
 - Never log full request bodies or headers. If you must, scrub them.
 - Internal/system values that never touched user input (settings keys, hard-coded enum members, `__name__`, computed counts) don't need `scrub()`. Apply it to the *tainted* fields, not the whole format string.
 - The helper lives in `workspace/common/logging_safe.py`. The `str(...).replace('\r','').replace('\n','')` chain inside is the exact form CodeQL recognizes as a sanitizer for `py/log-injection` — do not refactor the replaces away or wrap them in another helper.
+
+### Copying file content between rows - never assign a `FieldFile` directly
+
+When duplicating an existing file/attachment into a new row (chat `save-to-files`, mail `save-to-files`, files `copy_node`, anything similar), **never** assign the source `FieldFile` straight to the destination model's `FileField`. Doing so makes both rows point at the same blob in storage, so deleting the source later silently breaks the destination.
+
+The mechanism: Django's `FileField.pre_save` only invokes `storage.save()` (which generates a fresh storage path) when the value's `_committed` attribute is `False`. `FieldFile` (the descriptor returned for an existing row's `FileField`) carries `_committed=True`, so assigning it as-is is treated as "already in storage, do nothing" - the destination row gets the source's path verbatim.
+
+```python
+# ❌ Both rows now share the same blob. Delete the source -> destination orphans.
+new_file.content = source.content                         # FieldFile, committed
+new_file.save()
+```
+
+The fix is to wrap in `django.core.files.File` (or any other non-`FieldFile` `File` subclass: `ContentFile`, `UploadedFile`, ...). Those default to `_committed=False`, so `storage.save()` runs and streams the source via `content.chunks()` (default 64KB blocks) into a fresh path. This handles streaming AND the copy-correctness invariant in one move.
+
+```python
+# ✅ Streamed copy into a fresh storage path.
+from django.core.files.base import File as DjangoFile
+
+with source.content.open('rb') as f:
+    new_file.content = DjangoFile(f, name=source.name)
+    new_file.save()
+```
+
+**Rules:**
+
+- Always pin this with a regression test that asserts `dest.content.name != source.content.name` after the copy AND that the bytes round-trip. Don't rely on a "content equality" check alone - the buggy version with a shared blob also passes a content check (it's the same blob).
+- Wrap the open + save in `try/except (FileNotFoundError, OSError)` whenever copying user-uploaded content. A vanished blob otherwise surfaces as a bare 500 with no breadcrumbs. Mirror the response code of the closest read endpoint (404 for chat / mail attachment paths) and log the path through `scrub()` before re-raising or returning.
+- `ContentFile(source.read(), ...)` happens to be _committed=False so it copies correctly, but it buffers the entire file in memory before re-emitting it. For anything that could grow (>1MB), prefer the `DjangoFile(open_stream, ...)` idiom.
+- Existing precedent in the codebase: `workspace/files/webdav/resources.py:_copy_as` (already correct), `workspace/chat/views_attachments.py:AttachmentSaveToFilesView`, `workspace/mail/views.py:MailAttachmentSaveToFilesView`, `workspace/files/services/_storage_ops.py:copy_node`.
 
 ## Frontend Conventions
 

@@ -202,7 +202,7 @@ class GenerateScheduledResponseTests(TestCase):
         ConversationMember.objects.create(conversation=self.conversation, user=self.user)
         ConversationMember.objects.create(conversation=self.conversation, user=self.bot_user)
 
-    @patch('workspace.ai.tasks._call_llm')
+    @patch('workspace.ai.services.tool_loop.call_llm')
     def test_generates_message_and_deactivates_once(self, mock_llm):
         mock_llm.return_value = {
             'content': 'Hello!',
@@ -240,7 +240,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertFalse(schedule.is_active)
         self.assertIsNotNone(schedule.last_run_at)
 
-    @patch('workspace.ai.tasks._call_llm')
+    @patch('workspace.ai.services.tool_loop.call_llm')
     def test_recurring_stays_active(self, mock_llm):
         mock_llm.return_value = {
             'content': 'Check-in time!',
@@ -274,7 +274,7 @@ class GenerateScheduledResponseTests(TestCase):
         # next_run_at should have advanced (at least 1 hour in the future from last_run_at)
         self.assertGreater(schedule.next_run_at, schedule.last_run_at)
 
-    @patch('workspace.ai.tasks._call_llm')
+    @patch('workspace.ai.services.tool_loop.call_llm')
     def test_skips_inactive_schedule(self, mock_llm):
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
@@ -292,7 +292,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertEqual(result['status'], 'skipped')
         mock_llm.assert_not_called()
 
-    @patch('workspace.ai.tasks._call_llm')
+    @patch('workspace.ai.services.tool_loop.call_llm')
     def test_empty_response_skips_message(self, mock_llm):
         """Scheduled messages with empty AI responses should not post empty messages."""
         mock_llm.return_value = {
@@ -400,6 +400,60 @@ class ScheduledMessageAPITests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.schedule.refresh_from_db()
         self.assertEqual(self.schedule.prompt, 'Updated greeting')
+
+    def test_update_kind_to_once_without_scheduled_at_returns_400(self):
+        """Regression: PATCHing kind=once on a recurring schedule without
+        providing scheduled_at used to crash with IntegrityError on
+        next_run_at (non-null) and surface as 500. Must reject with 4xx.
+        """
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            self._detail_url(),
+            data={'kind': 'once'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('scheduled_at', str(resp.data).lower())
+
+    def test_update_once_schedule_reschedules_without_deactivating(self):
+        """Regression: PATCHing scheduled_at on a one-time schedule must
+        update next_run_at and keep is_active=True. The view used to call
+        compute_next_run() unconditionally, which deactivates ONCE kinds
+        and silently cancelled the rescheduled message.
+        """
+        original_at = timezone.now() + timedelta(hours=1)
+        once = ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt='One-time greeting',
+            kind=ScheduledMessage.Kind.ONCE,
+            scheduled_at=original_at,
+            next_run_at=original_at,
+        )
+        new_at = timezone.now() + timedelta(hours=5)
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            self._detail_url(schedule_id=once.uuid),
+            data={'scheduled_at': new_at.isoformat()},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        once.refresh_from_db()
+        self.assertTrue(
+            once.is_active,
+            'one-time schedule must stay active after reschedule',
+        )
+        self.assertAlmostEqual(
+            once.next_run_at.timestamp(),
+            new_at.timestamp(),
+            delta=1,
+        )
+        self.assertAlmostEqual(
+            once.scheduled_at.timestamp(),
+            new_at.timestamp(),
+            delta=1,
+        )
 
     def test_delete_schedule(self):
         self.client.force_authenticate(self.user)

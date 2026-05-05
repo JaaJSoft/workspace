@@ -130,7 +130,30 @@ window.mailAccountsMixin = function mailAccountsMixin() {
       });
       if (!ok) return;
 
-      await this._fetch(`/api/v1/mail/accounts/${uuid}`, { method: 'DELETE' });
+      let res;
+      try {
+        res = await this._fetch(`/api/v1/mail/accounts/${uuid}`, { method: 'DELETE' });
+      } catch (e) {
+        await AppDialog.message({
+          title: 'Remove Account',
+          message: 'Network error. Please check your connection and try again.',
+          icon: 'alert-triangle',
+          iconClass: 'bg-error/10 text-error',
+        });
+        return;
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        await AppDialog.message({
+          title: 'Remove Account',
+          message: data.detail || 'Failed to remove account',
+          icon: 'alert-triangle',
+          iconClass: 'bg-error/10 text-error',
+        });
+        return;
+      }
+
       this.accounts = this.accounts.filter(a => a.uuid !== uuid);
       delete this.folders[uuid];
       if (this.selectedFolder?.account_id === uuid) {

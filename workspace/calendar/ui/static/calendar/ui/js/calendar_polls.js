@@ -126,7 +126,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
     },
 
     async loadPoll(uuid) {
-      const requestId = ++this._loadPollRequestId;
+      const requestId = this._loadPollRequestId = (this._loadPollRequestId || 0) + 1;
       if (!isValidUuid(uuid)) {
         // Bail without leaving the modal stuck on its loading spinner if the
         // ?poll= query param was malformed.

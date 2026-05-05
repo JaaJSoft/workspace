@@ -230,14 +230,16 @@ class UnifiedInboxListTests(UnifiedInboxTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data['page'], 1)
 
-    def test_malformed_folder_id_returns_404(self):
-        """Non-UUID folder_id must not crash with ValidationError -> 500."""
+    def test_malformed_folder_id_returns_400(self):
+        """Non-UUID folder_id must not crash with ValidationError -> 500.
+        On a collection endpoint, a malformed filter UUID is a client error
+        (400), distinct from a well-formed UUID that doesn't resolve (404)."""
         self.client.force_authenticate(self.user)
         resp = self.client.get(URL, {'folder': 'not-a-uuid'})
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_malformed_label_id_returns_404(self):
-        """Non-UUID label_id must not crash with ValidationError -> 500."""
+    def test_malformed_label_id_returns_400(self):
+        """Same as above for ?label=."""
         self.client.force_authenticate(self.user)
         resp = self.client.get(URL, {'label': 'not-a-uuid'})
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

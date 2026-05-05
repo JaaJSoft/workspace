@@ -132,11 +132,13 @@ class MailFolderListTests(MailTestMixin, APITestCase):
         resp = self.client.get(self.url, {'account': self.other_account.uuid})
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_malformed_account_id_returns_404(self):
-        """Non-UUID account param must not crash with ValidationError -> 500."""
+    def test_malformed_account_id_returns_400(self):
+        """Non-UUID account param on a collection endpoint must return 400
+        (client error), distinct from 404 (well-formed UUID that doesn't
+        resolve to an accessible account)."""
         self.client.force_authenticate(self.user)
         resp = self.client.get(self.url, {'account': 'not-a-uuid'})
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class MailFolderCreateTests(MailTestMixin, APITestCase):

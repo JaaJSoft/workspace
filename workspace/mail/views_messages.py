@@ -59,7 +59,13 @@ class MailMessageListView(CacheControlMixin, APIView):
         if label_id:
             label_uuid = parse_uuid_or_none(label_id)
             if label_uuid is None:
-                return Response(status=status.HTTP_404_NOT_FOUND)
+                # Malformed UUID on a collection filter -> 400 (per CLAUDE.md
+                # "Query parameter parsing"). A well-formed UUID that doesn't
+                # resolve still returns 404 below.
+                return Response(
+                    {'detail': '"label" must be a valid UUID.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             try:
                 label = MailLabel.objects.select_related('account').get(uuid=label_uuid)
             except MailLabel.DoesNotExist:
@@ -70,7 +76,10 @@ class MailMessageListView(CacheControlMixin, APIView):
         if folder_id:
             folder_uuid = parse_uuid_or_none(folder_id)
             if folder_uuid is None:
-                return Response(status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {'detail': '"folder" must be a valid UUID.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             try:
                 folder = MailFolder.objects.select_related('account').get(uuid=folder_uuid)
             except MailFolder.DoesNotExist:

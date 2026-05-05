@@ -214,6 +214,39 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         self.assertFalse(msg200.is_read)
         self.assertFalse(msg200.is_starred)
 
+    def test_label_unread_count_recomputed_when_marking_read(self):
+        """Marking a message read during sync must refresh MailLabel.unread_count
+        for any label attached to that message - otherwise the sidebar badge
+        stays stale until the next user-side toggle."""
+        from workspace.mail.models import MailLabel, MailMessageLabel
+        msg = self._make_msg(100, is_read=False)
+        label = MailLabel.objects.create(
+            account=self.account, name='Important', unread_count=1,
+        )
+        MailMessageLabel.objects.create(message=msg, label=label)
+
+        conn = self._mock_conn([100], flags={100: r'\Seen'})
+        _reconcile_folder(conn, self.folder)
+
+        label.refresh_from_db()
+        self.assertEqual(label.unread_count, 0)
+
+    def test_label_unread_count_recomputed_when_marking_unread(self):
+        """The reverse direction: server marked a message unread, label
+        unread_count should reflect the increment."""
+        from workspace.mail.models import MailLabel, MailMessageLabel
+        msg = self._make_msg(100, is_read=True)
+        label = MailLabel.objects.create(
+            account=self.account, name='Important', unread_count=0,
+        )
+        MailMessageLabel.objects.create(message=msg, label=label)
+
+        conn = self._mock_conn([100], flags={100: ''})
+        _reconcile_folder(conn, self.folder)
+
+        label.refresh_from_db()
+        self.assertEqual(label.unread_count, 1)
+
     def test_flag_fetch_failure_skips_update(self):
         """Flag update is skipped when UID FETCH fails."""
         self._make_msg(100, is_read=False)

@@ -304,6 +304,17 @@ def _reconcile_folder(conn, folder):
             need_unstarred.add(uid)
 
     base = MailMessage.objects.filter(folder=folder, deleted_at__isnull=True)
+
+    # Capture pks for messages whose read state changes BEFORE running the
+    # update, so we can refresh the denormalized MailLabel.unread_count after.
+    # Star changes don't affect unread_count, so we don't track them here.
+    read_changed_uids = need_read | need_unread
+    affected_message_ids = []
+    if read_changed_uids:
+        affected_message_ids = list(
+            base.filter(imap_uid__in=read_changed_uids).values_list('pk', flat=True)
+        )
+
     if need_read:
         base.filter(imap_uid__in=need_read).update(is_read=True)
     if need_unread:
@@ -312,6 +323,17 @@ def _reconcile_folder(conn, folder):
         base.filter(imap_uid__in=need_starred).update(is_starred=True)
     if need_unstarred:
         base.filter(imap_uid__in=need_unstarred).update(is_starred=False)
+
+    if affected_message_ids:
+        from ..models import MailLabel, MailMessageLabel
+        affected_label_ids = set(
+            MailMessageLabel.objects
+            .filter(message_id__in=affected_message_ids)
+            .values_list('label_id', flat=True)
+        )
+        if affected_label_ids:
+            from ..views import _refresh_label_counts
+            _refresh_label_counts(MailLabel.objects.filter(pk__in=affected_label_ids))
 
 
 def _update_folder_counts(folder):

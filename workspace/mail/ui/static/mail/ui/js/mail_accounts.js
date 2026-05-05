@@ -63,26 +63,31 @@ window.mailAccountsMixin = function mailAccountsMixin() {
       this.addingAccount = true;
       this.accountError = '';
 
-      const res = await this._fetch('/api/v1/mail/accounts', {
-        method: 'POST',
-        body: this.newAccount,
-      });
+      try {
+        const res = await this._fetch('/api/v1/mail/accounts', {
+          method: 'POST',
+          body: this.newAccount,
+        });
 
-      if (res.ok) {
-        const account = await res.json();
-        this.accounts.push(account);
-        this.expandedAccounts[account.uuid] = true;
-        await this.loadFolders(account.uuid);
-        await this.fetchLabels(account.uuid);
-        this.closeAddAccount();
+        if (res.ok) {
+          const account = await res.json();
+          this.accounts.push(account);
+          this.expandedAccounts[account.uuid] = true;
+          await this.loadFolders(account.uuid);
+          await this.fetchLabels(account.uuid);
+          this.closeAddAccount();
 
-        // Trigger initial sync
-        this.syncAccount(account.uuid);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        this.accountError = data.detail || JSON.stringify(data) || 'Failed to add account';
+          // Trigger initial sync
+          this.syncAccount(account.uuid);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          this.accountError = data.detail || JSON.stringify(data) || 'Failed to add account';
+        }
+      } catch (e) {
+        this.accountError = 'Network error. Please check your connection and try again.';
+      } finally {
+        this.addingAccount = false;
       }
-      this.addingAccount = false;
     },
 
     async syncAccount(uuid) {
@@ -170,21 +175,26 @@ window.mailAccountsMixin = function mailAccountsMixin() {
       delete payload.email;
       if (!payload.password) delete payload.password;
 
-      const res = await this._fetch(`/api/v1/mail/accounts/${uuid}`, {
-        method: 'PATCH',
-        body: payload,
-      });
+      try {
+        const res = await this._fetch(`/api/v1/mail/accounts/${uuid}`, {
+          method: 'PATCH',
+          body: payload,
+        });
 
-      if (res.ok) {
-        const updated = await res.json();
-        const idx = this.accounts.findIndex(a => a.uuid === uuid);
-        if (idx !== -1) this.accounts[idx] = updated;
-        this.closeEditAccount();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        this.editAccountError = data.detail || JSON.stringify(data) || 'Failed to save account';
+        if (res.ok) {
+          const updated = await res.json();
+          const idx = this.accounts.findIndex(a => a.uuid === uuid);
+          if (idx !== -1) this.accounts[idx] = updated;
+          this.closeEditAccount();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          this.editAccountError = data.detail || JSON.stringify(data) || 'Failed to save account';
+        }
+      } catch (e) {
+        this.editAccountError = 'Network error. Please check your connection and try again.';
+      } finally {
+        this.savingAccount = false;
       }
-      this.savingAccount = false;
     },
 
     // ----- Account context menu -----

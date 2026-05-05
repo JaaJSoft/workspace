@@ -27,29 +27,42 @@ window.mailMessagesMixin = function mailMessagesMixin() {
 
     async loadMessages() {
       if (!this.selectedFolder && !this.selectedLabel && !this.unifiedInbox) return;
+      // Bump the shared messages request token so any in-flight load (a
+      // previous folder/label switch, or a loadMoreMessages) can detect it
+      // has been superseded. Without this, switching from Inbox to Sent
+      // quickly could let the late Inbox response overwrite Sent's messages.
+      const token = ++this._messagesRequestId;
+      const isCurrent = () => token === this._messagesRequestId;
       this.loadingMessages = true;
       const res = await this._fetch(this._buildMessagesUrl());
+      if (!isCurrent()) return;
       if (res.ok) {
         const data = await res.json();
+        if (!isCurrent()) return;
         this.messages = data.results;
         this.totalMessages = data.count;
         this.hasMoreMessages = data.count > this.currentPage * data.page_size;
       }
-      this.loadingMessages = false;
-
+      if (isCurrent()) this.loadingMessages = false;
     },
 
     async loadMoreMessages() {
+      // Same counter as loadMessages: a folder/label switch mid-loadMore must
+      // also invalidate the in-flight request so its results don't get
+      // concatenated to messages from a different selection.
+      const token = ++this._messagesRequestId;
+      const isCurrent = () => token === this._messagesRequestId;
       this.loadingMoreMessages = true;
       this.currentPage++;
       const res = await this._fetch(this._buildMessagesUrl());
+      if (!isCurrent()) return;
       if (res.ok) {
         const data = await res.json();
+        if (!isCurrent()) return;
         this.messages = [...this.messages, ...data.results];
         this.hasMoreMessages = data.count > this.currentPage * data.page_size;
       }
-      this.loadingMoreMessages = false;
-
+      if (isCurrent()) this.loadingMoreMessages = false;
     },
 
     // ----- Filters -----

@@ -38,6 +38,7 @@ function mailApp() {
     hasMoreMessages: false,
     currentPage: 1,
     totalMessages: 0,
+    _messagesRequestId: 0,
 
     // Add / Edit account
     newAccount: _defaultNewAccount(),

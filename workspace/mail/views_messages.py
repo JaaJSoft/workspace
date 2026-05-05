@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.uuids import parse_uuid_or_none
 from .models import MailFolder, MailLabel, MailMessage, MailMessageLabel
 from .queries import user_account_ids
 from .serializers import (
@@ -55,16 +56,22 @@ class MailMessageListView(CacheControlMixin, APIView):
         label = None
 
         if label_id:
+            label_uuid = parse_uuid_or_none(label_id)
+            if label_uuid is None:
+                return Response(status=status.HTTP_404_NOT_FOUND)
             try:
-                label = MailLabel.objects.select_related('account').get(uuid=label_id)
+                label = MailLabel.objects.select_related('account').get(uuid=label_uuid)
             except MailLabel.DoesNotExist:
                 return Response(status=status.HTTP_404_NOT_FOUND)
             if label.account.owner != request.user:
                 return Response(status=status.HTTP_404_NOT_FOUND)
 
         if folder_id:
+            folder_uuid = parse_uuid_or_none(folder_id)
+            if folder_uuid is None:
+                return Response(status=status.HTTP_404_NOT_FOUND)
             try:
-                folder = MailFolder.objects.select_related('account').get(uuid=folder_id)
+                folder = MailFolder.objects.select_related('account').get(uuid=folder_uuid)
             except MailFolder.DoesNotExist:
                 return Response(status=status.HTTP_404_NOT_FOUND)
             if folder.account.owner != request.user:

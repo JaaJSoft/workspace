@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.uuids import parse_uuid_or_none
 from .models import MailAccount, MailFolder, MailMessage
 from .serializers import (
     MailFolderCreateSerializer,
@@ -33,8 +34,11 @@ class MailFolderListView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        account_uuid = parse_uuid_or_none(account_id)
+        if account_uuid is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
         try:
-            account = MailAccount.objects.get(uuid=account_id, owner=request.user)
+            account = MailAccount.objects.get(uuid=account_uuid, owner=request.user)
         except MailAccount.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 

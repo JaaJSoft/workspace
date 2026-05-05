@@ -15,7 +15,13 @@ from workspace.mail.services.imap_messages import save_draft
 
 User = get_user_model()
 
-RAW_DRAFT = b'From: a@example.com\r\nTo: b@example.com\r\nSubject: hi\r\n\r\nbody'
+RAW_DRAFT = (
+    b'From: a@example.com\r\n'
+    b'To: b@example.com\r\n'
+    b'Subject: hi\r\n'
+    b'Message-ID: <our-draft-id@example.com>\r\n'
+    b'\r\nbody'
+)
 
 
 class SaveDraftTests(TestCase):
@@ -90,3 +96,34 @@ class SaveDraftTests(TestCase):
         conn.append.assert_called_once()
         conn.uid.assert_not_called()
         conn.expunge.assert_not_called()
+
+    @patch('workspace.mail.services.imap_sync.sync_folder_messages')
+    @patch('workspace.mail.services.imap_messages.connect_imap')
+    def test_returns_appended_draft_not_concurrent_intruder(self, mock_connect, mock_sync):
+        """If a parallel IMAP session APPENDed a different draft and the sync
+        picked both up, we must return OUR draft (matched by Message-ID), not
+        the intruder, even when the intruder has a more recent created_at."""
+        from workspace.mail.models import MailMessage
+
+        conn = self._mock_conn(append_status='OK')
+        mock_connect.return_value = conn
+
+        def _fake_sync(account, folder):
+            # The intruder is created LAST (most recent created_at) - exactly
+            # the scenario where order_by('-created_at') would return it.
+            MailMessage.objects.create(
+                account=account, folder=folder, imap_uid=100,
+                message_id='<our-draft-id@example.com>',
+            )
+            MailMessage.objects.create(
+                account=account, folder=folder, imap_uid=101,
+                message_id='<intruder@other-client.example.com>',
+            )
+
+        mock_sync.side_effect = _fake_sync
+
+        result = save_draft(self.account, RAW_DRAFT, old_uid=None)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.message_id, '<our-draft-id@example.com>')
+        self.assertEqual(result.imap_uid, 100)

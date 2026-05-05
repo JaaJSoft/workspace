@@ -155,6 +155,16 @@ def save_draft(account, raw_message_bytes, old_uid=None):
         logger.warning("No Drafts folder found for %s, skipping save_draft", account.email)
         return None
 
+    # Extract Message-ID from raw bytes BEFORE the network call so we can find
+    # our exact draft after sync. order_by('-created_at') is unsafe: a parallel
+    # IMAP session (mobile, web client) could APPEND a different draft between
+    # our APPEND and our sync, and we'd return the wrong message.
+    msg_id = None
+    for line in raw_message_bytes.split(b'\n'):
+        if line.lower().startswith(b'message-id:'):
+            msg_id = line.split(b':', 1)[1].strip().decode(errors='replace')
+            break
+
     conn = connect_imap(account)
     try:
         conn.select(_quote_mailbox(drafts_folder.name), readonly=False)
@@ -188,14 +198,14 @@ def save_draft(account, raw_message_bytes, old_uid=None):
     # Sync to pick up the new message locally
     sync_folder_messages(account, drafts_folder)
 
-    # Return the most recently created MailMessage in drafts
     from ..models import MailMessage
-    return (
-        MailMessage.objects
-        .filter(folder=drafts_folder, deleted_at__isnull=True)
-        .order_by('-created_at')
-        .first()
-    )
+    qs = MailMessage.objects.filter(folder=drafts_folder, deleted_at__isnull=True)
+    if msg_id:
+        # Identify the exact draft we just appended.
+        return qs.filter(message_id=msg_id).first()
+    # Fallback: a draft built without a Message-ID header is anomalous, but
+    # don't regress vs. the previous behavior in that case.
+    return qs.order_by('-created_at').first()
 
 
 def delete_draft(account, message):

@@ -117,19 +117,32 @@ window.mailAiMixin = function mailAiMixin() {
     },
 
     async _pollAIComposeTask(taskId) {
+      // Supersede any in-flight poll from a previous compose request so a
+      // late-arriving result can't be prepended on top of a newer draft.
+      if (this._aiComposePollInterval) clearInterval(this._aiComposePollInterval);
+      this._aiComposePollToken = (this._aiComposePollToken || 0) + 1;
+      const token = this._aiComposePollToken;
+      const isCurrent = () => this._aiComposePollToken === token;
+
+      let intervalId = null;
+      const stop = () => { if (intervalId) clearInterval(intervalId); };
+
       let attempts = 0;
       const maxAttempts = 30; // 60s max
       const poll = async () => {
+        if (!isCurrent()) { stop(); return; }
         if (++attempts > maxAttempts) {
+          stop();
           this.aiComposing = false;
-          clearInterval(this._aiComposePollInterval);
           AppDialog.error({ message: 'AI composition timed out' });
           return;
         }
         try {
           const resp = await fetch(`/api/v1/ai/tasks/${taskId}`);
+          if (!isCurrent()) { stop(); return; }
           if (!resp.ok) return;
           const task = await resp.json();
+          if (!isCurrent()) { stop(); return; }
           if (task.status === 'completed') {
             if (this.compose.is_reply && this.compose.body) {
               // Prepend AI response before the quoted original
@@ -140,17 +153,18 @@ window.mailAiMixin = function mailAiMixin() {
             this.aiComposing = false;
             this.showAICompose = false;
             this.aiComposePrompt = '';
-            clearInterval(this._aiComposePollInterval);
+            stop();
           } else if (task.status === 'failed') {
             AppDialog.error({ message: task.error || 'AI composition failed' });
             this.aiComposing = false;
-            clearInterval(this._aiComposePollInterval);
+            stop();
           }
         } catch (e) {
           // silent retry
         }
       };
-      this._aiComposePollInterval = setInterval(poll, 2000);
+      intervalId = setInterval(poll, 2000);
+      this._aiComposePollInterval = intervalId;
       poll();
     },
   };

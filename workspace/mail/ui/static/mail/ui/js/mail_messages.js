@@ -9,14 +9,18 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       return acc ? (acc.display_name || acc.email) : '';
     },
 
-    _buildMessagesUrl() {
+    _buildMessagesUrl(page) {
+      // Caller-supplied page lets loadMoreMessages keep this.currentPage
+      // unchanged until the response commits, avoiding "skipped page" bugs
+      // when a fetch fails or is superseded mid-flight.
+      const p = page !== undefined ? page : this.currentPage;
       let url;
       if (this.unifiedInbox) {
-        url = `/api/v1/mail/messages?inbox=all&page=${this.currentPage}`;
+        url = `/api/v1/mail/messages?inbox=all&page=${p}`;
       } else if (this.selectedLabel) {
-        url = `/api/v1/mail/messages?label=${this.selectedLabel.uuid}&page=${this.currentPage}`;
+        url = `/api/v1/mail/messages?label=${this.selectedLabel.uuid}&page=${p}`;
       } else {
-        url = `/api/v1/mail/messages?folder=${this.selectedFolder.uuid}&page=${this.currentPage}`;
+        url = `/api/v1/mail/messages?folder=${this.selectedFolder.uuid}&page=${p}`;
       }
       if (this.filters.search) url += `&search=${encodeURIComponent(this.filters.search)}`;
       if (this.filters.unread) url += '&unread=1';
@@ -34,16 +38,22 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       const token = ++this._messagesRequestId;
       const isCurrent = () => token === this._messagesRequestId;
       this.loadingMessages = true;
-      const res = await this._fetch(this._buildMessagesUrl());
-      if (!isCurrent()) return;
-      if (res.ok) {
-        const data = await res.json();
+      try {
+        const res = await this._fetch(this._buildMessagesUrl());
         if (!isCurrent()) return;
-        this.messages = data.results;
-        this.totalMessages = data.count;
-        this.hasMoreMessages = data.count > this.currentPage * data.page_size;
+        if (res.ok) {
+          const data = await res.json();
+          if (!isCurrent()) return;
+          this.messages = data.results;
+          this.totalMessages = data.count;
+          this.hasMoreMessages = data.count > this.currentPage * data.page_size;
+        }
+      } finally {
+        // Always clear the spinner, even on early return / network throw.
+        // Gated on isCurrent so a stale closure doesn't reset a flag the
+        // current closure has correctly set to true.
+        if (isCurrent()) this.loadingMessages = false;
       }
-      if (isCurrent()) this.loadingMessages = false;
     },
 
     async loadMoreMessages() {
@@ -52,17 +62,25 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       // concatenated to messages from a different selection.
       const token = ++this._messagesRequestId;
       const isCurrent = () => token === this._messagesRequestId;
+      // Don't mutate this.currentPage until the response commits: an early
+      // return (superseded, network throw, !res.ok) used to leave currentPage
+      // incremented with no data appended, so the next loadMore would skip
+      // a whole page of messages.
+      const nextPage = this.currentPage + 1;
       this.loadingMoreMessages = true;
-      this.currentPage++;
-      const res = await this._fetch(this._buildMessagesUrl());
-      if (!isCurrent()) return;
-      if (res.ok) {
-        const data = await res.json();
+      try {
+        const res = await this._fetch(this._buildMessagesUrl(nextPage));
         if (!isCurrent()) return;
-        this.messages = [...this.messages, ...data.results];
-        this.hasMoreMessages = data.count > this.currentPage * data.page_size;
+        if (res.ok) {
+          const data = await res.json();
+          if (!isCurrent()) return;
+          this.messages = [...this.messages, ...data.results];
+          this.currentPage = nextPage;
+          this.hasMoreMessages = data.count > nextPage * data.page_size;
+        }
+      } finally {
+        if (isCurrent()) this.loadingMoreMessages = false;
       }
-      if (isCurrent()) this.loadingMoreMessages = false;
     },
 
     // ----- Filters -----

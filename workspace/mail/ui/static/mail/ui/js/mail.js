@@ -106,7 +106,7 @@ function mailApp() {
     _aiComposePollInterval: null,
 
     // Autocomplete
-    _autocomplete: { results: [], highlight: -1, show: false, loading: false, field: null, _timer: null },
+    _autocomplete: { results: [], highlight: -1, show: false, loading: false, field: null, _timer: null, _requestId: 0 },
 
     // ── Compose mailApp from domain mixins ─────────────────
     // Each mixin returns an object literal with its own methods. They all

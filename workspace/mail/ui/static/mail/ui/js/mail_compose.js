@@ -174,14 +174,23 @@ window.mailComposeMixin = function mailComposeMixin() {
         return;
       }
       this._autocomplete.field = field;
+      // Bump the request token so an in-flight fetch from a previous keystroke
+      // can detect it has been superseded and skip its state writes. Without
+      // this, a slow response for "ab" can clobber the results displayed for
+      // "abcd" if it resolves after the newer request.
+      const token = ++this._autocomplete._requestId;
+      const isCurrent = () => token === this._autocomplete._requestId;
       this._autocomplete._timer = setTimeout(async () => {
+        if (!isCurrent()) return;
         this._autocomplete.loading = true;
         try {
           let url = `/api/v1/mail/contacts/autocomplete?q=${encodeURIComponent(q)}`;
           if (this.compose.account_id) url += `&account_id=${this.compose.account_id}`;
           const res = await this._fetch(url);
+          if (!isCurrent()) return;
           if (res.ok) {
             const data = await res.json();
+            if (!isCurrent()) return;
             // Filter out emails already added in any field
             const existing = new Set([
               ...this.compose.to, ...this.compose.cc, ...this.compose.bcc,
@@ -191,15 +200,25 @@ window.mailComposeMixin = function mailComposeMixin() {
             this._autocomplete.show = this._autocomplete.results.length > 0;
           }
         } catch (e) {
+          if (!isCurrent()) return;
           this._autocomplete.show = false;
         }
-        this._autocomplete.loading = false;
+        if (isCurrent()) this._autocomplete.loading = false;
       }, 300);
     },
 
     _acClose() {
       if (this._autocomplete._timer) clearTimeout(this._autocomplete._timer);
-      this._autocomplete = { results: [], highlight: -1, show: false, loading: false, field: null, _timer: null };
+      // Mutate fields instead of reassigning the object so _requestId keeps
+      // monotonically increasing - any in-flight fetch from before the close
+      // will see a higher current id and bail out.
+      this._autocomplete.results = [];
+      this._autocomplete.highlight = -1;
+      this._autocomplete.show = false;
+      this._autocomplete.loading = false;
+      this._autocomplete.field = null;
+      this._autocomplete._timer = null;
+      this._autocomplete._requestId = (this._autocomplete._requestId || 0) + 1;
     },
 
     _acSelect(contact, field) {

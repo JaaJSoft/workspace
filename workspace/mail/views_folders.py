@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
 from .models import MailAccount, MailFolder, MailMessage
 from .serializers import (
@@ -72,7 +73,7 @@ class MailFolderListView(APIView):
                 status=status.HTTP_201_CREATED,
             )
         except Exception as e:
-            logger.warning("Failed to create folder for %s: %s", account.email, e)
+            logger.warning("Failed to create folder for %s: %s", scrub(account.email), scrub(e))
             return Response(
                 {'detail': 'Failed to create folder'},
                 status=status.HTTP_502_BAD_GATEWAY,
@@ -126,7 +127,7 @@ class MailFolderUpdateView(APIView):
             try:
                 move_folder(folder.account, folder, parent_name)
             except Exception as e:
-                logger.warning("Failed to move folder for %s: %s", folder.account.email, e)
+                logger.warning("Failed to move folder for %s: %s", scrub(folder.account.email), scrub(e))
                 return Response(
                     {'detail': 'Failed to move folder'},
                     status=status.HTTP_502_BAD_GATEWAY,
@@ -150,7 +151,7 @@ class MailFolderUpdateView(APIView):
                 try:
                     rename_folder(folder.account, folder, new_name)
                 except Exception as e:
-                    logger.warning("Failed to rename folder for %s: %s", folder.account.email, e)
+                    logger.warning("Failed to rename folder for %s: %s", scrub(folder.account.email), scrub(e))
                     return Response(
                         {'detail': 'Failed to rename folder'},
                         status=status.HTTP_502_BAD_GATEWAY,
@@ -185,7 +186,7 @@ class MailFolderUpdateView(APIView):
         try:
             delete_folder(folder.account, folder)
         except Exception as e:
-            logger.warning("Failed to delete folder for %s: %s", folder.account.email, e)
+            logger.warning("Failed to delete folder for %s: %s", scrub(folder.account.email), scrub(e))
             return Response(
                 {'detail': 'Failed to delete folder'},
                 status=status.HTTP_502_BAD_GATEWAY,

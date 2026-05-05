@@ -60,7 +60,7 @@ class MailSendView(APIView):
             try:
                 append_to_sent(account, raw_msg)
             except Exception:
-                logger.warning("Failed to append sent message to IMAP for %s", account.email)
+                logger.warning("Failed to append sent message to IMAP for %s", scrub(account.email))
 
             try:
                 sent_folder = MailFolder.objects.filter(
@@ -69,11 +69,15 @@ class MailSendView(APIView):
                 if sent_folder:
                     sync_folder_messages(account, sent_folder)
             except Exception:
-                logger.warning("Failed to sync sent folder after send for %s", account.email)
+                logger.warning("Failed to sync sent folder after send for %s", scrub(account.email))
 
             return Response({'status': 'sent'}, status=status.HTTP_201_CREATED)
         except Exception as e:
-            logger.exception("Failed to send email from %s", account.email)
+            # Use logger.error + scrub(str(e)) instead of logger.exception:
+            # the latter would include the raw traceback which can contain
+            # un-scrubbed exception text (e.g. an IMAP/SMTP server response
+            # with embedded \r\n).
+            logger.error("Failed to send email from %s: %s", scrub(account.email), scrub(str(e)))
             return Response(
                 {'status': 'error', 'error': 'Failed to send email'},
                 status=status.HTTP_502_BAD_GATEWAY,
@@ -139,7 +143,8 @@ class MailDraftView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         except Exception as e:
-            logger.exception("Failed to save draft for %s", account.email)
+            # See comment in MailSendView above re: logger.error vs exception.
+            logger.error("Failed to save draft for %s: %s", scrub(account.email), scrub(str(e)))
             return Response(
                 {'detail': 'Failed to save draft'},
                 status=status.HTTP_502_BAD_GATEWAY,

@@ -6,6 +6,7 @@ import time
 
 from django.utils import timezone as dj_timezone
 
+from workspace.common.logging import scrub
 from workspace.mail.services.imap_connection import connect_imap
 from workspace.mail.services.imap_mailbox import _quote_mailbox
 
@@ -101,7 +102,7 @@ def append_to_sent(account, raw_message_bytes):
         .first()
     )
     if not sent_folder:
-        logger.warning("No Sent folder found for %s, skipping APPEND", account.email)
+        logger.warning("No Sent folder found for %s, skipping APPEND", scrub(account.email))
         return
 
     # Extract Message-ID from raw bytes to check for duplicates
@@ -119,7 +120,7 @@ def append_to_sent(account, raw_message_bytes):
         if msg_id:
             status, data = conn.uid('SEARCH', None, f'HEADER Message-ID "{msg_id}"')
             if status == 'OK' and data[0] and data[0].strip():
-                logger.info("Message already in Sent for %s (auto-copied by server)", account.email)
+                logger.info("Message already in Sent for %s (auto-copied by server)", scrub(account.email))
                 return
 
         # Not found - append it ourselves
@@ -131,9 +132,9 @@ def append_to_sent(account, raw_message_bytes):
             raw_message_bytes,
         )
         if status == 'OK':
-            logger.info("Appended sent message to %s for %s", sent_folder.name, account.email)
+            logger.info("Appended sent message to %s for %s", scrub(sent_folder.name), scrub(account.email))
         else:
-            logger.warning("IMAP APPEND to %s failed for %s", sent_folder.name, account.email)
+            logger.warning("IMAP APPEND to %s failed for %s", scrub(sent_folder.name), scrub(account.email))
     finally:
         try:
             conn.logout()
@@ -158,7 +159,7 @@ def save_draft(account, raw_message_bytes, old_uid=None):
         .first()
     )
     if not drafts_folder:
-        logger.warning("No Drafts folder found for %s, skipping save_draft", account.email)
+        logger.warning("No Drafts folder found for %s, skipping save_draft", scrub(account.email))
         return None
 
     # Extract Message-ID from raw bytes BEFORE the network call so we can find
@@ -185,14 +186,14 @@ def save_draft(account, raw_message_bytes, old_uid=None):
             raw_message_bytes,
         )
         if status != 'OK':
-            logger.warning("IMAP APPEND draft to %s failed for %s", drafts_folder.name, account.email)
+            logger.warning("IMAP APPEND draft to %s failed for %s", scrub(drafts_folder.name), scrub(account.email))
             return None
 
         if old_uid:
             conn.uid('STORE', str(old_uid), '+FLAGS', '(\\Deleted)')
             conn.expunge()
 
-        logger.info("Saved draft to %s for %s", drafts_folder.name, account.email)
+        logger.info("Saved draft to %s for %s", scrub(drafts_folder.name), scrub(account.email))
     finally:
         try:
             conn.logout()

@@ -6,6 +6,7 @@ import re
 from django.db import transaction
 from django.utils import timezone as dj_timezone
 
+from workspace.common.logging import scrub
 from workspace.mail.services.imap_connection import connect_imap
 from workspace.mail.services.imap_mailbox import (
     _detect_folder_type,
@@ -103,7 +104,7 @@ def sync_folder_messages(account, folder):
     try:
         status, data = conn.select(_quote_mailbox(folder.name), readonly=True)
         if status != 'OK':
-            logger.warning("Could not SELECT folder %s: %s", folder.name, data)
+            logger.warning("Could not SELECT folder %s: %s", scrub(folder.name), scrub(data))
             return
 
         # Check UIDVALIDITY (parsed from untagged OK response, NOT from
@@ -111,7 +112,7 @@ def sync_folder_messages(account, folder):
         uid_validity = _get_uidvalidity(conn)
         if uid_validity and folder.uid_validity and folder.uid_validity != uid_validity:
             # UIDVALIDITY changed - purge and re-sync
-            logger.info("UIDVALIDITY changed for %s, resetting", folder.name)
+            logger.info("UIDVALIDITY changed for %s, resetting", scrub(folder.name))
             MailMessage.objects.filter(folder=folder).delete()
             folder.last_sync_uid = 0
 
@@ -174,7 +175,7 @@ def sync_folder_messages(account, folder):
                     if msg:
                         new_message_uuids.append(str(msg.uuid))
                 except Exception:
-                    logger.exception("Failed to parse message UID %d in %s", uid, folder.name)
+                    logger.exception("Failed to parse message UID %d in %s", uid, scrub(folder.name))
 
         # Update sync position
         if max_uid > folder.last_sync_uid:
@@ -200,9 +201,9 @@ def sync_folder_messages(account, folder):
                     from workspace.ai.tasks import classify_mail_messages
                     classify_mail_messages.delay(str(ai_task.uuid))
                     logger.info('Dispatched classify task for %d new messages in %s',
-                                len(new_message_uuids), folder.name)
+                                len(new_message_uuids), scrub(folder.name))
             except Exception:
-                logger.exception('Failed to dispatch classify task for %s', folder.name)
+                logger.exception('Failed to dispatch classify task for %s', scrub(folder.name))
 
         # Process calendar invitations among messages just synced.
         # Scoping on new_message_uuids avoids re-parsing every old ICS
@@ -257,7 +258,7 @@ def _reconcile_folder(conn, folder):
             folder=folder, imap_uid__in=gone, deleted_at__isnull=True,
         ).update(deleted_at=dj_timezone.now())
         if count:
-            logger.info('Reconciled %s: soft-deleted %d messages no longer on server', folder.name, count)
+            logger.info('Reconciled %s: soft-deleted %d messages no longer on server', scrub(folder.name), count)
 
     # Update flags for remaining messages
     present = local_uids & remote_uids
@@ -360,7 +361,7 @@ def sync_account(account):
         try:
             sync_folder_messages(account, folder)
         except Exception:
-            logger.exception("Failed to sync folder %s for %s", folder.name, account.email)
+            logger.exception("Failed to sync folder %s for %s", scrub(folder.name), scrub(account.email))
             error_occurred = True
 
     account.last_sync_at = dj_timezone.now()

@@ -223,18 +223,27 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     // --- Agenda view (custom, not FullCalendar) ---
 
     async loadAgenda() {
-      // Reset and fetch page 1 from "now".
+      // Reset and fetch page 1 from "now". Bumping requestId invalidates any
+      // in-flight loadMoreAgenda call from a prior session so its response
+      // can't append stale events into the freshly-reset state.
+      const requestId = this.agenda.requestId = (this.agenda.requestId || 0) + 1;
       const now = new Date();
       this.agenda.events = [];
       this.agenda.nextAfter = now.toISOString();
       this.agenda.initialLoaded = false;
       this.agenda.seenIds = new Set();
+      // Release the loading lock so a still-in-flight stale call can't keep
+      // us blocked - its guarded finally won't clear it once superseded.
+      this.agenda.loading = false;
       await this.loadMoreAgenda();
-      this.agenda.initialLoaded = true;
+      if (requestId === this.agenda.requestId) {
+        this.agenda.initialLoaded = true;
+      }
     },
 
     async loadMoreAgenda() {
       if (this.agenda.loading || this.agenda.nextAfter === null) return;
+      const requestId = this.agenda.requestId || 0;
       this.agenda.loading = true;
       try {
         const calIds = Object.keys(this.visibleCalendars)
@@ -248,8 +257,10 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         const resp = await fetch(`/api/v1/calendar/events?${params}`, {
           credentials: 'same-origin',
         });
+        if (requestId !== this.agenda.requestId) return;
         if (!resp.ok) return;
         const data = await resp.json();
+        if (requestId !== this.agenda.requestId) return;
 
         // Dedup boundary events (events with start == cursor may appear on
         // both pages - see backend cursor stability note).
@@ -258,7 +269,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         this.agenda.events = [...this.agenda.events, ...fresh];
         this.agenda.nextAfter = data.next_after;
       } finally {
-        this.agenda.loading = false;
+        if (requestId === this.agenda.requestId) {
+          this.agenda.loading = false;
+        }
       }
     },
 

@@ -28,34 +28,47 @@ window.mailAiMixin = function mailAiMixin() {
     },
 
     async _pollAITask(taskId) {
+      // Supersede any in-flight poll from a previous summarize request so its
+      // late-arriving result can't overwrite the current selection's summary.
+      if (this._aiPollInterval) clearInterval(this._aiPollInterval);
+      this._aiPollToken = (this._aiPollToken || 0) + 1;
+      const token = this._aiPollToken;
+      const isCurrent = () => this._aiPollToken === token;
+
+      let intervalId = null;
+      const stop = () => { if (intervalId) clearInterval(intervalId); };
+
       let attempts = 0;
       const maxAttempts = 30; // 60s max
       const poll = async () => {
+        if (!isCurrent()) { stop(); return; }
         if (++attempts > maxAttempts) {
+          stop();
           this.aiSummarizing = false;
-          clearInterval(this._aiPollInterval);
           AppDialog.error({ message: 'AI task timed out' });
           return;
         }
         try {
           const resp = await fetch(`/api/v1/ai/tasks/${taskId}`);
+          if (!isCurrent()) { stop(); return; }
           if (!resp.ok) return;
           const task = await resp.json();
+          if (!isCurrent()) { stop(); return; }
           if (task.status === 'completed') {
             this.aiSummary = task.result_html || task.result;
             this.aiSummarizing = false;
-            clearInterval(this._aiPollInterval);
-
+            stop();
           } else if (task.status === 'failed') {
             AppDialog.error({ message: task.error || 'AI task failed' });
             this.aiSummarizing = false;
-            clearInterval(this._aiPollInterval);
+            stop();
           }
         } catch (e) {
           // silent retry
         }
       };
-      this._aiPollInterval = setInterval(poll, 2000);
+      intervalId = setInterval(poll, 2000);
+      this._aiPollInterval = intervalId;
       poll();
     },
 

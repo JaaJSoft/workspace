@@ -107,8 +107,14 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       this.loadingDetail = true;
       this._updateUrl(msg.uuid, {push: this.isMobile()});
       const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`);
+      // Bail if the user has selected another message in the meantime: a late
+      // detail fetch must not overwrite messageDetail/aiSummary for a different
+      // selection, nor mark the wrong message read via toggleRead.
+      if (this.selectedMessage?.uuid !== msg.uuid) return;
       if (res.ok) {
-        this.messageDetail = await res.json();
+        const data = await res.json();
+        if (this.selectedMessage?.uuid !== msg.uuid) return;
+        this.messageDetail = data;
         if (this.messageDetail.ai_summary_html) {
           this.aiSummary = this.messageDetail.ai_summary_html;
         }
@@ -118,8 +124,9 @@ window.mailMessagesMixin = function mailMessagesMixin() {
           msg.is_read = true;
         }
       }
-      this.loadingDetail = false;
-
+      if (this.selectedMessage?.uuid === msg.uuid) {
+        this.loadingDetail = false;
+      }
     },
 
     async _openMessageById(uuid) {

@@ -380,7 +380,7 @@
       </template>
 
       <!-- Invitees display (non-creator or closed poll) -->
-      <template x-if="!isPollCreator() && (currentPoll?.invitees || []).length > 0">
+      <template x-if="(!isPollCreator() || currentPoll?.status === 'closed') && (currentPoll?.invitees || []).length > 0">
         <div class="mb-4">
           <div class="text-xs font-medium text-base-content/40 uppercase tracking-wider mb-2 flex items-center gap-1.5">
             <i data-lucide="users" class="w-3 h-3"></i>

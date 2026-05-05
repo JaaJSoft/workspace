@@ -53,7 +53,13 @@ def move_message(account, message, target_folder):
     conn = connect_imap(account)
     try:
         conn.select(_quote_mailbox(message.folder.name))
-        conn.uid('COPY', str(message.imap_uid), _quote_mailbox(target_folder.name))
+        # imaplib does NOT raise on a 'NO' response - it returns (status, data).
+        # If COPY fails (target gone, quota exceeded, perms denied) and we
+        # don't check, the STORE+EXPUNGE below would permanently delete the
+        # source message with no copy in target: irrecoverable data loss.
+        st, data = conn.uid('COPY', str(message.imap_uid), _quote_mailbox(target_folder.name))
+        if st != 'OK':
+            raise Exception(f'IMAP COPY failed: {data}')
         conn.uid('STORE', str(message.imap_uid), '+FLAGS', '(\\Deleted)')
         conn.expunge()
     finally:

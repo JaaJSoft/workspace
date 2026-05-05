@@ -3,11 +3,13 @@ from collections import Counter, defaultdict
 
 from django.db.models import Q
 from drf_spectacular.utils import OpenApiParameter, extend_schema
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.uuids import parse_uuid_or_none
 from .models import MailMessage
 from .queries import user_account_ids
 
@@ -34,7 +36,16 @@ class ContactAutocompleteView(CacheControlMixin, APIView):
         account_filter = Q(account_id__in=user_account_ids(request.user))
         account_id = request.query_params.get('account_id')
         if account_id:
-            account_filter &= Q(account__uuid=account_id)
+            # Reject malformed UUIDs at the boundary: passing a non-UUID
+            # string straight to Q(account__uuid=...) crashes deep in Django's
+            # UUIDField cleaning layer and surfaces as 500.
+            account_uuid = parse_uuid_or_none(account_id)
+            if account_uuid is None:
+                return Response(
+                    {'detail': '"account_id" must be a valid UUID.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            account_filter &= Q(account__uuid=account_uuid)
 
         q_lower = q.lower()
 

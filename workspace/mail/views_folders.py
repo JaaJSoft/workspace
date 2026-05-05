@@ -224,7 +224,7 @@ class MailFolderMarkReadView(APIView):
         folder.unread_count = 0
         folder.save(update_fields=['unread_count', 'updated_at'])
 
-        from .views import _refresh_labels_for_messages
-        _refresh_labels_for_messages(affected_ids)
+        from .services.label_counts import refresh_labels_for_messages
+        refresh_labels_for_messages(affected_ids)
 
         return Response({'updated': updated})

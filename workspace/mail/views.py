@@ -132,27 +132,6 @@ def _refresh_message_label_counts(message):
         _refresh_label_counts(MailLabel.objects.filter(pk__in=label_ids))
 
 
-def _refresh_labels_for_messages(message_ids):
-    """Refresh unread_count for every label attached to any of these messages.
-
-    Use this anywhere ``MailMessage.is_read`` is mutated in bulk (folder
-    mark-as-read, batch actions, IMAP sync flag reconciliation). Without
-    propagating the change to ``MailLabel.unread_count``, sidebar badges go
-    stale until another action forces a recompute.
-
-    Accepts an iterable of MailMessage PKs. No-op when empty.
-    """
-    if not message_ids:
-        return
-    label_ids = set(
-        MailMessageLabel.objects
-        .filter(message_id__in=message_ids)
-        .values_list('label_id', flat=True)
-    )
-    if label_ids:
-        _refresh_label_counts(MailLabel.objects.filter(pk__in=label_ids))
-
-
 @extend_schema(tags=['Mail'])
 class MailAutodiscoverView(APIView):
     permission_classes = [IsAuthenticated]

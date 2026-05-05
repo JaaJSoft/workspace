@@ -331,8 +331,8 @@ def _reconcile_folder(conn, folder):
         base.filter(imap_uid__in=need_unstarred).update(is_starred=False)
 
     if affected_message_ids:
-        from ..views import _refresh_labels_for_messages
-        _refresh_labels_for_messages(affected_message_ids)
+        from .label_counts import refresh_labels_for_messages
+        refresh_labels_for_messages(affected_message_ids)
 
 
 def _update_folder_counts(folder):

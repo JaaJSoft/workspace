@@ -429,8 +429,13 @@ window.mailFoldersMixin = function mailFoldersMixin() {
       };
       flatten(tree, 0);
 
-      // Determine current parent for pre-selection
-      const lastSep = folder.name.lastIndexOf(delimiter);
+      // Determine current parent for pre-selection. The IMAP delimiter is
+      // not exposed at this layer, so check both common separators ('/' and
+      // '.') and use whichever appears - same heuristic as ownPrefixes above.
+      const lastSep = Math.max(
+        folder.name.lastIndexOf('/'),
+        folder.name.lastIndexOf('.'),
+      );
       const currentParent = lastSep > 0 ? folder.name.substring(0, lastSep) : '';
 
       const selected = await AppDialog.select({

@@ -100,6 +100,15 @@ class MailFolderUpdateView(APIView):
         ser = MailFolderUpdateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
+        # Reject hiding special folders BEFORE any IMAP operations: a 400
+        # returned after a successful rename/move would leave IMAP and DB
+        # out of sync, with no client-visible signal that the rename happened.
+        if ser.validated_data.get('is_hidden') and folder.folder_type != 'other':
+            return Response(
+                {'detail': 'Cannot hide a special folder'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Move folder if parent_name is provided
         parent_name = ser.validated_data.pop('parent_name', None)
         if parent_name is not None:
@@ -142,13 +151,6 @@ class MailFolderUpdateView(APIView):
                         {'detail': 'Failed to rename folder'},
                         status=status.HTTP_502_BAD_GATEWAY,
                     )
-
-        # Reject hiding special folders
-        if ser.validated_data.get('is_hidden') and folder.folder_type != 'other':
-            return Response(
-                {'detail': 'Cannot hide a special folder'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         # Update icon/color/is_hidden locally
         update_fields = ['updated_at']

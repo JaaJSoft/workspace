@@ -497,6 +497,28 @@ class MailFolderHideTests(MailTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('special folder', resp.data['detail'].lower())
 
+    @patch('workspace.mail.services.imap_folders.rename_folder')
+    def test_invalid_is_hidden_skips_imap_rename(self, mock_rename):
+        """A PATCH with both display_name (which would trigger an IMAP rename)
+        AND is_hidden=true on a special folder must reject WITHOUT performing
+        the rename - otherwise IMAP and DB go out of sync (rename happened but
+        the 400 prevents the local save)."""
+        self.client.force_authenticate(self.user)
+        original_name = self.inbox.name
+        original_display = self.inbox.display_name
+
+        resp = self.client.patch(
+            self._url(self.inbox),
+            {'display_name': 'Renamed', 'is_hidden': True},
+            format='json',
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        mock_rename.assert_not_called()
+        self.inbox.refresh_from_db()
+        self.assertEqual(self.inbox.name, original_name)
+        self.assertEqual(self.inbox.display_name, original_display)
+
     def test_unhide_folder(self):
         self.custom.is_hidden = True
         self.custom.save()

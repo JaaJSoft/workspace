@@ -159,12 +159,9 @@ def save_draft(account, raw_message_bytes, old_uid=None):
     try:
         conn.select(_quote_mailbox(drafts_folder.name), readonly=False)
 
-        # Delete old draft if updating
-        if old_uid:
-            conn.uid('STORE', str(old_uid), '+FLAGS', '(\\Deleted)')
-            conn.expunge()
-
-        # Append new draft
+        # Append new draft FIRST, then delete the old one only on APPEND
+        # success. The reverse order risks losing both copies if APPEND fails
+        # (network drop, quota exceeded), since EXPUNGE is irreversible.
         status, _ = conn.append(
             _quote_mailbox(drafts_folder.name),
             '(\\Draft \\Seen)',
@@ -174,6 +171,10 @@ def save_draft(account, raw_message_bytes, old_uid=None):
         if status != 'OK':
             logger.warning("IMAP APPEND draft to %s failed for %s", drafts_folder.name, account.email)
             return None
+
+        if old_uid:
+            conn.uid('STORE', str(old_uid), '+FLAGS', '(\\Deleted)')
+            conn.expunge()
 
         logger.info("Saved draft to %s for %s", drafts_folder.name, account.email)
     finally:

@@ -255,24 +255,30 @@ window.mailComposeMixin = function mailComposeMixin() {
       for (const addr of this.compose.bcc) formData.append('bcc', addr);
       for (const file of this.compose.attachments) formData.append('attachments', file);
 
-      const res = await fetch('/api/v1/mail/messages/send', {
-        method: 'POST',
-        headers: { 'X-CSRFToken': getCSRFToken() },
-        credentials: 'same-origin',
-        body: formData,
-      });
+      try {
+        const res = await this._fetch('/api/v1/mail/messages/send', {
+          method: 'POST',
+          body: formData,
+        });
 
-      if (res.ok) {
-        if (this.compose._saveTimer) clearTimeout(this.compose._saveTimer);
-        const draftId = this.compose.draft_id;
-        this._clearLocalStorageDraft();
-        document.getElementById('mail-compose-dialog').close();
-        this.compose = _defaultCompose();
-        // Delete the draft after sending
-        if (draftId) this._deleteDraft(draftId);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        this.compose.error = data.error || 'Failed to send email';
+        if (res.ok) {
+          if (this.compose._saveTimer) clearTimeout(this.compose._saveTimer);
+          const draftId = this.compose.draft_id;
+          this._clearLocalStorageDraft();
+          document.getElementById('mail-compose-dialog').close();
+          this.compose = _defaultCompose();
+          // Delete the draft after sending
+          if (draftId) this._deleteDraft(draftId);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          this.compose.error = data.error || 'Failed to send email';
+        }
+      } catch (e) {
+        // Network failure (offline, DNS, CORS, abort) - fetch rejects without
+        // ever touching res.ok. Without this catch, sending=true would stick
+        // and lock the dialog spinner indefinitely.
+        this.compose.error = 'Failed to send email';
+      } finally {
         this.compose.sending = false;
       }
     },

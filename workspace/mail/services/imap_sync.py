@@ -165,8 +165,13 @@ def sync_folder_messages(account, folder):
                 raw_email = response_part[1]
                 try:
                     msg = _parse_message(raw_email, account, folder, uid, flags_str)
+                    # Advance max_uid even when msg is None (already present in
+                    # DB): otherwise last_sync_uid never moves past UIDs we've
+                    # confirmed, and every future sync re-FETCHes the same
+                    # RFC822 bytes - happens after a crash mid-sync where some
+                    # messages were persisted but last_sync_uid wasn't updated.
+                    max_uid = max(max_uid, uid)
                     if msg:
-                        max_uid = max(max_uid, uid)
                         new_message_uuids.append(str(msg.uuid))
                 except Exception:
                     logger.exception("Failed to parse message UID %d in %s", uid, folder.name)

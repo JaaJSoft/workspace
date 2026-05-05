@@ -313,3 +313,48 @@ class SyncReconciliationIntegrationTests(ReconcileFolderMixin, TestCase):
         # Reconciliation should have soft-deleted the message
         msg.refresh_from_db()
         self.assertIsNotNone(msg.deleted_at)
+
+    @patch('workspace.mail.services.imap_sync.connect_imap')
+    def test_last_sync_uid_advances_for_already_present_messages(self, mock_connect):
+        """When FETCH returns UIDs that _parse_message recognises as already
+        in DB (returns None), max_uid must still advance so last_sync_uid
+        moves forward. Otherwise after a crash mid-sync we'd re-FETCH the
+        same UIDs every time."""
+        self.folder.last_sync_uid = 41
+        self.folder.uid_validity = 12345
+        self.folder.save()
+
+        # Message UID 42 is already in DB (simulates a crash after persist
+        # but before last_sync_uid update).
+        self._make_msg(42)
+
+        conn = MagicMock()
+        conn.select.return_value = ('OK', [b'1'])
+        conn.untagged_responses = {'OK': [b'[UIDVALIDITY 12345]']}
+
+        def uid_side_effect(cmd, *args):
+            if cmd == 'SEARCH':
+                search_arg = str(args[1]) if len(args) > 1 else ''
+                if 'UID 42:' in search_arg:
+                    return ('OK', [b'42'])
+                # Reconciliation SEARCH ALL: keep UID 42 present so it isn't
+                # soft-deleted by the reconciliation step.
+                return ('OK', [b'42'])
+            if cmd == 'FETCH':
+                # _parse_message will short-circuit on MailMessage.exists() so
+                # the body doesn't have to be a real RFC822 message.
+                return ('OK', [(b'1 (UID 42 FLAGS ())', b'')])
+            return ('OK', [b''])
+
+        conn.uid.side_effect = uid_side_effect
+        conn.logout.return_value = ('OK', [b'BYE'])
+        mock_connect.return_value = conn
+
+        from workspace.mail.services.imap_sync import sync_folder_messages
+        sync_folder_messages(self.account, self.folder)
+
+        self.folder.refresh_from_db()
+        self.assertGreaterEqual(
+            self.folder.last_sync_uid, 42,
+            "last_sync_uid must advance past confirmed-present UIDs",
+        )

@@ -120,6 +120,9 @@ class MailDraftView(APIView):
                 )
                 old_uid = old_msg.imap_uid
             except MailMessage.DoesNotExist:
+                # The referenced draft is gone (deleted on another device, or
+                # never existed). Fall through with old_uid=None so save_draft
+                # creates a fresh draft instead of trying to replace nothing.
                 pass
 
         from .services.imap_messages import save_draft

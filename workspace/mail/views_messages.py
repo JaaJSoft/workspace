@@ -311,7 +311,7 @@ class MailBatchActionView(APIView):
             except Exception:
                 logger.warning("Batch action '%s' failed for message %s", action, msg.uuid)
 
-        from .views import _refresh_folders_counts_bulk, _refresh_label_counts
+        from .views import _refresh_folders_counts_bulk, _refresh_labels_for_messages
         with transaction.atomic():
             if to_bulk_update:
                 MailMessage.objects.bulk_update(to_bulk_update, list(bulk_update_fields))
@@ -322,10 +322,6 @@ class MailBatchActionView(APIView):
 
             # Refresh label counts for read/unread/delete actions
             if action in ('mark_read', 'mark_unread', 'delete'):
-                affected_label_ids = MailMessageLabel.objects.filter(
-                    message__in=messages,
-                ).values_list('label_id', flat=True).distinct()
-                if affected_label_ids:
-                    _refresh_label_counts(MailLabel.objects.filter(pk__in=affected_label_ids))
+                _refresh_labels_for_messages([m.pk for m in messages])
 
         return Response({'processed': processed})

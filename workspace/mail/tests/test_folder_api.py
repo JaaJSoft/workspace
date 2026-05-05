@@ -575,3 +575,24 @@ class MailFolderMarkReadTests(MailTestMixin, APITestCase):
         self.client.force_authenticate(self.user)
         resp = self.client.post(self._url(self.other_folder))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_refreshes_label_unread_count(self):
+        """Marking a folder all-read must also refresh MailLabel.unread_count
+        for any label attached to those messages, otherwise the sidebar label
+        badges stay stale until the next user-side toggle."""
+        from workspace.mail.models import MailLabel, MailMessageLabel
+
+        msg = MailMessage.objects.create(
+            account=self.account, folder=self.inbox, imap_uid=200, is_read=False,
+        )
+        label = MailLabel.objects.create(
+            account=self.account, name='Important', unread_count=1,
+        )
+        MailMessageLabel.objects.create(message=msg, label=label)
+
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(self._url(self.inbox))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        label.refresh_from_db()
+        self.assertEqual(label.unread_count, 0)

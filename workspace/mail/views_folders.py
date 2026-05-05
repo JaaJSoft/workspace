@@ -204,11 +204,20 @@ class MailFolderMarkReadView(APIView):
         if folder.account.owner != request.user:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        updated = MailMessage.objects.filter(
+        qs = MailMessage.objects.filter(
             folder=folder, is_read=False, deleted_at__isnull=True,
-        ).update(is_read=True)
+        )
+        # Capture pks BEFORE the update so we can refresh denormalized
+        # MailLabel.unread_count for any label attached to these messages.
+        # Without this, label badges in the sidebar stay stale until the next
+        # user-side toggle.
+        affected_ids = list(qs.values_list('pk', flat=True))
+        updated = qs.update(is_read=True)
 
         folder.unread_count = 0
         folder.save(update_fields=['unread_count', 'updated_at'])
+
+        from .views import _refresh_labels_for_messages
+        _refresh_labels_for_messages(affected_ids)
 
         return Response({'updated': updated})

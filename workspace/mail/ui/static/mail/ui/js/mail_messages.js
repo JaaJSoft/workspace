@@ -433,15 +433,23 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       this.batchInProgress = true;
       // Optimistic UI update
       this._optimisticRemoveMessages(msgUuids);
-      await this._fetch('/api/v1/mail/messages/batch-action', {
-        method: 'POST',
-        body: {
-          message_ids: msgUuids,
-          action: 'move',
-          target_folder_id: targetFolder.uuid,
-        },
-      });
-      this.batchInProgress = false;
+      try {
+        const res = await this._fetch('/api/v1/mail/messages/batch-action', {
+          method: 'POST',
+          body: {
+            message_ids: msgUuids,
+            action: 'move',
+            target_folder_id: targetFolder.uuid,
+          },
+        });
+        if (!res.ok) throw new Error('Move failed');
+      } catch (e) {
+        // Reinserting removed messages at their original positions in a paged
+        // list is fragile; reload to reconcile with the server.
+        await this.loadMessages();
+      } finally {
+        this.batchInProgress = false;
+      }
     },
 
     async _showMoveDialog(msgUuids) {

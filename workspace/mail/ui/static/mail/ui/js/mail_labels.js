@@ -147,10 +147,18 @@ window.mailLabelsMixin = function mailLabelsMixin() {
       const hasLabel = this._msgCtxHasLabel(label.uuid);
       const adding = !hasLabel;
 
-      // Optimistic UI update
+      // Snapshot for rollback on failure (shallow-copy each labels array
+      // so the live mutation below cannot poison the snapshot).
+      const snapshots = [];
       for (const msgId of ids) {
         const msg = this.messages.find(m => m.uuid === msgId);
         if (!msg) continue;
+        snapshots.push({ msg, prevLabels: msg.labels ? [...msg.labels] : msg.labels });
+      }
+      const prevUnreadCount = label.unread_count;
+
+      // Optimistic UI update
+      for (const { msg } of snapshots) {
         if (!msg.labels) msg.labels = [];
         if (adding) {
           if (!msg.labels.some(l => l.uuid === label.uuid)) {
@@ -165,13 +173,19 @@ window.mailLabelsMixin = function mailLabelsMixin() {
 
       const method = adding ? 'POST' : 'DELETE';
       try {
-        await Promise.all(ids.map(msgId =>
-          this._fetch(`/api/v1/mail/messages/${msgId}/labels`, {
+        await Promise.all(ids.map(async msgId => {
+          const res = await this._fetch(`/api/v1/mail/messages/${msgId}/labels`, {
             method,
             body: { label_ids: [label.uuid] },
-          })
-        ));
+          });
+          if (!res.ok) throw new Error('Toggle label failed');
+        }));
       } catch (e) {
+        // Rollback the optimistic mutation so the UI doesn't lie.
+        for (const { msg, prevLabels } of snapshots) {
+          msg.labels = prevLabels;
+        }
+        label.unread_count = prevUnreadCount;
         console.warn('Toggle label failed:', e);
       }
     },

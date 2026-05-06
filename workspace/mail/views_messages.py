@@ -340,7 +340,7 @@ class MailBatchActionView(APIView):
                         logger.warning("IMAP %s failed for message %s: %s", scrub(action), msg.uuid, scrub(e))
                 processed += 1
             except Exception:
-                logger.warning("Batch action '%s' failed for message %s", action, msg.uuid)
+                logger.warning("Batch action '%s' failed for message %s", scrub(action), msg.uuid)
 
         from .services.label_counts import refresh_labels_for_messages
         from .views import _refresh_folders_counts_bulk

@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from workspace.common.cache import invalidate_tags
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.uuids import parse_uuid_or_none
 from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
 from .services.notifications import _user_tag, get_unread_count
@@ -38,14 +39,18 @@ class NotificationListView(CacheControlMixin, APIView):
         if search:
             qs = qs.filter(Q(title__icontains=search) | Q(body__icontains=search))
 
-        # Simple cursor pagination via ?before=<uuid>
+        # Simple cursor pagination via ?before=<uuid>. A malformed cursor
+        # falls back to "no cursor" instead of letting UUIDField.to_python
+        # raise ValidationError -> 500.
         before = request.query_params.get('before')
         if before:
-            try:
-                cursor_notif = Notification.objects.get(uuid=before)
-                qs = qs.filter(created_at__lt=cursor_notif.created_at)
-            except Notification.DoesNotExist:
-                pass
+            before_uuid = parse_uuid_or_none(before)
+            if before_uuid is not None:
+                try:
+                    cursor_notif = Notification.objects.get(uuid=before_uuid)
+                    qs = qs.filter(created_at__lt=cursor_notif.created_at)
+                except Notification.DoesNotExist:
+                    pass
 
         limit = min(int(request.query_params.get('limit', 20)), 50)
         notifications = list(qs[:limit + 1])

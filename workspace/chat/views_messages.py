@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.uuids import parse_uuid_or_none
 from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedMessage, Reaction
 from .serializers import (
     MessageCreateSerializer,
@@ -67,13 +68,19 @@ class MessageListView(CacheControlMixin, APIView):
         )
 
         if before:
-            try:
-                cursor_msg = Message.objects.get(uuid=before)
-                messages = messages.filter(created_at__lt=cursor_msg.created_at)
-            except Message.DoesNotExist:
-                # Unknown cursor: treat as "no cursor" and return the most
-                # recent page instead of erroring out.
-                logger.debug('Ignoring unknown ?before cursor: %s', scrub(before))
+            before_uuid = parse_uuid_or_none(before)
+            if before_uuid is None:
+                # Malformed cursor: treat as "no cursor" instead of letting
+                # UUIDField.to_python raise ValidationError -> 500.
+                logger.debug('Ignoring malformed ?before cursor: %s', scrub(before))
+            else:
+                try:
+                    cursor_msg = Message.objects.get(uuid=before_uuid)
+                    messages = messages.filter(created_at__lt=cursor_msg.created_at)
+                except Message.DoesNotExist:
+                    # Unknown cursor: treat as "no cursor" and return the most
+                    # recent page instead of erroring out.
+                    logger.debug('Ignoring unknown ?before cursor: %s', scrub(before))
 
         # Get limit+1 to check has_more
         messages = messages.order_by('-created_at')[:limit + 1]

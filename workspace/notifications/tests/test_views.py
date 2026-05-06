@@ -72,6 +72,15 @@ class NotificationListTests(NotifViewMixin, APITestCase):
         self.assertTrue(resp.data['has_more'])
         self.assertEqual(len(resp.data['notifications']), 5)
 
+    def test_malformed_before_cursor_falls_back_to_no_cursor(self):
+        """Regression: a non-UUID ?before used to crash with 500 because
+        UUIDField.to_python raised ValidationError outside the
+        DoesNotExist except. It now falls back to "no cursor"."""
+        self._make_notif()
+        resp = self.client.get(self.URL, {'before': 'not-a-uuid'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data['notifications']), 1)
+
 
 class NotificationDetailTests(NotifViewMixin, APITestCase):
 

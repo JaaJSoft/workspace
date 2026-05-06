@@ -4,6 +4,7 @@ from django.db.models import Exists, OuterRef
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File, Tag
 from workspace.files.services import FileService
 from workspace.users.services.settings import get_setting, set_setting
@@ -74,9 +75,13 @@ def _ensure_default_folders(user):
     changed = False
 
     # ── Notes folder ──
+    # ``prefs`` is user-controlled JSON written via the settings API. A
+    # malformed ``defaultFolderUuid`` would otherwise crash the notes UI
+    # with ValidationError -> 500 from UUIDField.to_python.
     notes_folder = None
-    if prefs.get('defaultFolderUuid'):
-        notes_folder = folders.filter(uuid=prefs['defaultFolderUuid']).first()
+    default_folder_uuid = parse_uuid_or_none(prefs.get('defaultFolderUuid'))
+    if default_folder_uuid is not None:
+        notes_folder = folders.filter(uuid=default_folder_uuid).first()
 
     if not notes_folder:
         notes_folder = folders.filter(name='Notes', parent__isnull=True).first()
@@ -89,8 +94,9 @@ def _ensure_default_folders(user):
 
     # ── Journal folder (migrate from root if needed) ──
     journal_folder = None
-    if prefs.get('journalFolderUuid'):
-        journal_folder = folders.filter(uuid=prefs['journalFolderUuid']).first()
+    journal_folder_uuid = parse_uuid_or_none(prefs.get('journalFolderUuid'))
+    if journal_folder_uuid is not None:
+        journal_folder = folders.filter(uuid=journal_folder_uuid).first()
 
     if not journal_folder:
         # Check for legacy root-level Journal

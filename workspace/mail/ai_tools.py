@@ -1,5 +1,6 @@
 """AI tools for the Mail module."""
 import json
+import uuid as uuid_mod
 
 from pydantic import BaseModel, Field
 
@@ -7,7 +8,10 @@ from workspace.ai.tool_registry import ToolProvider, tool
 
 
 class ReadEmailParams(BaseModel):
-    uuid: str = Field(description="The UUID of the email message to read.")
+    # Typed as ``uuid.UUID`` so Pydantic rejects malformed values at the
+    # tool-call boundary, before reaching ``filter(uuid=...)`` which would
+    # otherwise raise ValidationError -> 500.
+    uuid: uuid_mod.UUID = Field(description="The UUID of the email message to read.")
 
 
 class SearchEmailsParams(BaseModel):
@@ -24,14 +28,11 @@ class MailToolProvider(ToolProvider):
         """Read the full content of an email by its UUID: subject, sender, recipients, date, and body text. \
 Call this after finding an email via search_emails to get its complete content, \
 or when the user asks to read, open, or see the details of a specific email."""
-        email_uuid = args.uuid.strip()
-        if not email_uuid:
-            return 'Error: uuid is required'
         from workspace.mail.models import MailMessage
         from workspace.mail.queries import user_account_ids
         msg = (
             MailMessage.objects
-            .filter(uuid=email_uuid, account_id__in=user_account_ids(user), deleted_at__isnull=True)
+            .filter(uuid=args.uuid, account_id__in=user_account_ids(user), deleted_at__isnull=True)
             .select_related('folder', 'account')
             .first()
         )

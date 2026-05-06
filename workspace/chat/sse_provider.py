@@ -5,6 +5,7 @@ from datetime import timedelta
 from django.db.models import Prefetch
 from django.utils import timezone
 
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.sse_registry import SSEProvider
 from .models import ConversationMember, Message, MessageLinkPreview, PinnedMessage, Reaction
 from .serializers import MessageSerializer
@@ -21,10 +22,13 @@ class ChatSSEProvider(SSEProvider):
         # Get conversations user is a member of
         self._member_conv_ids = set(user_conversation_ids(user))
 
-        # Determine "since" timestamp
-        if last_event_id:
+        # Determine "since" timestamp. A malformed Last-Event-ID header
+        # (non-UUID) must not crash the SSE stream with a ValidationError
+        # -> 500: fall back to "now" just like an unknown UUID does.
+        last_event_uuid = parse_uuid_or_none(last_event_id) if last_event_id else None
+        if last_event_uuid is not None:
             try:
-                msg = Message.objects.get(uuid=last_event_id)
+                msg = Message.objects.get(uuid=last_event_uuid)
                 self._since = msg.created_at
             except Message.DoesNotExist:
                 self._since = timezone.now()

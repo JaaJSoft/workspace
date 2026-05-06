@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from workspace.common.uuids import parse_uuid_or_none
 from .models import MailAttachment
+from .queries import user_account_ids
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +23,11 @@ class MailAttachmentDownloadView(APIView):
         try:
             attachment = MailAttachment.objects.select_related(
                 'message__account',
-            ).get(uuid=uuid)
+            ).get(
+                uuid=uuid,
+                message__account_id__in=user_account_ids(request.user),
+            )
         except MailAttachment.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-        if attachment.message.account.owner != request.user:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         # A vanished blob (storage cleanup, migration, manual deletion) would
@@ -63,15 +64,15 @@ class MailAttachmentSaveToFilesView(APIView):
         try:
             attachment = MailAttachment.objects.select_related(
                 'message__account',
-            ).get(uuid=uuid)
+            ).get(
+                uuid=uuid,
+                message__account_id__in=user_account_ids(request.user),
+            )
         except MailAttachment.DoesNotExist:
             return Response(
                 {'detail': 'Attachment not found.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-
-        if attachment.message.account.owner != request.user:
-            return Response(status=status.HTTP_404_NOT_FOUND)
 
         # Resolve target folder
         parent = None
@@ -84,11 +85,9 @@ class MailAttachmentSaveToFilesView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             try:
-                parent = File.objects.get(
+                parent = FileService.user_files_qs(request.user).get(
                     uuid=folder_uuid,
-                    owner=request.user,
                     node_type=File.NodeType.FOLDER,
-                    deleted_at__isnull=True,
                 )
             except File.DoesNotExist:
                 return Response(

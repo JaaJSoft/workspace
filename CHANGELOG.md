@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.19.0 – Stability & Polish
+
+### Highlights
+
+A reliability and polish release. Mail data integrity is hardened against IMAP failures: failed moves no longer lose mail, deleted drafts stay deleted, and folders with accented names rename correctly. File operations are safer too, with atomic locking, ownership-checked release, streaming copies, and content that follows folder moves. The changelog page is redesigned with a vertical timeline and sticky version navigation, and the dashboard now shows ongoing and all-day events as upcoming. Pages and listings load faster across the app.
+
+### Mail
+
+- Moving messages no longer risks losing mail when the IMAP server returns a failure mid-operation
+- Saving a draft no longer risks overwriting the previous version on a partial IMAP failure
+- Drafts deleted locally no longer reappear after a refresh when the IMAP delete fails
+- Folders with accented characters now rename correctly instead of creating ghost folders
+- Folder sync errors are now visible per-folder instead of being hidden when others succeed
+- Zero-byte attachments are now preserved
+- Unread counts on labels stay in sync after every batch action and folder mark-as-read
+- Network errors during account or message actions no longer leave dialogs in a locked state
+- Quick selection changes no longer briefly show the previous folder's messages or another contact's autocomplete results
+- Trying to hide a special folder no longer leaves it half-renamed
+- Saving a mail attachment to Files handles missing original blobs cleanly instead of returning a server error
+
+### Files
+
+- File locks behave correctly under concurrent acquire attempts
+- Only the lock holder can release a file lock
+- Copying files and folders is more memory-efficient and reliable for large content
+- Copying or moving a file no longer briefly widens its access while the operation is in flight
+- Moving a file or folder over WebDAV now relocates the underlying content alongside the metadata, instead of leaving the bytes at the old path
+- Replacing an image's bytes through the API regenerates its thumbnail instead of serving the stale one
+- Legacy root-level "Journal" folder is migrated correctly into the Notes hierarchy on first load, with no orphaned notes
+- AI image edits with malformed input return a clear error instead of crashing the request
+
+### Chat
+
+- Direct messages and group conversations now share a single recency-sorted list in the sidebar
+- Reactions, edits, link previews, pins, and read receipts no longer jump the message view to the top while you're scrolled up
+- Switching conversations while messages are loading no longer briefly shows the previous conversation's messages
+- @mention with no matches no longer swallows Enter when sending a message
+
+### Dashboard
+
+- Upcoming events widget now includes all-day events and events already in progress
+- Upcoming events widget loads with a skeleton placeholder so the dashboard renders sooner
+- Show or hide the upcoming events widget from your preferences
+
+### Changelog page
+
+- Redesigned with a vertical timeline and per-version titles
+- Sticky version navigation on the side, with the active version highlighted as you scroll between sections
+
+### Performance
+
+- Faster listings and notification queries
+- Smoother live updates with longer-lived connections and fewer reconnect blips
+- Theme and timezone load with the page, removing the brief flash of the default theme on first paint
+- Calendar, Files, and dashboard pages open faster on first load
+
+### Security
+
+- Malformed UUIDs in URL parameters now return a clean 4xx instead of a 500 error
+- User-controlled values are sanitized before logging to prevent log injection
+- File uploads use stricter file system permissions
+
 ## 0.18.0 — Performance & Reliability
 
 ### Highlights

@@ -13,7 +13,7 @@ User = get_user_model()
 def sync_all_accounts(self):
     """Sync all active mail accounts. Scheduled via Celery Beat."""
     from workspace.mail.models import MailAccount
-    from workspace.mail.services.imap import sync_account
+    from workspace.mail.services.imap_sync import sync_account
 
     accounts = MailAccount.objects.filter(is_active=True).select_related('owner')
     total = {'synced': 0, 'errors': 0}
@@ -36,7 +36,7 @@ def sync_all_accounts(self):
 def sync_single_account(self, account_uuid):
     """Sync a single mail account on demand."""
     from workspace.mail.models import MailAccount
-    from workspace.mail.services.imap import sync_account
+    from workspace.mail.services.imap_sync import sync_account
 
     try:
         account = MailAccount.objects.get(uuid=account_uuid, is_active=True)

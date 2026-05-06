@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
-from workspace.mail.services.imap import _reconcile_folder
+from workspace.mail.services.imap_sync import _reconcile_folder
 
 User = get_user_model()
 
@@ -214,6 +214,39 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         self.assertFalse(msg200.is_read)
         self.assertFalse(msg200.is_starred)
 
+    def test_label_unread_count_recomputed_when_marking_read(self):
+        """Marking a message read during sync must refresh MailLabel.unread_count
+        for any label attached to that message - otherwise the sidebar badge
+        stays stale until the next user-side toggle."""
+        from workspace.mail.models import MailLabel, MailMessageLabel
+        msg = self._make_msg(100, is_read=False)
+        label = MailLabel.objects.create(
+            account=self.account, name='Important', unread_count=1,
+        )
+        MailMessageLabel.objects.create(message=msg, label=label)
+
+        conn = self._mock_conn([100], flags={100: r'\Seen'})
+        _reconcile_folder(conn, self.folder)
+
+        label.refresh_from_db()
+        self.assertEqual(label.unread_count, 0)
+
+    def test_label_unread_count_recomputed_when_marking_unread(self):
+        """The reverse direction: server marked a message unread, label
+        unread_count should reflect the increment."""
+        from workspace.mail.models import MailLabel, MailMessageLabel
+        msg = self._make_msg(100, is_read=True)
+        label = MailLabel.objects.create(
+            account=self.account, name='Important', unread_count=0,
+        )
+        MailMessageLabel.objects.create(message=msg, label=label)
+
+        conn = self._mock_conn([100], flags={100: ''})
+        _reconcile_folder(conn, self.folder)
+
+        label.refresh_from_db()
+        self.assertEqual(label.unread_count, 1)
+
     def test_flag_fetch_failure_skips_update(self):
         """Flag update is skipped when UID FETCH fails."""
         self._make_msg(100, is_read=False)
@@ -237,7 +270,7 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
 class SyncReconciliationIntegrationTests(ReconcileFolderMixin, TestCase):
     """Tests that sync_folder_messages always runs reconciliation."""
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_sync.connect_imap')
     def test_reconciliation_runs_with_no_new_messages(self, mock_connect):
         """Reconciliation runs even when there are no new UIDs to fetch."""
         self.folder.last_sync_uid = 500
@@ -274,9 +307,54 @@ class SyncReconciliationIntegrationTests(ReconcileFolderMixin, TestCase):
         conn.logout.return_value = ('OK', [b'BYE'])
         mock_connect.return_value = conn
 
-        from workspace.mail.services.imap import sync_folder_messages
+        from workspace.mail.services.imap_sync import sync_folder_messages
         sync_folder_messages(self.account, self.folder)
 
         # Reconciliation should have soft-deleted the message
         msg.refresh_from_db()
         self.assertIsNotNone(msg.deleted_at)
+
+    @patch('workspace.mail.services.imap_sync.connect_imap')
+    def test_last_sync_uid_advances_for_already_present_messages(self, mock_connect):
+        """When FETCH returns UIDs that _parse_message recognises as already
+        in DB (returns None), max_uid must still advance so last_sync_uid
+        moves forward. Otherwise after a crash mid-sync we'd re-FETCH the
+        same UIDs every time."""
+        self.folder.last_sync_uid = 41
+        self.folder.uid_validity = 12345
+        self.folder.save()
+
+        # Message UID 42 is already in DB (simulates a crash after persist
+        # but before last_sync_uid update).
+        self._make_msg(42)
+
+        conn = MagicMock()
+        conn.select.return_value = ('OK', [b'1'])
+        conn.untagged_responses = {'OK': [b'[UIDVALIDITY 12345]']}
+
+        def uid_side_effect(cmd, *args):
+            if cmd == 'SEARCH':
+                search_arg = str(args[1]) if len(args) > 1 else ''
+                if 'UID 42:' in search_arg:
+                    return ('OK', [b'42'])
+                # Reconciliation SEARCH ALL: keep UID 42 present so it isn't
+                # soft-deleted by the reconciliation step.
+                return ('OK', [b'42'])
+            if cmd == 'FETCH':
+                # _parse_message will short-circuit on MailMessage.exists() so
+                # the body doesn't have to be a real RFC822 message.
+                return ('OK', [(b'1 (UID 42 FLAGS ())', b'')])
+            return ('OK', [b''])
+
+        conn.uid.side_effect = uid_side_effect
+        conn.logout.return_value = ('OK', [b'BYE'])
+        mock_connect.return_value = conn
+
+        from workspace.mail.services.imap_sync import sync_folder_messages
+        sync_folder_messages(self.account, self.folder)
+
+        self.folder.refresh_from_db()
+        self.assertGreaterEqual(
+            self.folder.last_sync_uid, 42,
+            "last_sync_uid must advance past confirmed-present UIDs",
+        )

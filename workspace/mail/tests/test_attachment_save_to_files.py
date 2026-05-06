@@ -117,7 +117,7 @@ class MailAttachmentSaveToFilesTests(APITestCase):
         """
         from rest_framework.test import APIRequestFactory, force_authenticate
 
-        from workspace.mail.views import MailAttachmentSaveToFilesView
+        from workspace.mail.views_attachments import MailAttachmentSaveToFilesView
 
         factory = APIRequestFactory()
         request = factory.post(self.url, data={}, format='json')

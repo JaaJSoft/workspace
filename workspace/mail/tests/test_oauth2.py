@@ -251,12 +251,12 @@ class ConnectImapOAuth2Test(TestCase):
         })
         self.account.save()
 
-    @patch('workspace.mail.services.imap.imaplib')
+    @patch('workspace.mail.services.imap_connection.imaplib')
     @patch('workspace.mail.services.oauth2.get_valid_access_token', return_value='test-token')
     def test_uses_xoauth2_for_oauth2_accounts(self, mock_token, mock_imaplib):
         mock_conn = MagicMock()
         mock_imaplib.IMAP4_SSL.return_value = mock_conn
-        from workspace.mail.services.imap import connect_imap
+        from workspace.mail.services.imap_connection import connect_imap
         connect_imap(self.account)
         mock_conn.authenticate.assert_called_once()
         args = mock_conn.authenticate.call_args
@@ -266,14 +266,14 @@ class ConnectImapOAuth2Test(TestCase):
         self.assertIn(b'user=user@gmail.com', auth_bytes)
         self.assertIn(b'auth=Bearer test-token', auth_bytes)
 
-    @patch('workspace.mail.services.imap.imaplib')
+    @patch('workspace.mail.services.imap_connection.imaplib')
     def test_uses_login_for_password_accounts(self, mock_imaplib):
         self.account.auth_method = 'password'
         self.account.set_password('mypass')
         self.account.save()
         mock_conn = MagicMock()
         mock_imaplib.IMAP4_SSL.return_value = mock_conn
-        from workspace.mail.services.imap import connect_imap
+        from workspace.mail.services.imap_connection import connect_imap
         connect_imap(self.account)
         mock_conn.login.assert_called_once_with('user@gmail.com', 'mypass')
         mock_conn.authenticate.assert_not_called()

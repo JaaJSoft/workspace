@@ -38,6 +38,11 @@ class MailLabelCRUDTests(TestCase):
         resp = self.client.get(f'/api/v1/mail/labels?account={acc2.uuid}')
         self.assertEqual(resp.status_code, 404)
 
+    def test_list_malformed_account_id_returns_404(self):
+        """Non-UUID account param must not crash with ValidationError -> 500."""
+        resp = self.client.get('/api/v1/mail/labels?account=not-a-uuid')
+        self.assertEqual(resp.status_code, 404)
+
     def test_create_label(self):
         resp = self.client.post('/api/v1/mail/labels', {
             'account_id': str(self.account.uuid),

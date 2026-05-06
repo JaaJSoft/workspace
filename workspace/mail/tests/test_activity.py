@@ -56,7 +56,7 @@ class MailActivityProviderTests(TestCase):
         MailMessage.objects.create(
             account=self.account, folder=self.inbox, imap_uid=1,
             subject='Received 1', date=self.ts,
-            from_address={'name': 'External', 'address': 'ext@example.com'},
+            from_address={'name': 'External', 'email': 'ext@example.com'},
         )
         MailMessage.objects.create(
             account=self.account, folder=self.inbox, imap_uid=2,
@@ -136,6 +136,18 @@ class MailActivityProviderTests(TestCase):
         events = self.provider.get_recent_events(None)
         received_1 = next(e for e in events if e['description'] == 'Received 1')
         self.assertEqual(received_1['actor']['full_name'], 'External')
+
+    def test_recent_events_received_actor_falls_back_to_email_key(self):
+        """When from_address has no name, actor must fall back to the 'email'
+        key produced by _parse_address - not a legacy 'address' key."""
+        MailMessage.objects.create(
+            account=self.account, folder=self.inbox, imap_uid=10,
+            subject='No name sender', date=self.ts,
+            from_address={'name': '', 'email': 'noname@example.com'},
+        )
+        events = self.provider.get_recent_events(None)
+        evt = next(e for e in events if e['description'] == 'No name sender')
+        self.assertEqual(evt['actor']['full_name'], 'noname@example.com')
 
     def test_recent_events_respects_limit_and_offset(self):
         events = self.provider.get_recent_events(None, limit=2, offset=0)

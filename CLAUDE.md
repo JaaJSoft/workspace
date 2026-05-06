@@ -245,6 +245,45 @@ logger.exception("Activity provider '%s' failed", scrub(source))
 - Internal/system values that never touched user input (settings keys, hard-coded enum members, `__name__`, computed counts) don't need `scrub()`. Apply it to the *tainted* fields, not the whole format string.
 - The helper lives in `workspace/common/logging_safe.py`. The `str(...).replace('\r','').replace('\n','')` chain inside is the exact form CodeQL recognizes as a sanitizer for `py/log-injection` — do not refactor the replaces away or wrap them in another helper.
 
+### Query parameter parsing - never trust raw values from `request.query_params` or `request.data`
+
+Two recurring bugs land here, both because Python's loose typing or Django's deep-cleaning layer surface as confusing 500s instead of clean 4xxs:
+
+**UUID parameters - validate at the boundary.** Passing a raw string straight to `Model.objects.get(uuid=...)`, `filter(uuid=...)`, or `Q(...uuid=...)` lets `UUIDField.to_python` raise `ValidationError` deep inside Django's cleaning layer. The surrounding `except Model.DoesNotExist` does **not** catch it - the exception escapes the view as a 500. Use `workspace.common.uuids.parse_uuid_or_none` instead:
+
+```python
+from workspace.common.uuids import parse_uuid_or_none
+
+account_id = request.query_params.get('account')
+if account_id:
+    account_uuid = parse_uuid_or_none(account_id)
+    if account_uuid is None:
+        return Response(status=status.HTTP_404_NOT_FOUND)  # or 400 for collection filters
+    try:
+        account = MailAccount.objects.get(uuid=account_uuid, owner=request.user)
+    except MailAccount.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+```
+
+When the UUID identifies a single resource (folder, account, label by id), map malformed input to **404** - the resource doesn't exist either way and 404 avoids leaking "format invalid" vs "not found". When it's a collection filter (e.g. `?account_id=` on a search endpoint), prefer **400** so the client sees the bug. URL kwargs declared with the `<uuid:>` path converter (e.g. `path('.../<uuid:uuid>', ...)`) are validated by Django at routing time, so they don't need this helper.
+
+**Boolean parameters - never use Python truthiness on a string.** `if request.query_params.get('unread'):` is wrong: a non-empty string like `'false'` or `'0'` is truthy in Python, so a URL like `?unread=false` *enables* the filter the user is trying to disable. Use `workspace.common.booleans.is_truthy`, which mirrors DRF's `BooleanField.TRUE_VALUES`:
+
+```python
+from workspace.common.booleans import is_truthy
+
+if is_truthy(request.query_params.get('unread')):
+    qs = qs.filter(is_read=False)
+```
+
+Accepted true values: `true`, `1`, `yes`, `on`, `t`, `y` (case-insensitive). Everything else - including unknown strings, empty, `None`, and the false values - yields `False`. Permissive on purpose: a malformed boolean shouldn't 400 a search endpoint.
+
+**Rules:**
+
+- Every `objects.get(uuid=<request_value>)` or `filter(uuid=<request_value>)` in a view, AI tool args, or SSE handler must validate via `parse_uuid_or_none` first - unless the value is already typed (DRF serializer `UUIDField`, Pydantic `UUID`, URL `<uuid:>` converter).
+- Every `if request.query_params.get('<flag>'):` that gates a filter or feature must use `is_truthy(...)` instead.
+- For Pydantic-backed AI tool args, type the field as `uuid.UUID` rather than `str` so Pydantic rejects garbage at the tool-call boundary with a diagnostic error.
+
 ### Copying file content between rows - never assign a `FieldFile` directly
 
 When duplicating an existing file/attachment into a new row (chat `save-to-files`, mail `save-to-files`, files `copy_node`, anything similar), **never** assign the source `FieldFile` straight to the destination model's `FileField`. Doing so makes both rows point at the same blob in storage, so deleting the source later silently breaks the destination.

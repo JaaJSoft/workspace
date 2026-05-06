@@ -311,6 +311,13 @@ class AccountFilterTests(AutocompleteTestMixin, APITestCase):
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]['email'], 'alice@filter.com')
 
+    def test_malformed_account_id_returns_400(self):
+        """A non-UUID account_id must be rejected with 400 - passing it
+        straight to Q(account__uuid=...) crashes deep in Django's UUIDField
+        cleaning layer and surfaces as a bare 500."""
+        resp = self.client.get(URL, {'q': 'whatever', 'account_id': 'not-a-uuid'})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_other_user_messages_not_visible(self):
         """Messages from another user's account should never appear."""
         self._create_message(

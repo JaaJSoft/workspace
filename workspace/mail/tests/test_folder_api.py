@@ -132,6 +132,14 @@ class MailFolderListTests(MailTestMixin, APITestCase):
         resp = self.client.get(self.url, {'account': self.other_account.uuid})
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_malformed_account_id_returns_400(self):
+        """Non-UUID account param on a collection endpoint must return 400
+        (client error), distinct from 404 (well-formed UUID that doesn't
+        resolve to an accessible account)."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(self.url, {'account': 'not-a-uuid'})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
 
 class MailFolderCreateTests(MailTestMixin, APITestCase):
     """Tests for POST /api/v1/mail/folders"""
@@ -142,7 +150,7 @@ class MailFolderCreateTests(MailTestMixin, APITestCase):
         resp = self.client.post(self.url, {}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch('workspace.mail.services.imap.create_folder')
+    @patch('workspace.mail.services.imap_folders.create_folder')
     def test_create_folder(self, mock_create):
         folder = MailFolder.objects.create(
             account=self.account,
@@ -178,7 +186,7 @@ class MailFolderCreateTests(MailTestMixin, APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    @patch('workspace.mail.services.imap.create_folder', side_effect=Exception('IMAP error'))
+    @patch('workspace.mail.services.imap_folders.create_folder', side_effect=Exception('IMAP error'))
     def test_create_folder_imap_failure(self, mock_create):
         self.client.force_authenticate(self.user)
         resp = self.client.post(self.url, {
@@ -274,7 +282,7 @@ class MailFolderRenameTests(MailTestMixin, APITestCase):
     def _url(self, folder):
         return f'/api/v1/mail/folders/{folder.uuid}'
 
-    @patch('workspace.mail.services.imap.rename_folder')
+    @patch('workspace.mail.services.imap_folders.rename_folder')
     def test_rename_folder(self, mock_rename):
         def side_effect(account, folder, new_name):
             folder.name = new_name
@@ -295,14 +303,14 @@ class MailFolderRenameTests(MailTestMixin, APITestCase):
     def test_rename_same_name_no_imap_call(self):
         """Renaming to the same name should not call IMAP."""
         self.client.force_authenticate(self.user)
-        with patch('workspace.mail.services.imap.rename_folder') as mock_rename:
+        with patch('workspace.mail.services.imap_folders.rename_folder') as mock_rename:
             resp = self.client.patch(self._url(self.custom), {
                 'display_name': 'MyFolder',  # same name
             }, format='json')
             self.assertEqual(resp.status_code, status.HTTP_200_OK)
             mock_rename.assert_not_called()
 
-    @patch('workspace.mail.services.imap.rename_folder', side_effect=Exception('IMAP error'))
+    @patch('workspace.mail.services.imap_folders.rename_folder', side_effect=Exception('IMAP error'))
     def test_rename_imap_failure(self, mock_rename):
         self.client.force_authenticate(self.user)
         resp = self.client.patch(self._url(self.custom), {
@@ -315,7 +323,7 @@ class MailFolderRenameTests(MailTestMixin, APITestCase):
 
     def test_rename_with_icon_combined(self):
         """Icon/color and rename can be sent together."""
-        with patch('workspace.mail.services.imap.rename_folder') as mock_rename:
+        with patch('workspace.mail.services.imap_folders.rename_folder') as mock_rename:
             def side_effect(account, folder, new_name):
                 folder.name = new_name
                 folder.display_name = new_name
@@ -352,7 +360,7 @@ class MailFolderMoveTests(MailTestMixin, APITestCase):
     def _url(self, folder):
         return f'/api/v1/mail/folders/{folder.uuid}'
 
-    @patch('workspace.mail.services.imap.move_folder')
+    @patch('workspace.mail.services.imap_folders.move_folder')
     def test_move_folder_to_parent(self, mock_move):
         """Move a root folder under another folder."""
         parent = MailFolder.objects.create(
@@ -374,7 +382,7 @@ class MailFolderMoveTests(MailTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         mock_move.assert_called_once_with(self.account, self.custom, 'Work')
 
-    @patch('workspace.mail.services.imap.move_folder')
+    @patch('workspace.mail.services.imap_folders.move_folder')
     def test_move_folder_to_root(self, mock_move):
         """Move a subfolder to root using empty parent_name."""
         subfolder = MailFolder.objects.create(
@@ -405,7 +413,7 @@ class MailFolderMoveTests(MailTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('special folder', resp.data['detail'].lower())
 
-    @patch('workspace.mail.services.imap.move_folder', side_effect=Exception('IMAP error'))
+    @patch('workspace.mail.services.imap_folders.move_folder', side_effect=Exception('IMAP error'))
     def test_move_imap_failure(self, mock_move):
         self.client.force_authenticate(self.user)
         resp = self.client.patch(self._url(self.custom), {
@@ -434,7 +442,7 @@ class MailFolderDeleteTests(MailTestMixin, APITestCase):
         resp = self.client.delete(self._url(self.custom))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch('workspace.mail.services.imap.delete_folder')
+    @patch('workspace.mail.services.imap_folders.delete_folder')
     def test_delete_custom_folder(self, mock_delete):
         self.client.force_authenticate(self.user)
         folder_uuid = self.custom.uuid
@@ -458,7 +466,7 @@ class MailFolderDeleteTests(MailTestMixin, APITestCase):
         resp = self.client.delete(self._url(self.other_folder))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    @patch('workspace.mail.services.imap.delete_folder', side_effect=Exception('IMAP error'))
+    @patch('workspace.mail.services.imap_folders.delete_folder', side_effect=Exception('IMAP error'))
     def test_delete_imap_failure(self, mock_delete):
         self.client.force_authenticate(self.user)
         resp = self.client.delete(self._url(self.custom))
@@ -496,6 +504,28 @@ class MailFolderHideTests(MailTestMixin, APITestCase):
         resp = self.client.patch(self._url(self.inbox), {'is_hidden': True}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('special folder', resp.data['detail'].lower())
+
+    @patch('workspace.mail.services.imap_folders.rename_folder')
+    def test_invalid_is_hidden_skips_imap_rename(self, mock_rename):
+        """A PATCH with both display_name (which would trigger an IMAP rename)
+        AND is_hidden=true on a special folder must reject WITHOUT performing
+        the rename - otherwise IMAP and DB go out of sync (rename happened but
+        the 400 prevents the local save)."""
+        self.client.force_authenticate(self.user)
+        original_name = self.inbox.name
+        original_display = self.inbox.display_name
+
+        resp = self.client.patch(
+            self._url(self.inbox),
+            {'display_name': 'Renamed', 'is_hidden': True},
+            format='json',
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        mock_rename.assert_not_called()
+        self.inbox.refresh_from_db()
+        self.assertEqual(self.inbox.name, original_name)
+        self.assertEqual(self.inbox.display_name, original_display)
 
     def test_unhide_folder(self):
         self.custom.is_hidden = True
@@ -575,3 +605,24 @@ class MailFolderMarkReadTests(MailTestMixin, APITestCase):
         self.client.force_authenticate(self.user)
         resp = self.client.post(self._url(self.other_folder))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_refreshes_label_unread_count(self):
+        """Marking a folder all-read must also refresh MailLabel.unread_count
+        for any label attached to those messages, otherwise the sidebar label
+        badges stay stale until the next user-side toggle."""
+        from workspace.mail.models import MailLabel, MailMessageLabel
+
+        msg = MailMessage.objects.create(
+            account=self.account, folder=self.inbox, imap_uid=200, is_read=False,
+        )
+        label = MailLabel.objects.create(
+            account=self.account, name='Important', unread_count=1,
+        )
+        MailMessageLabel.objects.create(message=msg, label=label)
+
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(self._url(self.inbox))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        label.refresh_from_db()
+        self.assertEqual(label.unread_count, 0)

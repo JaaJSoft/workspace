@@ -4,7 +4,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
-from workspace.mail.services.imap import _quote_mailbox, create_folder, delete_folder, rename_folder
+from workspace.mail.services.imap_folders import create_folder, delete_folder, move_folder, rename_folder
+from workspace.mail.services.imap_mailbox import _quote_mailbox
 
 User = get_user_model()
 
@@ -38,7 +39,7 @@ class IMAPFolderServiceMixin:
 class CreateFolderTests(IMAPFolderServiceMixin, TestCase):
     """Tests for create_folder IMAP service."""
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_folders.connect_imap')
     def test_create_folder_success(self, mock_connect):
         mock_conn = self._mock_conn()
         mock_connect.return_value = mock_conn
@@ -54,7 +55,7 @@ class CreateFolderTests(IMAPFolderServiceMixin, TestCase):
         self.assertEqual(folder.account, self.account)
         self.assertTrue(MailFolder.objects.filter(account=self.account, name='Projects').exists())
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_folders.connect_imap')
     def test_create_folder_with_hierarchy(self, mock_connect):
         mock_conn = self._mock_conn()
         mock_connect.return_value = mock_conn
@@ -65,7 +66,7 @@ class CreateFolderTests(IMAPFolderServiceMixin, TestCase):
         self.assertEqual(folder.name, 'Work/Projects')
         self.assertEqual(folder.display_name, 'Projects')  # last segment
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_folders.connect_imap')
     def test_create_folder_imap_failure(self, mock_connect):
         mock_conn = self._mock_conn()
         mock_conn.create.return_value = ('NO', [b'Folder already exists'])
@@ -80,7 +81,7 @@ class CreateFolderTests(IMAPFolderServiceMixin, TestCase):
         )
         mock_conn.logout.assert_called_once()
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_folders.connect_imap')
     def test_create_folder_logout_on_error(self, mock_connect):
         """Logout should be called even if create raises."""
         mock_conn = self._mock_conn()
@@ -112,7 +113,7 @@ class DeleteFolderTests(IMAPFolderServiceMixin, TestCase):
                 imap_uid=200 + i,
             )
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_folders.connect_imap')
     def test_delete_folder_success(self, mock_connect):
         mock_conn = self._mock_conn()
         mock_connect.return_value = mock_conn
@@ -126,7 +127,7 @@ class DeleteFolderTests(IMAPFolderServiceMixin, TestCase):
         # Messages should also be deleted (cascade)
         self.assertFalse(MailMessage.objects.filter(folder_id=folder_uuid).exists())
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_folders.connect_imap')
     def test_delete_folder_imap_failure(self, mock_connect):
         mock_conn = self._mock_conn()
         mock_conn.delete.return_value = ('NO', [b'Cannot delete'])
@@ -139,7 +140,7 @@ class DeleteFolderTests(IMAPFolderServiceMixin, TestCase):
         self.assertTrue(MailFolder.objects.filter(uuid=self.folder.uuid).exists())
         mock_conn.logout.assert_called_once()
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_folders.connect_imap')
     def test_delete_folder_logout_on_error(self, mock_connect):
         mock_conn = self._mock_conn()
         mock_conn.delete.side_effect = Exception('Connection lost')
@@ -163,7 +164,7 @@ class RenameFolderTests(IMAPFolderServiceMixin, TestCase):
             folder_type='other',
         )
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_folders.connect_imap')
     def test_rename_folder_success(self, mock_connect):
         mock_conn = self._mock_conn()
         mock_connect.return_value = mock_conn
@@ -178,7 +179,7 @@ class RenameFolderTests(IMAPFolderServiceMixin, TestCase):
         self.assertEqual(self.folder.name, 'NewName')
         self.assertEqual(self.folder.display_name, 'NewName')
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_folders.connect_imap')
     def test_rename_folder_hierarchy(self, mock_connect):
         """Renaming to a hierarchical name extracts display_name correctly."""
         mock_conn = self._mock_conn()
@@ -189,7 +190,7 @@ class RenameFolderTests(IMAPFolderServiceMixin, TestCase):
         self.assertEqual(result.name, 'Work/Archive')
         self.assertEqual(result.display_name, 'Archive')
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_folders.connect_imap')
     def test_rename_folder_imap_failure(self, mock_connect):
         mock_conn = self._mock_conn()
         mock_conn.rename.return_value = ('NO', [b'Cannot rename'])
@@ -204,7 +205,7 @@ class RenameFolderTests(IMAPFolderServiceMixin, TestCase):
         self.assertEqual(self.folder.display_name, 'OldName')
         mock_conn.logout.assert_called_once()
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_folders.connect_imap')
     def test_rename_folder_preserves_other_fields(self, mock_connect):
         """Rename should not affect icon, color, or folder_type."""
         self.folder.icon = 'star'
@@ -221,7 +222,7 @@ class RenameFolderTests(IMAPFolderServiceMixin, TestCase):
         self.assertEqual(self.folder.color, 'text-warning')
         self.assertEqual(self.folder.folder_type, 'other')
 
-    @patch('workspace.mail.services.imap.connect_imap')
+    @patch('workspace.mail.services.imap_folders.connect_imap')
     def test_rename_folder_logout_on_error(self, mock_connect):
         mock_conn = self._mock_conn()
         mock_conn.rename.side_effect = Exception('Connection lost')
@@ -231,3 +232,51 @@ class RenameFolderTests(IMAPFolderServiceMixin, TestCase):
             rename_folder(self.account, self.folder, 'FailName')
 
         mock_conn.logout.assert_called_once()
+
+
+class MoveFolderTests(IMAPFolderServiceMixin, TestCase):
+    """Tests for move_folder IMAP service."""
+
+    @patch('workspace.mail.services.imap_folders.connect_imap')
+    def test_move_folder_uses_wire_encoded_leaf_not_display_name(self, mock_connect):
+        """A folder with non-ASCII chars must be renamed using its mUTF-7
+        wire-encoded leaf, not the Unicode-decoded display_name. Otherwise the
+        IMAP RENAME would push raw Unicode to the server and produce a
+        ghost/inaccessible folder."""
+        # &AOk-tudes is IMAP Modified UTF-7 for "Études"
+        folder = MailFolder.objects.create(
+            account=self.account,
+            name='Important/&AOk-tudes',
+            display_name='Études',  # decoded for UI
+            folder_type='other',
+        )
+        mock_conn = self._mock_conn()
+        mock_connect.return_value = mock_conn
+
+        move_folder(self.account, folder, 'Archive')
+
+        # The new name on the wire must use the original mUTF-7 leaf, not
+        # the decoded "Études".
+        mock_conn.rename.assert_called_once_with(
+            _quote_mailbox('Important/&AOk-tudes'),
+            _quote_mailbox('Archive/&AOk-tudes'),
+        )
+
+    @patch('workspace.mail.services.imap_folders.connect_imap')
+    def test_move_folder_to_root_uses_wire_leaf(self, mock_connect):
+        """Moving to root (no parent) must also use the wire-encoded leaf."""
+        folder = MailFolder.objects.create(
+            account=self.account,
+            name='Old/&AOk-tudes',
+            display_name='Études',
+            folder_type='other',
+        )
+        mock_conn = self._mock_conn()
+        mock_connect.return_value = mock_conn
+
+        move_folder(self.account, folder, '')
+
+        mock_conn.rename.assert_called_once_with(
+            _quote_mailbox('Old/&AOk-tudes'),
+            _quote_mailbox('&AOk-tudes'),
+        )

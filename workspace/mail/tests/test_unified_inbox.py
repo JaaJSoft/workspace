@@ -158,6 +158,22 @@ class UnifiedInboxListTests(UnifiedInboxTestMixin, APITestCase):
         self.assertEqual(resp.data['count'], 1)
         self.assertEqual(resp.data['results'][0]['subject'], 'Hello from account2')
 
+    def test_filter_unread_false_does_not_filter(self):
+        """Regression: ?unread=false used to apply the unread filter because
+        the truthiness check treated any non-empty string as True. Must now
+        return both read and unread messages."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(URL, {'inbox': 'all', 'unread': 'false'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['count'], 3)
+
+    def test_filter_unread_zero_does_not_filter(self):
+        """?unread=0 must not apply the filter either."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(URL, {'inbox': 'all', 'unread': '0'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['count'], 3)
+
     def test_filter_search(self):
         self.client.force_authenticate(self.user)
         resp = self.client.get(URL, {'inbox': 'all', 'search': 'account2'})
@@ -189,4 +205,41 @@ class UnifiedInboxListTests(UnifiedInboxTestMixin, APITestCase):
         """Calling without folder, label, or inbox=all returns 400."""
         self.client.force_authenticate(self.user)
         resp = self.client.get(URL)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_invalid_page_non_numeric_falls_back_to_1(self):
+        """A non-numeric page param must not crash the view with a 500 -
+        fall back to page 1 instead."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(URL, {'inbox': 'all', 'page': 'abc'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['page'], 1)
+
+    def test_invalid_page_zero_falls_back_to_1(self):
+        """page=0 would compute offset=-50 and trigger Django's
+        'Negative indexing is not supported' assertion - fall back to 1."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(URL, {'inbox': 'all', 'page': '0'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['page'], 1)
+
+    def test_invalid_page_negative_falls_back_to_1(self):
+        """A negative page value must not produce a negative offset."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(URL, {'inbox': 'all', 'page': '-3'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['page'], 1)
+
+    def test_malformed_folder_id_returns_400(self):
+        """Non-UUID folder_id must not crash with ValidationError -> 500.
+        On a collection endpoint, a malformed filter UUID is a client error
+        (400), distinct from a well-formed UUID that doesn't resolve (404)."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(URL, {'folder': 'not-a-uuid'})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_malformed_label_id_returns_400(self):
+        """Same as above for ?label=."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(URL, {'label': 'not-a-uuid'})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

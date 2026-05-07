@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from workspace.common.cache import invalidate_tags
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.uuids import parse_uuid_or_none
 from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
 from .services.notifications import _user_tag, get_unread_count
@@ -38,14 +39,29 @@ class NotificationListView(CacheControlMixin, APIView):
         if search:
             qs = qs.filter(Q(title__icontains=search) | Q(body__icontains=search))
 
-        # Simple cursor pagination via ?before=<uuid>
+        # Simple cursor pagination via ?before=<uuid>. A malformed cursor
+        # falls back to "no cursor" instead of letting UUIDField.to_python
+        # raise ValidationError -> 500.
         before = request.query_params.get('before')
         if before:
-            try:
-                cursor_notif = Notification.objects.get(uuid=before)
-                qs = qs.filter(created_at__lt=cursor_notif.created_at)
-            except Notification.DoesNotExist:
-                pass
+            before_uuid = parse_uuid_or_none(before)
+            if before_uuid is not None:
+                # Resolve the cursor inside the caller's already-scoped queryset
+                # (recipient + active filters). An unrestricted
+                # Notification.objects.get(uuid=...) would let a caller use
+                # another user's notification UUID as a cursor and read its
+                # created_at via the resulting page boundary (cross-user timing
+                # oracle).
+                cursor_created_at = (
+                    qs.filter(uuid=before_uuid)
+                    .values_list('created_at', flat=True)
+                    .first()
+                )
+                if cursor_created_at is not None:
+                    qs = qs.filter(created_at__lt=cursor_created_at)
+                # Else: stale, foreign, or filtered-out cursor - ignore and
+                # return the latest page without the created_at filter rather
+                # than 4xx-ing the client.
 
         limit = min(int(request.query_params.get('limit', 20)), 50)
         notifications = list(qs[:limit + 1])

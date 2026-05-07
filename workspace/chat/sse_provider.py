@@ -5,6 +5,7 @@ from datetime import timedelta
 from django.db.models import Prefetch
 from django.utils import timezone
 
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.sse_registry import SSEProvider
 from .models import ConversationMember, Message, MessageLinkPreview, PinnedMessage, Reaction
 from .serializers import MessageSerializer
@@ -21,13 +22,22 @@ class ChatSSEProvider(SSEProvider):
         # Get conversations user is a member of
         self._member_conv_ids = set(user_conversation_ids(user))
 
-        # Determine "since" timestamp
-        if last_event_id:
-            try:
-                msg = Message.objects.get(uuid=last_event_id)
-                self._since = msg.created_at
-            except Message.DoesNotExist:
-                self._since = timezone.now()
+        # Determine "since" timestamp. A malformed Last-Event-ID header
+        # (non-UUID) must not crash the SSE stream with a ValidationError
+        # -> 500: fall back to "now" just like an unknown UUID does.
+        # Scope the lookup to this user's member conversations so a foreign
+        # message UUID cannot leak its created_at into self._since (which
+        # would suppress replay of the user's own messages older than that
+        # timestamp - a cross-conversation timing oracle).
+        last_event_uuid = parse_uuid_or_none(last_event_id) if last_event_id else None
+        if last_event_uuid is not None:
+            msg = (
+                Message.objects
+                .filter(uuid=last_event_uuid, conversation_id__in=self._member_conv_ids)
+                .only('created_at')
+                .first()
+            )
+            self._since = msg.created_at if msg is not None else timezone.now()
         else:
             self._since = timezone.now()
 

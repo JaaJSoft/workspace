@@ -182,6 +182,16 @@ class FileTagAPITests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_add_tag_with_malformed_uuid_returns_400(self):
+        """Regression: a non-UUID 'tag' field used to crash with 500 because
+        UUIDField.to_python raised ValidationError on filter(uuid=...).
+        It now returns 400 like an invalid (well-formed) tag UUID."""
+        resp = self.client.post(
+            f'/api/v1/files/{self.file.uuid}/tags',
+            {'tag': 'not-a-uuid'},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
 
 class FileTagFilterTests(APITestCase):
 

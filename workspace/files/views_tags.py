@@ -27,6 +27,7 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
 from .models import FileTag
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FileService
 
 
@@ -38,9 +39,13 @@ class FileTagView(APIView):
         file_obj = get_object_or_404(
             FileService.user_files_qs(request.user), uuid=file_uuid,
         )
-        tag_uuid = request.data.get('tag')
-        if not tag_uuid:
+        tag_uuid_raw = request.data.get('tag')
+        if not tag_uuid_raw:
             return Response({'tag': 'This field is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        tag_uuid = parse_uuid_or_none(tag_uuid_raw)
+        if tag_uuid is None:
+            return Response({'tag': 'Invalid tag.'}, status=status.HTTP_400_BAD_REQUEST)
 
         tag = Tag.objects.filter(uuid=tag_uuid, owner=request.user).first()
         if not tag:

@@ -72,6 +72,45 @@ class NotificationListTests(NotifViewMixin, APITestCase):
         self.assertTrue(resp.data['has_more'])
         self.assertEqual(len(resp.data['notifications']), 5)
 
+    def test_malformed_before_cursor_falls_back_to_no_cursor(self):
+        """Regression: a non-UUID ?before used to crash with 500 because
+        UUIDField.to_python raised ValidationError outside the
+        DoesNotExist except. It now falls back to "no cursor"."""
+        self._make_notif()
+        resp = self.client.get(self.URL, {'before': 'not-a-uuid'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data['notifications']), 1)
+
+    def test_foreign_user_cursor_is_ignored(self):
+        """Regression: a ?before UUID belonging to another user must not
+        affect this user's pagination. Before the fix, the unrestricted
+        Notification.objects.get(uuid=...) lookup leaked the foreign
+        notification's created_at into the listing's filter, clipping the
+        page boundary - a cross-user timing oracle."""
+        early = self._make_notif(title='alice-early')
+        late = self._make_notif(title='alice-late')
+        foreign = self._make_notif(user=self.bob, title='bob-mid')
+
+        # Pin created_at order: early < foreign < late. auto_now_add prevents
+        # setting it via .save(), so use queryset .update().
+        Notification.objects.filter(pk=early.pk).update(
+            created_at='2024-01-01T10:00:00Z',
+        )
+        Notification.objects.filter(pk=foreign.pk).update(
+            created_at='2024-01-01T12:00:00Z',
+        )
+        Notification.objects.filter(pk=late.pk).update(
+            created_at='2024-01-01T13:00:00Z',
+        )
+
+        resp = self.client.get(self.URL, {'before': str(foreign.uuid)})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Both of alice's notifications must be present. If the foreign
+        # cursor's created_at had leaked, alice-late (13:00) would be filtered
+        # out by created_at__lt=12:00.
+        titles = {n['title'] for n in resp.data['notifications']}
+        self.assertEqual(titles, {'alice-early', 'alice-late'})
+
 
 class NotificationDetailTests(NotifViewMixin, APITestCase):
 

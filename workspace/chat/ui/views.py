@@ -11,6 +11,7 @@ from workspace.chat.models import Conversation, ConversationMember, Message, Mes
     PinnedMessage
 from workspace.chat.serializers import ConversationListSerializer
 from workspace.chat.services.conversations import get_active_membership, get_unread_counts, user_conversation_ids
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.ui.viewers import ViewerRegistry
 
 
@@ -230,11 +231,20 @@ def conversation_messages_view(request, conversation_uuid):
 
     before = request.GET.get('before')
     if before:
-        try:
-            cursor_msg = Message.objects.get(uuid=before)
-            qs = qs.filter(created_at__lt=cursor_msg.created_at)
-        except Message.DoesNotExist:
-            pass
+        before_uuid = parse_uuid_or_none(before)
+        if before_uuid is not None:
+            # Scope the cursor lookup to the current conversation: an unrestricted
+            # Message.objects.get(uuid=...) would let a caller use a UUID from
+            # another conversation as a cursor and read its created_at via the
+            # resulting page boundary (cross-conversation timing oracle).
+            cursor_msg = (
+                Message.objects
+                .filter(conversation_id=conversation_uuid, uuid=before_uuid)
+                .only('created_at')
+                .first()
+            )
+            if cursor_msg is not None:
+                qs = qs.filter(created_at__lt=cursor_msg.created_at)
 
     limit = 50
     messages_page = list(qs[:limit + 1])

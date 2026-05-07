@@ -1,6 +1,7 @@
 """AI tools for the Files module."""
 import base64
 import json
+import uuid as uuid_mod
 
 from pydantic import BaseModel, Field
 
@@ -8,7 +9,10 @@ from workspace.ai.tool_registry import ToolProvider, tool
 
 
 class ReadFileParams(BaseModel):
-    uuid: str = Field(description="The UUID of the file to read.")
+    # Typed as ``uuid.UUID`` so Pydantic rejects malformed values at the
+    # tool-call boundary, before reaching ``filter(uuid=...)`` which would
+    # otherwise raise ValidationError -> 500.
+    uuid: uuid_mod.UUID = Field(description="The UUID of the file to read.")
 
 
 class SearchFilesParams(BaseModel):
@@ -23,17 +27,9 @@ class FilesToolProvider(ToolProvider):
         """Read the content of a file by its UUID. Supports text files (returns text) and images (returns the image). \
 Call this after finding a file via search_files to get its content, \
 or when the user asks to read, open, view, or see a specific file."""
-        import uuid as uuid_mod
-        file_uuid = args.uuid.strip()
-        if not file_uuid:
-            return 'Error: uuid is required'
-        try:
-            uuid_mod.UUID(file_uuid)
-        except ValueError:
-            return 'Error: invalid UUID format.'
         from workspace.files.models import File
         from workspace.files.services import FileService
-        file_obj = File.objects.filter(uuid=file_uuid).select_related('owner').first()
+        file_obj = File.objects.filter(uuid=args.uuid).select_related('owner').first()
         if not file_obj or not FileService.can_access(user, file_obj):
             return 'File not found or access denied.'
         if file_obj.node_type != File.NodeType.FILE:

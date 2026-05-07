@@ -73,3 +73,36 @@ class EnsureDefaultFoldersStorageTests(TestCase):
         journal.refresh_from_db()
         self.assertIsNotNone(journal.parent_id)
         self.assertEqual(journal.parent.name, 'Notes')
+
+
+class EnsureDefaultFoldersMalformedPrefsTests(TestCase):
+    """User-controlled prefs may contain non-UUID strings; the bootstrap
+    must not crash with ValidationError -> 500."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='badprefs', email='bp@test.com', password='pass',
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_malformed_default_folder_uuid_does_not_crash(self):
+        """Regression: a non-UUID ``defaultFolderUuid`` (set via the
+        user-settings API) used to crash _ensure_default_folders because
+        UUIDField.to_python raised ValidationError on filter(uuid=...)."""
+        from workspace.users.services.settings import set_setting
+
+        set_setting(self.user, 'notes', 'preferences', {
+            'defaultFolderUuid': 'not-a-uuid',
+            'journalFolderUuid': 'also-bad',
+        })
+
+        # Did not raise: malformed UUIDs fall back to "no preference",
+        # so the bootstrap creates fresh folders as if no prefs existed.
+        prefs, changed = _ensure_default_folders(self.user)
+        self.assertTrue(changed)
+        # The bootstrap rewrote prefs with valid UUIDs.
+        from uuid import UUID
+        UUID(prefs['defaultFolderUuid'])
+        UUID(prefs['journalFolderUuid'])

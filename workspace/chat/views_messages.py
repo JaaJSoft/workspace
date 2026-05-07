@@ -74,12 +74,22 @@ class MessageListView(CacheControlMixin, APIView):
                 # UUIDField.to_python raise ValidationError -> 500.
                 logger.debug('Ignoring malformed ?before cursor: %s', scrub(before))
             else:
-                try:
-                    cursor_msg = Message.objects.get(uuid=before_uuid)
+                # Scope the cursor lookup to the current conversation: an
+                # unrestricted Message.objects.get(uuid=...) would let a caller
+                # use a UUID from another conversation as a cursor and read its
+                # created_at via the resulting page boundary (cross-conversation
+                # timing oracle).
+                cursor_msg = (
+                    Message.objects
+                    .filter(conversation_id=conversation_id, uuid=before_uuid)
+                    .only('created_at')
+                    .first()
+                )
+                if cursor_msg is not None:
                     messages = messages.filter(created_at__lt=cursor_msg.created_at)
-                except Message.DoesNotExist:
-                    # Unknown cursor: treat as "no cursor" and return the most
-                    # recent page instead of erroring out.
+                else:
+                    # Unknown cursor (no such UUID, or not in this conversation):
+                    # treat as "no cursor" and return the most recent page.
                     logger.debug('Ignoring unknown ?before cursor: %s', scrub(before))
 
         # Get limit+1 to check has_more

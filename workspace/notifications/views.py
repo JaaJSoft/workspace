@@ -46,11 +46,22 @@ class NotificationListView(CacheControlMixin, APIView):
         if before:
             before_uuid = parse_uuid_or_none(before)
             if before_uuid is not None:
-                try:
-                    cursor_notif = Notification.objects.get(uuid=before_uuid)
-                    qs = qs.filter(created_at__lt=cursor_notif.created_at)
-                except Notification.DoesNotExist:
-                    pass
+                # Resolve the cursor inside the caller's already-scoped queryset
+                # (recipient + active filters). An unrestricted
+                # Notification.objects.get(uuid=...) would let a caller use
+                # another user's notification UUID as a cursor and read its
+                # created_at via the resulting page boundary (cross-user timing
+                # oracle).
+                cursor_created_at = (
+                    qs.filter(uuid=before_uuid)
+                    .values_list('created_at', flat=True)
+                    .first()
+                )
+                if cursor_created_at is not None:
+                    qs = qs.filter(created_at__lt=cursor_created_at)
+                # Else: stale, foreign, or filtered-out cursor - ignore and
+                # return the latest page without the created_at filter rather
+                # than 4xx-ing the client.
 
         limit = min(int(request.query_params.get('limit', 20)), 50)
         notifications = list(qs[:limit + 1])

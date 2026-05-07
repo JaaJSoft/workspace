@@ -12,7 +12,6 @@ These tests pin the fix that routes user-supplied UUIDs through
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.chat.models import Conversation, ConversationMember
 from workspace.chat.sse_provider import ChatSSEProvider
 from workspace.chat.tests.test_chat import ChatTestMixin
 

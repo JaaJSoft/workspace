@@ -43,8 +43,19 @@ x-data="chatApp({{ user.id }})"
   <label for="chat-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
   <!-- Sidebar -->
-  <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
-         :class="collapsed ? 'w-16' : 'w-80'">
+  <!--
+    Base width is `w-16` on every viewport so the very first paint (before
+    Alpine binds its :class) already matches mobile's collapsed state — no
+    w-80 → w-16 flash on /chat. `lg:!w-80` (with Tailwind's !important
+    modifier) opens the sidebar on desktop unless `collapsed` is true.
+    `transition-all` is gated on `sidebarMounted` so Alpine's first bind
+    doesn't animate; it's flipped via $nextTick in chatApp.init().
+  -->
+  <aside class="bg-base-200 h-full border-r border-base-300 flex flex-col w-16"
+         :class="{
+           'lg:!w-80': !collapsed,
+           'transition-all duration-300': sidebarMounted,
+         }">
     <!-- Sidebar header -->
     <div class="border-b border-base-300 py-4 px-3">
       <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">

@@ -9,6 +9,12 @@ function chatApp(currentUserId) {
     // to w-16 once init() ran — a visible "expanded → collapsed" flicker.
     collapsed: window.matchMedia('(max-width: 1023px)').matches
       || JSON.parse(localStorage.getItem('chatSidebarCollapsed') || 'false'),
+    // Gate the sidebar's width transition. Defer-loaded Alpine binds the
+    // `:class` on the aside *after* the first paint, so any width applied
+    // here would animate from the unstyled state. Keep `transition-all`
+    // off until $nextTick has flushed the bind, then enable it for
+    // subsequent toggleCollapse() calls.
+    sidebarMounted: false,
 
     // ── Compose chatApp from domain mixins ──────────────────
     // Each mixin returns an object literal with its own state and
@@ -27,6 +33,11 @@ function chatApp(currentUserId) {
 
     // ── Init: orchestrates first paint and global listeners ─
     async init() {
+      // Re-enable the sidebar width transition after Alpine has finished
+      // its initial bind, so toggleCollapse() animates smoothly without
+      // animating the very first paint.
+      this.$nextTick(() => { this.sidebarMounted = true; });
+
       // Load conversations from embedded JSON (fast first paint)
       const dataEl = document.getElementById('conversations-data');
       if (dataEl) {

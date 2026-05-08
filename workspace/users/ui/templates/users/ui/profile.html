@@ -13,7 +13,7 @@
 <div class="py-6 space-y-6" x-data="{ now: Date.now() }">
 
   <!-- ── Profile hero ───────────────────────────────────── -->
-  <div class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+  <div class="card bg-base-100 border border-base-300 shadow-sm overflow-hidden relative">
     <!-- Banner -->
     {% if banner_gradient %}
     <div class="h-36 relative" style="background: {{ banner_gradient }}">
@@ -25,10 +25,23 @@
     </div>
     {% endif %}
 
+    <!-- Top-right action -->
+    {% if is_own_profile %}
+    <a href="{% url 'users_ui:settings' %}" class="btn btn-sm btn-ghost bg-base-100/80 backdrop-blur-sm hover:bg-base-100 text-base-content/70 hover:text-primary absolute top-3 right-3 z-10 w-8 px-0 sm:w-auto sm:px-3 gap-0 sm:gap-2" aria-label="Settings" title="Settings">
+      <i data-lucide="settings" class="w-4 h-4"></i>
+      <span class="hidden sm:inline">Settings</span>
+    </a>
+    {% else %}
+    <a href="/chat?dm={{ profile_user.id }}" class="btn btn-sm btn-info absolute top-3 right-3 z-10 w-8 px-0 sm:w-auto sm:px-3 gap-0 sm:gap-2" aria-label="Send message" title="Send message">
+      <i data-lucide="message-circle" class="w-4 h-4"></i>
+      <span class="hidden sm:inline">Send message</span>
+    </a>
+    {% endif %}
+
     <!-- Content below banner -->
     <div class="px-6 pb-6">
       <!-- Avatar row -->
-      <div class="flex items-start justify-between">
+      <div class="flex items-start">
         {% if profile_user|has_avatar %}
         <div class="avatar relative -mt-14">
           <div class="w-24 h-24 rounded-full ring-4 ring-base-100 shadow-lg" :class="'ring-4 ring-offset-base-100 ring-offset-2 ' + $store.presence.ringClass({{ profile_user.id }})">
@@ -43,17 +56,6 @@
           </div>
           <span class="absolute bottom-1 right-1 block w-4 h-4 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass({{ profile_user.id }})"></span>
         </div>
-        {% endif %}
-        {% if is_own_profile %}
-        <a href="{% url 'users_ui:settings' %}" class="btn btn-sm btn-ghost gap-2 text-base-content/60 hover:text-primary mt-3">
-          <i data-lucide="settings" class="w-4 h-4"></i>
-          Settings
-        </a>
-        {% else %}
-        <a href="/chat?dm={{ profile_user.id }}" class="btn btn-sm btn-outline btn-info gap-2 mt-3">
-          <i data-lucide="message-circle" class="w-4 h-4"></i>
-          Send message
-        </a>
         {% endif %}
       </div>
 
@@ -138,7 +140,7 @@
 
   <!-- ── Contribution heatmap ─────────────────────────── -->
   <div class="card bg-base-100 border border-base-300 shadow-sm">
-    <div class="card-body">
+    <div class="card-body p-4 sm:p-6">
       <div class="flex items-center justify-between mb-3">
         <h2 class="card-title text-base gap-2">
           <i data-lucide="grid-3x3" class="w-5 h-5"></i>
@@ -147,40 +149,44 @@
       </div>
 
       <div x-data="{ tooltip: '', tooltipX: 0, tooltipY: 0, showTooltip: false }">
-        <!-- Month labels -->
-        <div class="flex mb-1">
-          <div class="flex-none" style="width: 24px;"></div>
-          {% for label in heatmap.month_labels %}
-          <div class="flex-1 min-w-0 text-xs text-base-content/40 whitespace-nowrap">{{ label }}</div>
-          {% endfor %}
-        </div>
+        <div class="overflow-x-auto -mx-4 px-4 pb-2 sm:mx-0 sm:px-0 sm:pb-0">
+          <div class="min-w-[640px] sm:min-w-0">
+            <!-- Month labels -->
+            <div class="flex mb-1">
+              <div class="flex-none" style="width: 24px;"></div>
+              {% for label in heatmap.month_labels %}
+              <div class="flex-1 min-w-0 text-xs text-base-content/40 whitespace-nowrap">{{ label }}</div>
+              {% endfor %}
+            </div>
 
-        <!-- Grid -->
-        <div class="flex gap-px">
-          <!-- Day labels -->
-          <div class="flex flex-col gap-px flex-none" style="width: 24px;">
-            <div class="flex-1 flex items-center"></div>
-            <div class="flex-1 flex items-center text-base-content/40" style="font-size: 9px;">Mon</div>
-            <div class="flex-1 flex items-center"></div>
-            <div class="flex-1 flex items-center text-base-content/40" style="font-size: 9px;">Wed</div>
-            <div class="flex-1 flex items-center"></div>
-            <div class="flex-1 flex items-center text-base-content/40" style="font-size: 9px;">Fri</div>
-            <div class="flex-1 flex items-center"></div>
-          </div>
+            <!-- Grid -->
+            <div class="flex gap-px">
+              <!-- Day labels -->
+              <div class="flex flex-col gap-px flex-none" style="width: 24px;">
+                <div class="flex-1 flex items-center"></div>
+                <div class="flex-1 flex items-center text-base-content/40" style="font-size: 9px;">Mon</div>
+                <div class="flex-1 flex items-center"></div>
+                <div class="flex-1 flex items-center text-base-content/40" style="font-size: 9px;">Wed</div>
+                <div class="flex-1 flex items-center"></div>
+                <div class="flex-1 flex items-center text-base-content/40" style="font-size: 9px;">Fri</div>
+                <div class="flex-1 flex items-center"></div>
+              </div>
 
-          <!-- Week columns -->
-          {% for week in heatmap.weeks %}
-          <div class="flex-1 min-w-0 flex flex-col gap-px">
-            {% for day in week %}
-            <div
-              class="aspect-square rounded-sm cursor-pointer {% if day.level == 0 %}bg-base-300/50{% elif day.level == 1 %}bg-primary/20{% elif day.level == 2 %}bg-primary/40{% elif day.level == 3 %}bg-primary/60{% else %}bg-primary{% endif %}"
-              aria-label="{{ day.count }} contribution{{ day.count|pluralize }} on {{ day.date }}"
-              @mouseenter="tooltip = '{{ day.count }} contribution{{ day.count|pluralize }} on {{ day.date }}'; showTooltip = true; tooltipX = $event.clientX; tooltipY = $event.clientY"
-              @mouseleave="showTooltip = false"
-            ></div>
-            {% endfor %}
+              <!-- Week columns -->
+              {% for week in heatmap.weeks %}
+              <div class="flex-1 min-w-0 flex flex-col gap-px">
+                {% for day in week %}
+                <div
+                  class="aspect-square rounded-sm cursor-pointer {% if day.level == 0 %}bg-base-300/50{% elif day.level == 1 %}bg-primary/20{% elif day.level == 2 %}bg-primary/40{% elif day.level == 3 %}bg-primary/60{% else %}bg-primary{% endif %}"
+                  aria-label="{{ day.count }} contribution{{ day.count|pluralize }} on {{ day.date }}"
+                  @mouseenter="tooltip = '{{ day.count }} contribution{{ day.count|pluralize }} on {{ day.date }}'; showTooltip = true; tooltipX = $event.clientX; tooltipY = $event.clientY"
+                  @mouseleave="showTooltip = false"
+                ></div>
+                {% endfor %}
+              </div>
+              {% endfor %}
+            </div>
           </div>
-          {% endfor %}
         </div>
 
         <!-- Tooltip -->
@@ -224,7 +230,7 @@
        @ajax:before="loading = true"
        @ajax:after="loading = false"
   >
-    <div class="card-body gap-4">
+    <div class="card-body gap-4 p-4 sm:p-6">
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 class="card-title text-base gap-2">
           <i data-lucide="activity" class="w-5 h-5"></i>

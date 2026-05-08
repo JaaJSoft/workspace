@@ -61,7 +61,6 @@ Configurable chat bots with system prompts, vision, function calling, extended t
 | **Monitoring**     | Prometheus metrics, Kubernetes health probes                 |
 | **Tooling**        | uv, Docker, drf-spectacular (OpenAPI)                        |
 
-No build steps, no frontend framework complexity, no microservices. Just Python and templates.
 
 ## Architecture
 

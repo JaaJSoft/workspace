@@ -1,14 +1,13 @@
 function chatApp(currentUserId) {
-  // Compute the initial sidebar state synchronously so the very first
-  // Alpine binding pass paints the correct width class. Without this,
-  // a mobile viewport with a desktop-era localStorage value of `false`
-  // would render w-80 first, then snap to w-16 once init() awaits
-  // resolved — a visible "expanded → collapsed" flicker on load.
-  const isMobileViewport = window.matchMedia('(max-width: 1023px)').matches;
   return {
     // ── Identity + persistent UI state ──────────────────────
     currentUserId: currentUserId,
-    collapsed: isMobileViewport
+    // Seed `collapsed` synchronously from the viewport so Alpine's first
+    // binding pass paints the correct width class. Without the mobile
+    // check here, a mobile load after a desktop session left the sidebar
+    // expanded (localStorage = "false") would render w-80 first and snap
+    // to w-16 once init() ran — a visible "expanded → collapsed" flicker.
+    collapsed: window.matchMedia('(max-width: 1023px)').matches
       || JSON.parse(localStorage.getItem('chatSidebarCollapsed') || 'false'),
 
     // ── Compose chatApp from domain mixins ──────────────────

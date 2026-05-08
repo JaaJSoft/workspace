@@ -1,7 +1,7 @@
 [project]
 name = "workspace"
 version = "0.19.0"
-description = "All-in-one self-hosted workspace: files, chat, mail, calendar, notes, and AI assistants, from a Raspberry Pi to a Kubernetes cluster."
+description = "Self-hosted productivity suite (files, chat, mail, calendar, notes, AI assistants) designed to run anywhere — from a single Raspberry Pi to a multi-node Kubernetes deployment."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

@@ -154,7 +154,7 @@ x-data="chatApp({{ user.id }})"
      :style="!activeConversation && !pendingInitialConvUuid && isMobile() ? 'display:none!important' : ''">
 
   <!-- Empty state -->
-  <template x-if="!activeConversation">
+  <template x-if="!activeConversation && !pendingInitialConvUuid">
     {% include "chat/ui/partials/empty_state.html" %}
   </template>
 

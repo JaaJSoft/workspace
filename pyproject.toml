@@ -1,7 +1,7 @@
 [project]
 name = "workspace"
 version = "0.19.0"
-description = "Django workspace project"
+description = "All-in-one self-hosted workspace: files, chat, mail, calendar, notes, and AI assistants, from a Raspberry Pi to a Kubernetes cluster."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

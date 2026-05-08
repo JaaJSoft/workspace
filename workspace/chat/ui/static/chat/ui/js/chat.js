@@ -2,7 +2,19 @@ function chatApp(currentUserId) {
   return {
     // ── Identity + persistent UI state ──────────────────────
     currentUserId: currentUserId,
-    collapsed: JSON.parse(localStorage.getItem('chatSidebarCollapsed') || 'false'),
+    // Seed `collapsed` synchronously from the viewport so Alpine's first
+    // binding pass paints the correct width class. Without the mobile
+    // check here, a mobile load after a desktop session left the sidebar
+    // expanded (localStorage = "false") would render w-80 first and snap
+    // to w-16 once init() ran — a visible "expanded → collapsed" flicker.
+    collapsed: window.matchMedia('(max-width: 1023px)').matches
+      || JSON.parse(localStorage.getItem('chatSidebarCollapsed') || 'false'),
+    // Gate the sidebar's width transition. Defer-loaded Alpine binds the
+    // `:class` on the aside *after* the first paint, so any width applied
+    // here would animate from the unstyled state. Keep `transition-all`
+    // off until $nextTick has flushed the bind, then enable it for
+    // subsequent toggleCollapse() calls.
+    sidebarMounted: false,
 
     // ── Compose chatApp from domain mixins ──────────────────
     // Each mixin returns an object literal with its own state and
@@ -21,6 +33,11 @@ function chatApp(currentUserId) {
 
     // ── Init: orchestrates first paint and global listeners ─
     async init() {
+      // Re-enable the sidebar width transition after Alpine has finished
+      // its initial bind, so toggleCollapse() animates smoothly without
+      // animating the very first paint.
+      this.$nextTick(() => { this.sidebarMounted = true; });
+
       // Load conversations from embedded JSON (fast first paint)
       const dataEl = document.getElementById('conversations-data');
       if (dataEl) {
@@ -34,10 +51,10 @@ function chatApp(currentUserId) {
         await this.loadConversations();
       }
 
-      // Auto-collapse on mobile
-      if (this.isMobile()) {
-        this.collapsed = true;
-      }
+      // Auto-collapse when the viewport shrinks into the mobile range.
+      // The initial mobile check happens synchronously above (in the
+      // factory) to avoid a first-paint flicker; this listener only
+      // handles later resize transitions.
       window.matchMedia('(max-width: 1023px)').addEventListener('change', (e) => {
         if (e.matches) this.collapsed = true;
       });
@@ -84,22 +101,17 @@ function chatApp(currentUserId) {
         await this._openDmByUserId(parseInt(dmParam, 10));
       }
 
-      // Auto-select conversation from URL (e.g. /chat/<uuid>)
-      if (!dmParam) {
-        const initialEl = document.getElementById('initial-conversation');
-        if (initialEl) {
-          try {
-            const uuid = JSON.parse(initialEl.textContent);
-            if (uuid) {
-              // Replace current history entry so back goes to /chat
-              history.replaceState({ conversationUuid: uuid }, '', `/chat/${uuid}`);
-              await this.selectConversationById(uuid, false);
-            }
-          } catch (e) {
-            console.error('Failed to parse initial conversation', e);
-          }
-        }
+      // Auto-select conversation from URL (e.g. /chat/<uuid>). The UUID was
+      // already read synchronously in chatConversationsMixin (and stashed in
+      // `pendingInitialConvUuid`) so the first paint can hide the mobile
+      // drawer; here we just trigger the actual fetch + selection.
+      if (!dmParam && this.pendingInitialConvUuid) {
+        const uuid = this.pendingInitialConvUuid;
+        // Replace current history entry so back goes to /chat
+        history.replaceState({ conversationUuid: uuid }, '', `/chat/${uuid}`);
+        await this.selectConversationById(uuid, false);
       }
+      this.pendingInitialConvUuid = null;
 
       // Fetch available AI bots
       this.fetchBots();

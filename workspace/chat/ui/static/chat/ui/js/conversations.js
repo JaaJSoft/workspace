@@ -3,10 +3,26 @@
 // list-level context menu, conversation display helpers (name, avatar,
 // member list).
 window.chatConversationsMixin = function chatConversationsMixin() {
+  // Read the URL-targeted conversation UUID synchronously from the embedded
+  // JSON so the first Alpine binding pass already knows we're going to have
+  // an active conversation. Without this, on mobile, `/chat/<uuid>` paints
+  // the drawer sidebar visible (because `activeConversation` is still null),
+  // then `init()` awaits `selectConversationById`, sets `activeConversation`,
+  // and the `:style` binding finally hides the drawer — visible flash. The
+  // flag is consumed in init() right after the conversation is loaded.
+  let pendingUuid = null;
+  try {
+    const el = document.getElementById('initial-conversation');
+    if (el) pendingUuid = JSON.parse(el.textContent) || null;
+  } catch (_) {
+    pendingUuid = null;
+  }
+
   return {
     // ── State ────────────────────────────────────────────────
     conversations: [],
     activeConversation: null,
+    pendingInitialConvUuid: pendingUuid,
 
     // New-conversation dialog state
     selectedUsers: [],

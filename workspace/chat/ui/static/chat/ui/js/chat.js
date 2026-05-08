@@ -90,22 +90,17 @@ function chatApp(currentUserId) {
         await this._openDmByUserId(parseInt(dmParam, 10));
       }
 
-      // Auto-select conversation from URL (e.g. /chat/<uuid>)
-      if (!dmParam) {
-        const initialEl = document.getElementById('initial-conversation');
-        if (initialEl) {
-          try {
-            const uuid = JSON.parse(initialEl.textContent);
-            if (uuid) {
-              // Replace current history entry so back goes to /chat
-              history.replaceState({ conversationUuid: uuid }, '', `/chat/${uuid}`);
-              await this.selectConversationById(uuid, false);
-            }
-          } catch (e) {
-            console.error('Failed to parse initial conversation', e);
-          }
-        }
+      // Auto-select conversation from URL (e.g. /chat/<uuid>). The UUID was
+      // already read synchronously in chatConversationsMixin (and stashed in
+      // `pendingInitialConvUuid`) so the first paint can hide the mobile
+      // drawer; here we just trigger the actual fetch + selection.
+      if (!dmParam && this.pendingInitialConvUuid) {
+        const uuid = this.pendingInitialConvUuid;
+        // Replace current history entry so back goes to /chat
+        history.replaceState({ conversationUuid: uuid }, '', `/chat/${uuid}`);
+        await this.selectConversationById(uuid, false);
       }
+      this.pendingInitialConvUuid = null;
 
       // Fetch available AI bots
       this.fetchBots();

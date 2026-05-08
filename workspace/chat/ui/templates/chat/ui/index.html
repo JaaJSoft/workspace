@@ -39,7 +39,7 @@ x-data="chatApp({{ user.id }})"
 
 {% block drawer_sidebar %}
 <div class="drawer-side z-40 h-full"
-     :style="activeConversation && isMobile() ? 'display:none!important' : ''">
+     :style="(activeConversation || pendingInitialConvUuid) && isMobile() ? 'display:none!important' : ''">
   <label for="chat-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
   <!-- Sidebar -->
@@ -140,7 +140,7 @@ x-data="chatApp({{ user.id }})"
 
 {% block content %}
 <div class="h-full flex flex-col min-w-0 bg-base-100"
-     :style="!activeConversation && isMobile() ? 'display:none!important' : ''">
+     :style="!activeConversation && !pendingInitialConvUuid && isMobile() ? 'display:none!important' : ''">
 
   <!-- Empty state -->
   <template x-if="!activeConversation">

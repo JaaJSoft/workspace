@@ -380,6 +380,22 @@ class EventsPanelEndpointTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    def test_load_more_button_replaced_by_explainer_at_cap(self):
+        # When events_limit hits the server cap (200) but there are still
+        # more events on the file, the "Load more" button would loop without
+        # progress - it must be hidden and an explainer rendered instead.
+        from workspace.files.services.events import record_event
+        # Seed 250 events so 200 (cap) < total -> explainer branch fires.
+        for i in range(250):
+            record_event(self.file, self.user, FileEvent.Action.RENAMED, {'i': i})
+
+        response = self.client.get(f'/files/{self.file.uuid}/events?limit=200')
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('Load more', body)
+        self.assertIn('Showing the 200 most recent of 250 events', body)
+
     def test_endpoint_invalid_limit_falls_back_to_default(self):
         from workspace.files.services.events import record_event
         record_event(self.file, self.user, FileEvent.Action.RENAMED)

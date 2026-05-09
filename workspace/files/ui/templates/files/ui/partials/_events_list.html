@@ -87,17 +87,23 @@ Loaded by:
 </ul>
 
 {% if total_event_count > events_limit %}
-<div class="flex justify-center pt-1">
-  <a
-    href="/files/{{ file.uuid }}/events?limit={{ events_limit|add:15 }}{% if action_filter %}&action={{ action_filter }}{% endif %}"
-    x-target="file-events-list"
-    class="btn btn-ghost btn-xs gap-1"
-  >
-    <i data-lucide="chevron-down" class="w-3 h-3"></i>
-    Load more
-    <span class="text-base-content/40">({{ events_limit }} of {{ total_event_count }})</span>
-  </a>
-</div>
+  {% if events_limit < max_events_limit %}
+  <div class="flex justify-center pt-1">
+    <a
+      href="/files/{{ file.uuid }}/events?limit={{ events_limit|add:15 }}{% if action_filter %}&action={{ action_filter }}{% endif %}"
+      x-target="file-events-list"
+      class="btn btn-ghost btn-xs gap-1"
+    >
+      <i data-lucide="chevron-down" class="w-3 h-3"></i>
+      Load more
+      <span class="text-base-content/40">({{ events_limit }} of {{ total_event_count }})</span>
+    </a>
+  </div>
+  {% else %}
+  <p class="text-xs text-base-content/40 text-center pt-1">
+    Showing the {{ max_events_limit }} most recent of {{ total_event_count }} events. Older entries aren't displayed.
+  </p>
+  {% endif %}
 {% endif %}
 
 {% else %}

@@ -453,6 +453,7 @@ def events(request, uuid):
         'file': file_obj,
         'file_events': file_events,
         'events_limit': events_limit,
+        'max_events_limit': MAX_EVENTS_LIMIT,
         'action_filter': action_filter,
         'grouped_actions': grouped_actions,
         'total_event_count': total_event_count,

@@ -22,7 +22,7 @@ Loaded by:
 <div class="divider my-0 text-xs text-base-content/40">Activity</div>
 
 <select
-  class="select select-bordered select-xs w-full"
+  class="select select-bordered select-xs w-full my-2"
   aria-label="Filter activity by action"
   x-on:change="$ajax(`/files/{{ file.uuid }}/events?action=${encodeURIComponent($event.target.value)}`, { target: 'file-events-list' })"
 >

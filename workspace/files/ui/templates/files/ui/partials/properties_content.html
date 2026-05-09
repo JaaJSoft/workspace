@@ -289,61 +289,7 @@ Context:
   </div>
 
   <!-- Activity -->
-  {% if file_events %}
-  <div class="divider my-0 text-xs text-base-content/40">Activity</div>
-
-  <ul class="space-y-2.5">
-    {% for event in file_events %}
-    <li class="flex items-start gap-2.5 text-sm">
-      <i
-        data-lucide="{% if event.action == 'created' %}plus-circle{% elif event.action == 'renamed' %}pencil{% elif event.action == 'moved' %}move{% elif event.action == 'content_replaced' %}upload{% elif event.action == 'deleted' %}trash-2{% elif event.action == 'restored' %}rotate-ccw{% elif event.action == 'shared' %}user-plus{% elif event.action == 'share_permission_changed' %}shield{% elif event.action == 'unshared' %}user-minus{% elif event.action == 'link_created' %}link{% elif event.action == 'link_revoked' %}unlink{% else %}activity{% endif %}"
-        class="w-3.5 h-3.5 mt-1 text-base-content/50 flex-shrink-0"
-      ></i>
-      <div class="flex-1 min-w-0">
-        <p class="text-sm leading-tight">
-          <span class="font-medium">{% if event.actor %}{{ event.actor.username }}{% else %}System{% endif %}</span>
-          {% if event.action == 'renamed' %}
-            renamed
-            <span class="text-base-content/60">{{ event.metadata.old_name|default:'' }}</span>
-            →
-            <span class="text-base-content/60">{{ event.metadata.new_name|default:'' }}</span>
-          {% elif event.action == 'moved' %}
-            moved this
-          {% elif event.action == 'content_replaced' %}
-            updated the file
-          {% elif event.action == 'created' %}
-            {% if event.metadata.source_uuid %}copied from <span class="text-base-content/60">{{ event.metadata.source_name|default:'another file' }}</span>{% else %}created this{% endif %}
-          {% elif event.action == 'deleted' %}
-            moved this to the trash
-          {% elif event.action == 'restored' %}
-            restored this from the trash
-          {% elif event.action == 'shared' %}
-            shared with
-            <span class="text-base-content/60">{{ event.metadata.shared_with_username|default:'a user' }}</span>
-            {% if event.metadata.permission == 'rw' %}<span class="badge badge-xs badge-primary">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
-          {% elif event.action == 'share_permission_changed' %}
-            changed
-            <span class="text-base-content/60">{{ event.metadata.shared_with_username|default:'a user' }}</span>'s
-            permission
-            {% if event.metadata.new_permission == 'rw' %}<span class="badge badge-xs badge-primary">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
-          {% elif event.action == 'unshared' %}
-            revoked
-            <span class="text-base-content/60">{{ event.metadata.shared_with_username|default:'a user' }}</span>'s access
-          {% elif event.action == 'link_created' %}
-            created a public link
-            {% if event.metadata.has_password %}<i data-lucide="lock" class="w-3 h-3 inline text-base-content/40"></i>{% endif %}
-          {% elif event.action == 'link_revoked' %}
-            revoked a public link
-          {% else %}
-            {{ event.get_action_display }}
-          {% endif %}
-        </p>
-        <time class="text-xs text-base-content/40">{{ event.created_at|timesince }} ago</time>
-      </div>
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
+  {% include "files/ui/partials/_events_list.html" %}
 
   <!-- Advanced (UUID) -->
   <details class="group">

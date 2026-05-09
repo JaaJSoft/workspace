@@ -11,6 +11,8 @@ from .viewers import ViewerRegistry
 from ..models import File, FileFavorite, FileShare, FileShareLink, PinnedFolder
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
+INITIAL_EVENTS_LIMIT = 15
+MAX_EVENTS_LIMIT = 200
 
 
 def build_breadcrumbs(folder, user=None):
@@ -393,7 +395,10 @@ def properties(request, uuid):
     perm_label, perm_is_write = PERMISSION_LABELS.get(perm, (None, False))
 
     from workspace.files.services.events import events_for_file
-    file_events = list(events_for_file(file_obj)[:15])
+    events_qs = events_for_file(file_obj)
+    events_limit = INITIAL_EVENTS_LIMIT
+    file_events = list(events_qs[:events_limit])
+    total_event_count = events_qs.count()
 
     return render(request, 'files/ui/partials/properties_content.html', {
         'file': file_obj,
@@ -407,6 +412,41 @@ def properties(request, uuid):
         'permission_is_write': perm_is_write,
         'share_links': share_links,
         'file_events': file_events,
+        'events_limit': events_limit,
+        'total_event_count': total_event_count,
+    })
+
+
+@login_required
+def events_panel(request, uuid):
+    """Return just the activity timeline partial for the right properties panel.
+
+    Loaded by alpine-ajax when the user clicks "Load more" on the timeline.
+    The ``?limit=N`` param controls how many events to render (capped at
+    ``MAX_EVENTS_LIMIT``); offset is always 0 so the swap is idempotent.
+    """
+    file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
+    if not file_obj:
+        raise Http404
+    if FileService.get_permission(request.user, file_obj) is None:
+        raise Http404
+
+    try:
+        events_limit = int(request.GET.get('limit', INITIAL_EVENTS_LIMIT))
+    except (TypeError, ValueError):
+        events_limit = INITIAL_EVENTS_LIMIT
+    events_limit = max(INITIAL_EVENTS_LIMIT, min(events_limit, MAX_EVENTS_LIMIT))
+
+    from workspace.files.services.events import events_for_file
+    events_qs = events_for_file(file_obj)
+    file_events = list(events_qs[:events_limit])
+    total_event_count = events_qs.count()
+
+    return render(request, 'files/ui/partials/_events_list.html', {
+        'file': file_obj,
+        'file_events': file_events,
+        'events_limit': events_limit,
+        'total_event_count': total_event_count,
     })
 
 

@@ -335,6 +335,105 @@ class PropertiesPanelEventsTests(APITestCase):
         self.assertIn('rename-5', body)
         self.assertNotIn('rename-4', body)
 
+    def test_panel_shows_load_more_button_when_more_events_exist(self):
+        from workspace.files.services.events import record_event
+        for i in range(20):
+            record_event(self.file, self.user, FileEvent.Action.RENAMED, {'i': i})
+
+        response = self.client.get(f'/files/properties/{self.file.uuid}')
+        body = response.content.decode()
+
+        self.assertIn('Load more', body)
+        self.assertIn(f'/files/{self.file.uuid}/activity?limit=30', body)
+
+    def test_panel_omits_load_more_button_when_all_events_fit(self):
+        from workspace.files.services.events import record_event
+        for i in range(3):
+            record_event(self.file, self.user, FileEvent.Action.RENAMED, {'i': i})
+
+        response = self.client.get(f'/files/properties/{self.file.uuid}')
+
+        self.assertNotIn('Load more', response.content.decode())
+
+
+class EventsPanelEndpointTests(APITestCase):
+    """GET /files/<uuid>/activity — alpine-ajax target for "Load more"."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='alice', email='a@test.com', password='pass',
+        )
+        self.other_user = User.objects.create_user(
+            username='bob', email='b@test.com', password='pass',
+        )
+        self.client.login(username='alice', password='pass')
+        self.file = File.objects.create(
+            owner=self.user, name='doc.txt',
+            node_type=File.NodeType.FILE, mime_type='text/plain',
+        )
+        FileEvent.objects.all().delete()
+
+    def test_endpoint_renders_more_events_with_higher_limit(self):
+        from workspace.files.services.events import record_event
+        for i in range(40):
+            record_event(self.file, self.user, FileEvent.Action.RENAMED, {
+                'old_name': 'doc.txt', 'new_name': f'rev-{i}.txt',
+            })
+
+        response = self.client.get(f'/files/{self.file.uuid}/activity?limit=30')
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        # 30 most recent are present (rev-39..rev-10), older (rev-9..rev-0) are not.
+        self.assertIn('rev-39.txt', body)
+        self.assertIn('rev-10.txt', body)
+        self.assertNotIn('rev-9.txt', body)
+        # Load more button still present (40 > 30).
+        self.assertIn('Load more', body)
+        self.assertIn(f'/files/{self.file.uuid}/activity?limit=45', body)
+
+    def test_load_more_button_disappears_when_all_events_loaded(self):
+        from workspace.files.services.events import record_event
+        for i in range(20):
+            record_event(self.file, self.user, FileEvent.Action.RENAMED, {'i': i})
+
+        # Asking for more than total should drop the button.
+        response = self.client.get(f'/files/{self.file.uuid}/activity?limit=30')
+
+        self.assertNotIn('Load more', response.content.decode())
+
+    def test_endpoint_caps_limit_at_max(self):
+        from workspace.files.services.events import record_event
+        for i in range(5):
+            record_event(self.file, self.user, FileEvent.Action.RENAMED, {'i': i})
+
+        # 99999 must be clamped down to MAX_EVENTS_LIMIT (200) - no 500.
+        response = self.client.get(f'/files/{self.file.uuid}/activity?limit=99999')
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_endpoint_invalid_limit_falls_back_to_default(self):
+        from workspace.files.services.events import record_event
+        record_event(self.file, self.user, FileEvent.Action.RENAMED)
+
+        response = self.client.get(f'/files/{self.file.uuid}/activity?limit=garbage')
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_endpoint_404s_for_unknown_file(self):
+        response = self.client.get('/files/00000000-0000-0000-0000-000000000000/activity')
+        self.assertEqual(response.status_code, 404)
+
+    def test_endpoint_404s_for_user_without_access(self):
+        from workspace.files.services.events import record_event
+        record_event(self.file, self.user, FileEvent.Action.RENAMED)
+        self.client.logout()
+        self.client.login(username='bob', password='pass')
+
+        response = self.client.get(f'/files/{self.file.uuid}/activity')
+
+        self.assertEqual(response.status_code, 404)
+
 
 class FileEventCopyTests(APITestCase):
     """POST /copy emits CREATED on the new file with source_uuid metadata."""

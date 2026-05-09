@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.cache import cached, invalidate_tags
+from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
 from .models import MessageAttachment
 from .services.conversations import get_active_membership
@@ -142,22 +143,30 @@ class AttachmentSaveToFilesView(APIView):
         # the opened FieldFile in django.core.files.File so the destination
         # FileField sees _committed=False and storage.save() runs (FieldFile
         # itself is committed and would be reused as-is, leaving the two
-        # rows pointing at the same blob). FileFound/OSError mirrors the
-        # download view's handling for a vanished blob.
+        # rows pointing at the same blob).
+        #
+        # The try/except scopes only the source-blob open: a vanished blob
+        # is the user-visible "Attachment not found" 404 path. Storage
+        # failures from FileService.create_file (disk full, perm denied,
+        # quota exceeded, ...) must surface as 5xx, not be silently
+        # rewritten to a 404 that hides the real problem.
         try:
-            with attachment.file.open('rb') as f:
-                file_obj = FileService.create_file(
-                    owner=request.user,
-                    name=attachment.original_name,
-                    parent=parent,
-                    content=DjangoFile(f, name=attachment.original_name),
-                    mime_type=attachment.mime_type,
-                    acting_user=request.user,
-                )
+            src = attachment.file.open('rb')
         except (FileNotFoundError, OSError):
+            logger.warning("Chat attachment blob missing for %s", scrub(attachment.file.name))
             return Response(
                 {'detail': 'Attachment not found.'},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        with src as f:
+            file_obj = FileService.create_file(
+                owner=request.user,
+                name=attachment.original_name,
+                parent=parent,
+                content=DjangoFile(f, name=attachment.original_name),
+                mime_type=attachment.mime_type,
+                acting_user=request.user,
             )
 
         return Response(

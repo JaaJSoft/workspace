@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
 from .models import MailAttachment
 from .queries import user_account_ids
@@ -101,28 +102,34 @@ class MailAttachmentSaveToFilesView(APIView):
         # runs (a FieldFile passed directly is _committed=True and would make
         # both rows point at the same blob).
         #
-        # The try/except is intentionally narrow: only a missing source blob
-        # is mapped to 404. Operational errors from FileService.create_file
+        # FileNotFoundError on either side means the source blob is gone -
+        # mapped to 404 ("Attachment not found"). Other OSError variants
         # (disk full / perm denied / remote storage flake on the destination
-        # side) propagate so middleware returns 500 - they're not "attachment
-        # not found" and lying to the client would mask the real issue.
+        # side) get a single sanitized log line with the attachment path
+        # before being re-raised, so middleware turns them into 500 with a
+        # breadcrumb instead of a bare stack trace.
         try:
             src = attachment.content.open('rb')
+            with src as f:
+                file_obj = FileService.create_file(
+                    owner=request.user,
+                    name=attachment.filename,
+                    parent=parent,
+                    content=DjangoFile(f, name=attachment.filename),
+                    mime_type=attachment.content_type,
+                    acting_user=request.user,
+                )
         except FileNotFoundError:
             return Response(
                 {'detail': 'Attachment not found.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-
-        with src as f:
-            file_obj = FileService.create_file(
-                owner=request.user,
-                name=attachment.filename,
-                parent=parent,
-                content=DjangoFile(f, name=attachment.filename),
-                mime_type=attachment.content_type,
-                acting_user=request.user,
+        except OSError:
+            logger.exception(
+                "Failed to save mail attachment %s to files",
+                scrub(attachment.content.name or attachment.filename),
             )
+            raise
 
         return Response(
             {'detail': 'File saved.', 'file_uuid': str(file_obj.uuid)},

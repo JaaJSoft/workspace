@@ -123,7 +123,7 @@ class FilesActivityProviderTests(TestCase):
 
         events = self.provider.get_recent_events(self.alice.id)
 
-        self.assertEqual(events[0]['label'], 'File renamed')
+        self.assertEqual(events[0]['label'], 'Renamed')
         self.assertEqual(events[0]['icon'], 'pencil')
 
     def test_recent_events_actor_can_differ_from_owner(self):

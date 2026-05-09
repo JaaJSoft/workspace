@@ -420,20 +420,42 @@ class EventsPanelEndpointTests(APITestCase):
         self.assertIn('b.txt', body)
         self.assertNotIn('shared with', body)
 
-    def test_filter_with_zero_matches_keeps_dropdown_visible(self):
+    def test_filter_for_action_not_on_file_falls_back_to_all(self):
         from workspace.files.services.events import record_event
-        # File has events overall, but none of the filtered type.
+        # File only has a CREATED event - the dropdown will only offer
+        # "Created" as a choice, so a stale URL pointing at "shared"
+        # silently resolves to "All actions" rather than rendering an
+        # empty timeline.
         record_event(self.file, self.user, FileEvent.Action.CREATED)
 
         response = self.client.get(f'/files/{self.file.uuid}/activity?action=shared')
         body = response.content.decode()
 
         self.assertEqual(response.status_code, 200)
-        # Section visible (Activity divider + dropdown still rendered).
-        self.assertIn('Activity', body)
-        self.assertIn('aria-label="Filter activity by action"', body)
-        # Empty state messaging present.
-        self.assertIn('No events match this filter', body)
+        # All-actions option is the selected one, not a phantom 'shared'.
+        self.assertIn('value="" selected', body)
+        # The CREATED event is still rendered (filter dropped silently).
+        self.assertIn('created this', body)
+
+    def test_dropdown_only_offers_actions_present_on_file(self):
+        from workspace.files.services.events import record_event
+        record_event(self.file, self.user, FileEvent.Action.CREATED)
+        record_event(self.file, self.user, FileEvent.Action.RENAMED, {
+            'old_name': 'a.txt', 'new_name': 'b.txt',
+        })
+
+        response = self.client.get(f'/files/{self.file.uuid}/activity')
+        body = response.content.decode()
+
+        # Created and Renamed appear; Shared, Trashed etc. don't.
+        self.assertIn('value="created"', body)
+        self.assertIn('value="renamed"', body)
+        self.assertNotIn('value="shared"', body)
+        self.assertNotIn('value="deleted"', body)
+        # Lifecycle and Edits optgroups are rendered, Sharing isn't.
+        self.assertIn('label="Lifecycle"', body)
+        self.assertIn('label="Edits"', body)
+        self.assertNotIn('label="Sharing"', body)
 
     def test_filter_value_preserved_in_dropdown_after_swap(self):
         from workspace.files.services.events import record_event

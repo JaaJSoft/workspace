@@ -45,37 +45,12 @@ def events_for_file(file):
     return FileEvent.objects.filter(file=file).select_related('actor').order_by('-created_at')
 
 
-_HUMAN_LABELS = {
-    FileEvent.Action.CREATED: 'created this',
-    FileEvent.Action.RENAMED: 'renamed this',
-    FileEvent.Action.MOVED: 'moved this',
-    FileEvent.Action.CONTENT_REPLACED: 'updated the file',
-    FileEvent.Action.DELETED: 'moved this to the trash',
-    FileEvent.Action.RESTORED: 'restored this from the trash',
-    FileEvent.Action.SHARED: 'shared this',
-    FileEvent.Action.SHARE_PERMISSION_CHANGED: 'updated share permissions',
-    FileEvent.Action.UNSHARED: 'revoked a share',
-    FileEvent.Action.LINK_CREATED: 'created a public link',
-    FileEvent.Action.LINK_REVOKED: 'revoked a public link',
-}
-
-_ICONS = {
-    FileEvent.Action.CREATED: 'plus-circle',
-    FileEvent.Action.RENAMED: 'pencil',
-    FileEvent.Action.MOVED: 'move',
-    FileEvent.Action.CONTENT_REPLACED: 'upload',
-    FileEvent.Action.DELETED: 'trash-2',
-    FileEvent.Action.RESTORED: 'rotate-ccw',
-    FileEvent.Action.SHARED: 'user-plus',
-    FileEvent.Action.SHARE_PERMISSION_CHANGED: 'shield',
-    FileEvent.Action.UNSHARED: 'user-minus',
-    FileEvent.Action.LINK_CREATED: 'link',
-    FileEvent.Action.LINK_REVOKED: 'unlink',
-}
-
-
 def serialize_event(event):
-    """Serialize an event for API responses and template rendering."""
+    """Serialize an event for API responses and template rendering.
+
+    The icon and label come from ``FileEvent`` (single source of truth in
+    ``models.py``); this function only assembles the JSON-friendly dict.
+    """
     actor = event.actor
     actor_data = None
     if actor is not None:
@@ -87,8 +62,8 @@ def serialize_event(event):
     return {
         'uuid': str(event.uuid),
         'action': event.action,
-        'label': _HUMAN_LABELS.get(event.action, event.action),
-        'icon': _ICONS.get(event.action, 'activity'),
+        'label': event.short_label,
+        'icon': event.icon,
         'actor': actor_data,
         'metadata': event.metadata or {},
         'created_at': event.created_at.isoformat(),

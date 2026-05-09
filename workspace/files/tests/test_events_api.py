@@ -45,7 +45,7 @@ class FileEventsListTests(APITestCase):
 
         ev = response.json()['results'][0]
         self.assertEqual(ev['action'], 'renamed')
-        self.assertEqual(ev['label'], 'renamed this')
+        self.assertEqual(ev['label'], 'Renamed')
         self.assertEqual(ev['icon'], 'pencil')
         self.assertEqual(ev['actor']['username'], 'alice')
         self.assertEqual(ev['metadata'], {'old_name': 'a', 'new_name': 'b'})

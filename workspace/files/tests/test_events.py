@@ -124,7 +124,7 @@ class SerializeEventTests(TestCase):
         data = serialize_event(event)
 
         self.assertEqual(data['action'], 'renamed')
-        self.assertEqual(data['label'], 'renamed this')
+        self.assertEqual(data['label'], 'Renamed')
         self.assertEqual(data['icon'], 'pencil')
         self.assertEqual(data['metadata'], {'old': 'a', 'new': 'b'})
         self.assertEqual(data['actor']['username'], 'alice')

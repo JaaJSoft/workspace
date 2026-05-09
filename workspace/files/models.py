@@ -623,14 +623,36 @@ class FileEvent(models.Model):
         CREATED = 'created', 'Created'
         RENAMED = 'renamed', 'Renamed'
         MOVED = 'moved', 'Moved'
-        CONTENT_REPLACED = 'content_replaced', 'Content replaced'
-        DELETED = 'deleted', 'Moved to trash'
-        RESTORED = 'restored', 'Restored from trash'
+        CONTENT_REPLACED = 'content_replaced', 'Updated'
+        DELETED = 'deleted', 'Trashed'
+        RESTORED = 'restored', 'Restored'
         SHARED = 'shared', 'Shared'
-        SHARE_PERMISSION_CHANGED = 'share_permission_changed', 'Share permission changed'
+        SHARE_PERMISSION_CHANGED = 'share_permission_changed', 'Permission changed'
         UNSHARED = 'unshared', 'Unshared'
-        LINK_CREATED = 'link_created', 'Public link created'
-        LINK_REVOKED = 'link_revoked', 'Public link revoked'
+        LINK_CREATED = 'link_created', 'Link created'
+        LINK_REVOKED = 'link_revoked', 'Link revoked'
+
+    # Single source of truth for the per-action presentation metadata
+    # (Lucide icon + category used for grouping in the filter dropdown).
+    # Anything that needed an icon or a label used to keep its own copy of
+    # this table in services/events.py, activity.py and the template — they
+    # now all read from here.
+    _ACTION_METADATA = {
+        Action.CREATED: ('plus-circle', 'Lifecycle'),
+        Action.DELETED: ('trash-2', 'Lifecycle'),
+        Action.RESTORED: ('rotate-ccw', 'Lifecycle'),
+        Action.RENAMED: ('pencil', 'Edits'),
+        Action.MOVED: ('move', 'Edits'),
+        Action.CONTENT_REPLACED: ('upload', 'Edits'),
+        Action.SHARED: ('user-plus', 'Sharing'),
+        Action.SHARE_PERMISSION_CHANGED: ('shield', 'Sharing'),
+        Action.UNSHARED: ('user-minus', 'Sharing'),
+        Action.LINK_CREATED: ('link', 'Sharing'),
+        Action.LINK_REVOKED: ('unlink', 'Sharing'),
+    }
+
+    # Display order for the action-filter dropdown's optgroups.
+    _CATEGORY_ORDER = ['Lifecycle', 'Edits', 'Sharing']
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     file = models.ForeignKey(File, on_delete=models.CASCADE, related_name='events')
@@ -654,3 +676,30 @@ class FileEvent(models.Model):
 
     def __str__(self):
         return f'{self.action} on {self.file_id} by {self.actor_id} at {self.created_at}'
+
+    @property
+    def icon(self):
+        """Lucide icon name for this event's action."""
+        return self._ACTION_METADATA.get(self.action, ('activity', 'Other'))[0]
+
+    @property
+    def short_label(self):
+        """Noun-form label (matches the Action.choices display label)."""
+        return self.get_action_display()
+
+    @classmethod
+    def grouped_actions(cls, only=None):
+        """Return ``[(category, [(value, label), ...]), ...]`` for the dropdown.
+
+        ``only`` restricts the result to a subset of action values - typically
+        the distinct actions present on a given file, so the dropdown only
+        offers filters that will yield matches.
+        """
+        only_set = set(only) if only is not None else None
+        groups: dict[str, list[tuple[str, str]]] = {}
+        for value, label in cls.Action.choices:
+            if only_set is not None and value not in only_set:
+                continue
+            _icon, category = cls._ACTION_METADATA.get(value, ('activity', 'Other'))
+            groups.setdefault(category, []).append((value, label))
+        return [(cat, groups[cat]) for cat in cls._CATEGORY_ORDER if cat in groups]

@@ -431,18 +431,20 @@ def events_panel(request, uuid):
         events_limit = INITIAL_EVENTS_LIMIT
     events_limit = max(INITIAL_EVENTS_LIMIT, min(events_limit, MAX_EVENTS_LIMIT))
 
-    valid_actions = {value for value, _ in FileEvent.Action.choices}
     action_filter = request.GET.get('action', '').strip()
-    if action_filter not in valid_actions:
-        action_filter = ''
 
     from workspace.files.services.events import events_for_file
     base_qs = events_for_file(file_obj)
-    # Whether the section appears at all is governed by the *unfiltered*
-    # existence: a filter that returns 0 should still render the dropdown
-    # so the user can clear it; a file with no events ever should hide
-    # the whole Activity block.
-    unfiltered_events_exist = base_qs.exists()
+    # The dropdown only offers filters that yield matches on this file:
+    # one query for the distinct action codes, then translated to grouped
+    # (category, [(value, label), ...]) tuples by the model.
+    available_action_codes = list(base_qs.values_list('action', flat=True).distinct())
+    # Drop the filter when it points at an action this file has never
+    # seen - keeps the dropdown selection consistent with the offered
+    # options instead of leaving it on a phantom value.
+    if action_filter not in available_action_codes:
+        action_filter = ''
+    grouped_actions = FileEvent.grouped_actions(only=available_action_codes)
     events_qs = base_qs.filter(action=action_filter) if action_filter else base_qs
     file_events = list(events_qs[:events_limit])
     total_event_count = events_qs.count()
@@ -452,7 +454,7 @@ def events_panel(request, uuid):
         'file_events': file_events,
         'events_limit': events_limit,
         'action_filter': action_filter,
-        'unfiltered_events_exist': unfiltered_events_exist,
+        'grouped_actions': grouped_actions,
         'total_event_count': total_event_count,
     })
 

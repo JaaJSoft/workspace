@@ -7,8 +7,10 @@ Context:
 - events_limit: how many events the response embeds (for the "Load more" math)
 - total_event_count: total events matching the active filter
 - action_filter: current ``?action=`` value, '' when "All"
-- unfiltered_events_exist: True when the file has at least one event regardless
-  of filter (drives whether the section appears at all)
+- grouped_actions: ``[(category, [(value, label), ...]), ...]`` of actions
+  that exist on this file. Empty when the file has no events at all -
+  the entire Activity section is hidden in that case. Source of truth
+  for icons + grouping is FileEvent in models.py.
 
 Loaded by:
 - properties_content.html embeds an empty stub that auto-fetches this
@@ -16,7 +18,7 @@ Loaded by:
 - Action-filter dropdown changes
 {% endcomment %}
 <div id="file-events-list">
-{% if unfiltered_events_exist %}
+{% if grouped_actions %}
 <div class="divider my-0 text-xs text-base-content/40">Activity</div>
 
 <select
@@ -25,33 +27,20 @@ Loaded by:
   x-on:change="$ajax(`/files/{{ file.uuid }}/activity?action=${encodeURIComponent($event.target.value)}`, { target: 'file-events-list' })"
 >
   <option value="" {% if not action_filter %}selected{% endif %}>All actions</option>
-  <optgroup label="Lifecycle">
-    <option value="created" {% if action_filter == 'created' %}selected{% endif %}>Created</option>
-    <option value="deleted" {% if action_filter == 'deleted' %}selected{% endif %}>Moved to trash</option>
-    <option value="restored" {% if action_filter == 'restored' %}selected{% endif %}>Restored</option>
+  {% for category, actions in grouped_actions %}
+  <optgroup label="{{ category }}">
+    {% for value, label in actions %}
+    <option value="{{ value }}" {% if action_filter == value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
   </optgroup>
-  <optgroup label="Edits">
-    <option value="renamed" {% if action_filter == 'renamed' %}selected{% endif %}>Renamed</option>
-    <option value="moved" {% if action_filter == 'moved' %}selected{% endif %}>Moved</option>
-    <option value="content_replaced" {% if action_filter == 'content_replaced' %}selected{% endif %}>Updated</option>
-  </optgroup>
-  <optgroup label="Sharing">
-    <option value="shared" {% if action_filter == 'shared' %}selected{% endif %}>Shared</option>
-    <option value="share_permission_changed" {% if action_filter == 'share_permission_changed' %}selected{% endif %}>Permission changed</option>
-    <option value="unshared" {% if action_filter == 'unshared' %}selected{% endif %}>Unshared</option>
-    <option value="link_created" {% if action_filter == 'link_created' %}selected{% endif %}>Public link created</option>
-    <option value="link_revoked" {% if action_filter == 'link_revoked' %}selected{% endif %}>Public link revoked</option>
-  </optgroup>
+  {% endfor %}
 </select>
 
 {% if file_events %}
 <ul class="space-y-2.5">
   {% for event in file_events %}
   <li class="flex items-start gap-2.5 text-sm">
-    <i
-      data-lucide="{% if event.action == 'created' %}plus-circle{% elif event.action == 'renamed' %}pencil{% elif event.action == 'moved' %}move{% elif event.action == 'content_replaced' %}upload{% elif event.action == 'deleted' %}trash-2{% elif event.action == 'restored' %}rotate-ccw{% elif event.action == 'shared' %}user-plus{% elif event.action == 'share_permission_changed' %}shield{% elif event.action == 'unshared' %}user-minus{% elif event.action == 'link_created' %}link{% elif event.action == 'link_revoked' %}unlink{% else %}activity{% endif %}"
-      class="w-3.5 h-3.5 mt-1 text-base-content/50 flex-shrink-0"
-    ></i>
+    <i data-lucide="{{ event.icon }}" class="w-3.5 h-3.5 mt-1 text-base-content/50 flex-shrink-0"></i>
     <div class="flex-1 min-w-0">
       <p class="text-sm leading-tight">
         <span class="font-medium">{% if event.actor %}{{ event.actor.username }}{% else %}System{% endif %}</span>
@@ -88,7 +77,7 @@ Loaded by:
         {% elif event.action == 'link_revoked' %}
           revoked a public link
         {% else %}
-          {{ event.get_action_display }}
+          {{ event.short_label|lower }}
         {% endif %}
       </p>
       <time class="text-xs text-base-content/40">{{ event.created_at|timesince }} ago</time>

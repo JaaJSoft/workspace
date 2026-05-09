@@ -4,35 +4,6 @@ from django.db.models.functions import TruncDate
 from workspace.core.activity_registry import ActivityProvider
 
 
-_EVENT_LABELS = {
-    'created': 'File created',
-    'renamed': 'File renamed',
-    'moved': 'File moved',
-    'content_replaced': 'File updated',
-    'deleted': 'File trashed',
-    'restored': 'File restored',
-    'shared': 'File shared',
-    'share_permission_changed': 'Share permission changed',
-    'unshared': 'Share revoked',
-    'link_created': 'Public link created',
-    'link_revoked': 'Public link revoked',
-}
-
-_EVENT_ICONS = {
-    'created': 'plus-circle',
-    'renamed': 'pencil',
-    'moved': 'move',
-    'content_replaced': 'upload',
-    'deleted': 'trash-2',
-    'restored': 'rotate-ccw',
-    'shared': 'user-plus',
-    'share_permission_changed': 'shield',
-    'unshared': 'user-minus',
-    'link_created': 'link',
-    'link_revoked': 'unlink',
-}
-
-
 class FilesActivityProvider(ActivityProvider):
 
     def _file_visibility_filter(self, user_id, viewer_id):
@@ -101,8 +72,8 @@ class FilesActivityProvider(ActivityProvider):
             # system-generated events from a Celery task).
             actor = ev.actor or ev.file.owner
             events.append({
-                'icon': _EVENT_ICONS.get(ev.action, 'hard-drive'),
-                'label': _EVENT_LABELS.get(ev.action, ev.action),
+                'icon': ev.icon,
+                'label': ev.short_label,
                 'description': ev.file.name,
                 'timestamp': ev.created_at,
                 'url': f'/files?preview={ev.file.pk}',

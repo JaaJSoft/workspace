@@ -49,7 +49,7 @@ _HUMAN_LABELS = {
     FileEvent.Action.CREATED: 'created this',
     FileEvent.Action.RENAMED: 'renamed this',
     FileEvent.Action.MOVED: 'moved this',
-    FileEvent.Action.CONTENT_REPLACED: 'replaced the content',
+    FileEvent.Action.CONTENT_REPLACED: 'updated the file',
     FileEvent.Action.DELETED: 'moved this to the trash',
     FileEvent.Action.RESTORED: 'restored this from the trash',
     FileEvent.Action.SHARED: 'shared this',

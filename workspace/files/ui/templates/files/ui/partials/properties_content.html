@@ -310,7 +310,7 @@ Context:
           {% elif event.action == 'moved' %}
             moved this
           {% elif event.action == 'content_replaced' %}
-            replaced the content
+            updated the file
           {% elif event.action == 'created' %}
             {% if event.metadata.source_uuid %}copied from <span class="text-base-content/60">{{ event.metadata.source_name|default:'another file' }}</span>{% else %}created this{% endif %}
           {% elif event.action == 'deleted' %}

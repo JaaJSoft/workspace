@@ -1,11 +1,11 @@
 """Copy action for FileViewSet."""
 
-from django.core.exceptions import ValidationError
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
 from workspace.files.serializers import FileSerializer
 from workspace.files.services import FilePermission, FileService
@@ -53,18 +53,17 @@ class CopyMixin:
         # threshold ``RenameAction``/``DeleteAction`` use for write operations.
         parent = None
         if parent_uuid:
-            try:
-                parent = File.objects.filter(
-                    uuid=parent_uuid,
-                    node_type=File.NodeType.FOLDER,
-                    deleted_at__isnull=True,
-                ).first()
-            except (ValidationError, ValueError):
-                # Malformed UUID strings -> 400 instead of 500.
+            parsed_parent_uuid = parse_uuid_or_none(parent_uuid)
+            if parsed_parent_uuid is None:
                 return Response(
                     {'detail': 'Parent folder not found.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            parent = File.objects.filter(
+                uuid=parsed_parent_uuid,
+                node_type=File.NodeType.FOLDER,
+                deleted_at__isnull=True,
+            ).first()
 
             perm = FileService.get_permission(request.user, parent) if parent else None
             if perm is None or perm < FilePermission.EDIT:

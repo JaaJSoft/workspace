@@ -289,13 +289,23 @@ Context:
   </div>
 
   <!-- Activity (lazy-loaded via alpine-ajax: same endpoint serves
-       initial fetch and "Load more" clicks) -->
+       initial fetch and "Load more" clicks). The wrapper sits OUTSIDE
+       the swap target so its ``loading`` state survives each ajax
+       round-trip; nested elements (refresh button, dim overlay) read
+       it via Alpine's scope chain. -->
   <div
-    id="file-events-list"
-    x-init="$ajax('/files/{{ file.uuid }}/events', { target: 'file-events-list' })"
+    x-data="{ loading: false }"
+    @ajax:before="loading = true"
+    @ajax:after="loading = false"
+    :class="loading && 'opacity-60 pointer-events-none'"
   >
-    <div class="flex justify-center py-2">
-      <span class="loading loading-spinner loading-sm text-base-content/40"></span>
+    <div
+      id="file-events-list"
+      x-init="$ajax('/files/{{ file.uuid }}/events', { target: 'file-events-list' })"
+    >
+      <div class="flex justify-center py-2">
+        <span class="loading loading-spinner loading-sm text-base-content/40"></span>
+      </div>
     </div>
   </div>
 

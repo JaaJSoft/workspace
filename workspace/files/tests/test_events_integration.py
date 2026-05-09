@@ -520,8 +520,9 @@ class EventsPanelEndpointTests(APITestCase):
         body = response.content.decode()
 
         # Load-more URL preserves the active filter so paginating doesn't
-        # silently drop it.
-        self.assertIn(f'/files/{self.file.uuid}/events?limit=30&action=renamed', body)
+        # silently drop it. Django auto-escapes the ``&`` separator in
+        # the rendered href; the browser decodes it before navigation.
+        self.assertIn(f'/files/{self.file.uuid}/events?limit=30&amp;action=renamed', body)
 
     def test_invalid_filter_value_falls_back_to_all(self):
         from workspace.files.services.events import record_event

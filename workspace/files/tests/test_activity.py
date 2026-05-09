@@ -160,10 +160,17 @@ class FilesActivityProviderTests(TestCase):
         )
         self.assertEqual(stats['total_files'], 1)
 
-    # ── deleted files excluded ────────────────────────────
+    # ── deleted files: events kept, stats exclude ────────────
 
-    def test_deleted_files_excluded(self):
-        """Soft-deleted files should not appear in any results."""
+    def test_events_on_deleted_files_are_kept_in_feed(self):
+        """Events stay in the activity feed even after the file is trashed.
+
+        The feed is a historical audit log: hiding events for soft-deleted
+        files would also hide the DELETED event itself (the file is in
+        trash by the time the event lands). ``get_stats`` is the only path
+        that still gates on ``deleted_at`` because it counts current files,
+        not history.
+        """
         deleted = File.objects.create(
             owner=self.alice, name='deleted_file.txt',
             node_type=File.NodeType.FILE, mime_type='text/plain', size=50,
@@ -175,10 +182,14 @@ class FilesActivityProviderTests(TestCase):
         counts = self.provider.get_daily_counts(
             self.alice.id, today, today,
         )
-        self.assertEqual(counts.get(today, 0), 2)  # still 2, deleted file's event excluded
+        # 2 from setUp + 1 from the trashed file = 3.
+        self.assertEqual(counts.get(today, 0), 3)
 
         events = self.provider.get_recent_events(self.alice.id)
-        self.assertEqual(len(events), 2)
+        self.assertEqual(len(events), 3)
+        self.assertIn('deleted_file.txt', {e['description'] for e in events})
 
+        # Stats are about current state, not history - trashed files stay
+        # excluded from the file count.
         stats = self.provider.get_stats(self.alice.id)
         self.assertEqual(stats['total_files'], 2)

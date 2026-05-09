@@ -37,9 +37,13 @@ class FilesActivityProvider(ActivityProvider):
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
         from workspace.files.models import File, FileEvent
 
+        # Events on soft-deleted files are kept in the feed: hiding them
+        # would also hide the DELETED event itself (the file is in trash
+        # by the time that event lands), and aligns this provider with the
+        # per-file panel (events_for_file) and the REST endpoint, neither
+        # of which filter on file__deleted_at.
         qs = FileEvent.objects.filter(
             file__node_type=File.NodeType.FILE,
-            file__deleted_at__isnull=True,
             created_at__date__gte=date_from,
             created_at__date__lte=date_to,
         )
@@ -56,9 +60,11 @@ class FilesActivityProvider(ActivityProvider):
     def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
         from workspace.files.models import File, FileEvent
 
+        # See get_daily_counts: events are not filtered by file__deleted_at
+        # so the DELETED event itself is reachable from the feed and the
+        # provider stays consistent with the per-file timeline.
         qs = FileEvent.objects.filter(
             file__node_type=File.NodeType.FILE,
-            file__deleted_at__isnull=True,
         )
         if user_id is not None:
             qs = qs.filter(file__owner_id=user_id)

@@ -2,19 +2,49 @@
 Activity timeline for the right properties panel.
 
 Context:
-- file: File object (used to build the load-more URL)
-- file_events: list of FileEvent (already capped at events_limit)
-- events_limit: the number of events currently shown
-- total_event_count: total events for the file (for the load-more visibility)
+- file: File object (used to build the swap URLs)
+- file_events: list of FileEvent matching the active filter (capped at events_limit)
+- events_limit: how many events the response embeds (for the "Load more" math)
+- total_event_count: total events matching the active filter
+- action_filter: current ``?action=`` value, '' when "All"
+- unfiltered_events_exist: True when the file has at least one event regardless
+  of filter (drives whether the section appears at all)
 
 Loaded by:
-- properties view (initial render, embedded inside properties_content.html)
-- events_panel view (alpine-ajax target on "Load more" clicks)
+- properties_content.html embeds an empty stub that auto-fetches this
+- "Load more" clicks (carry the active filter forward)
+- Action-filter dropdown changes
 {% endcomment %}
 <div id="file-events-list">
-{% if file_events %}
+{% if unfiltered_events_exist %}
 <div class="divider my-0 text-xs text-base-content/40">Activity</div>
 
+<select
+  class="select select-bordered select-xs w-full"
+  aria-label="Filter activity by action"
+  x-on:change="$ajax(`/files/{{ file.uuid }}/activity?action=${encodeURIComponent($event.target.value)}`, { target: 'file-events-list' })"
+>
+  <option value="" {% if not action_filter %}selected{% endif %}>All actions</option>
+  <optgroup label="Lifecycle">
+    <option value="created" {% if action_filter == 'created' %}selected{% endif %}>Created</option>
+    <option value="deleted" {% if action_filter == 'deleted' %}selected{% endif %}>Moved to trash</option>
+    <option value="restored" {% if action_filter == 'restored' %}selected{% endif %}>Restored</option>
+  </optgroup>
+  <optgroup label="Edits">
+    <option value="renamed" {% if action_filter == 'renamed' %}selected{% endif %}>Renamed</option>
+    <option value="moved" {% if action_filter == 'moved' %}selected{% endif %}>Moved</option>
+    <option value="content_replaced" {% if action_filter == 'content_replaced' %}selected{% endif %}>Updated</option>
+  </optgroup>
+  <optgroup label="Sharing">
+    <option value="shared" {% if action_filter == 'shared' %}selected{% endif %}>Shared</option>
+    <option value="share_permission_changed" {% if action_filter == 'share_permission_changed' %}selected{% endif %}>Permission changed</option>
+    <option value="unshared" {% if action_filter == 'unshared' %}selected{% endif %}>Unshared</option>
+    <option value="link_created" {% if action_filter == 'link_created' %}selected{% endif %}>Public link created</option>
+    <option value="link_revoked" {% if action_filter == 'link_revoked' %}selected{% endif %}>Public link revoked</option>
+  </optgroup>
+</select>
+
+{% if file_events %}
 <ul class="space-y-2.5">
   {% for event in file_events %}
   <li class="flex items-start gap-2.5 text-sm">
@@ -70,7 +100,7 @@ Loaded by:
 {% if total_event_count > events_limit %}
 <div class="flex justify-center pt-1">
   <a
-    href="/files/{{ file.uuid }}/activity?limit={{ events_limit|add:15 }}"
+    href="/files/{{ file.uuid }}/activity?limit={{ events_limit|add:15 }}{% if action_filter %}&action={{ action_filter }}{% endif %}"
     x-target="file-events-list"
     class="btn btn-ghost btn-xs gap-1"
   >
@@ -79,6 +109,10 @@ Loaded by:
     <span class="text-base-content/40">({{ events_limit }} of {{ total_event_count }})</span>
   </a>
 </div>
+{% endif %}
+
+{% else %}
+<p class="text-sm text-base-content/40 px-1 py-2">No events match this filter.</p>
 {% endif %}
 {% endif %}
 </div>

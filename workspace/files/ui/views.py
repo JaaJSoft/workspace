@@ -412,10 +412,13 @@ def properties(request, uuid):
 def events_panel(request, uuid):
     """Return just the activity timeline partial for the right properties panel.
 
-    Loaded by alpine-ajax when the user clicks "Load more" on the timeline.
-    The ``?limit=N`` param controls how many events to render (capped at
-    ``MAX_EVENTS_LIMIT``); offset is always 0 so the swap is idempotent.
+    Loaded by alpine-ajax for the initial fetch, "Load more" clicks, and
+    action-filter changes. Params:
+    - ``limit`` (int, default 15, capped at MAX_EVENTS_LIMIT)
+    - ``action`` (str, one of FileEvent.Action values; invalid/empty = no filter)
+    Offset is always 0 so the swap is idempotent.
     """
+    from workspace.files.models import FileEvent
     file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
     if not file_obj:
         raise Http404
@@ -428,8 +431,19 @@ def events_panel(request, uuid):
         events_limit = INITIAL_EVENTS_LIMIT
     events_limit = max(INITIAL_EVENTS_LIMIT, min(events_limit, MAX_EVENTS_LIMIT))
 
+    valid_actions = {value for value, _ in FileEvent.Action.choices}
+    action_filter = request.GET.get('action', '').strip()
+    if action_filter not in valid_actions:
+        action_filter = ''
+
     from workspace.files.services.events import events_for_file
-    events_qs = events_for_file(file_obj)
+    base_qs = events_for_file(file_obj)
+    # Whether the section appears at all is governed by the *unfiltered*
+    # existence: a filter that returns 0 should still render the dropdown
+    # so the user can clear it; a file with no events ever should hide
+    # the whole Activity block.
+    unfiltered_events_exist = base_qs.exists()
+    events_qs = base_qs.filter(action=action_filter) if action_filter else base_qs
     file_events = list(events_qs[:events_limit])
     total_event_count = events_qs.count()
 
@@ -437,6 +451,8 @@ def events_panel(request, uuid):
         'file': file_obj,
         'file_events': file_events,
         'events_limit': events_limit,
+        'action_filter': action_filter,
+        'unfiltered_events_exist': unfiltered_events_exist,
         'total_event_count': total_event_count,
     })
 

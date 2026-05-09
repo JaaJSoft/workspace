@@ -402,6 +402,80 @@ class EventsPanelEndpointTests(APITestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_filter_by_action_returns_only_matching_events(self):
+        from workspace.files.services.events import record_event
+        record_event(self.file, self.user, FileEvent.Action.CREATED)
+        record_event(self.file, self.user, FileEvent.Action.RENAMED, {
+            'old_name': 'a.txt', 'new_name': 'b.txt',
+        })
+        record_event(self.file, self.user, FileEvent.Action.SHARED, {
+            'shared_with_username': 'bob', 'permission': 'ro',
+        })
+
+        response = self.client.get(f'/files/{self.file.uuid}/activity?action=renamed')
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        # Only the rename event row is rendered.
+        self.assertIn('b.txt', body)
+        self.assertNotIn('shared with', body)
+
+    def test_filter_with_zero_matches_keeps_dropdown_visible(self):
+        from workspace.files.services.events import record_event
+        # File has events overall, but none of the filtered type.
+        record_event(self.file, self.user, FileEvent.Action.CREATED)
+
+        response = self.client.get(f'/files/{self.file.uuid}/activity?action=shared')
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        # Section visible (Activity divider + dropdown still rendered).
+        self.assertIn('Activity', body)
+        self.assertIn('aria-label="Filter activity by action"', body)
+        # Empty state messaging present.
+        self.assertIn('No events match this filter', body)
+
+    def test_filter_value_preserved_in_dropdown_after_swap(self):
+        from workspace.files.services.events import record_event
+        record_event(self.file, self.user, FileEvent.Action.RENAMED, {
+            'old_name': 'a.txt', 'new_name': 'b.txt',
+        })
+
+        response = self.client.get(f'/files/{self.file.uuid}/activity?action=renamed')
+        body = response.content.decode()
+
+        # The rename option keeps the selected attribute so the user sees
+        # which filter is currently active.
+        self.assertIn('value="renamed" selected', body)
+        self.assertNotIn('value="" selected', body)
+
+    def test_filter_carried_over_in_load_more_url(self):
+        from workspace.files.services.events import record_event
+        for i in range(20):
+            record_event(self.file, self.user, FileEvent.Action.RENAMED, {
+                'old_name': 'a.txt', 'new_name': f'rev-{i}.txt',
+            })
+        record_event(self.file, self.user, FileEvent.Action.SHARED)
+
+        response = self.client.get(f'/files/{self.file.uuid}/activity?action=renamed')
+        body = response.content.decode()
+
+        # Load-more URL preserves the active filter so paginating doesn't
+        # silently drop it.
+        self.assertIn(f'/files/{self.file.uuid}/activity?limit=30&action=renamed', body)
+
+    def test_invalid_filter_value_falls_back_to_all(self):
+        from workspace.files.services.events import record_event
+        record_event(self.file, self.user, FileEvent.Action.RENAMED, {
+            'old_name': 'a.txt', 'new_name': 'b.txt',
+        })
+
+        response = self.client.get(f'/files/{self.file.uuid}/activity?action=garbage')
+
+        self.assertEqual(response.status_code, 200)
+        # Garbage param is silently treated as "All" so the rename is shown.
+        self.assertIn('b.txt', response.content.decode())
+
 
 class FileEventCopyTests(APITestCase):
     """POST /copy emits CREATED on the new file with source_uuid metadata."""

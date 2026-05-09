@@ -136,15 +136,21 @@ class FilesActivityProviderTests(TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]['actor']['username'], 'bob')
 
-    def test_recent_events_falls_back_to_owner_when_actor_null(self):
-        """System actions (no actor) report the file owner as the actor."""
+    def test_recent_events_emit_null_actor_for_system_events(self):
+        """System actions (no actor) emit a null actor in the feed entry.
+
+        Falsely attributing them to the file owner would lie to the user
+        ('Alice trashed file.txt' when actually a Celery task or the sync
+        service did it). The dashboard template renders the actor block
+        only when the field is non-null.
+        """
         FileEvent.objects.all().delete()
         record_event(self.alice_file1, None, FileEvent.Action.DELETED)
 
         events = self.provider.get_recent_events(self.alice.id)
 
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0]['actor']['username'], 'alice')
+        self.assertIsNone(events[0]['actor'])
 
     # ── get_stats ─────────────────────────────────────────
 

@@ -70,24 +70,30 @@ class FilesActivityProvider(ActivityProvider):
             qs = qs.filter(file__owner_id=user_id)
         qs = qs.filter(
             self._event_visibility_filter(user_id, viewer_id),
-        ).select_related('actor', 'file', 'file__owner').order_by('-created_at')[offset:offset + limit]
+        ).select_related('actor', 'file').order_by('-created_at')[offset:offset + limit]
 
         events = []
         for ev in qs:
-            # Fall back to the file owner when an event has no actor (e.g.
-            # system-generated events from a Celery task).
-            actor = ev.actor or ev.file.owner
+            # Events without an actor are system-driven (Celery cleanup,
+            # sync soft-delete, ...). Reporting them as the file owner
+            # would falsely attribute the action to a real user; emit a
+            # null actor instead - the dashboard template already hides
+            # the actor block when it's missing.
+            if ev.actor is not None:
+                actor_data = {
+                    'id': ev.actor.pk,
+                    'username': ev.actor.username,
+                    'full_name': ev.actor.get_full_name(),
+                }
+            else:
+                actor_data = None
             events.append({
                 'icon': ev.icon,
                 'label': ev.short_label,
                 'description': ev.file.name,
                 'timestamp': ev.created_at,
                 'url': f'/files?preview={ev.file.pk}',
-                'actor': {
-                    'id': actor.pk,
-                    'username': actor.username,
-                    'full_name': actor.get_full_name(),
-                },
+                'actor': actor_data,
             })
         return events
 

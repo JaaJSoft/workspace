@@ -7,7 +7,6 @@ is the safety net guarding against silent regressions when wiring of
 """
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from rest_framework import status
 from rest_framework.test import APITestCase

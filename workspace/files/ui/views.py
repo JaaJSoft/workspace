@@ -409,8 +409,8 @@ def properties(request, uuid):
 
 
 @login_required
-def events_panel(request, uuid):
-    """Return just the activity timeline partial for the right properties panel.
+def events(request, uuid):
+    """Return just the events timeline partial for the right properties panel.
 
     Loaded by alpine-ajax for the initial fetch, "Load more" clicks, and
     action-filter changes. Params:

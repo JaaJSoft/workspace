@@ -24,7 +24,7 @@ Loaded by:
 <select
   class="select select-bordered select-xs w-full"
   aria-label="Filter activity by action"
-  x-on:change="$ajax(`/files/{{ file.uuid }}/activity?action=${encodeURIComponent($event.target.value)}`, { target: 'file-events-list' })"
+  x-on:change="$ajax(`/files/{{ file.uuid }}/events?action=${encodeURIComponent($event.target.value)}`, { target: 'file-events-list' })"
 >
   <option value="" {% if not action_filter %}selected{% endif %}>All actions</option>
   {% for category, actions in grouped_actions %}
@@ -89,7 +89,7 @@ Loaded by:
 {% if total_event_count > events_limit %}
 <div class="flex justify-center pt-1">
   <a
-    href="/files/{{ file.uuid }}/activity?limit={{ events_limit|add:15 }}{% if action_filter %}&action={{ action_filter }}{% endif %}"
+    href="/files/{{ file.uuid }}/events?limit={{ events_limit|add:15 }}{% if action_filter %}&action={{ action_filter }}{% endif %}"
     x-target="file-events-list"
     class="btn btn-ghost btn-xs gap-1"
   >

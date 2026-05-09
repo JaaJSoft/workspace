@@ -307,7 +307,7 @@ class PropertiesPanelEventsTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('id="file-events-list"', body)
         # The stub auto-fetches the activity endpoint via alpine-ajax on mount.
-        self.assertIn(f'/files/{self.file.uuid}/activity', body)
+        self.assertIn(f'/files/{self.file.uuid}/events', body)
 
     def test_panel_does_not_render_events_inline(self):
         from workspace.files.services.events import record_event
@@ -320,12 +320,12 @@ class PropertiesPanelEventsTests(APITestCase):
 
         # Events are lazy-loaded, so the rename payload (final.txt) must
         # not appear in the initial properties body — it'll come back via
-        # the alpine-ajax fetch against /files/<uuid>/activity.
+        # the alpine-ajax fetch against /files/<uuid>/events.
         self.assertNotIn('final.txt', body)
 
 
 class EventsPanelEndpointTests(APITestCase):
-    """GET /files/<uuid>/activity — alpine-ajax target for "Load more"."""
+    """GET /files/<uuid>/events — alpine-ajax target for "Load more"."""
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -348,7 +348,7 @@ class EventsPanelEndpointTests(APITestCase):
                 'old_name': 'doc.txt', 'new_name': f'rev-{i}.txt',
             })
 
-        response = self.client.get(f'/files/{self.file.uuid}/activity?limit=30')
+        response = self.client.get(f'/files/{self.file.uuid}/events?limit=30')
         body = response.content.decode()
 
         self.assertEqual(response.status_code, 200)
@@ -358,7 +358,7 @@ class EventsPanelEndpointTests(APITestCase):
         self.assertNotIn('rev-9.txt', body)
         # Load more button still present (40 > 30).
         self.assertIn('Load more', body)
-        self.assertIn(f'/files/{self.file.uuid}/activity?limit=45', body)
+        self.assertIn(f'/files/{self.file.uuid}/events?limit=45', body)
 
     def test_load_more_button_disappears_when_all_events_loaded(self):
         from workspace.files.services.events import record_event
@@ -366,7 +366,7 @@ class EventsPanelEndpointTests(APITestCase):
             record_event(self.file, self.user, FileEvent.Action.RENAMED, {'i': i})
 
         # Asking for more than total should drop the button.
-        response = self.client.get(f'/files/{self.file.uuid}/activity?limit=30')
+        response = self.client.get(f'/files/{self.file.uuid}/events?limit=30')
 
         self.assertNotIn('Load more', response.content.decode())
 
@@ -376,7 +376,7 @@ class EventsPanelEndpointTests(APITestCase):
             record_event(self.file, self.user, FileEvent.Action.RENAMED, {'i': i})
 
         # 99999 must be clamped down to MAX_EVENTS_LIMIT (200) - no 500.
-        response = self.client.get(f'/files/{self.file.uuid}/activity?limit=99999')
+        response = self.client.get(f'/files/{self.file.uuid}/events?limit=99999')
 
         self.assertEqual(response.status_code, 200)
 
@@ -384,12 +384,12 @@ class EventsPanelEndpointTests(APITestCase):
         from workspace.files.services.events import record_event
         record_event(self.file, self.user, FileEvent.Action.RENAMED)
 
-        response = self.client.get(f'/files/{self.file.uuid}/activity?limit=garbage')
+        response = self.client.get(f'/files/{self.file.uuid}/events?limit=garbage')
 
         self.assertEqual(response.status_code, 200)
 
     def test_endpoint_404s_for_unknown_file(self):
-        response = self.client.get('/files/00000000-0000-0000-0000-000000000000/activity')
+        response = self.client.get('/files/00000000-0000-0000-0000-000000000000/events')
         self.assertEqual(response.status_code, 404)
 
     def test_endpoint_404s_for_user_without_access(self):
@@ -398,7 +398,7 @@ class EventsPanelEndpointTests(APITestCase):
         self.client.logout()
         self.client.login(username='bob', password='pass')
 
-        response = self.client.get(f'/files/{self.file.uuid}/activity')
+        response = self.client.get(f'/files/{self.file.uuid}/events')
 
         self.assertEqual(response.status_code, 404)
 
@@ -412,7 +412,7 @@ class EventsPanelEndpointTests(APITestCase):
             'shared_with_username': 'bob', 'permission': 'ro',
         })
 
-        response = self.client.get(f'/files/{self.file.uuid}/activity?action=renamed')
+        response = self.client.get(f'/files/{self.file.uuid}/events?action=renamed')
         body = response.content.decode()
 
         self.assertEqual(response.status_code, 200)
@@ -428,7 +428,7 @@ class EventsPanelEndpointTests(APITestCase):
         # empty timeline.
         record_event(self.file, self.user, FileEvent.Action.CREATED)
 
-        response = self.client.get(f'/files/{self.file.uuid}/activity?action=shared')
+        response = self.client.get(f'/files/{self.file.uuid}/events?action=shared')
         body = response.content.decode()
 
         self.assertEqual(response.status_code, 200)
@@ -444,7 +444,7 @@ class EventsPanelEndpointTests(APITestCase):
             'old_name': 'a.txt', 'new_name': 'b.txt',
         })
 
-        response = self.client.get(f'/files/{self.file.uuid}/activity')
+        response = self.client.get(f'/files/{self.file.uuid}/events')
         body = response.content.decode()
 
         # Created and Renamed appear; Shared, Trashed etc. don't.
@@ -463,7 +463,7 @@ class EventsPanelEndpointTests(APITestCase):
             'old_name': 'a.txt', 'new_name': 'b.txt',
         })
 
-        response = self.client.get(f'/files/{self.file.uuid}/activity?action=renamed')
+        response = self.client.get(f'/files/{self.file.uuid}/events?action=renamed')
         body = response.content.decode()
 
         # The rename option keeps the selected attribute so the user sees
@@ -479,12 +479,12 @@ class EventsPanelEndpointTests(APITestCase):
             })
         record_event(self.file, self.user, FileEvent.Action.SHARED)
 
-        response = self.client.get(f'/files/{self.file.uuid}/activity?action=renamed')
+        response = self.client.get(f'/files/{self.file.uuid}/events?action=renamed')
         body = response.content.decode()
 
         # Load-more URL preserves the active filter so paginating doesn't
         # silently drop it.
-        self.assertIn(f'/files/{self.file.uuid}/activity?limit=30&action=renamed', body)
+        self.assertIn(f'/files/{self.file.uuid}/events?limit=30&action=renamed', body)
 
     def test_invalid_filter_value_falls_back_to_all(self):
         from workspace.files.services.events import record_event
@@ -492,7 +492,7 @@ class EventsPanelEndpointTests(APITestCase):
             'old_name': 'a.txt', 'new_name': 'b.txt',
         })
 
-        response = self.client.get(f'/files/{self.file.uuid}/activity?action=garbage')
+        response = self.client.get(f'/files/{self.file.uuid}/events?action=garbage')
 
         self.assertEqual(response.status_code, 200)
         # Garbage param is silently treated as "All" so the rename is shown.

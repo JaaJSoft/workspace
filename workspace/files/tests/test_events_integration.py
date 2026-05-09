@@ -279,7 +279,13 @@ class FileEventShareLinkTests(APITestCase):
 
 
 class PropertiesPanelEventsTests(APITestCase):
-    """Properties partial includes the recent activity timeline."""
+    """Properties partial embeds a lazy-loading stub for the activity timeline.
+
+    The events themselves are fetched by alpine-ajax against the activity
+    endpoint after the panel mounts; tests for that endpoint live in
+    ``EventsPanelEndpointTests`` below. These tests only assert that the
+    handoff (stub + auto-fetch URL) is in the rendered properties partial.
+    """
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -294,7 +300,16 @@ class PropertiesPanelEventsTests(APITestCase):
         )
         FileEvent.objects.all().delete()
 
-    def test_panel_shows_recent_events_with_actor_and_label(self):
+    def test_panel_includes_lazy_load_stub_for_activity(self):
+        response = self.client.get(f'/files/properties/{self.file.uuid}')
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="file-events-list"', body)
+        # The stub auto-fetches the activity endpoint via alpine-ajax on mount.
+        self.assertIn(f'/files/{self.file.uuid}/activity', body)
+
+    def test_panel_does_not_render_events_inline(self):
         from workspace.files.services.events import record_event
         record_event(self.file, self.user, FileEvent.Action.RENAMED, {
             'old_name': 'doc.txt', 'new_name': 'final.txt',
@@ -303,57 +318,10 @@ class PropertiesPanelEventsTests(APITestCase):
         response = self.client.get(f'/files/properties/{self.file.uuid}')
         body = response.content.decode()
 
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('Activity', body)
-        self.assertIn('alice', body)
-        self.assertIn('renamed', body)
-        self.assertIn('doc.txt', body)
-        self.assertIn('final.txt', body)
-
-    def test_panel_omits_activity_section_when_no_events(self):
-        response = self.client.get(f'/files/properties/{self.file.uuid}')
-
-        self.assertEqual(response.status_code, 200)
-        self.assertNotIn(
-            '<div class="divider my-0 text-xs text-base-content/40">Activity</div>',
-            response.content.decode(),
-        )
-
-    def test_panel_caps_at_15_events(self):
-        from workspace.files.services.events import record_event
-        for i in range(20):
-            record_event(self.file, self.user, FileEvent.Action.RENAMED, {
-                'old_name': 'a',
-                'new_name': f'rename-{i}',
-            })
-
-        response = self.client.get(f'/files/properties/{self.file.uuid}')
-        body = response.content.decode()
-
-        # Newest 15 are shown; older ones (rename-0..rename-4) must be missing.
-        self.assertIn('rename-19', body)
-        self.assertIn('rename-5', body)
-        self.assertNotIn('rename-4', body)
-
-    def test_panel_shows_load_more_button_when_more_events_exist(self):
-        from workspace.files.services.events import record_event
-        for i in range(20):
-            record_event(self.file, self.user, FileEvent.Action.RENAMED, {'i': i})
-
-        response = self.client.get(f'/files/properties/{self.file.uuid}')
-        body = response.content.decode()
-
-        self.assertIn('Load more', body)
-        self.assertIn(f'/files/{self.file.uuid}/activity?limit=30', body)
-
-    def test_panel_omits_load_more_button_when_all_events_fit(self):
-        from workspace.files.services.events import record_event
-        for i in range(3):
-            record_event(self.file, self.user, FileEvent.Action.RENAMED, {'i': i})
-
-        response = self.client.get(f'/files/properties/{self.file.uuid}')
-
-        self.assertNotIn('Load more', response.content.decode())
+        # Events are lazy-loaded, so the rename payload (final.txt) must
+        # not appear in the initial properties body — it'll come back via
+        # the alpine-ajax fetch against /files/<uuid>/activity.
+        self.assertNotIn('final.txt', body)
 
 
 class EventsPanelEndpointTests(APITestCase):

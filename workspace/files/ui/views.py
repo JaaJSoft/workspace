@@ -394,12 +394,6 @@ def properties(request, uuid):
     }
     perm_label, perm_is_write = PERMISSION_LABELS.get(perm, (None, False))
 
-    from workspace.files.services.events import events_for_file
-    events_qs = events_for_file(file_obj)
-    events_limit = INITIAL_EVENTS_LIMIT
-    file_events = list(events_qs[:events_limit])
-    total_event_count = events_qs.count()
-
     return render(request, 'files/ui/partials/properties_content.html', {
         'file': file_obj,
         'is_owner': is_owner,
@@ -411,9 +405,6 @@ def properties(request, uuid):
         'permission_label': perm_label,
         'permission_is_write': perm_is_write,
         'share_links': share_links,
-        'file_events': file_events,
-        'events_limit': events_limit,
-        'total_event_count': total_event_count,
     })
 
 

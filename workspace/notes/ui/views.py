@@ -89,6 +89,7 @@ def _ensure_default_folders(user):
     if not notes_folder:
         notes_folder = FileService.create_folder(
             user, 'Notes', icon='notebook-pen', color='primary',
+            acting_user=user,
         )
         changed = True
 
@@ -102,7 +103,7 @@ def _ensure_default_folders(user):
         # Check for legacy root-level Journal
         root_journal = folders.filter(name='Journal', parent__isnull=True).first()
         if root_journal:
-            FileService.move(root_journal, notes_folder)
+            FileService.move(root_journal, notes_folder, acting_user=user)
             journal_folder = root_journal
             changed = True
 
@@ -115,6 +116,7 @@ def _ensure_default_folders(user):
         journal_folder = FileService.create_folder(
             user, 'Journal', parent=notes_folder,
             icon='book-open', color='success',
+            acting_user=user,
         )
         changed = True
 

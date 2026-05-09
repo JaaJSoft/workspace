@@ -5,7 +5,8 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.files.activity import FilesActivityProvider
-from workspace.files.models import File, FileShare
+from workspace.files.models import File, FileEvent, FileShare
+from workspace.files.services.events import record_event
 
 User = get_user_model()
 
@@ -20,7 +21,7 @@ class FilesActivityProviderTests(TestCase):
             username='bob', email='bob@test.com', password='pass123',
         )
 
-        # Alice owns 2 files
+        # Alice owns 2 files, each with one CREATED event.
         self.alice_file1 = File.objects.create(
             owner=self.alice, name='alice_doc.txt',
             node_type=File.NodeType.FILE, mime_type='text/plain', size=100,
@@ -43,12 +44,18 @@ class FilesActivityProviderTests(TestCase):
             shared_with=self.bob,
         )
 
+        # Seed one event per file - direct `File.objects.create` does not
+        # write events, so the tests would otherwise see an empty feed.
+        record_event(self.alice_file1, self.alice, FileEvent.Action.CREATED)
+        record_event(self.alice_file2, self.alice, FileEvent.Action.CREATED)
+        record_event(self.bob_file, self.bob, FileEvent.Action.CREATED)
+
         self.provider = FilesActivityProvider()
 
     # ── get_daily_counts ──────────────────────────────────
 
     def test_daily_counts_own_profile(self):
-        """Alice viewing her own profile sees her 2 files."""
+        """Alice viewing her own profile sees her 2 events."""
         today = date.today()
         counts = self.provider.get_daily_counts(
             self.alice.id, today, today,
@@ -56,24 +63,36 @@ class FilesActivityProviderTests(TestCase):
         self.assertEqual(counts.get(today, 0), 2)
 
     def test_daily_counts_viewer_sees_only_shared(self):
-        """Bob looking at Alice's activity only sees the 1 shared file."""
+        """Bob looking at Alice's activity only sees the 1 shared event."""
         today = date.today()
         counts = self.provider.get_daily_counts(
             self.alice.id, today, today, viewer_id=self.bob.id,
         )
         self.assertEqual(counts.get(today, 0), 1)
 
+    def test_daily_counts_count_each_event(self):
+        """Multiple events on the same file produce multiple counts."""
+        record_event(self.alice_file1, self.alice, FileEvent.Action.RENAMED)
+        record_event(self.alice_file1, self.alice, FileEvent.Action.CONTENT_REPLACED)
+
+        today = date.today()
+        counts = self.provider.get_daily_counts(
+            self.alice.id, today, today,
+        )
+        # 2 CREATED events from setUp + 2 new events on file1 = 4
+        self.assertEqual(counts.get(today, 0), 4)
+
     # ── get_recent_events ─────────────────────────────────
 
     def test_recent_events_own_profile(self):
-        """Alice viewing her own profile sees her 2 files."""
+        """Alice viewing her own profile sees her 2 file events."""
         events = self.provider.get_recent_events(self.alice.id)
         self.assertEqual(len(events), 2)
         names = {e['description'] for e in events}
         self.assertEqual(names, {'alice_doc.txt', 'alice_notes.txt'})
 
     def test_recent_events_viewer_sees_only_shared(self):
-        """Bob looking at Alice's activity only sees the 1 shared file."""
+        """Bob looking at Alice's activity only sees the 1 shared file event."""
         events = self.provider.get_recent_events(
             self.alice.id, viewer_id=self.bob.id,
         )
@@ -97,6 +116,36 @@ class FilesActivityProviderTests(TestCase):
         )
         self.assertEqual(len(events), 0)
 
+    def test_recent_events_uses_action_specific_label(self):
+        """Each event reports its own action label, not a generic one."""
+        FileEvent.objects.all().delete()
+        record_event(self.alice_file1, self.alice, FileEvent.Action.RENAMED)
+
+        events = self.provider.get_recent_events(self.alice.id)
+
+        self.assertEqual(events[0]['label'], 'File renamed')
+        self.assertEqual(events[0]['icon'], 'pencil')
+
+    def test_recent_events_actor_can_differ_from_owner(self):
+        """When Bob (rw share) replaces content, the event's actor is Bob, not Alice."""
+        FileEvent.objects.all().delete()
+        record_event(self.alice_file1, self.bob, FileEvent.Action.CONTENT_REPLACED)
+
+        events = self.provider.get_recent_events(self.alice.id)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]['actor']['username'], 'bob')
+
+    def test_recent_events_falls_back_to_owner_when_actor_null(self):
+        """System actions (no actor) report the file owner as the actor."""
+        FileEvent.objects.all().delete()
+        record_event(self.alice_file1, None, FileEvent.Action.DELETED)
+
+        events = self.provider.get_recent_events(self.alice.id)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]['actor']['username'], 'alice')
+
     # ── get_stats ─────────────────────────────────────────
 
     def test_stats_own_profile(self):
@@ -115,17 +164,18 @@ class FilesActivityProviderTests(TestCase):
 
     def test_deleted_files_excluded(self):
         """Soft-deleted files should not appear in any results."""
-        File.objects.create(
+        deleted = File.objects.create(
             owner=self.alice, name='deleted_file.txt',
             node_type=File.NodeType.FILE, mime_type='text/plain', size=50,
             deleted_at=timezone.now(),
         )
+        record_event(deleted, self.alice, FileEvent.Action.CREATED)
 
         today = date.today()
         counts = self.provider.get_daily_counts(
             self.alice.id, today, today,
         )
-        self.assertEqual(counts.get(today, 0), 2)  # still 2, deleted excluded
+        self.assertEqual(counts.get(today, 0), 2)  # still 2, deleted file's event excluded
 
         events = self.provider.get_recent_events(self.alice.id)
         self.assertEqual(len(events), 2)

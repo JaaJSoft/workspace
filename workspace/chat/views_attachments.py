@@ -152,6 +152,7 @@ class AttachmentSaveToFilesView(APIView):
                     parent=parent,
                     content=DjangoFile(f, name=attachment.original_name),
                     mime_type=attachment.mime_type,
+                    acting_user=request.user,
                 )
         except (FileNotFoundError, OSError):
             return Response(

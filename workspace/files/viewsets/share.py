@@ -8,6 +8,12 @@ from rest_framework.response import Response
 
 from workspace.files.models import FileShare, FileShareLink
 from workspace.files.services import FileService
+from workspace.files.services.sharing import (
+    create_share_link as service_create_share_link,
+    revoke_share_link as service_revoke_share_link,
+    share_file as service_share_file,
+    unshare_file as service_unshare_file,
+)
 from workspace.notifications.services.notifications import notify
 
 User = get_user_model()
@@ -90,10 +96,11 @@ class ShareMixin:
                     {'detail': 'Invalid permission. Must be "ro" or "rw".'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            share, created = FileShare.objects.get_or_create(
-                file=file_obj,
-                shared_with=target_user,
-                defaults={'shared_by': request.user, 'permission': permission},
+            share, created, permission_changed = service_share_file(
+                file_obj,
+                target_user=target_user,
+                permission=permission,
+                acting_user=request.user,
             )
             if created:
                 notify(
@@ -103,9 +110,7 @@ class ShareMixin:
                     url=f'/files/{file_obj.parent_id}' if file_obj.parent_id else '/files',
                     actor=request.user,
                 )
-            if not created and share.permission != permission:
-                share.permission = permission
-                share.save(update_fields=['permission'])
+            if permission_changed:
                 perm_label = 'read & write' if permission == FileShare.Permission.READ_WRITE else 'read only'
                 notify(
                     recipient=target_user,
@@ -120,10 +125,9 @@ class ShareMixin:
             )
 
         # DELETE
-        deleted, _ = FileShare.objects.filter(
-            file=file_obj,
-            shared_with=target_user,
-        ).delete()
+        deleted = service_unshare_file(
+            file_obj, target_user=target_user, acting_user=request.user,
+        )
         if deleted:
             notify(
                 recipient=target_user,
@@ -166,7 +170,6 @@ class ShareMixin:
     @action(detail=True, methods=['get', 'post'], url_path='share-links')
     def share_links(self, request, uuid=None):
         """List or create share links for a file (owner only)."""
-        from django.contrib.auth.hashers import make_password
         from django.http import Http404
 
         from workspace.files.models import File
@@ -189,11 +192,10 @@ class ShareMixin:
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        raw_password = request.data.get('password', '')
-        link = FileShareLink.objects.create(
-            file=file_obj,
-            created_by=request.user,
-            password=make_password(raw_password) if raw_password else '',
+        link = service_create_share_link(
+            file_obj,
+            acting_user=request.user,
+            password=request.data.get('password', ''),
             expires_at=request.data.get('expires_at'),
         )
         return Response(
@@ -212,9 +214,9 @@ class ShareMixin:
         if file_obj.owner_id != request.user.id:
             raise Http404
 
-        deleted, _ = FileShareLink.objects.filter(
-            uuid=link_uuid, file=file_obj,
-        ).delete()
+        deleted = service_revoke_share_link(
+            file_obj, link_uuid=link_uuid, acting_user=request.user,
+        )
         if not deleted:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(status=status.HTTP_204_NO_CONTENT)

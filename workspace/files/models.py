@@ -614,3 +614,43 @@ class FileTag(models.Model):
 
     def __str__(self):
         return f'{self.file.name} — {self.tag.name}'
+
+
+class FileEvent(models.Model):
+    """Audit log entry for non-read operations performed on a file or folder."""
+
+    class Action(models.TextChoices):
+        CREATED = 'created', 'Created'
+        RENAMED = 'renamed', 'Renamed'
+        MOVED = 'moved', 'Moved'
+        CONTENT_REPLACED = 'content_replaced', 'Content replaced'
+        DELETED = 'deleted', 'Moved to trash'
+        RESTORED = 'restored', 'Restored from trash'
+        SHARED = 'shared', 'Shared'
+        SHARE_PERMISSION_CHANGED = 'share_permission_changed', 'Share permission changed'
+        UNSHARED = 'unshared', 'Unshared'
+        LINK_CREATED = 'link_created', 'Public link created'
+        LINK_REVOKED = 'link_revoked', 'Public link revoked'
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name='events')
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='file_events',
+        help_text='User who performed the action. Null for system actions.',
+    )
+    action = models.CharField(max_length=32, choices=Action.choices, db_index=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['file', '-created_at'], name='file_event_file_created'),
+        ]
+
+    def __str__(self):
+        return f'{self.action} on {self.file_id} by {self.actor_id} at {self.created_at}'

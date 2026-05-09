@@ -88,7 +88,7 @@ class CopyMixin:
                 )
 
         # Perform the copy
-        copied = FileService.copy(file_obj, parent, request.user)
+        copied = FileService.copy(file_obj, parent, request.user, acting_user=request.user)
         # Re-fetch through get_queryset() so the instance carries the
         # annotations FileSerializer now requires.
         annotated = self.get_queryset().filter(pk=copied.pk).first() or copied

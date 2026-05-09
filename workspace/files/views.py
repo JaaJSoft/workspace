@@ -29,6 +29,7 @@ from .viewsets.actions import ActionsMixin
 from .viewsets.comments import CommentsMixin
 from .viewsets.content import ContentMixin
 from .viewsets.copy import CopyMixin
+from .viewsets.events import EventsMixin
 from .viewsets.favorites import FavoritesMixin
 from .viewsets.share import ShareMixin
 from .viewsets.sync import SyncMixin
@@ -210,6 +211,7 @@ class FileViewSet(
     ShareMixin,
     CommentsMixin,
     ActionsMixin,
+    EventsMixin,
     viewsets.ModelViewSet,
 ):
     """
@@ -525,7 +527,9 @@ class FileViewSet(
                     {'detail': 'Shared write access only allows updating file content.'},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            # Perform the content update
+            # Perform the content update. The serializer's update() routes
+            # the write through FileService.update_content, which records
+            # the CONTENT_REPLACED event itself.
             serializer = self.get_serializer(file_obj, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
@@ -552,4 +556,4 @@ class FileViewSet(
                 title=f'{self.request.user.username} deleted "{instance.name}"',
                 actor=self.request.user,
             )
-        instance.delete()
+        FileService.soft_delete(instance, acting_user=self.request.user)

@@ -233,6 +233,7 @@ class FileSerializer(serializers.ModelSerializer):
                 icon=validated_data.get('icon'),
                 color=validated_data.get('color'),
                 group=group,
+                acting_user=owner,
             )
         else:
             instance = FileService.create_file(
@@ -242,6 +243,7 @@ class FileSerializer(serializers.ModelSerializer):
                 content=validated_data.get('content'),
                 mime_type=validated_data.get('mime_type'),
                 group=group,
+                acting_user=owner,
             )
 
         # A freshly-created node cannot have favorites, pins, shares, or
@@ -260,19 +262,20 @@ class FileSerializer(serializers.ModelSerializer):
         content_provided = 'content' in validated_data
         uploaded = validated_data.pop('content', None)
         explicit_mime_type = validated_data.pop('mime_type', None)
+        acting_user = self.context['request'].user
 
         # Handle rename via FileService (storage moves)
         if 'name' in validated_data:
             new_name = validated_data['name']
             if instance.name != new_name:
-                FileService.rename(instance, new_name)
+                FileService.rename(instance, new_name, acting_user=acting_user)
 
         # Handle move via FileService (storage moves). Pop so super().update()
         # below doesn't re-assign parent + re-save — FileService.move() already
         # does both, and noops when the parent is unchanged.
         if 'parent' in validated_data:
             new_parent = validated_data.pop('parent')
-            FileService.move(instance, new_parent, acting_user=self.context['request'].user)
+            FileService.move(instance, new_parent, acting_user=acting_user)
 
         instance = super().update(instance, validated_data)
 
@@ -282,6 +285,7 @@ class FileSerializer(serializers.ModelSerializer):
                     instance, uploaded,
                     name=instance.name,
                     mime_type=explicit_mime_type,
+                    acting_user=acting_user,
                 )
             else:
                 instance.content = uploaded

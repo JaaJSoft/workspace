@@ -12,10 +12,11 @@ import logging
 from django.db import transaction
 
 from ..metrics import FILES_UPLOAD_BYTES
-from ..models import File
+from ..models import File, FileEvent
 from . import _content as _content_helpers
 from . import _names as _name_helpers
 from . import _storage_ops as _storage
+from .events import record_event
 
 
 class FilePermission(enum.IntEnum):
@@ -99,7 +100,7 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def create_file(owner, name, parent=None, *, content=None, mime_type=None, group=None):
+    def create_file(owner, name, parent=None, *, content=None, mime_type=None, group=None, acting_user=None):
         """Create a new file record, optionally with uploaded content."""
         if group is None and parent and parent.group_id:
             group = parent.group
@@ -123,10 +124,11 @@ class FileService:
         file_obj.save()
         if size:
             FILES_UPLOAD_BYTES.inc(size)
+        record_event(file_obj, acting_user or owner, FileEvent.Action.CREATED)
         return file_obj
 
     @staticmethod
-    def create_folder(owner, name, parent=None, *, icon=None, color=None, group=None):
+    def create_folder(owner, name, parent=None, *, icon=None, color=None, group=None, acting_user=None):
         """Create a new folder record."""
         if group is None and parent and parent.group_id:
             group = parent.group
@@ -142,10 +144,11 @@ class FileService:
         )
         folder.save()
         FileService._ensure_folder_on_storage(folder)
+        record_event(folder, acting_user or owner, FileEvent.Action.CREATED)
         return folder
 
     @staticmethod
-    def register_disk_file(owner, name, parent, content_path, *, mime_type=None, size=None):
+    def register_disk_file(owner, name, parent, content_path, *, mime_type=None, size=None, acting_user=None):
         """Register a file that already exists on disk (used by sync)."""
         if not mime_type:
             mime_type = FileService.infer_mime_type(name)
@@ -160,6 +163,7 @@ class FileService:
         )
         file_obj.content.name = content_path
         file_obj.save()
+        record_event(file_obj, acting_user, FileEvent.Action.CREATED)
         return file_obj
 
     # ------------------------------------------------------------------
@@ -201,6 +205,11 @@ class FileService:
             File.objects.filter(file_obj._descendant_filter()).update(owner=new_owner)
             file_obj.owner = new_owner
 
+        record_event(file_obj, acting_user, FileEvent.Action.MOVED, {
+            'old_parent_id': str(old_parent_id) if old_parent_id else None,
+            'new_parent_id': str(new_parent_id) if new_parent_id else None,
+        })
+
     @staticmethod
     def propagate_group(file_obj, group):
         """Set group on file_obj and all its descendants."""
@@ -209,7 +218,7 @@ class FileService:
 
     @staticmethod
     @transaction.atomic
-    def rename(file_obj, new_name):
+    def rename(file_obj, new_name, *, acting_user=None):
         """Rename a file or folder, moving physical storage files as needed."""
         old_name = file_obj.name
         if old_name == new_name:
@@ -224,10 +233,14 @@ class FileService:
 
         file_obj.name = new_name
         file_obj.save()
+        record_event(file_obj, acting_user, FileEvent.Action.RENAMED, {
+            'old_name': old_name,
+            'new_name': new_name,
+        })
         return file_obj
 
     @staticmethod
-    def update_content(file_obj, content, *, name=None, mime_type=None):
+    def update_content(file_obj, content, *, name=None, mime_type=None, acting_user=None):
         """Replace a file's content, updating size and MIME type."""
         effective_name = name or file_obj.name
         file_obj.size = content.size
@@ -239,10 +252,11 @@ class FileService:
         file_obj.save()
         if file_obj.size:
             FILES_UPLOAD_BYTES.inc(file_obj.size)
+        record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED)
         return file_obj
 
     @staticmethod
-    def replace_content_storage(file_obj, *, storage_path, size):
+    def replace_content_storage(file_obj, *, storage_path, size, acting_user=None):
         """Point *file_obj* at content already written to *storage_path*."""
         file_obj.size = size
         file_obj.mime_type = FileService.infer_mime_type(file_obj.name)
@@ -251,12 +265,46 @@ class FileService:
         file_obj.save()
         if size:
             FILES_UPLOAD_BYTES.inc(size)
+        record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED)
         return file_obj
 
     @staticmethod
-    def copy(file_obj, target_parent, owner):
+    def copy(file_obj, target_parent, owner, *, acting_user=None):
         """Recursively copy a file or folder to *target_parent*."""
-        return _storage.copy_node(file_obj, target_parent, owner)
+        copied = _storage.copy_node(file_obj, target_parent, owner)
+        record_event(copied, acting_user or owner, FileEvent.Action.CREATED, {
+            'source_uuid': str(file_obj.uuid),
+            'source_name': file_obj.name,
+        })
+        return copied
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def soft_delete(file_obj, *, acting_user=None):
+        """Soft-delete a file or folder (cascades to descendants)."""
+        count = file_obj.soft_delete()
+        record_event(file_obj, acting_user, FileEvent.Action.DELETED, {
+            'cascade_count': count,
+        })
+        return count
+
+    @staticmethod
+    def restore(file_obj, *, acting_user=None):
+        """Restore a soft-deleted file or folder from trash."""
+        count = file_obj.restore()
+        record_event(file_obj, acting_user, FileEvent.Action.RESTORED, {
+            'cascade_count': count,
+        })
+        return count
+
+    @staticmethod
+    def hard_delete(file_obj, *, acting_user=None):
+        """Permanently delete a file or folder. No event - the row vanishes."""
+        # The cascade also wipes any FileEvent rows on this file.
+        file_obj.delete(hard=True)
 
     # ------------------------------------------------------------------
     # Access control

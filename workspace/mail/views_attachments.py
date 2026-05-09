@@ -121,6 +121,7 @@ class MailAttachmentSaveToFilesView(APIView):
                 parent=parent,
                 content=DjangoFile(f, name=attachment.filename),
                 mime_type=attachment.content_type,
+                acting_user=request.user,
             )
 
         return Response(

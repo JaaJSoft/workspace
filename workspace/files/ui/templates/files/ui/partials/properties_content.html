@@ -292,11 +292,17 @@ Context:
        initial fetch and "Load more" clicks). The wrapper sits OUTSIDE
        the swap target so its ``loading`` state survives each ajax
        round-trip; nested elements (refresh button, dim overlay) read
-       it via Alpine's scope chain. -->
+       it via Alpine's scope chain.
+
+       The ``ready`` flag silences the initial auto-fetch: that one is
+       already represented by the inline spinner inside the swap
+       target, so we don't want the refresh button (which renders the
+       moment the swap completes) to inherit a transient loading state
+       from the bootstrapping fetch. -->
   <div
-    x-data="{ loading: false }"
-    @ajax:before="loading = true"
-    @ajax:after="loading = false"
+    x-data="{ loading: false, ready: false }"
+    @ajax:before="if (ready) loading = true"
+    @ajax:after="loading = false; ready = true"
     :class="loading && 'opacity-60 pointer-events-none'"
   >
     <div

@@ -449,6 +449,13 @@ def events(request, uuid):
     file_events = list(events_qs[:events_limit])
     total_event_count = events_qs.count()
 
+    # Pre-build the refresh URL so the template doesn't have to thread
+    # filter + limit through filter chains. The refresh keeps the user's
+    # current filter and currently-loaded count rather than resetting.
+    refresh_url = f'/files/{file_obj.uuid}/events?limit={events_limit}'
+    if action_filter:
+        refresh_url += f'&action={action_filter}'
+
     return render(request, 'files/ui/partials/_events_list.html', {
         'file': file_obj,
         'file_events': file_events,
@@ -457,6 +464,7 @@ def events(request, uuid):
         'action_filter': action_filter,
         'grouped_actions': grouped_actions,
         'total_event_count': total_event_count,
+        'refresh_url': refresh_url,
     })
 
 

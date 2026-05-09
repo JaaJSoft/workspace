@@ -86,9 +86,9 @@ Loaded by:
   {% endfor %}
 </ul>
 
-{% if total_event_count > events_limit %}
-  {% if events_limit < max_events_limit %}
-  <div class="flex justify-center pt-1">
+<div class="flex items-center justify-center gap-2 pt-1">
+  {% if total_event_count > events_limit %}
+    {% if events_limit < max_events_limit %}
     <a
       href="/files/{{ file.uuid }}/events?limit={{ events_limit|add:15 }}{% if action_filter %}&action={{ action_filter }}{% endif %}"
       x-target="file-events-list"
@@ -98,13 +98,14 @@ Loaded by:
       Load more
       <span class="text-base-content/40">({{ events_limit }} of {{ total_event_count }})</span>
     </a>
-  </div>
-  {% else %}
-  <p class="text-xs text-base-content/40 text-center pt-1">
-    Showing the {{ max_events_limit }} most recent of {{ total_event_count }} events. Older entries aren't displayed.
-  </p>
+    {% else %}
+    <p class="text-xs text-base-content/40 text-center flex-1">
+      Showing the {{ max_events_limit }} most recent of {{ total_event_count }} events. Older entries aren't displayed.
+    </p>
+    {% endif %}
   {% endif %}
-{% endif %}
+  {% include "ui/partials/refresh_button.html" with url_expr="'"|add:refresh_url|add:"'" target="file-events-list" loading_expr="false" size="xs" %}
+</div>
 
 {% else %}
 <p class="text-sm text-base-content/40 px-1 py-2">No events match this filter.</p>

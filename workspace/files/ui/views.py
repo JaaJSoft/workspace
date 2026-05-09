@@ -11,6 +11,8 @@ from .viewers import ViewerRegistry
 from ..models import File, FileFavorite, FileShare, FileShareLink, PinnedFolder
 
 RECENT_FILES_LIMIT = getattr(settings, 'RECENT_FILES_LIMIT', 25)
+INITIAL_EVENTS_LIMIT = 15
+MAX_EVENTS_LIMIT = 200
 
 
 def build_breadcrumbs(folder, user=None):
@@ -403,6 +405,58 @@ def properties(request, uuid):
         'permission_label': perm_label,
         'permission_is_write': perm_is_write,
         'share_links': share_links,
+    })
+
+
+@login_required
+def events(request, uuid):
+    """Return just the events timeline partial for the right properties panel.
+
+    Loaded by alpine-ajax for the initial fetch, "Load more" clicks, and
+    action-filter changes. Params:
+    - ``limit`` (int, default 15, capped at MAX_EVENTS_LIMIT)
+    - ``action`` (str, one of FileEvent.Action values; invalid/empty = no filter)
+    Offset is always 0 so the swap is idempotent.
+    """
+    from workspace.files.models import FileEvent
+    file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
+    if not file_obj:
+        raise Http404
+    if FileService.get_permission(request.user, file_obj) is None:
+        raise Http404
+
+    try:
+        events_limit = int(request.GET.get('limit', INITIAL_EVENTS_LIMIT))
+    except (TypeError, ValueError):
+        events_limit = INITIAL_EVENTS_LIMIT
+    events_limit = max(INITIAL_EVENTS_LIMIT, min(events_limit, MAX_EVENTS_LIMIT))
+
+    action_filter = request.GET.get('action', '').strip()
+
+    from workspace.files.services.events import events_for_file
+    base_qs = events_for_file(file_obj)
+    # The dropdown only offers filters that yield matches on this file:
+    # one query for the distinct action codes, then translated to grouped
+    # (category, [(value, label), ...]) tuples by the model.
+    available_action_codes = list(base_qs.values_list('action', flat=True).distinct())
+    # Drop the filter when it points at an action this file has never
+    # seen - keeps the dropdown selection consistent with the offered
+    # options instead of leaving it on a phantom value.
+    if action_filter not in available_action_codes:
+        action_filter = ''
+    grouped_actions = FileEvent.grouped_actions(only=available_action_codes)
+    events_qs = base_qs.filter(action=action_filter) if action_filter else base_qs
+    file_events = list(events_qs[:events_limit])
+    total_event_count = events_qs.count()
+
+    return render(request, 'files/ui/partials/_events_list.html', {
+        'file': file_obj,
+        'file_events': file_events,
+        'events_limit': events_limit,
+        'max_events_limit': MAX_EVENTS_LIMIT,
+        'action_filter': action_filter,
+        'grouped_actions': grouped_actions,
+        'total_event_count': total_event_count,
     })
 
 

@@ -157,12 +157,14 @@ class RootCollection(DAVCollection):
             node_type=File.NodeType.FILE, deleted_at__isnull=True,
         ).first()
         if file_obj is None:
-            file_obj = FileService.create_file(self._user, name, parent=None)
+            file_obj = FileService.create_file(
+                self._user, name, parent=None, acting_user=self._user,
+            )
         child_path = self.path.rstrip("/") + "/" + name
         return FileResource(child_path, self.environ, file_obj)
 
     def create_collection(self, name):
-        FileService.create_folder(self._user, name, parent=None)
+        FileService.create_folder(self._user, name, parent=None, acting_user=self._user)
         return True
 
     def get_used_bytes(self):
@@ -232,17 +234,19 @@ class FolderResource(DAVCollection):
         ).first()
         if file_obj is None:
             file_obj = FileService.create_file(
-                self._user, name, parent=self._file
+                self._user, name, parent=self._file, acting_user=self._user,
             )
         child_path = self.path.rstrip("/") + "/" + name
         return FileResource(child_path, self.environ, file_obj)
 
     def create_collection(self, name):
-        FileService.create_folder(self._user, name, parent=self._file)
+        FileService.create_folder(
+            self._user, name, parent=self._file, acting_user=self._user,
+        )
         return True
 
     def delete(self):
-        self._file.soft_delete()
+        FileService.soft_delete(self._file, acting_user=self._user)
 
     def copy_move_single(self, dest_path, *, is_move):
         dest_parts = dest_path.strip("/").split("/")
@@ -260,7 +264,7 @@ class FolderResource(DAVCollection):
         dest_parent = _resolve_parent(self._user, dest_parts[:-1])
 
         if new_name != self._file.name:
-            FileService.rename(self._file, new_name)
+            FileService.rename(self._file, new_name, acting_user=self._user)
 
         if dest_parent != self._file.parent:
             FileService.move(self._file, dest_parent, acting_user=self._user)
@@ -375,11 +379,13 @@ class FileResource(DAVNonCollection):
                 self._file = FileService.create_file(
                     self._user, self._file.name,
                     parent=self._file.parent,
+                    acting_user=self._user,
                 )
             FileService.replace_content_storage(
                 self._file,
                 storage_path=self._storage_path,
                 size=buf.size,
+                acting_user=self._user,
             )
 
         logger.info(
@@ -391,7 +397,7 @@ class FileResource(DAVNonCollection):
     def delete(self):
         if getattr(self, "_moved", False):
             return  # Already moved in copy_move_single; nothing to delete.
-        self._file.soft_delete()
+        FileService.soft_delete(self._file, acting_user=self._user)
 
     def copy_move_single(self, dest_path, *, is_move):
         dest_parts = dest_path.strip("/").split("/")
@@ -400,7 +406,7 @@ class FileResource(DAVNonCollection):
 
         if is_move:
             if new_name != self._file.name:
-                FileService.rename(self._file, new_name)
+                FileService.rename(self._file, new_name, acting_user=self._user)
             if dest_parent != self._file.parent:
                 FileService.move(self._file, dest_parent, acting_user=self._user)
             self._moved = True
@@ -431,7 +437,9 @@ def _copy_as(file_obj, dest_parent, owner, new_name):
     For folders, children are copied recursively with their original names.
     """
     if file_obj.is_folder():
-        folder = FileService.create_folder(owner, new_name, parent=dest_parent)
+        folder = FileService.create_folder(
+            owner, new_name, parent=dest_parent, acting_user=owner,
+        )
         children = File.objects.filter(
             FileService.accessible_files_q(owner),
             parent=file_obj, deleted_at__isnull=True,
@@ -449,6 +457,7 @@ def _copy_as(file_obj, dest_parent, owner, new_name):
         return FileService.create_file(
             owner, new_name, parent=dest_parent,
             content=content, mime_type=file_obj.mime_type,
+            acting_user=owner,
         )
     finally:
         if content is not None:

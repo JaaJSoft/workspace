@@ -35,7 +35,7 @@ class TrashMixin:
         file_obj = self.get_object()
         if file_obj.deleted_at is None:
             return Response({'detail': 'Item is not in trash.'}, status=status.HTTP_400_BAD_REQUEST)
-        restored = file_obj.restore()
+        restored = FileService.restore(file_obj, acting_user=request.user)
         return Response({'restored': restored}, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -52,7 +52,7 @@ class TrashMixin:
         file_obj = self.get_object()
         if file_obj.deleted_at is None:
             return Response({'detail': 'Item is not in trash.'}, status=status.HTTP_400_BAD_REQUEST)
-        file_obj.delete(hard=True)
+        FileService.hard_delete(file_obj, acting_user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(

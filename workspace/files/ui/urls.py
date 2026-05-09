@@ -10,6 +10,7 @@ urlpatterns = [
     path('/pinned', views.pinned_folders, name='pinned_folders'),
     path('/group-folders', views.group_folders_sidebar, name='group_folders_sidebar'),
     path('/properties/<uuid:uuid>', views.properties, name='properties'),
+    path('/<uuid:uuid>/events', views.events, name='events'),
     path('/view/<uuid:uuid>', views.view_file, name='view_file'),
     path('/shared/<str:token>', views.shared_file_view, name='shared_file'),
     path('/<uuid:folder>', views.index, name='folder'),

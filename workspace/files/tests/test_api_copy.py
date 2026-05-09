@@ -303,6 +303,20 @@ class CopyAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
+    def test_copy_with_malformed_parent_uuid_returns_400(self):
+        """Garbage parent UUID returns 400 via parse_uuid_or_none, not 500."""
+        my_file = File.objects.create(
+            owner=self.user, name='mine.txt', node_type=File.NodeType.FILE,
+            mime_type='text/plain',
+        )
+
+        response = self.client.post(
+            f'/api/v1/files/{my_file.uuid}/copy',
+            {'parent': 'not-a-uuid'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_copy_into_unrelated_user_folder_still_400(self):
         """Negative control: someone else's personal folder is still
         rejected with 400, even after access widening."""

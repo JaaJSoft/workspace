@@ -288,6 +288,17 @@ Context:
     </div>
   </div>
 
+  <!-- Activity (lazy-loaded via alpine-ajax: same endpoint serves
+       initial fetch and "Load more" clicks) -->
+  <div
+    id="file-events-list"
+    x-init="$ajax('/files/{{ file.uuid }}/events', { target: 'file-events-list' })"
+  >
+    <div class="flex justify-center py-2">
+      <span class="loading loading-spinner loading-sm text-base-content/40"></span>
+    </div>
+  </div>
+
   <!-- Advanced (UUID) -->
   <details class="group">
     <summary class="flex items-center justify-between cursor-pointer text-xs text-base-content/40 hover:text-base-content/60 transition-colors list-none">

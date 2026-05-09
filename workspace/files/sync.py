@@ -168,7 +168,7 @@ class FileSyncService:
 
             try:
                 if is_dir:
-                    FileService.create_folder(user, entry_name, parent_db)
+                    FileService.create_folder(user, entry_name, parent_db, acting_user=user)
                     result.folders_created += 1
                     self.log.info("Created folder: %s", entry_name)
                 else:
@@ -182,7 +182,7 @@ class FileSyncService:
 
                     FileService.register_disk_file(
                         user, entry_name, parent_db, content_path,
-                        mime_type=mime_type, size=size,
+                        mime_type=mime_type, size=size, acting_user=user,
                     )
                     result.files_created += 1
                     self.log.info("Created file: %s (%s, %s bytes)", entry_name, mime_type, size)
@@ -210,7 +210,17 @@ class FileSyncService:
                 continue
 
             try:
+                # Bypass FileService.soft_delete here: we already have a custom
+                # *deleted_at* (the moment sync started, ``now``), and we still
+                # want a single FileEvent for traceability. Calling the model
+                # directly + recording the event ourselves preserves both.
+                from workspace.files.models import FileEvent
+                from workspace.files.services.events import record_event
                 count = db_record.soft_delete(deleted_at=now)
+                record_event(db_record, user, FileEvent.Action.DELETED, {
+                    'cascade_count': count,
+                    'detected_by_sync': True,
+                })
                 self.log.info("Soft-deleted %s: %s (%d records)", node_type, name, count)
                 if node_type == File.NodeType.FOLDER:
                     result.folders_soft_deleted += 1

@@ -9,6 +9,13 @@ Optional context:
 - loading_expr: Alpine expression (default "loading") that, when truthy, spins the icon.
 - title: tooltip text (default "Refresh").
 - size: button size modifier (default "sm").
+
+Note: the reactive ``:class`` binding lives on a ``<span>`` wrapper rather
+than the ``<i>`` itself. Lucide replaces ``<i data-lucide="...">`` with a
+fresh ``<svg>`` at mount time, which orphans any Alpine directive bound
+to the original ``<i>`` - the spin would never start. Wrapping in a
+``<span>`` (which Lucide never touches) preserves the binding and makes
+the SVG inside rotate via ``animate-spin``.
 {% endcomment %}
 <a
   :href="{{ url_expr }}"
@@ -16,5 +23,7 @@ Optional context:
   x-target="{{ target }}"
   title="{{ title|default:'Refresh' }}"
 >
-  <i data-lucide="refresh-cw" class="w-4 h-4" :class="{{ loading_expr|default:'loading' }} && 'animate-spin'"></i>
+  <span class="inline-flex" :class="{{ loading_expr|default:'loading' }} && 'animate-spin'">
+    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+  </span>
 </a>

@@ -1,6 +1,7 @@
 """Scheduled bot message Celery tasks (dispatcher + worker)."""
 
 import logging
+from datetime import timedelta
 
 from celery import shared_task
 from django.utils import timezone
@@ -17,18 +18,39 @@ from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
+# Window the dispatcher uses to push next_run_at out of the due range when it
+# claims a row. Any worker that fails to complete within this window leaves
+# the row to re-fire naturally — self-healing fallback if the Celery task is
+# lost or the worker dies before its own CAS update.
+DISPATCH_LOCK_HORIZON = timedelta(hours=1)
+
 
 @shared_task(name='ai.dispatch_scheduled_messages')
 def dispatch_scheduled_messages():
-    """Find due scheduled messages and dispatch a generation task for each."""
+    """Find due scheduled messages and dispatch a generation task for each.
+
+    Each row is claimed via a compare-and-swap UPDATE keyed on the value of
+    ``next_run_at`` we just observed. Only the dispatcher whose UPDATE
+    affects a row enqueues the generation task — concurrent dispatcher runs
+    (or beat-fired duplicates) all end up racing on the same predicate, and
+    the database guarantees exactly one winner per row.
+    """
     from workspace.ai.models import ScheduledMessage
 
     now = timezone.now()
-    due = ScheduledMessage.objects.filter(is_active=True, next_run_at__lte=now)
+    due = ScheduledMessage.objects.filter(
+        is_active=True, next_run_at__lte=now,
+    ).only('pk', 'next_run_at')
     count = 0
     for schedule in due:
-        generate_scheduled_response.delay(str(schedule.uuid))
-        count += 1
+        claimed = ScheduledMessage.objects.filter(
+            pk=schedule.pk,
+            next_run_at=schedule.next_run_at,
+            is_active=True,
+        ).update(next_run_at=now + DISPATCH_LOCK_HORIZON)
+        if claimed:
+            generate_scheduled_response.delay(str(schedule.uuid))
+            count += 1
     if count:
         logger.info('Dispatched %d scheduled message(s)', count)
 
@@ -64,9 +86,30 @@ def generate_scheduled_response(self, schedule_id: str):
 
     creator_tz = get_user_timezone(schedule.created_by)
 
+    # Compare-and-swap on next_run_at: if another worker already advanced
+    # the row (because the same task got delivered twice, or the worker is
+    # racing the dispatcher's claim window), our UPDATE matches zero rows
+    # and we bail out before posting anything. This is the second half of
+    # the dispatcher's atomic-claim contract — together they guarantee
+    # exactly-once delivery per scheduled run.
+    expected_next_run_at = schedule.next_run_at
     schedule.last_run_at = timezone.now()
     schedule.compute_next_run(user_tz=creator_tz)
-    schedule.save(update_fields=['last_run_at', 'next_run_at', 'is_active'])
+    claimed = ScheduledMessage.objects.filter(
+        pk=schedule_id,
+        next_run_at=expected_next_run_at,
+        is_active=True,
+    ).update(
+        last_run_at=schedule.last_run_at,
+        next_run_at=schedule.next_run_at,
+        is_active=schedule.is_active,
+    )
+    if not claimed:
+        logger.info(
+            'Scheduled response skipped (claimed by another worker): schedule=%s',
+            scrub(schedule_id),
+        )
+        return {'status': 'skipped', 'reason': 'already_claimed'}
 
     try:
         bot_user = User.objects.get(pk=schedule.bot_id)

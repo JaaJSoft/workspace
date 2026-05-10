@@ -172,6 +172,28 @@ class DispatchScheduledMessagesTests(TestCase):
 
         mock_delay.assert_not_called()
 
+    @patch('workspace.ai.tasks.generate_scheduled_response.delay')
+    def test_dispatcher_does_not_double_enqueue_on_back_to_back_runs(self, mock_delay):
+        # Two dispatcher passes against the same due row must enqueue at most
+        # once. The first pass atomically advances next_run_at out of the due
+        # window so the second pass can no longer match the same row.
+        schedule = ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt='Due',
+            kind=ScheduledMessage.Kind.ONCE,
+            next_run_at=timezone.now() - timedelta(minutes=5),
+        )
+
+        from workspace.ai.tasks import dispatch_scheduled_messages
+        dispatch_scheduled_messages()
+        dispatch_scheduled_messages()
+
+        mock_delay.assert_called_once_with(str(schedule.uuid))
+        schedule.refresh_from_db()
+        self.assertGreater(schedule.next_run_at, timezone.now())
+
 
 # ---------------------------------------------------------------------------
 # 3. Generate Scheduled Response Tests
@@ -334,6 +356,55 @@ class GenerateScheduledResponseTests(TestCase):
         result = generate_scheduled_response(str(uuid.uuid4()))
         self.assertEqual(result['status'], 'error')
         self.assertIn('not found', result['error'])
+
+    @patch('workspace.ai.services.tool_loop.call_llm')
+    def test_concurrent_worker_does_not_double_send(self, mock_llm):
+        # Simulate the worker race: two workers loaded the row at the same
+        # next_run_at, the other one already advanced it in the DB before
+        # this worker reaches its CAS update. The CAS predicate matches zero
+        # rows, the worker bails, and no bot message is posted.
+        mock_llm.return_value = {
+            'content': 'Hello!',
+            'tool_calls': None,
+            'message': MagicMock(content='Hello!', tool_calls=None, to_dict=lambda: {}),
+            'model': 'gpt-4o-mini',
+            'prompt_tokens': 10,
+            'completion_tokens': 5,
+        }
+
+        schedule = ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt='Say hi',
+            kind=ScheduledMessage.Kind.ONCE,
+            next_run_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        original_compute = ScheduledMessage.compute_next_run
+
+        def race_then_compute(self_obj, user_tz=None):
+            # Competing worker advances next_run_at in the DB before our CAS.
+            ScheduledMessage.objects.filter(pk=self_obj.pk).update(
+                next_run_at=timezone.now() + timedelta(hours=24),
+            )
+            return original_compute(self_obj, user_tz=user_tz)
+
+        with patch.object(
+            ScheduledMessage, 'compute_next_run',
+            autospec=True, side_effect=race_then_compute,
+        ):
+            from workspace.ai.tasks import generate_scheduled_response
+            result = generate_scheduled_response(str(schedule.uuid))
+
+        self.assertEqual(result['status'], 'skipped')
+        self.assertEqual(result['reason'], 'already_claimed')
+
+        # Crucial: no bot message was posted.
+        bot_msgs = Message.objects.filter(
+            conversation=self.conversation, author=self.bot_user,
+        )
+        self.assertEqual(bot_msgs.count(), 0)
 
 
 # ---------------------------------------------------------------------------

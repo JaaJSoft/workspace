@@ -34,36 +34,72 @@ def dispatch_scheduled_messages():
     affects a row enqueues the generation task — concurrent dispatcher runs
     (or beat-fired duplicates) all end up racing on the same predicate, and
     the database guarantees exactly one winner per row.
+
+    The claim token (the value written into ``next_run_at`` here) is passed
+    to the worker so the worker's CAS predicate stays pinned to the exact
+    value this dispatcher published. That makes the worker reject duplicate
+    Celery deliveries even after the first delivery has committed a fresh
+    ``next_run_at``.
     """
     from workspace.ai.models import ScheduledMessage
 
     now = timezone.now()
+    claim_token = now + DISPATCH_LOCK_HORIZON
     due = ScheduledMessage.objects.filter(
         is_active=True, next_run_at__lte=now,
     ).only('pk', 'next_run_at')
     count = 0
     for schedule in due:
+        original_next_run_at = schedule.next_run_at
         claimed = ScheduledMessage.objects.filter(
             pk=schedule.pk,
-            next_run_at=schedule.next_run_at,
+            next_run_at=original_next_run_at,
             is_active=True,
-        ).update(next_run_at=now + DISPATCH_LOCK_HORIZON)
-        if claimed:
-            generate_scheduled_response.delay(str(schedule.uuid))
-            count += 1
+        ).update(next_run_at=claim_token)
+        if not claimed:
+            continue
+        try:
+            generate_scheduled_response.delay(
+                str(schedule.uuid), claim_token.isoformat(),
+            )
+        except Exception:
+            # Broker errors etc. - roll back the claim so the row stays due
+            # and re-fires on the next dispatcher pass instead of being
+            # parked at ``claim_token`` for DISPATCH_LOCK_HORIZON. Keep the
+            # loop going so other due rows still get a chance.
+            ScheduledMessage.objects.filter(pk=schedule.pk).update(
+                next_run_at=original_next_run_at,
+            )
+            logger.exception(
+                'Failed to enqueue scheduled response: schedule=%s',
+                scrub(str(schedule.pk)),
+            )
+            continue
+        count += 1
     if count:
         logger.info('Dispatched %d scheduled message(s)', count)
 
 
 @shared_task(name='ai.generate_scheduled_response', bind=True, max_retries=0)
-def generate_scheduled_response(self, schedule_id: str):
+def generate_scheduled_response(self, schedule_id: str, claim_token: str | None = None):
     """Run a scheduled bot message: load schedule, advance, generate.
 
-    Advances the schedule's ``next_run_at`` immediately to prevent duplicate
-    dispatches if the worker takes a while. The bot may emit ``[SKIP]`` to
-    indicate that the scheduled action is no longer relevant; in that case
-    no message is posted.
+    The CAS that finalizes the claim is keyed on ``claim_token`` — the
+    exact value the dispatcher wrote into ``next_run_at`` when it
+    enqueued this task. That way a duplicate Celery delivery (lost ack,
+    worker restart, …) sees a row whose ``next_run_at`` has been moved
+    to a real recurrence value by the first delivery and our predicate
+    matches zero rows, so we bail before posting a duplicate message.
+
+    Calls without a token (legacy queued tasks, direct test calls) fall
+    back to CAS against the value observed at load time, which still
+    blocks the in-flight worker race against the dispatcher's window.
+
+    The bot may emit ``[SKIP]`` to indicate the scheduled action is no
+    longer relevant; no message is posted in that case.
     """
+    from datetime import datetime
+
     from django.contrib.auth import get_user_model
 
     from workspace.ai.models import AITask, BotProfile, ScheduledMessage
@@ -74,7 +110,6 @@ def generate_scheduled_response(self, schedule_id: str):
 
     User = get_user_model()
 
-    # Load the schedule and advance it immediately to prevent duplicate dispatches.
     try:
         schedule = ScheduledMessage.objects.get(pk=schedule_id)
     except ScheduledMessage.DoesNotExist:
@@ -86,13 +121,9 @@ def generate_scheduled_response(self, schedule_id: str):
 
     creator_tz = get_user_timezone(schedule.created_by)
 
-    # Compare-and-swap on next_run_at: if another worker already advanced
-    # the row (because the same task got delivered twice, or the worker is
-    # racing the dispatcher's claim window), our UPDATE matches zero rows
-    # and we bail out before posting anything. This is the second half of
-    # the dispatcher's atomic-claim contract — together they guarantee
-    # exactly-once delivery per scheduled run.
-    expected_next_run_at = schedule.next_run_at
+    expected_next_run_at = (
+        datetime.fromisoformat(claim_token) if claim_token else schedule.next_run_at
+    )
     schedule.last_run_at = timezone.now()
     schedule.compute_next_run(user_tz=creator_tz)
     claimed = ScheduledMessage.objects.filter(

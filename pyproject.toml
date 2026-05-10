@@ -35,7 +35,7 @@ dependencies = [
     # webdav
     "wsgidav>=4.3.0",
     # server
-    "gunicorn>=24.1.1",
+    "gunicorn>=26.0.0",
     "django-brotli>=0.4.0",
     "gevent>=25.9.1",
     "django-prometheus>=2.4.0",

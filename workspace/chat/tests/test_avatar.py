@@ -5,6 +5,7 @@ from unittest import mock
 
 from PIL import Image
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -152,6 +153,20 @@ class GroupAvatarUploadTests(ChatTestMixin, APITestCase):
         image = _make_test_image()
         resp = self.client.post(self.url(self.dm.uuid), {
             'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_malformed_image_returns_400(self):
+        # Bytes pass the content-type/size guards but PIL can't decode them
+        # (raises UnidentifiedImageError, an OSError subclass). Without
+        # the try/except in the view this propagates as a 500.
+        self.client.force_authenticate(self.member)
+        bad = SimpleUploadedFile(
+            'avatar.png', b'not-actually-a-png', content_type='image/png',
+        )
+        resp = self.client.post(self.url(self.group.uuid), {
+            'image': bad,
+            'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
         }, format='multipart')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 

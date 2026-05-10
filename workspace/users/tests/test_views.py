@@ -5,6 +5,7 @@ from PIL import Image
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -304,6 +305,19 @@ class UserAvatarUploadTests(UserTestMixin, APITestCase):
         resp = self.client.post(self.URL, {
             'image': buf,
             'crop_x': 0, 'crop_y': 0, 'crop_w': 0, 'crop_h': 50,
+        }, format='multipart')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_malformed_image_returns_400(self):
+        # Bytes pass the content-type/size guards but PIL can't decode them
+        # (raises UnidentifiedImageError, an OSError subclass). Without
+        # the try/except in the view this propagates as a 500.
+        bad = SimpleUploadedFile(
+            'avatar.png', b'not-actually-a-png', content_type='image/png',
+        )
+        resp = self.client.post(self.URL, {
+            'image': bad,
+            'crop_x': 0, 'crop_y': 0, 'crop_w': 50, 'crop_h': 50,
         }, format='multipart')
         self.assertEqual(resp.status_code, 400)
 

@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from django.conf import settings as django_settings
@@ -25,6 +26,8 @@ from workspace.files.models import File
 from workspace.users.models import APITokenLabel, UserSetting
 from workspace.users.services import avatar as avatar_service, presence as presence_service
 from workspace.users.services.settings import delete_setting, set_setting
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema(tags=['Users'])
@@ -349,9 +352,24 @@ class UserAvatarUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        avatar_service.process_and_save_avatar(
-            request.user, image, crop_x, crop_y, crop_w, crop_h,
-        )
+        try:
+            avatar_service.process_and_save_avatar(
+                request.user, image, crop_x, crop_y, crop_w, crop_h,
+            )
+        except (ValueError, OSError):
+            # PIL raises UnidentifiedImageError (OSError) on unrecognised
+            # bytes and OSError on truncated files; ValueError covers
+            # crop coordinates that produce a zero-size region. Map them
+            # all to 400 so the client gets a useful error instead of 500.
+            logger.warning(
+                "Avatar upload failed for user %s",
+                request.user.id,
+                exc_info=True,
+            )
+            return Response(
+                {"errors": ["Invalid image or crop parameters."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response({"message": "Avatar updated successfully."})
 
     @extend_schema(

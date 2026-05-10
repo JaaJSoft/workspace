@@ -188,7 +188,7 @@ class DispatchScheduledMessagesTests(TestCase):
             kind=ScheduledMessage.Kind.ONCE,
             next_run_at=original,
         )
-        schedule_b = ScheduledMessage.objects.create(
+        ScheduledMessage.objects.create(
             conversation=self.conversation,
             bot=self.bot_user,
             created_by=self.user,

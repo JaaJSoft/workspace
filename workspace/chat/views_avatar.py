@@ -111,6 +111,11 @@ class GroupAvatarUploadView(APIView):
             # bytes and OSError on truncated files; ValueError covers
             # crop coordinates that produce a zero-size region. Map them
             # all to 400 so the client gets a useful error instead of 500.
+            logger.warning(
+                "Group avatar upload failed for conversation %s",
+                conversation.uuid,
+                exc_info=True,
+            )
             return Response(
                 {"errors": ["Invalid image or crop parameters."]},
                 status=status.HTTP_400_BAD_REQUEST,

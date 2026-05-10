@@ -379,6 +379,28 @@ class EventsPanelEndpointTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    def test_refresh_button_renders_with_current_limit_and_filter(self):
+        # The refresh button must keep the user's current view (limit +
+        # filter) rather than resetting to the default - clicking it after
+        # loading 30 renamed events should re-fetch 30 renamed events.
+        from workspace.files.services.events import record_event
+        for i in range(40):
+            record_event(self.file, self.user, FileEvent.Action.RENAMED, {
+                'old_name': 'a.txt', 'new_name': f'rev-{i}.txt',
+            })
+
+        response = self.client.get(f'/files/{self.file.uuid}/events?limit=30&action=renamed')
+        body = response.content.decode()
+
+        self.assertIn('data-lucide="refresh-cw"', body)
+        # Django auto-escapes the single quotes (&#x27;) and the ampersand
+        # (&amp;) in the :href attribute. The browser decodes them before
+        # Alpine evaluates the expression as a JS string literal.
+        self.assertIn(
+            f'&#x27;/files/{self.file.uuid}/events?limit=30&amp;action=renamed&#x27;',
+            body,
+        )
+
     def test_load_more_button_replaced_by_explainer_at_cap(self):
         # When events_limit hits the server cap (200) but there are still
         # more events on the file, the "Load more" button would loop without
@@ -498,8 +520,9 @@ class EventsPanelEndpointTests(APITestCase):
         body = response.content.decode()
 
         # Load-more URL preserves the active filter so paginating doesn't
-        # silently drop it.
-        self.assertIn(f'/files/{self.file.uuid}/events?limit=30&action=renamed', body)
+        # silently drop it. Django auto-escapes the ``&`` separator in
+        # the rendered href; the browser decodes it before navigation.
+        self.assertIn(f'/files/{self.file.uuid}/events?limit=30&amp;action=renamed', body)
 
     def test_invalid_filter_value_falls_back_to_all(self):
         from workspace.files.services.events import record_event

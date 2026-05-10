@@ -449,6 +449,19 @@ def events(request, uuid):
     file_events = list(events_qs[:events_limit])
     total_event_count = events_qs.count()
 
+    # Pre-build the swap URLs so the template doesn't thread filter +
+    # limit through filter chains. ``refresh_url`` keeps the user's
+    # current filter and currently-loaded count. ``load_more_url`` is
+    # None when no further page is available - either everything fits
+    # already, or the request hit the server cap and the explainer
+    # branch will render instead.
+    base_url = f'/files/{file_obj.uuid}/events'
+    action_qs = f'&action={action_filter}' if action_filter else ''
+    refresh_url = f'{base_url}?limit={events_limit}{action_qs}'
+    load_more_url = None
+    if total_event_count > events_limit and events_limit < MAX_EVENTS_LIMIT:
+        load_more_url = f'{base_url}?limit={events_limit + 15}{action_qs}'
+
     return render(request, 'files/ui/partials/_events_list.html', {
         'file': file_obj,
         'file_events': file_events,
@@ -457,6 +470,8 @@ def events(request, uuid):
         'action_filter': action_filter,
         'grouped_actions': grouped_actions,
         'total_event_count': total_event_count,
+        'refresh_url': refresh_url,
+        'load_more_url': load_more_url,
     })
 
 

@@ -289,29 +289,49 @@ Context:
   </div>
 
   <!-- Activity (lazy-loaded via alpine-ajax: same endpoint serves
-       initial fetch and "Load more" clicks). The wrapper sits OUTSIDE
-       the swap target so its ``loading`` state survives each ajax
-       round-trip; nested elements (refresh button, dim overlay) read
-       it via Alpine's scope chain.
+       initial fetch, refresh, filter changes and "Load more" clicks).
+       Mirrors the dashboard activity feed: a sibling skeleton block
+       toggled by ``loading`` covers the round-trip; the swap target
+       lives in the other branch so it stays present in the DOM while
+       hidden. ``loading: true`` initially so the skeleton covers the
+       first lazy fetch fired from ``x-init``. "Load more" carries
+       ``@ajax:before.stop`` to keep the existing list visible while
+       paginating - see ``_events_list.html``.
 
-       The ``ready`` flag silences the initial auto-fetch: that one is
-       already represented by the inline spinner inside the swap
-       target, so we don't want the refresh button (which renders the
-       moment the swap completes) to inherit a transient loading state
-       from the bootstrapping fetch. -->
+       NOTE on the event names: with the default ``replace`` merge
+       strategy, alpine-ajax detaches the trigger element via
+       ``replaceWith`` *before* firing ``ajax:after``, so that event
+       never bubbles up to this wrapper (the trigger == the swap
+       target == the inner ``#file-events-list``). We clear ``loading``
+       on ``ajax:merged`` instead - that one fires on the *new*
+       element, which is attached to the DOM, so it bubbles correctly.
+       ``ajax:error`` is the equivalent for failed requests. -->
   <div
-    x-data="{ loading: false, ready: false }"
-    @ajax:before="if (ready) loading = true"
-    @ajax:after="loading = false; ready = true"
-    :class="loading && 'opacity-60 pointer-events-none'"
+    x-data="{ loading: true }"
+    @ajax:before="loading = true"
+    @ajax:merged="loading = false"
+    @ajax:error="loading = false"
   >
-    <div
-      id="file-events-list"
-      x-init="$ajax('/files/{{ file.uuid }}/events', { target: 'file-events-list' })"
-    >
-      <div class="flex justify-center py-2">
-        <span class="loading loading-spinner loading-sm text-base-content/40"></span>
-      </div>
+    <div x-show="loading" x-cloak>
+      <div class="divider my-0 text-xs text-base-content/40">Activity</div>
+      <div class="h-7 bg-base-300/60 rounded my-2 animate-pulse"></div>
+      <ul class="space-y-2.5 animate-pulse">
+        {% for _ in "1234" %}
+        <li class="flex items-start gap-2.5">
+          <div class="w-3.5 h-3.5 mt-1 rounded-full bg-base-300 flex-shrink-0"></div>
+          <div class="flex-1 space-y-1.5">
+            <div class="h-3.5 bg-base-300 rounded w-3/4"></div>
+            <div class="h-3 bg-base-300 rounded w-1/3"></div>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div x-show="!loading">
+      <div
+        id="file-events-list"
+        x-init="$ajax('/files/{{ file.uuid }}/events', { target: 'file-events-list' })"
+      ></div>
     </div>
   </div>
 

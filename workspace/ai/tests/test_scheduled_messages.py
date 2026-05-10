@@ -137,7 +137,8 @@ class DispatchScheduledMessagesTests(TestCase):
         from workspace.ai.tasks import dispatch_scheduled_messages
         dispatch_scheduled_messages()
 
-        mock_delay.assert_called_once_with(str(schedule.uuid))
+        mock_delay.assert_called_once()
+        self.assertEqual(mock_delay.call_args.args[0], str(schedule.uuid))
 
     @patch('workspace.ai.tasks.generate_scheduled_response.delay')
     def test_skips_future_schedules(self, mock_delay):
@@ -171,6 +172,67 @@ class DispatchScheduledMessagesTests(TestCase):
         dispatch_scheduled_messages()
 
         mock_delay.assert_not_called()
+
+    def test_dispatcher_rolls_back_claim_on_publish_failure(self):
+        # When generate_scheduled_response.delay() raises (e.g. broker is
+        # down), the dispatcher must roll back its claim so the row stays
+        # due for the next pass instead of being parked at now + 1h. The
+        # exception must also be swallowed so the loop keeps processing
+        # other due rows.
+        original = timezone.now() - timedelta(minutes=5)
+        schedule_a = ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt='First',
+            kind=ScheduledMessage.Kind.ONCE,
+            next_run_at=original,
+        )
+        ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt='Second',
+            kind=ScheduledMessage.Kind.ONCE,
+            next_run_at=original + timedelta(seconds=1),
+        )
+
+        with patch(
+            'workspace.ai.tasks.generate_scheduled_response.delay',
+            side_effect=[Exception('broker unavailable'), None],
+        ) as mock_delay:
+            from workspace.ai.tasks import dispatch_scheduled_messages
+            dispatch_scheduled_messages()  # must not raise
+
+        # Loop kept going after the first failure and tried the second row.
+        self.assertEqual(mock_delay.call_count, 2)
+
+        # First row's claim was rolled back to its original due time.
+        schedule_a.refresh_from_db()
+        self.assertLessEqual(schedule_a.next_run_at, timezone.now())
+
+    @patch('workspace.ai.tasks.generate_scheduled_response.delay')
+    def test_dispatcher_does_not_double_enqueue_on_back_to_back_runs(self, mock_delay):
+        # Two dispatcher passes against the same due row must enqueue at most
+        # once. The first pass atomically advances next_run_at out of the due
+        # window so the second pass can no longer match the same row.
+        schedule = ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt='Due',
+            kind=ScheduledMessage.Kind.ONCE,
+            next_run_at=timezone.now() - timedelta(minutes=5),
+        )
+
+        from workspace.ai.tasks import dispatch_scheduled_messages
+        dispatch_scheduled_messages()
+        dispatch_scheduled_messages()
+
+        mock_delay.assert_called_once()
+        self.assertEqual(mock_delay.call_args.args[0], str(schedule.uuid))
+        schedule.refresh_from_db()
+        self.assertGreater(schedule.next_run_at, timezone.now())
 
 
 # ---------------------------------------------------------------------------
@@ -334,6 +396,116 @@ class GenerateScheduledResponseTests(TestCase):
         result = generate_scheduled_response(str(uuid.uuid4()))
         self.assertEqual(result['status'], 'error')
         self.assertIn('not found', result['error'])
+
+    @patch('workspace.ai.services.tool_loop.call_llm')
+    def test_duplicate_delivery_does_not_double_send_recurring(self, mock_llm):
+        # Celery can redeliver a task after the first worker has already
+        # committed (lost ack, worker death, etc.). Without keying the CAS
+        # off the dispatcher's claim token, worker B reads the post-A
+        # next_run_at and its CAS predicate matches a *new* value — so
+        # worker B advances the row again and posts a duplicate message
+        # for recurring schedules. Pinning the CAS to the claim token
+        # written by the dispatcher closes that window.
+        mock_llm.return_value = {
+            'content': 'Hello!',
+            'tool_calls': None,
+            'message': MagicMock(content='Hello!', tool_calls=None, to_dict=lambda: {}),
+            'model': 'gpt-4o-mini',
+            'prompt_tokens': 10,
+            'completion_tokens': 5,
+        }
+
+        # Recurring 2-hour schedule: when worker A advances it, the row
+        # gets a fresh next_run_at that worker B (the duplicate delivery)
+        # would otherwise CAS against successfully.
+        schedule = ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt='Hourly check-in',
+            kind=ScheduledMessage.Kind.RECURRING,
+            recurrence_unit=ScheduledMessage.RecurrenceUnit.HOURS,
+            recurrence_interval=2,
+            next_run_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        # Simulate the dispatcher's claim: park next_run_at at the claim
+        # token, capture the value the dispatcher would have published.
+        from workspace.ai.tasks.scheduled import DISPATCH_LOCK_HORIZON
+        claim_token = timezone.now() + DISPATCH_LOCK_HORIZON
+        ScheduledMessage.objects.filter(pk=schedule.pk).update(next_run_at=claim_token)
+
+        from workspace.ai.tasks import generate_scheduled_response
+
+        # Worker A processes the original delivery.
+        result_a = generate_scheduled_response(
+            str(schedule.uuid), claim_token.isoformat(),
+        )
+        self.assertEqual(result_a['status'], 'ok')
+
+        # Worker B is the duplicate redelivery, with the *same* claim
+        # token. The row's next_run_at is now whatever worker A computed
+        # (a real recurrence value, not the token) - so the CAS keyed on
+        # the token must match zero rows and bail.
+        result_b = generate_scheduled_response(
+            str(schedule.uuid), claim_token.isoformat(),
+        )
+        self.assertEqual(result_b['status'], 'skipped')
+        self.assertEqual(result_b['reason'], 'already_claimed')
+
+        bot_msgs = Message.objects.filter(
+            conversation=self.conversation, author=self.bot_user,
+        )
+        self.assertEqual(bot_msgs.count(), 1)
+
+    @patch('workspace.ai.services.tool_loop.call_llm')
+    def test_concurrent_worker_does_not_double_send(self, mock_llm):
+        # Simulate the worker race: two workers loaded the row at the same
+        # next_run_at, the other one already advanced it in the DB before
+        # this worker reaches its CAS update. The CAS predicate matches zero
+        # rows, the worker bails, and no bot message is posted.
+        mock_llm.return_value = {
+            'content': 'Hello!',
+            'tool_calls': None,
+            'message': MagicMock(content='Hello!', tool_calls=None, to_dict=lambda: {}),
+            'model': 'gpt-4o-mini',
+            'prompt_tokens': 10,
+            'completion_tokens': 5,
+        }
+
+        schedule = ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt='Say hi',
+            kind=ScheduledMessage.Kind.ONCE,
+            next_run_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        original_compute = ScheduledMessage.compute_next_run
+
+        def race_then_compute(self_obj, user_tz=None):
+            # Competing worker advances next_run_at in the DB before our CAS.
+            ScheduledMessage.objects.filter(pk=self_obj.pk).update(
+                next_run_at=timezone.now() + timedelta(hours=24),
+            )
+            return original_compute(self_obj, user_tz=user_tz)
+
+        with patch.object(
+            ScheduledMessage, 'compute_next_run',
+            autospec=True, side_effect=race_then_compute,
+        ):
+            from workspace.ai.tasks import generate_scheduled_response
+            result = generate_scheduled_response(str(schedule.uuid))
+
+        self.assertEqual(result['status'], 'skipped')
+        self.assertEqual(result['reason'], 'already_claimed')
+
+        # Crucial: no bot message was posted.
+        bot_msgs = Message.objects.filter(
+            conversation=self.conversation, author=self.bot_user,
+        )
+        self.assertEqual(bot_msgs.count(), 0)
 
 
 # ---------------------------------------------------------------------------

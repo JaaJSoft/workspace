@@ -102,9 +102,19 @@ class GroupAvatarUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        group_avatar_service.process_and_save_group_avatar(
-            conversation, image, crop_x, crop_y, crop_w, crop_h,
-        )
+        try:
+            group_avatar_service.process_and_save_group_avatar(
+                conversation, image, crop_x, crop_y, crop_w, crop_h,
+            )
+        except (ValueError, OSError):
+            # PIL raises UnidentifiedImageError (OSError) on unrecognised
+            # bytes and OSError on truncated files; ValueError covers
+            # crop coordinates that produce a zero-size region. Map them
+            # all to 400 so the client gets a useful error instead of 500.
+            return Response(
+                {"errors": ["Invalid image or crop parameters."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response({"message": "Group avatar updated successfully."})
 
     @extend_schema(

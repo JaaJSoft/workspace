@@ -13,12 +13,7 @@ from workspace.ai.services.llm import (
 )
 from workspace.ai.services.responses import handle_generation_error, post_bot_message
 from workspace.ai.services.tool_loop import run_tool_loop
-from workspace.common.celery_claim import (
-    DISPATCH_LOCK_HORIZON,
-    cas_claim,
-    cas_finalize,
-    cas_rollback,
-)
+from workspace.common.celery_claim import cas_claim, cas_finalize, cas_rollback
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -59,7 +54,7 @@ def dispatch_scheduled_messages():
         except Exception:
             # Broker errors etc. - roll back the claim so the row stays
             # due and re-fires on the next dispatcher pass instead of
-            # being parked at the token for DISPATCH_LOCK_HORIZON. Keep
+            # being parked at the token for the lock horizon. Keep
             # looping so other due rows still get a chance.
             cas_rollback(
                 ScheduledMessage, schedule.pk,

@@ -469,9 +469,8 @@ class SyncTaskTests(TestCase):
 
         from django.utils import timezone
 
-        from workspace.calendar.tasks import (
-            DISPATCH_LOCK_HORIZON, sync_external_calendar_task,
-        )
+        from workspace.calendar.tasks import sync_external_calendar_task
+        from workspace.common.celery_claim import DISPATCH_LOCK_HORIZON
 
         # Simulate the dispatcher's claim, then the first worker
         # committing a fresh last_synced_at.
@@ -494,9 +493,8 @@ class SyncTaskTests(TestCase):
         # current time, and runs the sync.
         from django.utils import timezone
 
-        from workspace.calendar.tasks import (
-            DISPATCH_LOCK_HORIZON, sync_external_calendar_task,
-        )
+        from workspace.calendar.tasks import sync_external_calendar_task
+        from workspace.common.celery_claim import DISPATCH_LOCK_HORIZON
 
         claim_token = timezone.now() + DISPATCH_LOCK_HORIZON
         ExternalCalendar.objects.filter(pk=self.ext.pk).update(

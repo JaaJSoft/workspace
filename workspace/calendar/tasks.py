@@ -3,12 +3,7 @@ from datetime import timedelta
 
 from celery import shared_task
 
-from workspace.common.celery_claim import (
-    DISPATCH_LOCK_HORIZON,
-    cas_claim,
-    cas_finalize,
-    cas_rollback,
-)
+from workspace.common.celery_claim import cas_claim, cas_finalize, cas_rollback
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -161,7 +156,7 @@ def sync_all_external_calendars():
         except Exception:
             # Broker errors etc. - roll back the claim so the row stays
             # due and re-fires on the next dispatcher pass instead of
-            # being parked at the token for DISPATCH_LOCK_HORIZON. Keep
+            # being parked at the token for the lock horizon. Keep
             # looping so other due rows still get a chance.
             cas_rollback(ExternalCalendar, ext.pk, 'last_synced_at', original)
             logger.exception(
@@ -169,13 +164,3 @@ def sync_all_external_calendars():
                 scrub(str(ext.pk)),
             )
             continue
-
-
-# Re-exported for backwards-compat with any caller that imported it from
-# this module before the helper was extracted.
-__all__ = [
-    'send_ics_reply',
-    'sync_external_calendar_task',
-    'sync_all_external_calendars',
-    'DISPATCH_LOCK_HORIZON',
-]

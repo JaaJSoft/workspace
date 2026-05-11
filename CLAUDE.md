@@ -122,6 +122,12 @@ Examples in the codebase: `files/services/{files,mime,thumbnails}.py`, `chat/ser
 
 `@patch('workspace.<module>.services.<name>.symbol')` patches the symbol at its **definition site**. Patch there, not at a re-export alias — patches at an alias site bind a different name and the actual call site keeps running unmocked.
 
+### Re-exports — ask before adding
+
+Re-exporting a symbol (via `__all__`, a top-level `from .x import y` whose only purpose is to surface `y` from a different module, or any other indirection that lets a caller `from workspace.A import X` when `X` is actually defined in `workspace.B`) creates a "where is this defined?" maze. It also breaks `@patch` at the call site (see *Test patches* above) and makes refactors that move the definition silently leak the old path.
+
+**Never introduce a new re-export — even to preserve a single test import, even to keep a constant reachable from where it used to live — without explicit user approval.** Default: update the call sites (including tests) to import from the definition module directly. When you genuinely think a re-export is warranted (e.g. a canonical class that defines the module's core entity), say so and ask before adding it.
+
 ### Access Control Querysets
 
 Never duplicate access/permission querysets. Always use the centralized helpers listed below. Each module exposes its access control logic through its `services/` package or a `queries.py` module. This ensures permission logic is defined once per module and stays consistent across views, API endpoints, and background tasks.

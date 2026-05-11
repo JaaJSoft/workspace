@@ -431,7 +431,7 @@ class GenerateScheduledResponseTests(TestCase):
 
         # Simulate the dispatcher's claim: park next_run_at at the claim
         # token, capture the value the dispatcher would have published.
-        from workspace.ai.tasks.scheduled import DISPATCH_LOCK_HORIZON
+        from workspace.common.celery_claim import DISPATCH_LOCK_HORIZON
         claim_token = timezone.now() + DISPATCH_LOCK_HORIZON
         ScheduledMessage.objects.filter(pk=schedule.pk).update(next_run_at=claim_token)
 

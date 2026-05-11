@@ -2,8 +2,9 @@ from django.db import migrations, models
 
 
 def backfill_paths(apps, schema_editor):
+    db = schema_editor.connection.alias
     File = apps.get_model('files', 'File')
-    nodes = list(File.objects.values_list('uuid', 'parent_id', 'name'))
+    nodes = list(File.objects.using(db).values_list('uuid', 'parent_id', 'name'))
     node_map = {
         node_id: (parent_id, name)
         for node_id, parent_id, name in nodes
@@ -42,7 +43,7 @@ def backfill_paths(apps, schema_editor):
         if path
     ]
     if objs:
-        File.objects.bulk_update(objs, ['path'])
+        File.objects.using(db).bulk_update(objs, ['path'])
 
 
 class Migration(migrations.Migration):

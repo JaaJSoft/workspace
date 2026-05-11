@@ -5,8 +5,9 @@ from django.db import migrations
 
 def migrate_storage_paths(apps, schema_editor):
     """Update content.name for all existing files: files/<user>/ -> files/users/<user>/."""
+    db = schema_editor.connection.alias
     File = apps.get_model('files', 'File')
-    files = File.objects.filter(
+    files = File.objects.using(db).filter(
         node_type='file',
     ).exclude(content='').exclude(content__isnull=True)
 
@@ -19,10 +20,10 @@ def migrate_storage_paths(apps, schema_editor):
             f.content.name = 'files/users/' + name[len('files/'):]
             updated.append(f)
         if len(updated) >= 500:
-            File.objects.bulk_update(updated, ['content'], batch_size=500)
+            File.objects.using(db).bulk_update(updated, ['content'], batch_size=500)
             updated = []
     if updated:
-        File.objects.bulk_update(updated, ['content'], batch_size=500)
+        File.objects.using(db).bulk_update(updated, ['content'], batch_size=500)
 
 
 def move_physical_files(apps, schema_editor):

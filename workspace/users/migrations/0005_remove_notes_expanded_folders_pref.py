@@ -4,13 +4,14 @@ from django.db import migrations
 
 
 def remove_expanded_folders(apps, schema_editor):
+    db = schema_editor.connection.alias
     UserSetting = apps.get_model('users', 'UserSetting')
-    for setting in UserSetting.objects.filter(module='notes', key='preferences'):
+    for setting in UserSetting.objects.using(db).filter(module='notes', key='preferences'):
         value = setting.value
         if isinstance(value, dict) and 'expandedFolders' in value:
             del value['expandedFolders']
             setting.value = value
-            setting.save(update_fields=['value'])
+            setting.save(update_fields=['value'], using=db)
 
 
 class Migration(migrations.Migration):

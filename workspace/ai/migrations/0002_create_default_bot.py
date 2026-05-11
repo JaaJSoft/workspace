@@ -8,13 +8,14 @@ def create_default_bot(apps, schema_editor):
     if not settings.AI_API_KEY:
         return
 
+    db = schema_editor.connection.alias
     User = apps.get_model('auth', 'User')
     BotProfile = apps.get_model('ai', 'BotProfile')
 
-    if BotProfile.objects.exists():
+    if BotProfile.objects.using(db).exists():
         return
 
-    bot_user, created = User.objects.get_or_create(
+    bot_user, created = User.objects.using(db).get_or_create(
         username='assistant',
         defaults={
             'first_name': 'AI',
@@ -25,9 +26,9 @@ def create_default_bot(apps, schema_editor):
     if created:
         from django.contrib.auth.hashers import make_password
         bot_user.password = make_password(None)
-        bot_user.save(update_fields=['password'])
+        bot_user.save(update_fields=['password'], using=db)
 
-    BotProfile.objects.get_or_create(
+    BotProfile.objects.using(db).get_or_create(
         user=bot_user,
         defaults={
             'system_prompt': (

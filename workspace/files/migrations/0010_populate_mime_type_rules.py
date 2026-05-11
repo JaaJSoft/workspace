@@ -76,6 +76,7 @@ RULES = [
 
 
 def populate(apps, schema_editor):
+    db = schema_editor.connection.alias
     MimeTypeRule = apps.get_model("files", "MimeTypeRule")
     objs = []
     for pattern, priority, icon, color, category, viewer_type in RULES:
@@ -88,12 +89,13 @@ def populate(apps, schema_editor):
             category=category,
             viewer_type=viewer_type or "",
         ))
-    MimeTypeRule.objects.bulk_create(objs)
+    MimeTypeRule.objects.using(db).bulk_create(objs)
 
 
 def depopulate(apps, schema_editor):
+    db = schema_editor.connection.alias
     MimeTypeRule = apps.get_model("files", "MimeTypeRule")
-    MimeTypeRule.objects.all().delete()
+    MimeTypeRule.objects.using(db).all().delete()
 
 
 class Migration(migrations.Migration):

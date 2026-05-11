@@ -8,13 +8,14 @@ def dedupe_event_ical_uid(apps, schema_editor):
 
     Keeps the oldest row (by ``created_at``) and deletes the rest. Cascades
     on ``Event`` clean up child rows (``EventMember``, exception events,
-    ``Poll.event=SET_NULL``, ``source_message=SET_NULL``) — losing them on
+    ``Poll.event=SET_NULL``, ``source_message=SET_NULL``) - losing them on
     the duplicate copies is the desired behaviour since they should never
     have existed in the first place.
     """
+    db = schema_editor.connection.alias
     Event = apps.get_model('calendar', 'Event')
     duplicates = (
-        Event.objects
+        Event.objects.using(db)
         .exclude(ical_uid__isnull=True)
         .exclude(ical_uid='')
         .values('calendar_id', 'ical_uid')
@@ -23,13 +24,13 @@ def dedupe_event_ical_uid(apps, schema_editor):
     )
     for group in duplicates:
         rows = list(
-            Event.objects
+            Event.objects.using(db)
             .filter(calendar_id=group['calendar_id'], ical_uid=group['ical_uid'])
             .order_by('created_at', 'uuid')
             .values_list('uuid', flat=True)
         )
         # Keep the oldest, drop the rest.
-        Event.objects.filter(uuid__in=rows[1:]).delete()
+        Event.objects.using(db).filter(uuid__in=rows[1:]).delete()
 
 
 def noop_reverse(apps, schema_editor):

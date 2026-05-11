@@ -1,6 +1,10 @@
 import logging
+from datetime import timedelta
 
 from celery import shared_task
+
+from workspace.common.celery_claim import cas_claim, cas_finalize, cas_rollback
+from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +66,19 @@ def send_ics_reply(event_id, user_id, response_status):
 
 
 @shared_task(name='calendar.sync_external_calendar', ignore_result=True, soft_time_limit=120)
-def sync_external_calendar_task(external_calendar_uuid):
-    """Sync a single external ICS calendar feed."""
+def sync_external_calendar_task(external_calendar_uuid, claim_token=None):
+    """Sync a single external ICS calendar feed.
+
+    ``claim_token`` is the value the dispatcher CAS-wrote into
+    ``last_synced_at``. The worker finalises its claim by CAS-pinning
+    that exact value (see :func:`workspace.common.celery_claim.cas_finalize`)
+    so a duplicate Celery delivery whose row was already finalised by
+    the winning worker matches zero rows and bails before re-fetching
+    the feed. Calls without a token (manual ``sync`` button, direct
+    test calls) skip the CAS.
+    """
+    from django.utils import timezone
+
     from workspace.calendar.models_external import ExternalCalendar
     from workspace.calendar.services.ics_sync import sync_external_calendar
 
@@ -73,6 +88,20 @@ def sync_external_calendar_task(external_calendar_uuid):
         )
     except ExternalCalendar.DoesNotExist:
         return
+
+    if claim_token and not cas_finalize(
+        ExternalCalendar, ext.pk,
+        claim_field='last_synced_at', claim_token=claim_token,
+        updates={'last_synced_at': timezone.now()},
+        extra_where={'is_active': True},
+    ):
+        logger.info(
+            'External calendar sync skipped (claimed by another worker): ext=%s',
+            scrub(str(ext.pk)),
+        )
+        return
+    if claim_token:
+        ext.refresh_from_db(fields=['last_synced_at'])
 
     try:
         sync_external_calendar(ext)
@@ -86,25 +115,52 @@ def sync_external_calendar_task(external_calendar_uuid):
 def sync_all_external_calendars():
     """Dispatch sync tasks for active external calendars due for sync.
 
-    Filters on `last_synced_at` so the `(is_active, last_synced_at)`
-    composite index is used end-to-end. The 900s threshold matches
-    the default `sync_interval` and the typical celery-beat cadence;
-    `last_synced_at IS NULL` covers calendars never synced before.
-    """
-    from datetime import timedelta
+    Each row is CAS-claimed by advancing ``last_synced_at`` past the due
+    threshold (see :mod:`workspace.common.celery_claim`). Only the
+    dispatcher whose UPDATE affected a row enqueues the worker;
+    concurrent dispatcher runs race on the same predicate and the
+    database guarantees exactly one winner per row.
 
+    Filters on ``last_synced_at`` so the ``(is_active, last_synced_at)``
+    composite index is used end-to-end. The 900s threshold matches the
+    default ``sync_interval`` and the typical celery-beat cadence;
+    ``last_synced_at IS NULL`` covers calendars never synced before
+    (note that the dispatcher's claim — a future timestamp — also flips
+    such rows out of the IS NULL state, which is what we want).
+    """
     from django.db.models import Q
     from django.utils import timezone
 
     from workspace.calendar.models_external import ExternalCalendar
 
     threshold = timezone.now() - timedelta(seconds=900)
-    for ext_uuid in (
+    due = (
         ExternalCalendar.objects
         .filter(
             Q(last_synced_at__lt=threshold) | Q(last_synced_at__isnull=True),
             is_active=True,
         )
-        .values_list('uuid', flat=True)
-    ):
-        sync_external_calendar_task.delay(str(ext_uuid))
+        .only('pk', 'uuid', 'last_synced_at')
+    )
+    for ext in due:
+        original = ext.last_synced_at
+        token = cas_claim(
+            ExternalCalendar, ext.pk,
+            claim_field='last_synced_at', observed_value=original,
+            extra_where={'is_active': True},
+        )
+        if token is None:
+            continue
+        try:
+            sync_external_calendar_task.delay(str(ext.uuid), token.isoformat())
+        except Exception:
+            # Broker errors etc. - roll back the claim so the row stays
+            # due and re-fires on the next dispatcher pass instead of
+            # being parked at the token for the lock horizon. Keep
+            # looping so other due rows still get a chance.
+            cas_rollback(ExternalCalendar, ext.pk, 'last_synced_at', original)
+            logger.exception(
+                'Failed to enqueue external calendar sync: ext=%s',
+                scrub(str(ext.pk)),
+            )
+            continue

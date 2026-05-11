@@ -1,7 +1,6 @@
 """Scheduled bot message Celery tasks (dispatcher + worker)."""
 
 import logging
-from datetime import timedelta
 
 from celery import shared_task
 from django.utils import timezone
@@ -14,61 +13,52 @@ from workspace.ai.services.llm import (
 )
 from workspace.ai.services.responses import handle_generation_error, post_bot_message
 from workspace.ai.services.tool_loop import run_tool_loop
+from workspace.common.celery_claim import cas_claim, cas_finalize, cas_rollback
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
-
-# Window the dispatcher uses to push next_run_at out of the due range when it
-# claims a row. Any worker that fails to complete within this window leaves
-# the row to re-fire naturally — self-healing fallback if the Celery task is
-# lost or the worker dies before its own CAS update.
-DISPATCH_LOCK_HORIZON = timedelta(hours=1)
 
 
 @shared_task(name='ai.dispatch_scheduled_messages')
 def dispatch_scheduled_messages():
     """Find due scheduled messages and dispatch a generation task for each.
 
-    Each row is claimed via a compare-and-swap UPDATE keyed on the value of
-    ``next_run_at`` we just observed. Only the dispatcher whose UPDATE
-    affects a row enqueues the generation task — concurrent dispatcher runs
-    (or beat-fired duplicates) all end up racing on the same predicate, and
-    the database guarantees exactly one winner per row.
-
-    The claim token (the value written into ``next_run_at`` here) is passed
-    to the worker so the worker's CAS predicate stays pinned to the exact
-    value this dispatcher published. That makes the worker reject duplicate
-    Celery deliveries even after the first delivery has committed a fresh
-    ``next_run_at``.
+    Each row is CAS-claimed by advancing ``next_run_at`` past the due
+    window (see :mod:`workspace.common.celery_claim`). Only the
+    dispatcher whose UPDATE affected a row enqueues the worker;
+    concurrent dispatcher runs (or beat-fired duplicates) race on the
+    same predicate and the database guarantees one winner per row. The
+    token is passed to the worker so its own CAS can pin against the
+    exact value we just wrote.
     """
     from workspace.ai.models import ScheduledMessage
 
     now = timezone.now()
-    claim_token = now + DISPATCH_LOCK_HORIZON
     due = ScheduledMessage.objects.filter(
         is_active=True, next_run_at__lte=now,
     ).only('pk', 'next_run_at')
     count = 0
     for schedule in due:
         original_next_run_at = schedule.next_run_at
-        claimed = ScheduledMessage.objects.filter(
-            pk=schedule.pk,
-            next_run_at=original_next_run_at,
-            is_active=True,
-        ).update(next_run_at=claim_token)
-        if not claimed:
+        token = cas_claim(
+            ScheduledMessage, schedule.pk,
+            claim_field='next_run_at', observed_value=original_next_run_at,
+            extra_where={'is_active': True},
+        )
+        if token is None:
             continue
         try:
             generate_scheduled_response.delay(
-                str(schedule.uuid), claim_token.isoformat(),
+                str(schedule.uuid), token.isoformat(),
             )
         except Exception:
-            # Broker errors etc. - roll back the claim so the row stays due
-            # and re-fires on the next dispatcher pass instead of being
-            # parked at ``claim_token`` for DISPATCH_LOCK_HORIZON. Keep the
-            # loop going so other due rows still get a chance.
-            ScheduledMessage.objects.filter(pk=schedule.pk).update(
-                next_run_at=original_next_run_at,
+            # Broker errors etc. - roll back the claim so the row stays
+            # due and re-fires on the next dispatcher pass instead of
+            # being parked at the token for the lock horizon. Keep
+            # looping so other due rows still get a chance.
+            cas_rollback(
+                ScheduledMessage, schedule.pk,
+                'next_run_at', original_next_run_at,
             )
             logger.exception(
                 'Failed to enqueue scheduled response: schedule=%s',
@@ -84,22 +74,20 @@ def dispatch_scheduled_messages():
 def generate_scheduled_response(self, schedule_id: str, claim_token: str | None = None):
     """Run a scheduled bot message: load schedule, advance, generate.
 
-    The CAS that finalizes the claim is keyed on ``claim_token`` — the
-    exact value the dispatcher wrote into ``next_run_at`` when it
-    enqueued this task. That way a duplicate Celery delivery (lost ack,
-    worker restart, …) sees a row whose ``next_run_at`` has been moved
-    to a real recurrence value by the first delivery and our predicate
-    matches zero rows, so we bail before posting a duplicate message.
+    The claim is finalised via
+    :func:`workspace.common.celery_claim.cas_finalize` keyed on the
+    dispatcher's ``claim_token``. Duplicate Celery deliveries whose row
+    has been advanced past the token by the winning worker fail the
+    CAS and return ``skipped/already_claimed`` before re-posting.
 
     Calls without a token (legacy queued tasks, direct test calls) fall
-    back to CAS against the value observed at load time, which still
-    blocks the in-flight worker race against the dispatcher's window.
+    back to CAS against the value observed at load time — still good
+    enough to block the in-flight worker race against the dispatcher's
+    window.
 
     The bot may emit ``[SKIP]`` to indicate the scheduled action is no
     longer relevant; no message is posted in that case.
     """
-    from datetime import datetime
-
     from django.contrib.auth import get_user_model
 
     from workspace.ai.models import AITask, BotProfile, ScheduledMessage
@@ -121,21 +109,22 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
 
     creator_tz = get_user_timezone(schedule.created_by)
 
-    expected_next_run_at = (
-        datetime.fromisoformat(claim_token) if claim_token else schedule.next_run_at
-    )
+    # Capture the value the CAS will pin against *before* compute_next_run
+    # mutates schedule.next_run_at — when there is no claim_token, the
+    # fallback predicate is the pre-advance value.
+    cas_value = claim_token or schedule.next_run_at
     schedule.last_run_at = timezone.now()
     schedule.compute_next_run(user_tz=creator_tz)
-    claimed = ScheduledMessage.objects.filter(
-        pk=schedule_id,
-        next_run_at=expected_next_run_at,
-        is_active=True,
-    ).update(
-        last_run_at=schedule.last_run_at,
-        next_run_at=schedule.next_run_at,
-        is_active=schedule.is_active,
-    )
-    if not claimed:
+    if not cas_finalize(
+        ScheduledMessage, schedule_id,
+        claim_field='next_run_at', claim_token=cas_value,
+        updates={
+            'last_run_at': schedule.last_run_at,
+            'next_run_at': schedule.next_run_at,
+            'is_active': schedule.is_active,
+        },
+        extra_where={'is_active': True},
+    ):
         logger.info(
             'Scheduled response skipped (claimed by another worker): schedule=%s',
             scrub(schedule_id),

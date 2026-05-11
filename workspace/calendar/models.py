@@ -132,6 +132,17 @@ class Event(models.Model):
             models.Index(fields=['ical_uid'], name='event_ical_uid'),
             models.Index(fields=['calendar', 'is_cancelled', 'start'], name='event_cal_cancel_start'),
         ]
+        constraints = [
+            # One row per VEVENT UID per calendar — closes the duplicate
+            # window when two ICS sync workers race on the same feed.
+            # Native events (no ical_uid) and legacy '' values are excluded
+            # via the partial condition.
+            models.UniqueConstraint(
+                fields=['calendar', 'ical_uid'],
+                condition=models.Q(ical_uid__isnull=False) & ~models.Q(ical_uid=''),
+                name='unique_event_ical_uid_per_calendar',
+            ),
+        ]
 
     @property
     def is_recurring(self):

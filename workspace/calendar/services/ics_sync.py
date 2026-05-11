@@ -52,19 +52,13 @@ def sync_external_calendar(external_calendar):
         seen_uids.add(uid)
 
         defaults = _vevent_to_defaults(component, owner)
-        try:
-            existing = Event.objects.get(calendar=calendar, ical_uid=uid)
-            # Only save if any field actually changed
-            changed = any(
-                getattr(existing, field) != value
-                for field, value in defaults.items()
-            )
-            if changed:
-                for field, value in defaults.items():
-                    setattr(existing, field, value)
-                existing.save()
-        except Event.DoesNotExist:
-            Event.objects.create(calendar=calendar, ical_uid=uid, **defaults)
+        # update_or_create + the partial UniqueConstraint on (calendar,
+        # ical_uid) is atomic under concurrent sync runs: the loser of an
+        # INSERT race transparently falls back to UPDATE instead of
+        # raising IntegrityError or creating a duplicate row.
+        Event.objects.update_or_create(
+            calendar=calendar, ical_uid=uid, defaults=defaults,
+        )
 
     # Remove events that disappeared from the feed
     Event.objects.filter(

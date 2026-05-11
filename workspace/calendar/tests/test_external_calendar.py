@@ -280,6 +280,69 @@ class SyncExternalCalendarTests(TestCase):
         event = Event.objects.get(ical_uid='ext-anonymous@example.com')
         self.assertEqual(event.external_organizer, '')
 
+    def test_unique_constraint_on_calendar_ical_uid(self):
+        # The partial UniqueConstraint on (calendar, ical_uid) closes
+        # the duplicate-creation race at the DB layer regardless of any
+        # worker race. Without it, two concurrent ICS syncs could each
+        # walk the same VEVENT and both INSERT a row.
+        from django.db import IntegrityError, transaction
+        from django.utils import timezone
+
+        Event.objects.create(
+            calendar=self.calendar, ical_uid='ext-event-1@example.com',
+            owner=self.user, title='First', start=timezone.now(),
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Event.objects.create(
+                calendar=self.calendar, ical_uid='ext-event-1@example.com',
+                owner=self.user, title='Duplicate', start=timezone.now(),
+            )
+
+    def test_unique_constraint_allows_multiple_null_ical_uid(self):
+        # Native events have ical_uid=NULL; the partial constraint is
+        # conditioned on a non-null, non-empty UID so creating many
+        # native events on the same calendar still works.
+        from django.utils import timezone
+
+        Event.objects.create(
+            calendar=self.calendar, owner=self.user,
+            title='Native 1', start=timezone.now(),
+        )
+        Event.objects.create(
+            calendar=self.calendar, owner=self.user,
+            title='Native 2', start=timezone.now(),
+        )
+        self.assertEqual(
+            Event.objects.filter(calendar=self.calendar, ical_uid__isnull=True).count(),
+            2,
+        )
+
+    @patch('workspace.calendar.services.ics_sync.httpx')
+    def test_sync_recovers_from_concurrent_creation_via_update_or_create(self, mock_httpx):
+        # Simulate the race: a competing worker has already created an
+        # Event for the same (calendar, ical_uid) before our sync's
+        # update_or_create runs. The constraint would make a plain
+        # ``create()`` raise IntegrityError, but ``update_or_create``
+        # catches that and falls back to an UPDATE — so the second sync
+        # converges to the latest defaults without raising and without
+        # creating a duplicate row.
+        from django.utils import timezone
+
+        # Pre-create the row that the feed would otherwise insert.
+        Event.objects.create(
+            calendar=self.calendar, ical_uid='ext-event-1@example.com',
+            owner=self.user, title='Stale Title', start=timezone.now(),
+        )
+
+        _mock_httpx(mock_httpx, _mock_response(ICS_FEED))
+        sync_external_calendar(self.ext)  # must not raise
+
+        events = Event.objects.filter(
+            calendar=self.calendar, ical_uid='ext-event-1@example.com',
+        )
+        self.assertEqual(events.count(), 1)
+        self.assertEqual(events.first().title, 'External Meeting')
+
 
 # ─── Celery Task Tests ─────────────────────────────────────
 
@@ -313,8 +376,10 @@ class SyncTaskTests(TestCase):
         from workspace.calendar.tasks import sync_all_external_calendars
         sync_all_external_calendars()
 
-        # Only the active one should be dispatched
-        mock_task.delay.assert_called_once_with(str(self.ext.uuid))
+        # Only the active one should be dispatched. The dispatcher passes a
+        # claim_token as second arg so the worker can CAS-pin its update.
+        mock_task.delay.assert_called_once()
+        self.assertEqual(mock_task.delay.call_args.args[0], str(self.ext.uuid))
 
     @patch('workspace.calendar.services.ics_sync.sync_external_calendar')
     def test_sync_task_records_error(self, mock_sync):
@@ -326,6 +391,126 @@ class SyncTaskTests(TestCase):
 
         self.ext.refresh_from_db()
         self.assertIn('Network error', self.ext.last_error)
+
+    @patch('workspace.calendar.tasks.sync_external_calendar_task')
+    def test_dispatcher_does_not_double_enqueue_on_back_to_back_runs(self, mock_task):
+        # Two dispatcher passes against the same due row must enqueue at
+        # most once. The first pass atomically advances last_synced_at out
+        # of the due window so the second pass can no longer match.
+        mock_task.delay = MagicMock()
+
+        from workspace.calendar.tasks import sync_all_external_calendars
+        sync_all_external_calendars()
+        sync_all_external_calendars()
+
+        mock_task.delay.assert_called_once()
+        self.assertEqual(mock_task.delay.call_args.args[0], str(self.ext.uuid))
+
+        # The second pass observed last_synced_at parked at claim_token
+        # (now + DISPATCH_LOCK_HORIZON), well past the 900s due window.
+        from django.utils import timezone
+        self.ext.refresh_from_db()
+        self.assertIsNotNone(self.ext.last_synced_at)
+        self.assertGreater(self.ext.last_synced_at, timezone.now())
+
+    def test_dispatcher_rolls_back_claim_on_publish_failure(self):
+        # When sync_external_calendar_task.delay() raises (e.g. broker is
+        # down), the dispatcher must roll back its claim so the row stays
+        # due for the next pass instead of being parked at now + 1h. The
+        # exception must also be swallowed so the loop keeps processing
+        # other due rows.
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        cal_b = Calendar.objects.create(name='Second Cal', owner=self.user)
+        ext_b = ExternalCalendar.objects.create(
+            calendar=cal_b, url='https://example.com/feed-b.ics',
+        )
+        # Both rows are due — self.ext via IS NULL, ext_b via < threshold.
+        original_b = timezone.now() - timedelta(hours=1)
+        ExternalCalendar.objects.filter(pk=ext_b.pk).update(last_synced_at=original_b)
+
+        with patch(
+            'workspace.calendar.tasks.sync_external_calendar_task.delay',
+            side_effect=[Exception('broker unavailable'), None],
+        ) as mock_delay:
+            from workspace.calendar.tasks import sync_all_external_calendars
+            sync_all_external_calendars()  # must not raise
+
+        # Loop kept going after the first failure and tried the second row.
+        self.assertEqual(mock_delay.call_count, 2)
+
+        # Exactly one row was rolled back (matches its pre-claim state) and
+        # exactly one is parked in the future (successful claim).
+        self.ext.refresh_from_db()
+        ext_b.refresh_from_db()
+        now = timezone.now()
+        rolled_back = sum([
+            self.ext.last_synced_at is None,
+            ext_b.last_synced_at is not None and ext_b.last_synced_at <= now,
+        ])
+        claimed = sum([
+            self.ext.last_synced_at is not None and self.ext.last_synced_at > now,
+            ext_b.last_synced_at is not None and ext_b.last_synced_at > now,
+        ])
+        self.assertEqual(rolled_back, 1)
+        self.assertEqual(claimed, 1)
+
+    @patch('workspace.calendar.services.ics_sync.sync_external_calendar')
+    def test_worker_skips_on_stale_claim_token(self, mock_sync):
+        # Celery can redeliver a task after the first worker has already
+        # committed (lost ack, worker death, etc.). The second worker
+        # arrives with the dispatcher's claim_token, but the row's
+        # last_synced_at has been finalized by the first worker — so the
+        # CAS predicate matches zero rows and the worker bails before
+        # re-fetching the feed.
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from workspace.calendar.tasks import (
+            DISPATCH_LOCK_HORIZON, sync_external_calendar_task,
+        )
+
+        # Simulate the dispatcher's claim, then the first worker
+        # committing a fresh last_synced_at.
+        claim_token = timezone.now() + DISPATCH_LOCK_HORIZON
+        ExternalCalendar.objects.filter(pk=self.ext.pk).update(
+            last_synced_at=timezone.now() - timedelta(seconds=1),
+        )
+
+        # Duplicate redelivery: same claim_token, but the row's
+        # last_synced_at no longer matches it.
+        sync_external_calendar_task(str(self.ext.uuid), claim_token.isoformat())
+
+        # No sync happened.
+        mock_sync.assert_not_called()
+
+    @patch('workspace.calendar.services.ics_sync.sync_external_calendar')
+    def test_worker_with_matching_claim_token_proceeds(self, mock_sync):
+        # The happy path: the dispatcher claimed the row, the worker
+        # arrives with the matching token, finalizes the claim with the
+        # current time, and runs the sync.
+        from django.utils import timezone
+
+        from workspace.calendar.tasks import (
+            DISPATCH_LOCK_HORIZON, sync_external_calendar_task,
+        )
+
+        claim_token = timezone.now() + DISPATCH_LOCK_HORIZON
+        ExternalCalendar.objects.filter(pk=self.ext.pk).update(
+            last_synced_at=claim_token,
+        )
+
+        sync_external_calendar_task(str(self.ext.uuid), claim_token.isoformat())
+
+        mock_sync.assert_called_once()
+        # last_synced_at was advanced to ~now by the CAS (well below the
+        # claim_token horizon), so the next dispatcher pass within 900s
+        # still won't re-fire it.
+        self.ext.refresh_from_db()
+        self.assertLess(self.ext.last_synced_at, claim_token)
 
 
 # ─── API Tests ──────────────────────────────────────────────

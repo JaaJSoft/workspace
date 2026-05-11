@@ -20,6 +20,23 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      # Postgres is only used by the migration smoke step further down,
+      # but services on a job spin up unconditionally - that is fine here
+      # because the smoke step always runs (it gates the push).
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: workspace
+          POSTGRES_PASSWORD: workspace
+          POSTGRES_DB: workspace
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U workspace"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -43,9 +60,70 @@ jobs:
         with:
           context: .
           push: false
+          load: true
+          tags: workspace:pg-smoke
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Initialise SQLite source and seed test data
+        run: |
+          uv run python manage.py migrate
+          uv run python manage.py pg_migration_smoke --seed
+
+      - name: Migrate to PostgreSQL
+        run: |
+          uv run python manage.py migrate_to_postgres \
+            "postgres://workspace:workspace@localhost:5432/workspace"
+
+      - name: Verify migrated data on PostgreSQL
+        env:
+          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
+        run: |
+          uv run python manage.py pg_migration_smoke --verify
+
+      - name: Run image against PostgreSQL and smoke HTTP endpoints
+        run: |
+          # --network host lets the container reach the postgres service
+          # mapped on the runner at 127.0.0.1:5432, AND lets the runner
+          # curl the gunicorn process at 127.0.0.1:8000.
+          docker run -d --name workspace-smoke --network host \
+            -e DATABASE_URL=postgres://workspace:workspace@127.0.0.1:5432/workspace \
+            -e DEBUG=False \
+            -e ALLOWED_HOSTS=127.0.0.1,localhost \
+            -e SECRET_KEY=smoke-test-key-not-secret \
+            workspace:pg-smoke
+
+          trap 'echo "--- container logs ---"; \
+                docker logs workspace-smoke 2>&1 || true; \
+                docker rm -f workspace-smoke >/dev/null 2>&1 || true' EXIT
+
+          # Wait up to 45s for gunicorn (with gevent workers) to come up.
+          for i in $(seq 1 45); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8000/health/startup; then
+              echo "Container ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+          # /health/startup hits the DB (SELECT 1) through the gevent pool.
+          # /health/ready hits DB+cache. /login renders a real template
+          # against PostgreSQL-backed contenttypes + permissions.
+          curl -fsS http://127.0.0.1:8000/health/startup | grep -q '"status": "ok"'
+          curl -fsS http://127.0.0.1:8000/health/ready   | grep -q '"status": "ok"'
+          curl -fsS http://127.0.0.1:8000/login          | grep -q '<form'
 
       - name: Log in to GitHub Container Registry
         if: env.SHOULD_PUSH == 'true'

@@ -150,7 +150,7 @@
   <!-- Persistent nav links for Alpine AJAX navigation (outside #folder-browser so they survive replacements) -->
   <a id="folder-nav-push" class="hidden" x-target.push="folder-browser"></a>
   <a id="folder-nav-replace" class="hidden" x-target.replace="folder-browser"></a>
-  <div class="flex-1 flex min-h-0">
+  <div class="flex-1 flex min-h-0 relative">
     <!-- Folder browser (replaced on navigation) -->
     <div class="flex-1 flex flex-col min-w-0">
       {% partialdef folder-browser inline %}
@@ -242,16 +242,22 @@
       {% endpartialdef %}
     </div>
 
-    <!-- Properties sidebar -->
-    <div x-show="showPropertiesPanel" x-cloak
-         x-transition:enter="transition-[width] ease-out duration-200"
-         x-transition:enter-start="!w-0"
-         x-transition:enter-end="!w-80"
-         x-transition:leave="transition-[width] ease-in duration-150"
-         x-transition:leave-start="!w-80"
-         x-transition:leave-end="!w-0"
-         class="w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden">
-      <div class="w-80 flex-1 overflow-y-auto">
+    <!-- Properties sidebar: full-coverage overlay on mobile, in-flow 320 px panel on md+.
+         Mobile width comes from ``inset-0`` (the browser derives it from left:0/right:0),
+         which is more robust than ``max-md:w-full`` — the Tailwind CDN's handling of
+         responsive width utilities + Alpine x-transition can leave the panel sized to
+         its content (~306 px) on some runtimes. Mobile slides in via opacity; desktop
+         keeps the original width animation. -->
+    <div id="properties-sidebar"
+         x-show="showPropertiesPanel" x-cloak
+         x-transition:enter="max-md:transition-opacity max-md:duration-150 md:transition-[width] md:ease-out md:duration-200"
+         x-transition:enter-start="max-md:opacity-0 md:!w-0"
+         x-transition:enter-end="max-md:opacity-100 md:!w-80"
+         x-transition:leave="max-md:transition-opacity max-md:duration-100 md:transition-[width] md:ease-in md:duration-150"
+         x-transition:leave-start="max-md:opacity-100 md:!w-80"
+         x-transition:leave-end="max-md:opacity-0 md:!w-0"
+         class="max-md:absolute max-md:inset-0 max-md:z-30 md:w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden">
+      <div class="md:w-80 flex-1 overflow-y-auto">
         {% include "files/ui/partials/properties_panel.html" %}
       </div>
     </div>

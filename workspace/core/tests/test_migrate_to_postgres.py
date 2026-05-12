@@ -137,6 +137,12 @@ class DryRunTests(TestCase):
         call_names = [c[0][0] for c in mock_call.call_args_list]
         self.assertIn("dumpdata", call_names)
         self.assertNotIn("loaddata", call_names)
+        # --dry-run must leave the target untouched: no schema or seed-data
+        # migrations may run on it. Regression test: an earlier version
+        # called migrate before the dry-run early-return, which created
+        # the full schema and inserted seed rows (MimeTypeRule, default
+        # mail labels, the assistant bot user) on the target.
+        self.assertNotIn("migrate", call_names)
 
 
 class FullMigrationTests(TestCase):

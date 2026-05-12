@@ -90,12 +90,11 @@ class Command(BaseCommand):
             )
         self.stdout.write(self.style.SUCCESS("  Source migrations up to date OK"))
 
-        # -- 2. Apply migrations on target ---------------------------------
-        self.stdout.write("Applying migrations on target database...")
-        call_command("migrate", database=TARGET_ALIAS, verbosity=0)
-        self.stdout.write(self.style.SUCCESS("  Migrations applied OK"))
-
-        # -- 3. Export from SQLite -----------------------------------------
+        # -- 2. Export from SQLite -----------------------------------------
+        # We run the export before the target migrate step on purpose: the
+        # dumpdata reads only from the source SQLite, so running it first
+        # keeps --dry-run a true no-op on the target (no schema, no seed
+        # data) when the user bails out below.
         self.stdout.write("Exporting data from SQLite...")
 
         dump_handle = tempfile.NamedTemporaryFile(
@@ -130,7 +129,7 @@ class Command(BaseCommand):
 
         if dry_run:
             self.stdout.write(self.style.WARNING(
-                "Dry run - skipping import and verification."
+                "Dry run - skipping target migrate, import and verification."
             ))
             if keep_dump:
                 self.stdout.write(f"  Dump kept at: {dump_file}")
@@ -138,6 +137,15 @@ class Command(BaseCommand):
                 dump_file.unlink(missing_ok=True)
                 self.stdout.write("  Dump file removed.")
             return
+
+        # -- 3. Apply migrations on target ---------------------------------
+        # Deferred until after the dry-run early-return so --dry-run leaves
+        # the target untouched. Data migrations (e.g. files.MimeTypeRule
+        # seed, mail default-label seed) write rows on the target, so this
+        # step must only run on a real migration.
+        self.stdout.write("Applying migrations on target database...")
+        call_command("migrate", database=TARGET_ALIAS, verbosity=0)
+        self.stdout.write(self.style.SUCCESS("  Migrations applied OK"))
 
         # -- 4. Clear target data tables -----------------------------------
         # Data migrations populated seed data (e.g. files.MimeTypeRule) that

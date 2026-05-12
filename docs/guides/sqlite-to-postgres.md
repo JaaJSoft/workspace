@@ -71,11 +71,13 @@ If you prefer to run each step yourself:
 
 ```bash
 python manage.py dumpdata \
-  --natural-foreign --natural-primary \
+  --natural-foreign \
   --exclude contenttypes --exclude auth.permission \
   --indent 2 \
   -o dump.json
 ```
+
+Do not pass `--natural-primary`: it nulls the primary key on models that expose a natural key (notably `auth.User`), which breaks `OneToOneField(primary_key=True)` relations such as `UserPresence` (its pk is the user's pk) and produces orphaned or conflicting rows on load.
 
 ### 2. Apply migrations on PostgreSQL
 

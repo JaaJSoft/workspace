@@ -121,8 +121,10 @@ jobs:
           # /health/startup hits the DB (SELECT 1) through the gevent pool.
           # /health/ready hits DB+cache. /login renders a real template
           # against PostgreSQL-backed contenttypes + permissions.
-          curl -fsS http://127.0.0.1:8000/health/startup | grep -q '"status": "ok"'
-          curl -fsS http://127.0.0.1:8000/health/ready   | grep -q '"status": "ok"'
+          # drf-orjson-renderer emits compact JSON: {"status":"ok"} with no
+          # whitespace, so the regex tolerates both compact and indented forms.
+          curl -fsS http://127.0.0.1:8000/health/startup | grep -qE '"status"[[:space:]]*:[[:space:]]*"ok"'
+          curl -fsS http://127.0.0.1:8000/health/ready   | grep -qE '"status"[[:space:]]*:[[:space:]]*"ok"'
           curl -fsS http://127.0.0.1:8000/login          | grep -q '<form'
 
       - name: Log in to GitHub Container Registry

@@ -249,17 +249,17 @@
          class="md:hidden absolute inset-0 bg-black/40 z-20"
          aria-hidden="true"></div>
 
-    <!-- Properties sidebar: floats over content on mobile, in-flow on md+ -->
+    <!-- Properties sidebar: full-width overlay on mobile, in-flow 320px panel on md+ -->
     <div id="properties-sidebar"
          x-show="showPropertiesPanel" x-cloak
          x-transition:enter="transition-[width] ease-out duration-200"
          x-transition:enter-start="!w-0"
-         x-transition:enter-end="!w-80"
+         x-transition:enter-end="max-md:!w-full md:!w-80"
          x-transition:leave="transition-[width] ease-in duration-150"
-         x-transition:leave-start="!w-80"
+         x-transition:leave-start="max-md:!w-full md:!w-80"
          x-transition:leave-end="!w-0"
-         class="max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-30 w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden">
-      <div class="w-80 flex-1 overflow-y-auto">
+         class="max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-30 max-md:w-full md:w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden">
+      <div class="w-full md:w-80 flex-1 overflow-y-auto">
         {% include "files/ui/partials/properties_panel.html" %}
       </div>
     </div>

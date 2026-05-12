@@ -250,7 +250,8 @@
          aria-hidden="true"></div>
 
     <!-- Properties sidebar: floats over content on mobile, in-flow on md+ -->
-    <div x-show="showPropertiesPanel" x-cloak
+    <div id="properties-sidebar"
+         x-show="showPropertiesPanel" x-cloak
          x-transition:enter="transition-[width] ease-out duration-200"
          x-transition:enter-start="!w-0"
          x-transition:enter-end="!w-80"

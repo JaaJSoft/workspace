@@ -15,6 +15,8 @@ Two bugs are pinned here, both visible only in a real browser:
 """
 from __future__ import annotations
 
+import re
+
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
@@ -42,9 +44,17 @@ class PropertiesPanelMobileOverlayTests(PlaywrightTestCase):
         # folder-browser column would be squeezed to ~55 px here.
         self.page.set_viewport_size({"width": 375, "height": 800})
         self.page.goto(f"{self.live_server_url}/files")
-        # Let Alpine settle so the left nav has applied its mobile
-        # (``w-16``) width before we read the folder-browser column.
-        self.page.wait_for_timeout(300)
+
+        # Wait for ``sidebarCollapse().init()`` to run and collapse the
+        # left nav to ``w-16`` — below the ``lg`` breakpoint it forces
+        # ``collapsed=true``. Using ``expect(...).to_have_class`` auto-
+        # retries (5 s by default), which is more robust than a fixed
+        # timeout on a slow CI runner. Without this the folder-browser
+        # column would still be measured against a ``w-72`` left nav and
+        # the baseline sanity check would trip.
+        expect(self.page.locator("aside").first).to_have_class(
+            re.compile(r"\bw-16\b")
+        )
 
         folder_browser = self.page.locator("#folder-browser")
         expect(folder_browser).to_be_visible()
@@ -63,13 +73,14 @@ class PropertiesPanelMobileOverlayTests(PlaywrightTestCase):
 
         sidebar = self.page.locator("#properties-sidebar")
         expect(sidebar).to_be_visible()
-        # Width transition is 200 ms — wait for the panel to be near
-        # its final width before measuring layout. We poll relative to
-        # the content area width rather than hard-coding 320 px so the
-        # check also makes sense at desktop breakpoints.
+        # Width transition is 200 ms — wait for the panel to reach its
+        # final size (= the content-area width, since it covers full
+        # width on mobile) before measuring layout. Waiting for less
+        # than the full target races the subsequent ``bounding_box()``
+        # call and intermittently reads the panel mid-transition.
         self.page.wait_for_function(
             "min => document.getElementById('properties-sidebar').offsetWidth >= min",
-            arg=int(baseline_width * 0.9),
+            arg=baseline_width - 1,
         )
 
         # Mechanism: the panel must be ``position: absolute`` below md

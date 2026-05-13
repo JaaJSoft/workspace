@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.20.0 - PostgreSQL & Activity
+
+### Highlights
+
+This release brings PostgreSQL as a first-class database option and ships a tool to migrate an existing workspace off SQLite without losing data. Files gain a per-file activity timeline in the Properties panel, and right-clicking a file with several selected now applies the menu action to the whole selection. Several long-standing duplication bugs in calendar sync and scheduled AI messages are fixed, and a handful of mobile and error-handling rough edges are smoothed.
+
+### Database
+
+- New `migrate_to_postgres` management command and step-by-step guide to move an existing workspace from SQLite to PostgreSQL with all data, history, and uploaded files intact
+- PostgreSQL is now a supported and documented target for production deployments
+
+### Files
+
+- New activity timeline in the Properties panel shows every event for a file: who created it, who renamed it, who shared it, when it was moved, and more
+- Right-click on a file inside a multi-selection now applies the chosen action (delete, cut, copy, download, favorite, pin) to the entire selection instead of just the file under the cursor
+- Right-clicking a file that isn't part of the current selection collapses the selection to that file, matching standard file-manager behavior
+- Properties sidebar no longer squeezes the page header off-screen on narrow viewports; it now slides over the file list as a full-coverage panel on mobile
+
+### Calendar
+
+- Subscribed external calendars no longer create duplicate events when two sync runs overlap
+
+### AI Chat
+
+- Scheduled assistant messages no longer get dispatched twice when more than one worker picks them up at the same moment
+
+### Profile
+
+- Tighter spacing and a cleaner activity heatmap layout on mobile
+
+### Chat
+
+- No more sidebar flicker on the first load on mobile
+
+### Fixes
+
+- Avatar uploads with unsupported or corrupted image data now return a clear error instead of a server crash
+- URLs with malformed UUIDs return a clean 4xx error instead of a 500
+
 ## 0.19.0 – Stability & Polish
 
 ### Highlights

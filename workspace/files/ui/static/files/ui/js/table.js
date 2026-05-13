@@ -167,10 +167,67 @@ window.fileTableControls = function fileTableControls() {
 
     openContextMenu(event, nodeData) {
       event.preventDefault();
+
+      // Selection-aware dispatch:
+      //   - right-clicked file IS in a multi-selection -> menu acts on the
+      //     whole selection (replace actions with the bulk-action intersection
+      //     and attach selectionUuids so the menu dispatches bulk events).
+      //   - right-clicked file is NOT in the current selection -> standard OS
+      //     behavior: replace the selection with just that one file.
+      if (this.selectedUuids.has(nodeData.uuid)) {
+        if (this.selectedUuids.size > 1) {
+          const uuids = this.getSelectedUuids();
+          nodeData = {
+            ...nodeData,
+            selectionUuids: uuids,
+            actions: this._buildSelectionActions(uuids),
+          };
+        }
+      } else if (this.selectedUuids.size > 0) {
+        this.selectedUuids = new Set([nodeData.uuid]);
+        this.lastSelectedUuid = nodeData.uuid;
+      }
+
       // Dispatch event for context menu to listen
       window.dispatchEvent(new CustomEvent('open-context-menu', {
         detail: { event, nodeData }
       }));
+    },
+
+    // Intersection of bulk-capable actions across all selected files,
+    // sorted in the same category order the bulk toolbar uses. Toggle
+    // actions get an extra `_bulkAdd` flag baked in so the context menu
+    // can dispatch the right direction without re-reading actionsMap.
+    _buildSelectionActions(uuids) {
+      const lists = uuids.map(uuid => this.actionsMap[uuid] || []);
+      if (lists.some(l => l.length === 0)) return [];
+
+      let common = lists[0].filter(a => a.bulk);
+      for (let i = 1; i < lists.length; i++) {
+        const ids = new Set(lists[i].filter(a => a.bulk).map(a => a.id));
+        common = common.filter(a => ids.has(a.id));
+        if (common.length === 0) break;
+      }
+
+      const catOrder = ['transfer', 'organize', 'edit', 'danger', 'trash'];
+      const sorted = common.slice().sort(
+        (a, b) => catOrder.indexOf(a.category) - catOrder.indexOf(b.category)
+      );
+
+      const allHaveState = (actionId, key) => uuids.every(uuid => {
+        const a = (this.actionsMap[uuid] || []).find(x => x.id === actionId);
+        return a && a.state && a.state[key];
+      });
+
+      return sorted.map(action => {
+        if (action.id === 'toggle_favorite') {
+          return { ...action, _bulkAdd: !allHaveState('toggle_favorite', 'is_favorite') };
+        }
+        if (action.id === 'toggle_pin') {
+          return { ...action, _bulkAdd: !allHaveState('toggle_pin', 'is_pinned') };
+        }
+        return action;
+      });
     },
 
     openBackgroundContextMenu(event) {

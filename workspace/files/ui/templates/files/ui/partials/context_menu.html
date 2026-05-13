@@ -75,9 +75,11 @@
           x-show="action.id !== 'paste_into' || hasClipboardItems"
           :class="idx > 0 && action.category !== nodeData.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''"
         >
-          <!-- Download action: <a> with download attribute -->
+          <!-- Download action (single-file): <a> with download attribute.
+               In bulk mode we fall back to the default button so the click
+               goes through the /bulk-download endpoint instead. -->
           <a
-            x-show="action.id === 'download'"
+            x-show="action.id === 'download' && !isBulkSelection"
             :href="`/api/v1/files/${nodeData.uuid}/download`"
             download
             :download="nodeData.nodeType === 'folder' ? nodeData.name + '.zip' : nodeData.name"
@@ -90,7 +92,7 @@
 
           <!-- Open in new tab: <a> with target="_blank" -->
           <a
-            x-show="action.id === 'open_new_tab'"
+            x-show="action.id === 'open_new_tab' && !isBulkSelection"
             :href="`/api/v1/files/${nodeData.uuid}/content`"
             target="_blank"
             class="gap-3 rounded"
@@ -102,7 +104,7 @@
 
           <!-- Default: button with @click -->
           <button
-            x-show="action.id !== 'download' && action.id !== 'open_new_tab'"
+            x-show="(action.id !== 'download' && action.id !== 'open_new_tab') || isBulkSelection"
             type="button"
             class="gap-3 rounded"
             :class="action.css_class"
@@ -130,6 +132,12 @@ function contextMenu() {
     nodeData: null,
     isBackgroundMenu: false,
     hasClipboardItems: false,
+
+    get isBulkSelection() {
+      return !!(this.nodeData
+        && Array.isArray(this.nodeData.selectionUuids)
+        && this.nodeData.selectionUuids.length > 1);
+    },
 
     init() {
       // Listen for context menu events (on files/folders)
@@ -229,6 +237,36 @@ function contextMenu() {
 
     executeAction(action) {
       const nd = this.nodeData;
+
+      // Multi-selection: route through the bulk-action event bus so the
+      // chosen action applies to every selected file, not just the one
+      // under the cursor.
+      if (this.isBulkSelection) {
+        const uuids = nd.selectionUuids;
+        let detail = null;
+        switch (action.id) {
+          case 'toggle_favorite':
+            detail = { action: 'favorite', uuids, add: !!action._bulkAdd };
+            break;
+          case 'toggle_pin':
+            detail = { action: 'pin', uuids, add: !!action._bulkAdd };
+            break;
+          case 'delete':
+          case 'restore':
+          case 'purge':
+          case 'cut':
+          case 'copy':
+          case 'download':
+            detail = { action: action.id, uuids };
+            break;
+        }
+        if (detail) {
+          window.dispatchEvent(new CustomEvent('bulk-action', { detail }));
+        }
+        this.close();
+        return;
+      }
+
       switch (action.id) {
         case 'view':
           window.dispatchEvent(new CustomEvent('open-file-viewer', {

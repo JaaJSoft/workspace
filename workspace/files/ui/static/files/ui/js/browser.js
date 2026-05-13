@@ -149,6 +149,9 @@ window.fileBrowser = function fileBrowser() {
           case 'pin':
             this.bulkTogglePin(uuids, add);
             break;
+          case 'download':
+            this.bulkDownload(uuids);
+            break;
         }
       });
     },
@@ -901,6 +904,33 @@ window.fileBrowser = function fileBrowser() {
       window.dispatchEvent(new CustomEvent('clear-file-selection'));
       this.refreshFolderBrowser();
       this._stopLoading(...uuids);
+    },
+
+    async bulkDownload(uuids) {
+      if (!uuids || uuids.length === 0) return;
+      try {
+        const csrfToken = getCSRFToken();
+        const resp = await fetch('/api/v1/files/bulk-download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ uuids }),
+        });
+        if (!resp.ok) {
+          this.showAlert('error', 'Failed to download selected files');
+          return;
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'download.zip';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        this.showAlert('error', 'Failed to download selected files');
+      }
     },
 
     async bulkTogglePin(uuids, add) {

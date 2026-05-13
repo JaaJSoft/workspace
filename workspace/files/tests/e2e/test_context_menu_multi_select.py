@@ -42,20 +42,36 @@ class ContextMenuMultiSelectTests(PlaywrightTestCase):
             f'tr[data-uuid="{uuid}"] td[data-col="select"] input[type="checkbox"]'
         ).click()
 
-    def _wait_for_actions_loaded(self):
-        # The page boots, then ``fileTableControls.init()`` fires
-        # ``POST /api/v1/files/actions`` for every visible uuid. We need
-        # ``actionsMap`` to be populated before opening the context menu,
-        # otherwise the bulk-action intersection in table.js evaluates
-        # against an empty map and the menu renders zero items.
-        with self.page.expect_response(
-            lambda r: (
-                r.request.method == 'POST'
-                and '/api/v1/files/actions' in r.url
-                and r.ok
-            )
-        ):
-            pass  # Caller already navigated; just wait for the response.
+    def _wait_for_actions_loaded(self, *uuids):
+        # ``fileTableControls.fetchActions`` writes the API payload onto
+        # the component's ``actionsMap`` reactive prop. The HTTP response
+        # arrives before the JS assignment completes, so waiting on the
+        # network response alone leaves a small race where the right-click
+        # fires against an empty actions map. Poll the DOM until we see
+        # the rows AND Alpine has the action data for them.
+        self.page.wait_for_function(
+            """(uuids) => {
+              const root = document.querySelector('[x-data*="fileTableWithView"]');
+              if (!root || typeof Alpine === 'undefined') return false;
+              const data = Alpine.$data(root);
+              if (!data || !data.actionsMap) return false;
+              return uuids.every(u => Array.isArray(data.actionsMap[u])
+                                       && data.actionsMap[u].length > 0);
+            }""",
+            arg=list(uuids),
+        )
+
+    def _delete_button(self, menu):
+        # Lucide replaces ``<i data-lucide="...">`` with an ``<svg>``
+        # at runtime, so a tag-scoped selector like ``i[data-lucide]``
+        # stops matching once Lucide has run. The button itself wraps
+        # an icon, the label span, AND a ``<kbd>`` shortcut badge ("Del"),
+        # so its full ``innerText`` is "Delete\nDel" - we'd need to use
+        # the inner span to match the bare label and avoid colliding
+        # with the Purge action ("Delete permanently").
+        return menu.locator(
+            'button:has(span:text-is("Delete"))'
+        ).first
 
     def test_right_click_on_selected_file_acts_on_whole_selection(self):
         user = self.create_user(username='alice')
@@ -68,18 +84,24 @@ class ContextMenuMultiSelectTests(PlaywrightTestCase):
         # Capture the actions response so we know the row-level action
         # cache is populated before we open the context menu - same trick
         # ``test_context_menu_actions.py`` uses.
-        with self.page.expect_response(
-            lambda r: (
-                r.request.method == 'POST'
-                and '/api/v1/files/actions' in r.url
-            )
-        ):
-            self.page.goto(f'{self.live_server_url}/files')
+        self.page.goto(f'{self.live_server_url}/files')
 
         # Visible sanity check - the rows render in list view.
         expect(self.page.locator(f'tr[data-uuid="{f1.uuid}"]')).to_be_visible()
         expect(self.page.locator(f'tr[data-uuid="{f2.uuid}"]')).to_be_visible()
         expect(self.page.locator(f'tr[data-uuid="{f3.uuid}"]')).to_be_visible()
+
+        self._wait_for_actions_loaded(str(f1.uuid), str(f2.uuid), str(f3.uuid))
+
+        # Disable the "confirm before delete" dialog so the test doesn't
+        # need to drive an AppDialog modal. Set this BEFORE the click so
+        # ``bulkDeleteItems`` sees ``confirmBeforeDelete = false``.
+        self.page.evaluate(
+            """() => {
+              window._filePrefsCache = window._filePrefsCache || {};
+              window._filePrefsCache.confirmBeforeDelete = false;
+            }"""
+        )
 
         # Select the first two files via their row checkboxes.
         self._select_checkbox(f1.uuid)
@@ -92,20 +114,7 @@ class ContextMenuMultiSelectTests(PlaywrightTestCase):
         menu = self.page.locator('[x-data*="contextMenu"]')
         expect(menu).to_be_visible()
 
-        # Disable the "confirm before delete" dialog so the test doesn't
-        # need to drive an AppDialog modal. The pref is stored in the
-        # ``files`` user-settings module under ``preferences``.
-        self.page.evaluate(
-            """() => {
-              window._filePrefsCache = window._filePrefsCache || {};
-              window._filePrefsCache.confirmBeforeDelete = false;
-            }"""
-        )
-
-        # Find and click the "Delete" / "Move to trash" entry. The label
-        # comes from the action registry - match by the lucide trash icon
-        # which is more stable than the exact label text.
-        delete_button = menu.locator('button:has(i[data-lucide="trash-2"])').first
+        delete_button = self._delete_button(menu)
         expect(delete_button).to_be_visible()
         delete_button.click()
 
@@ -145,13 +154,17 @@ class ContextMenuMultiSelectTests(PlaywrightTestCase):
 
         self.login_as(user)
 
-        with self.page.expect_response(
-            lambda r: (
-                r.request.method == 'POST'
-                and '/api/v1/files/actions' in r.url
-            )
-        ):
-            self.page.goto(f'{self.live_server_url}/files')
+        self.page.goto(f'{self.live_server_url}/files')
+
+        expect(self.page.locator(f'tr[data-uuid="{f3.uuid}"]')).to_be_visible()
+        self._wait_for_actions_loaded(str(f1.uuid), str(f2.uuid), str(f3.uuid))
+
+        self.page.evaluate(
+            """() => {
+              window._filePrefsCache = window._filePrefsCache || {};
+              window._filePrefsCache.confirmBeforeDelete = false;
+            }"""
+        )
 
         # Select f1 and f2, but right-click on f3 (NOT in selection).
         # Per the issue spec, the selection should be replaced by f3 and
@@ -164,14 +177,7 @@ class ContextMenuMultiSelectTests(PlaywrightTestCase):
         menu = self.page.locator('[x-data*="contextMenu"]')
         expect(menu).to_be_visible()
 
-        self.page.evaluate(
-            """() => {
-              window._filePrefsCache = window._filePrefsCache || {};
-              window._filePrefsCache.confirmBeforeDelete = false;
-            }"""
-        )
-
-        delete_button = menu.locator('button:has(i[data-lucide="trash-2"])').first
+        delete_button = self._delete_button(menu)
         expect(delete_button).to_be_visible()
         delete_button.click()
 

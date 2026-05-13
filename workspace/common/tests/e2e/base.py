@@ -215,15 +215,31 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
 
     # ---- helpers ---------------------------------------------------------
 
-    def create_user(self, username="alice", password="pass12345", **extra):
-        """Create and return a regular user for use in tests."""
+    def create_user(self, username="alice", password="pass12345", *,
+                    seen_changelog=True, **extra):
+        """Create and return a regular user for use in tests.
+
+        By default the user is marked as having already seen the latest
+        ``CHANGELOG.md`` entry, so the auto-open "What's new" modal does
+        not race other UI interactions. Pass ``seen_changelog=False`` if
+        the test specifically exercises the auto-open behaviour.
+        """
         User = get_user_model()
-        return User.objects.create_user(
+        user = User.objects.create_user(
             username=username,
             password=password,
             email=extra.pop("email", f"{username}@example.com"),
             **extra,
         )
+        if seen_changelog:
+            from workspace.core.changelog import get_latest_version
+            from workspace.users.services.settings import set_setting
+            latest = get_latest_version()
+            if latest:
+                set_setting(
+                    user, "core", "changelog_last_seen_version", latest,
+                )
+        return user
 
     def login_via_ui(self, username, password, *, wait_for_redirect=True):
         """Log in through the actual login form.

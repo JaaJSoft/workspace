@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.20.1 - Release Awareness
+
+### Highlights
+
+A small release focused on release awareness. The "What's new" modal now opens by itself the first time you visit after new changelog entries are added, so you do not have to dig into the user menu to discover them. Inside the modal, the version sidebar flags which releases you have already read and which are still new to you.
+
+### Changelog
+
+- The "What's new" modal opens once automatically after every release that adds entries to the changelog
+- The version sidebar inside the modal shows a coloured dot next to each release: highlighted when you have not seen it, muted once you have
+- Scrolling past a version, or clicking it in the sidebar, flips its read indicator straight away
+
 ## 0.20.0 - PostgreSQL & Activity
 
 ### Highlights

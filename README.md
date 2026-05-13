@@ -1,8 +1,8 @@
 # Workspace
 
-> **Early Development** — APIs, schemas, and features may change without notice. Use at your own risk.
+> **Early Development** - APIs, schemas, and features may change without notice. Use at your own risk.
 
-A self-hosted productivity suite built with Django. Files, chat, email, calendar, AI assistants, and more — in a single platform you control.
+A self-hosted productivity suite built with Django. Files, chat, email, calendar, AI assistants, and more - in a single platform you control.
 
 From a Raspberry Pi to a Kubernetes cluster. One codebase, any scale.
 
@@ -39,11 +39,11 @@ Markdown editor with journal mode, folders, tags, favorites, and full-text searc
 Configurable chat bots with system prompts, vision, function calling, extended thinking, image generation, and bot memory. Works with OpenAI API or any compatible provider (Ollama, LM Studio, etc.).
 
 ### And more
-- **Notifications** — In-app + Web Push (VAPID), priority levels, read tracking
-- **Dashboard** — Storage stats, recent files, conversation and event insights
-- **Unified search** — Cross-module command palette (Ctrl+K) with extensible providers
-- **User profiles** — Avatar upload, presence/status, per-module settings, 12 themes
-- **Shareable links** — Password-protected file links with expiration
+- **Notifications** - In-app + Web Push (VAPID), priority levels, read tracking
+- **Dashboard** - Storage stats, recent files, conversation and event insights
+- **Unified search** - Cross-module command palette (Ctrl+K) with extensible providers
+- **User profiles** - Avatar upload, presence/status, per-module settings, 12 themes
+- **Shareable links** - Password-protected file links with expiration
 
 ## Tech Stack
 
@@ -72,9 +72,9 @@ At its core, Workspace is Django + SQLite. One Docker container, done. No databa
 
 The same codebase can switch to PostgreSQL for high-concurrency workloads. The architecture supports multiple deployment strategies:
 
-- **Personal** — Run on a VPS with SQLite, or any PaaS with persistent volumes
-- **Teams** — Docker Compose, one instance per team with isolated data
-- **Enterprise** — Kubernetes with PostgreSQL, SSO/LDAP, dedicated infrastructure
+- **Personal** - Run on a VPS with SQLite, or any PaaS with persistent volumes
+- **Teams** - Docker Compose, one instance per team with isolated data
+- **Enterprise** - Kubernetes with PostgreSQL, SSO/LDAP, dedicated infrastructure
 
 Instead of complex multi-tenancy with `tenant_id` columns, Workspace uses **instance-per-tenant**: true data isolation, independent scaling, and simplified security.
 
@@ -138,15 +138,15 @@ See [docs/deployments/](docs/deployments/) for Docker Compose and Kubernetes exa
 
 All endpoints are prefixed with `/api/` with no trailing slashes. Interactive documentation is available at:
 
-- **Swagger UI** — `/schema/swagger-ui/`
-- **ReDoc** — `/schema/redoc/`
-- **OpenAPI Schema** — `/schema/`
+- **Swagger UI** - `/schema/swagger-ui/`
+- **ReDoc** - `/schema/redoc/`
+- **OpenAPI Schema** - `/schema/`
 
 ### Health Checks
 
-- `/health/live` — Liveness probe
-- `/health/ready` — Readiness probe (checks database)
-- `/health/startup` — Startup probe
+- `/health/live` - Liveness probe
+- `/health/ready` - Readiness probe (checks database)
+- `/health/startup` - Startup probe
 
 ## Extending Workspace
 
@@ -172,10 +172,10 @@ Your module automatically appears in the sidebar, dashboard, and search results.
 
 See [IDEAS.md](IDEAS.md) for the full roadmap. Planned modules include:
 
-- **Tasks & Projects** — Kanban boards, sprints, time tracking
-- **Contacts & CRM** — Contact management with interaction history
-- **Bookmarks** — Save and organize links with automatic previews
-- **Password Manager** — Encrypted vault with TOTP support
+- **Tasks & Projects** - Kanban boards, sprints, time tracking
+- **Contacts & CRM** - Contact management with interaction history
+- **Bookmarks** - Save and organize links with automatic previews
+- **Password Manager** - Encrypted vault with TOTP support
 
 ## Contributing
 

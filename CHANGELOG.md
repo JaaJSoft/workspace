@@ -51,7 +51,7 @@ This release brings PostgreSQL as a first-class database option and ships a tool
 - Avatar uploads with unsupported or corrupted image data now return a clear error instead of a server crash
 - URLs with malformed UUIDs return a clean 4xx error instead of a 500
 
-## 0.19.0 – Stability & Polish
+## 0.19.0 - Stability & Polish
 
 ### Highlights
 
@@ -113,11 +113,11 @@ A reliability and polish release. Mail data integrity is hardened against IMAP f
 - User-controlled values are sanitized before logging to prevent log injection
 - File uploads use stricter file system permissions
 
-## 0.18.0 — Performance & Reliability
+## 0.18.0 - Performance & Reliability
 
 ### Highlights
 
-Performance and reliability release. Listings, sidebars, and notifications across the workspace are noticeably faster. Large WebDAV uploads are more reliable on slow networks. Rename and permission rules are now consistent between the UI and the backend — no more buttons that look clickable but fail. New personal API tokens let you connect third-party apps and scripts to your workspace.
+Performance and reliability release. Listings, sidebars, and notifications across the workspace are noticeably faster. Large WebDAV uploads are more reliable on slow networks. Rename and permission rules are now consistent between the UI and the backend - no more buttons that look clickable but fail. New personal API tokens let you connect third-party apps and scripts to your workspace.
 
 ### Performance
 
@@ -138,11 +138,11 @@ Performance and reliability release. Listings, sidebars, and notifications acros
 ### Chat
 
 - Search filter in the conversation sidebar to quickly find conversations
-- Smoother refreshes of the sidebar, read receipts, and list updates — interactions no longer reset state mid-action
+- Smoother refreshes of the sidebar, read receipts, and list updates - interactions no longer reset state mid-action
 
 ### Files & Notes
 
-- Rename and action buttons now match the backend rules — the UI only offers what will actually succeed
+- Rename and action buttons now match the backend rules - the UI only offers what will actually succeed
 - Journal notes can no longer be renamed by mistake
 - File name validation blocks invalid characters before save
 - Properties panel, pinned folders, and group sidebar refresh without flicker
@@ -157,7 +157,7 @@ Performance and reliability release. Listings, sidebars, and notifications acros
 - Multi-step operations are now fully transactional, preventing rare partial updates
 - User settings are no longer fetched for anonymous visitors
 
-## 0.17.0 — Calendar Overhaul
+## 0.17.0 - Calendar Overhaul
 
 ### Highlights
 
@@ -165,7 +165,7 @@ Calendar overhaul with infinite scroll and a smoother mobile experience. WebDAV 
 
 ### Calendar
 
-- Infinite scroll across events — no more pagination arrows
+- Infinite scroll across events - no more pagination arrows
 - Sidebar collapse is more reliable, with a smoother mobile experience
 - Improved hover interactions on both touch and non-touch devices
 - Events from external feeds are no longer mistakenly attributed to your account
@@ -185,11 +185,11 @@ Calendar overhaul with infinite scroll and a smoother mobile experience. WebDAV 
 
 - Activity events with no actor no longer break the activity feed
 
-## 0.16.0 — Profile & Rich Media
+## 0.16.0 - Profile & Rich Media
 
 ### Highlights
 
-**Profile customization** arrives with bio, role, and banner palette. Rich media in chat gets a major boost — link previews, a shared media gallery, and video attachments analyzable by the AI. WebDAV now shows your storage quota, and broad caching makes heavy pages noticeably snappier.
+**Profile customization** arrives with bio, role, and banner palette. Rich media in chat gets a major boost - link previews, a shared media gallery, and video attachments analyzable by the AI. WebDAV now shows your storage quota, and broad caching makes heavy pages noticeably snappier.
 
 ### Profile
 
@@ -229,7 +229,7 @@ Calendar overhaul with infinite scroll and a smoother mobile experience. WebDAV 
 - Declined events no longer appear in the upcoming calendar view
 - Activity feed no longer hides others' events when the actor is excluded
 
-## 0.15.0 — External Calendars & Group Folders
+## 0.15.0 - External Calendars & Group Folders
 
 ### Highlights
 
@@ -249,7 +249,7 @@ Calendar overhaul with infinite scroll and a smoother mobile experience. WebDAV 
 
 ### Files
 
-- **Group folders** — shared folder spaces with creation dialog and sidebar integration
+- **Group folders** - shared folder spaces with creation dialog and sidebar integration
 - Destructive actions on root group folders are blocked
 - Group folders and sidebar refresh automatically after changes
 
@@ -269,11 +269,11 @@ Calendar overhaul with infinite scroll and a smoother mobile experience. WebDAV 
 - Un-favoriting a note keeps the selection consistent
 - Smoother chat membership updates and read receipts
 
-## 0.14.0 — Notes & Unified Inbox
+## 0.14.0 - Notes & Unified Inbox
 
 ### Highlights
 
-**Notes**, a new Markdown-based note-taking app, joins the workspace — with tags, advanced filters, and folder-tree sidebar organization. Mail now lands on a **unified inbox** with customizable density. A new workspace-wide **Favorites** view lets you pin content from every module.
+**Notes**, a new Markdown-based note-taking app, joins the workspace - with tags, advanced filters, and folder-tree sidebar organization. Mail now lands on a **unified inbox** with customizable density. A new workspace-wide **Favorites** view lets you pin content from every module.
 
 ### New: Notes
 
@@ -321,11 +321,11 @@ Markdown-based note-taking app with rich organization features.
 - Markdown editor padding on smaller screens
 - Changelog modal width on smaller screens
 
-## 0.13.0 — File Sharing Links
+## 0.13.0 - File Sharing Links
 
 ### Highlights
 
-**Share files with anyone** via password-protected, expiring links. Mail gets smarter — automatic detection of deleted or moved messages, and cleaner AI classification for sent and draft folders.
+**Share files with anyone** via password-protected, expiring links. Mail gets smarter - automatic detection of deleted or moved messages, and cleaner AI classification for sent and draft folders.
 
 ### Files
 
@@ -354,7 +354,7 @@ Markdown-based note-taking app with rich organization features.
 - Fixed edge cases in IMAP folder synchronization
 - Scheduled messages no longer post empty responses
 
-## 0.12.0 — AI Search & PWA
+## 0.12.0 - AI Search & PWA
 
 ### Highlights
 
@@ -409,7 +409,7 @@ Enhanced AI capabilities with web search, scheduling, and improved tool handling
 - Chat titles generate only after 2+ messages
 - Calendar widget accent color consistency
 
-## 0.11.0 — AI Bots Overhaul
+## 0.11.0 - AI Bots Overhaul
 
 ### Highlights
 
@@ -419,12 +419,12 @@ Major overhaul of **AI bots**: bots now remember context, mention users, search 
 
 AI tools ecosystem and bot management overhaul.
 
-- **AI Memory** — bots remember context across sessions, with search and filter UI
+- **AI Memory** - bots remember context across sessions, with search and filter UI
 - **Image generation and editing** tools for bots
-- **Workspace search tool** — bots can query across all modules
+- **Workspace search tool** - bots can query across all modules
 - Dedicated Mail, Files, and Chat tools
 - Message search and user info retrieval tools
-- **Bot access controls** — public visibility settings and capability flags
+- **Bot access controls** - public visibility settings and capability flags
 - Customize bot avatars and appearance
 - Personalized system prompt with the bot's name in context
 - Configurable timeout, retry options, and context size
@@ -454,20 +454,20 @@ AI tools ecosystem and bot management overhaul.
 - Calendar icons refresh correctly after polls update
 - Greeting falls back to username when first name is empty
 
-## 0.10.0 — AI Assistant
+## 0.10.0 - AI Assistant
 
 ### Highlights
 
-**AI Assistant** lands across Chat and Mail — bots respond in conversations (text and images), summarize emails, and help you compose replies. Mail adds **OAuth2 authentication** for providers like Gmail and Microsoft.
+**AI Assistant** lands across Chat and Mail - bots respond in conversations (text and images), summarize emails, and help you compose replies. Mail adds **OAuth2 authentication** for providers like Gmail and Microsoft.
 
 ### New: AI Assistant
 
 AI-powered assistant integrated across Chat and Mail modules.
 
 - Configurable AI bots with a picker modal and per-conversation assignment
-- **Chat AI** — bots respond in conversations with text and image attachments
-- **Mail AI** — email summaries with a dismiss option, preserving formatting
-- **Mail AI** — reply assistance using your sender identity for tone
+- **Chat AI** - bots respond in conversations with text and image attachments
+- **Mail AI** - email summaries with a dismiss option, preserving formatting
+- **Mail AI** - reply assistance using your sender identity for tone
 - Editor task type with attachment viewer for AI-generated content
 - Bots show presence status
 
@@ -499,18 +499,18 @@ AI-powered assistant integrated across Chat and Mail modules.
 - Presence indicators disabled in dialog avatars
 - Visual refresh for the mail account menu
 
-## 0.9.0 — Polls & File Locking
+## 0.9.0 - Polls & File Locking
 
 ### Highlights
 
-**Calendar polls** — schedule events democratically by proposing time slots, inviting guests (even without an account), collecting votes, and picking the final slot. Chat gets an **emoji picker** and optimistic message sending. **File locking** prevents concurrent editing conflicts.
+**Calendar polls** - schedule events democratically by proposing time slots, inviting guests (even without an account), collecting votes, and picking the final slot. Chat gets an **emoji picker** and optimistic message sending. **File locking** prevents concurrent editing conflicts.
 
 ### Calendar
 
-- **Poll scheduling** — create polls with time slots, invite guests via shareable link, collect votes, pick the final slot
+- **Poll scheduling** - create polls with time slots, invite guests via shareable link, collect votes, pick the final slot
 - Edit polls by adding or removing slots; redesigned poll list with search and filters
 - Optional notifications when guests vote on your polls
-- **iCalendar email integration** — incoming `.ics` attachments are processed and replies sent automatically
+- **iCalendar email integration** - incoming `.ics` attachments are processed and replies sent automatically
 - Event-specific URLs in notifications for direct navigation
 - Pending actions now include events until end of day
 - Invitation calendar name updates when your account display name changes
@@ -518,7 +518,7 @@ AI-powered assistant integrated across Chat and Mail modules.
 ### Chat
 
 - **Emoji picker** for messages and reactions
-- Messages appear immediately with a loading animation — no waiting for the server
+- Messages appear immediately with a loading animation - no waiting for the server
 - Smoother scroll handling and delayed image loading
 - Read receipt dropdown position corrected
 
@@ -545,7 +545,7 @@ AI-powered assistant integrated across Chat and Mail modules.
 
 - Mail unread counts stay in sync with optimistic UI updates
 
-## 0.8.0 — Replies & Read Receipts
+## 0.8.0 - Replies & Read Receipts
 
 ### Highlights
 
@@ -553,17 +553,17 @@ Chat gets **message replies** with quoted preview and click-to-scroll, plus **re
 
 ### Chat
 
-- **Reply to messages** with a quoted preview — click the quote to scroll to the original
+- **Reply to messages** with a quoted preview - click the quote to scroll to the original
 - **Read receipts** with double-check indicators, per-group read count, and a detail popover
 - Message timestamps moved to the group footer alongside read receipts
 
 ### Notifications
 
-- **File activity notifications** — edits, shares, permission changes, deletions, and comments
-- **Calendar event notifications** — invites, updates, cancellations, and RSVP responses
+- **File activity notifications** - edits, shares, permission changes, deletions, and comments
+- **Calendar event notifications** - invites, updates, cancellations, and RSVP responses
 - Notification URLs and click handling now work reliably
 
-## 0.7.0 — Notifications & Presence
+## 0.7.0 - Notifications & Presence
 
 ### Highlights
 
@@ -575,8 +575,8 @@ A real-time **notification system** lands with its own UI panel. User **presence
 
 ### Users
 
-- **Presence tracking** — online, away, offline detection
-- **Manual status** — online, away, busy, invisible
+- **Presence tracking** - online, away, offline detection
+- **Manual status** - online, away, busy, invisible
 - User card popover with real-time status updates
 - **DM shortcut** from user profiles and user cards
 - Logging out immediately marks you as offline
@@ -594,11 +594,11 @@ A real-time **notification system** lands with its own UI panel. User **presence
 - App shortcuts no longer conflict with browser shortcuts
 - Navbar cleanup: removed unused entries
 
-## 0.6.0 — Mail & Recurring Events
+## 0.6.0 - Mail & Recurring Events
 
 ### Highlights
 
-**Mail**, a new IMAP/SMTP mail client, joins the workspace — with account auto-discovery, drafts, a hierarchical folder tree, drag-and-drop message management, and direct "Save to Files". Calendar gains **recurring events** with scope-aware editing. Kubernetes deployment manifests are now available for self-hosters.
+**Mail**, a new IMAP/SMTP mail client, joins the workspace - with account auto-discovery, drafts, a hierarchical folder tree, drag-and-drop message management, and direct "Save to Files". Calendar gains **recurring events** with scope-aware editing. Kubernetes deployment manifests are now available for self-hosters.
 
 ### New module: Mail
 
@@ -611,7 +611,7 @@ IMAP/SMTP mail client integrated into the workspace.
 - Filter messages by search, unread, starred, or attachments
 - Drag-and-drop or context menu to move messages
 - Contact autocomplete with popover cards
-- **"Save to Files"** — save mail attachments directly to the file browser
+- **"Save to Files"** - save mail attachments directly to the file browser
 - Sent mail properly stored on the server (IMAP APPEND)
 - Syncing indicators, loading spinners, and empty states throughout
 - Context menu on messages with action shortcuts
@@ -650,15 +650,15 @@ IMAP/SMTP mail client integrated into the workspace.
 - **Kubernetes deployment manifests** with health probes (liveness, readiness, startup)
 - **Celery task queue** for background processing, with Redis fallback
 
-## 0.5.0 — Agenda & Attachments
+## 0.5.0 - Agenda & Attachments
 
 ### Highlights
 
-Calendar introduces an **Agenda view** with a chronological event listing. Chat now supports **attachments** — upload files to messages and save them directly to your file browser. Files gets a **comments** system.
+Calendar introduces an **Agenda view** with a chronological event listing. Chat now supports **attachments** - upload files to messages and save them directly to your file browser. Files gets a **comments** system.
 
 ### Calendar
 
-- **Agenda view** — chronological list of events across your calendars
+- **Agenda view** - chronological list of events across your calendars
 - Event context menu with quick actions (edit, delete, duplicate)
 - Show or hide declined events
 - Smoother loading of the event detail panel
@@ -666,12 +666,12 @@ Calendar introduces an **Agenda view** with a chronological event listing. Chat 
 
 ### Chat
 
-- **Message attachments** — upload and attach files to messages
-- **"Save to Files"** — save chat attachments directly to your file browser
+- **Message attachments** - upload and attach files to messages
+- **"Save to Files"** - save chat attachments directly to your file browser
 
 ### Files
 
-- **Comments on files** — add, edit, and delete
+- **Comments on files** - add, edit, and delete
 - Refreshed properties panel
 
 ### Users
@@ -682,7 +682,7 @@ Calendar introduces an **Agenda view** with a chronological event listing. Chat 
 
 - **Docker images** now published on GHCR for each `main` push and tag
 
-## 0.4.0 — Chat, Calendar & Sharing
+## 0.4.0 - Chat, Calendar & Sharing
 
 ### Highlights
 
@@ -737,13 +737,13 @@ Full-featured calendar with multiple views and event management.
 
 - New prompt dialogs with icons and customizable input sizes
 - New user selector with avatars, search-as-you-type, and keyboard navigation
-- Shared dialog utilities: confirm, prompt, message, error — with icons
+- Shared dialog utilities: confirm, prompt, message, error - with icons
 
 ### Infrastructure
 
-- **Trash auto-purge** — trashed items are now periodically cleaned up
+- **Trash auto-purge** - trashed items are now periodically cleaned up
 
-## 0.3.0 — Folder ZIP Downloads
+## 0.3.0 - Folder ZIP Downloads
 
 ### Highlights
 
@@ -751,14 +751,14 @@ Folders can now be **downloaded as ZIP archives**. A new "Download as ZIP" optio
 
 ### Files
 
-- **Download folders as ZIP archives** — new "Download as ZIP" context menu option
+- **Download folders as ZIP archives** - new "Download as ZIP" context menu option
 - The download endpoint now handles both files and folders
 
-## 0.2.0 — PostgreSQL Support
+## 0.2.0 - PostgreSQL Support
 
 ### Highlights
 
-**PostgreSQL support** — the workspace can now run against PostgreSQL as well as SQLite. Monaco editor's base theme is now in sync with the workspace theme.
+**PostgreSQL support** - the workspace can now run against PostgreSQL as well as SQLite. Monaco editor's base theme is now in sync with the workspace theme.
 
 ### Infrastructure
 
@@ -768,7 +768,7 @@ Folders can now be **downloaded as ZIP archives**. A new "Download as ZIP" optio
 
 - Monaco editor base theme syncs with the workspace theme
 
-## 0.1.0 — Initial Release
+## 0.1.0 - Initial Release
 
 ### Highlights
 

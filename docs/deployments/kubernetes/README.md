@@ -139,7 +139,7 @@ To give the AI web search capabilities, deploy [SearXNG](https://docs.searxng.or
 # 1. Deploy SearXNG
 kubectl apply -f searxng.yaml
 
-# 2. Enable it in the ConfigMap — set SEARXNG_URL in configmap.yaml:
+# 2. Enable it in the ConfigMap - set SEARXNG_URL in configmap.yaml:
 #    SEARXNG_URL: "http://searxng.workspace.svc:8080"
 kubectl apply -f configmap.yaml
 
@@ -147,7 +147,7 @@ kubectl apply -f configmap.yaml
 kubectl -n workspace rollout restart deployment workspace
 ```
 
-SearXNG requires no API keys — it aggregates results from public search engines.
+SearXNG requires no API keys - it aggregates results from public search engines.
 
 ## Scaling Limitations
 

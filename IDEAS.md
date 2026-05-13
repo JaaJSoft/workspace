@@ -99,9 +99,9 @@ Integrated email client to centralize communication.
 - [x] Unified inbox (default landing page with cross-account aggregation)
 - [x] Compose, reply, forward
 - [x] Attachments -> direct save to Files
-- [x] iCalendar integration — parse incoming .ics invitations (REQUEST/CANCEL), auto-create calendar events, send METHOD:REPLY on accept/decline
+- [x] iCalendar integration - parse incoming .ics invitations (REQUEST/CANCEL), auto-create calendar events, send METHOD:REPLY on accept/decline
 - [x] Custom labels / tags (with AI-driven email classification)
-- [x] Customizable mail preferences — density, preview lines, label visibility
+- [x] Customizable mail preferences - density, preview lines, label visibility
 - [x] Mobile-responsive layout with sidebar toggle
 - [ ] Full-text search in emails
 - [ ] HTML signatures per account
@@ -109,8 +109,8 @@ Integrated email client to centralize communication.
 - [ ] Convert email to task (link with Tasks)
 - [ ] Email templates
 - [ ] Filters and automatic rules
-- [ ] Scheduled send — compose now, send later via Celery delayed task
-- [ ] Undo send — 10s grace period before actually sending (queue + cancel)
+- [ ] Scheduled send - compose now, send later via Celery delayed task
+- [ ] Undo send - 10s grace period before actually sending (queue + cancel)
 
 ---
 
@@ -121,13 +121,13 @@ Calendar and planning. **Module shipped in v0.4.0.**
 - [x] Day, week, month views (FullCalendar integration)
 - [x] Events with title, description, location, participants
 - [x] Recurring events
-- [x] External ICS calendar sync — subscribe to external ICS feeds with auto-sync (ETag, interval)
+- [x] External ICS calendar sync - subscribe to external ICS feeds with auto-sync (ETag, interval)
 - [ ] Bidirectional CalDAV / Google Calendar / Outlook sync
 - [ ] Reminders (email, in-app notification)
-- [x] Quick event creation — click a time slot or drag-to-select, type title, expand for details
-- [ ] Drag to resize events — resize duration by dragging bottom edge
-- [ ] Multi-calendar overlay — see multiple users' calendars side by side
-- [x] Scheduling polls (Doodle-style) — create polls with time slots, invite participants, vote, finalize with share link
+- [x] Quick event creation - click a time slot or drag-to-select, type title, expand for details
+- [ ] Drag to resize events - resize duration by dragging bottom edge
+- [ ] Multi-calendar overlay - see multiple users' calendars side by side
+- [x] Scheduling polls (Doodle-style) - create polls with time slots, invite participants, vote, finalize with share link
 - [ ] Link with tasks (deadlines visible in calendar)
 - [x] Agenda view (chronological list)
 - [ ] Time zones (format preferences only for now)
@@ -173,14 +173,14 @@ Real-time internal communication. **Module shipped in v0.4.0.**
 - [x] Group conversations with avatar, stats, and info panel
 - [x] Member management and context menus
 - [x] Keyboard shortcuts and help dialog
-- [x] Markdown message rendering — rich formatting with Pygments syntax highlighting, tables, task lists
-- [x] Typing indicators — "X is typing..." via SSE (cache key + short TTL)
-- [x] Message replies — quote a specific message when replying (parent_id FK)
-- [ ] Link previews — auto-unfurl URLs with OpenGraph metadata (title, image, description)
-- [x] Read receipts — show who has read messages in group conversations
-- [ ] Voice messages — record and send audio clips (MediaRecorder API + file upload)
-- [x] Message formatting toolbar — bold/italic/strikethrough/code/link buttons + keyboard shortcuts
-- [x] AI chatbot integration — configurable bot profiles with tool calling, rolling conversation summaries, persistent memory, scheduled messages
+- [x] Markdown message rendering - rich formatting with Pygments syntax highlighting, tables, task lists
+- [x] Typing indicators - "X is typing..." via SSE (cache key + short TTL)
+- [x] Message replies - quote a specific message when replying (parent_id FK)
+- [ ] Link previews - auto-unfurl URLs with OpenGraph metadata (title, image, description)
+- [x] Read receipts - show who has read messages in group conversations
+- [ ] Voice messages - record and send audio clips (MediaRecorder API + file upload)
+- [x] Message formatting toolbar - bold/italic/strikethrough/code/link buttons + keyboard shortcuts
+- [x] AI chatbot integration - configurable bot profiles with tool calling, rolling conversation summaries, persistent memory, scheduled messages
 
 ---
 
@@ -249,7 +249,7 @@ Customizable dashboards.
 - [x] Module stats and pending action counts
 - [ ] Report export
 - [ ] Shared dashboards between users
-- [ ] Starred/favorites unification — single "favorites" system across files, conversations, events
+- [ ] Starred/favorites unification - single "favorites" system across files, conversations, events
 
 ---
 
@@ -292,7 +292,7 @@ Features shared across all modules.
 
 ### Global Search
 - [x] Unified search across all modules (Ctrl+K) with search provider registry
-- [ ] Full-text indexing — PostgreSQL FTS (tsvector/tsquery) across files, mail, chat, contacts
+- [ ] Full-text indexing - PostgreSQL FTS (tsvector/tsquery) across files, mail, chat, contacts
 - [x] Results grouped by type (file, task, note, contact...)
 - [x] Recent commands tracking and quick actions
 
@@ -313,10 +313,10 @@ Features shared across all modules.
 - [ ] Global audit log
 
 ### API & AI
-- [x] AI chatbot platform — bot profiles, tool registry, rolling summaries, persistent memory
-- [x] AI tools — search messages, check availability, file operations, mail operations, image generation
-- [x] Scheduled AI messages — recurring/one-time bot messages via Celery
-- [x] AI email classification — automatic label assignment on incoming mail
+- [x] AI chatbot platform - bot profiles, tool registry, rolling summaries, persistent memory
+- [x] AI tools - search messages, check availability, file operations, mail operations, image generation
+- [x] Scheduled AI messages - recurring/one-time bot messages via Celery
+- [x] AI email classification - automatic label assignment on incoming mail
 - [ ] Configurable webhooks
 - [ ] Personal API tokens
 - [ ] Zapier / n8n / Make integration
@@ -325,35 +325,35 @@ Features shared across all modules.
 - [ ] Python/JS SDK
 
 ### Desktop Integration
-- [x] WebDAV server (wsgidav) — mount files as a network drive on any OS (WIP)
-- [ ] macOS File Provider Extension — native Finder integration with sync status
-- [ ] Windows Cloud Files API — native Explorer integration (on-demand files)
+- [x] WebDAV server (wsgidav) - mount files as a network drive on any OS (WIP)
+- [ ] macOS File Provider Extension - native Finder integration with sync status
+- [ ] Windows Cloud Files API - native Explorer integration (on-demand files)
 
 ### Ops & Maintenance
-- [x] **SQLite maintenance job** — Celery Beat task (daily 3h) : PRAGMA optimize, WAL checkpoint, VACUUM, integrity check. Commande `manage.py db_maintenance` pour exécution manuelle.
-- [x] **Trash auto-purge** — Tâche Celery (daily 2h30) pour hard-delete les fichiers en corbeille depuis > `TRASH_RETENTION_DAYS`. Commande `manage.py purge_trash` avec `--days` et `--dry-run`.
-- [x] **Orphan attachments purge** — Celery task + management command `purge_orphan_attachments` for chat file cleanup
-- [ ] **Session cleanup** — Tâche Celery pour `clearsessions` (purge des sessions DB expirées quand Redis n'est pas utilisé)
-- [x] **Admin enrichi** — File, FileFavorite, PinnedFolder, ConversationMember, PinnedMessage, PinnedConversation dans l'admin avec filtres et recherche
-- [ ] **Background file processing** — Celery pipeline for thumbnails, virus scan, metadata extraction on upload
-- [ ] **CDN / S3 storage backend** — django-storages for scalable file storage (MinIO for self-hosted)
-- [ ] **Rate limiting** — django-ratelimit on API endpoints (login, file upload, chat send)
-- [x] **Metrics endpoint** — Prometheus /metrics (request latency, DB pool, cache hit rate, active SSE connections)
-- [ ] **Structured logging** — JSON logs with request_id tracing (django-structlog)
-- [x] **Database connection pooling** — PgBouncer or psycopg pool for high-concurrency scenarios
-- [x] **View caching** — CacheControlMixin with invalidation for API responses
-- [ ] **E2E tests** — Playwright test suite for critical flows (login, file upload, chat send, mail compose)
+- [x] **SQLite maintenance job** - Celery Beat task (daily 3h) : PRAGMA optimize, WAL checkpoint, VACUUM, integrity check. Commande `manage.py db_maintenance` pour exécution manuelle.
+- [x] **Trash auto-purge** - Tâche Celery (daily 2h30) pour hard-delete les fichiers en corbeille depuis > `TRASH_RETENTION_DAYS`. Commande `manage.py purge_trash` avec `--days` et `--dry-run`.
+- [x] **Orphan attachments purge** - Celery task + management command `purge_orphan_attachments` for chat file cleanup
+- [ ] **Session cleanup** - Tâche Celery pour `clearsessions` (purge des sessions DB expirées quand Redis n'est pas utilisé)
+- [x] **Admin enrichi** - File, FileFavorite, PinnedFolder, ConversationMember, PinnedMessage, PinnedConversation dans l'admin avec filtres et recherche
+- [ ] **Background file processing** - Celery pipeline for thumbnails, virus scan, metadata extraction on upload
+- [ ] **CDN / S3 storage backend** - django-storages for scalable file storage (MinIO for self-hosted)
+- [ ] **Rate limiting** - django-ratelimit on API endpoints (login, file upload, chat send)
+- [x] **Metrics endpoint** - Prometheus /metrics (request latency, DB pool, cache hit rate, active SSE connections)
+- [ ] **Structured logging** - JSON logs with request_id tracing (django-structlog)
+- [x] **Database connection pooling** - PgBouncer or psycopg pool for high-concurrency scenarios
+- [x] **View caching** - CacheControlMixin with invalidation for API responses
+- [ ] **E2E tests** - Playwright test suite for critical flows (login, file upload, chat send, mail compose)
 
 ### UI/UX
-- [x] PWA (Progressive Web App) — service worker, push notifications, offline caching, app icons
-- [x] Mobile responsive design — Tailwind responsive classes across all modules
+- [x] PWA (Progressive Web App) - service worker, push notifications, offline caching, app icons
+- [x] Mobile responsive design - Tailwind responsive classes across all modules
 - [x] Modular sidebar (each module = one section)
 - [x] Customizable themes (12 themes: light, dark, cupcake, emerald, corporate, forest, dracula, night, winter, nord, sunset, autumn)
 - [ ] Onboarding wizard for new users
-- [ ] Focus mode (hide sidebar) — per-module sidebar collapse exists (Chat, Calendar)
+- [ ] Focus mode (hide sidebar) - per-module sidebar collapse exists (Chat, Calendar)
 - [x] Keyboard shortcuts per module (Files, Calendar, Chat, global Ctrl+K)
-- [ ] i18n (FR, EN minimum) — Django i18n enabled but no translations yet
+- [ ] i18n (FR, EN minimum) - Django i18n enabled but no translations yet
 - [x] Reusable dialog system (confirm, prompt, message)
 - [x] Enhanced user profiles with avatar, stats, and activity timeline (basic for now)
-- [x] Changelog modal — in-app release notes viewer
+- [x] Changelog modal - in-app release notes viewer
 - [x] Reusable preferences UI partials (density, toggles, popovers)

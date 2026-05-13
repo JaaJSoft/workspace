@@ -38,7 +38,7 @@ kubectl apply -f ingress.yaml
 
 ## Reverse Proxy
 
-Workspace expects to run behind a TLS-terminating reverse proxy (nginx, Caddy, Traefik, an ingress controller, etc.). The application speaks plain HTTP/1.1 on port 8000 — the proxy handles TLS, HTTP/2, HTTP/3, compression, and rate limiting as the operator sees fit.
+Workspace expects to run behind a TLS-terminating reverse proxy (nginx, Caddy, Traefik, an ingress controller, etc.). The application speaks plain HTTP/1.1 on port 8000 - the proxy handles TLS, HTTP/2, HTTP/3, compression, and rate limiting as the operator sees fit.
 
 ### Required headers from the proxy
 
@@ -50,7 +50,7 @@ Workspace expects to run behind a TLS-terminating reverse proxy (nginx, Caddy, T
 
 ### Optional settings for proxies that rewrite Host/Port
 
-Some proxies — notably Cloudflare, AWS ALB, GCP Load Balancer, Azure Front Door — rewrite the `Host` header and forward the original under `X-Forwarded-Host`. Enable these only when you know your proxy does that:
+Some proxies - notably Cloudflare, AWS ALB, GCP Load Balancer, Azure Front Door - rewrite the `Host` header and forward the original under `X-Forwarded-Host`. Enable these only when you know your proxy does that:
 
 | Variable               | Default | Effect                                                            |
 |------------------------|---------|-------------------------------------------------------------------|

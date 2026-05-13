@@ -127,7 +127,7 @@ To give the AI web search capabilities, deploy a [SearXNG](https://docs.searxng.
 
 The `searxng/` directory contains a `settings.yml` that enables the JSON API format required by Workspace. It is mounted into the container automatically.
 
-SearXNG requires no API keys — it aggregates results from public search engines.
+SearXNG requires no API keys - it aggregates results from public search engines.
 
 ## Limitations
 

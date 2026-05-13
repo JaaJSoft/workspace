@@ -1,5 +1,48 @@
 # Claude Code Instructions
 
+## Commands
+
+```bash
+# Setup
+uv sync                                        # install dependencies
+uv run python manage.py migrate                # apply migrations
+uv run python manage.py runserver              # dev server on :8000
+
+# Tests (per module - matches CI matrix)
+uv run python manage.py test workspace.<module>           # e.g. workspace.files
+uv run coverage run manage.py test workspace.<module>     # with coverage
+
+# Async stack
+uv run celery -A workspace worker -l info
+uv run celery -A workspace beat -l info
+```
+
+**CI coverage floors** (`.github/workflows/tests.yml`): each module pins a `min_coverage` (45-95%). Lowering a threshold is forbidden by the workflow's own comment - raise it after adding coverage, never lower it.
+
+## Module Map
+
+Each Django app under `workspace/` follows the same shape (`models.py`, `views.py`, `services/`, `tests/`, `ui/`, `urls.py`):
+
+| Module | Purpose |
+|---|---|
+| `ai` | LLM tools, AI assistants, prompt routing |
+| `calendar` | Events, recurrence, external calendar sync |
+| `chat` | Conversations, messages, typing indicators, link previews |
+| `common` | Cross-cutting helpers: UUIDs, booleans, logging, cache, mixins |
+| `core` | Auth, navigation, changelog, dashboard scaffolding |
+| `dashboard` | User home page widgets |
+| `files` | File/folder model, permissions, WebDAV, thumbnails, sharing |
+| `mail` | IMAP/SMTP, OAuth2 providers, labels, autodiscover |
+| `notes` | Markdown notes built on the files module |
+| `notifications` | Web push, in-app notifications |
+| `users` | User model, settings, profile, activity feed |
+
+## Infrastructure
+
+- **Cache & sessions:** Redis (`django-redis`). Sessions are NOT in the DB in production - don't count `SELECT django_session` as a prod cost.
+- **Async tasks:** Celery + Redis broker. Background work (mail sync, thumbnails, push) runs via tasks; never block a request on it.
+- **Database:** PostgreSQL canonical, SQLite for dev/tests (see `core/management/commands/sqlite_to_postgres.py` for migration).
+
 ## Workflow
 
 ### Git
@@ -94,7 +137,7 @@ workspace/<module>/
 └── ...
 ```
 
-Examples in the codebase: `files/services/{files,mime,thumbnails}.py`, `chat/services/{conversations,notifications,rendering,avatar,typing,link_preview}.py`, `mail/services/{imap,smtp,oauth2}.py`.
+Examples in the codebase: `files/services/{files,mime,thumbnails,sharing,events}.py`, `chat/services/{conversations,notifications,rendering,avatar,typing,link_preview}.py`, `mail/services/{imap_connection,imap_folders,imap_mailbox,imap_messages,imap_parse,imap_sync,label_counts,smtp,oauth2}.py`.
 
 #### Naming rules
 
@@ -249,7 +292,7 @@ logger.exception("Activity provider '%s' failed", scrub(source))
 - Sanitize at the logger call site even when the value looks "safe" (a validated UUID, an enum slug, an email that passed `EmailField`). Validation runs at the view boundary, but the same value flows through Celery tasks, signals, and services to loggers far from where it was checked. CodeQL traces taint, not validation — the `py/log-injection` alert fires regardless.
 - Never log full request bodies or headers. If you must, scrub them.
 - Internal/system values that never touched user input (settings keys, hard-coded enum members, `__name__`, computed counts) don't need `scrub()`. Apply it to the *tainted* fields, not the whole format string.
-- The helper lives in `workspace/common/logging_safe.py`. The `str(...).replace('\r','').replace('\n','')` chain inside is the exact form CodeQL recognizes as a sanitizer for `py/log-injection` — do not refactor the replaces away or wrap them in another helper.
+- The helper lives in `workspace/common/logging.py`. The `str(...).replace('\r','').replace('\n','')` chain inside is the exact form CodeQL recognizes as a sanitizer for `py/log-injection` — do not refactor the replaces away or wrap them in another helper.
 
 ### Query parameter parsing - never trust raw values from `request.query_params` or `request.data`
 

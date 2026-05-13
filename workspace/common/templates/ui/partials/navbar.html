@@ -343,6 +343,11 @@
 {% if user.is_authenticated %}
 <dialog id="changelog-dialog" class="modal"
         x-data="{ loaded: false, loading: false }"
+        x-init="
+          {% if CHANGELOG_UNREAD %}
+          $nextTick(() => setTimeout(() => window.dispatchEvent(new CustomEvent('changelog-open')), 400));
+          {% endif %}
+        "
         @changelog-open.window="
           $el.showModal();
           if (!loaded && !loading) {

@@ -8,6 +8,23 @@
          const entries = Array.from(body.querySelectorAll('[data-cl-version]'));
          if (!entries.length) return;
 
+         const navLinkByVersion = new Map();
+         if (nav) {
+           nav.querySelectorAll('[data-cl-jump]').forEach(link => {
+             navLinkByVersion.set(link.dataset.clJump, link);
+           });
+         }
+
+         const markSeenThrough = (idxLimit) => {
+           for (let i = 0; i <= idxLimit && i < entries.length; i++) {
+             const link = navLinkByVersion.get(entries[i].dataset.clVersion);
+             if (link && link.classList.contains('is-unread')) {
+               link.classList.remove('is-unread');
+               link.classList.add('is-read');
+             }
+           }
+         };
+
          const setActive = (version) => {
            if (!nav) return;
            nav.querySelectorAll('[data-cl-jump]').forEach(a => {
@@ -23,15 +40,16 @@
            const lastRect = entries[entries.length - 1].getBoundingClientRect();
            if (scrollerRect.height < 1 || (entries.length > 1 && lastRect.top === 0)) return;
            const topLine = scrollerRect.top + 60;
-           let current = entries[0].dataset.clVersion;
-           for (const entry of entries) {
-             if (entry.getBoundingClientRect().top <= topLine) {
-               current = entry.dataset.clVersion;
+           let currentIdx = 0;
+           for (let i = 0; i < entries.length; i++) {
+             if (entries[i].getBoundingClientRect().top <= topLine) {
+               currentIdx = i;
              } else {
                break;
              }
            }
-           setActive(current);
+           setActive(entries[currentIdx].dataset.clVersion);
+           markSeenThrough(currentIdx);
          };
 
          let scrollTimer = 0;
@@ -56,8 +74,10 @@
              const version = link.dataset.clJump;
              const target = body.querySelector(`[data-cl-version='${version}']`);
              if (!target) return;
+             const targetIdx = entries.findIndex(en => en.dataset.clVersion === version);
              pinnedVersion = version;
              setActive(version);
+             if (targetIdx >= 0) markSeenThrough(targetIdx);
              const targetRect = target.getBoundingClientRect();
              const scrollerRect = scroller.getBoundingClientRect();
              scroller.scrollTo({
@@ -111,6 +131,11 @@
   text-decoration: none;
   transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
 }
+.cl-nav-link-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
 .cl-nav-link:hover {
   color: oklch(var(--bc));
   background: oklch(var(--bc) / 0.04);
@@ -126,12 +151,30 @@
   font-weight: 400;
   color: oklch(var(--bc) / 0.45);
   margin-top: 0.0625rem;
+  padding-left: 0.875rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .cl-nav-link.is-active .cl-nav-link-sub {
   color: oklch(var(--p) / 0.75);
+}
+.cl-nav-link.is-unread {
+  font-weight: 600;
+  color: oklch(var(--bc));
+}
+.cl-nav-link-mark {
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+}
+.cl-nav-link.is-read .cl-nav-link-mark {
+  background: oklch(var(--bc) / 0.2);
+}
+.cl-nav-link.is-unread .cl-nav-link-mark {
+  background: oklch(var(--p));
+  box-shadow: 0 0 0 3px oklch(var(--p) / 0.18);
 }
 @media (max-width: 640px) {
   .cl-nav { display: none; }
@@ -292,10 +335,14 @@
 <nav class="cl-nav" data-cl-nav aria-label="Versions">
   <div class="cl-nav-title">Versions</div>
   {% for entry in entries %}
-    <a class="cl-nav-link{% if forloop.first %} is-active{% endif %}"
+    <a class="cl-nav-link{% if forloop.first %} is-active{% endif %} {% if entry.read %}is-read{% else %}is-unread{% endif %}"
        data-cl-jump="{{ entry.version }}"
-       href="#">
-      {{ entry.version }}
+       href="#"
+       title="{% if entry.read %}Already read{% else %}New to you{% endif %}">
+      <span class="cl-nav-link-header">
+        <span class="cl-nav-link-mark" aria-hidden="true"></span>
+        <span>{{ entry.version }}</span>
+      </span>
       {% if entry.title %}<span class="cl-nav-link-sub">{{ entry.title }}</span>{% endif %}
     </a>
   {% endfor %}

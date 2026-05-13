@@ -12,6 +12,22 @@ _CHANGELOG_PATH = Path(settings.BASE_DIR) / 'CHANGELOG.md'
 _TITLE_SEPARATORS = (' \u2014 ', ' \u2013 ', ' - ', ': ')
 
 
+def parse_version(version):
+    """Convert a version string like '0.20.0' to a comparable tuple ``(0, 20, 0)``.
+
+    Returns an empty tuple for non-numeric values (e.g. ``'dev'``) so callers can
+    detect them and skip ordered comparisons.
+    """
+    if not version or not isinstance(version, str):
+        return ()
+    parts = []
+    for chunk in version.split('.'):
+        if not chunk.isdigit():
+            return ()
+        parts.append(int(chunk))
+    return tuple(parts)
+
+
 def _split_version_and_title(heading):
     """Split '0.18.0 — Performance' into ('0.18.0', 'Performance').
 
@@ -52,3 +68,14 @@ def get_changelog_entries():
     without any explicit invalidation step.
     """
     return _parse_changelog()
+
+
+def get_latest_version():
+    """Return the topmost (newest) version listed in CHANGELOG.md, or None.
+
+    Releases are written newest-first by convention, so the first entry is
+    the latest. Acts as the source of truth for "is there something new to
+    read" comparisons, decoupled from the runtime ``APP_VERSION`` env var.
+    """
+    entries = get_changelog_entries()
+    return entries[0]['version'] if entries else None

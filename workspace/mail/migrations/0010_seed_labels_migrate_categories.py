@@ -20,37 +20,46 @@ CATEGORY_TO_LABEL = {
 
 
 def seed_and_migrate(apps, schema_editor):
+    db = schema_editor.connection.alias
     MailAccount = apps.get_model('mail', 'MailAccount')
     MailLabel = apps.get_model('mail', 'MailLabel')
     MailMessage = apps.get_model('mail', 'MailMessage')
     MailMessageLabel = apps.get_model('mail', 'MailMessageLabel')
 
     # Seed default labels for all existing accounts
-    for account in MailAccount.objects.all():
-        existing_names = set(account.labels.values_list('name', flat=True))
+    for account in MailAccount.objects.using(db).all():
+        existing_names = set(
+            MailLabel.objects.using(db).filter(account_id=account.pk).values_list('name', flat=True)
+        )
         to_create = [
             MailLabel(account=account, **lbl)
             for lbl in DEFAULT_LABELS
             if lbl['name'] not in existing_names
         ]
         if to_create:
-            MailLabel.objects.bulk_create(to_create)
+            MailLabel.objects.using(db).bulk_create(to_create)
 
-    # Migrate ai_category → MailMessageLabel
+    # Migrate ai_category -> MailMessageLabel
     for cat_value, label_name in CATEGORY_TO_LABEL.items():
-        messages = MailMessage.objects.filter(ai_category=cat_value).select_related('account')
+        messages = (
+            MailMessage.objects.using(db)
+            .filter(ai_category=cat_value)
+            .select_related('account')
+        )
         links = []
         label_cache = {}
         for msg in messages.iterator():
             key = (msg.account_id, label_name)
             if key not in label_cache:
-                label_cache[key] = MailLabel.objects.get(account_id=msg.account_id, name=label_name)
+                label_cache[key] = MailLabel.objects.using(db).get(
+                    account_id=msg.account_id, name=label_name
+                )
             links.append(MailMessageLabel(message=msg, label=label_cache[key]))
             if len(links) >= 1000:
-                MailMessageLabel.objects.bulk_create(links, ignore_conflicts=True)
+                MailMessageLabel.objects.using(db).bulk_create(links, ignore_conflicts=True)
                 links = []
         if links:
-            MailMessageLabel.objects.bulk_create(links, ignore_conflicts=True)
+            MailMessageLabel.objects.using(db).bulk_create(links, ignore_conflicts=True)
 
 
 def reverse_noop(apps, schema_editor):

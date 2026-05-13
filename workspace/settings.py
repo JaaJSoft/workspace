@@ -432,6 +432,12 @@ DATABASES = {
 # PostgreSQL: connection pooling + Prometheus DB metrics
 if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
     DATABASES['default']['ENGINE'] = 'django_prometheus.db.backends.postgresql'
+    # Django 6.0 rejects pool=True combined with CONN_MAX_AGE>0
+    # ("Pooling doesn't support persistent connections"). The pool itself
+    # already keeps connections alive, so persistent-connection caching is
+    # both redundant and incompatible.
+    DATABASES['default']['CONN_MAX_AGE'] = 0
+    DATABASES['default']['CONN_HEALTH_CHECKS'] = False
     DATABASES['default']['OPTIONS'] = {
         **DATABASES['default'].get('OPTIONS', {}),
         'pool': True,

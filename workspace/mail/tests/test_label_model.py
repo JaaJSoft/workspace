@@ -135,3 +135,28 @@ class DefaultLabelSeedTests(TestCase):
         account.display_name = 'Updated'
         account.save()
         self.assertEqual(account.labels.count(), 5)
+
+    def test_signal_skips_seeding_when_raw(self):
+        """Regression: loaddata fires post_save with raw=True; the handler must
+        skip label seeding so the fixture-provided labels do not collide with
+        signal-created duplicates.
+        """
+        from workspace.mail.signals import seed_default_labels
+
+        user = User.objects.create_user(username='rawuser', password='pass123')
+        # Build an unsaved account; the signal should be a no-op.
+        account = MailAccount(
+            owner=user, email='raw@test.com',
+            imap_host='imap.test.com', smtp_host='smtp.test.com',
+            username='raw@test.com',
+        )
+
+        before = MailLabel.objects.count()
+        seed_default_labels(
+            sender=MailAccount,
+            instance=account,
+            created=True,
+            raw=True,
+            using='default',
+        )
+        self.assertEqual(MailLabel.objects.count(), before)

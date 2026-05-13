@@ -4,8 +4,9 @@ from django.db import migrations
 
 
 def set_existing_bots_public(apps, schema_editor):
+    db = schema_editor.connection.alias
     BotProfile = apps.get_model('ai', 'BotProfile')
-    BotProfile.objects.all().update(is_public=True)
+    BotProfile.objects.using(db).all().update(is_public=True)
 
 
 class Migration(migrations.Migration):

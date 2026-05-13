@@ -10,11 +10,14 @@ DEFAULT_LABELS = [
 ]
 
 @receiver(post_save, sender='mail.MailAccount')
-def seed_default_labels(sender, instance, created, **kwargs):
-    if not created:
+def seed_default_labels(sender, instance, created, raw=False, using=None, **kwargs):
+    # `raw=True` means we're inside loaddata; the fixture already carries
+    # the labels (or doesn't, by design) and the DB may not be in a
+    # consistent state for related-object creation.
+    if raw or not created:
         return
     from workspace.mail.models import MailLabel
-    MailLabel.objects.bulk_create([
+    MailLabel.objects.using(using).bulk_create([
         MailLabel(account=instance, **label_data)
         for label_data in DEFAULT_LABELS
     ])

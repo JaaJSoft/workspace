@@ -2,15 +2,16 @@ from django.db import migrations
 
 
 def populate_unread_counts(apps, schema_editor):
+    db = schema_editor.connection.alias
     ConversationMember = apps.get_model('chat', 'ConversationMember')
     Message = apps.get_model('chat', 'Message')
 
-    members = ConversationMember.objects.filter(
+    members = ConversationMember.objects.using(db).filter(
         left_at__isnull=True,
     ).iterator(chunk_size=500)
 
     for member in members:
-        qs = Message.objects.filter(
+        qs = Message.objects.using(db).filter(
             conversation_id=member.conversation_id,
             deleted_at__isnull=True,
         ).exclude(author_id=member.user_id)
@@ -20,7 +21,7 @@ def populate_unread_counts(apps, schema_editor):
 
         count = qs.count()
         if count > 0:
-            ConversationMember.objects.filter(pk=member.pk).update(
+            ConversationMember.objects.using(db).filter(pk=member.pk).update(
                 unread_count=count,
             )
 

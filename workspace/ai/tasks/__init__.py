@@ -12,6 +12,7 @@ This file re-exports every task at the package level so that:
   after the file -> package conversion.
 """
 
+from workspace.ai.tasks.calendar import extract_from_mail_messages
 from workspace.ai.tasks.chat import (
     generate_chat_response,
     generate_conversation_title,
@@ -34,6 +35,7 @@ __all__ = [
     'compose_email',
     'dispatch_scheduled_messages',
     'editor_action',
+    'extract_from_mail_messages',
     'generate_chat_response',
     'generate_conversation_title',
     'generate_scheduled_response',

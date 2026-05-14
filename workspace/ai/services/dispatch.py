@@ -38,6 +38,7 @@ def _enqueue_worker(ai_task: AITask) -> None:
         classify_mail_messages,
         compose_email,
         editor_action,
+        extract_from_mail_messages,
         summarize,
     )
 
@@ -47,6 +48,7 @@ def _enqueue_worker(ai_task: AITask) -> None:
         AITask.TaskType.REPLY: compose_email,
         AITask.TaskType.CLASSIFY: classify_mail_messages,
         AITask.TaskType.EDITOR: editor_action,
+        AITask.TaskType.EXTRACT: extract_from_mail_messages,
     }
     worker = mapping.get(ai_task.task_type)
     if worker is None:

@@ -86,6 +86,15 @@ class DispatchTests(TestCase):
 
         self.assertIn('not-a-real-type', str(cm.exception))
 
+    @patch('workspace.ai.tasks.extract_from_mail_messages.delay')
+    def test_extract_dispatch(self, mock_delay):
+        ai_task = dispatch(
+            owner=self.user,
+            task_type=AITask.TaskType.EXTRACT,
+            input_data={'message_uuids': ['u1']},
+        )
+        mock_delay.assert_called_once_with(str(ai_task.uuid))
+
     def test_every_task_type_has_a_worker(self):
         # Catches the case where a new TaskType is added to the model
         # enum but the dispatch mapping is not updated. ``CHAT`` is
@@ -98,6 +107,7 @@ class DispatchTests(TestCase):
             patch('workspace.ai.tasks.compose_email.delay'),
             patch('workspace.ai.tasks.classify_mail_messages.delay'),
             patch('workspace.ai.tasks.editor_action.delay'),
+            patch('workspace.ai.tasks.extract_from_mail_messages.delay'),
         ):
             for task_type in AITask.TaskType.values:
                 if task_type in non_dispatched:

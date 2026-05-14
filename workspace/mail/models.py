@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db import models
 
 from workspace.common.uuids import uuid_v7_or_v4
@@ -289,3 +290,54 @@ class MailAttachment(models.Model):
 
     def __str__(self):
         return self.filename
+
+
+class MailExtraction(models.Model):
+    """One row per item extracted from a mail by an LLM (or future
+    rule-based extractor). Polymorphic: `target` is a GenericForeignKey
+    to whatever was extracted - today only calendar.Event, tomorrow
+    possibly package trackings, invoices, etc.
+
+    A single MailMessage can have N extractions (one mail mentioning
+    two RDV produces two rows). When a target is deleted from elsewhere
+    (e.g., user removes the event from the calendar UI), the FK becomes
+    NULL via SET_NULL and the extraction row stays as audit.
+    """
+
+    class Kind(models.TextChoices):
+        EVENT = 'event', 'Event'
+
+    class Status(models.TextChoices):
+        DETECTED = 'detected', 'Detected'
+        DISMISSED = 'dismissed', 'Dismissed'
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    mail_message = models.ForeignKey(
+        MailMessage, on_delete=models.CASCADE, related_name='extractions',
+    )
+    kind = models.CharField(max_length=32, choices=Kind.choices)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.DETECTED,
+    )
+
+    target_content_type = models.ForeignKey(
+        'contenttypes.ContentType',
+        on_delete=models.SET_NULL, null=True, blank=True,
+    )
+    target_object_id = models.UUIDField(null=True, blank=True)
+    target = GenericForeignKey('target_content_type', 'target_object_id')
+
+    confidence = models.CharField(max_length=8, blank=True, default='')
+    model_used = models.CharField(max_length=64, blank=True, default='')
+    raw_output = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['mail_message', 'kind']),
+            models.Index(fields=['target_content_type', 'target_object_id']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.kind} extraction from {self.mail_message_id}'

@@ -67,14 +67,12 @@ class SummarizeView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        ai_task = AITask.objects.create(
+        from workspace.ai.services.dispatch import dispatch
+        ai_task = dispatch(
             owner=request.user,
             task_type=AITask.TaskType.SUMMARIZE,
             input_data={'message_id': str(message_id)},
         )
-
-        from workspace.ai.tasks import summarize
-        summarize.delay(str(ai_task.uuid))
 
         return Response(
             AITaskSerializer(ai_task).data,
@@ -116,14 +114,12 @@ class ComposeView(APIView):
         if serializer.validated_data.get('account_id'):
             input_data['account_id'] = str(serializer.validated_data['account_id'])
 
-        ai_task = AITask.objects.create(
+        from workspace.ai.services.dispatch import dispatch
+        ai_task = dispatch(
             owner=request.user,
             task_type=AITask.TaskType.COMPOSE,
             input_data=input_data,
         )
-
-        from workspace.ai.tasks import compose_email
-        compose_email.delay(str(ai_task.uuid))
 
         return Response(
             AITaskSerializer(ai_task).data,
@@ -166,7 +162,8 @@ class ReplyView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        ai_task = AITask.objects.create(
+        from workspace.ai.services.dispatch import dispatch
+        ai_task = dispatch(
             owner=request.user,
             task_type=AITask.TaskType.REPLY,
             input_data={
@@ -174,9 +171,6 @@ class ReplyView(APIView):
                 'instructions': serializer.validated_data['instructions'],
             },
         )
-
-        from workspace.ai.tasks import compose_email
-        compose_email.delay(str(ai_task.uuid))
 
         return Response(
             AITaskSerializer(ai_task).data,
@@ -214,14 +208,12 @@ class EditorActionView(APIView):
         if data.get('instructions'):
             input_data['instructions'] = data['instructions']
 
-        ai_task = AITask.objects.create(
+        from workspace.ai.services.dispatch import dispatch
+        ai_task = dispatch(
             owner=request.user,
             task_type=AITask.TaskType.EDITOR,
             input_data=input_data,
         )
-
-        from workspace.ai.tasks import editor_action
-        editor_action.delay(str(ai_task.uuid))
 
         return Response(
             AITaskSerializer(ai_task).data,
@@ -304,14 +296,12 @@ class ClassifyView(APIView):
 
         message_uuids = list(qs.values_list('uuid', flat=True)[:500])
 
-        ai_task = AITask.objects.create(
+        from workspace.ai.services.dispatch import dispatch
+        ai_task = dispatch(
             owner=request.user,
             task_type=AITask.TaskType.CLASSIFY,
             input_data={'message_uuids': [str(u) for u in message_uuids]},
         )
-
-        from workspace.ai.tasks import classify_mail_messages
-        classify_mail_messages.delay(str(ai_task.uuid))
 
         return Response(
             AITaskSerializer(ai_task).data,

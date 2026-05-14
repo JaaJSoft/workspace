@@ -15,7 +15,8 @@ def get_thread(message: MailMessage, max_depth: int = 20) -> list[MailMessage]:
     The walk starts from `message.in_reply_to`, looks up a MailMessage
     in the same account whose `message_id` matches, then continues
     upward until in_reply_to is empty, no parent matches in our DB,
-    or max_depth ancestors have been collected.
+    or the chain has reached max_depth total messages (the starting
+    message counts toward the cap).
 
     A solo message (no in_reply_to, or in_reply_to points to an
     unknown id) returns [message]. The thread is always at least

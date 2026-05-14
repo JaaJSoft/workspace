@@ -139,6 +139,15 @@ class ProcessRequestTest(ICSProcessorMixin, TestCase):
 
         self.assertEqual(Calendar.objects.filter(mail_account=self.account).count(), 1)
 
+    def test_event_calendar_linked_to_mail_account(self, mock_notify, _mock_now):
+        """Event created from an ICS invitation must belong to the invitation calendar
+        whose mail_account matches the receiving mail account."""
+        mail_msg = self._create_mail_with_ics(ICS_REQUEST)
+        process_calendar_email(mail_msg)
+
+        event = Event.objects.get(ical_uid='evt-abc-123@example.com')
+        self.assertEqual(event.calendar.mail_account, self.account)
+
     def test_creates_event_member_pending(self, mock_notify, _mock_now):
         mail_msg = self._create_mail_with_ics(ICS_REQUEST)
         process_calendar_email(mail_msg)

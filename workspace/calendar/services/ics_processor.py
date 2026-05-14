@@ -5,7 +5,7 @@ import icalendar
 from django.db import transaction
 from django.utils import timezone as django_tz
 
-from workspace.calendar.models import Calendar, Event, EventMember
+from workspace.calendar.models import Event, EventMember
 from workspace.notifications.services.notifications import notify
 
 logger = logging.getLogger(__name__)
@@ -83,32 +83,27 @@ def _handle_cancel(vevent, uid, mail_message):
 @transaction.atomic
 def _create_event(vevent, uid, sequence, mail_message):
     """Create a new Event from a VEVENT component."""
-    account = mail_message.account
-    user = account.owner
-    calendar = _get_or_create_invitation_calendar(account)
+    from workspace.calendar.services.event_creation import create_event_from_payload
 
+    user = mail_message.account.owner
     external_organizer = _extract_email(vevent.get('ORGANIZER'))
     dtstart = _to_datetime(vevent.get('DTSTART'))
     dtend = _to_datetime(vevent.get('DTEND'))
-    all_day = _is_all_day(vevent.get('DTSTART'))
 
-    title = str(vevent.get('SUMMARY', ''))
-    description = str(vevent.get('DESCRIPTION', ''))
-    location = str(vevent.get('LOCATION', ''))
-
-    event = Event.objects.create(
-        calendar=calendar,
-        title=title,
-        description=description,
-        start=dtstart,
-        end=dtend,
-        all_day=all_day,
-        location=location,
-        owner=user,
+    event = create_event_from_payload(
+        user=user,
+        payload={
+            'title': str(vevent.get('SUMMARY', '')),
+            'description': str(vevent.get('DESCRIPTION', '')),
+            'start': dtstart,
+            'end': dtend,
+            'all_day': _is_all_day(vevent.get('DTSTART')),
+            'location': str(vevent.get('LOCATION', '')),
+        },
+        source_message=mail_message,
         ical_uid=uid,
         ical_sequence=sequence,
         external_organizer=external_organizer,
-        source_message=mail_message,
     )
 
     EventMember.objects.create(
@@ -121,7 +116,7 @@ def _create_event(vevent, uid, sequence, mail_message):
         notify(
             recipient=user,
             origin='calendar',
-            title=f'Invitation: {title}',
+            title=f'Invitation: {event.title}',
             body=f'From {external_organizer}',
             url=f'/calendar?event={event.pk}',
         )
@@ -153,24 +148,6 @@ def _update_event(event, vevent, sequence, mail_message):
             body='The event has been updated',
             url=f'/calendar?event={event.pk}',
         )
-
-
-def _get_or_create_invitation_calendar(account):
-    """Get or create the invitation calendar for a mail account."""
-    calendar = Calendar.objects.filter(mail_account=account).first()
-    if calendar:
-        expected_name = account.display_name or account.email
-        if calendar.name != expected_name:
-            calendar.name = expected_name
-            calendar.save(update_fields=['name', 'updated_at'])
-        return calendar
-
-    return Calendar.objects.create(
-        name=account.display_name or account.email,
-        color='secondary',
-        owner=account.owner,
-        mail_account=account,
-    )
 
 
 def _is_future_event(event):

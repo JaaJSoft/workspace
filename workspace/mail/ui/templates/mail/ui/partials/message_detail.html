@@ -223,7 +223,7 @@
           </div>
           <div class="px-3 py-2.5 text-sm space-y-2">
             <div class="font-medium" x-text="extraction.target.title"></div>
-            <div class="text-base-content/70 text-xs" x-text="extraction.target.start"></div>
+            <div class="text-base-content/70 text-xs" x-text="formatFullDate(extraction.target.start)"></div>
             <div x-show="extraction.target.location" class="text-base-content/70 text-xs" x-text="extraction.target.location"></div>
             <div class="flex items-center gap-2 pt-1">
               <a :href="`/calendar?event=${extraction.target.uuid}`" class="btn btn-xs btn-ghost">

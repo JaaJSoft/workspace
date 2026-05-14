@@ -4,14 +4,12 @@ from django.conf import settings
 
 from workspace.core.changelog import get_latest_version
 from workspace.core.module_registry import registry
-from workspace.core.views_changelog import (
-    CHANGELOG_SETTING_KEY,
-    CHANGELOG_SETTING_MODULE,
+from workspace.core.setting_keys import (
+    CHANGELOG_LAST_SEEN_VERSION,
+    MODULE,
+    ONBOARDING_COMPLETED,
 )
 from workspace.users.services.settings import get_setting
-
-ONBOARDING_SETTING_MODULE = 'core'
-ONBOARDING_SETTING_KEY = 'onboarding_completed'
 
 
 def workspace_modules(request):
@@ -19,14 +17,13 @@ def workspace_modules(request):
     changelog_unread = False
     if request.user.is_authenticated:
         onboarding_pending = not get_setting(
-            request.user, ONBOARDING_SETTING_MODULE, ONBOARDING_SETTING_KEY,
-            default=False,
+            request.user, MODULE, ONBOARDING_COMPLETED, default=False,
         )
         if not onboarding_pending:
             latest = get_latest_version()
             if latest:
                 last_seen = get_setting(
-                    request.user, CHANGELOG_SETTING_MODULE, CHANGELOG_SETTING_KEY,
+                    request.user, MODULE, CHANGELOG_LAST_SEEN_VERSION,
                 )
                 changelog_unread = last_seen != latest
 

@@ -6,14 +6,11 @@ from django.core.cache import cache
 from django.test import RequestFactory, TestCase
 
 from workspace.core import changelog as changelog_module
-from workspace.core.context_processors import (
-    ONBOARDING_SETTING_KEY,
-    ONBOARDING_SETTING_MODULE,
-    workspace_modules,
-)
-from workspace.core.views_changelog import (
-    CHANGELOG_SETTING_KEY,
-    CHANGELOG_SETTING_MODULE,
+from workspace.core.context_processors import workspace_modules
+from workspace.core.setting_keys import (
+    CHANGELOG_LAST_SEEN_VERSION,
+    MODULE,
+    ONBOARDING_COMPLETED,
 )
 from workspace.users.services.settings import set_setting
 
@@ -56,14 +53,14 @@ class OnboardingContextProcessorTests(TestCase):
 
     def test_user_with_setting_false_is_pending(self):
         set_setting(
-            self.user, ONBOARDING_SETTING_MODULE, ONBOARDING_SETTING_KEY, False,
+            self.user, MODULE, ONBOARDING_COMPLETED, False,
         )
         ctx = workspace_modules(self._request(self.user))
         self.assertTrue(ctx['ONBOARDING_PENDING'])
 
     def test_user_with_setting_true_is_not_pending(self):
         set_setting(
-            self.user, ONBOARDING_SETTING_MODULE, ONBOARDING_SETTING_KEY, True,
+            self.user, MODULE, ONBOARDING_COMPLETED, True,
         )
         ctx = workspace_modules(self._request(self.user))
         self.assertFalse(ctx['ONBOARDING_PENDING'])
@@ -78,7 +75,7 @@ class OnboardingContextProcessorTests(TestCase):
 
     def test_completed_onboarding_lets_changelog_unread_through(self):
         set_setting(
-            self.user, ONBOARDING_SETTING_MODULE, ONBOARDING_SETTING_KEY, True,
+            self.user, MODULE, ONBOARDING_COMPLETED, True,
         )
         ctx = workspace_modules(self._request(self.user))
         self.assertFalse(ctx['ONBOARDING_PENDING'])
@@ -86,10 +83,10 @@ class OnboardingContextProcessorTests(TestCase):
 
     def test_completed_onboarding_and_seen_changelog_is_quiet(self):
         set_setting(
-            self.user, ONBOARDING_SETTING_MODULE, ONBOARDING_SETTING_KEY, True,
+            self.user, MODULE, ONBOARDING_COMPLETED, True,
         )
         set_setting(
-            self.user, CHANGELOG_SETTING_MODULE, CHANGELOG_SETTING_KEY, '0.20.0',
+            self.user, MODULE, CHANGELOG_LAST_SEEN_VERSION, '0.20.0',
         )
         ctx = workspace_modules(self._request(self.user))
         self.assertFalse(ctx['ONBOARDING_PENDING'])

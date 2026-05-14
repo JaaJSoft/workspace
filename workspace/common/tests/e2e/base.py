@@ -216,14 +216,18 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
     # ---- helpers ---------------------------------------------------------
 
     def create_user(self, username="alice", password="pass12345", *,
-                    seen_changelog=True, **extra):
+                    seen_changelog=True, completed_onboarding=True, **extra):
         """Create and return a regular user for use in tests.
 
         By default the user is marked as having already seen the latest
-        ``CHANGELOG.md`` entry, so the auto-open "What's new" modal does
-        not race other UI interactions. Pass ``seen_changelog=False`` if
-        the test specifically exercises the auto-open behaviour.
+        ``CHANGELOG.md`` entry AND completed the onboarding tour, so the
+        two auto-open modals do not race other UI interactions. Pass
+        ``seen_changelog=False`` / ``completed_onboarding=False`` if the
+        test specifically exercises one of those auto-open behaviours.
         """
+        from workspace.core import setting_keys
+        from workspace.users.services.settings import set_setting
+
         User = get_user_model()
         user = User.objects.create_user(
             username=username,
@@ -233,12 +237,17 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
         )
         if seen_changelog:
             from workspace.core.changelog import get_latest_version
-            from workspace.users.services.settings import set_setting
             latest = get_latest_version()
             if latest:
                 set_setting(
-                    user, "core", "changelog_last_seen_version", latest,
+                    user, setting_keys.MODULE,
+                    setting_keys.CHANGELOG_LAST_SEEN_VERSION, latest,
                 )
+        if completed_onboarding:
+            set_setting(
+                user, setting_keys.MODULE,
+                setting_keys.ONBOARDING_COMPLETED, True,
+            )
         return user
 
     def login_via_ui(self, username, password, *, wait_for_redirect=True):

@@ -8,9 +8,10 @@ from django.test import Client, RequestFactory, TestCase
 from workspace.core import changelog as changelog_module
 from workspace.core.changelog import parse_version
 from workspace.core.context_processors import workspace_modules
-from workspace.core.views_changelog import (
-    CHANGELOG_SETTING_KEY,
-    CHANGELOG_SETTING_MODULE,
+from workspace.core.setting_keys import (
+    CHANGELOG_LAST_SEEN_VERSION,
+    MODULE,
+    ONBOARDING_COMPLETED,
 )
 from workspace.users.services.settings import get_setting, set_setting
 
@@ -73,12 +74,12 @@ class ChangelogPartialViewTests(TestCase):
 
     def test_first_visit_marks_latest_changelog_version_as_seen(self):
         self.assertIsNone(get_setting(
-            self.user, CHANGELOG_SETTING_MODULE, CHANGELOG_SETTING_KEY,
+            self.user, MODULE, CHANGELOG_LAST_SEEN_VERSION,
         ))
         resp = self.client.get('/changelog')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
-            get_setting(self.user, CHANGELOG_SETTING_MODULE, CHANGELOG_SETTING_KEY),
+            get_setting(self.user, MODULE, CHANGELOG_LAST_SEEN_VERSION),
             '0.20.0',
         )
 
@@ -89,7 +90,7 @@ class ChangelogPartialViewTests(TestCase):
 
     def test_returning_user_with_older_seen_version_marks_older_as_read(self):
         set_setting(
-            self.user, CHANGELOG_SETTING_MODULE, CHANGELOG_SETTING_KEY, '0.19.0',
+            self.user, MODULE, CHANGELOG_LAST_SEEN_VERSION, '0.19.0',
         )
         resp = self.client.get('/changelog')
         entries = resp.context['entries']
@@ -100,7 +101,7 @@ class ChangelogPartialViewTests(TestCase):
 
     def test_returning_user_at_current_version_marks_all_read(self):
         set_setting(
-            self.user, CHANGELOG_SETTING_MODULE, CHANGELOG_SETTING_KEY, '0.20.0',
+            self.user, MODULE, CHANGELOG_LAST_SEEN_VERSION, '0.20.0',
         )
         resp = self.client.get('/changelog')
         entries = resp.context['entries']
@@ -110,7 +111,7 @@ class ChangelogPartialViewTests(TestCase):
         # If a user previously saw 'dev', only an entry literally tagged 'dev'
         # would count as read. Numeric entries stay unread until a real release.
         set_setting(
-            self.user, CHANGELOG_SETTING_MODULE, CHANGELOG_SETTING_KEY, 'dev',
+            self.user, MODULE, CHANGELOG_LAST_SEEN_VERSION, 'dev',
         )
         resp = self.client.get('/changelog')
         entries = resp.context['entries']
@@ -118,7 +119,7 @@ class ChangelogPartialViewTests(TestCase):
 
     def test_empty_changelog_does_not_overwrite_existing_seen_value(self):
         set_setting(
-            self.user, CHANGELOG_SETTING_MODULE, CHANGELOG_SETTING_KEY, '0.19.0',
+            self.user, MODULE, CHANGELOG_LAST_SEEN_VERSION, '0.19.0',
         )
         with patch.object(
             changelog_module, 'get_changelog_entries', return_value=[],
@@ -126,7 +127,7 @@ class ChangelogPartialViewTests(TestCase):
             resp = self.client.get('/changelog')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
-            get_setting(self.user, CHANGELOG_SETTING_MODULE, CHANGELOG_SETTING_KEY),
+            get_setting(self.user, MODULE, CHANGELOG_LAST_SEEN_VERSION),
             '0.19.0',
         )
 
@@ -136,6 +137,10 @@ class ChangelogContextProcessorTests(TestCase):
         cache.clear()
         self.factory = RequestFactory()
         self.user = User.objects.create_user(username='bob', password='pass')
+        # Mark onboarding completed so the changelog gating is exercised in
+        # isolation; an onboarding-pending user always sees CHANGELOG_UNREAD
+        # as False (the onboarding modal owns first-load).
+        set_setting(self.user, MODULE, ONBOARDING_COMPLETED, True)
         _stub_changelog_entries(self)
 
     def tearDown(self):
@@ -156,14 +161,14 @@ class ChangelogContextProcessorTests(TestCase):
 
     def test_user_who_saw_older_version_is_unread(self):
         set_setting(
-            self.user, CHANGELOG_SETTING_MODULE, CHANGELOG_SETTING_KEY, '0.19.0',
+            self.user, MODULE, CHANGELOG_LAST_SEEN_VERSION, '0.19.0',
         )
         ctx = workspace_modules(self._request(self.user))
         self.assertTrue(ctx['CHANGELOG_UNREAD'])
 
     def test_user_at_latest_changelog_version_is_not_unread(self):
         set_setting(
-            self.user, CHANGELOG_SETTING_MODULE, CHANGELOG_SETTING_KEY, '0.20.0',
+            self.user, MODULE, CHANGELOG_LAST_SEEN_VERSION, '0.20.0',
         )
         ctx = workspace_modules(self._request(self.user))
         self.assertFalse(ctx['CHANGELOG_UNREAD'])

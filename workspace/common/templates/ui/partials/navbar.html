@@ -277,6 +277,18 @@
               </button>
             </li>
 
+            <!-- Welcome tour -->
+            <li>
+              <button
+                type="button"
+                onclick="window.dispatchEvent(new CustomEvent('onboarding-open'))"
+                class="gap-3 hover:bg-primary/10 hover:text-primary transition-colors"
+              >
+                <i data-lucide="rocket" class="w-4 h-4"></i>
+                <span class="font-medium">Welcome tour</span>
+              </button>
+            </li>
+
             {% if user.is_staff or user.is_superuser %}
               <div class="divider my-1">
                 <span class="text-xs text-base-content/40 uppercase tracking-wider">Admin</span>
@@ -337,6 +349,11 @@
 <form id="logout-form" method="post" action="{% url 'logout' %}" style="display: none;">
   {% csrf_token %}
 </form>
+{% endif %}
+
+<!-- Onboarding modal -->
+{% if user.is_authenticated %}
+{% include 'core/partials/onboarding.html' %}
 {% endif %}
 
 <!-- Changelog modal -->

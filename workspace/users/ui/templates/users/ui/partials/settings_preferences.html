@@ -166,15 +166,19 @@
         html.setAttribute('data-theme', id);
         const toggle = document.getElementById('themeToggle');
         if (toggle) toggle.checked = (kind === 'dark');
-        const headers = {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCSRFToken(),
-        };
-        fetch('/api/v1/settings/core/' + kind + '_theme', {
-          method: 'PUT', headers, body: JSON.stringify({ value: id }),
-        });
-        fetch('/api/v1/settings/core/theme', {
-          method: 'PUT', headers, body: JSON.stringify({ value: id }),
+        // One bulk PATCH instead of two parallel PUTs: both keys land
+        // inside the same DB transaction, so the writer-lock is acquired
+        // once for the whole batch on SQLite.
+        fetch('/api/v1/settings/core', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          body: JSON.stringify({
+            [kind + '_theme']: id,
+            theme: id,
+          }),
         });
       },
     };

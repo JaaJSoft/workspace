@@ -489,6 +489,142 @@ class SettingDetailTests(UserTestMixin, APITestCase):
         cache.clear()
 
 
+# ── SettingsModuleView (bulk read / write) ──────────────────────
+
+class SettingsModuleTests(UserTestMixin, APITestCase):
+
+    def _url(self, module):
+        return f'/api/v1/settings/{module}'
+
+    def test_unauthenticated_rejected(self):
+        self.client.force_authenticate(None)
+        resp = self.client.get(self._url('core'))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_get_returns_empty_dict_when_module_has_no_settings(self):
+        resp = self.client.get(self._url('core'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data, {})
+
+    def test_get_returns_all_keys_in_module_as_flat_dict(self):
+        set_setting(self.user, 'core', 'theme', 'dark')
+        set_setting(self.user, 'core', 'light_theme', 'nord')
+        set_setting(self.user, 'mail', 'sig', 'hi')  # other module: must not leak in
+
+        resp = self.client.get(self._url('core'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data, {'theme': 'dark', 'light_theme': 'nord'})
+
+    def test_get_does_not_return_other_users_settings(self):
+        other = User.objects.create_user(username='other', password='pass')
+        set_setting(other, 'core', 'theme', 'dark')
+        resp = self.client.get(self._url('core'))
+        self.assertEqual(resp.data, {})
+
+    def test_patch_creates_multiple_settings_in_one_request(self):
+        resp = self.client.patch(
+            self._url('core'),
+            {'theme': 'dracula', 'light_theme': 'nord', 'dark_theme': 'dracula'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.data,
+            {'theme': 'dracula', 'light_theme': 'nord', 'dark_theme': 'dracula'},
+        )
+        self.assertEqual(
+            UserSetting.objects.filter(user=self.user, module='core').count(),
+            3,
+        )
+
+    def test_patch_updates_existing_settings(self):
+        set_setting(self.user, 'core', 'theme', 'light')
+        set_setting(self.user, 'core', 'light_theme', 'light')
+
+        resp = self.client.patch(
+            self._url('core'),
+            {'theme': 'nord', 'light_theme': 'nord'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data, {'theme': 'nord', 'light_theme': 'nord'})
+
+    def test_patch_runs_inside_single_transaction(self):
+        # All set_setting calls must happen inside the same atomic block,
+        # so on SQLite the writer-lock is acquired once for the whole batch.
+        # We assert this by patching ``set_setting`` and checking that the
+        # outer connection is in an atomic block when each call lands.
+        from django.db import transaction as dj_transaction
+        from unittest.mock import patch as mock_patch
+
+        seen_in_atomic: list[bool] = []
+        real = set_setting
+
+        def spy(user, module, key, value):
+            seen_in_atomic.append(not dj_transaction.get_autocommit())
+            return real(user, module, key, value)
+
+        with mock_patch('workspace.users.views.set_setting', side_effect=spy):
+            resp = self.client.patch(
+                self._url('core'),
+                {'a': 1, 'b': 2, 'c': 3},
+                format='json',
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(seen_in_atomic, [True, True, True])
+
+    def test_patch_rejects_non_object_body(self):
+        resp = self.client.patch(
+            self._url('core'),
+            [{'theme': 'dark'}],  # list at top-level, not an object
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_patch_accepts_empty_body_as_no_op(self):
+        resp = self.client.patch(self._url('core'), {}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data, {})
+        self.assertFalse(UserSetting.objects.filter(user=self.user).exists())
+
+    def test_patch_supports_json_value_types(self):
+        resp = self.client.patch(
+            self._url('core'),
+            {
+                'string': 'hi',
+                'number': 42,
+                'list': [1, 2, 3],
+                'nested': {'a': 1},
+                'null_value': None,
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['string'], 'hi')
+        self.assertEqual(resp.data['number'], 42)
+        self.assertEqual(resp.data['list'], [1, 2, 3])
+        self.assertEqual(resp.data['nested'], {'a': 1})
+        self.assertIsNone(resp.data['null_value'])
+
+    def test_patch_invalidates_module_cache_so_subsequent_get_is_fresh(self):
+        # Prime the module-level cache with an empty result.
+        self.assertEqual(get_setting(self.user, 'core', 'theme', default='light'), 'light')
+
+        resp = self.client.patch(
+            self._url('core'),
+            {'theme': 'dracula'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        # Without cache invalidation by ``set_setting``, this would still
+        # return the stale 'light' default.
+        self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dracula')
+
+    def tearDown(self):
+        cache.clear()
+
+
 # ── UserGroupsView ──────────────────────────────────────────────
 
 class UserGroupsTests(UserTestMixin, APITestCase):

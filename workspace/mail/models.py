@@ -183,6 +183,7 @@ class MailMessage(models.Model):
         related_name='messages',
     )
     message_id = models.CharField(max_length=512, blank=True, default='')
+    in_reply_to = models.CharField(max_length=512, blank=True, default='')
     imap_uid = models.BigIntegerField()
     subject = models.CharField(max_length=1000, blank=True, default='')
 

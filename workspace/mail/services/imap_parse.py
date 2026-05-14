@@ -111,6 +111,7 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
     bcc_addrs = _parse_address_list(msg.get_all('Bcc') or [])
     reply_to = msg.get('Reply-To', '')
     message_id = msg.get('Message-ID', '')
+    in_reply_to = msg.get('In-Reply-To', '')
 
     # Date
     date_str = msg.get('Date')
@@ -201,6 +202,7 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
         folder=folder,
         message_id=message_id[:512],
         imap_uid=uid,
+        in_reply_to=in_reply_to[:512],
         subject=subject[:1000],
         from_address=from_addr,
         to_addresses=to_addrs,

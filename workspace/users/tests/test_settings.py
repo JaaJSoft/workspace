@@ -186,6 +186,45 @@ class SetSettingTests(TestCase):
             user=self.user, module='core', key='theme',
         ).exists())
 
+    def test_falls_through_when_cache_says_match_but_db_has_different_value(self):
+        # Race scenario: a concurrent writer mutated the DB after our
+        # process's cache was warmed. Our cache still shows the old
+        # value (which happens to match what the caller wants to set),
+        # but the DB drifted to a different value.
+        #
+        # Without re-verifying the .get() result against the target
+        # value, the no-op fast path would short-circuit on the stale
+        # cache and silently drop the caller's write, leaving the DB at
+        # the concurrent writer's value.
+        set_setting(self.user, 'core', 'theme', 'dark')
+        get_setting(self.user, 'core', 'theme')  # warm cache with 'dark'
+
+        # Mutate the DB without going through set_setting so our cache
+        # stays unchanged (simulates a different process whose
+        # invalidate_tags broadcast hasn't reached us, or was lost).
+        UserSetting.objects.filter(
+            user=self.user, module='core', key='theme',
+        ).update(value='light')
+
+        # Cache: 'dark'. DB: 'light'. Caller wants 'dark'.
+        # The fast path matches on cache but must NOT skip the write -
+        # the freshly-fetched row carries the drifted DB value and the
+        # mismatch must be detected.
+        set_setting(self.user, 'core', 'theme', 'dark')
+
+        self.assertEqual(
+            UserSetting.objects.get(
+                user=self.user, module='core', key='theme',
+            ).value,
+            'dark',
+        )
+
+    def tearDown(self):
+        # LocMemCache is process-global; without tearDown the cache
+        # entries written by set_setting / get_setting leak into the
+        # next test class and cause order-dependent failures.
+        cache.clear()
+
 
 class DeleteSettingTests(TestCase):
     def setUp(self):

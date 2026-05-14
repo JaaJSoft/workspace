@@ -87,6 +87,83 @@ class SetSettingTests(TestCase):
         obj = set_setting(self.user, 'core', 'theme', 'dark')
         self.assertIsInstance(obj, UserSetting)
 
+    def test_skips_update_or_create_when_value_unchanged(self):
+        # The point of the optimization is that no_op calls do NOT enter
+        # the update_or_create path - which is the path that opens a
+        # transaction and (on SQLite) takes the writer-lock. Spying on
+        # that method is more meaningful than counting queries because
+        # the no-op fast path still does ONE cheap SELECT to honour the
+        # return-type contract - the win is "no UPDATE", not "no query".
+        from unittest.mock import patch
+
+        set_setting(self.user, 'core', 'theme', 'dark')
+        # Warm the read cache (set_setting invalidates it on write).
+        get_setting(self.user, 'core', 'theme')
+
+        original = UserSetting.objects.update_or_create
+        with patch.object(
+            UserSetting.objects, 'update_or_create', wraps=original,
+        ) as spy:
+            set_setting(self.user, 'core', 'theme', 'dark')
+        spy.assert_not_called()
+
+    def test_does_not_take_writer_path_when_cached_value_matches(self):
+        # Sanity-check on query count too: with a warm cache, the no-op
+        # path costs exactly one indexed SELECT (the .get() that returns
+        # the model instance) and zero writes.
+        set_setting(self.user, 'core', 'theme', 'dark')
+        get_setting(self.user, 'core', 'theme')  # warm the read cache
+
+        with self.assertNumQueries(1):
+            set_setting(self.user, 'core', 'theme', 'dark')
+
+    def test_writes_when_value_changes(self):
+        set_setting(self.user, 'core', 'theme', 'light')
+        set_setting(self.user, 'core', 'theme', 'dark')
+        self.assertEqual(
+            UserSetting.objects.get(
+                user=self.user, module='core', key='theme',
+            ).value,
+            'dark',
+        )
+
+    def test_noop_does_not_invalidate_cache(self):
+        # If a no-op call were to invalidate the cache anyway, every
+        # redundant click would still cost a Redis round-trip (and the
+        # next read would refill the cache from the DB). The whole point
+        # of the optimization is to be free on no-op.
+        set_setting(self.user, 'core', 'theme', 'dark')
+        # Warm the read-side cache.
+        self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dark')
+
+        set_setting(self.user, 'core', 'theme', 'dark')  # no-op
+
+        # The cache must still be hot - this get must hit zero queries.
+        with self.assertNumQueries(0):
+            self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dark')
+
+    def test_falls_through_when_cache_lies_about_existence(self):
+        # Edge case: the cache says the row exists with the target value,
+        # but the row was deleted out-of-band (a direct ORM delete that
+        # bypassed delete_setting). The no-op fast path must catch the
+        # DoesNotExist and fall through to the create branch.
+        set_setting(self.user, 'core', 'theme', 'dark')
+        # Warm the cache with the value.
+        get_setting(self.user, 'core', 'theme')
+
+        # Delete the row WITHOUT going through delete_setting so the
+        # cache is now stale.
+        UserSetting.objects.filter(
+            user=self.user, module='core', key='theme',
+        ).delete()
+
+        # Should re-create, not raise.
+        obj = set_setting(self.user, 'core', 'theme', 'dark')
+        self.assertEqual(obj.value, 'dark')
+        self.assertTrue(UserSetting.objects.filter(
+            user=self.user, module='core', key='theme',
+        ).exists())
+
 
 class DeleteSettingTests(TestCase):
     def setUp(self):

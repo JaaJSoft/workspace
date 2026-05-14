@@ -193,13 +193,12 @@ def sync_folder_messages(account, folder):
                 from workspace.users.services.settings import get_setting
                 if is_ai_enabled() and get_setting(account.owner, 'mail', 'ai_enabled', default=True):
                     from workspace.ai.models import AITask
-                    ai_task = AITask.objects.create(
+                    from workspace.ai.services.dispatch import dispatch
+                    dispatch(
                         owner=account.owner,
                         task_type=AITask.TaskType.CLASSIFY,
                         input_data={'message_uuids': new_message_uuids},
                     )
-                    from workspace.ai.tasks import classify_mail_messages
-                    classify_mail_messages.delay(str(ai_task.uuid))
                     logger.info('Dispatched classify task for %d new messages in %s',
                                 len(new_message_uuids), scrub(folder.name))
             except Exception:

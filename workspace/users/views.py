@@ -25,7 +25,7 @@ from workspace.common.mixins import CacheControlMixin
 from workspace.files.models import File
 from workspace.users.models import APITokenLabel, UserSetting
 from workspace.users.services import avatar as avatar_service, presence as presence_service
-from workspace.users.services.settings import delete_setting, set_setting
+from workspace.users.services.settings import delete_setting, get_module_settings, set_setting
 
 logger = logging.getLogger(__name__)
 
@@ -524,6 +524,67 @@ class SettingDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=['Settings'])
+class SettingsModuleView(APIView):
+    """Bulk read or write every setting within a single module.
+
+    Lets clients hydrate or update several related settings in one round-trip
+    instead of N separate single-key requests. On SQLite, batching writes
+    inside one ``transaction.atomic`` block acquires the writer-lock only
+    once for the entire batch, which dramatically reduces the contention
+    window that causes ``database is locked`` errors when users change
+    several settings in quick succession.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Get all settings in a module",
+        description=(
+            "Return every ``(key, value)`` pair stored under *module* for the "
+            "current user as a single ``{key: value}`` object."
+        ),
+        responses={
+            200: OpenApiResponse(
+                description="A ``{key: value}`` mapping of every stored key in the module.",
+            ),
+        },
+    )
+    def get(self, request, module):
+        return Response(get_module_settings(request.user, module))
+
+    @extend_schema(
+        summary="Bulk create or update settings within a module",
+        description=(
+            "Upsert several settings inside the same module in one request. "
+            "Body must be a JSON object of ``{key: value}`` pairs. Every write "
+            "happens inside a single ``transaction.atomic`` block. Responds "
+            "with the full state of the module after the update."
+        ),
+        request=inline_serializer(
+            name='SettingsBulkWriteRequest',
+            fields={'__any_key__': serializers.JSONField(allow_null=True)},
+        ),
+        responses={
+            200: OpenApiResponse(
+                description="The full ``{key: value}`` state of the module after the update.",
+            ),
+            400: OpenApiResponse(description="Body is not a JSON object."),
+        },
+    )
+    def patch(self, request, module):
+        data = request.data
+        if not isinstance(data, dict):
+            return Response(
+                {'detail': 'Body must be a JSON object of {key: value} pairs.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        with transaction.atomic():
+            for key, value in data.items():
+                set_setting(request.user, module, key, value)
+        return Response(get_module_settings(request.user, module))
 
 
 # ── API Tokens ───────────────────────────────────────────────

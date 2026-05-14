@@ -17,5 +17,6 @@ urlpatterns = [
     path('api/v1/users/groups', views.UserGroupsView.as_view(), name='user-groups'),
     # Settings
     path('api/v1/settings', views.SettingsListView.as_view(), name='settings-list'),
+    path('api/v1/settings/<str:module>', views.SettingsModuleView.as_view(), name='settings-module'),
     path('api/v1/settings/<str:module>/<str:key>', views.SettingDetailView.as_view(), name='setting-detail'),
 ]

@@ -1,6 +1,6 @@
 {% load static %}
 <!doctype html>
-<html lang="en"{% if user_theme %} data-theme="{{ user_theme }}"{% endif %}>
+<html lang="en"{% if user_theme %} data-theme="{{ user_theme }}"{% endif %}{% if user_light_theme %} data-light-theme="{{ user_light_theme }}"{% endif %}{% if user_dark_theme %} data-dark-theme="{{ user_dark_theme }}"{% endif %}>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>

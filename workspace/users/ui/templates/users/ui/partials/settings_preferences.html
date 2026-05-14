@@ -7,26 +7,69 @@
         Appearance
       </h2>
 
-      <p class="text-sm text-base-content/60 mt-1">Choose a theme for your workspace.</p>
+      <p class="text-sm text-base-content/60 mt-1">
+        Pick the theme used in light mode and the one used in dark mode.
+        The toggle in the navigation bar switches between them.
+      </p>
 
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
-        <template x-for="t in themes" :key="t.id">
-          <button
-            type="button"
-            @click="applyTheme(t.id)"
-            class="rounded-lg border-2 p-3 text-left transition-all hover:scale-[1.02]"
-            :class="current === t.id ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-base-content/20'"
-          >
-            <!-- Mini theme preview -->
-            <div class="flex gap-1 mb-2" :data-theme="t.id">
-              <div class="rounded-full w-4 h-4 bg-primary"></div>
-              <div class="rounded-full w-4 h-4 bg-secondary"></div>
-              <div class="rounded-full w-4 h-4 bg-accent"></div>
-              <div class="rounded-full w-4 h-4 bg-neutral"></div>
-            </div>
-            <span class="text-sm font-medium capitalize" x-text="t.label"></span>
-          </button>
-        </template>
+      <!-- Light themes -->
+      <div class="mt-5">
+        <div class="flex items-center gap-2 mb-2">
+          <i data-lucide="sun" class="w-4 h-4 text-warning"></i>
+          <h3 class="font-semibold text-sm uppercase tracking-wide text-base-content/70">Light theme</h3>
+          <span
+            x-show="currentTheme === lightTheme"
+            class="badge badge-xs badge-success"
+          >Active</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <template x-for="t in lightThemes" :key="t.id">
+            <button
+              type="button"
+              @click="selectTheme(t.id, 'light')"
+              class="rounded-lg border-2 p-3 text-left transition-all hover:scale-[1.02]"
+              :class="lightTheme === t.id ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-base-content/20'"
+            >
+              <div class="flex gap-1 mb-2" :data-theme="t.id">
+                <div class="rounded-full w-4 h-4 bg-primary"></div>
+                <div class="rounded-full w-4 h-4 bg-secondary"></div>
+                <div class="rounded-full w-4 h-4 bg-accent"></div>
+                <div class="rounded-full w-4 h-4 bg-neutral"></div>
+              </div>
+              <span class="text-sm font-medium capitalize" x-text="t.label"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <!-- Dark themes -->
+      <div class="mt-6">
+        <div class="flex items-center gap-2 mb-2">
+          <i data-lucide="moon" class="w-4 h-4 text-info"></i>
+          <h3 class="font-semibold text-sm uppercase tracking-wide text-base-content/70">Dark theme</h3>
+          <span
+            x-show="currentTheme === darkTheme"
+            class="badge badge-xs badge-success"
+          >Active</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <template x-for="t in darkThemes" :key="t.id">
+            <button
+              type="button"
+              @click="selectTheme(t.id, 'dark')"
+              class="rounded-lg border-2 p-3 text-left transition-all hover:scale-[1.02]"
+              :class="darkTheme === t.id ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-base-content/20'"
+            >
+              <div class="flex gap-1 mb-2" :data-theme="t.id">
+                <div class="rounded-full w-4 h-4 bg-primary"></div>
+                <div class="rounded-full w-4 h-4 bg-secondary"></div>
+                <div class="rounded-full w-4 h-4 bg-accent"></div>
+                <div class="rounded-full w-4 h-4 bg-neutral"></div>
+              </div>
+              <span class="text-sm font-medium capitalize" x-text="t.label"></span>
+            </button>
+          </template>
+        </div>
       </div>
     </div>
   </div>
@@ -76,33 +119,62 @@
 
 <script>
   function themePickerForm() {
+    const html = document.documentElement;
     return {
-      current: localStorage.getItem('theme') || 'light',
-      themes: [
+      currentTheme: html.getAttribute('data-theme') || 'light',
+      lightTheme: html.getAttribute('data-light-theme') || 'light',
+      darkTheme: html.getAttribute('data-dark-theme') || 'dark',
+      lightThemes: [
         { id: 'light',     label: 'Light' },
-        { id: 'dark',      label: 'Dark' },
         { id: 'cupcake',   label: 'Cupcake' },
+        { id: 'bumblebee', label: 'Bumblebee' },
         { id: 'emerald',   label: 'Emerald' },
         { id: 'corporate', label: 'Corporate' },
-        { id: 'forest',    label: 'Forest' },
-        { id: 'dracula',   label: 'Dracula' },
-        { id: 'night',     label: 'Night' },
+        { id: 'retro',     label: 'Retro' },
+        { id: 'valentine', label: 'Valentine' },
+        { id: 'garden',    label: 'Garden' },
+        { id: 'pastel',    label: 'Pastel' },
+        { id: 'lemonade',  label: 'Lemonade' },
+        { id: 'autumn',    label: 'Autumn' },
         { id: 'winter',    label: 'Winter' },
         { id: 'nord',      label: 'Nord' },
-        { id: 'sunset',    label: 'Sunset' },
-        { id: 'autumn',    label: 'Autumn' },
       ],
-      applyTheme(id) {
-        this.current = id;
-        document.documentElement.setAttribute('data-theme', id);
-        localStorage.setItem('theme', id);
+      darkThemes: [
+        { id: 'dark',      label: 'Dark' },
+        { id: 'synthwave', label: 'Synthwave' },
+        { id: 'halloween', label: 'Halloween' },
+        { id: 'forest',    label: 'Forest' },
+        { id: 'aqua',      label: 'Aqua' },
+        { id: 'black',     label: 'Black' },
+        { id: 'luxury',    label: 'Luxury' },
+        { id: 'dracula',   label: 'Dracula' },
+        { id: 'business',  label: 'Business' },
+        { id: 'night',     label: 'Night' },
+        { id: 'coffee',    label: 'Coffee' },
+        { id: 'dim',       label: 'Dim' },
+        { id: 'sunset',    label: 'Sunset' },
+      ],
+      selectTheme(id, kind) {
+        if (kind === 'light') {
+          this.lightTheme = id;
+          html.setAttribute('data-light-theme', id);
+        } else {
+          this.darkTheme = id;
+          html.setAttribute('data-dark-theme', id);
+        }
+        this.currentTheme = id;
+        html.setAttribute('data-theme', id);
         const toggle = document.getElementById('themeToggle');
-        if (toggle) toggle.checked = (id === 'dark');
-        const csrfToken = getCSRFToken();
+        if (toggle) toggle.checked = (kind === 'dark');
+        const headers = {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCSRFToken(),
+        };
+        fetch('/api/v1/settings/core/' + kind + '_theme', {
+          method: 'PUT', headers, body: JSON.stringify({ value: id }),
+        });
         fetch('/api/v1/settings/core/theme', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ value: id }),
+          method: 'PUT', headers, body: JSON.stringify({ value: id }),
         });
       },
     };

@@ -7,5 +7,7 @@ def user_preferences(request):
         return {}
     return {
         'user_theme': get_setting(user, 'core', 'theme') or 'light',
+        'user_light_theme': get_setting(user, 'core', 'light_theme') or 'light',
+        'user_dark_theme': get_setting(user, 'core', 'dark_theme') or 'dark',
         'user_timezone': get_setting(user, 'core', 'timezone') or '',
     }

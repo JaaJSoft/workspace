@@ -31,12 +31,42 @@ class UserPreferencesContextProcessorTests(TestCase):
         self.assertEqual(user_preferences(req), {})
 
     def test_authenticated_returns_stored_preferences(self):
-        set_setting(self.user, 'core', 'theme', 'dark')
+        set_setting(self.user, 'core', 'theme', 'dracula')
+        set_setting(self.user, 'core', 'light_theme', 'nord')
+        set_setting(self.user, 'core', 'dark_theme', 'dracula')
         set_setting(self.user, 'core', 'timezone', 'Europe/Paris')
 
         ctx = user_preferences(self._request(self.user))
-        self.assertEqual(ctx, {'user_theme': 'dark', 'user_timezone': 'Europe/Paris'})
+        self.assertEqual(
+            ctx,
+            {
+                'user_theme': 'dracula',
+                'user_light_theme': 'nord',
+                'user_dark_theme': 'dracula',
+                'user_timezone': 'Europe/Paris',
+            },
+        )
 
     def test_authenticated_defaults_when_nothing_stored(self):
         ctx = user_preferences(self._request(self.user))
-        self.assertEqual(ctx, {'user_theme': 'light', 'user_timezone': ''})
+        self.assertEqual(
+            ctx,
+            {
+                'user_theme': 'light',
+                'user_light_theme': 'light',
+                'user_dark_theme': 'dark',
+                'user_timezone': '',
+            },
+        )
+
+    def test_light_and_dark_theme_independent_of_active_theme(self):
+        # Active theme can be the user's chosen dark theme while the
+        # ``light_theme`` slot still points at a different light option.
+        set_setting(self.user, 'core', 'theme', 'dracula')
+        set_setting(self.user, 'core', 'light_theme', 'cupcake')
+        set_setting(self.user, 'core', 'dark_theme', 'dracula')
+
+        ctx = user_preferences(self._request(self.user))
+        self.assertEqual(ctx['user_theme'], 'dracula')
+        self.assertEqual(ctx['user_light_theme'], 'cupcake')
+        self.assertEqual(ctx['user_dark_theme'], 'dracula')

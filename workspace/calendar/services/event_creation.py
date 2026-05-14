@@ -34,6 +34,7 @@ def create_event_from_payload(
     user,
     payload: dict,
     source_message,
+    source: str = '',
     ical_uid: str = '',
     ical_sequence: int = 0,
     external_organizer: str = '',
@@ -47,10 +48,13 @@ def create_event_from_payload(
     source_message: required. The mail that produced this event (ICS
     attachment OR LLM extraction). Its account determines which
     invitation calendar hosts the event.
+
+    source: optional Event.Source value. Empty string leaves the model
+    default (MANUAL). Callers set this to ICS or LLM as appropriate.
     """
     calendar = get_or_create_invitation_calendar(source_message.account)
 
-    return Event.objects.create(
+    create_kwargs = dict(
         calendar=calendar,
         title=payload['title'],
         description=payload.get('description', ''),
@@ -64,3 +68,6 @@ def create_event_from_payload(
         external_organizer=external_organizer or None,
         source_message=source_message,
     )
+    if source:
+        create_kwargs['source'] = source
+    return Event.objects.create(**create_kwargs)

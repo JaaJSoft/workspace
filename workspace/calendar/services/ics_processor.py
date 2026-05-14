@@ -100,6 +100,7 @@ def _create_event(vevent, uid, sequence, mail_message):
             'location': str(vevent.get('LOCATION', '')),
         },
         source_message=mail_message,
+        source=Event.Source.ICS,
         ical_uid=uid,
         ical_sequence=sequence,
         external_organizer=external_organizer,

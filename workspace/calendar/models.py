@@ -70,6 +70,11 @@ class Event(models.Model):
         MONTHLY = 'monthly', 'Monthly'
         YEARLY = 'yearly', 'Yearly'
 
+    class Source(models.TextChoices):
+        MANUAL = 'manual', 'Manual'
+        ICS = 'ics', 'ICS invitation'
+        LLM = 'llm', 'Extracted by AI'
+
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     calendar = models.ForeignKey(
         Calendar,
@@ -116,6 +121,9 @@ class Event(models.Model):
         blank=True,
         default=None,
         related_name='+',
+    )
+    source = models.CharField(
+        max_length=16, choices=Source.choices, default=Source.MANUAL,
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

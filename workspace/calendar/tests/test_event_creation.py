@@ -79,3 +79,18 @@ class CreateEventFromPayloadTests(TestCase):
         self.assertIsNone(event.ical_uid)
         self.assertIsNone(event.external_organizer)
         self.assertEqual(event.ical_sequence, 0)
+
+    def test_source_defaults_to_manual_when_not_set(self):
+        event = create_event_from_payload(
+            user=self.user, payload=self._payload(),
+            source_message=self.message,
+        )
+        self.assertEqual(event.source, Event.Source.MANUAL)
+
+    def test_source_can_be_set_to_llm(self):
+        event = create_event_from_payload(
+            user=self.user, payload=self._payload(),
+            source_message=self.message,
+            source=Event.Source.LLM,
+        )
+        self.assertEqual(event.source, Event.Source.LLM)

@@ -117,6 +117,28 @@ class SetSettingTests(TestCase):
         with self.assertNumQueries(1):
             set_setting(self.user, 'core', 'theme', 'dark')
 
+    def test_skips_update_or_create_when_cache_cold_but_db_already_matches(self):
+        # First-write-after-deploy scenario: the Redis cache is cold but
+        # the SQLite row already has the target value (e.g. user clicks
+        # their currently-active theme on a freshly-started worker).
+        # The fast path must still kick in based on the *DB* value
+        # populated into the cache by _get_setting_raw, not require a
+        # pre-warmed cache.
+        from unittest.mock import patch
+
+        # Plant the row directly so the read-side cache stays cold.
+        UserSetting.objects.create(
+            user=self.user, module='core', key='theme', value='dark',
+        )
+        cache.clear()
+
+        original = UserSetting.objects.update_or_create
+        with patch.object(
+            UserSetting.objects, 'update_or_create', wraps=original,
+        ) as spy:
+            set_setting(self.user, 'core', 'theme', 'dark')
+        spy.assert_not_called()
+
     def test_writes_when_value_changes(self):
         set_setting(self.user, 'core', 'theme', 'light')
         set_setting(self.user, 'core', 'theme', 'dark')

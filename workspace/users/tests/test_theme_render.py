@@ -68,3 +68,21 @@ class ThemeRenderAfterSetTests(TestCase):
         resp = self.client.get('/users/settings')
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b'data-theme="light"', resp.content)
+
+    def test_light_and_dark_theme_attributes_rendered(self):
+        # The navbar toggle reads these data-* attributes off <html> to know
+        # which themes to swap between. Regression for the toggle being
+        # hard-coded to 'light'/'dark'.
+        set_setting(self.user, 'core', 'light_theme', 'nord')
+        set_setting(self.user, 'core', 'dark_theme', 'dracula')
+
+        resp = self.client.get('/users/settings')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b'data-light-theme="nord"', resp.content)
+        self.assertIn(b'data-dark-theme="dracula"', resp.content)
+
+    def test_light_and_dark_theme_attributes_default_when_unset(self):
+        resp = self.client.get('/users/settings')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b'data-light-theme="light"', resp.content)
+        self.assertIn(b'data-dark-theme="dark"', resp.content)

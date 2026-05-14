@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.21.0 - Theme Picker & Reliability
+
+### Highlights
+
+This release rebuilds the theme picker around two independent slots, so the navbar sun/moon toggle now swaps between your preferred light theme and your preferred dark theme instead of forcing the defaults back. The picker list also doubles, with 13 light and 13 dark DaisyUI themes available. Behind the scenes, settings saves are faster and no longer trip "database is locked" errors on self-hosted SQLite instances when you click through themes quickly.
+
+### Themes
+
+- The Preferences page now has two grids - one for your light theme and one for your dark theme - each with an "Active" badge marking the slot currently in use
+- The navbar sun/moon toggle bounces between those two slots instead of resetting to plain light / dark, so picking Nord + Dracula (or any other pair) actually sticks across toggles
+- Changing a slot in Preferences applies immediately, with no page refresh needed
+- Expanded theme list, balanced at 13 light and 13 dark options: added Bumblebee, Retro, Valentine, Garden, Pastel and Lemonade on the light side, plus Synthwave, Halloween, Aqua, Black, Luxury, Business, Coffee and Dim on the dark side
+
+### Fixes
+
+- Self-hosted instances running on SQLite no longer hit intermittent "database is locked" errors when changing settings in quick succession (most visible when clicking through themes)
+- Saving multiple preferences in a row is faster and consumes a single request instead of one per key
+
 ## 0.20.1 - Release Awareness
 
 ### Highlights

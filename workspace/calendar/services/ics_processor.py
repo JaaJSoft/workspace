@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils import timezone as django_tz
 
 from workspace.calendar.models import Event, EventMember
+from workspace.calendar.services.event_creation import create_event_from_payload
 from workspace.notifications.services.notifications import notify
 
 logger = logging.getLogger(__name__)
@@ -83,8 +84,6 @@ def _handle_cancel(vevent, uid, mail_message):
 @transaction.atomic
 def _create_event(vevent, uid, sequence, mail_message):
     """Create a new Event from a VEVENT component."""
-    from workspace.calendar.services.event_creation import create_event_from_payload
-
     user = mail_message.account.owner
     external_organizer = _extract_email(vevent.get('ORGANIZER'))
     dtstart = _to_datetime(vevent.get('DTSTART'))

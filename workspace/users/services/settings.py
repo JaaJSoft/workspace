@@ -61,7 +61,37 @@ def get_setting(user, module: str, key: str, *, default: Any = None) -> Any:
 
 
 def set_setting(user, module: str, key: str, value: Any) -> UserSetting:
-    """Create or update a setting and return the model instance."""
+    """Create or update a setting and return the model instance.
+
+    Skips the database write entirely when the stored value already matches
+    *value*. Saves one write transaction per click in flows that fire the
+    same value repeatedly (clicking the active theme, double-submitted
+    forms, click-spam, ...), which on SQLite means one less acquisition of
+    the writer-lock per redundant call.
+
+    The pre-check goes through the cached ``_get_setting_raw`` helper so
+    a cache hit costs zero DB hits in the value lookup. If the cache says
+    we're already at the target value we re-fetch the model instance and
+    **re-verify the value from the DB** before treating as a no-op: this
+    closes the race where the cache holds a stale snapshot equal to our
+    target value while the DB has been moved to something else by a
+    concurrent writer (invalidate-after-commit can be lost or delayed
+    across processes). Without the second check we would silently drop
+    the write and leave the DB at the concurrent writer's value. With it,
+    we fall through to ``update_or_create`` and honour the caller's
+    intent.
+    """
+    cached_value = _get_setting_raw(user, module, key)
+    if cached_value != _DB_MISS and cached_value == value:
+        try:
+            existing = UserSetting.objects.get(user=user, module=module, key=key)
+        except UserSetting.DoesNotExist:
+            pass  # row deleted out-of-band; fall through to create
+        else:
+            if existing.value == value:
+                return existing  # confirmed no-op against fresh DB read
+            # else: stale cache, DB drifted; fall through to write
+
     obj, _ = UserSetting.objects.update_or_create(
         user=user, module=module, key=key,
         defaults={'value': value},

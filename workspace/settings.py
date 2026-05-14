@@ -452,6 +452,16 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
 
     DATABASES['default'].setdefault('OPTIONS', {})
     DATABASES['default']['OPTIONS']['timeout'] = 60.0
+    # Force BEGIN IMMEDIATE for every transaction. Django's default
+    # (BEGIN DEFERRED) starts each transaction as a reader and tries to
+    # upgrade to a writer on the first INSERT/UPDATE/DELETE. When two
+    # concurrent connections both hold a read snapshot and both try to
+    # upgrade, SQLite raises SQLITE_BUSY_SNAPSHOT immediately - the
+    # busy_timeout PRAGMA below does NOT apply to snapshot upgrades.
+    # IMMEDIATE acquires the writer-lock at BEGIN time, so busy_timeout
+    # works as intended and concurrent writers serialize cleanly instead
+    # of failing with "database is locked".
+    DATABASES['default']['OPTIONS']['transaction_mode'] = 'IMMEDIATE'
     DATABASES['default']['OPTIONS']['init_command'] = (
         "PRAGMA journal_mode=WAL; "
         "PRAGMA foreign_keys=ON; "

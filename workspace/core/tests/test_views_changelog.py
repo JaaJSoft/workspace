@@ -136,6 +136,10 @@ class ChangelogContextProcessorTests(TestCase):
         cache.clear()
         self.factory = RequestFactory()
         self.user = User.objects.create_user(username='bob', password='pass')
+        # Mark onboarding completed so the changelog gating is exercised in
+        # isolation; an onboarding-pending user always sees CHANGELOG_UNREAD
+        # as False (the onboarding modal owns first-load).
+        set_setting(self.user, 'core', 'onboarding_completed', True)
         _stub_changelog_entries(self)
 
     def tearDown(self):

@@ -1,0 +1,190 @@
+<dialog id="onboarding-dialog" class="modal"
+        x-data="onboardingWizard({{ ONBOARDING_PENDING|yesno:'true,false' }})"
+        x-init="
+          {% if ONBOARDING_PENDING %}
+          $nextTick(() => setTimeout(() => window.dispatchEvent(new CustomEvent('onboarding-open')), 400));
+          {% endif %}
+        "
+        @onboarding-open.window="$el.showModal()"
+        @close="markCompleteIfNeeded()">
+  <div class="modal-box w-11/12 max-w-2xl p-0 flex flex-col">
+    <!-- Header -->
+    <div class="flex items-center gap-3 px-5 py-4 border-b border-base-300 shrink-0">
+      <div class="rounded-lg bg-primary/10 p-2">
+        <i data-lucide="rocket" class="w-5 h-5 text-primary"></i>
+      </div>
+      <div class="flex-1">
+        <h3 class="font-bold text-lg">Welcome aboard</h3>
+        <p class="text-xs text-base-content/50">
+          Step <span x-text="step"></span> of 3
+        </p>
+      </div>
+      <form method="dialog">
+        <button class="btn btn-ghost btn-sm btn-circle" aria-label="Close">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </form>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="h-1 bg-base-200">
+      <div class="h-full bg-primary transition-all duration-300"
+           :style="`width: ${(step / 3) * 100}%`"></div>
+    </div>
+
+    <!-- Body -->
+    <div class="flex-1 overflow-y-auto overscroll-contain px-6 py-6 min-h-[26rem]">
+      <!-- Step 1: Welcome -->
+      <div x-show="step === 1" class="text-center">
+        <div class="mx-auto w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+          <i data-lucide="sparkles" class="w-10 h-10 text-primary"></i>
+        </div>
+        <h2 class="text-2xl font-bold mb-2">Welcome to JaaJ Workspace</h2>
+        <p class="text-base-content/70 max-w-md mx-auto">
+          Your all-in-one space for files, notes, mail, calendar, chat, and more.
+          Let's take a quick tour so you know where everything lives.
+        </p>
+      </div>
+
+      <!-- Step 2: Modules -->
+      <div x-show="step === 2" x-cloak>
+        <h2 class="text-xl font-bold mb-1">Everything in one place</h2>
+        <p class="text-sm text-base-content/60 mb-4">
+          Each module lives in its own page. Switch between them from the dashboard or via the search bar.
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {% for module in workspace_active_modules %}
+            <div class="flex items-start gap-3 p-3 rounded-lg border border-base-300">
+              <div class="rounded-lg bg-{{ module.color }}/10 p-2 shrink-0">
+                <i data-lucide="{{ module.icon }}" class="w-5 h-5 text-{{ module.color }}"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm">{{ module.name }}</div>
+                <div class="text-xs text-base-content/60">{{ module.description }}</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Step 3: Ready -->
+      <div x-show="step === 3" x-cloak>
+        <h2 class="text-xl font-bold mb-1">You're all set</h2>
+        <p class="text-sm text-base-content/60 mb-4">A few tips to get the most out of the app:</p>
+        <ul class="space-y-3">
+          <li class="flex items-start gap-3">
+            <div class="rounded-lg bg-info/10 p-2 shrink-0">
+              <i data-lucide="search" class="w-4 h-4 text-info"></i>
+            </div>
+            <div>
+              <div class="font-medium text-sm">Search everything from the top bar</div>
+              <div class="text-xs text-base-content/60">
+                Find files, notes, mail and conversations, or jump to any module quickly.
+              </div>
+            </div>
+          </li>
+          <li class="flex items-start gap-3">
+            <div class="rounded-lg bg-warning/10 p-2 shrink-0">
+              <i data-lucide="settings" class="w-4 h-4 text-warning"></i>
+            </div>
+            <div>
+              <div class="font-medium text-sm">Personalize your workspace</div>
+              <div class="text-xs text-base-content/60">
+                Pick a theme, set your timezone and configure notifications from the user menu.
+              </div>
+            </div>
+          </li>
+          <li class="flex items-start gap-3">
+            <div class="rounded-lg bg-success/10 p-2 shrink-0">
+              <i data-lucide="rotate-ccw" class="w-4 h-4 text-success"></i>
+            </div>
+            <div>
+              <div class="font-medium text-sm">Re-open this tour anytime</div>
+              <div class="text-xs text-base-content/60">
+                Click "Welcome tour" in the user menu to revisit these steps.
+              </div>
+            </div>
+          </li>
+          <li class="flex items-start gap-3">
+            <div class="rounded-lg bg-primary/10 p-2 shrink-0">
+              <i data-lucide="sparkles" class="w-4 h-4 text-primary"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="font-medium text-sm">See what's new in each release</div>
+              <div class="text-xs text-base-content/60">
+                The changelog lists every recent improvement and fix.
+              </div>
+            </div>
+            <button type="button"
+                    class="btn btn-xs btn-ghost shrink-0 self-center gap-1 hover:bg-primary/10 hover:text-primary"
+                    @click="openChangelog()">
+              View changelog
+              <i data-lucide="external-link" class="w-3 h-3"></i>
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex items-center justify-between gap-2 px-5 py-4 border-t border-base-300 shrink-0">
+      <button type="button"
+              class="btn btn-ghost btn-sm"
+              :class="step === 1 ? 'invisible' : ''"
+              @click="step = Math.max(1, step - 1)">
+        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        Back
+      </button>
+      <div class="flex gap-2">
+        <template x-for="i in 3" :key="i">
+          <span class="w-2 h-2 rounded-full transition-colors"
+                :class="i <= step ? 'bg-primary' : 'bg-base-300'"></span>
+        </template>
+      </div>
+      <button x-show="step < 3"
+              type="button"
+              class="btn btn-primary btn-sm"
+              @click="step = Math.min(3, step + 1)">
+        Next
+        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+      </button>
+      <form x-show="step === 3" method="dialog" x-cloak>
+        <button type="submit" class="btn btn-primary btn-sm">
+          Get started
+          <i data-lucide="check" class="w-4 h-4"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<script>
+  function onboardingWizard(pending) {
+    return {
+      step: 1,
+      completed: !pending,
+      markCompleteIfNeeded() {
+        if (this.completed) return;
+        this.completed = true;
+        fetch('/api/v1/settings/core/onboarding_completed', {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          body: JSON.stringify({ value: true }),
+        });
+      },
+      openChangelog() {
+        // Close this dialog first - the native close event will fire and
+        // run markCompleteIfNeeded(). Then ask the changelog dialog to open.
+        // $root is the dialog (the x-data host); $el here would be the
+        // button that triggered the click.
+        this.$root.close();
+        window.dispatchEvent(new CustomEvent('changelog-open'));
+      },
+    };
+  }
+</script>

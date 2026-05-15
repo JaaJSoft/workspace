@@ -57,6 +57,17 @@ class GetThreadTests(TestCase):
         self.assertEqual(len(result), 5)
         self.assertEqual(result[-1], msgs[-1])
 
+    def test_walk_breaks_on_multi_message_cycle(self):
+        """A pathological in_reply_to cycle A -> B -> A must not produce an
+        alternating chain. The walk stops as soon as a parent is revisited,
+        rather than relying on max_depth to eventually cap the oscillation."""
+        a = self._make(1, '<a@x>', in_reply_to='<b@x>')
+        b = self._make(2, '<b@x>', in_reply_to='<a@x>')
+        # Walking from a: a -> b (parent) -> a (revisit, stop).
+        # Without cycle detection, the walk would oscillate up to max_depth.
+        result = get_thread(a, max_depth=10)
+        self.assertEqual(result, [b, a])
+
     def test_walk_scoped_to_same_account(self):
         other_user = User.objects.create_user(username='u2', password='p')
         other_acc = MailAccount.objects.create(

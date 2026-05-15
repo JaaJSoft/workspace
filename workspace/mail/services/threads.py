@@ -24,6 +24,7 @@ def get_thread(message: MailMessage, max_depth: int = 20) -> list[MailMessage]:
     """
     chain = [message]
     current = message
+    visited = {message.pk}
     while (
         len(chain) < max_depth
         and current.in_reply_to
@@ -33,8 +34,11 @@ def get_thread(message: MailMessage, max_depth: int = 20) -> list[MailMessage]:
             .filter(account=message.account, message_id=current.in_reply_to)
             .first()
         )
-        if parent is None or parent.pk == current.pk:
+        # A pathological cycle (A -> B -> A, or A -> A) would otherwise
+        # oscillate until max_depth and feed the LLM a duplicated thread.
+        if parent is None or parent.pk in visited:
             break
+        visited.add(parent.pk)
         chain.append(parent)
         current = parent
 

@@ -50,7 +50,7 @@ class GenerateChatResponseTests(TestCase):
         mock_client.chat.completions.create.return_value = mock_response
         mock_get_client.return_value = mock_client
 
-        from workspace.ai.tasks import generate_chat_response
+        from workspace.ai.tasks.chat import generate_chat_response
         result = generate_chat_response(
             str(self.conversation.uuid),
             str(self.message.uuid),
@@ -68,7 +68,7 @@ class GenerateChatResponseTests(TestCase):
         mock_client.chat.completions.create.side_effect = Exception('API Error')
         mock_get_client.return_value = mock_client
 
-        from workspace.ai.tasks import generate_chat_response
+        from workspace.ai.tasks.chat import generate_chat_response
         result = generate_chat_response(
             str(self.conversation.uuid),
             str(self.message.uuid),
@@ -125,7 +125,7 @@ class SummarizeTaskTests(TestCase):
             input_data={'message_id': str(self.message.uuid)},
         )
 
-        from workspace.ai.tasks import summarize
+        from workspace.ai.tasks.mail import summarize
         result = summarize(str(task.uuid))
 
         self.assertEqual(result['status'], 'ok')
@@ -151,7 +151,7 @@ class SummarizeTaskTests(TestCase):
             input_data={'message_id': str(self.message.uuid)},
         )
 
-        from workspace.ai.tasks import summarize
+        from workspace.ai.tasks.mail import summarize
         summarize(str(task.uuid))
 
         self.message.refresh_from_db()
@@ -222,7 +222,7 @@ class GenerateChatResponseWithToolsTests(TestCase):
         mock_client.chat.completions.create.side_effect = [first_response, second_response]
         mock_get_client.return_value = mock_client
 
-        from workspace.ai.tasks import generate_chat_response
+        from workspace.ai.tasks.chat import generate_chat_response
         result = generate_chat_response(
             str(self.conversation.uuid),
             str(self.message.uuid),
@@ -478,7 +478,7 @@ class ClassifyMailMessagesTests(TestCase):
             task_type=AITask.TaskType.CLASSIFY,
             input_data={'message_uuids': [str(self.msg1.uuid), str(self.msg2.uuid)]},
         )
-        from workspace.ai.tasks import classify_mail_messages
+        from workspace.ai.tasks.mail import classify_mail_messages
         classify_mail_messages(str(ai_task.uuid))
 
         from workspace.mail.models import MailMessageLabel
@@ -505,7 +505,7 @@ class ClassifyMailMessagesTests(TestCase):
             task_type=AITask.TaskType.CLASSIFY,
             input_data={'message_uuids': [str(self.msg1.uuid)]},
         )
-        from workspace.ai.tasks import classify_mail_messages
+        from workspace.ai.tasks.mail import classify_mail_messages
         classify_mail_messages(str(ai_task.uuid))
 
         self.assertEqual(self.msg1.message_labels.count(), 1)
@@ -529,7 +529,7 @@ class ClassifyMailMessagesTests(TestCase):
             task_type=AITask.TaskType.CLASSIFY,
             input_data={'message_uuids': [str(self.msg1.uuid)]},
         )
-        from workspace.ai.tasks import classify_mail_messages
+        from workspace.ai.tasks.mail import classify_mail_messages
         classify_mail_messages(str(ai_task.uuid))
 
         self.assertEqual(self.msg1.message_labels.count(), 2)
@@ -552,7 +552,7 @@ class ClassifyMailMessagesTests(TestCase):
             task_type=AITask.TaskType.CLASSIFY,
             input_data={'message_uuids': [str(self.msg1.uuid)]},
         )
-        from workspace.ai.tasks import classify_mail_messages
+        from workspace.ai.tasks.mail import classify_mail_messages
         classify_mail_messages(str(ai_task.uuid))
 
         self.assertEqual(self.msg1.message_labels.count(), 3)
@@ -573,7 +573,7 @@ class ClassifyMailMessagesTests(TestCase):
             task_type=AITask.TaskType.CLASSIFY,
             input_data={'message_uuids': [str(self.msg1.uuid)]},
         )
-        from workspace.ai.tasks import classify_mail_messages
+        from workspace.ai.tasks.mail import classify_mail_messages
         result = classify_mail_messages(str(ai_task.uuid))
 
         self.assertEqual(result['status'], 'error')

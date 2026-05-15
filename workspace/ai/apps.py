@@ -30,3 +30,14 @@ class AIConfig(AppConfig):
         if getattr(settings, 'SEARXNG_URL', ''):
             from workspace.ai.tools import WebToolProvider
             tool_registry.register_provider(WebToolProvider())
+
+        # Import task submodules so Celery's autodiscover_tasks() sees them
+        # via the @shared_task decorators evaluated at import time.
+        from workspace.ai.tasks import (  # noqa: F401
+            calendar,
+            chat,
+            editor,
+            housekeeping,
+            mail,
+            scheduled,
+        )

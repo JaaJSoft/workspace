@@ -183,7 +183,7 @@ def maybe_dispatch_summary_update(conversation_id, summary_text: str) -> bool:
         # Lazy import to avoid a circular dependency: tasks.py imports this
         # service module (via the thin wrapper), but only at call time, so
         # tasks.py is fully loaded by the time we re-enter it here.
-        from workspace.ai.tasks import update_conversation_summary
+        from workspace.ai.tasks.chat import update_conversation_summary
         update_conversation_summary.delay(str(conversation_id))
         return True
     return False

@@ -13,7 +13,7 @@ class DispatchTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='dispatch_user', password='pass123')
 
-    @patch('workspace.ai.tasks.summarize.delay')
+    @patch('workspace.ai.tasks.mail.summarize.delay')
     def test_dispatch_creates_task_and_enqueues_worker(self, mock_delay):
         ai_task = dispatch(
             owner=self.user,
@@ -28,7 +28,7 @@ class DispatchTests(TestCase):
         self.assertEqual(ai_task.status, AITask.Status.PENDING)
         mock_delay.assert_called_once_with(str(ai_task.uuid))
 
-    @patch('workspace.ai.tasks.summarize.delay')
+    @patch('workspace.ai.tasks.mail.summarize.delay')
     def test_dispatch_defaults_input_data_to_empty_dict(self, mock_delay):
         ai_task = dispatch(
             owner=self.user,
@@ -37,7 +37,7 @@ class DispatchTests(TestCase):
         self.assertEqual(ai_task.input_data, {})
         mock_delay.assert_called_once_with(str(ai_task.uuid))
 
-    @patch('workspace.ai.tasks.compose_email.delay')
+    @patch('workspace.ai.tasks.mail.compose_email.delay')
     def test_reply_and_compose_share_compose_email_worker(self, mock_delay):
         compose_task = dispatch(
             owner=self.user,
@@ -54,7 +54,7 @@ class DispatchTests(TestCase):
         mock_delay.assert_any_call(str(compose_task.uuid))
         mock_delay.assert_any_call(str(reply_task.uuid))
 
-    @patch('workspace.ai.tasks.classify_mail_messages.delay')
+    @patch('workspace.ai.tasks.mail.classify_mail_messages.delay')
     def test_classify_dispatch(self, mock_delay):
         ai_task = dispatch(
             owner=self.user,
@@ -63,7 +63,7 @@ class DispatchTests(TestCase):
         )
         mock_delay.assert_called_once_with(str(ai_task.uuid))
 
-    @patch('workspace.ai.tasks.editor_action.delay')
+    @patch('workspace.ai.tasks.editor.editor_action.delay')
     def test_editor_dispatch(self, mock_delay):
         ai_task = dispatch(
             owner=self.user,
@@ -86,7 +86,7 @@ class DispatchTests(TestCase):
 
         self.assertIn('not-a-real-type', str(cm.exception))
 
-    @patch('workspace.ai.tasks.extract_from_mail_messages.delay')
+    @patch('workspace.ai.tasks.calendar.extract_from_mail_messages.delay')
     def test_extract_dispatch(self, mock_delay):
         ai_task = dispatch(
             owner=self.user,
@@ -103,11 +103,11 @@ class DispatchTests(TestCase):
         # generate_chat_response).
         non_dispatched = {AITask.TaskType.CHAT}
         with (
-            patch('workspace.ai.tasks.summarize.delay'),
-            patch('workspace.ai.tasks.compose_email.delay'),
-            patch('workspace.ai.tasks.classify_mail_messages.delay'),
-            patch('workspace.ai.tasks.editor_action.delay'),
-            patch('workspace.ai.tasks.extract_from_mail_messages.delay'),
+            patch('workspace.ai.tasks.mail.summarize.delay'),
+            patch('workspace.ai.tasks.mail.compose_email.delay'),
+            patch('workspace.ai.tasks.mail.classify_mail_messages.delay'),
+            patch('workspace.ai.tasks.editor.editor_action.delay'),
+            patch('workspace.ai.tasks.calendar.extract_from_mail_messages.delay'),
         ):
             for task_type in AITask.TaskType.values:
                 if task_type in non_dispatched:

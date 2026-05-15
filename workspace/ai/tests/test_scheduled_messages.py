@@ -123,7 +123,7 @@ class DispatchScheduledMessagesTests(TestCase):
         ConversationMember.objects.create(conversation=self.conversation, user=self.user)
         ConversationMember.objects.create(conversation=self.conversation, user=self.bot_user)
 
-    @patch('workspace.ai.tasks.generate_scheduled_response.delay')
+    @patch('workspace.ai.tasks.scheduled.generate_scheduled_response.delay')
     def test_dispatches_due_schedules(self, mock_delay):
         schedule = ScheduledMessage.objects.create(
             conversation=self.conversation,
@@ -134,13 +134,13 @@ class DispatchScheduledMessagesTests(TestCase):
             next_run_at=timezone.now() - timedelta(minutes=5),
         )
 
-        from workspace.ai.tasks import dispatch_scheduled_messages
+        from workspace.ai.tasks.scheduled import dispatch_scheduled_messages
         dispatch_scheduled_messages()
 
         mock_delay.assert_called_once()
         self.assertEqual(mock_delay.call_args.args[0], str(schedule.uuid))
 
-    @patch('workspace.ai.tasks.generate_scheduled_response.delay')
+    @patch('workspace.ai.tasks.scheduled.generate_scheduled_response.delay')
     def test_skips_future_schedules(self, mock_delay):
         ScheduledMessage.objects.create(
             conversation=self.conversation,
@@ -151,12 +151,12 @@ class DispatchScheduledMessagesTests(TestCase):
             next_run_at=timezone.now() + timedelta(hours=1),
         )
 
-        from workspace.ai.tasks import dispatch_scheduled_messages
+        from workspace.ai.tasks.scheduled import dispatch_scheduled_messages
         dispatch_scheduled_messages()
 
         mock_delay.assert_not_called()
 
-    @patch('workspace.ai.tasks.generate_scheduled_response.delay')
+    @patch('workspace.ai.tasks.scheduled.generate_scheduled_response.delay')
     def test_skips_inactive_schedules(self, mock_delay):
         ScheduledMessage.objects.create(
             conversation=self.conversation,
@@ -168,7 +168,7 @@ class DispatchScheduledMessagesTests(TestCase):
             is_active=False,
         )
 
-        from workspace.ai.tasks import dispatch_scheduled_messages
+        from workspace.ai.tasks.scheduled import dispatch_scheduled_messages
         dispatch_scheduled_messages()
 
         mock_delay.assert_not_called()
@@ -198,10 +198,10 @@ class DispatchScheduledMessagesTests(TestCase):
         )
 
         with patch(
-            'workspace.ai.tasks.generate_scheduled_response.delay',
+            'workspace.ai.tasks.scheduled.generate_scheduled_response.delay',
             side_effect=[Exception('broker unavailable'), None],
         ) as mock_delay:
-            from workspace.ai.tasks import dispatch_scheduled_messages
+            from workspace.ai.tasks.scheduled import dispatch_scheduled_messages
             dispatch_scheduled_messages()  # must not raise
 
         # Loop kept going after the first failure and tried the second row.
@@ -211,7 +211,7 @@ class DispatchScheduledMessagesTests(TestCase):
         schedule_a.refresh_from_db()
         self.assertLessEqual(schedule_a.next_run_at, timezone.now())
 
-    @patch('workspace.ai.tasks.generate_scheduled_response.delay')
+    @patch('workspace.ai.tasks.scheduled.generate_scheduled_response.delay')
     def test_dispatcher_does_not_double_enqueue_on_back_to_back_runs(self, mock_delay):
         # Two dispatcher passes against the same due row must enqueue at most
         # once. The first pass atomically advances next_run_at out of the due
@@ -225,7 +225,7 @@ class DispatchScheduledMessagesTests(TestCase):
             next_run_at=timezone.now() - timedelta(minutes=5),
         )
 
-        from workspace.ai.tasks import dispatch_scheduled_messages
+        from workspace.ai.tasks.scheduled import dispatch_scheduled_messages
         dispatch_scheduled_messages()
         dispatch_scheduled_messages()
 
@@ -284,7 +284,7 @@ class GenerateScheduledResponseTests(TestCase):
             next_run_at=timezone.now() - timedelta(minutes=1),
         )
 
-        from workspace.ai.tasks import generate_scheduled_response
+        from workspace.ai.tasks.scheduled import generate_scheduled_response
         result = generate_scheduled_response(str(schedule.uuid))
 
         self.assertEqual(result['status'], 'ok')
@@ -325,7 +325,7 @@ class GenerateScheduledResponseTests(TestCase):
             next_run_at=now - timedelta(minutes=1),
         )
 
-        from workspace.ai.tasks import generate_scheduled_response
+        from workspace.ai.tasks.scheduled import generate_scheduled_response
         result = generate_scheduled_response(str(schedule.uuid))
 
         self.assertEqual(result['status'], 'ok')
@@ -348,7 +348,7 @@ class GenerateScheduledResponseTests(TestCase):
             is_active=False,
         )
 
-        from workspace.ai.tasks import generate_scheduled_response
+        from workspace.ai.tasks.scheduled import generate_scheduled_response
         result = generate_scheduled_response(str(schedule.uuid))
 
         self.assertEqual(result['status'], 'skipped')
@@ -375,7 +375,7 @@ class GenerateScheduledResponseTests(TestCase):
             next_run_at=timezone.now() - timedelta(minutes=1),
         )
 
-        from workspace.ai.tasks import generate_scheduled_response
+        from workspace.ai.tasks.scheduled import generate_scheduled_response
         result = generate_scheduled_response(str(schedule.uuid))
 
         self.assertEqual(result['status'], 'skipped')
@@ -392,7 +392,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.assertEqual(mock_llm.call_count, 2)
 
     def test_nonexistent_schedule(self):
-        from workspace.ai.tasks import generate_scheduled_response
+        from workspace.ai.tasks.scheduled import generate_scheduled_response
         result = generate_scheduled_response(str(uuid.uuid4()))
         self.assertEqual(result['status'], 'error')
         self.assertIn('not found', result['error'])
@@ -435,7 +435,7 @@ class GenerateScheduledResponseTests(TestCase):
         claim_token = timezone.now() + DISPATCH_LOCK_HORIZON
         ScheduledMessage.objects.filter(pk=schedule.pk).update(next_run_at=claim_token)
 
-        from workspace.ai.tasks import generate_scheduled_response
+        from workspace.ai.tasks.scheduled import generate_scheduled_response
 
         # Worker A processes the original delivery.
         result_a = generate_scheduled_response(
@@ -495,7 +495,7 @@ class GenerateScheduledResponseTests(TestCase):
             ScheduledMessage, 'compute_next_run',
             autospec=True, side_effect=race_then_compute,
         ):
-            from workspace.ai.tasks import generate_scheduled_response
+            from workspace.ai.tasks.scheduled import generate_scheduled_response
             result = generate_scheduled_response(str(schedule.uuid))
 
         self.assertEqual(result['status'], 'skipped')

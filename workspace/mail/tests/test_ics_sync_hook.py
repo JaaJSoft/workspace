@@ -50,7 +50,7 @@ class SyncCalendarHookTest(TestCase):
         # No new UIDs parsed in this pass → no calendar reprocessing.
         mock_process.assert_not_called()
 
-    @patch('workspace.ai.tasks.classify_mail_messages.delay')
+    @patch('workspace.ai.tasks.mail.classify_mail_messages.delay')
     @patch('workspace.ai.client.is_ai_enabled', return_value=False)
     @patch('workspace.mail.services.imap_sync._reconcile_folder')
     @patch('workspace.mail.services.imap_sync._parse_message')

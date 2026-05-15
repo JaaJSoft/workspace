@@ -236,7 +236,7 @@ class ClassifyViewTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
     @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
-    @patch('workspace.ai.tasks.classify_mail_messages.delay')
+    @patch('workspace.ai.tasks.mail.classify_mail_messages.delay')
     def test_creates_task_for_unclassified(self, mock_delay):
         self.client.force_authenticate(self.user)
         resp = self.client.post('/api/v1/ai/tasks/mail/classify', {}, format='json')
@@ -253,7 +253,7 @@ class ClassifyViewTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
-    @patch('workspace.ai.tasks.classify_mail_messages.delay')
+    @patch('workspace.ai.tasks.mail.classify_mail_messages.delay')
     def test_rate_limit(self, mock_delay):
         self.client.force_authenticate(self.user)
         resp1 = self.client.post('/api/v1/ai/tasks/mail/classify', {}, format='json')
@@ -262,7 +262,7 @@ class ClassifyViewTests(APITestCase):
         self.assertEqual(resp2.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
     @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
-    @patch('workspace.ai.tasks.classify_mail_messages.delay')
+    @patch('workspace.ai.tasks.mail.classify_mail_messages.delay')
     def test_no_unclassified_messages(self, mock_delay):
         from workspace.mail.models import MailMessageLabel
         label = self.account.labels.first()
@@ -272,7 +272,7 @@ class ClassifyViewTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
 
     @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
-    @patch('workspace.ai.tasks.classify_mail_messages.delay')
+    @patch('workspace.ai.tasks.mail.classify_mail_messages.delay')
     def test_excludes_already_labeled_messages(self, mock_delay):
         from workspace.mail.models import MailMessageLabel
         label = self.account.labels.first()

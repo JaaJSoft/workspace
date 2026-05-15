@@ -34,10 +34,11 @@ def _enqueue_worker(ai_task: AITask) -> None:
     # ``workspace.ai.tasks`` imports from ``workspace.ai.services``
     # (e.g. ``ai_task_lifecycle``), so importing tasks at module
     # load time would form a loop.
-    from workspace.ai.tasks import (
+    from workspace.ai.tasks.calendar import extract_from_mail_messages
+    from workspace.ai.tasks.editor import editor_action
+    from workspace.ai.tasks.mail import (
         classify_mail_messages,
         compose_email,
-        editor_action,
         summarize,
     )
 
@@ -47,6 +48,7 @@ def _enqueue_worker(ai_task: AITask) -> None:
         AITask.TaskType.REPLY: compose_email,
         AITask.TaskType.CLASSIFY: classify_mail_messages,
         AITask.TaskType.EDITOR: editor_action,
+        AITask.TaskType.EXTRACT: extract_from_mail_messages,
     }
     worker = mapping.get(ai_task.task_type)
     if worker is None:

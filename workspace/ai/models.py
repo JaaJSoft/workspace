@@ -92,6 +92,7 @@ class AITask(models.Model):
         CHAT = 'chat'
         EDITOR = 'editor'
         CLASSIFY = 'classify'
+        EXTRACT = 'extract'
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     owner = models.ForeignKey(

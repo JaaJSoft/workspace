@@ -211,6 +211,34 @@
         </div>
         <div class="px-3 py-2.5 text-sm prose prose-sm max-w-none" x-html="aiSummary"></div>
       </div>
+
+      <!-- Extracted calendar events -->
+      <template x-for="extraction in (messageDetail.extractions || [])" :key="extraction.uuid">
+        <div x-show="extraction.kind === 'event' && extraction.target"
+             x-cloak
+             class="mb-5 rounded-lg border border-accent/15 bg-gradient-to-br from-accent/5 via-transparent to-accent/3 overflow-hidden">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-accent/10 bg-accent/5">
+            <i data-lucide="calendar-plus" class="w-3.5 h-3.5 text-accent flex-shrink-0"></i>
+            <span class="text-xs font-semibold text-accent tracking-wide uppercase flex-1">Suggested event</span>
+          </div>
+          <div class="px-3 py-2.5 text-sm space-y-2">
+            <div class="font-medium" x-text="extraction.target.title"></div>
+            <div class="text-base-content/70 text-xs" x-text="formatFullDate(extraction.target.start)"></div>
+            <div x-show="extraction.target.location" class="text-base-content/70 text-xs" x-text="extraction.target.location"></div>
+            <div class="flex items-center gap-2 pt-1">
+              <a :href="`/calendar?event=${extraction.target.uuid}`" class="btn btn-xs btn-ghost">
+                View in calendar
+              </a>
+              <button type="button"
+                      class="btn btn-xs btn-ghost text-error/80"
+                      @click="dismissExtraction(extraction, messageDetail)">
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <template x-if="messageDetail.body_html">
         <div class="mail-body prose prose-sm max-w-none" x-html="messageDetail.body_html"></div>
       </template>

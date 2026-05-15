@@ -38,7 +38,7 @@ def _trigger_bot_response(conversation_id, message, sender):
     )
     if bot_member:
         try:
-            from workspace.ai.tasks import generate_chat_response
+            from workspace.ai.tasks.chat import generate_chat_response
             generate_chat_response.delay(
                 str(conversation_id),
                 str(message.uuid),

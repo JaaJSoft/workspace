@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import MailAccount, MailAttachment, MailFolder, MailLabel, MailMessage
+from .models import MailAccount, MailAttachment, MailExtraction, MailFolder, MailLabel, MailMessage
 
 
 class MailAccountSerializer(serializers.ModelSerializer):
@@ -113,10 +113,38 @@ class MailMessageListSerializer(serializers.ModelSerializer):
         ]
 
 
+class _ExtractionTargetEventSerializer(serializers.Serializer):
+    """Minimal embed of a calendar.Event inside a MailExtraction payload.
+    Defined here to avoid a circular import from calendar.serializers."""
+    uuid = serializers.UUIDField(read_only=True)
+    title = serializers.CharField(read_only=True)
+    start = serializers.DateTimeField(read_only=True)
+    end = serializers.DateTimeField(read_only=True, allow_null=True)
+    all_day = serializers.BooleanField(read_only=True)
+    location = serializers.CharField(read_only=True)
+
+
+class MailExtractionSerializer(serializers.ModelSerializer):
+    target = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MailExtraction
+        fields = ['uuid', 'kind', 'target']
+
+    def get_target(self, obj):
+        target = obj.target
+        if target is None:
+            return None
+        if obj.kind == MailExtraction.Kind.EVENT:
+            return _ExtractionTargetEventSerializer(target).data
+        return None
+
+
 class MailMessageDetailSerializer(serializers.ModelSerializer):
     attachments = MailAttachmentSerializer(many=True, read_only=True)
     labels = serializers.SerializerMethodField()
     ai_summary_html = serializers.SerializerMethodField()
+    extractions = serializers.SerializerMethodField()
 
     class Meta:
         model = MailMessage
@@ -127,7 +155,7 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
             'body_text', 'body_html',
             'is_read', 'is_starred', 'is_draft', 'has_attachments',
             'has_calendar_event', 'ai_summary', 'ai_summary_html',
-            'attachments', 'labels', 'created_at',
+            'attachments', 'labels', 'extractions', 'created_at',
         ]
 
     def get_ai_summary_html(self, obj):
@@ -142,6 +170,12 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
             {'uuid': str(link.label.uuid), 'name': link.label.name, 'color': link.label.color}
             for link in obj.message_labels.all()
         ]
+
+    def get_extractions(self, obj):
+        qs = obj.extractions.filter(
+            status=MailExtraction.Status.DETECTED,
+        ).select_related('target_content_type')
+        return MailExtractionSerializer(qs, many=True).data
 
 
 class MailMessageUpdateSerializer(serializers.Serializer):

@@ -199,10 +199,17 @@ def sync_folder_messages(account, folder):
                         task_type=AITask.TaskType.CLASSIFY,
                         input_data={'message_uuids': new_message_uuids},
                     )
-                    logger.info('Dispatched classify task for %d new messages in %s',
-                                len(new_message_uuids), scrub(folder.name))
+                    dispatch(
+                        owner=account.owner,
+                        task_type=AITask.TaskType.EXTRACT,
+                        input_data={'message_uuids': new_message_uuids},
+                    )
+                    logger.info(
+                        'Dispatched classify+extract tasks for %d new messages in %s',
+                        len(new_message_uuids), scrub(folder.name),
+                    )
             except Exception:
-                logger.exception('Failed to dispatch classify task for %s', scrub(folder.name))
+                logger.exception('Failed to dispatch classify+extract tasks for %s', scrub(folder.name))
 
         # Process calendar invitations among messages just synced.
         # Scoping on new_message_uuids avoids re-parsing every old ICS

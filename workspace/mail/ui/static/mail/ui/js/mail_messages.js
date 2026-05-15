@@ -296,6 +296,26 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       }
     },
 
+    async dismissExtraction(extraction, message) {
+      // Optimistic: drop locally first; refresh on failure.
+      if (message && Array.isArray(message.extractions)) {
+        message.extractions = message.extractions.filter(e => e.uuid !== extraction.uuid);
+      }
+      try {
+        const resp = await this._fetch(`/api/v1/mail/extractions/${extraction.uuid}`, {
+          method: 'DELETE',
+        });
+        if (!resp.ok && resp.status !== 404) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
+      } catch (e) {
+        console.error('Failed to dismiss extraction:', e);
+        if (message && typeof this.selectMessage === 'function') {
+          this.selectMessage(message);
+        }
+      }
+    },
+
     // ----- Batch actions -----
     toggleSelectMessage(uuid) {
       const idx = this.selectedMessages.indexOf(uuid);

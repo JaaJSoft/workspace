@@ -2,7 +2,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone as dj_tz
 
 from workspace.ai.models import AITask
@@ -117,6 +117,26 @@ class ExtractFromMailTests(TestCase):
         extract_from_mail_messages(str(self.ai_task.uuid))
 
         self.assertEqual(MailExtraction.objects.filter(mail_message=self.message).count(), 2)
+
+    @patch('workspace.ai.tasks.calendar.call_llm')
+    @override_settings(AI_EXTRACT_MODEL='custom-extract-model', AI_MODEL='other')
+    def test_uses_ai_extract_model_when_configured(self, mock_llm):
+        """AI_EXTRACT_MODEL takes precedence over AI_MODEL when set."""
+        mock_llm.return_value = _llm_payload([])
+        from workspace.ai.tasks.calendar import extract_from_mail_messages
+        extract_from_mail_messages(str(self.ai_task.uuid))
+
+        self.assertEqual(mock_llm.call_args.kwargs.get('model'), 'custom-extract-model')
+
+    @patch('workspace.ai.tasks.calendar.call_llm')
+    @override_settings(AI_EXTRACT_MODEL='', AI_MODEL='fallback-model')
+    def test_falls_back_to_ai_model_when_extract_model_empty(self, mock_llm):
+        """Empty AI_EXTRACT_MODEL falls through to AI_MODEL (backward compat)."""
+        mock_llm.return_value = _llm_payload([])
+        from workspace.ai.tasks.calendar import extract_from_mail_messages
+        extract_from_mail_messages(str(self.ai_task.uuid))
+
+        self.assertEqual(mock_llm.call_args.kwargs.get('model'), 'fallback-model')
 
     @patch('workspace.ai.tasks.calendar.call_llm')
     def test_malformed_json_skips_message_without_crashing(self, mock_llm):

@@ -104,7 +104,8 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
     thread = get_thread(msg)
     user_tz = get_user_timezone(msg.account.owner)
     messages = build_event_extraction_messages(thread, user_tz=user_tz)
-    result = call_llm(messages, model=settings.AI_MODEL)
+    model = settings.AI_EXTRACT_MODEL or settings.AI_MODEL
+    result = call_llm(messages, model=model)
 
     raw_content = _FENCE_RE.sub('', (result.get('content') or '').strip())
     try:

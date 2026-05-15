@@ -714,6 +714,7 @@ AI_API_KEY = os.getenv('AI_API_KEY', '')
 AI_BASE_URL = os.getenv('AI_BASE_URL') or None  # For Ollama, LM Studio, etc.
 AI_MODEL = os.getenv('AI_MODEL', 'gpt-5')
 AI_SMALL_MODEL = os.getenv('AI_SMALL_MODEL', '') or None  # Fast model for summaries, titles, etc.
+AI_EXTRACT_MODEL = os.getenv('AI_EXTRACT_MODEL', '')  # Event extraction. Empty = fall back to AI_MODEL.
 AI_MAX_TOKENS = int(os.getenv('AI_MAX_TOKENS', '2048'))
 AI_CHAT_CONTEXT_SIZE = int(os.getenv('AI_CHAT_CONTEXT_SIZE', '30'))  # recent messages kept in full; older ones are summarized
 AI_TIMEOUT = int(os.getenv('AI_TIMEOUT', '300'))  # seconds per request

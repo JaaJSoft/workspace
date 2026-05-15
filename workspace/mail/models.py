@@ -300,8 +300,11 @@ class MailExtraction(models.Model):
 
     A single MailMessage can have N extractions (one mail mentioning
     two RDV produces two rows). When a target is deleted from elsewhere
-    (e.g., user removes the event from the calendar UI), the FK becomes
-    NULL via SET_NULL and the extraction row stays as audit.
+    (e.g., user removes the event from the calendar UI), the
+    GenericForeignKey lookup returns None on subsequent access while
+    target_object_id keeps the dangling UUID, so the extraction row
+    stays in place as an audit record. Callers (serializer, dismiss
+    endpoint) already guard on `target is not None` to handle this.
     """
 
     class Kind(models.TextChoices):

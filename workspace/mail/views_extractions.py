@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.mail.models import MailExtraction
+from workspace.mail.queries import user_account_ids
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class ExtractionDetailView(APIView):
         try:
             ex = MailExtraction.objects.select_related('mail_message__account').get(
                 uuid=ex_uuid,
-                mail_message__account__owner=request.user,
+                mail_message__account_id__in=user_account_ids(request.user),
             )
         except MailExtraction.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)

@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
@@ -43,3 +43,28 @@ class BuildEventExtractionMessagesTests(TestCase):
         long_body = 'x' * 10000
         messages = build_event_extraction_messages([self._msg('Hi', long_body)])
         self.assertLess(len(messages[1]['content']), 8000)
+
+    @patch('workspace.ai.prompts.calendar.timezone.now')
+    def test_user_message_includes_today_date(self, mock_now):
+        """The prompt must include today's date so the LLM can resolve
+        relative references ('tomorrow', 'next Tuesday') correctly."""
+        mock_now.return_value = datetime(2026, 5, 15, 12, 0, tzinfo=timezone.utc)
+        messages = build_event_extraction_messages([self._msg('Hi', 'body')])
+        self.assertIn('2026-05-15', messages[1]['content'])
+
+    @patch('workspace.ai.prompts.calendar.timezone.now')
+    def test_user_message_renders_date_in_user_timezone(self, mock_now):
+        """When a user_tz is passed, the 'today' rendering is the user's
+        local date/time, not UTC. Critical to prevent the LLM from
+        treating '8h' as UTC when the user is in Paris (+02:00)."""
+        from zoneinfo import ZoneInfo
+        # 22:30 UTC on May 15 is 00:30 May 16 in Paris (summer time UTC+2).
+        mock_now.return_value = datetime(2026, 5, 15, 22, 30, tzinfo=timezone.utc)
+        messages = build_event_extraction_messages(
+            [self._msg('Hi', 'body')],
+            user_tz=ZoneInfo('Europe/Paris'),
+        )
+        content = messages[1]['content']
+        self.assertIn('2026-05-16 00:30', content)
+        self.assertIn('Europe/Paris', content)
+        self.assertIn('interpret it in Europe/Paris', content)

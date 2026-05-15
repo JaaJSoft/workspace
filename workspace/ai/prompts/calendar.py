@@ -1,6 +1,12 @@
 """Prompt construction for LLM event extraction from mail."""
 
+from zoneinfo import ZoneInfo
+
+from django.utils import timezone
+
 from workspace.ai.prompts.mail import INJECTION_GUARD
+
+_UTC = ZoneInfo('UTC')
 
 MAX_BODY_CHARS = 4000  # per message; threads can have many messages.
 
@@ -32,13 +38,21 @@ SYSTEM_PROMPT = (
 )
 
 
-def build_event_extraction_messages(thread_messages: list) -> list[dict]:
+def build_event_extraction_messages(
+    thread_messages: list,
+    user_tz: ZoneInfo | None = None,
+) -> list[dict]:
     """Render a chronological thread into the chat-format messages
     expected by call_llm().
 
     thread_messages is a list of MailMessage instances (or compatible
     objects with subject, body_text, body_html, from_address, date),
     ordered oldest-first. Each body is truncated to MAX_BODY_CHARS.
+
+    user_tz is the recipient's local timezone (from get_user_timezone).
+    Injected into the prompt so the LLM (a) resolves "8h" as 08:00 in
+    that zone instead of UTC, and (b) computes relative dates from the
+    user's local "today", not the server's UTC midnight.
     """
     rendered = []
     for i, m in enumerate(thread_messages, 1):
@@ -52,10 +66,19 @@ def build_event_extraction_messages(thread_messages: list) -> list[dict]:
             f"[Message {i} | {date_str} | From: {sender} | Subject: {m.subject}]\n{body}"
         )
     thread_block = '\n\n---\n\n'.join(rendered)
+    tz = user_tz or _UTC
+    now_local = timezone.now().astimezone(tz)
+    today = now_local.strftime('%Y-%m-%d %H:%M')
+    tz_name = str(tz)
 
     return [
         {'role': 'system', 'content': SYSTEM_PROMPT},
         {'role': 'user', 'content': (
+            f"Current local time for the recipient: {today} ({tz_name}). "
+            f"Resolve relative references ('tomorrow', 'next Tuesday', "
+            f"'in three weeks') against this. When an email mentions a "
+            f"time WITHOUT an explicit timezone (e.g., '8h', '3pm'), "
+            f"interpret it in {tz_name}, NOT in UTC.\n\n"
             f"Extract events from this email thread:\n\n"
             f"<untrusted-content>\n{thread_block}\n</untrusted-content>\n\n"
             f"{INJECTION_GUARD}"

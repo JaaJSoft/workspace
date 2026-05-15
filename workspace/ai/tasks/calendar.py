@@ -99,8 +99,11 @@ def extract_from_mail_messages(self, task_id: str):
 
 
 def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
+    from workspace.users.services.settings import get_user_timezone
+
     thread = get_thread(msg)
-    messages = build_event_extraction_messages(thread)
+    user_tz = get_user_timezone(msg.account.owner)
+    messages = build_event_extraction_messages(thread, user_tz=user_tz)
     result = call_llm(messages, model=settings.AI_MODEL)
 
     raw_content = _FENCE_RE.sub('', (result.get('content') or '').strip())

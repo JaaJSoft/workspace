@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.22.0 - Calendar AI & Onboarding
+
+### Highlights
+
+The headline feature this release is automatic calendar event extraction from your inbox: AI bots can now read confirmed bookings, meetings, and tickets straight out of an email thread and add them to your calendar, with a short rationale and a confidence score for each event. New users land on a guided welcome tour the first time they sign in, and AI chat picks up a couple of reliability and speed wins around the retry path and prompt caching.
+
+### Calendar
+
+- New AI-powered event extraction reads confirmed events (flights, meetings, restaurant bookings, medical appointments, concert tickets, ...) out of email threads and adds them to your calendar. Each suggested event carries a short reasoning line and a confidence score; vague proposals and marketing fluff are filtered out.
+- Subscribed external calendars no longer re-write unchanged events on every sync, so refreshes complete faster and put less load on the server.
+
+### Onboarding
+
+- New users see a guided welcome tour the first time they log in, with quick walkthroughs of the core features. Existing users are not affected.
+
+### AI Chat
+
+- When a bot's first reply comes back empty and triggers an automatic retry, the retry no longer accidentally repeats earlier actions (saving a memory, sending a scheduled message, generating an image, ...). Each action now runs at most once per turn.
+- Follow-up replies in a long chat come back faster: the stable part of the system prompt is now reused turn-over-turn instead of being reprocessed every time.
+
 ## 0.21.0 - Theme Picker & Reliability
 
 ### Highlights

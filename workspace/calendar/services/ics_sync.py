@@ -40,6 +40,19 @@ def sync_external_calendar(external_calendar):
     calendar = external_calendar.calendar
     owner = calendar.owner
 
+    # Pre-load existing rows keyed by ical_uid so we can short-circuit
+    # no-op syncs: feeds that don't support ETag/If-None-Match return
+    # 200 on every poll, and without this check ``update_or_create``
+    # would rewrite every row (and advance ``updated_at``) every 15 min
+    # even when the upstream content is unchanged. Mirrors the
+    # skip-write-when-unchanged pattern from set_setting (PR #179).
+    existing_by_uid = {
+        e.ical_uid: e
+        for e in Event.objects.filter(
+            calendar=calendar, ical_uid__isnull=False,
+        ).exclude(ical_uid='')
+    }
+
     seen_uids = set()
 
     for component in cal.walk():
@@ -52,6 +65,10 @@ def sync_external_calendar(external_calendar):
         seen_uids.add(uid)
 
         defaults = _vevent_to_defaults(component, owner)
+        existing = existing_by_uid.get(uid)
+        if existing is not None and _matches_defaults(existing, defaults):
+            continue
+
         # update_or_create + the partial UniqueConstraint on (calendar,
         # ical_uid) is atomic under concurrent sync runs: the loser of an
         # INSERT race transparently falls back to UPDATE instead of
@@ -90,6 +107,21 @@ def _fetch_feed(external_calendar):
     resp.raise_for_status()
     external_calendar.last_etag = resp.headers.get('ETag', '')
     return resp.text
+
+
+def _matches_defaults(existing, defaults):
+    """Return True if every default field on ``existing`` already matches.
+
+    ``defaults`` contains the ``owner`` User instance; compare via its pk
+    against ``existing.owner_id`` so we don't trigger a lazy FK lookup.
+    """
+    for key, value in defaults.items():
+        if key == 'owner':
+            if existing.owner_id != value.pk:
+                return False
+        elif getattr(existing, key) != value:
+            return False
+    return True
 
 
 def _vevent_to_defaults(vevent, owner):

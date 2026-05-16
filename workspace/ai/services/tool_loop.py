@@ -182,3 +182,23 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
         rounds.append({'response': serialize_response(result)})
 
     return result, used_tools, tool_context, rounds, tool_data or None
+
+
+def retry_final_completion(messages, model):
+    """Re-prompt the model for a final text completion without re-running
+    any tools.
+
+    Used by chat / scheduled tasks when the first :func:`run_tool_loop`
+    returned an empty response: rerunning the full loop would
+    re-execute every tool from scratch and trigger side effects twice
+    (sending a message, writing data, ...). Calling ``call_llm``
+    without ``tools`` forces the model to produce text instead, while
+    the *messages* list - already mutated by the first loop with all
+    tool calls and their results - keeps the conversation context.
+
+    Returns ``(result, retry_rounds)`` so the caller can extend its
+    ``rounds`` log; ``tool_context``, ``used_tools`` and ``tool_data``
+    accumulated by the first pass are preserved on the caller side.
+    """
+    result = call_llm(messages, model=model)
+    return result, [{'response': serialize_response(result)}]

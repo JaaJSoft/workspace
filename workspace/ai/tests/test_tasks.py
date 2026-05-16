@@ -247,6 +247,74 @@ class GenerateChatResponseWithToolsTests(TestCase):
         # Two API calls were made
         self.assertEqual(mock_client.chat.completions.create.call_count, 2)
 
+    @patch('workspace.ai.tool_registry.tool_registry.execute')
+    @patch('workspace.ai.client.get_ai_client')
+    def test_empty_response_retry_does_not_replay_tools(
+        self, mock_get_client, mock_execute,
+    ):
+        """Regression for #143/#144: an empty first response must retry
+        only the final completion, not the whole tool loop. Tools with
+        side effects (sending messages, mutating state) would otherwise
+        fire twice.
+
+        The mock emits the SAME tool_call on its 3rd invocation so the
+        bug condition is actually triggered: under the buggy code the
+        retry re-entered run_tool_loop and would have executed
+        save_memory a second time.
+        """
+        tool_call = MagicMock()
+        tool_call.id = 'call_abc'
+        tool_call.type = 'function'
+        tool_call.function.name = 'save_memory'
+        tool_call.function.arguments = '{"key": "name", "content": "Pierre"}'
+
+        def tool_resp():
+            r = MagicMock()
+            r.choices = [MagicMock(message=MagicMock(
+                content=None, tool_calls=[tool_call], role='assistant',
+            ))]
+            r.model = 'gpt-4o-mini'
+            r.usage = MagicMock(prompt_tokens=10, completion_tokens=5)
+            return r
+
+        def empty_resp():
+            r = MagicMock()
+            r.choices = [MagicMock(message=MagicMock(content='', tool_calls=None))]
+            r.model = 'gpt-4o-mini'
+            r.usage = MagicMock(prompt_tokens=10, completion_tokens=0)
+            return r
+
+        def final_resp():
+            r = MagicMock()
+            r.choices = [MagicMock(message=MagicMock(
+                content='Got it, Pierre!', tool_calls=None,
+            ))]
+            r.model = 'gpt-4o-mini'
+            r.usage = MagicMock(prompt_tokens=15, completion_tokens=5)
+            return r
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = [
+            tool_resp(),    # round 1: tool_call → execute
+            empty_resp(),   # round 2: empty → triggers retry
+            tool_resp(),    # round 3 (bug only): re-runs tool loop, re-execs tool
+            final_resp(),   # round 4 (bug only): final text
+        ]
+        mock_get_client.return_value = mock_client
+        mock_execute.return_value = 'Memory saved.'
+
+        from workspace.ai.tasks.chat import generate_chat_response
+        generate_chat_response(
+            str(self.conversation.uuid),
+            str(self.message.uuid),
+            self.bot_user.id,
+        )
+
+        # The tool was executed exactly once. With the pre-fix code the
+        # retry re-entered run_tool_loop and save_memory would have
+        # fired a second time (mock_execute.call_count == 2).
+        self.assertEqual(mock_execute.call_count, 1)
+
 
 class GenerateImageToolTest(TestCase):
     """Unit tests for the generate_image tool."""

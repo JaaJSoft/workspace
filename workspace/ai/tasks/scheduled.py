@@ -12,7 +12,7 @@ from workspace.ai.services.llm import (
     sanitize_messages_for_storage,
 )
 from workspace.ai.services.responses import handle_generation_error, post_bot_message
-from workspace.ai.services.tool_loop import run_tool_loop
+from workspace.ai.services.tool_loop import retry_final_completion, run_tool_loop
 from workspace.common.celery_claim import cas_claim, cas_finalize, cas_rollback
 from workspace.common.logging import scrub
 
@@ -181,16 +181,14 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
         )
 
         # Auto-retry once if the model returned an empty response.
+        # Only the final completion is retried (no tools): rerunning
+        # the whole loop would re-execute side-effectful tools and
+        # discard the first pass's tool_context / used_tools.
         body_preview = clean_llm_content(result.get('content') or '')
         if not body_preview and not tool_context.get('images'):
             logger.warning('Empty scheduled response, retrying once: schedule=%s', scrub(schedule_id))
-            result, used_tools, tool_context, retry_rounds, retry_td = run_tool_loop(
-                messages, bot_profile.get_model(),
-                human_user, bot_user, str(conversation.pk),
-            )
+            result, retry_rounds = retry_final_completion(messages, bot_profile.get_model())
             rounds.extend(retry_rounds)
-            if retry_td:
-                tool_data = (tool_data or []) + retry_td
             body_preview = clean_llm_content(result.get('content') or '')
             if not body_preview and not tool_context.get('images'):
                 ai_task.status = ai_task.Status.COMPLETED

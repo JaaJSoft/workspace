@@ -391,6 +391,78 @@ class GenerateScheduledResponseTests(TestCase):
         # OpenAI should have been called twice (initial + retry)
         self.assertEqual(mock_llm.call_count, 2)
 
+    @patch('workspace.ai.tool_registry.tool_registry.execute')
+    @patch('workspace.ai.services.tool_loop.call_llm')
+    def test_empty_response_retry_does_not_replay_tools(
+        self, mock_llm, mock_execute,
+    ):
+        """Regression for #143/#144: an empty initial response must
+        retry only the final completion, not the whole tool loop.
+        Otherwise side-effectful tools would fire twice on retry.
+        """
+        tool_call = MagicMock()
+        tool_call.id = 'call_abc'
+        tool_call.type = 'function'
+        tool_call.function.name = 'save_memory'
+        tool_call.function.arguments = '{"key": "x", "content": "y"}'
+
+        def tool_resp():
+            return {
+                'content': '',
+                'tool_calls': [tool_call],
+                'message': MagicMock(
+                    content=None, tool_calls=[tool_call], role='assistant',
+                ),
+                'model': 'gpt-4o-mini',
+                'prompt_tokens': 10,
+                'completion_tokens': 5,
+            }
+
+        def empty_resp():
+            return {
+                'content': '',
+                'tool_calls': None,
+                'message': MagicMock(content='', tool_calls=None),
+                'model': 'gpt-4o-mini',
+                'prompt_tokens': 10,
+                'completion_tokens': 0,
+            }
+
+        def final_resp():
+            return {
+                'content': 'Check-in!',
+                'tool_calls': None,
+                'message': MagicMock(content='Check-in!', tool_calls=None),
+                'model': 'gpt-4o-mini',
+                'prompt_tokens': 15,
+                'completion_tokens': 5,
+            }
+
+        mock_llm.side_effect = [
+            tool_resp(),    # round 1: tool_call → execute
+            empty_resp(),   # round 2: empty → triggers retry
+            tool_resp(),    # round 3 (bug only): would re-execute
+            final_resp(),   # round 4 (bug only): final text
+        ]
+        mock_execute.return_value = 'Saved.'
+
+        schedule = ScheduledMessage.objects.create(
+            conversation=self.conversation,
+            bot=self.bot_user,
+            created_by=self.user,
+            prompt='Check in with the user',
+            kind=ScheduledMessage.Kind.ONCE,
+            next_run_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        from workspace.ai.tasks.scheduled import generate_scheduled_response
+        generate_scheduled_response(str(schedule.uuid))
+
+        # The tool was executed exactly once. With the pre-fix code the
+        # retry re-entered run_tool_loop and save_memory would have
+        # fired a second time (mock_execute.call_count == 2).
+        self.assertEqual(mock_execute.call_count, 1)
+
     def test_nonexistent_schedule(self):
         from workspace.ai.tasks.scheduled import generate_scheduled_response
         result = generate_scheduled_response(str(uuid.uuid4()))

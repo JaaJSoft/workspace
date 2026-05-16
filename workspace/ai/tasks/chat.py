@@ -19,7 +19,7 @@ from workspace.ai.services.llm import (
     sanitize_messages_for_storage,
 )
 from workspace.ai.services.responses import handle_generation_error, post_bot_message
-from workspace.ai.services.tool_loop import run_tool_loop
+from workspace.ai.services.tool_loop import retry_final_completion, run_tool_loop
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -80,16 +80,14 @@ def generate_chat_response(self, conversation_id: str, message_id: str, bot_user
         )
 
         # Auto-retry once if the model returned an empty response.
+        # Only the final completion is retried (no tools): rerunning
+        # the whole loop would re-execute side-effectful tools and
+        # discard the first pass's tool_context / used_tools.
         body_preview = clean_llm_content(result.get('content') or '')
         if not body_preview and not tool_context.get('images'):
             logger.warning('Empty response, retrying once: conversation=%s', scrub(conversation_id))
-            result, used_tools, tool_context, retry_rounds, retry_td = run_tool_loop(
-                messages, bot_profile.get_model(),
-                human_user, bot_user, conversation_id,
-            )
+            result, retry_rounds = retry_final_completion(messages, bot_profile.get_model())
             rounds.extend(retry_rounds)
-            if retry_td:
-                tool_data = (tool_data or []) + retry_td
             body_preview = clean_llm_content(result.get('content') or '')
             if not body_preview and not tool_context.get('images'):
                 raise RuntimeError('Empty response from model')

@@ -32,6 +32,36 @@ class BuildChatMessagesMemoryTests(TestCase):
         self.assertIn('name: Pierre', system)
         self.assertIn('lang: Python', system)
 
+    def test_time_context_is_appended_after_history_not_in_system(self):
+        # The volatile date/time block must live in a separate system
+        # message AFTER the history so it doesn't invalidate the cached
+        # system prompt prefix on every turn.
+        history = [{'role': 'user', 'content': 'hi'}]
+        msgs = build_chat_messages(
+            'System prompt', history, bot_name='Bot', user=self.user,
+        )
+        # System prompt at index 0 must not contain the time block.
+        self.assertNotIn('Current date:', msgs[0]['content'])
+        self.assertNotIn('Current time:', msgs[0]['content'])
+        # Identity stays in the cached prefix.
+        self.assertIn(f'Your name is Bot.', msgs[0]['content'])
+        self.assertIn(f'You are talking to', msgs[0]['content'])
+        # The last message is a system reminder carrying the time block.
+        last = msgs[-1]
+        self.assertEqual(last['role'], 'system')
+        self.assertIn('<context>', last['content'])
+        self.assertIn('Current date:', last['content'])
+        self.assertIn('Current time:', last['content'])
+
+    def test_no_identity_block_when_no_bot_name_or_user(self):
+        msgs = build_chat_messages('System prompt', [])
+        system = msgs[0]['content']
+        self.assertNotIn('Your name is', system)
+        self.assertNotIn('You are talking to', system)
+        # Time reminder still appended.
+        self.assertEqual(msgs[-1]['role'], 'system')
+        self.assertIn('<context>', msgs[-1]['content'])
+
 
 class BuildClassifyMessagesTests(TestCase):
     def test_builds_messages_with_labels(self):

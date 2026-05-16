@@ -44,8 +44,8 @@ class BuildChatMessagesMemoryTests(TestCase):
         self.assertNotIn('Current date:', msgs[0]['content'])
         self.assertNotIn('Current time:', msgs[0]['content'])
         # Identity stays in the cached prefix.
-        self.assertIn(f'Your name is Bot.', msgs[0]['content'])
-        self.assertIn(f'You are talking to', msgs[0]['content'])
+        self.assertIn('Your name is Bot.', msgs[0]['content'])
+        self.assertIn('You are talking to', msgs[0]['content'])
         # The last message is a system reminder carrying the time block.
         last = msgs[-1]
         self.assertEqual(last['role'], 'system')

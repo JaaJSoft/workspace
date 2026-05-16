@@ -343,6 +343,34 @@ class SyncExternalCalendarTests(TestCase):
         self.assertEqual(events.count(), 1)
         self.assertEqual(events.first().title, 'External Meeting')
 
+    @patch('workspace.calendar.services.ics_sync.httpx')
+    def test_sync_skips_db_writes_when_event_unchanged(self, mock_httpx):
+        # Feeds that don't emit ETag/Last-Modified return 200 on every
+        # poll. Without the skip-if-unchanged guard, ``update_or_create``
+        # would rewrite every row on every 15-min sync — ``updated_at``
+        # would constantly advance even though nothing actually changed
+        # upstream. Pinning this here so a regression brings the
+        # "calendars seem to update permanently" report back.
+        client = _mock_httpx(mock_httpx, _mock_response(ICS_FEED))
+        sync_external_calendar(self.ext)
+
+        before = {
+            e.ical_uid: e.updated_at
+            for e in Event.objects.filter(calendar=self.calendar)
+        }
+        self.assertEqual(len(before), 2)
+
+        # Same feed body, no ETag → server returns 200 again.
+        client.get.return_value = _mock_response(ICS_FEED)
+        self.ext.refresh_from_db()
+        sync_external_calendar(self.ext)
+
+        after = {
+            e.ical_uid: e.updated_at
+            for e in Event.objects.filter(calendar=self.calendar)
+        }
+        self.assertEqual(before, after)
+
 
 # ─── Celery Task Tests ─────────────────────────────────────
 

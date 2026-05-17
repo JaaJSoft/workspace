@@ -27,7 +27,11 @@ Typical usage:
 import re
 
 # bytes=start-end, bytes=start-, bytes=-N. Multi-range is rejected.
-_RANGE_RE = re.compile(r'^\s*bytes\s*=\s*(\d*)\s*-\s*(\d*)\s*$')
+# No internal `\s*` matches: outer whitespace is handled by .strip()
+# at the call site, internal whitespace inside the directive is not
+# allowed by RFC 7233 and the redundant `\s*` opens a polynomial
+# backtracking surface (CodeQL py/polynomial-redos).
+_RANGE_RE = re.compile(r'^bytes=(\d*)-(\d*)$')
 
 
 def parse_byte_range(range_header, file_size):
@@ -40,7 +44,7 @@ def parse_byte_range(range_header, file_size):
     """
     if not range_header or file_size <= 0:
         return None
-    m = _RANGE_RE.match(range_header)
+    m = _RANGE_RE.match(range_header.strip())
     if not m:
         return None
     start_s, end_s = m.group(1), m.group(2)

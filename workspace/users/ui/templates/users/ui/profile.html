@@ -45,7 +45,7 @@
         {% if profile_user|has_avatar %}
         <div class="avatar relative -mt-14">
           <div class="w-24 h-24 rounded-full ring-4 ring-base-100 shadow-lg" :class="'ring-4 ring-offset-base-100 ring-offset-2 ' + $store.presence.ringClass({{ profile_user.id }})">
-            <img src="/api/v1/users/{{ profile_user.id }}/avatar" alt="{{ profile_user.username }}" class="rounded-full object-cover" />
+            <img src="/api/v1/users/{{ profile_user.id }}/avatar" alt="{{ profile_user.username }}" class="rounded-full object-cover" loading="lazy" decoding="async" />
           </div>
           <span class="absolute bottom-1 right-1 block w-4 h-4 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass({{ profile_user.id }})"></span>
         </div>

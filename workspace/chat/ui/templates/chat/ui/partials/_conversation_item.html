@@ -40,7 +40,7 @@ Used by:
         {% include "ui/partials/user_avatar.html" with user=conv.other_user size="sm" %}
       {% elif conv.has_avatar %}
         <div class="w-8 h-8 rounded-full overflow-hidden">
-          <img src="/api/v1/chat/conversations/{{ conv.uuid }}/avatar/image" alt="{{ conv.display_name|escapejs }}" class="w-full h-full object-cover" />
+          <img src="/api/v1/chat/conversations/{{ conv.uuid }}/avatar/image" alt="{{ conv.display_name|escapejs }}" class="w-full h-full object-cover" loading="lazy" decoding="async" />
         </div>
       {% else %}
         <div class="w-8 h-8 rounded-full flex items-center justify-center"

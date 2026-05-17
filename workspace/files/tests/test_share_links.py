@@ -294,6 +294,55 @@ class PublicShareLinkAPITests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
 
+class PublicShareLinkRangeTests(APITestCase):
+    """Range support on the binary content / download share-link endpoints."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='range-owner', email='range@example.com', password='p',
+        )
+        self.payload = bytes(i % 256 for i in range(1024))
+        self.file = File.objects.create(
+            owner=self.user, name='clip.mp4',
+            node_type=File.NodeType.FILE, mime_type='video/mp4',
+        )
+        self.file.content = ContentFile(self.payload, name='clip.mp4')
+        self.file.size = len(self.payload)
+        self.file.save()
+        self.link = FileShareLink.objects.create(
+            file=self.file, created_by=self.user,
+        )
+
+    def _consume(self, resp):
+        if hasattr(resp, 'streaming_content'):
+            return b''.join(resp.streaming_content)
+        return resp.content
+
+    def test_content_advertises_accept_ranges(self):
+        resp = self.client.get(f'/api/v1/files/shared/{self.link.token}/content')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp['Accept-Ranges'], 'bytes')
+        self._consume(resp)
+
+    def test_content_range_returns_206_slice(self):
+        resp = self.client.get(
+            f'/api/v1/files/shared/{self.link.token}/content',
+            HTTP_RANGE='bytes=100-199',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_206_PARTIAL_CONTENT)
+        self.assertEqual(resp['Content-Range'], 'bytes 100-199/1024')
+        self.assertEqual(self._consume(resp), self.payload[100:200])
+
+    def test_download_range_supports_resume(self):
+        resp = self.client.get(
+            f'/api/v1/files/shared/{self.link.token}/download',
+            HTTP_RANGE='bytes=512-',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_206_PARTIAL_CONTENT)
+        self.assertEqual(resp['Content-Range'], 'bytes 512-1023/1024')
+        self.assertEqual(self._consume(resp), self.payload[512:])
+
+
 class ShareLinkIntegrationTests(APITestCase):
     """End-to-end tests for the share link feature."""
 

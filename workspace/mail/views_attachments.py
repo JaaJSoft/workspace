@@ -1,12 +1,12 @@
 import logging
 
-from django.http import FileResponse
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.http_ranges import serve_with_ranges
 from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
 from .models import MailAttachment
@@ -39,11 +39,20 @@ class MailAttachmentDownloadView(APIView):
         except FileNotFoundError:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        return FileResponse(
-            src,
+        size = attachment.size or getattr(src, 'size', 0)
+        if not size:
+            src.seek(0, 2)
+            size = src.tell()
+            src.seek(0)
+        # Range support lets download managers resume an interrupted save and
+        # lets the browser stream a previewable attachment (PDF, video, etc.).
+        return serve_with_ranges(
+            request,
+            file_handle=src,
+            file_size=size,
             content_type=attachment.content_type,
-            as_attachment=True,
-            filename=attachment.filename,
+            attachment_filename=attachment.filename,
+            cache_control='private, max-age=2592000, immutable',
         )
 
 

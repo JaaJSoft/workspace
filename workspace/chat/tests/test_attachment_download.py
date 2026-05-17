@@ -66,7 +66,30 @@ class AttachmentDownloadTests(APITestCase):
         self.assertEqual(resp['Content-Type'], 'application/pdf')
         self.assertIn('filename="doc.pdf"', resp['Content-Disposition'])
         self.assertEqual(resp['Cache-Control'], 'private, max-age=604800, immutable')
+        self.assertEqual(resp['Accept-Ranges'], 'bytes')
         self._consume(resp)
+
+    def test_range_request_returns_206_partial(self):
+        """Video attachments need 206 for seeking; pdf-bytes is enough to pin behavior."""
+        self.client.force_authenticate(self.owner)
+        resp = self.client.get(
+            self.url(self.attachment.uuid), HTTP_RANGE='bytes=2-5',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_206_PARTIAL_CONTENT)
+        self.assertEqual(resp['Content-Range'], 'bytes 2-5/9')
+        self.assertEqual(resp['Content-Length'], '4')
+        self.assertEqual(resp['Accept-Ranges'], 'bytes')
+        body = b''.join(resp.streaming_content)
+        # Payload is b'pdf-bytes' (9 bytes); bytes 2-5 inclusive = b'f-by'.
+        self.assertEqual(body, b'f-by')
+
+    def test_unsatisfiable_range_returns_416(self):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.get(
+            self.url(self.attachment.uuid), HTTP_RANGE='bytes=100-200',
+        )
+        self.assertEqual(resp.status_code, 416)
+        self.assertEqual(resp['Content-Range'], 'bytes */9')
 
     def test_member_can_download(self):
         self.client.force_authenticate(self.member)

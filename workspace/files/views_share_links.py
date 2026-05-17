@@ -2,7 +2,7 @@
 
 from django.contrib.auth.hashers import check_password
 from django.core import signing
-from django.http import FileResponse, HttpResponse
+from django.http import HttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
+from workspace.common.http_ranges import serve_with_ranges
 from workspace.files.models import FileShareLink
 from workspace.files.utils import FileTypeDetector
 
@@ -169,16 +170,18 @@ class SharedFileContentView(APIView):
             except FileNotFoundError:
                 return Response(status=status.HTTP_404_NOT_FOUND)
 
-        # Binary files: stream
+        # Binary files: stream with Range support so shared videos can seek.
         try:
-            response = FileResponse(
-                f.content.open('rb'),
-                content_type=f.mime_type or 'application/octet-stream',
-            )
-            response['Content-Disposition'] = f'inline; filename="{f.name}"'
-            return response
+            fh = f.content.open('rb')
         except FileNotFoundError:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        return serve_with_ranges(
+            request,
+            file_handle=fh,
+            file_size=f.size or 0,
+            content_type=f.mime_type or 'application/octet-stream',
+            inline_filename=f.name,
+        )
 
 
 @extend_schema(tags=['Files - Shared Links'])
@@ -205,12 +208,14 @@ class SharedFileDownloadView(APIView):
             )
 
         try:
-            response = FileResponse(
-                f.content.open('rb'),
-                content_type=f.mime_type or 'application/octet-stream',
-                as_attachment=True,
-                filename=f.name,
-            )
-            return response
+            fh = f.content.open('rb')
         except FileNotFoundError:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        # Range support lets the user resume an interrupted download.
+        return serve_with_ranges(
+            request,
+            file_handle=fh,
+            file_size=f.size or 0,
+            content_type=f.mime_type or 'application/octet-stream',
+            attachment_filename=f.name,
+        )

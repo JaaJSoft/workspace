@@ -1,7 +1,6 @@
 import logging
 
 from django.core.files.storage import default_storage
-from django.http import FileResponse
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
@@ -9,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.cache import cached, invalidate_tags
+from workspace.common.http_ranges import serve_with_ranges
 from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
 from .models import MessageAttachment
@@ -52,6 +52,14 @@ def _get_attachment_meta(user, attachment_id):
     }
 
 
+def _attachment_size(fh):
+    """Read the size of an open file handle via seek/tell, then rewind."""
+    fh.seek(0, 2)
+    size = fh.tell()
+    fh.seek(0)
+    return size
+
+
 @extend_schema(tags=['Chat'])
 class AttachmentDownloadView(APIView):
     permission_classes = [IsAuthenticated]
@@ -72,12 +80,15 @@ class AttachmentDownloadView(APIView):
                 {'detail': 'Attachment not found.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        response = FileResponse(fh, content_type=meta['mime'])
-        # Sanitize filename for Content-Disposition header
-        safe_name = meta['name'].replace('"', '\\"').replace('\n', '').replace('\r', '')
-        response['Content-Disposition'] = f'inline; filename="{safe_name}"'
-        response['Cache-Control'] = 'private, max-age=604800, immutable'
-        return response
+        size = _attachment_size(fh)
+        return serve_with_ranges(
+            request,
+            file_handle=fh,
+            file_size=size,
+            content_type=meta['mime'],
+            inline_filename=meta['name'],
+            cache_control='private, max-age=604800, immutable',
+        )
 
 
 @extend_schema(tags=['Chat'])

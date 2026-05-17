@@ -223,3 +223,19 @@ class GroupAvatarRetrieveTests(ChatTestMixin, APITestCase):
         resp = self.client.get(self.retrieve_url(self.group.uuid))
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp['Content-Type'], 'image/webp')
+
+    def test_cache_control_uses_swr(self):
+        """Avatar response opts into stale-while-revalidate with a private cache."""
+        self.client.force_authenticate(self.creator)
+        image = _make_test_image()
+        self.client.post(self.upload_url(self.group.uuid), {
+            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
+        }, format='multipart')
+        self.client.logout()
+        resp = self.client.get(self.retrieve_url(self.group.uuid))
+        self.assertEqual(resp.status_code, 200)
+        cc = resp['Cache-Control']
+        self.assertIn('private', cc)
+        self.assertIn('max-age=300', cc)
+        self.assertIn('stale-while-revalidate=86400', cc)
+        self.assertIn('ETag', resp)

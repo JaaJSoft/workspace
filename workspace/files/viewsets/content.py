@@ -239,9 +239,26 @@ class ContentMixin:
         if not default_storage.exists(thumb_path):
             return Response({'detail': 'No thumbnail.'}, status=status.HTTP_404_NOT_FOUND)
 
+        # Thumbnails are content-addressed: the file's updated_at changes
+        # whenever it gets regenerated, so a UUID+timestamp ETag is exact.
+        etag = self._file_etag(file_obj)
+        if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
+        if if_none_match and if_none_match.strip('"') == etag.strip('"'):
+            from django.http import HttpResponse as DjHttpResponse
+            resp = DjHttpResponse(status=304)
+            resp['ETag'] = etag
+            resp['Cache-Control'] = 'private, max-age=86400, stale-while-revalidate=604800'
+            return resp
+
         file_handle = default_storage.open(thumb_path, 'rb')
         response = FileResponse(file_handle, content_type='image/webp')
-        response['Cache-Control'] = 'public, max-age=86400'
+        response['ETag'] = etag
+        # 24 h hot cache, 7 d stale-while-revalidate. `private` so a shared
+        # proxy can't leak one user's thumbnail to another. Set inline rather
+        # than via CacheControlMixin: the viewset mixes CacheControlMixin in
+        # at the class level for its JSON endpoints, and a per-action override
+        # would need bespoke plumbing the mixin does not provide.
+        response['Cache-Control'] = 'private, max-age=86400, stale-while-revalidate=604800'
         return response
 
     @extend_schema(

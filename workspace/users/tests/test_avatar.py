@@ -90,3 +90,40 @@ class GetAvatarEtagTests(TestCase):
     def test_returns_none_when_no_file(self, mock_etag):
         mock_etag.return_value = None
         self.assertIsNone(avatar_service.get_avatar_etag(7))
+
+
+class UserAvatarRetrieveCacheHeadersTests(TestCase):
+    """GET /api/v1/users/<id>/avatar must opt into stale-while-revalidate."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username='alice', password='pass')
+        # Drop a fake webp into storage so the view hits the success path.
+        from django.core.files.base import ContentFile
+        from django.core.files.storage import default_storage
+        self._path = avatar_service.get_avatar_path(self.user.id)
+        if default_storage.exists(self._path):
+            default_storage.delete(self._path)
+        default_storage.save(self._path, ContentFile(b'fake-webp-bytes'))
+
+    def tearDown(self):
+        from django.core.files.storage import default_storage
+        try:
+            if default_storage.exists(self._path):
+                default_storage.delete(self._path)
+        except PermissionError:
+            # Windows: FileResponse may still hold the handle. Tolerate it.
+            pass
+        cache.clear()
+
+    def test_cache_control_uses_swr(self):
+        resp = self.client.get(f'/api/v1/users/{self.user.id}/avatar')
+        self.assertEqual(resp.status_code, 200)
+        cc = resp['Cache-Control']
+        self.assertIn('private', cc)
+        self.assertIn('max-age=300', cc)
+        self.assertIn('stale-while-revalidate=86400', cc)
+        self.assertIn('ETag', resp)
+        # Drain the body so the file handle is closed.
+        if hasattr(resp, 'streaming_content'):
+            b''.join(resp.streaming_content)

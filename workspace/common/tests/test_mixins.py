@@ -59,6 +59,23 @@ class ErrorView(_OpenView):
         return Response({'detail': 'nope'}, status=404)
 
 
+class SwrView(_OpenView):
+    cache_max_age = 300
+    cache_stale_while_revalidate = 86400
+
+    def get(self, request):
+        return Response({'ok': True})
+
+
+class SwrIgnoredWithoutMaxAgeView(_OpenView):
+    # SWR is meaningless with max-age=0 and must be silently dropped
+    cache_max_age = 0
+    cache_stale_while_revalidate = 60
+
+    def get(self, request):
+        return Response({'ok': True})
+
+
 class CacheControlMixinTests(SimpleTestCase):
     def _get(self, view_cls):
         request = factory.get('/whatever')
@@ -94,3 +111,17 @@ class CacheControlMixinTests(SimpleTestCase):
     def test_skips_error_responses(self):
         response = self._get(ErrorView)
         self.assertNotIn('Cache-Control', response)
+
+    def test_stale_while_revalidate_appended_when_set(self):
+        response = self._get(SwrView)
+        self.assertEqual(
+            response['Cache-Control'],
+            'private, max-age=300, stale-while-revalidate=86400',
+        )
+
+    def test_stale_while_revalidate_ignored_when_max_age_zero(self):
+        response = self._get(SwrIgnoredWithoutMaxAgeView)
+        self.assertEqual(
+            response['Cache-Control'],
+            'private, max-age=0, must-revalidate',
+        )

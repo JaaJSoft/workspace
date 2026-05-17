@@ -78,7 +78,7 @@ class DownloadAPITests(APITestCase):
         self.assertEqual(response['Content-Type'], 'application/zip')
         self.assertIn('Reports.zip', response['Content-Disposition'])
 
-        buf = io.BytesIO(response.content)
+        buf = io.BytesIO(b''.join(response.streaming_content))
         with zipfile.ZipFile(buf) as zf:
             names = zf.namelist()
             self.assertIn('data.txt', names)
@@ -119,7 +119,7 @@ class DownloadAPITests(APITestCase):
         response = self.client.get(f'/api/v1/files/{folder.uuid}/download')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        buf = io.BytesIO(response.content)
+        buf = io.BytesIO(b''.join(response.streaming_content))
         with zipfile.ZipFile(buf) as zf:
             names = zf.namelist()
             self.assertIn('active.txt', names)
@@ -154,7 +154,7 @@ class DownloadAPITests(APITestCase):
         response = self.client.get(f'/api/v1/files/{root.uuid}/download')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        buf = io.BytesIO(response.content)
+        buf = io.BytesIO(b''.join(response.streaming_content))
         with zipfile.ZipFile(buf) as zf:
             names = zf.namelist()
             self.assertIn('Sub/deep.txt', names)
@@ -174,3 +174,126 @@ class DownloadAPITests(APITestCase):
 
         response = self.client.get(f'/api/v1/files/{other_file.uuid}/download')
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class BulkDownloadAPITests(APITestCase):
+    """Tests for POST /api/v1/files/bulk-download."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='bulkuser', email='bulk@example.com', password='pass',
+        )
+        self.client.force_authenticate(user=self.user)
+        # Two flat files at the user root
+        self.file_a = File(
+            owner=self.user, name='a.txt',
+            node_type=File.NodeType.FILE, mime_type='text/plain',
+        )
+        self.file_a.content = ContentFile(b'AAAA', name='a.txt')
+        self.file_a.size = 4
+        self.file_a.save()
+        self.file_b = File(
+            owner=self.user, name='b.txt',
+            node_type=File.NodeType.FILE, mime_type='text/plain',
+        )
+        self.file_b.content = ContentFile(b'BBBB', name='b.txt')
+        self.file_b.size = 4
+        self.file_b.save()
+
+    def _read_zip(self, response):
+        import io
+        import zipfile
+        if hasattr(response, 'streaming_content'):
+            body = b''.join(response.streaming_content)
+        else:
+            body = response.content
+        return zipfile.ZipFile(io.BytesIO(body))
+
+    def test_bulk_download_two_flat_files(self):
+        resp = self.client.post(
+            '/api/v1/files/bulk-download',
+            {'uuids': [str(self.file_a.uuid), str(self.file_b.uuid)]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp['Content-Type'], 'application/zip')
+        self.assertIn('download.zip', resp['Content-Disposition'])
+        with self._read_zip(resp) as zf:
+            names = zf.namelist()
+            self.assertIn('a.txt', names)
+            self.assertIn('b.txt', names)
+            self.assertEqual(zf.read('a.txt'), b'AAAA')
+            self.assertEqual(zf.read('b.txt'), b'BBBB')
+
+    def test_bulk_download_includes_folder_descendants(self):
+        folder = File.objects.create(
+            owner=self.user, name='Docs', node_type=File.NodeType.FOLDER,
+        )
+        child = File(
+            owner=self.user, name='inside.txt', parent=folder,
+            node_type=File.NodeType.FILE, mime_type='text/plain',
+        )
+        child.content = ContentFile(b'inside-content', name='inside.txt')
+        child.size = 14
+        child.save()
+
+        resp = self.client.post(
+            '/api/v1/files/bulk-download',
+            {'uuids': [str(folder.uuid)]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        with self._read_zip(resp) as zf:
+            names = zf.namelist()
+            self.assertIn('Docs/inside.txt', names)
+            self.assertEqual(zf.read('Docs/inside.txt'), b'inside-content')
+
+    def test_bulk_download_rejects_empty_list(self):
+        resp = self.client.post(
+            '/api/v1/files/bulk-download', {'uuids': []}, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_bulk_download_rejects_over_200(self):
+        too_many = [str(self.file_a.uuid)] * 201
+        resp = self.client.post(
+            '/api/v1/files/bulk-download', {'uuids': too_many}, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_bulk_download_unknown_uuid_returns_404(self):
+        resp = self.client.post(
+            '/api/v1/files/bulk-download',
+            {'uuids': [
+                str(self.file_a.uuid),
+                '00000000-0000-0000-0000-000000000000',
+            ]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_bulk_download_response_is_streaming(self):
+        """Regression guard: a buffered BytesIO impl would re-introduce OOM risk
+        for large archives. The response must stream the ZIP."""
+        from django.http import StreamingHttpResponse
+        resp = self.client.post(
+            '/api/v1/files/bulk-download',
+            {'uuids': [str(self.file_a.uuid)]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(resp, StreamingHttpResponse)
+        # Also assert the same for the single-folder /download path
+        folder = File.objects.create(
+            owner=self.user, name='Stream', node_type=File.NodeType.FOLDER,
+        )
+        child = File(
+            owner=self.user, name='c.txt', parent=folder,
+            node_type=File.NodeType.FILE, mime_type='text/plain',
+        )
+        child.content = ContentFile(b'streamed', name='c.txt')
+        child.size = 8
+        child.save()
+        resp = self.client.get(f'/api/v1/files/{folder.uuid}/download')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(resp, StreamingHttpResponse)

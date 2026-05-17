@@ -1,6 +1,7 @@
 import logging
 
 from django.db import transaction
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -13,6 +14,7 @@ from workspace.mail.queries import user_account_ids
 logger = logging.getLogger(__name__)
 
 
+@extend_schema(tags=['Mail'])
 class ExtractionDetailView(APIView):
     """DELETE /api/v1/mail/extractions/<uuid> - dismiss an extraction.
 
@@ -21,6 +23,7 @@ class ExtractionDetailView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(summary="Dismiss a mail extraction")
     def delete(self, request, extraction_id):
         ex_uuid = parse_uuid_or_none(str(extraction_id))
         if ex_uuid is None:

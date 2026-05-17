@@ -167,12 +167,18 @@ def classify_mail_messages(self, task_id: str):
     try:
         with ai_task_lifecycle(task_id, log_label='Classify') as ai_task:
             message_uuids = ai_task.input_data.get('message_uuids', [])
-            msgs = list(
-                MailMessage.objects.filter(
+            by_uuid = {
+                str(m.uuid): m
+                for m in MailMessage.objects.filter(
                     uuid__in=message_uuids,
                     account__owner=ai_task.owner,
                 ).only('uuid', 'subject', 'from_address', 'snippet', 'account_id')
-            )
+            }
+            # Preserve the caller's input order. The DB returns rows in
+            # PK (uuid) order which is random for v4 UUIDs, so the LLM
+            # index (i=1, i=2, ...) would otherwise map to the wrong
+            # messages when callers expect input-order semantics.
+            msgs = [by_uuid[u] for u in message_uuids if u in by_uuid]
 
             if not msgs:
                 ai_task.result = 'No messages to classify'

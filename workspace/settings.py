@@ -187,11 +187,6 @@ MIDDLEWARE = [
     'workspace.users.middleware.PresenceMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # Negotiates zstd / brotli / gzip and only compresses content types
-    # whose payload actually shrinks (text/*, application/json,
-    # application/javascript, SVG, ...). Skips image/* video/* audio/*
-    # WOFF, etc. - so a JPEG no longer streams through the compressor
-    # for zero bytes gained and several hundred ms of CPU + TTFB.
     'django_http_compression.middleware.HttpCompressionMiddleware',
     # django-simple-history middleware to track user in history
     'simple_history.middleware.HistoryRequestMiddleware',
@@ -202,7 +197,6 @@ MIDDLEWARE = [
 
 # Add Debug Toolbar middleware only in DEBUG mode and not during tests
 if DEBUG and not TESTING:
-    # Place after the compression middleware
     compression_idx = MIDDLEWARE.index(
         'django_http_compression.middleware.HttpCompressionMiddleware'
     )

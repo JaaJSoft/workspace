@@ -215,7 +215,10 @@ class ContentMixin:
         response = FileResponse(file_handle, content_type='image/webp')
         response['ETag'] = etag
         # 24 h hot cache, 7 d stale-while-revalidate. `private` so a shared
-        # proxy can't leak one user's thumbnail to another.
+        # proxy can't leak one user's thumbnail to another. Set inline rather
+        # than via CacheControlMixin: the viewset mixes CacheControlMixin in
+        # at the class level for its JSON endpoints, and a per-action override
+        # would need bespoke plumbing the mixin does not provide.
         response['Cache-Control'] = 'private, max-age=86400, stale-while-revalidate=604800'
         return response
 

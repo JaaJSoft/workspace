@@ -246,11 +246,18 @@ AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
 @extend_schema(tags=['Users'])
-class UserAvatarRetrieveView(APIView):
-    """Serve a user's avatar image (public)."""
+class UserAvatarRetrieveView(CacheControlMixin, APIView):
+    """Serve a user's avatar image (public).
+
+    Cache 5 min hot, then 24 h of stale-while-revalidate: the browser
+    paints the cached copy instantly and quietly re-fetches in the
+    background. The ETag below makes the revalidation a cheap 304.
+    """
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    cache_max_age = 300
+    cache_stale_while_revalidate = 86400
 
     @extend_schema(
         summary="Get user avatar",
@@ -278,10 +285,6 @@ class UserAvatarRetrieveView(APIView):
 
         avatar_file = default_storage.open(path, "rb")
         response = FileResponse(avatar_file, content_type="image/webp")
-        # Cache for 5 min then serve stale up to 24 h while revalidating in
-        # the background. With the ETag below, the revalidation costs a 304
-        # round-trip, not a re-download. `private` keeps shared proxies out.
-        response["Cache-Control"] = "private, max-age=300, stale-while-revalidate=86400"
         if etag:
             response["ETag"] = f'"{etag}"'
         return response

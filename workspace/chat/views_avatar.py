@@ -9,6 +9,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.mixins import CacheControlMixin
+
 from .models import Conversation
 from .services import avatar as group_avatar_service
 from .services.conversations import get_active_membership
@@ -152,11 +154,18 @@ class GroupAvatarUploadView(APIView):
 
 
 @extend_schema(tags=['Chat'])
-class GroupAvatarRetrieveView(APIView):
-    """Serve a group conversation's avatar image (public)."""
+class GroupAvatarRetrieveView(CacheControlMixin, APIView):
+    """Serve a group conversation's avatar image (public).
+
+    Cache 5 min hot, then 24 h of stale-while-revalidate: the browser
+    paints the cached copy instantly and quietly re-fetches in the
+    background. The ETag below makes the revalidation a cheap 304.
+    """
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    cache_max_age = 300
+    cache_stale_while_revalidate = 86400
 
     @extend_schema(
         summary="Get group avatar",
@@ -184,10 +193,6 @@ class GroupAvatarRetrieveView(APIView):
         except (FileNotFoundError, OSError):
             return HttpResponse(status=404)
         response = FileResponse(avatar_file, content_type="image/webp")
-        # Cache for 5 min then serve stale up to 24 h while revalidating in
-        # the background. With the ETag below, the revalidation costs a 304
-        # round-trip, not a re-download.
-        response["Cache-Control"] = "private, max-age=300, stale-while-revalidate=86400"
         if etag:
             response["ETag"] = f'"{etag}"'
         return response

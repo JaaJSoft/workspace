@@ -50,9 +50,14 @@ def build_event_extraction_messages(
     ordered oldest-first. Each body is truncated to MAX_BODY_CHARS.
 
     user_tz is the recipient's local timezone (from get_user_timezone).
-    Injected into the prompt so the LLM (a) resolves "8h" as 08:00 in
-    that zone instead of UTC, and (b) computes relative dates from the
-    user's local "today", not the server's UTC midnight.
+    Injected into the prompt so the LLM resolves "8h" as 08:00 in that
+    zone instead of UTC.
+
+    Relative references ("demain", "tomorrow", "next Tuesday") are
+    anchored on the date of the MOST RECENT message in the thread - not
+    on the server's "now". Otherwise an email sent in March saying
+    "rdv demain a 8h" but processed in May would be interpreted as
+    May+1 instead of March+1.
     """
     rendered = []
     for i, m in enumerate(thread_messages, 1):
@@ -67,18 +72,23 @@ def build_event_extraction_messages(
         )
     thread_block = '\n\n---\n\n'.join(rendered)
     tz = user_tz or _UTC
-    now_local = timezone.now().astimezone(tz)
-    today = now_local.strftime('%Y-%m-%d %H:%M')
+    anchor_dt = next(
+        (m.date for m in reversed(thread_messages) if m.date), None
+    ) or timezone.now()
+    anchor = anchor_dt.astimezone(tz).strftime('%Y-%m-%d %H:%M')
     tz_name = str(tz)
 
     return [
         {'role': 'system', 'content': SYSTEM_PROMPT},
         {'role': 'user', 'content': (
-            f"Current local time for the recipient: {today} ({tz_name}). "
-            f"Resolve relative references ('tomorrow', 'next Tuesday', "
-            f"'in three weeks') against this. When an email mentions a "
-            f"time WITHOUT an explicit timezone (e.g., '8h', '3pm'), "
-            f"interpret it in {tz_name}, NOT in UTC.\n\n"
+            f"Resolve relative references ('tomorrow', 'demain', 'next "
+            f"Tuesday', 'in three weeks') in each message against the "
+            f"date that message was sent (the ISO timestamp shown after "
+            f"'[Message N |'), NOT against today's date. The most "
+            f"recent message in this thread was sent on {anchor} "
+            f"({tz_name}); use that as the default anchor. When an "
+            f"email mentions a time WITHOUT an explicit timezone (e.g., "
+            f"'8h', '3pm'), interpret it in {tz_name}, NOT in UTC.\n\n"
             f"Extract events from this email thread:\n\n"
             f"<untrusted-content>\n{thread_block}\n</untrusted-content>\n\n"
             f"{INJECTION_GUARD}"

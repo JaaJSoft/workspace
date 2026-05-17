@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     'django_filters',
     'simple_history',
     'django_prometheus',
+    'django_http_compression',
     # Workspace apps
     'workspace.core',
     'workspace.common',
@@ -186,10 +187,12 @@ MIDDLEWARE = [
     'workspace.users.middleware.PresenceMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # Brotli compression for HTTP responses (place before GZip for better compression)
-    'django_brotli.middleware.BrotliMiddleware',
-    # GZip compression for HTTP responses (fallback for clients that don't support Brotli)
-    'django.middleware.gzip.GZipMiddleware',
+    # Negotiates zstd / brotli / gzip and only compresses content types
+    # whose payload actually shrinks (text/*, application/json,
+    # application/javascript, SVG, ...). Skips image/* video/* audio/*
+    # WOFF, etc. - so a JPEG no longer streams through the compressor
+    # for zero bytes gained and several hundred ms of CPU + TTFB.
+    'django_http_compression.middleware.HttpCompressionMiddleware',
     # django-simple-history middleware to track user in history
     'simple_history.middleware.HistoryRequestMiddleware',
     # Mesure du temps de traitement pour affichage dans le footer UI et header HTTP
@@ -199,9 +202,11 @@ MIDDLEWARE = [
 
 # Add Debug Toolbar middleware only in DEBUG mode and not during tests
 if DEBUG and not TESTING:
-    # Find the position after GZipMiddleware
-    gzip_idx = MIDDLEWARE.index('django.middleware.gzip.GZipMiddleware')
-    MIDDLEWARE.insert(gzip_idx + 1, 'debug_toolbar.middleware.DebugToolbarMiddleware')
+    # Place after the compression middleware
+    compression_idx = MIDDLEWARE.index(
+        'django_http_compression.middleware.HttpCompressionMiddleware'
+    )
+    MIDDLEWARE.insert(compression_idx + 1, 'debug_toolbar.middleware.DebugToolbarMiddleware')
 
 ROOT_URLCONF = 'workspace.urls'
 

@@ -36,7 +36,12 @@ dependencies = [
     "wsgidav>=4.3.0",
     # server
     "gunicorn>=26.0.0",
-    "django-brotli>=0.4.0",
+    # Single compression middleware that negotiates zstd / brotli / gzip
+    # AND skips non-compressible content types (images, video, audio,
+    # WOFF fonts, etc.) - replaces the django-brotli + GZipMiddleware
+    # stack which compressed binary streaming responses for no benefit
+    # and stalled TTFB.
+    "django-http-compression[brotli]>=1.4.0",
     "gevent>=25.9.1",
     "django-prometheus>=2.4.0",
     # push notifications

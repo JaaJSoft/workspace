@@ -556,6 +556,52 @@ class ClassifyMailMessagesTests(TestCase):
         self.assertEqual(ai_task.status, AITask.Status.COMPLETED)
 
     @patch('workspace.ai.client.get_ai_client')
+    def test_preserves_input_uuid_order(self, mock_client):
+        """The LLM index (i=1, i=2, ...) must map to messages in the
+        order the caller passed them in message_uuids. Without this,
+        the DB returns rows in PK (uuid) order - random for v4 UUIDs -
+        so labels end up on the wrong messages."""
+        # Force a deterministic mismatch: msg_a's uuid sorts AFTER
+        # msg_b's, but the caller passes [msg_a, msg_b].
+        msg_a = MailMessage.objects.create(
+            uuid='ffffffff-ffff-4fff-8fff-ffffffffffff',
+            account=self.account, folder=self.folder, imap_uid=10,
+            subject='Server down!', snippet='Production is down',
+            from_address={'name': 'Alert', 'email': 'alert@ops.com'},
+        )
+        msg_b = MailMessage.objects.create(
+            uuid='00000000-0000-4000-8000-000000000000',
+            account=self.account, folder=self.folder, imap_uid=11,
+            subject='Weekly digest', snippet='Here is your digest',
+            from_address={'name': 'News', 'email': 'news@co.com'},
+        )
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps([
+            {'i': 1, 'labels': ['Urgent']},
+            {'i': 2, 'labels': ['Newsletter']},
+        ])
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = 'gpt-4o-mini'
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={'message_uuids': [str(msg_a.uuid), str(msg_b.uuid)]},
+        )
+        from workspace.ai.tasks.mail import classify_mail_messages
+        classify_mail_messages(str(ai_task.uuid))
+
+        from workspace.mail.models import MailMessageLabel
+        self.assertTrue(MailMessageLabel.objects.filter(
+            message=msg_a, label=self.label_urgent).exists())
+        self.assertTrue(MailMessageLabel.objects.filter(
+            message=msg_b, label=self.label_newsletter).exists())
+
+    @patch('workspace.ai.client.get_ai_client')
     def test_unknown_label_names_ignored(self, mock_client):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]

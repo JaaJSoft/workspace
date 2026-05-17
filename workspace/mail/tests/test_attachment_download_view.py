@@ -57,6 +57,18 @@ class MailAttachmentDownloadTests(APITestCase):
         self.client.force_authenticate(self.user)
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp['Accept-Ranges'], 'bytes')
+        if hasattr(resp, 'streaming_content'):
+            b''.join(resp.streaming_content)
+
+    def test_range_request_supports_resume(self):
+        """Download managers issue Range to resume an interrupted save."""
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(self.url, HTTP_RANGE='bytes=1-')
+        self.assertEqual(resp.status_code, status.HTTP_206_PARTIAL_CONTENT)
+        self.assertEqual(resp['Content-Range'], 'bytes 1-2/3')
+        body = b''.join(resp.streaming_content)
+        self.assertEqual(body, b'df')
 
     def test_missing_blob_returns_404(self):
         """If the underlying blob has gone missing, attachment.content.open('rb')

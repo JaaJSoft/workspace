@@ -35,7 +35,8 @@ class ThumbnailCacheHeadersTests(APITestCase):
             if default_storage.exists(self.thumb_path):
                 default_storage.delete(self.thumb_path)
         except PermissionError:
-            pass
+            # Best-effort cleanup on Windows; ignore transient file-lock errors.
+            return
 
     def _consume(self, resp):
         # Drain streaming_content so Django closes the file handle. Otherwise

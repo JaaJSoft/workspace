@@ -7,14 +7,13 @@ FROM node:22-alpine AS css-builder
 WORKDIR /build
 
 # Install npm deps first (cache layer that survives template edits)
-COPY package.json package-lock.json ./
-RUN npm ci --omit=optional
+COPY scripts/tailwind/package.json scripts/tailwind/package-lock.json ./scripts/tailwind/
+RUN cd scripts/tailwind && npm ci --omit=optional
 
-# Then copy the inputs Tailwind scans (config + entry CSS + templates + JS)
-COPY tailwind.config.js ./
-COPY frontend/ ./frontend/
+# Then copy the inputs Tailwind scans (entry CSS, config, templates, JS)
+COPY scripts/tailwind/input.css scripts/tailwind/tailwind.config.js ./scripts/tailwind/
 COPY workspace/ ./workspace/
-RUN npm run build:css
+RUN cd scripts/tailwind && npm run build:css
 
 # Stage 2: Python builder
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder

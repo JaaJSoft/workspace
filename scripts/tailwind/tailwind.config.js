@@ -5,8 +5,8 @@ module.exports = {
   // `\`badge-${tag.color}\``) is invisible to the scanner and must be in
   // the `safelist` below.
   content: [
-    './workspace/**/templates/**/*.html',
-    './workspace/**/static/**/*.js',
+    '../../workspace/**/templates/**/*.html',
+    '../../workspace/**/static/**/*.js',
   ],
   // DaisyUI semantic colors that the codebase interpolates at runtime
   // (audit identified 14 dynamic patterns: module.color, calendar.color,

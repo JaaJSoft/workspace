@@ -1,5 +1,7 @@
 """Content + thumbnail + download actions for FileViewSet."""
 
+import re
+
 from django.db.models import Q
 from django.http import Http404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -10,6 +12,50 @@ from rest_framework.response import Response
 from workspace.files.metrics import FILES_DOWNLOAD_BYTES
 from workspace.files.models import File
 from workspace.files.services import FileService
+
+# RFC 7233 single byte-range. Multi-range (comma-separated) is intentionally not
+# supported - browsers don't use it for <video>/<audio> playback.
+_RANGE_RE = re.compile(r'^\s*bytes\s*=\s*(\d*)\s*-\s*(\d*)\s*$')
+
+
+def _parse_byte_range(range_header, file_size):
+    """Parse a 'bytes=start-end' Range header. Returns (start, end) inclusive, or None."""
+    if not range_header or file_size <= 0:
+        return None
+    m = _RANGE_RE.match(range_header)
+    if not m:
+        return None
+    start_s, end_s = m.group(1), m.group(2)
+    if not start_s and not end_s:
+        return None
+    if not start_s:
+        # Suffix form 'bytes=-N' -> last N bytes
+        suffix = int(end_s)
+        if suffix == 0:
+            return None
+        start = max(0, file_size - suffix)
+        end = file_size - 1
+    else:
+        start = int(start_s)
+        end = int(end_s) if end_s else file_size - 1
+    if start >= file_size or start > end:
+        return None
+    return start, min(end, file_size - 1)
+
+
+def _stream_range(file_handle, start, end, block_size=65536):
+    """Yield chunks of file_handle from start to end inclusive, then close the handle."""
+    try:
+        file_handle.seek(start)
+        remaining = end - start + 1
+        while remaining > 0:
+            chunk = file_handle.read(min(block_size, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            yield chunk
+    finally:
+        file_handle.close()
 
 
 class ContentMixin:
@@ -29,7 +75,7 @@ class ContentMixin:
     @action(detail=True, methods=['get'], url_path='content')
     def content(self, request, uuid=None):
         """Serve file content with proper headers for inline viewing."""
-        from django.http import FileResponse, HttpResponse
+        from django.http import FileResponse, HttpResponse, StreamingHttpResponse
 
         try:
             file_obj, perm = self._resolve_file_with_access(uuid)
@@ -44,6 +90,38 @@ class ContentMixin:
         if not file_obj.content:
             return Response({'detail': 'No content.'}, status=status.HTTP_404_NOT_FOUND)
 
+        content_type = file_obj.mime_type or 'application/octet-stream'
+
+        # Range path: when the client requests a byte range (e.g. <video> seeking),
+        # serve a 206 Partial Content. Bypasses the 304 short-circuit because the
+        # client wants a specific slice, not a cache revalidation.
+        range_header = request.META.get('HTTP_RANGE')
+        if range_header:
+            file_size = file_obj.size or file_obj.content.size
+            parsed = _parse_byte_range(range_header, file_size)
+            if parsed is None:
+                resp = HttpResponse(status=416)
+                resp['Content-Range'] = f'bytes */{file_size}'
+                resp['Accept-Ranges'] = 'bytes'
+                return resp
+            start, end = parsed
+            file_handle = file_obj.content.open('rb')
+            response = StreamingHttpResponse(
+                _stream_range(file_handle, start, end),
+                status=206,
+                content_type=content_type,
+            )
+            response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
+            response['Content-Length'] = str(end - start + 1)
+            response['Accept-Ranges'] = 'bytes'
+            response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
+            # Intentionally no ETag on 206: ConditionalGetMiddleware would
+            # turn the 206 into a 304 whenever the client sends both Range
+            # and If-None-Match (common from Chrome), starving the player.
+            response['Cache-Control'] = 'private, no-cache'
+            FILES_DOWNLOAD_BYTES.inc(end - start + 1)
+            return response
+
         # Short-circuit: return 304 if ETag matches (avoids reading file from storage)
         not_modified = self._check_etag_304(request, file_obj)
         if not_modified:
@@ -57,6 +135,7 @@ class ContentMixin:
                 content = file_handle.read().decode('utf-8')
                 response = HttpResponse(content, content_type=file_obj.mime_type)
                 response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
+                response['Accept-Ranges'] = 'bytes'
                 self._set_file_cache_headers(response, file_obj)
                 if file_obj.size:
                     FILES_DOWNLOAD_BYTES.inc(file_obj.size)
@@ -73,10 +152,11 @@ class ContentMixin:
         file_handle = file_obj.content.open('rb')
         response = FileResponse(
             file_handle,
-            content_type=file_obj.mime_type or 'application/octet-stream',
+            content_type=content_type,
             as_attachment=False
         )
         response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
+        response['Accept-Ranges'] = 'bytes'
         self._set_file_cache_headers(response, file_obj)
 
         if file_obj.size:

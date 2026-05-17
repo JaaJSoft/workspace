@@ -113,10 +113,13 @@ class BuildEventExtractionMessagesTests(TestCase):
         self.assertIn('2026-04-20', content)
         self.assertNotIn('2026-05-17', content)
 
-    def test_anchor_falls_back_to_now_when_no_message_has_date(self):
+    @patch('workspace.ai.prompts.calendar.timezone.now')
+    def test_anchor_falls_back_to_now_when_no_message_has_date(self, mock_now):
         """If no message in the thread carries a date header, fall back
-        to now() instead of crashing."""
+        to now() rather than crashing - and the anchor in the prompt
+        must be that now()."""
+        mock_now.return_value = datetime(2026, 5, 17, 10, 0, tzinfo=timezone.utc)
         msg = self._msg('Hi', 'body')
         msg.date = None
         messages = build_event_extraction_messages([msg])
-        self.assertEqual(messages[1]['role'], 'user')
+        self.assertIn('2026-05-17 10:00', messages[1]['content'])

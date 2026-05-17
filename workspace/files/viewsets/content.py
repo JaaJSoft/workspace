@@ -18,6 +18,15 @@ from workspace.files.services import FileService
 _RANGE_RE = re.compile(r'^\s*bytes\s*=\s*(\d*)\s*-\s*(\d*)\s*$')
 
 
+def _safe_filename(name):
+    """Sanitize a filename for inclusion in a Content-Disposition header.
+
+    Strips CR/LF (header-injection vector) and backslash-escapes double quotes
+    so the value can't close the quoted-string parameter.
+    """
+    return name.replace('\\', '\\\\').replace('"', '\\"').replace('\r', '').replace('\n', '')
+
+
 def _parse_byte_range(range_header, file_size):
     """Parse a 'bytes=start-end' Range header. Returns (start, end) inclusive, or None."""
     if not range_header or file_size <= 0:
@@ -114,7 +123,7 @@ class ContentMixin:
             response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
             response['Content-Length'] = str(end - start + 1)
             response['Accept-Ranges'] = 'bytes'
-            response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
+            response['Content-Disposition'] = f'inline; filename="{_safe_filename(file_obj.name)}"'
             # Intentionally no ETag on 206: ConditionalGetMiddleware would
             # turn the 206 into a 304 whenever the client sends both Range
             # and If-None-Match (common from Chrome), starving the player.
@@ -134,7 +143,7 @@ class ContentMixin:
                 file_handle = file_obj.content.open('rb')
                 content = file_handle.read().decode('utf-8')
                 response = HttpResponse(content, content_type=file_obj.mime_type)
-                response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
+                response['Content-Disposition'] = f'inline; filename="{_safe_filename(file_obj.name)}"'
                 response['Accept-Ranges'] = 'bytes'
                 self._set_file_cache_headers(response, file_obj)
                 if file_obj.size:
@@ -155,7 +164,7 @@ class ContentMixin:
             content_type=content_type,
             as_attachment=False
         )
-        response['Content-Disposition'] = f'inline; filename="{file_obj.name}"'
+        response['Content-Disposition'] = f'inline; filename="{_safe_filename(file_obj.name)}"'
         response['Accept-Ranges'] = 'bytes'
         self._set_file_cache_headers(response, file_obj)
 
@@ -273,7 +282,7 @@ class ContentMixin:
                     continue
         buf.seek(0)
 
-        zip_name = f"{file_obj.name}.zip"
+        zip_name = f"{_safe_filename(file_obj.name)}.zip"
         zip_bytes = buf.getvalue()
         response = HttpResponse(zip_bytes, content_type='application/zip')
         response['Content-Disposition'] = f'attachment; filename="{zip_name}"'

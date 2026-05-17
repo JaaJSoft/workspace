@@ -278,7 +278,10 @@ class UserAvatarRetrieveView(APIView):
 
         avatar_file = default_storage.open(path, "rb")
         response = FileResponse(avatar_file, content_type="image/webp")
-        response["Cache-Control"] = "no-cache"
+        # Cache for 5 min then serve stale up to 24 h while revalidating in
+        # the background. With the ETag below, the revalidation costs a 304
+        # round-trip, not a re-download. `private` keeps shared proxies out.
+        response["Cache-Control"] = "private, max-age=300, stale-while-revalidate=86400"
         if etag:
             response["ETag"] = f'"{etag}"'
         return response

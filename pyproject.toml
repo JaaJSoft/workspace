@@ -49,6 +49,8 @@ dependencies = [
     # web search & scraping
     "httpx>=0.28.0",
     "trafilatura>=2.0.0",
+    # streaming ZIP generation for bulk downloads (constant RAM)
+    "zipstream-ng>=1.7.1",
 ]
 
 [build-system]

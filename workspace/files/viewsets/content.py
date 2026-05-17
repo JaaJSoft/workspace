@@ -67,6 +67,45 @@ def _stream_range(file_handle, start, end, block_size=65536):
         file_handle.close()
 
 
+def _chunked_field_file(field_file, block_size=65536):
+    """Yield successive chunks from a Django FieldFile, then close it.
+
+    Used as the data source for ZipStream so a multi-GB folder download
+    can be streamed without ever holding more than one block in memory.
+    """
+    fh = field_file.open('rb')
+    try:
+        while True:
+            chunk = fh.read(block_size)
+            if not chunk:
+                return
+            yield chunk
+    finally:
+        fh.close()
+
+
+def _build_zip_stream(entries):
+    """Build a zipstream.ZipStream from an iterable of (File, arcname) pairs.
+
+    Each entry's content is wired up as a lazy generator so the archive
+    is generated as the response is iterated - constant RAM regardless of
+    how much data the user requested. Entries with missing or vanished
+    blobs are skipped silently (mirrors prior buffered behavior).
+    """
+    from zipstream import ZIP_DEFLATED, ZipStream
+
+    zs = ZipStream(compress_type=ZIP_DEFLATED)
+    for file_obj, arcname in entries:
+        if not file_obj.content:
+            continue
+        zs.add(
+            _chunked_field_file(file_obj.content),
+            arcname=arcname,
+            size=file_obj.size or None,
+        )
+    return zs
+
+
 class ContentMixin:
     """Adds content, thumbnail, download, bulk_download actions."""
 
@@ -221,10 +260,7 @@ class ContentMixin:
     @action(detail=True, methods=['get'], url_path='download')
     def download(self, request, uuid=None):
         """Download a file or a folder as a ZIP archive."""
-        import io
-        import zipfile
-
-        from django.http import FileResponse, HttpResponse
+        from django.http import FileResponse, StreamingHttpResponse
 
         try:
             file_obj, perm = self._resolve_file_with_access(uuid)
@@ -253,7 +289,9 @@ class ContentMixin:
                 FILES_DOWNLOAD_BYTES.inc(file_obj.size)
             return response
 
-        # Folder download as ZIP
+        # Folder download as ZIP - streamed so RAM usage stays bounded
+        # (the previous BytesIO-then-getvalue() held the full archive in
+        # memory before the first byte hit the socket).
         folder_path = file_obj.path or file_obj.get_path()
         prefix = f"{folder_path}/"
         # Use the folder owner (not request.user) so a folder shared from
@@ -269,24 +307,12 @@ class ContentMixin:
             path__startswith=prefix,
         ).exclude(content='').exclude(content__isnull=True)
 
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for desc in descendants:
-                # Relative path inside the ZIP: strip the folder's own path prefix
-                rel_path = desc.path[len(prefix):]
-                try:
-                    data = desc.content.read()
-                    desc.content.close()
-                    zf.writestr(rel_path, data)
-                except Exception:
-                    continue
-        buf.seek(0)
-
+        zs = _build_zip_stream(
+            (desc, desc.path[len(prefix):]) for desc in descendants
+        )
         zip_name = f"{_safe_filename(file_obj.name)}.zip"
-        zip_bytes = buf.getvalue()
-        response = HttpResponse(zip_bytes, content_type='application/zip')
+        response = StreamingHttpResponse(zs, content_type='application/zip')
         response['Content-Disposition'] = f'attachment; filename="{zip_name}"'
-        FILES_DOWNLOAD_BYTES.inc(len(zip_bytes))
         return response
 
     @extend_schema(
@@ -317,10 +343,7 @@ class ContentMixin:
     @action(detail=False, methods=['post'], url_path='bulk-download')
     def bulk_download(self, request):
         """Download multiple files/folders as a single ZIP archive."""
-        import io
-        import zipfile
-
-        from django.http import HttpResponse
+        from django.http import StreamingHttpResponse
 
         uuids = request.data.get('uuids', [])
         if not isinstance(uuids, list) or len(uuids) == 0:
@@ -350,20 +373,13 @@ class ContentMixin:
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        def _entries():
             for obj in file_objects:
                 if obj.node_type == File.NodeType.FILE:
-                    if not obj.content:
-                        continue
-                    try:
-                        data = obj.content.read()
-                        obj.content.close()
-                        zf.writestr(obj.name, data)
-                    except Exception:
-                        continue
+                    if obj.content:
+                        yield obj, obj.name
                 else:
-                    # Folder: add all descendant files
+                    # Folder: add all descendant files under <folder name>/
                     folder_path = obj.path or obj.get_path()
                     prefix = f"{folder_path}/"
                     descendants = File.objects.filter(
@@ -375,15 +391,9 @@ class ContentMixin:
                         'uuid', 'name', 'path', 'content',
                     ).exclude(content='').exclude(content__isnull=True)
                     for desc in descendants:
-                        rel_path = f"{obj.name}/{desc.path[len(prefix):]}"
-                        try:
-                            data = desc.content.read()
-                            desc.content.close()
-                            zf.writestr(rel_path, data)
-                        except Exception:
-                            continue
-        buf.seek(0)
+                        yield desc, f"{obj.name}/{desc.path[len(prefix):]}"
 
-        response = HttpResponse(buf.read(), content_type='application/zip')
+        zs = _build_zip_stream(_entries())
+        response = StreamingHttpResponse(zs, content_type='application/zip')
         response['Content-Disposition'] = 'attachment; filename="download.zip"'
         return response

@@ -66,6 +66,7 @@
                              alt=""
                              class="w-full h-32 object-cover"
                              loading="lazy"
+                             decoding="async"
                              onerror="this.remove()">
                       {% endif %}
                       <div class="px-2.5 py-2">
@@ -75,6 +76,7 @@
                                  alt=""
                                  class="w-3.5 h-3.5 rounded-sm"
                                  loading="lazy"
+                                 decoding="async"
                                  onerror="this.remove()">
                           {% endif %}
                           {% if lp.preview.site_name %}
@@ -109,6 +111,7 @@
                             alt="{{ att.original_name }}"
                             class="max-h-64 max-w-full rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity"
                             loading="lazy"
+                            decoding="async"
                           />
                         </div>
                         <button

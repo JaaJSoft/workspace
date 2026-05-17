@@ -6,6 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{% block title %}Workspace{% endblock %}</title>
 
+  <!-- Warm up TLS + DNS for the CDNs we hit on every page -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
 

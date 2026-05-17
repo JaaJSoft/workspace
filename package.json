@@ -1,0 +1,15 @@
+{
+  "name": "workspace-frontend",
+  "version": "1.0.0",
+  "description": "Tailwind + DaisyUI build for the workspace Django project. Replaces the Tailwind Play CDN and the DaisyUI full.min.css CDN with a purged, minified, theme-trimmed local bundle served via whitenoise.",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i frontend/input.css -o workspace/common/static/css/app.css --minify",
+    "watch:css": "tailwindcss -i frontend/input.css -o workspace/common/static/css/app.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "0.5.18",
+    "daisyui": "4.12.10",
+    "tailwindcss": "3.4.18"
+  }
+}

@@ -6,15 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{% block title %}Workspace{% endblock %}</title>
 
-  <!-- Warm up TLS + DNS for the CDNs we hit on every page -->
+  <!-- Warm up TLS + DNS for the JS CDNs we still hit on every page -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://unpkg.com" crossorigin>
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
-
-  <!-- DaisyUI -->
-  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" type="text/css"/>
+  <!-- Tailwind + DaisyUI + Typography - locally built (see package.json,
+       tailwind.config.js, frontend/input.css). Replaces the Tailwind Play
+       CDN which shipped a 140KB JIT compiler that re-ran on every page. -->
+  <link href="{% static 'css/app.css' %}" rel="stylesheet" type="text/css"/>
 
   <!-- Alpine.js + plugins -->
   <script defer src="https://cdn.jsdelivr.net/npm/@imacrayon/alpine-ajax@0.12.6/dist/cdn.min.js"></script>

@@ -1,5 +1,22 @@
 # Dockerfile
-# Stage 1: Builder
+# Stage 1: CSS builder (Tailwind + DaisyUI + Typography)
+# Runs npm + tailwindcss to produce workspace/common/static/css/app.css.
+# Always rebuilds in CI so a stale committed CSS file can never ship to prod.
+FROM node:22-alpine AS css-builder
+
+WORKDIR /build
+
+# Install npm deps first (cache layer that survives template edits)
+COPY package.json package-lock.json ./
+RUN npm ci --omit=optional
+
+# Then copy the inputs Tailwind scans (config + entry CSS + templates + JS)
+COPY tailwind.config.js ./
+COPY frontend/ ./frontend/
+COPY workspace/ ./workspace/
+RUN npm run build:css
+
+# Stage 2: Python builder
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -11,7 +28,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-# Stage 2: Runtime
+# Stage 3: Runtime
 FROM python:3.14-slim
 
 # OCI metadata — static labels
@@ -51,6 +68,12 @@ COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 
 # Copy the code
 COPY --chown=appuser:appuser . .
+
+# Overlay the freshly-built Tailwind CSS on top of whatever was committed.
+# The committed file is for local-dev convenience; CI always regenerates it.
+COPY --from=css-builder --chown=appuser:appuser \
+    /build/workspace/common/static/css/app.css \
+    /app/workspace/common/static/css/app.css
 
 # /app itself is owned by root (created by WORKDIR), so appuser cannot create
 # subdirectories in it. Hand the working tree over to appuser before switching

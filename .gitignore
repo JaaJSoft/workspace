@@ -131,3 +131,8 @@ test_db.sqlite3*
 /scripts/package.json
 /scripts/package-lock.json
 .superpowers/
+
+# Tailwind build (npm deps at project root; the built CSS is committed
+# so a fresh clone has styles immediately, no `npm install` required for
+# devs who only touch Python)
+/node_modules/

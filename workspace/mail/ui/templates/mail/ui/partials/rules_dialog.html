@@ -25,16 +25,16 @@
 
         <ul class="space-y-2" x-show="rulesList.length">
           <template x-for="rule in rulesList" :key="rule.uuid">
-            <li class="card bg-base-100 border border-base-300 p-3 flex items-center gap-3">
+            <li class="bg-base-100 border border-base-300 rounded-lg p-3 flex flex-row items-center gap-3">
               <div class="flex-1 min-w-0">
-                <div class="font-medium" x-text="rule.name"></div>
-                <div class="text-xs text-base-content/60" x-text="rulesDescribe(rule)"></div>
+                <div class="font-medium truncate" x-text="rule.name"></div>
+                <div class="text-xs text-base-content/60 truncate" x-text="rulesDescribe(rule)"></div>
               </div>
-              <input type="checkbox" class="toggle toggle-sm toggle-warning"
+              <input type="checkbox" class="toggle toggle-sm toggle-warning flex-shrink-0"
                 :checked="rule.is_enabled"
                 @change="rulesToggle(rule, $event.target.checked)" />
-              <button class="btn btn-ghost btn-xs" @click="rulesOpenForm(rule)">Edit</button>
-              <button class="btn btn-ghost btn-xs text-error" @click="rulesDelete(rule)" title="Delete">
+              <button class="btn btn-ghost btn-xs flex-shrink-0" @click="rulesOpenForm(rule)">Edit</button>
+              <button class="btn btn-ghost btn-xs text-error flex-shrink-0" @click="rulesDelete(rule)" title="Delete">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>
             </li>

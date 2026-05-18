@@ -17,7 +17,10 @@ def _node(field, op, value=None, case_sensitive=False):
     return parse_conditions(d)
 
 
-class TextConditionTests(TestCase):
+class _BaseConditionTests(TestCase):
+    """Shared setUp for condition tests. No test_* methods here so that
+    subclasses don't inherit (and re-run) tests they don't own."""
+
     def setUp(self):
         self.user = User.objects.create_user(username='cu', password='p')
         self.account = MailAccount.objects.create(
@@ -38,6 +41,8 @@ class TextConditionTests(TestCase):
             date=datetime(2026, 5, 1, 12, 0, 0, tzinfo=timezone.utc),
         )
 
+
+class TextConditionTests(_BaseConditionTests):
     def test_from_contains_match(self):
         self.assertTrue(evaluate_node(_node('from', 'contains', '@github.com'), self.msg))
 
@@ -86,7 +91,7 @@ class TextConditionTests(TestCase):
         ))
 
 
-class BooleanDateConditionTests(TextConditionTests):
+class BooleanDateConditionTests(_BaseConditionTests):
     def test_is_starred_true(self):
         self.msg.is_starred = True
         self.msg.save(update_fields=['is_starred'])
@@ -119,7 +124,7 @@ class BooleanDateConditionTests(TextConditionTests):
         ))
 
 
-class RegexConditionTests(TextConditionTests):
+class RegexConditionTests(_BaseConditionTests):
     def test_regex_match(self):
         self.assertTrue(evaluate_node(
             _node('from', 'matches_regex', r'^alice@.*\.com$'),
@@ -133,7 +138,7 @@ class RegexConditionTests(TextConditionTests):
         ))
 
 
-class GroupConditionTests(TextConditionTests):
+class GroupConditionTests(_BaseConditionTests):
     def test_all_group_true(self):
         node = parse_conditions({
             'type': 'all',

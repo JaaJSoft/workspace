@@ -1,18 +1,18 @@
 <!-- Mail rules management dialog (per-account) -->
 <dialog id="mail-rules-dialog" class="modal">
   <div class="modal-box max-w-3xl">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+    <div class="flex items-center justify-between gap-2 mb-4">
       <div class="flex items-center gap-2 min-w-0">
         <span class="w-8 h-8 rounded-full bg-warning/10 text-warning flex items-center justify-center flex-shrink-0">
           <i data-lucide="filter" class="w-4 h-4"></i>
         </span>
         <div class="min-w-0">
-          <h3 class="font-bold text-lg leading-tight">Filters &amp; Rules</h3>
+          <h3 class="font-bold text-lg leading-tight truncate">Filters &amp; Rules</h3>
           <p x-show="rulesAccount" class="text-xs text-base-content/60 truncate"
              x-text="rulesAccount && rulesAccount.email"></p>
         </div>
       </div>
-      <div class="flex items-center gap-2 self-end sm:self-auto flex-shrink-0" x-show="rulesEditing === null">
+      <div class="flex items-center gap-2 flex-shrink-0" x-show="rulesEditing === null">
         <button type="button" class="btn btn-ghost btn-sm btn-square"
                 :title="mailPrefs.rulesCompact ? 'Switch to comfortable view' : 'Switch to compact view'"
                 @click="rulesToggleCompact()">

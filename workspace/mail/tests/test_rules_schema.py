@@ -103,7 +103,6 @@ from workspace.mail.services.rules.schema import (
     AddLabelAction,
     DeleteAction,
     MarkReadAction,
-    MoveToFolderAction,
     parse_actions,
 )
 

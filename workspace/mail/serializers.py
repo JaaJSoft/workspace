@@ -1,6 +1,12 @@
 from rest_framework import serializers
 
-from .models import MailAccount, MailAttachment, MailExtraction, MailFolder, MailLabel, MailMessage
+from .models import MailAccount, MailAttachment, MailExtraction, MailFolder, MailLabel, MailMessage, MailRule, MailRuleLog
+from .services.rules.schema import (
+    SchemaError,
+    parse_actions,
+    parse_conditions,
+    validate_tree_limits,
+)
 
 
 class MailAccountSerializer(serializers.ModelSerializer):
@@ -225,31 +231,29 @@ class BatchActionSerializer(serializers.Serializer):
         return attrs
 
 
-from .models import MailRule, MailRuleLog
-from .services.rules.schema import (
-    MAX_DEPTH,
-    MAX_LEAVES,
-    SchemaError,
-    parse_actions,
-    parse_conditions,
-    validate_tree_limits,
-)
-
-
 def _validate_conditions(value):
+    # Catch SchemaError and surface a clean, user-facing message rather than
+    # the raw Pydantic exception text (which would expose internal validator
+    # paths and is flagged by CodeQL as information exposure).
     try:
         node = parse_conditions(value)
         validate_tree_limits(node)
-    except SchemaError as e:
-        raise serializers.ValidationError(str(e))
+    except SchemaError:
+        raise serializers.ValidationError(
+            'Invalid conditions: check field, op and value formats, and that '
+            'the tree depth and total leaf count are within limits.'
+        )
     return value
 
 
 def _validate_actions(value):
     try:
         parsed = parse_actions(value)
-    except SchemaError as e:
-        raise serializers.ValidationError(str(e))
+    except SchemaError:
+        raise serializers.ValidationError(
+            'Invalid actions: check that each action has a valid type and '
+            'the required label_id or folder_id when applicable.'
+        )
     if not parsed:
         raise serializers.ValidationError('at least one action is required')
     return value

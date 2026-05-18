@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.mail.models import (
-    MailAccount, MailFolder, MailLabel, MailMessage, MailMessageLabel,
+    MailAccount, MailFolder, MailMessage, MailMessageLabel,
 )
 from workspace.mail.services.rules.actions import apply_action
 from workspace.mail.services.rules.schema import parse_actions

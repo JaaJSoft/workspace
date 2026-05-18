@@ -200,9 +200,10 @@ class MailRuleTestView(APIView):
         try:
             node = parse_conditions(conditions)
             matched = evaluate_node(node, message)
-        except SchemaError as e:
+        except SchemaError:
+            # Avoid surfacing the raw Pydantic exception (CodeQL info-exposure).
             return Response(
-                {'detail': str(e)},
+                {'detail': 'Invalid conditions payload.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response({'matched': matched, 'message_id': str(message.uuid)})

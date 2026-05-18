@@ -18,13 +18,18 @@
 
     <!-- List mode -->
     <template x-if="rulesEditing === null">
-      <div>
+      <div class="space-y-2">
         <template x-if="!rulesList.length">
           {% include "ui/partials/inline_alert.html" with type="info" message="No rules yet. Click 'New rule' to create one." %}
         </template>
 
-        <ul class="space-y-2" x-show="rulesList.length">
-          <template x-for="rule in rulesList" :key="rule.uuid">
+        <template x-if="rulesList.length > 0">
+          <input type="text" x-model="rulesSearch" placeholder="Filter by name or action type..."
+                 class="input input-bordered input-sm w-full" />
+        </template>
+
+        <ul class="space-y-2" x-show="filteredRulesList().length">
+          <template x-for="rule in filteredRulesList()" :key="rule.uuid">
             <li class="bg-base-100 border border-base-300 rounded-lg p-3 flex flex-row items-center gap-3">
               <div class="flex-1 min-w-0">
                 <div class="font-medium truncate" x-text="rule.name"></div>
@@ -40,6 +45,10 @@
             </li>
           </template>
         </ul>
+
+        <template x-if="rulesList.length > 0 && filteredRulesList().length === 0">
+          <p class="text-base-content/60 text-sm py-4 text-center">No rules match the filter.</p>
+        </template>
       </div>
     </template>
 

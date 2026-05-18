@@ -8,6 +8,7 @@ window.mailRulesMixin = function mailRulesMixin() {
       this.rulesAccount = account;
       this.rulesEditing = null;
       this.rulesList = [];
+      this.rulesSearch = '';
 
       const tasks = [];
       if (!this.folders[account.uuid]) tasks.push(this.loadFolders(account.uuid));
@@ -22,6 +23,18 @@ window.mailRulesMixin = function mailRulesMixin() {
       if (!this.rulesAccount) return;
       const resp = await fetch(`/api/v1/mail/rules?account=${this.rulesAccount.uuid}`);
       if (resp.ok) this.rulesList = await resp.json();
+    },
+
+    filteredRulesList() {
+      const q = (this.rulesSearch || '').trim().toLowerCase();
+      if (!q) return this.rulesList;
+      return this.rulesList.filter(r => {
+        if ((r.name || '').toLowerCase().includes(q)) return true;
+        // Also match on action types so users can find "all delete rules"
+        // by typing 'delete', etc.
+        const types = (r.actions || []).map(a => (a.type || '').toLowerCase());
+        return types.some(t => t.includes(q));
+      });
     },
 
     rulesAccountLabels() {

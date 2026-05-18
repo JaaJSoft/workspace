@@ -100,6 +100,7 @@ function mailApp() {
     // Mail rules (per-account, opened via account context menu)
     rulesAccount: null,
     rulesList: [],
+    rulesSearch: '',
     rulesEditing: null,
     rulesForm: {
       mode: 'simple',

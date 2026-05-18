@@ -126,7 +126,7 @@
           <span class="text-sm">Stop processing more rules after this one</span>
         </label>
 
-        <div class="flex justify-end gap-2 pt-3 border-t border-base-300">
+        <div class="modal-action">
           <button class="btn btn-ghost btn-sm" @click="rulesCancelEdit()">Back</button>
           <button class="btn btn-primary btn-sm" @click="rulesSave()" :disabled="!rulesEditing.name">Save</button>
         </div>

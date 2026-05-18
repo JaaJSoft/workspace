@@ -97,3 +97,44 @@ class TreeLimitsTests(SimpleTestCase):
             return  # pydantic rejected at parse time - valid
         with self.assertRaises(SchemaError):
             validate_tree_limits(node)
+
+
+from workspace.mail.services.rules.schema import (
+    AddLabelAction,
+    DeleteAction,
+    MarkReadAction,
+    MoveToFolderAction,
+    parse_actions,
+)
+
+
+class ActionSchemaTests(SimpleTestCase):
+    def test_parse_mark_read(self):
+        actions = parse_actions([{'type': 'mark_read'}])
+        self.assertEqual(len(actions), 1)
+        self.assertIsInstance(actions[0], MarkReadAction)
+
+    def test_parse_add_label_with_uuid(self):
+        uid = '01934e2e-1111-7777-8888-abcdef000001'
+        actions = parse_actions([{'type': 'add_label', 'label_id': uid}])
+        self.assertIsInstance(actions[0], AddLabelAction)
+        self.assertEqual(str(actions[0].label_id), uid)
+
+    def test_add_label_missing_uuid_rejected(self):
+        with self.assertRaises(SchemaError):
+            parse_actions([{'type': 'add_label'}])
+
+    def test_move_to_folder_requires_uuid(self):
+        with self.assertRaises(SchemaError):
+            parse_actions([{'type': 'move_to_folder'}])
+
+    def test_unknown_action_type_rejected(self):
+        with self.assertRaises(SchemaError):
+            parse_actions([{'type': 'forward_to', 'email': 'x@y.z'}])
+
+    def test_empty_list_ok(self):
+        self.assertEqual(parse_actions([]), [])
+
+    def test_delete_action(self):
+        actions = parse_actions([{'type': 'delete'}])
+        self.assertIsInstance(actions[0], DeleteAction)

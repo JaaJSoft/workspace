@@ -135,3 +135,80 @@ def validate_tree_limits(node: Union[LeafCondition, GroupCondition]) -> None:
     total = _count(node)
     if total > MAX_LEAVES:
         raise SchemaError(f'too many conditions ({total} > {MAX_LEAVES})')
+
+
+from uuid import UUID
+
+
+class _ActionBase(BaseModel):
+    pass
+
+
+class AddLabelAction(_ActionBase):
+    type: Literal['add_label']
+    label_id: UUID
+
+
+class RemoveLabelAction(_ActionBase):
+    type: Literal['remove_label']
+    label_id: UUID
+
+
+class MarkReadAction(_ActionBase):
+    type: Literal['mark_read']
+
+
+class MarkUnreadAction(_ActionBase):
+    type: Literal['mark_unread']
+
+
+class StarAction(_ActionBase):
+    type: Literal['star']
+
+
+class UnstarAction(_ActionBase):
+    type: Literal['unstar']
+
+
+class MoveToFolderAction(_ActionBase):
+    type: Literal['move_to_folder']
+    folder_id: UUID
+
+
+class DeleteAction(_ActionBase):
+    type: Literal['delete']
+
+
+ActionNode = Annotated[
+    Union[
+        AddLabelAction, RemoveLabelAction,
+        MarkReadAction, MarkUnreadAction,
+        StarAction, UnstarAction,
+        MoveToFolderAction, DeleteAction,
+    ],
+    Field(discriminator='type'),
+]
+
+
+def parse_actions(payload: Any) -> List[Union[
+    AddLabelAction, RemoveLabelAction,
+    MarkReadAction, MarkUnreadAction,
+    StarAction, UnstarAction,
+    MoveToFolderAction, DeleteAction,
+]]:
+    """Parse a list of action dicts into typed action models.
+
+    Raises ``SchemaError`` if any item has an unknown ``type`` or is missing
+    a required field. Returns ``[]`` for an empty list (a rule with no
+    actions is meaningless but legal at this layer; CRUD validation rejects
+    it).
+    """
+    from pydantic import TypeAdapter
+
+    if not isinstance(payload, list):
+        raise SchemaError('actions payload must be a list')
+    adapter = TypeAdapter(List[ActionNode])
+    try:
+        return adapter.validate_python(payload)
+    except ValidationError as e:
+        raise SchemaError(str(e)) from e

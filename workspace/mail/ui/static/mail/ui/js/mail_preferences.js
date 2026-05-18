@@ -4,6 +4,7 @@ window._mailPrefsDefaults = {
     previewLines: 1,         // 0 | 1 | 2
     confirmBeforeDelete: true,
     showLabels: true,
+    rulesCompact: false,     // compact rule rows in the rules dialog
 };
 window._mailPrefsCache = { ...window._mailPrefsDefaults };
 
@@ -15,6 +16,21 @@ window._mailPrefsReady = fetch('/api/v1/settings/mail/preferences', { credential
         }
     })
     .catch(function() {});
+
+// Helper to update a single mail preference from anywhere (not just the
+// preferences dialog). Mutates the cache, persists via the same endpoint as
+// `mailPreferences()._saveRemote`, and broadcasts the change so any Alpine
+// component listening to `mail:preferences-changed` re-renders.
+window.updateMailPref = function updateMailPref(key, value) {
+    window._mailPrefsCache = { ...window._mailPrefsCache, [key]: value };
+    fetch('/api/v1/settings/mail/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ value: window._mailPrefsCache }),
+        credentials: 'same-origin',
+    }).catch(function() {});
+    window.dispatchEvent(new CustomEvent('mail:preferences-changed', { detail: window._mailPrefsCache }));
+};
 
 window.mailPreferences = function mailPreferences() {
     const API_URL = '/api/v1/settings/mail/preferences';

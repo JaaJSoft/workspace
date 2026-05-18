@@ -101,7 +101,6 @@ function mailApp() {
     rulesAccount: null,
     rulesList: [],
     rulesSearch: '',
-    rulesCompact: false,
     rulesEditing: null,
     rulesForm: {
       mode: 'simple',

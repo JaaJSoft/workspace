@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/v1/mail/labels/<uuid:uuid>', views_labels.MailLabelDetailView.as_view(), name='mail-label-detail'),
     path('api/v1/mail/rules', views_rules.MailRuleListView.as_view(), name='mail-rule-list'),
     path('api/v1/mail/rules/<uuid:uuid>', views_rules.MailRuleDetailView.as_view(), name='mail-rule-detail'),
+    path('api/v1/mail/rules/<uuid:uuid>/reorder', views_rules.MailRuleReorderView.as_view(), name='mail-rule-reorder'),
     path('api/v1/mail/folders', views_folders.MailFolderListView.as_view(), name='mail-folder-list'),
     path('api/v1/mail/folders/<uuid:uuid>', views_folders.MailFolderUpdateView.as_view(), name='mail-folder-update'),
     path('api/v1/mail/folders/<uuid:uuid>/mark-read', views_folders.MailFolderMarkReadView.as_view(), name='mail-folder-mark-read'),

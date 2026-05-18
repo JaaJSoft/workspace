@@ -121,3 +121,34 @@ class MailRuleDetailView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         rule.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=['Mail'])
+class MailRuleReorderView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Move a rule to a new position", request=MailRuleReorderSerializer)
+    def post(self, request, uuid):
+        rule = _get_user_rule(request, uuid)
+        if not rule:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        ser = MailRuleReorderSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        target = ser.validated_data['position']
+
+        with transaction.atomic():
+            siblings = list(
+                MailRule.objects
+                .select_for_update()
+                .filter(account=rule.account)
+                .exclude(pk=rule.pk)
+                .order_by('position', 'created_at')
+            )
+            siblings.insert(min(target, len(siblings)), rule)
+            for index, item in enumerate(siblings):
+                if item.position != index:
+                    item.position = index
+            MailRule.objects.bulk_update(siblings, ['position'])
+
+        rule.refresh_from_db()
+        return Response(MailRuleSerializer(rule).data)

@@ -102,3 +102,46 @@ class MailRuleCRUDTests(_Base):
         resp = self.client.delete(f'/api/v1/mail/rules/{rule.uuid}')
         self.assertEqual(resp.status_code, 204)
         self.assertFalse(MailRule.objects.filter(pk=rule.pk).exists())
+
+
+class MailRuleReorderTests(_Base):
+    def test_reorder_to_position_zero(self):
+        a = MailRule.objects.create(account=self.account, name='a', position=0)
+        b = MailRule.objects.create(account=self.account, name='b', position=1)
+        c = MailRule.objects.create(account=self.account, name='c', position=2)
+        resp = self.client.post(
+            f'/api/v1/mail/rules/{c.uuid}/reorder',
+            {'position': 0}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        a.refresh_from_db(); b.refresh_from_db(); c.refresh_from_db()
+        self.assertEqual(c.position, 0)
+        self.assertEqual(a.position, 1)
+        self.assertEqual(b.position, 2)
+
+    def test_reorder_to_higher_position(self):
+        a = MailRule.objects.create(account=self.account, name='a', position=0)
+        b = MailRule.objects.create(account=self.account, name='b', position=1)
+        c = MailRule.objects.create(account=self.account, name='c', position=2)
+        resp = self.client.post(
+            f'/api/v1/mail/rules/{a.uuid}/reorder',
+            {'position': 2}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        a.refresh_from_db(); b.refresh_from_db(); c.refresh_from_db()
+        self.assertEqual(b.position, 0)
+        self.assertEqual(c.position, 1)
+        self.assertEqual(a.position, 2)
+
+    def test_reorder_other_user_rule_404(self):
+        other = User.objects.create_user(username='oo', password='p')
+        other_acc = MailAccount.objects.create(
+            owner=other, email='oo@x.com',
+            imap_host='x', smtp_host='x', username='oo@x.com',
+        )
+        r = MailRule.objects.create(account=other_acc, name='leak')
+        resp = self.client.post(
+            f'/api/v1/mail/rules/{r.uuid}/reorder',
+            {'position': 0}, format='json',
+        )
+        self.assertEqual(resp.status_code, 404)

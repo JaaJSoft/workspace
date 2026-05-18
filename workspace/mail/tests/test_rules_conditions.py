@@ -84,3 +84,103 @@ class TextConditionTests(TestCase):
             _node('from', 'in_list', ['noreply@x.com']),
             self.msg,
         ))
+
+
+class BooleanDateConditionTests(TextConditionTests):
+    def test_is_starred_true(self):
+        self.msg.is_starred = True
+        self.msg.save(update_fields=['is_starred'])
+        self.assertTrue(evaluate_node(_node('is_starred', 'is_true'), self.msg))
+        self.assertFalse(evaluate_node(_node('is_starred', 'is_false'), self.msg))
+
+    def test_has_attachments_false(self):
+        self.assertTrue(evaluate_node(_node('has_attachments', 'is_false'), self.msg))
+
+    def test_date_greater_than(self):
+        self.assertTrue(evaluate_node(
+            _node('date', 'greater_than', '2026-04-01T00:00:00+00:00'),
+            self.msg,
+        ))
+        self.assertFalse(evaluate_node(
+            _node('date', 'greater_than', '2026-06-01T00:00:00+00:00'),
+            self.msg,
+        ))
+
+    def test_date_less_than(self):
+        self.assertTrue(evaluate_node(
+            _node('date', 'less_than', '2026-06-01T00:00:00+00:00'),
+            self.msg,
+        ))
+
+    def test_date_invalid_value_returns_false(self):
+        self.assertFalse(evaluate_node(
+            _node('date', 'greater_than', 'not-a-date'),
+            self.msg,
+        ))
+
+
+class RegexConditionTests(TextConditionTests):
+    def test_regex_match(self):
+        self.assertTrue(evaluate_node(
+            _node('from', 'matches_regex', r'^alice@.*\.com$'),
+            self.msg,
+        ))
+
+    def test_regex_no_match(self):
+        self.assertFalse(evaluate_node(
+            _node('from', 'matches_regex', r'^bob@'),
+            self.msg,
+        ))
+
+
+class GroupConditionTests(TextConditionTests):
+    def test_all_group_true(self):
+        node = parse_conditions({
+            'type': 'all',
+            'conditions': [
+                {'field': 'from', 'op': 'contains', 'value': '@github.com'},
+                {'field': 'subject', 'op': 'contains', 'value': 'review'},
+            ],
+        })
+        self.assertTrue(evaluate_node(node, self.msg))
+
+    def test_all_group_false_when_one_fails(self):
+        node = parse_conditions({
+            'type': 'all',
+            'conditions': [
+                {'field': 'from', 'op': 'contains', 'value': '@github.com'},
+                {'field': 'subject', 'op': 'contains', 'value': 'XYZ'},
+            ],
+        })
+        self.assertFalse(evaluate_node(node, self.msg))
+
+    def test_any_group_true_when_one_matches(self):
+        node = parse_conditions({
+            'type': 'any',
+            'conditions': [
+                {'field': 'from', 'op': 'contains', 'value': 'nobody'},
+                {'field': 'subject', 'op': 'contains', 'value': 'review'},
+            ],
+        })
+        self.assertTrue(evaluate_node(node, self.msg))
+
+    def test_nested_all_inside_any(self):
+        node = parse_conditions({
+            'type': 'any',
+            'conditions': [
+                {'type': 'all', 'conditions': [
+                    {'field': 'from', 'op': 'contains', 'value': '@github.com'},
+                    {'field': 'subject', 'op': 'contains', 'value': 'review'},
+                ]},
+                {'field': 'subject', 'op': 'contains', 'value': 'urgent'},
+            ],
+        })
+        self.assertTrue(evaluate_node(node, self.msg))
+
+    def test_empty_all_is_true(self):
+        node = parse_conditions({'type': 'all', 'conditions': []})
+        self.assertTrue(evaluate_node(node, self.msg))
+
+    def test_empty_any_is_false(self):
+        node = parse_conditions({'type': 'any', 'conditions': []})
+        self.assertFalse(evaluate_node(node, self.msg))

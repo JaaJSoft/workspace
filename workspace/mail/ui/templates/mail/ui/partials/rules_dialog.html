@@ -58,13 +58,13 @@
 
         <div x-show="rulesForm.mode === 'simple'" class="space-y-2">
           <div class="text-sm font-semibold">When</div>
-          <div class="flex flex-wrap gap-2 items-center">
-            <select class="select select-bordered select-sm w-40 min-w-0" x-model="rulesForm.simpleCondition.field">
+          <div class="flex flex-wrap gap-2 items-stretch">
+            <select class="select select-bordered select-sm w-40 flex-shrink-0" x-model="rulesForm.simpleCondition.field">
               <template x-for="f in rulesConditionFields" :key="f.value">
                 <option :value="f.value" x-text="f.label"></option>
               </template>
             </select>
-            <select class="select select-bordered select-sm w-40 min-w-0" x-model="rulesForm.simpleCondition.op">
+            <select class="select select-bordered select-sm w-40 flex-shrink-0" x-model="rulesForm.simpleCondition.op">
               <template x-for="o in rulesCompatibleOps(rulesForm.simpleCondition.field)" :key="o">
                 <option :value="o" x-text="o.replace(/_/g, ' ')"></option>
               </template>
@@ -75,8 +75,8 @@
           </div>
 
           <div class="text-sm font-semibold mt-3">Then</div>
-          <div class="flex flex-wrap gap-2 items-center">
-            <select class="select select-bordered select-sm w-44 min-w-0" x-model="rulesForm.simpleAction.type">
+          <div class="flex flex-wrap gap-2 items-stretch">
+            <select class="select select-bordered select-sm w-44 flex-shrink-0" x-model="rulesForm.simpleAction.type">
               <option value="mark_read">Mark as read</option>
               <option value="mark_unread">Mark as unread</option>
               <option value="star">Star</option>

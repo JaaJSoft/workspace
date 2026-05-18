@@ -133,6 +133,7 @@ function mailApp() {
     ...mailLabelsMixin(),
     ...mailAiMixin(),
     ...mailRulesMixin(),
+    ...mailRulesFormMixin(),
 
     // ── Computed ───────────────────────────────────────────
     // Defined on the root (not a mixin) so the getter survives object spread —

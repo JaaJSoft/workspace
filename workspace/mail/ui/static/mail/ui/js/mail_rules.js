@@ -103,7 +103,13 @@ window.mailRulesMixin = function mailRulesMixin() {
     },
 
     async rulesDelete(rule) {
-      if (!confirm(`Delete rule "${rule.name}"?`)) return;
+      const ok = await AppDialog.confirm({
+        title: 'Delete rule',
+        message: `Delete rule "${rule.name}"? This cannot be undone.`,
+        okLabel: 'Delete',
+        okClass: 'btn-error',
+      });
+      if (!ok) return;
       const resp = await fetch(`/api/v1/mail/rules/${rule.uuid}`, {
         method: 'DELETE',
         headers: { 'X-CSRFToken': getCSRFToken() },

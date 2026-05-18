@@ -109,6 +109,7 @@ function mailApp() {
       advancedConditionsText: '',
       advancedActionsText: '',
       error: '',
+      saving: false,
     },
     rulesShowAdvancedHelp: false,
 

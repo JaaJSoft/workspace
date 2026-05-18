@@ -51,14 +51,21 @@ window.mailRulesFormMixin = function mailRulesFormMixin() {
       if (rule) {
         this.rulesEditing = JSON.parse(JSON.stringify(rule));
         const cond = this.rulesEditing.conditions;
-        if (cond && cond.field) {
+        const actions = this.rulesEditing.actions || [];
+        // Simple mode is only safe when the rule is a single leaf
+        // condition AND a single action. Anything richer (AND/OR groups,
+        // multiple actions, extra leaf keys we don't expose in the simple
+        // form) would silently lose data on save, so force advanced mode
+        // and let the user edit the JSON directly.
+        const isSimpleLeaf = cond && typeof cond === 'object'
+          && cond.field !== undefined && !cond.type;
+        if (isSimpleLeaf && actions.length === 1) {
           this.rulesForm.mode = 'simple';
           this.rulesForm.simpleCondition = { ...cond };
+          this.rulesForm.simpleAction = { ...actions[0] };
         } else {
           this.rulesForm.mode = 'advanced';
         }
-        const act = (this.rulesEditing.actions || [])[0];
-        if (act) this.rulesForm.simpleAction = { ...act };
         this.rulesForm.advancedConditionsText = JSON.stringify(this.rulesEditing.conditions, null, 2);
         this.rulesForm.advancedActionsText = JSON.stringify(this.rulesEditing.actions, null, 2);
       } else {
@@ -146,29 +153,38 @@ window.mailRulesFormMixin = function mailRulesFormMixin() {
     },
 
     async rulesSave() {
+      if (this.rulesForm.saving) return;  // single-flight guard
       const body = this._rulesPayload();
       if (!body) return;
-      let resp;
-      if (this.rulesEditing.uuid) {
-        resp = await fetch(`/api/v1/mail/rules/${this.rulesEditing.uuid}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify(body),
-        });
-      } else {
-        resp = await fetch('/api/v1/mail/rules', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ account_id: this.rulesAccount.uuid, ...body }),
-        });
+      this.rulesForm.saving = true;
+      this.rulesForm.error = '';
+      try {
+        let resp;
+        if (this.rulesEditing.uuid) {
+          resp = await fetch(`/api/v1/mail/rules/${this.rulesEditing.uuid}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify(body),
+          });
+        } else {
+          resp = await fetch('/api/v1/mail/rules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ account_id: this.rulesAccount.uuid, ...body }),
+          });
+        }
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          this.rulesForm.error = data.detail || JSON.stringify(data);
+          return;
+        }
+        this.rulesEditing = null;
+        await this._loadRules();
+      } catch (e) {
+        this.rulesForm.error = (e && e.message) || 'Network error - please retry.';
+      } finally {
+        this.rulesForm.saving = false;
       }
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        this.rulesForm.error = data.detail || JSON.stringify(data);
-        return;
-      }
-      this.rulesEditing = null;
-      await this._loadRules();
     },
   };
 };

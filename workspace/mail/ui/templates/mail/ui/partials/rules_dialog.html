@@ -230,8 +230,12 @@
         </label>
 
         <div class="modal-action">
-          <button class="btn btn-ghost btn-sm" @click="rulesCancelEdit()">Back</button>
-          <button class="btn btn-primary btn-sm" @click="rulesSave()" :disabled="!rulesEditing.name">Save</button>
+          <button class="btn btn-ghost btn-sm" @click="rulesCancelEdit()" :disabled="rulesForm.saving">Back</button>
+          <button class="btn btn-primary btn-sm" @click="rulesSave()"
+                  :disabled="!rulesEditing.name || rulesForm.saving">
+            <span x-show="!rulesForm.saving">Save</span>
+            <span x-show="rulesForm.saving" class="loading loading-spinner loading-xs"></span>
+          </button>
         </div>
       </div>
     </template>

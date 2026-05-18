@@ -32,6 +32,21 @@ window.mailRulesFormMixin = function mailRulesFormMixin() {
       return !['is_true', 'is_false'].includes(op);
     },
 
+    // When the user switches the field, the previously-selected op may not
+    // be valid for the new field (e.g. 'contains' on 'is_starred'). Reset
+    // to the first compatible op and clear the value if it's no longer
+    // needed, otherwise the form sits in an inconsistent state until the
+    // user manually picks an op.
+    rulesOnFieldChange() {
+      const ops = this.rulesCompatibleOps(this.rulesForm.simpleCondition.field);
+      if (!ops.includes(this.rulesForm.simpleCondition.op)) {
+        this.rulesForm.simpleCondition.op = ops[0] || '';
+      }
+      if (!this.rulesNeedsValue(this.rulesForm.simpleCondition.op)) {
+        this.rulesForm.simpleCondition.value = '';
+      }
+    },
+
     rulesOpenForm(rule) {
       if (rule) {
         this.rulesEditing = JSON.parse(JSON.stringify(rule));

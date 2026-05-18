@@ -80,7 +80,9 @@
         <div x-show="rulesForm.mode === 'simple'" class="space-y-2">
           <div class="text-sm font-semibold">When</div>
           <div class="flex flex-wrap gap-2 items-stretch">
-            <select class="select select-bordered select-sm w-40 flex-shrink-0" x-model="rulesForm.simpleCondition.field">
+            <select class="select select-bordered select-sm w-40 flex-shrink-0"
+                    x-model="rulesForm.simpleCondition.field"
+                    @change="rulesOnFieldChange()">
               <template x-for="f in rulesConditionFields" :key="f.value">
                 <option :value="f.value" x-text="f.label"></option>
               </template>

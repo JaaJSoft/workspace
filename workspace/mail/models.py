@@ -375,3 +375,29 @@ class MailRule(models.Model):
 
     def __str__(self):
         return f'{self.account.email} / {self.name}'
+
+
+class MailRuleLog(models.Model):
+    """Audit trail: which rule fired on which message and what changed."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    rule = models.ForeignKey(
+        MailRule, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='logs',
+    )
+    rule_name_snapshot = models.CharField(max_length=120, blank=True, default='')
+    message = models.ForeignKey(
+        MailMessage, on_delete=models.CASCADE, related_name='rule_logs',
+    )
+    actions_applied = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['message', '-created_at']),
+            models.Index(fields=['rule', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f'log {self.uuid} (rule={self.rule_name_snapshot or "deleted"})'

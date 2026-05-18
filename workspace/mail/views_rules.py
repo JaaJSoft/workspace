@@ -80,12 +80,18 @@ class MailRuleListView(APIView):
         except MailAccount.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        # Default to end of the list so newly-created rules don't stack at
+        # position 0 (which causes ordering ambiguity and breaks the
+        # up/down move buttons that rely on `position` being contiguous).
+        position = data.get('position')
+        if position is None or position == 0:
+            position = MailRule.objects.filter(account=account).count()
         rule = MailRule.objects.create(
             account=account,
             name=data['name'],
             is_enabled=data.get('is_enabled', True),
             stop_processing=data.get('stop_processing', False),
-            position=data.get('position', 0),
+            position=position,
             conditions=data['conditions'],
             actions=data['actions'],
         )

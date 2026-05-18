@@ -77,10 +77,14 @@ window.mailRulesMixin = function mailRulesMixin() {
     },
 
     async rulesMove(rule, delta) {
-      // Move the rule by `delta` positions in the global list (not the
-      // filtered view). Backend renumbers atomically, so we reload after.
-      const target = (rule.position || 0) + delta;
-      if (target < 0) return;
+      // Use array index, not rule.position: rules created before the
+      // position-on-create fix all sit at position 0, and the server falls
+      // back to created_at for display. The reorder endpoint renumbers
+      // atomically from any starting state, so sending the target index
+      // always converges.
+      const idx = this.rulesList.findIndex(r => r.uuid === rule.uuid);
+      const target = idx + delta;
+      if (idx === -1 || target < 0 || target >= this.rulesList.length) return;
       const resp = await fetch(`/api/v1/mail/rules/${rule.uuid}/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -90,12 +94,12 @@ window.mailRulesMixin = function mailRulesMixin() {
     },
 
     rulesCanMoveUp(rule) {
-      return (rule.position || 0) > 0;
+      return this.rulesList.findIndex(r => r.uuid === rule.uuid) > 0;
     },
 
     rulesCanMoveDown(rule) {
-      const maxPos = Math.max(...this.rulesList.map(r => r.position || 0));
-      return (rule.position || 0) < maxPos;
+      const idx = this.rulesList.findIndex(r => r.uuid === rule.uuid);
+      return idx !== -1 && idx < this.rulesList.length - 1;
     },
 
     async rulesDelete(rule) {

@@ -145,3 +145,69 @@ class MailRuleReorderTests(_Base):
             {'position': 0}, format='json',
         )
         self.assertEqual(resp.status_code, 404)
+
+
+class MailRuleTestEndpointTests(_Base):
+    def setUp(self):
+        super().setUp()
+        self.folder = MailFolder.objects.create(
+            account=self.account, name='INBOX', folder_type='inbox',
+        )
+        self.msg = MailMessage.objects.create(
+            account=self.account, folder=self.folder, imap_uid=1,
+            from_address={'email': 'a@news.com'},
+            subject='News',
+        )
+
+    def test_dry_run_with_conditions_match(self):
+        resp = self.client.post('/api/v1/mail/rules/test', {
+            'message_id': str(self.msg.uuid),
+            'conditions': {'field': 'from', 'op': 'contains', 'value': '@news.com'},
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(resp.data['matched'])
+
+    def test_dry_run_with_conditions_no_match(self):
+        resp = self.client.post('/api/v1/mail/rules/test', {
+            'message_id': str(self.msg.uuid),
+            'conditions': {'field': 'from', 'op': 'contains', 'value': '@other.com'},
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data['matched'])
+
+    def test_dry_run_with_rule_id(self):
+        rule = MailRule.objects.create(
+            account=self.account, name='r',
+            conditions={'field': 'subject', 'op': 'contains', 'value': 'News'},
+            actions=[{'type': 'mark_read'}],
+        )
+        resp = self.client.post('/api/v1/mail/rules/test', {
+            'message_id': str(self.msg.uuid),
+            'rule_id': str(rule.uuid),
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['matched'])
+
+    def test_dry_run_other_user_message_404(self):
+        other = User.objects.create_user(username='oo', password='p')
+        other_acc = MailAccount.objects.create(
+            owner=other, email='oo@x.com',
+            imap_host='x', smtp_host='x', username='oo@x.com',
+        )
+        other_folder = MailFolder.objects.create(
+            account=other_acc, name='INBOX', folder_type='inbox',
+        )
+        bad_msg = MailMessage.objects.create(
+            account=other_acc, folder=other_folder, imap_uid=1,
+        )
+        resp = self.client.post('/api/v1/mail/rules/test', {
+            'message_id': str(bad_msg.uuid),
+            'conditions': {'field': 'from', 'op': 'contains', 'value': 'x'},
+        }, format='json')
+        self.assertEqual(resp.status_code, 404)
+
+    def test_dry_run_must_provide_rule_or_conditions(self):
+        resp = self.client.post('/api/v1/mail/rules/test', {
+            'message_id': str(self.msg.uuid),
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)

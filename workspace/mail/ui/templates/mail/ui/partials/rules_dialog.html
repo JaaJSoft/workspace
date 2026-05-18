@@ -13,7 +13,7 @@
       <div class="flex items-center gap-2" x-show="rulesEditing === null">
         <button type="button" class="btn btn-ghost btn-sm btn-square"
                 :title="mailPrefs.rulesCompact ? 'Switch to comfortable view' : 'Switch to compact view'"
-                @click="updateMailPref('rulesCompact', !mailPrefs.rulesCompact)">
+                @click="rulesToggleCompact()">
           <i :data-lucide="mailPrefs.rulesCompact ? 'rows-2' : 'rows-3'" class="w-4 h-4"></i>
         </button>
         <button class="btn btn-primary btn-sm" @click="rulesOpenForm()">

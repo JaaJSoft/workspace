@@ -25,6 +25,10 @@ window.mailRulesMixin = function mailRulesMixin() {
       if (resp.ok) this.rulesList = await resp.json();
     },
 
+    rulesToggleCompact() {
+      window.updateMailPref('rulesCompact', !this.mailPrefs.rulesCompact);
+    },
+
     filteredRulesList() {
       const q = (this.rulesSearch || '').trim().toLowerCase();
       if (!q) return this.rulesList;

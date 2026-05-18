@@ -98,23 +98,3 @@
 [draggable="true"]:active {
   cursor: grabbing;
 }
-
-/* Firefox renders <select> text with the OS-native baseline, which sits
-   higher than DaisyUI's inline-flex centering in adjacent <input> elements.
-   Forcing line-height equal to the select height re-centers the text so
-   side-by-side selects and inputs share a baseline.
-
-   The @supports check matches Firefox only (-moz-appearance is Firefox-
-   specific), so Chrome/Safari are not affected. */
-@supports (-moz-appearance: none) {
-  .select.select-sm {
-    line-height: 2rem;
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-  .select.select-md, .select:not(.select-xs):not(.select-sm):not(.select-lg) {
-    line-height: 3rem;
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-}

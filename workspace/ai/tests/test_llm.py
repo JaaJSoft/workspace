@@ -39,7 +39,7 @@ class ExtractTextToolCallsTests(TestCase):
 
     def test_openai_like_form_with_string_arguments(self):
         content = '{"name": "echo", "arguments": "raw string"}'
-        calls, remaining = extract_text_tool_calls(content)
+        calls, _ = extract_text_tool_calls(content)
         self.assertEqual(len(calls), 1)
         name, args_json = calls[0]
         self.assertEqual(name, 'echo')

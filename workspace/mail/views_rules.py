@@ -200,3 +200,35 @@ class MailRuleTestView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response({'matched': matched, 'message_id': str(message.uuid)})
+
+
+@extend_schema(tags=['Mail'])
+class MailRuleLogsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Paginated audit logs for a rule",
+        parameters=[OpenApiParameter('page', int, required=False)],
+    )
+    def get(self, request, uuid):
+        rule = _get_user_rule(request, uuid)
+        if not rule:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        try:
+            page = int(request.query_params.get('page', 1))
+            if page < 1:
+                page = 1
+        except (TypeError, ValueError):
+            page = 1
+        page_size = 50
+        offset = (page - 1) * page_size
+
+        qs = MailRuleLog.objects.filter(rule=rule).select_related('message')
+        total = qs.count()
+        logs = qs.order_by('-created_at')[offset:offset + page_size]
+        return Response({
+            'results': MailRuleLogSerializer(logs, many=True).data,
+            'count': total,
+            'page': page,
+            'page_size': page_size,
+        })

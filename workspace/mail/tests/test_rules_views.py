@@ -211,3 +211,45 @@ class MailRuleTestEndpointTests(_Base):
             'message_id': str(self.msg.uuid),
         }, format='json')
         self.assertEqual(resp.status_code, 400)
+
+
+class MailRuleLogsEndpointTests(_Base):
+    def setUp(self):
+        super().setUp()
+        self.folder = MailFolder.objects.create(
+            account=self.account, name='INBOX', folder_type='inbox',
+        )
+        self.msg = MailMessage.objects.create(
+            account=self.account, folder=self.folder, imap_uid=1,
+        )
+        self.rule = MailRule.objects.create(account=self.account, name='r')
+
+    def test_logs_empty(self):
+        resp = self.client.get(f'/api/v1/mail/rules/{self.rule.uuid}/logs')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['results'], [])
+        self.assertEqual(resp.data['count'], 0)
+
+    def test_logs_paginated(self):
+        from workspace.mail.models import MailRuleLog
+        for i in range(75):
+            MailRuleLog.objects.create(
+                rule=self.rule, rule_name_snapshot='r',
+                message=self.msg, actions_applied=[{'type': 'mark_read', 'ok': True}],
+            )
+        resp = self.client.get(f'/api/v1/mail/rules/{self.rule.uuid}/logs')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 75)
+        self.assertEqual(len(resp.data['results']), 50)
+        resp2 = self.client.get(f'/api/v1/mail/rules/{self.rule.uuid}/logs?page=2')
+        self.assertEqual(len(resp2.data['results']), 25)
+
+    def test_logs_other_user_rule_404(self):
+        other = User.objects.create_user(username='oo', password='p')
+        other_acc = MailAccount.objects.create(
+            owner=other, email='oo@x.com',
+            imap_host='x', smtp_host='x', username='oo@x.com',
+        )
+        r = MailRule.objects.create(account=other_acc, name='r')
+        resp = self.client.get(f'/api/v1/mail/rules/{r.uuid}/logs')
+        self.assertEqual(resp.status_code, 404)

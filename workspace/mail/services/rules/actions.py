@@ -9,13 +9,15 @@ import logging
 from typing import Any
 
 from django.db import transaction
+from django.utils import timezone
 
 from workspace.common.logging import scrub
 from ...models import (
     MailFolder, MailLabel, MailMessage, MailMessageLabel,
 )
 from ..imap_messages import (
-    mark_read, mark_unread, star_message, unstar_message,
+    delete_message, mark_read, mark_unread, move_message,
+    star_message, unstar_message,
 )
 from .schema import (
     AddLabelAction,
@@ -87,6 +89,39 @@ def _unstar(action: UnstarAction, message: MailMessage) -> dict:
     return _flag(message, 'is_starred', False, unstar_message, 'unstar')
 
 
+def _move_to_folder(action: MoveToFolderAction, message: MailMessage) -> dict:
+    try:
+        target = MailFolder.objects.get(
+            uuid=action.folder_id, account_id=message.account_id,
+        )
+    except MailFolder.DoesNotExist:
+        return _err('move_to_folder', 'folder_not_in_account')
+    if target.pk == message.folder_id:
+        return _ok('move_to_folder', folder_id=str(target.uuid), noop=True)
+    # IMAP first: if COPY fails, leave the local row alone so the next
+    # reconciliation does not soft-delete a message that is still in the
+    # source folder server-side (same invariant as MailBatchActionView).
+    try:
+        move_message(message.account, message, target)
+    except Exception as e:
+        logger.warning('IMAP move failed for message %s: %s', message.uuid, scrub(e))
+        return _err('move_to_folder', 'imap_failed')
+    message.folder = target
+    message.save(update_fields=['folder', 'updated_at'])
+    return _ok('move_to_folder', folder_id=str(target.uuid))
+
+
+def _delete(action: DeleteAction, message: MailMessage) -> dict:
+    message.deleted_at = timezone.now()
+    message.save(update_fields=['deleted_at', 'updated_at'])
+    try:
+        delete_message(message.account, message)
+    except Exception as e:
+        logger.warning('IMAP delete failed for message %s: %s', message.uuid, scrub(e))
+        return _ok('delete', imap_warning='imap_failed')
+    return _ok('delete')
+
+
 HANDLERS: dict[type, Any] = {
     AddLabelAction: _add_label,
     RemoveLabelAction: _remove_label,
@@ -94,6 +129,8 @@ HANDLERS: dict[type, Any] = {
     MarkUnreadAction: _mark_unread,
     StarAction: _star,
     UnstarAction: _unstar,
+    MoveToFolderAction: _move_to_folder,
+    DeleteAction: _delete,
 }
 
 

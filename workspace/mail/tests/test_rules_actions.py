@@ -117,3 +117,67 @@ class FlagActionTests(_BaseActionTests):
         self.assertTrue(result.get('imap_warning'))
         self.msg.refresh_from_db()
         self.assertTrue(self.msg.is_read)
+
+
+class MoveDeleteActionTests(_BaseActionTests):
+    def setUp(self):
+        super().setUp()
+        self.archive = MailFolder.objects.create(
+            account=self.account, name='Archive',
+            display_name='Archive', folder_type='archive',
+        )
+
+    @patch('workspace.mail.services.rules.actions.move_message')
+    def test_move_to_folder_success(self, mock_imap):
+        action = parse_actions([
+            {'type': 'move_to_folder', 'folder_id': str(self.archive.uuid)},
+        ])[0]
+        result = apply_action(action, self.msg)
+        self.assertTrue(result['ok'])
+        self.msg.refresh_from_db()
+        self.assertEqual(self.msg.folder_id, self.archive.uuid)
+        mock_imap.assert_called_once()
+
+    @patch('workspace.mail.services.rules.actions.move_message', side_effect=Exception('IMAP down'))
+    def test_move_to_folder_imap_failure_keeps_local_folder(self, _mock):
+        """Same invariant as MailBatchActionView.move: don't update local
+        state when IMAP failed, or the next reconciliation will soft-delete
+        the message."""
+        orig_folder_id = self.msg.folder_id
+        action = parse_actions([
+            {'type': 'move_to_folder', 'folder_id': str(self.archive.uuid)},
+        ])[0]
+        result = apply_action(action, self.msg)
+        self.assertFalse(result['ok'])
+        self.msg.refresh_from_db()
+        self.assertEqual(self.msg.folder_id, orig_folder_id)
+
+    @patch('workspace.mail.services.rules.actions.move_message')
+    def test_move_to_other_account_folder_rejected(self, mock_imap):
+        from django.contrib.auth import get_user_model
+        UserModel = get_user_model()
+        other = UserModel.objects.create_user(username='oth', password='p')
+        other_account = MailAccount.objects.create(
+            owner=other, email='o@x.com',
+            imap_host='x', smtp_host='x', username='o@x.com',
+        )
+        bad_folder = MailFolder.objects.create(
+            account=other_account, name='X',
+            display_name='X', folder_type='other',
+        )
+        action = parse_actions([
+            {'type': 'move_to_folder', 'folder_id': str(bad_folder.uuid)},
+        ])[0]
+        result = apply_action(action, self.msg)
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['error'], 'folder_not_in_account')
+        mock_imap.assert_not_called()
+
+    @patch('workspace.mail.services.rules.actions.delete_message')
+    def test_delete_soft_deletes_and_calls_imap(self, mock_imap):
+        action = parse_actions([{'type': 'delete'}])[0]
+        result = apply_action(action, self.msg)
+        self.assertTrue(result['ok'])
+        self.msg.refresh_from_db()
+        self.assertIsNotNone(self.msg.deleted_at)
+        mock_imap.assert_called_once()

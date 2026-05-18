@@ -5,6 +5,7 @@ discriminated union on ``type``. The Django layer stores both as JSONField
 payloads; this module is the single source of truth for valid shapes.
 """
 from typing import Annotated, Any, List, Literal, Optional, Union
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -135,9 +136,6 @@ def validate_tree_limits(node: Union[LeafCondition, GroupCondition]) -> None:
     total = _count(node)
     if total > MAX_LEAVES:
         raise SchemaError(f'too many conditions ({total} > {MAX_LEAVES})')
-
-
-from uuid import UUID
 
 
 class _ActionBase(BaseModel):

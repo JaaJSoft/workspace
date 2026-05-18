@@ -97,6 +97,9 @@ function mailApp() {
     labelCtx: { open: false, x: 0, y: 0, label: null },
     dragOverLabel: null,
 
+    // Current main view: 'mail' or 'rules'
+    currentView: 'mail',
+
     // AI features
     aiSummarizing: false,
     aiSummary: null,
@@ -441,6 +444,16 @@ function mailApp() {
       let i = 0;
       while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
       return `${bytes.toFixed(i ? 1 : 0)} ${units[i]}`;
+    },
+
+    // ── View switching ─────────────────────────────────────
+    showRulesPane() {
+      this.currentView = 'rules';
+      this._closeDrawerOnMobile();
+    },
+
+    showMailPane() {
+      this.currentView = 'mail';
     },
   };
 }

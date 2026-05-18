@@ -1,0 +1,30 @@
+{% load static %}
+<div id="rules-pane" class="p-4 space-y-3">
+  <div class="flex items-center justify-between">
+    <h2 class="text-lg font-semibold">Filters &amp; Rules</h2>
+    <button class="btn btn-primary btn-sm" @click="openRuleForm()">
+      + New rule
+    </button>
+  </div>
+
+  <template x-if="!rules.length">
+    {% include "ui/partials/inline_alert.html" with type="info" message="No rules yet. Click + New rule to create one." %}
+  </template>
+
+  <ul class="space-y-2" x-show="rules.length">
+    <template x-for="rule in rules" :key="rule.uuid">
+      <li class="card bg-base-100 border border-base-300 p-3 flex items-center gap-3">
+        <span class="cursor-grab" title="Drag to reorder">::</span>
+        <div class="flex-1 min-w-0">
+          <div class="font-medium" x-text="rule.name"></div>
+          <div class="text-xs text-base-content/60" x-text="describeRule(rule)"></div>
+        </div>
+        <input type="checkbox" class="toggle toggle-sm toggle-warning"
+          :checked="rule.is_enabled"
+          @change="toggleRule(rule, $event.target.checked)" />
+        <button class="btn btn-ghost btn-xs" @click="openRuleForm(rule)">Edit</button>
+        <button class="btn btn-ghost btn-xs text-error" @click="deleteRule(rule)">X</button>
+      </li>
+    </template>
+  </ul>
+</div>

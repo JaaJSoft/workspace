@@ -1,16 +1,18 @@
 <!-- Mail rules management dialog (per-account) -->
 <dialog id="mail-rules-dialog" class="modal">
   <div class="modal-box max-w-3xl">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="font-bold text-lg flex items-center gap-2">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+      <div class="flex items-center gap-2 min-w-0">
         <span class="w-8 h-8 rounded-full bg-warning/10 text-warning flex items-center justify-center flex-shrink-0">
           <i data-lucide="filter" class="w-4 h-4"></i>
         </span>
-        <span>Filters &amp; Rules</span>
-        <span x-show="rulesAccount" class="text-sm font-normal text-base-content/60"
-              x-text="rulesAccount && ('- ' + rulesAccount.email)"></span>
-      </h3>
-      <div class="flex items-center gap-2" x-show="rulesEditing === null">
+        <div class="min-w-0">
+          <h3 class="font-bold text-lg leading-tight">Filters &amp; Rules</h3>
+          <p x-show="rulesAccount" class="text-xs text-base-content/60 truncate"
+             x-text="rulesAccount && rulesAccount.email"></p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 self-end sm:self-auto flex-shrink-0" x-show="rulesEditing === null">
         <button type="button" class="btn btn-ghost btn-sm btn-square"
                 :title="mailPrefs.rulesCompact ? 'Switch to comfortable view' : 'Switch to compact view'"
                 @click="rulesToggleCompact()">
@@ -18,7 +20,7 @@
         </button>
         <button class="btn btn-primary btn-sm" @click="rulesOpenForm()">
           <i data-lucide="plus" class="w-4 h-4"></i>
-          New rule
+          <span class="hidden sm:inline">New rule</span>
         </button>
       </div>
     </div>
@@ -63,8 +65,10 @@
               <input type="checkbox" class="toggle toggle-sm toggle-warning flex-shrink-0"
                 :checked="rule.is_enabled"
                 @change="rulesToggle(rule, $event.target.checked)" />
-              <button class="btn btn-ghost btn-xs flex-shrink-0" @click="rulesOpenForm(rule)">Edit</button>
-              <button class="btn btn-ghost btn-xs text-error flex-shrink-0" @click="rulesDelete(rule)" title="Delete">
+              <button class="btn btn-ghost btn-xs btn-square flex-shrink-0" @click="rulesOpenForm(rule)" title="Edit">
+                <i data-lucide="pencil" class="w-4 h-4"></i>
+              </button>
+              <button class="btn btn-ghost btn-xs btn-square text-error flex-shrink-0" @click="rulesDelete(rule)" title="Delete">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>
             </li>
@@ -93,26 +97,26 @@
         <div x-show="rulesForm.mode === 'simple'" class="space-y-2">
           <div class="text-sm font-semibold">When</div>
           <div class="flex flex-wrap gap-2 items-stretch">
-            <select class="select select-bordered select-sm w-40 flex-shrink-0"
+            <select class="select select-bordered select-sm w-full sm:w-40 sm:flex-shrink-0"
                     x-model="rulesForm.simpleCondition.field"
                     @change="rulesOnFieldChange()">
               <template x-for="f in rulesConditionFields" :key="f.value">
                 <option :value="f.value" x-text="f.label"></option>
               </template>
             </select>
-            <select class="select select-bordered select-sm w-40 flex-shrink-0" x-model="rulesForm.simpleCondition.op">
+            <select class="select select-bordered select-sm w-full sm:w-40 sm:flex-shrink-0" x-model="rulesForm.simpleCondition.op">
               <template x-for="o in rulesCompatibleOps(rulesForm.simpleCondition.field)" :key="o">
                 <option :value="o" x-text="o.replace(/_/g, ' ')"></option>
               </template>
             </select>
             <input x-show="rulesNeedsValue(rulesForm.simpleCondition.op)" type="text"
-                   class="input input-bordered input-sm flex-1 min-w-0"
+                   class="input input-bordered input-sm w-full sm:flex-1 sm:w-auto sm:min-w-0"
                    x-model="rulesForm.simpleCondition.value" />
           </div>
 
           <div class="text-sm font-semibold mt-3">Then</div>
           <div class="flex flex-wrap gap-2 items-stretch">
-            <select class="select select-bordered select-sm w-44 flex-shrink-0" x-model="rulesForm.simpleAction.type">
+            <select class="select select-bordered select-sm w-full sm:w-44 sm:flex-shrink-0" x-model="rulesForm.simpleAction.type">
               <option value="mark_read">Mark as read</option>
               <option value="mark_unread">Mark as unread</option>
               <option value="star">Star</option>
@@ -123,14 +127,14 @@
               <option value="delete">Delete</option>
             </select>
             <select x-show="rulesForm.simpleAction.type === 'add_label' || rulesForm.simpleAction.type === 'remove_label'"
-                    class="select select-bordered select-sm flex-1 min-w-0"
+                    class="select select-bordered select-sm w-full sm:flex-1 sm:w-auto sm:min-w-0"
                     x-model="rulesForm.simpleAction.label_id">
               <template x-for="lbl in rulesAccountLabels()" :key="lbl.uuid">
                 <option :value="lbl.uuid" x-text="lbl.name"></option>
               </template>
             </select>
             <select x-show="rulesForm.simpleAction.type === 'move_to_folder'"
-                    class="select select-bordered select-sm flex-1 min-w-0"
+                    class="select select-bordered select-sm w-full sm:flex-1 sm:w-auto sm:min-w-0"
                     x-model="rulesForm.simpleAction.folder_id">
               <template x-for="f in rulesAccountFolders()" :key="f.uuid">
                 <option :value="f.uuid" x-text="f.display_name"></option>

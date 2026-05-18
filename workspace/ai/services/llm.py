@@ -120,15 +120,14 @@ def extract_text_tool_calls(content: str):
         if not isinstance(parsed, dict):
             continue
 
-        if 'tool' in parsed:
-            name = parsed.pop('tool')
-            calls.append((name, json.dumps(parsed)))
-            remaining = remaining.replace(match.group(), '').strip()
-        elif 'name' in parsed and 'arguments' in parsed:
-            args = parsed['arguments']
-            args_json = args if isinstance(args, str) else json.dumps(args)
-            calls.append((parsed['name'], args_json))
-            remaining = remaining.replace(match.group(), '').strip()
+        match parsed:
+            case {'tool': name, **rest}:
+                calls.append((name, json.dumps(rest)))
+                remaining = remaining.replace(match.group(), '').strip()
+            case {'name': name, 'arguments': args}:
+                args_json = args if isinstance(args, str) else json.dumps(args)
+                calls.append((name, args_json))
+                remaining = remaining.replace(match.group(), '').strip()
 
     if calls:
         logger.info('Parsed %d tool call(s) from text content', len(calls))

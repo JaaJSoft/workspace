@@ -53,17 +53,18 @@ def _query_presence_snapshot():
 
     online, away, busy = [], [], []
     for uid, last_seen, manual in rows:
-        if manual == 'invisible':
-            continue
-        if manual == 'busy':
-            busy.append(uid)
-        elif manual == 'away':
-            away.append(uid)
-        elif manual in ('auto', 'online'):
-            if last_seen >= online_cutoff:
-                online.append(uid)
-            elif last_seen >= cutoff:
+        match manual:
+            case 'invisible':
+                continue
+            case 'busy':
+                busy.append(uid)
+            case 'away':
                 away.append(uid)
+            case 'auto' | 'online':
+                if last_seen >= online_cutoff:
+                    online.append(uid)
+                elif last_seen >= cutoff:
+                    away.append(uid)
 
     bot_ids = list(PresenceSSEProvider._get_bot_ids())
 

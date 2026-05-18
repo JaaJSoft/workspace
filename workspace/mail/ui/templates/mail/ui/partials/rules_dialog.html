@@ -10,10 +10,17 @@
         <span x-show="rulesAccount" class="text-sm font-normal text-base-content/60"
               x-text="rulesAccount && ('- ' + rulesAccount.email)"></span>
       </h3>
-      <button class="btn btn-primary btn-sm" @click="rulesOpenForm()" x-show="rulesEditing === null">
-        <i data-lucide="plus" class="w-4 h-4"></i>
-        New rule
-      </button>
+      <div class="flex items-center gap-2" x-show="rulesEditing === null">
+        <button type="button" class="btn btn-ghost btn-sm btn-square"
+                :title="rulesCompact ? 'Switch to comfortable view' : 'Switch to compact view'"
+                @click="rulesCompact = !rulesCompact">
+          <i :data-lucide="rulesCompact ? 'rows-2' : 'rows-3'" class="w-4 h-4"></i>
+        </button>
+        <button class="btn btn-primary btn-sm" @click="rulesOpenForm()">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          New rule
+        </button>
+      </div>
     </div>
 
     <!-- List mode -->
@@ -28,12 +35,17 @@
                  class="input input-bordered input-sm w-full" />
         </template>
 
-        <ul class="space-y-2" x-show="filteredRulesList().length">
+        <ul :class="rulesCompact ? 'space-y-1' : 'space-y-2'" x-show="filteredRulesList().length">
           <template x-for="rule in filteredRulesList()" :key="rule.uuid">
-            <li class="bg-base-100 border border-base-300 rounded-lg p-3 flex flex-row items-center gap-3">
+            <li class="bg-base-100 border border-base-300 rounded-lg flex flex-row items-center gap-3"
+                :class="rulesCompact ? 'px-3 py-1.5' : 'p-3'">
               <div class="flex-1 min-w-0">
-                <div class="font-medium truncate" x-text="rule.name"></div>
-                <div class="text-xs text-base-content/60 truncate" x-text="rulesDescribe(rule)"></div>
+                <div class="font-medium truncate"
+                     :class="rulesCompact ? 'text-sm' : ''"
+                     x-text="rule.name"></div>
+                <div x-show="!rulesCompact"
+                     class="text-xs text-base-content/60 truncate"
+                     x-text="rulesDescribe(rule)"></div>
               </div>
               <input type="checkbox" class="toggle toggle-sm toggle-warning flex-shrink-0"
                 :checked="rule.is_enabled"

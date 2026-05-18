@@ -223,3 +223,93 @@ class BatchActionSerializer(serializers.Serializer):
         if attrs['action'] == 'move' and not attrs.get('target_folder_id'):
             raise serializers.ValidationError({'target_folder_id': 'This field is required for move action.'})
         return attrs
+
+
+from .models import MailRule, MailRuleLog
+from .services.rules.schema import (
+    MAX_DEPTH,
+    MAX_LEAVES,
+    SchemaError,
+    parse_actions,
+    parse_conditions,
+    validate_tree_limits,
+)
+
+
+def _validate_conditions(value):
+    try:
+        node = parse_conditions(value)
+        validate_tree_limits(node)
+    except SchemaError as e:
+        raise serializers.ValidationError(str(e))
+    return value
+
+
+def _validate_actions(value):
+    try:
+        parsed = parse_actions(value)
+    except SchemaError as e:
+        raise serializers.ValidationError(str(e))
+    if not parsed:
+        raise serializers.ValidationError('at least one action is required')
+    return value
+
+
+class MailRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MailRule
+        fields = [
+            'uuid', 'account_id', 'name', 'is_enabled', 'position',
+            'stop_processing', 'conditions', 'actions',
+            'last_matched_at', 'match_count',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'uuid', 'account_id', 'last_matched_at', 'match_count',
+            'created_at', 'updated_at',
+        ]
+
+
+class MailRuleCreateSerializer(serializers.Serializer):
+    account_id = serializers.UUIDField()
+    name = serializers.CharField(max_length=120)
+    is_enabled = serializers.BooleanField(required=False, default=True)
+    stop_processing = serializers.BooleanField(required=False, default=False)
+    position = serializers.IntegerField(min_value=0, required=False, default=0)
+    conditions = serializers.JSONField(validators=[_validate_conditions])
+    actions = serializers.JSONField(validators=[_validate_actions])
+
+
+class MailRuleUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120, required=False)
+    is_enabled = serializers.BooleanField(required=False)
+    stop_processing = serializers.BooleanField(required=False)
+    position = serializers.IntegerField(min_value=0, required=False)
+    conditions = serializers.JSONField(required=False, validators=[_validate_conditions])
+    actions = serializers.JSONField(required=False, validators=[_validate_actions])
+
+
+class MailRuleReorderSerializer(serializers.Serializer):
+    position = serializers.IntegerField(min_value=0)
+
+
+class MailRuleTestSerializer(serializers.Serializer):
+    message_id = serializers.UUIDField()
+    rule_id = serializers.UUIDField(required=False)
+    conditions = serializers.JSONField(required=False, validators=[_validate_conditions])
+
+    def validate(self, attrs):
+        if 'rule_id' not in attrs and 'conditions' not in attrs:
+            raise serializers.ValidationError('rule_id or conditions is required')
+        return attrs
+
+
+class MailRuleLogSerializer(serializers.ModelSerializer):
+    message_subject = serializers.CharField(source='message.subject', read_only=True)
+
+    class Meta:
+        model = MailRuleLog
+        fields = [
+            'uuid', 'rule_name_snapshot', 'message', 'message_subject',
+            'actions_applied', 'created_at',
+        ]

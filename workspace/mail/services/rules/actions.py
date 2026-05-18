@@ -14,6 +14,9 @@ from workspace.common.logging import scrub
 from ...models import (
     MailFolder, MailLabel, MailMessage, MailMessageLabel,
 )
+from ..imap_messages import (
+    mark_read, mark_unread, star_message, unstar_message,
+)
 from .schema import (
     AddLabelAction,
     DeleteAction,
@@ -52,9 +55,45 @@ def _remove_label(action: RemoveLabelAction, message: MailMessage) -> dict:
     return _ok('remove_label', label_id=str(action.label_id), removed=deleted)
 
 
+def _flag(message: MailMessage, db_field: str, db_value: bool,
+          imap_fn, type_: str) -> dict:
+    setattr(message, db_field, db_value)
+    message.save(update_fields=[db_field, 'updated_at'])
+    imap_warning = None
+    try:
+        imap_fn(message.account, message)
+    except Exception as e:
+        logger.warning('IMAP %s failed for message %s: %s', type_, message.uuid, scrub(e))
+        imap_warning = 'imap_failed'
+    result = _ok(type_)
+    if imap_warning:
+        result['imap_warning'] = imap_warning
+    return result
+
+
+def _mark_read(action: MarkReadAction, message: MailMessage) -> dict:
+    return _flag(message, 'is_read', True, mark_read, 'mark_read')
+
+
+def _mark_unread(action: MarkUnreadAction, message: MailMessage) -> dict:
+    return _flag(message, 'is_read', False, mark_unread, 'mark_unread')
+
+
+def _star(action: StarAction, message: MailMessage) -> dict:
+    return _flag(message, 'is_starred', True, star_message, 'star')
+
+
+def _unstar(action: UnstarAction, message: MailMessage) -> dict:
+    return _flag(message, 'is_starred', False, unstar_message, 'unstar')
+
+
 HANDLERS: dict[type, Any] = {
     AddLabelAction: _add_label,
     RemoveLabelAction: _remove_label,
+    MarkReadAction: _mark_read,
+    MarkUnreadAction: _mark_unread,
+    StarAction: _star,
+    UnstarAction: _unstar,
 }
 
 

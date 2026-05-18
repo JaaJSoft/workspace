@@ -15,10 +15,11 @@
       <div class="flex items-center gap-2 flex-shrink-0" x-show="rulesEditing === null">
         <button type="button" class="btn btn-ghost btn-sm btn-square"
                 :title="mailPrefs.rulesCompact ? 'Switch to comfortable view' : 'Switch to compact view'"
+                :aria-label="mailPrefs.rulesCompact ? 'Switch to comfortable view' : 'Switch to compact view'"
                 @click="rulesToggleCompact()">
           <i :data-lucide="mailPrefs.rulesCompact ? 'rows-2' : 'rows-3'" class="w-4 h-4"></i>
         </button>
-        <button class="btn btn-primary btn-sm" @click="rulesOpenForm()">
+        <button class="btn btn-primary btn-sm" @click="rulesOpenForm()" aria-label="New rule">
           <i data-lucide="plus" class="w-4 h-4"></i>
           <span class="hidden sm:inline">New rule</span>
         </button>
@@ -53,22 +54,23 @@
               <div x-show="!rulesSearch.trim()" class="join join-vertical flex-shrink-0">
                 <button x-show="rulesCanMoveUp(rule)"
                         class="btn btn-ghost btn-xs join-item"
-                        @click="rulesMove(rule, -1)" title="Move up">
+                        @click="rulesMove(rule, -1)" title="Move up" aria-label="Move rule up">
                   <i data-lucide="chevron-up" class="w-4 h-4"></i>
                 </button>
                 <button x-show="rulesCanMoveDown(rule)"
                         class="btn btn-ghost btn-xs join-item"
-                        @click="rulesMove(rule, 1)" title="Move down">
+                        @click="rulesMove(rule, 1)" title="Move down" aria-label="Move rule down">
                   <i data-lucide="chevron-down" class="w-4 h-4"></i>
                 </button>
               </div>
               <input type="checkbox" class="toggle toggle-sm toggle-warning flex-shrink-0"
                 :checked="rule.is_enabled"
+                :aria-label="rule.is_enabled ? 'Disable rule ' + rule.name : 'Enable rule ' + rule.name"
                 @change="rulesToggle(rule, $event.target.checked)" />
-              <button class="btn btn-ghost btn-xs btn-square flex-shrink-0" @click="rulesOpenForm(rule)" title="Edit">
+              <button class="btn btn-ghost btn-xs btn-square flex-shrink-0" @click="rulesOpenForm(rule)" title="Edit" aria-label="Edit rule">
                 <i data-lucide="pencil" class="w-4 h-4"></i>
               </button>
-              <button class="btn btn-ghost btn-xs btn-square text-error flex-shrink-0" @click="rulesDelete(rule)" title="Delete">
+              <button class="btn btn-ghost btn-xs btn-square text-error flex-shrink-0" @click="rulesDelete(rule)" title="Delete" aria-label="Delete rule">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>
             </li>

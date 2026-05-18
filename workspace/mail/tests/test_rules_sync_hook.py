@@ -80,3 +80,34 @@ class SyncRulesHookTests(TestCase):
         mock_conn.return_value = self._mock_imap_conn()
         sync_folder_messages(self.account, sent)
         mock_rules.assert_not_called()
+
+    @patch('workspace.mail.services.rules.engine.run_rules_for_messages',
+           side_effect=Exception('rule blew up'))
+    @patch('workspace.ai.services.dispatch.dispatch')
+    @patch('workspace.users.services.settings.get_setting', return_value=True)
+    @patch('workspace.ai.client.is_ai_enabled', return_value=True)
+    @patch('workspace.calendar.services.ics_processor.process_calendar_emails')
+    @patch('workspace.mail.services.imap_sync._reconcile_folder')
+    @patch('workspace.mail.services.imap_sync._parse_message')
+    @patch('workspace.mail.services.imap_sync.connect_imap')
+    def test_rules_exception_does_not_break_sync(
+        self, mock_conn, mock_parse, _mock_recon, _mock_proc,
+        _mock_ai, _mock_setting, mock_dispatch, _mock_rules,
+    ):
+        """A misbehaving rule must never abort the sync - the AI dispatch
+        and the rest of the sync pipeline still run."""
+        from workspace.mail.services.imap_sync import sync_folder_messages
+
+        new_msg = MailMessage.objects.create(
+            account=self.account, folder=self.folder,
+            message_id='<a@x>', imap_uid=2, subject='S',
+        )
+        mock_parse.return_value = new_msg
+        mock_conn.return_value = self._mock_imap_conn()
+
+        with self.assertLogs('workspace.mail.services.imap_sync', level='ERROR'):
+            # No exception propagates.
+            sync_folder_messages(self.account, self.folder)
+
+        # AI dispatch still ran for the new message.
+        self.assertTrue(mock_dispatch.called)

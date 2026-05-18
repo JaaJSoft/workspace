@@ -96,6 +96,7 @@ class FlagActionTests(_BaseActionTests):
         self.assertTrue(result['ok'])
         self.msg.refresh_from_db()
         self.assertTrue(self.msg.is_starred)
+        mock_imap.assert_called_once_with(self.account, self.msg)
 
     @patch('workspace.mail.services.rules.actions.unstar_message')
     def test_unstar(self, mock_imap):
@@ -106,6 +107,7 @@ class FlagActionTests(_BaseActionTests):
         self.assertTrue(result['ok'])
         self.msg.refresh_from_db()
         self.assertFalse(self.msg.is_starred)
+        mock_imap.assert_called_once_with(self.account, self.msg)
 
     @patch('workspace.mail.services.rules.actions.mark_read', side_effect=Exception('IMAP down'))
     def test_mark_read_imap_failure_still_writes_db(self, _mock):

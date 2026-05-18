@@ -112,7 +112,9 @@ class MailRuleReorderTests(_Base):
             {'position': 0}, format='json',
         )
         self.assertEqual(resp.status_code, 200, resp.data)
-        a.refresh_from_db(); b.refresh_from_db(); c.refresh_from_db()
+        a.refresh_from_db()
+        b.refresh_from_db()
+        c.refresh_from_db()
         self.assertEqual(c.position, 0)
         self.assertEqual(a.position, 1)
         self.assertEqual(b.position, 2)
@@ -126,7 +128,9 @@ class MailRuleReorderTests(_Base):
             {'position': 2}, format='json',
         )
         self.assertEqual(resp.status_code, 200)
-        a.refresh_from_db(); b.refresh_from_db(); c.refresh_from_db()
+        a.refresh_from_db()
+        b.refresh_from_db()
+        c.refresh_from_db()
         self.assertEqual(b.position, 0)
         self.assertEqual(c.position, 1)
         self.assertEqual(a.position, 2)

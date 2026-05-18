@@ -105,3 +105,33 @@ def parse_conditions(payload: Any) -> Union[LeafCondition, GroupCondition]:
         return adapter.validate_python(payload)
     except ValidationError as e:
         raise SchemaError(str(e)) from e
+
+
+MAX_DEPTH = 5
+MAX_LEAVES = 20
+
+
+def validate_tree_limits(node: Union[LeafCondition, GroupCondition]) -> None:
+    """Raise ``SchemaError`` if the tree exceeds depth or leaf-count limits.
+
+    These limits are not enforced by the Pydantic models themselves because
+    Pydantic's per-list ``max_length`` already caps per-group fanout at 20.
+    The recursive total-leaf and depth checks belong here so the message is
+    explicit.
+    """
+    def _walk(n, depth):
+        if depth > MAX_DEPTH:
+            raise SchemaError(f'tree depth {depth} exceeds {MAX_DEPTH}')
+        if isinstance(n, GroupCondition):
+            for child in n.conditions:
+                _walk(child, depth + 1)
+
+    def _count(n) -> int:
+        if isinstance(n, LeafCondition):
+            return 1
+        return sum(_count(c) for c in n.conditions)
+
+    _walk(node, 0)
+    total = _count(node)
+    if total > MAX_LEAVES:
+        raise SchemaError(f'too many conditions ({total} > {MAX_LEAVES})')

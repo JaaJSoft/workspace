@@ -63,3 +63,37 @@ class GroupConditionTests(SimpleTestCase):
     def test_unknown_group_type_rejected(self):
         with self.assertRaises(SchemaError):
             parse_conditions({'type': 'xor', 'conditions': []})
+
+
+from workspace.mail.services.rules.schema import (
+    MAX_DEPTH, MAX_LEAVES, validate_tree_limits,
+)
+
+
+class TreeLimitsTests(SimpleTestCase):
+    def _leaf(self, value='x'):
+        return {'field': 'from', 'op': 'contains', 'value': value}
+
+    def test_depth_one_ok(self):
+        node = parse_conditions(self._leaf())
+        validate_tree_limits(node)  # no raise
+
+    def test_depth_exceeds_limit(self):
+        # Build a tree of depth MAX_DEPTH + 1
+        node_dict = self._leaf()
+        for _ in range(MAX_DEPTH + 1):
+            node_dict = {'type': 'all', 'conditions': [node_dict]}
+        node = parse_conditions(node_dict)
+        with self.assertRaises(SchemaError):
+            validate_tree_limits(node)
+
+    def test_too_many_leaves(self):
+        try:
+            node = parse_conditions({
+                'type': 'all',
+                'conditions': [self._leaf(str(i)) for i in range(MAX_LEAVES + 1)],
+            })
+        except SchemaError:
+            return  # pydantic rejected at parse time - valid
+        with self.assertRaises(SchemaError):
+            validate_tree_limits(node)

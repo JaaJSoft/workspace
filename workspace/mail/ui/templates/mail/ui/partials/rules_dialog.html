@@ -48,19 +48,9 @@
       <div class="space-y-3">
         <div class="flex items-center justify-between">
           <h4 class="font-semibold" x-text="rulesEditing.uuid ? 'Edit rule' : 'New rule'"></h4>
-          <div class="flex items-center gap-2">
-            <div class="tabs tabs-boxed">
-              <button class="tab tab-sm" :class="rulesForm.mode === 'simple' ? 'tab-active' : ''" @click="rulesSetMode('simple')">Simple</button>
-              <button class="tab tab-sm" :class="rulesForm.mode === 'advanced' ? 'tab-active' : ''" @click="rulesSetMode('advanced')">Advanced</button>
-            </div>
-            <button type="button"
-                    x-show="rulesForm.mode === 'advanced'"
-                    class="btn btn-ghost btn-xs btn-circle"
-                    :class="rulesShowAdvancedHelp ? 'text-warning' : ''"
-                    @click="rulesShowAdvancedHelp = !rulesShowAdvancedHelp"
-                    title="JSON syntax help">
-              <i data-lucide="help-circle" class="w-4 h-4"></i>
-            </button>
+          <div class="tabs tabs-boxed">
+            <button class="tab tab-sm" :class="rulesForm.mode === 'simple' ? 'tab-active' : ''" @click="rulesSetMode('simple')">Simple</button>
+            <button class="tab tab-sm" :class="rulesForm.mode === 'advanced' ? 'tab-active' : ''" @click="rulesSetMode('advanced')">Advanced</button>
           </div>
         </div>
 
@@ -166,7 +156,16 @@
         </div>
 
         <div x-show="rulesForm.mode === 'advanced'" class="space-y-2">
-          <div class="text-sm font-semibold">Conditions (JSON tree)</div>
+          <div class="flex items-center justify-between">
+            <div class="text-sm font-semibold">Conditions (JSON tree)</div>
+            <button type="button"
+                    class="btn btn-ghost btn-xs gap-1"
+                    :class="rulesShowAdvancedHelp ? 'text-warning' : 'text-base-content/60'"
+                    @click="rulesShowAdvancedHelp = !rulesShowAdvancedHelp">
+              <i data-lucide="help-circle" class="w-4 h-4"></i>
+              <span x-text="rulesShowAdvancedHelp ? 'Hide syntax help' : 'Show syntax help'"></span>
+            </button>
+          </div>
           <textarea class="textarea textarea-bordered w-full font-mono text-xs" rows="6"
                     x-model="rulesForm.advancedConditionsText"
                     @input="rulesSyncAdvancedConditions()"></textarea>

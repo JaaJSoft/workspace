@@ -70,13 +70,6 @@ x-data="mailApp()"
       </ul>
     </div>
 
-    <!-- Filters & Rules button -->
-    <div class="px-3 pb-2">
-      <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="filter" label="Filters & Rules" color="warning" onclick="currentView === 'rules' ? showMailPane() : showRulesPane()" tooltip="Filters & Rules" %}
-      </ul>
-    </div>
-
     <!-- Help button -->
     <div class="px-3 pb-2">
       <ul class="menu p-0">
@@ -99,7 +92,7 @@ x-data="mailApp()"
 
 {% block content %}
 <!-- Mail pane -->
-<div class="h-full flex min-w-0 bg-base-100" x-show="currentView === 'mail'" x-cloak>
+<div class="h-full flex min-w-0 bg-base-100">
   <!-- No accounts: centered empty state -->
   <template x-if="accounts.length === 0 && !selectedFolder">
     <div class="flex-1 flex items-center justify-center">
@@ -143,17 +136,8 @@ x-data="mailApp()"
   </button>
 </div>
 
-<!-- Rules pane -->
-<div class="h-full w-full overflow-y-auto bg-base-100"
-     x-show="currentView === 'rules'"
-     x-cloak
-     x-data="rulesApp(
-       accounts[0]?.uuid || '',
-       JSON.parse(document.getElementById('rules-labels-data')?.textContent || '[]'),
-       JSON.parse(document.getElementById('rules-folders-data')?.textContent || '[]')
-     )">
-  {% include "mail/ui/partials/rules_list.html" %}
-</div>
+<!-- Rules dialog (opened per-account from the account context menu) -->
+{% include "mail/ui/partials/rules_dialog.html" %}
 
 <!-- Account context menu -->
 {% include "mail/ui/partials/account_context_menu.html" %}
@@ -505,8 +489,6 @@ x-data="mailApp()"
 <!-- Embedded data -->
 {{ accounts|json_script:"accounts-data" }}
 {{ oauth_providers|json_script:"oauth-providers-data" }}
-{{ labels|json_script:"rules-labels-data" }}
-{{ folders|json_script:"rules-folders-data" }}
 {% endblock %}
 
 {% block extra_scripts %}
@@ -518,6 +500,6 @@ x-data="mailApp()"
 <script src="{% static 'mail/ui/js/mail_compose.js' %}"></script>
 <script src="{% static 'mail/ui/js/mail_labels.js' %}"></script>
 <script src="{% static 'mail/ui/js/mail_ai.js' %}"></script>
-<script src="{% static 'mail/ui/js/rules.js' %}"></script>
+<script src="{% static 'mail/ui/js/mail_rules.js' %}"></script>
 <script src="{% static 'mail/ui/js/mail.js' %}"></script>
 {% endblock %}

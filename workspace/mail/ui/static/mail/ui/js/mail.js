@@ -97,8 +97,18 @@ function mailApp() {
     labelCtx: { open: false, x: 0, y: 0, label: null },
     dragOverLabel: null,
 
-    // Current main view: 'mail' or 'rules'
-    currentView: 'mail',
+    // Mail rules (per-account, opened via account context menu)
+    rulesAccount: null,
+    rulesList: [],
+    rulesEditing: null,
+    rulesForm: {
+      mode: 'simple',
+      simpleCondition: { field: 'from', op: 'contains', value: '' },
+      simpleAction: { type: 'mark_read' },
+      advancedConditionsText: '',
+      advancedActionsText: '',
+      error: '',
+    },
 
     // AI features
     aiSummarizing: false,
@@ -121,6 +131,7 @@ function mailApp() {
     ...mailComposeMixin(),
     ...mailLabelsMixin(),
     ...mailAiMixin(),
+    ...mailRulesMixin(),
 
     // ── Computed ───────────────────────────────────────────
     // Defined on the root (not a mixin) so the getter survives object spread —
@@ -444,16 +455,6 @@ function mailApp() {
       let i = 0;
       while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
       return `${bytes.toFixed(i ? 1 : 0)} ${units[i]}`;
-    },
-
-    // ── View switching ─────────────────────────────────────
-    showRulesPane() {
-      this.currentView = 'rules';
-      this._closeDrawerOnMobile();
-    },
-
-    showMailPane() {
-      this.currentView = 'mail';
     },
   };
 }

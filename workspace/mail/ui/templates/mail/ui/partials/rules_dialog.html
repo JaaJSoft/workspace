@@ -49,13 +49,13 @@
               </div>
               <!-- Reorder arrows: hidden during search so positions are unambiguous -->
               <div x-show="!rulesSearch.trim()" class="join join-vertical flex-shrink-0">
-                <button class="btn btn-ghost btn-xs join-item"
-                        :disabled="!rulesCanMoveUp(rule)"
+                <button x-show="rulesCanMoveUp(rule)"
+                        class="btn btn-ghost btn-xs join-item"
                         @click="rulesMove(rule, -1)" title="Move up">
                   <i data-lucide="chevron-up" class="w-4 h-4"></i>
                 </button>
-                <button class="btn btn-ghost btn-xs join-item"
-                        :disabled="!rulesCanMoveDown(rule)"
+                <button x-show="rulesCanMoveDown(rule)"
+                        class="btn btn-ghost btn-xs join-item"
                         @click="rulesMove(rule, 1)" title="Move down">
                   <i data-lucide="chevron-down" class="w-4 h-4"></i>
                 </button>

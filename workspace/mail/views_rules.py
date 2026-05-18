@@ -1,0 +1,123 @@
+import logging
+
+from django.db import transaction
+from drf_spectacular.utils import OpenApiParameter, extend_schema
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from workspace.common.uuids import parse_uuid_or_none
+from .models import MailAccount, MailMessage, MailRule, MailRuleLog
+from .serializers import (
+    MailRuleCreateSerializer,
+    MailRuleLogSerializer,
+    MailRuleReorderSerializer,
+    MailRuleSerializer,
+    MailRuleTestSerializer,
+    MailRuleUpdateSerializer,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _get_user_account(request, account_id):
+    """Return (account, error_response). One of them is None."""
+    if not account_id:
+        return None, Response(
+            {'detail': 'account query parameter is required'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    account_uuid = parse_uuid_or_none(account_id)
+    if account_uuid is None:
+        return None, Response(
+            {'detail': 'account must be a valid UUID'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        account = MailAccount.objects.get(uuid=account_uuid, owner=request.user)
+    except MailAccount.DoesNotExist:
+        return None, Response(status=status.HTTP_404_NOT_FOUND)
+    return account, None
+
+
+def _get_user_rule(request, uuid):
+    try:
+        rule = MailRule.objects.select_related('account').get(uuid=uuid)
+    except MailRule.DoesNotExist:
+        return None
+    if rule.account.owner_id != request.user.pk:
+        return None
+    return rule
+
+
+@extend_schema(tags=['Mail'])
+class MailRuleListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="List rules for a mail account",
+        parameters=[OpenApiParameter('account', str, required=True)],
+    )
+    def get(self, request):
+        account, err = _get_user_account(request, request.query_params.get('account'))
+        if err:
+            return err
+        rules = MailRule.objects.filter(account=account).order_by('position', 'created_at')
+        return Response(MailRuleSerializer(rules, many=True).data)
+
+    @extend_schema(summary="Create a rule", request=MailRuleCreateSerializer)
+    def post(self, request):
+        ser = MailRuleCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+
+        try:
+            account = MailAccount.objects.get(uuid=data['account_id'], owner=request.user)
+        except MailAccount.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        rule = MailRule.objects.create(
+            account=account,
+            name=data['name'],
+            is_enabled=data.get('is_enabled', True),
+            stop_processing=data.get('stop_processing', False),
+            position=data.get('position', 0),
+            conditions=data['conditions'],
+            actions=data['actions'],
+        )
+        return Response(MailRuleSerializer(rule).data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(tags=['Mail'])
+class MailRuleDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Get rule details")
+    def get(self, request, uuid):
+        rule = _get_user_rule(request, uuid)
+        if not rule:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(MailRuleSerializer(rule).data)
+
+    @extend_schema(summary="Update a rule", request=MailRuleUpdateSerializer)
+    def patch(self, request, uuid):
+        rule = _get_user_rule(request, uuid)
+        if not rule:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        ser = MailRuleUpdateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        update_fields = ['updated_at']
+        for key, value in ser.validated_data.items():
+            setattr(rule, key, value)
+            update_fields.append(key)
+        rule.save(update_fields=update_fields)
+        return Response(MailRuleSerializer(rule).data)
+
+    @extend_schema(summary="Delete a rule")
+    def delete(self, request, uuid):
+        rule = _get_user_rule(request, uuid)
+        if not rule:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        rule.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

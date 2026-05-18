@@ -55,13 +55,27 @@ class LeafCondition(BaseModel):
         if self.field in DATE_FIELDS and self.op not in DATE_OPS:
             raise ValueError(f'op {self.op!r} not valid on date field {self.field!r}')
         if self.op in BOOL_OPS:
-            return self
+            return self  # value ignored
         if self.op == 'in_list':
             if not isinstance(self.value, list) or not all(isinstance(v, str) for v in self.value):
                 raise ValueError('in_list value must be a list of strings')
             return self
         if self.value is None:
             raise ValueError(f'op {self.op!r} requires a value')
+        # Enforce value type per op family so the evaluator can rely on
+        # the right Python type and we fail fast at write time rather
+        # than at eval time during a sync.
+        if self.op in TEXT_OPS:
+            if not isinstance(self.value, str):
+                raise ValueError(f'op {self.op!r} requires a string value')
+        elif self.op in DATE_OPS:
+            if not isinstance(self.value, str):
+                raise ValueError(f'op {self.op!r} requires an ISO 8601 string value')
+            from datetime import datetime
+            try:
+                datetime.fromisoformat(self.value)
+            except ValueError:
+                raise ValueError(f'op {self.op!r} value is not a valid ISO 8601 date or datetime')
         return self
 
 

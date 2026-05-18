@@ -48,18 +48,23 @@ def _matches(rule, message) -> bool:
         return False
 
 
-def _apply(rule, message) -> tuple[list, bool]:
-    """Apply ``rule.actions`` to ``message``. Returns (audit_list, short_circuit).
+def _apply(rule, message) -> tuple[list, bool, bool]:
+    """Apply ``rule.actions`` to ``message``.
 
-    ``short_circuit=True`` when an action removed the message from further
-    consideration (currently: ``delete``). The engine uses this to stop
-    evaluating further rules for the same message.
+    Returns ``(audit_list, short_circuit, applied)``:
+
+    - ``short_circuit=True`` when an action removed the message from further
+      consideration (currently: ``delete``). The engine uses this to stop
+      evaluating further rules for the same message.
+    - ``applied=False`` when ``rule.actions`` could not be parsed. The
+      engine uses this to skip stat increments and log writes for rules
+      whose actions are broken.
     """
     try:
         actions = parse_actions(rule.actions)
     except SchemaError:
         logger.warning('rule %s has invalid actions, skipping', rule.uuid)
-        return [], False
+        return [], False, False
 
     audit = []
     short_circuit = False
@@ -69,7 +74,7 @@ def _apply(rule, message) -> tuple[list, bool]:
         if isinstance(action, DeleteAction) and result.get('ok'):
             short_circuit = True
             break
-    return audit, short_circuit
+    return audit, short_circuit, True
 
 
 def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
@@ -98,7 +103,12 @@ def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
         for rule in rules:
             if not _matches(rule, message):
                 continue
-            audit, short_circuit = _apply(rule, message)
+            audit, short_circuit, applied = _apply(rule, message)
+            if not applied:
+                # Conditions matched but actions could not be parsed -
+                # skip stats and log so the rule doesn't appear to have
+                # fired when it actually did nothing.
+                continue
             matched_rules.append(rule)
             try:
                 MailRuleLog.objects.create(

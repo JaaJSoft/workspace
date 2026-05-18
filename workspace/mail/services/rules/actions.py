@@ -8,7 +8,6 @@ failure doesn't abort the rest of the rule.
 import logging
 from typing import Any
 
-from django.db import transaction
 from django.utils import timezone
 
 from workspace.common.logging import scrub
@@ -145,8 +144,12 @@ def apply_action(action, message: MailMessage) -> dict:
     if handler is None:
         return _err(getattr(action, 'type', 'unknown'), 'no_handler')
     try:
-        with transaction.atomic():
-            return handler(action, message)
+        # No outer transaction.atomic here: each handler issues a single
+        # DB statement that auto-commits, and IMAP calls would otherwise
+        # extend row locks across a network round-trip. The reorder
+        # endpoint and any multi-statement DB work belongs in its own
+        # tight atomic block inside the handler.
+        return handler(action, message)
     except Exception as e:
         logger.exception('action %s failed on message %s', action.type, message.uuid)
         return _err(action.type, scrub(str(e))[:200])

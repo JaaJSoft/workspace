@@ -117,11 +117,12 @@ class BooleanDateConditionTests(_BaseConditionTests):
             self.msg,
         ))
 
-    def test_date_invalid_value_returns_false(self):
-        self.assertFalse(evaluate_node(
-            _node('date', 'greater_than', 'not-a-date'),
-            self.msg,
-        ))
+    def test_date_invalid_value_rejected_at_parse(self):
+        # Schema validation now rejects invalid ISO 8601 strings at parse
+        # time, so a malformed date never reaches the evaluator.
+        from workspace.mail.services.rules.schema import SchemaError
+        with self.assertRaises(SchemaError):
+            _node('date', 'greater_than', 'not-a-date')
 
 
 class RegexConditionTests(_BaseConditionTests):

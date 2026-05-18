@@ -2521,7 +2521,7 @@ requires-dist = [
     { name = "trafilatura", specifier = ">=2.0.0" },
     { name = "whitenoise", specifier = ">=6.11.0" },
     { name = "wsgidav", specifier = ">=4.3.0" },
-    { name = "zipstream-ng", specifier = ">=1.7.1" },
+    { name = "zipstream-ng", specifier = ">=1.9.2" },
 ]
 
 [package.metadata.requires-dev]
@@ -2635,11 +2635,11 @@ wheels = [
 
 [[package]]
 name = "zipstream-ng"
-version = "1.9.1"
+version = "1.9.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/bb/05/8e36a866c98f7eac4de51f3fea1bbd07487e40d00eb97c97c5496524a4a9/zipstream_ng-1.9.1.tar.gz", hash = "sha256:04bfe50c5fcbb5cc62580cdb9fd2d5a1fa34141d88900755f9fbf75578f30067", size = 21534, upload-time = "2026-05-17T01:59:25.494Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fa/33/fce793430e56888cfe3d61199b0116fa42b95d54c2e0fe87b85829507d10/zipstream_ng-1.9.2.tar.gz", hash = "sha256:116b7304b00f3251328cb300fa90f0f09d523b7faf2a06b3eaf7277dcb82cc3e", size = 32446, upload-time = "2026-05-17T16:09:26.934Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5a/c4/d43a5907fb4c42b45899172c86c415272a1b66dbcf5bd15eab76407f0bc8/zipstream_ng-1.9.1-py3-none-any.whl", hash = "sha256:22c07a5e367f7749b1642c186cf09b6df7b4d8c86c445da04d75eb58ceb02785", size = 23146, upload-time = "2026-05-17T01:59:23.935Z" },
+    { url = "https://files.pythonhosted.org/packages/63/6e/103ba2f47ae052a9d91e4c3d4d7b1d45128045675325d99a476e9171fa2e/zipstream_ng-1.9.2-py3-none-any.whl", hash = "sha256:7292efc812a437ec688cef2c9523a4e710cd669e4b5abc7d5a15eb4d5e68e4ea", size = 23407, upload-time = "2026-05-17T16:09:25.874Z" },
 ]
 
 [[package]]

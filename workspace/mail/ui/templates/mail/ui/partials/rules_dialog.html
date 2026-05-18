@@ -47,6 +47,19 @@
                      class="text-xs text-base-content/60 truncate"
                      x-text="rulesDescribe(rule)"></div>
               </div>
+              <!-- Reorder arrows: hidden during search so positions are unambiguous -->
+              <div x-show="!rulesSearch.trim()" class="flex flex-col gap-0 flex-shrink-0">
+                <button class="btn btn-ghost btn-xs h-4 min-h-0 px-1"
+                        :disabled="!rulesCanMoveUp(rule)"
+                        @click="rulesMove(rule, -1)" title="Move up">
+                  <i data-lucide="chevron-up" class="w-3 h-3"></i>
+                </button>
+                <button class="btn btn-ghost btn-xs h-4 min-h-0 px-1"
+                        :disabled="!rulesCanMoveDown(rule)"
+                        @click="rulesMove(rule, 1)" title="Move down">
+                  <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                </button>
+              </div>
               <input type="checkbox" class="toggle toggle-sm toggle-warning flex-shrink-0"
                 :checked="rule.is_enabled"
                 @change="rulesToggle(rule, $event.target.checked)" />

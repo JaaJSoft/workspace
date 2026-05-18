@@ -76,6 +76,28 @@ window.mailRulesMixin = function mailRulesMixin() {
       }
     },
 
+    async rulesMove(rule, delta) {
+      // Move the rule by `delta` positions in the global list (not the
+      // filtered view). Backend renumbers atomically, so we reload after.
+      const target = (rule.position || 0) + delta;
+      if (target < 0) return;
+      const resp = await fetch(`/api/v1/mail/rules/${rule.uuid}/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ position: target }),
+      });
+      if (resp.ok) await this._loadRules();
+    },
+
+    rulesCanMoveUp(rule) {
+      return (rule.position || 0) > 0;
+    },
+
+    rulesCanMoveDown(rule) {
+      const maxPos = Math.max(...this.rulesList.map(r => r.position || 0));
+      return (rule.position || 0) < maxPos;
+    },
+
     async rulesDelete(rule) {
       if (!confirm(`Delete rule "${rule.name}"?`)) return;
       const resp = await fetch(`/api/v1/mail/rules/${rule.uuid}`, {

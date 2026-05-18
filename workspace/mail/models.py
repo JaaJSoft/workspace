@@ -344,3 +344,34 @@ class MailExtraction(models.Model):
 
     def __str__(self):
         return f'{self.kind} extraction from {self.mail_message_id}'
+
+
+class MailRule(models.Model):
+    """User-defined rule that applies actions to incoming mail messages."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    account = models.ForeignKey(
+        MailAccount, on_delete=models.CASCADE, related_name='rules',
+    )
+    name = models.CharField(max_length=120)
+    is_enabled = models.BooleanField(default=True)
+    position = models.PositiveIntegerField(default=0)
+    stop_processing = models.BooleanField(default=False)
+
+    conditions = models.JSONField(default=dict)
+    actions = models.JSONField(default=list)
+
+    last_matched_at = models.DateTimeField(null=True, blank=True)
+    match_count = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['account', 'position', 'created_at']
+        indexes = [
+            models.Index(fields=['account', 'is_enabled', 'position']),
+        ]
+
+    def __str__(self):
+        return f'{self.account.email} / {self.name}'

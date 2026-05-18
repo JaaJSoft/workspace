@@ -109,6 +109,7 @@ function mailApp() {
       advancedActionsText: '',
       error: '',
     },
+    rulesShowAdvancedHelp: false,
 
     // AI features
     aiSummarizing: false,

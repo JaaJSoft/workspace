@@ -48,9 +48,71 @@
       <div class="space-y-3">
         <div class="flex items-center justify-between">
           <h4 class="font-semibold" x-text="rulesEditing.uuid ? 'Edit rule' : 'New rule'"></h4>
-          <div class="tabs tabs-boxed">
-            <button class="tab tab-sm" :class="rulesForm.mode === 'simple' ? 'tab-active' : ''" @click="rulesSetMode('simple')">Simple</button>
-            <button class="tab tab-sm" :class="rulesForm.mode === 'advanced' ? 'tab-active' : ''" @click="rulesSetMode('advanced')">Advanced</button>
+          <div class="flex items-center gap-2">
+            <div class="tabs tabs-boxed">
+              <button class="tab tab-sm" :class="rulesForm.mode === 'simple' ? 'tab-active' : ''" @click="rulesSetMode('simple')">Simple</button>
+              <button class="tab tab-sm" :class="rulesForm.mode === 'advanced' ? 'tab-active' : ''" @click="rulesSetMode('advanced')">Advanced</button>
+            </div>
+            <button type="button"
+                    x-show="rulesForm.mode === 'advanced'"
+                    class="btn btn-ghost btn-xs btn-circle"
+                    :class="rulesShowAdvancedHelp ? 'text-warning' : ''"
+                    @click="rulesShowAdvancedHelp = !rulesShowAdvancedHelp"
+                    title="JSON syntax help">
+              <i data-lucide="help-circle" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Advanced mode help panel -->
+        <div x-show="rulesForm.mode === 'advanced' && rulesShowAdvancedHelp" x-cloak
+             class="bg-base-200 border border-base-300 rounded-lg p-3 text-xs space-y-3">
+          <div>
+            <div class="font-semibold mb-1">Conditions</div>
+            <p class="text-base-content/70 mb-2">A condition is either a single check (leaf) or a group combining multiple checks with AND/OR.</p>
+            <div class="font-mono bg-base-100 border border-base-300 rounded p-2 mb-2 whitespace-pre-wrap">{"field": "from", "op": "contains", "value": "@news.com"}</div>
+            <div class="font-mono bg-base-100 border border-base-300 rounded p-2 whitespace-pre-wrap">{"type": "all", "conditions": [
+  {"field": "from", "op": "contains", "value": "@github.com"},
+  {"type": "any", "conditions": [
+    {"field": "subject", "op": "contains", "value": "[review]"},
+    {"field": "is_starred", "op": "is_true"}
+  ]}
+]}</div>
+          </div>
+          <div>
+            <div class="font-semibold mb-1">Available fields</div>
+            <p class="text-base-content/70">
+              <span class="font-mono">from, to, cc, recipient, subject, body, folder</span> (text);
+              <span class="font-mono">has_attachments, is_starred</span> (boolean);
+              <span class="font-mono">date</span> (ISO 8601).
+            </p>
+          </div>
+          <div>
+            <div class="font-semibold mb-1">Available ops</div>
+            <p class="text-base-content/70">
+              Text: <span class="font-mono">contains, equals, starts_with, ends_with, matches_regex, in_list</span>.
+              Boolean: <span class="font-mono">is_true, is_false</span>.
+              Date: <span class="font-mono">greater_than, less_than</span>.
+            </p>
+            <p class="text-base-content/70 mt-1">Add <span class="font-mono">"case_sensitive": true</span> to a text leaf for exact case matching (default: false).</p>
+          </div>
+          <div>
+            <div class="font-semibold mb-1">Actions (flat list)</div>
+            <div class="font-mono bg-base-100 border border-base-300 rounded p-2 whitespace-pre-wrap">[
+  {"type": "add_label", "label_id": "&lt;uuid&gt;"},
+  {"type": "mark_read"},
+  {"type": "move_to_folder", "folder_id": "&lt;uuid&gt;"}
+]</div>
+            <p class="text-base-content/70 mt-2">
+              Types: <span class="font-mono">add_label, remove_label</span> (need <span class="font-mono">label_id</span>);
+              <span class="font-mono">mark_read, mark_unread, star, unstar, delete</span> (no args);
+              <span class="font-mono">move_to_folder</span> (needs <span class="font-mono">folder_id</span>).
+            </p>
+            <p class="text-base-content/70 mt-1">Limits: max 5 nesting levels, max 20 leaf conditions per rule.</p>
+          </div>
+          <div>
+            <div class="font-semibold mb-1">Finding label/folder UUIDs</div>
+            <p class="text-base-content/70">Use the Simple mode to pick a label or folder, then switch to Advanced to see its UUID inlined in the JSON.</p>
           </div>
         </div>
 

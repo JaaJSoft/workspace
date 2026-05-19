@@ -91,6 +91,7 @@ x-data="mailApp()"
 {% endblock %}
 
 {% block content %}
+<!-- Mail pane -->
 <div class="h-full flex min-w-0 bg-base-100">
   <!-- No accounts: centered empty state -->
   <template x-if="accounts.length === 0 && !selectedFolder">
@@ -134,6 +135,9 @@ x-data="mailApp()"
     <i data-lucide="pencil" class="w-5 h-5"></i>
   </button>
 </div>
+
+<!-- Rules dialog (opened per-account from the account context menu) -->
+{% include "mail/ui/partials/rules_dialog.html" %}
 
 <!-- Account context menu -->
 {% include "mail/ui/partials/account_context_menu.html" %}
@@ -496,5 +500,7 @@ x-data="mailApp()"
 <script src="{% static 'mail/ui/js/mail_compose.js' %}"></script>
 <script src="{% static 'mail/ui/js/mail_labels.js' %}"></script>
 <script src="{% static 'mail/ui/js/mail_ai.js' %}"></script>
+<script src="{% static 'mail/ui/js/mail_rules.js' %}"></script>
+<script src="{% static 'mail/ui/js/mail_rules_form.js' %}"></script>
 <script src="{% static 'mail/ui/js/mail.js' %}"></script>
 {% endblock %}

@@ -260,6 +260,9 @@ window.mailAccountsMixin = function mailAccountsMixin() {
         case 'hidden_folders':
           this._showHiddenFolders(account);
           break;
+        case 'filters_rules':
+          this.showRules(account);
+          break;
         case 'remove':
           this.removeAccount(account.uuid);
           break;

@@ -186,6 +186,16 @@ def sync_folder_messages(account, folder):
 
         _update_folder_counts(folder)
 
+        # Run user-defined rules first - explicit user intent takes precedence
+        # over AI classification. Wrapped in try/except so a misbehaving rule
+        # never breaks the sync.
+        if new_message_uuids and folder.folder_type not in ('sent', 'drafts'):
+            try:
+                from workspace.mail.services.rules.engine import run_rules_for_messages
+                run_rules_for_messages(account, new_message_uuids)
+            except Exception:
+                logger.exception('rules engine failed for %s', scrub(folder.name))
+
         # Dispatch AI classification for new messages (skip sent/drafts)
         if new_message_uuids and folder.folder_type not in ('sent', 'drafts'):
             try:

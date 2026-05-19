@@ -97,6 +97,22 @@ function mailApp() {
     labelCtx: { open: false, x: 0, y: 0, label: null },
     dragOverLabel: null,
 
+    // Mail rules (per-account, opened via account context menu)
+    rulesAccount: null,
+    rulesList: [],
+    rulesSearch: '',
+    rulesEditing: null,
+    rulesForm: {
+      mode: 'simple',
+      simpleCondition: { field: 'from', op: 'contains', value: '' },
+      simpleAction: { type: 'mark_read' },
+      advancedConditionsText: '',
+      advancedActionsText: '',
+      error: '',
+      saving: false,
+    },
+    rulesShowAdvancedHelp: false,
+
     // AI features
     aiSummarizing: false,
     aiSummary: null,
@@ -118,6 +134,8 @@ function mailApp() {
     ...mailComposeMixin(),
     ...mailLabelsMixin(),
     ...mailAiMixin(),
+    ...mailRulesMixin(),
+    ...mailRulesFormMixin(),
 
     // ── Computed ───────────────────────────────────────────
     // Defined on the root (not a mixin) so the getter survives object spread —

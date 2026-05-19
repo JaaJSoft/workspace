@@ -1,0 +1,252 @@
+<!-- Mail rules management dialog (per-account) -->
+<dialog id="mail-rules-dialog" class="modal">
+  <div class="modal-box max-w-3xl">
+    <div class="flex items-center justify-between gap-2 mb-4">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="w-8 h-8 rounded-full bg-warning/10 text-warning flex items-center justify-center flex-shrink-0">
+          <i data-lucide="filter" class="w-4 h-4"></i>
+        </span>
+        <div class="min-w-0">
+          <h3 class="font-bold text-lg leading-tight truncate">Filters &amp; Rules</h3>
+          <p x-show="rulesAccount" class="text-xs text-base-content/60 truncate"
+             x-text="rulesAccount && rulesAccount.email"></p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0" x-show="rulesEditing === null">
+        <button type="button" class="btn btn-ghost btn-sm btn-square"
+                :title="mailPrefs.rulesCompact ? 'Switch to comfortable view' : 'Switch to compact view'"
+                :aria-label="mailPrefs.rulesCompact ? 'Switch to comfortable view' : 'Switch to compact view'"
+                @click="rulesToggleCompact()">
+          <i :data-lucide="mailPrefs.rulesCompact ? 'rows-2' : 'rows-3'" class="w-4 h-4"></i>
+        </button>
+        <button class="btn btn-primary btn-sm" @click="rulesOpenForm()" aria-label="New rule">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">New rule</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- List mode -->
+    <template x-if="rulesEditing === null">
+      <div class="space-y-2">
+        <template x-if="!rulesList.length">
+          {% include "ui/partials/inline_alert.html" with type="info" message="No rules yet. Click 'New rule' to create one." %}
+        </template>
+
+        <template x-if="rulesList.length > 0">
+          <input type="text" x-model="rulesSearch" placeholder="Filter by name or action type..."
+                 class="input input-bordered input-sm w-full" />
+        </template>
+
+        <ul :class="mailPrefs.rulesCompact ? 'space-y-1' : 'space-y-2'" x-show="filteredRulesList().length">
+          <template x-for="rule in filteredRulesList()" :key="rule.uuid">
+            <li class="bg-base-100 border border-base-300 rounded-lg flex flex-row items-center gap-3"
+                :class="mailPrefs.rulesCompact ? 'px-3 py-1.5' : 'p-3'">
+              <div class="flex-1 min-w-0">
+                <div class="font-medium truncate"
+                     :class="mailPrefs.rulesCompact ? 'text-sm' : ''"
+                     x-text="rule.name"></div>
+                <div x-show="!mailPrefs.rulesCompact"
+                     class="text-xs text-base-content/60 truncate"
+                     x-text="rulesDescribe(rule)"></div>
+              </div>
+              <!-- Reorder arrows: hidden during search so positions are unambiguous -->
+              <div x-show="!rulesSearch.trim()" class="join join-vertical flex-shrink-0">
+                <button x-show="rulesCanMoveUp(rule)"
+                        class="btn btn-ghost btn-xs join-item"
+                        @click="rulesMove(rule, -1)" title="Move up" aria-label="Move rule up">
+                  <i data-lucide="chevron-up" class="w-4 h-4"></i>
+                </button>
+                <button x-show="rulesCanMoveDown(rule)"
+                        class="btn btn-ghost btn-xs join-item"
+                        @click="rulesMove(rule, 1)" title="Move down" aria-label="Move rule down">
+                  <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                </button>
+              </div>
+              <input type="checkbox" class="toggle toggle-sm toggle-warning flex-shrink-0"
+                :checked="rule.is_enabled"
+                :aria-label="rule.is_enabled ? 'Disable rule ' + rule.name : 'Enable rule ' + rule.name"
+                @change="rulesToggle(rule, $event.target.checked)" />
+              <button class="btn btn-ghost btn-xs btn-square flex-shrink-0" @click="rulesOpenForm(rule)" title="Edit" aria-label="Edit rule">
+                <i data-lucide="pencil" class="w-4 h-4"></i>
+              </button>
+              <button class="btn btn-ghost btn-xs btn-square text-error flex-shrink-0" @click="rulesDelete(rule)" title="Delete" aria-label="Delete rule">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </li>
+          </template>
+        </ul>
+
+        <template x-if="rulesList.length > 0 && filteredRulesList().length === 0">
+          <p class="text-base-content/60 text-sm py-4 text-center">No rules match the filter.</p>
+        </template>
+      </div>
+    </template>
+
+    <!-- Edit/Create form -->
+    <template x-if="rulesEditing !== null">
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h4 class="font-semibold" x-text="rulesEditing.uuid ? 'Edit rule' : 'New rule'"></h4>
+          <div class="tabs tabs-boxed">
+            <button class="tab tab-sm" :class="rulesForm.mode === 'simple' ? 'tab-active' : ''" @click="rulesSetMode('simple')">Simple</button>
+            <button class="tab tab-sm" :class="rulesForm.mode === 'advanced' ? 'tab-active' : ''" @click="rulesSetMode('advanced')">Advanced</button>
+          </div>
+        </div>
+
+        <input type="text" class="input input-bordered w-full" placeholder="Rule name" x-model="rulesEditing.name" />
+
+        <div x-show="rulesForm.mode === 'simple'" class="space-y-2">
+          <div class="text-sm font-semibold">When</div>
+          <div class="flex flex-wrap gap-2 items-stretch">
+            <select class="select select-bordered select-sm w-full sm:w-40 sm:flex-shrink-0"
+                    x-model="rulesForm.simpleCondition.field"
+                    @change="rulesOnFieldChange()">
+              <template x-for="f in rulesConditionFields" :key="f.value">
+                <option :value="f.value" x-text="f.label"></option>
+              </template>
+            </select>
+            <select class="select select-bordered select-sm w-full sm:w-40 sm:flex-shrink-0" x-model="rulesForm.simpleCondition.op">
+              <template x-for="o in rulesCompatibleOps(rulesForm.simpleCondition.field)" :key="o">
+                <option :value="o" x-text="o.replace(/_/g, ' ')"></option>
+              </template>
+            </select>
+            <input x-show="rulesNeedsValue(rulesForm.simpleCondition.op)" type="text"
+                   class="input input-bordered input-sm w-full sm:flex-1 sm:w-auto sm:min-w-0"
+                   x-model="rulesForm.simpleCondition.value" />
+          </div>
+
+          <div class="text-sm font-semibold mt-3">Then</div>
+          <div class="flex flex-wrap gap-2 items-stretch">
+            <select class="select select-bordered select-sm w-full sm:w-44 sm:flex-shrink-0" x-model="rulesForm.simpleAction.type">
+              <option value="mark_read">Mark as read</option>
+              <option value="mark_unread">Mark as unread</option>
+              <option value="star">Star</option>
+              <option value="unstar">Unstar</option>
+              <option value="add_label">Add label</option>
+              <option value="remove_label">Remove label</option>
+              <option value="move_to_folder">Move to folder</option>
+              <option value="delete">Delete</option>
+            </select>
+            <select x-show="rulesForm.simpleAction.type === 'add_label' || rulesForm.simpleAction.type === 'remove_label'"
+                    class="select select-bordered select-sm w-full sm:flex-1 sm:w-auto sm:min-w-0"
+                    x-model="rulesForm.simpleAction.label_id">
+              <template x-for="lbl in rulesAccountLabels()" :key="lbl.uuid">
+                <option :value="lbl.uuid" x-text="lbl.name"></option>
+              </template>
+            </select>
+            <select x-show="rulesForm.simpleAction.type === 'move_to_folder'"
+                    class="select select-bordered select-sm w-full sm:flex-1 sm:w-auto sm:min-w-0"
+                    x-model="rulesForm.simpleAction.folder_id">
+              <template x-for="f in rulesAccountFolders()" :key="f.uuid">
+                <option :value="f.uuid" x-text="f.display_name"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+
+        <div x-show="rulesForm.mode === 'advanced'" class="space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="text-sm font-semibold">Conditions (JSON tree)</div>
+            <button type="button"
+                    class="btn btn-ghost btn-xs gap-1"
+                    :class="rulesShowAdvancedHelp ? 'text-warning' : 'text-base-content/60'"
+                    @click="rulesShowAdvancedHelp = !rulesShowAdvancedHelp">
+              <i data-lucide="help-circle" class="w-4 h-4"></i>
+              <span x-text="rulesShowAdvancedHelp ? 'Hide syntax help' : 'Show syntax help'"></span>
+            </button>
+          </div>
+
+          <!-- Help panel: rendered right below the toggle so the click target -->
+          <!-- and the result stay in the same area of the dialog.            -->
+          <div x-show="rulesShowAdvancedHelp" x-cloak
+               class="bg-base-200 border border-base-300 rounded-lg p-3 text-xs space-y-3">
+            <div>
+              <div class="font-semibold mb-1">Conditions</div>
+              <p class="text-base-content/70 mb-2">A condition is either a single check (leaf) or a group combining multiple checks with AND/OR.</p>
+              <div class="font-mono bg-base-100 border border-base-300 rounded p-2 mb-2 whitespace-pre-wrap">{"field": "from", "op": "contains", "value": "@news.com"}</div>
+              <div class="font-mono bg-base-100 border border-base-300 rounded p-2 whitespace-pre-wrap">{"type": "all", "conditions": [
+  {"field": "from", "op": "contains", "value": "@github.com"},
+  {"type": "any", "conditions": [
+    {"field": "subject", "op": "contains", "value": "[review]"},
+    {"field": "is_starred", "op": "is_true"}
+  ]}
+]}</div>
+            </div>
+            <div>
+              <div class="font-semibold mb-1">Available fields</div>
+              <p class="text-base-content/70">
+                <span class="font-mono">from, to, cc, recipient, subject, body, folder</span> (text);
+                <span class="font-mono">has_attachments, is_starred</span> (boolean);
+                <span class="font-mono">date</span> (ISO 8601).
+              </p>
+            </div>
+            <div>
+              <div class="font-semibold mb-1">Available ops</div>
+              <p class="text-base-content/70">
+                Text: <span class="font-mono">contains, equals, starts_with, ends_with, matches_regex, in_list</span>.
+                Boolean: <span class="font-mono">is_true, is_false</span>.
+                Date: <span class="font-mono">greater_than, less_than</span>.
+              </p>
+              <p class="text-base-content/70 mt-1">Add <span class="font-mono">"case_sensitive": true</span> to a text leaf for exact case matching (default: false).</p>
+            </div>
+            <div>
+              <div class="font-semibold mb-1">Actions (flat list)</div>
+              <div class="font-mono bg-base-100 border border-base-300 rounded p-2 whitespace-pre-wrap">[
+  {"type": "add_label", "label_id": "&lt;uuid&gt;"},
+  {"type": "mark_read"},
+  {"type": "move_to_folder", "folder_id": "&lt;uuid&gt;"}
+]</div>
+              <p class="text-base-content/70 mt-2">
+                Types: <span class="font-mono">add_label, remove_label</span> (need <span class="font-mono">label_id</span>);
+                <span class="font-mono">mark_read, mark_unread, star, unstar, delete</span> (no args);
+                <span class="font-mono">move_to_folder</span> (needs <span class="font-mono">folder_id</span>).
+              </p>
+              <p class="text-base-content/70 mt-1">Limits: max 5 nesting levels, max 20 leaf conditions per rule.</p>
+            </div>
+            <div>
+              <div class="font-semibold mb-1">Finding label/folder UUIDs</div>
+              <p class="text-base-content/70">Use the Simple mode to pick a label or folder, then switch to Advanced to see its UUID inlined in the JSON.</p>
+            </div>
+          </div>
+
+          <textarea class="textarea textarea-bordered w-full font-mono text-xs" rows="6"
+                    x-model="rulesForm.advancedConditionsText"
+                    @input="rulesSyncAdvancedConditions()"></textarea>
+
+          <div class="text-sm font-semibold mt-3">Actions (JSON list)</div>
+          <textarea class="textarea textarea-bordered w-full font-mono text-xs" rows="8"
+                    x-model="rulesForm.advancedActionsText"
+                    @input="rulesSyncAdvancedActions()"></textarea>
+        </div>
+
+        <div x-show="rulesForm.error" class="text-error text-xs" x-text="rulesForm.error"></div>
+
+        <label class="flex items-center gap-2 mt-3">
+          <input type="checkbox" class="checkbox checkbox-sm" x-model="rulesEditing.is_enabled" />
+          <span class="text-sm">Enabled</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="checkbox checkbox-sm" x-model="rulesEditing.stop_processing" />
+          <span class="text-sm">Stop processing more rules after this one</span>
+        </label>
+
+        <div class="modal-action">
+          <button class="btn btn-ghost btn-sm" @click="rulesCancelEdit()" :disabled="rulesForm.saving">Back</button>
+          <button class="btn btn-primary btn-sm" @click="rulesSave()"
+                  :disabled="!rulesEditing.name || rulesForm.saving">
+            <span x-show="!rulesForm.saving">Save</span>
+            <span x-show="rulesForm.saving" class="loading loading-spinner loading-xs"></span>
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <div class="modal-action" x-show="rulesEditing === null">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>

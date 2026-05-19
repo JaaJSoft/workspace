@@ -10,6 +10,7 @@ from . import (
     views_labels,
     views_messages,
     views_oauth2,
+    views_rules,
 )
 
 urlpatterns = [
@@ -20,6 +21,11 @@ urlpatterns = [
     path('api/v1/mail/accounts/<uuid:uuid>/sync', views.MailAccountSyncView.as_view(), name='mail-account-sync'),
     path('api/v1/mail/labels', views_labels.MailLabelListView.as_view(), name='mail-label-list'),
     path('api/v1/mail/labels/<uuid:uuid>', views_labels.MailLabelDetailView.as_view(), name='mail-label-detail'),
+    path('api/v1/mail/rules', views_rules.MailRuleListView.as_view(), name='mail-rule-list'),
+    path('api/v1/mail/rules/<uuid:uuid>', views_rules.MailRuleDetailView.as_view(), name='mail-rule-detail'),
+    path('api/v1/mail/rules/<uuid:uuid>/reorder', views_rules.MailRuleReorderView.as_view(), name='mail-rule-reorder'),
+    path('api/v1/mail/rules/test', views_rules.MailRuleTestView.as_view(), name='mail-rule-test'),
+    path('api/v1/mail/rules/<uuid:uuid>/logs', views_rules.MailRuleLogsView.as_view(), name='mail-rule-logs'),
     path('api/v1/mail/folders', views_folders.MailFolderListView.as_view(), name='mail-folder-list'),
     path('api/v1/mail/folders/<uuid:uuid>', views_folders.MailFolderUpdateView.as_view(), name='mail-folder-update'),
     path('api/v1/mail/folders/<uuid:uuid>/mark-read', views_folders.MailFolderMarkReadView.as_view(), name='mail-folder-mark-read'),

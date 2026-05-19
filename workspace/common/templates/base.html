@@ -50,6 +50,16 @@
       height: 100dvh;
     }
 
+    /* DaisyUI's `html:has(.drawer-open.drawer-open) { overflow-y: auto }` rule
+       lets the html element scroll on pages that use `drawer-open` (files, chat).
+       Combined with body `overflow-hidden`, an unexpected content-height bump
+       (mobile keyboard, dynamic injection) then scrolls the sticky navbar off
+       screen. Lock html scrolling whenever the body opts into the fixed-height
+       layout. The `.h-dvh` second class matches DaisyUI's selector specificity. */
+    html:has(> body.overflow-hidden.h-dvh) {
+      overflow: hidden;
+    }
+
     /* Breadcrumb separators */
     .bc-sep > li + li::before {
       content: "";

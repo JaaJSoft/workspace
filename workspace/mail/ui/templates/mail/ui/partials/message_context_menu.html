@@ -49,9 +49,9 @@
       </button>
     </li>
     <li x-show="msgCtx.msg && msgCtx.msg.from_address && msgCtx.msg.from_address.email">
-      <button type="button" class="gap-3 rounded" @click="msgCtxAction('create_rule_from_sender')" aria-label="Create rule from sender">
+      <button type="button" class="gap-3 rounded" @click="msgCtxAction('create_rule_from_sender')" aria-label="Create filter from sender">
         <i data-lucide="filter" class="w-4 h-4"></i>
-        <span>Create rule from sender</span>
+        <span>Create filter</span>
       </button>
     </li>
     <hr class="my-1 border-base-300" />

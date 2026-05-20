@@ -1,4 +1,6 @@
 """Regression tests for ``base.html`` / ``base_with_navbar.html``."""
+import re
+
 from django.template import Context, Template
 from django.test import TestCase
 
@@ -16,6 +18,11 @@ class NavbarLayoutScrollLockTests(TestCase):
         tpl = Template("{% extends 'base_with_navbar.html' %}")
         return tpl.render(Context({}))
 
+    def _body_classes(self, html):
+        match = re.search(r'<body\b[^>]*\bclass="([^"]*)"', html)
+        self.assertIsNotNone(match, "body tag with class attribute not found")
+        return set(match.group(1).split())
+
     def test_html_overflow_is_locked_when_body_opts_into_fixed_layout(self):
         html = self._render_base_with_navbar()
         self.assertIn("html:has(> body.overflow-hidden.h-dvh)", html)
@@ -25,9 +32,11 @@ class NavbarLayoutScrollLockTests(TestCase):
         block = html[idx:idx + 200]
         self.assertIn("overflow: hidden", block)
 
-    def test_body_opts_into_fixed_layout_via_default_body_class(self):
-        html = self._render_base_with_navbar()
-        # The lock relies on the body carrying BOTH classes the selector
-        # matches. If the default body class for base_with_navbar.html ever
-        # drops one of them, the lock silently stops applying.
-        self.assertIn('class="bg-base-100 h-dvh overflow-hidden flex flex-col"', html)
+    def test_body_carries_classes_the_lock_selector_matches(self):
+        # The lock fires on `body.overflow-hidden.h-dvh`. If the default body
+        # class for base_with_navbar.html ever drops one of those classes,
+        # the lock silently stops applying. Assert on membership, not the
+        # full class string, so unrelated tailwind classes can come and go.
+        classes = self._body_classes(self._render_base_with_navbar())
+        self.assertIn("overflow-hidden", classes)
+        self.assertIn("h-dvh", classes)

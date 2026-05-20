@@ -48,6 +48,12 @@
         <span>Move to...</span>
       </button>
     </li>
+    <li x-show="msgCtx.msg && msgCtx.msg.from_address && msgCtx.msg.from_address.email">
+      <button type="button" class="gap-3 rounded" @click="msgCtxAction('create_rule_from_sender')" aria-label="Create rule from sender">
+        <i data-lucide="filter" class="w-4 h-4"></i>
+        <span>Create rule from sender</span>
+      </button>
+    </li>
     <hr class="my-1 border-base-300" />
     <template x-for="label in _getMsgCtxAccountLabels()" :key="label.uuid">
       <li>

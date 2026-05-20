@@ -423,6 +423,9 @@ window.mailMessagesMixin = function mailMessagesMixin() {
         case 'delete':
           await this.deleteMessage(msg);
           break;
+        case 'create_rule_from_sender':
+          await this.openRuleFromMessage(msg);
+          break;
       }
     },
 

@@ -437,7 +437,14 @@ window.mailMessagesMixin = function mailMessagesMixin() {
     },
 
     _getMsgCtxAccountLabels() {
-      const accountId = this.selectedFolder?.account_id || this.selectedLabel?.account_id;
+      // Prefer the right-clicked message's account_id over the selection
+      // context: in the unified ("All inboxes") view, both selectedFolder
+      // and selectedLabel are null, so falling back to them would leave
+      // the labels submenu empty. Each message carries its own account_id
+      // (MailMessageListSerializer), which is the right source of truth.
+      const accountId = this.msgCtx.msg?.account_id
+        || this.selectedFolder?.account_id
+        || this.selectedLabel?.account_id;
       return accountId ? (this.labels[accountId] || []) : [];
     },
 

@@ -19,6 +19,27 @@ window.mailRulesMixin = function mailRulesMixin() {
       document.getElementById('mail-rules-dialog').showModal();
     },
 
+    // Open the rules dialog and pre-fill the form with a "from = sender"
+    // condition derived from the given message. The account is resolved
+    // from msg.account_id so the new rule is created on the right account.
+    async openRuleFromMessage(msg) {
+      if (!msg) return;
+      const email = (msg.from_address && msg.from_address.email) || '';
+      if (!email) return;
+      const account = this.accounts.find(a => a.uuid === msg.account_id);
+      if (!account) return;
+
+      await this.showRules(account);
+      this.rulesOpenForm();
+      // Force simple mode: a single leaf condition + single action is
+      // exactly what the simple form supports, so this stays editable
+      // without dropping the user into raw JSON.
+      this.rulesForm.mode = 'simple';
+      this.rulesForm.simpleCondition = { field: 'from', op: 'equals', value: email };
+      const senderName = (msg.from_address && msg.from_address.name) || email;
+      this.rulesEditing.name = `From ${senderName}`;
+    },
+
     async _loadRules() {
       if (!this.rulesAccount) return;
       const resp = await fetch(`/api/v1/mail/rules?account=${this.rulesAccount.uuid}`);

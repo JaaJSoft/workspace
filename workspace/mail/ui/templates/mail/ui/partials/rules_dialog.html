@@ -98,21 +98,21 @@
 
         <div x-show="rulesForm.mode === 'simple'" class="space-y-2">
           <div class="text-sm font-semibold">When</div>
-          <div class="flex flex-wrap gap-2 items-stretch">
-            <select class="select select-bordered select-sm w-full sm:w-40 sm:flex-shrink-0"
+          <div class="grid grid-cols-1 sm:grid-cols-[10rem_10rem_1fr] gap-2 items-stretch">
+            <select class="select select-bordered select-sm min-w-0 w-full"
                     x-model="rulesForm.simpleCondition.field"
                     @change="rulesOnFieldChange()">
               <template x-for="f in rulesConditionFields" :key="f.value">
                 <option :value="f.value" x-text="f.label"></option>
               </template>
             </select>
-            <select class="select select-bordered select-sm w-full sm:w-40 sm:flex-shrink-0" x-model="rulesForm.simpleCondition.op">
+            <select class="select select-bordered select-sm min-w-0 w-full" x-model="rulesForm.simpleCondition.op">
               <template x-for="o in rulesCompatibleOps(rulesForm.simpleCondition.field)" :key="o">
                 <option :value="o" x-text="o.replace(/_/g, ' ')"></option>
               </template>
             </select>
             <input x-show="rulesNeedsValue(rulesForm.simpleCondition.op)" type="text"
-                   class="input input-bordered input-sm w-full sm:flex-1 sm:w-auto sm:min-w-0"
+                   class="input input-bordered input-sm min-w-0 w-full"
                    x-model="rulesForm.simpleCondition.value" />
           </div>
 

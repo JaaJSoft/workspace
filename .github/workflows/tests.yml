@@ -44,6 +44,8 @@ jobs:
             min_coverage: 45
           - module: notifications
             min_coverage: 80
+          - module: passwords
+            min_coverage: 40
           - module: users
             min_coverage: 85
     name: Tests (${{ matrix.module }})

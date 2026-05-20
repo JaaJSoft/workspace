@@ -1,0 +1,46 @@
+<!-- Create folder dialog — rendered inside vault's x-data scope -->
+<dialog id="create-folder-dialog" class="modal"
+        x-data="{
+          name: '',
+          loading: false,
+          error: '',
+          close() {
+            this.name = '';
+            this.error = '';
+            document.getElementById('create-folder-dialog').close();
+          }
+        }">
+  <div class="modal-box max-w-sm">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+      <i data-lucide="folder-plus" class="w-5 h-5 text-warning"></i>
+      New folder
+    </h3>
+
+    <div x-show="error" class="mb-4 text-error text-sm" x-text="error"></div>
+
+    <form @submit.prevent="
+      loading = true;
+      error = '';
+      createFolder(name.trim()).then(() => {
+        close();
+        loading = false;
+      }).catch(() => { error = 'Failed to create folder.'; loading = false; });
+    ">
+      <div class="form-control mb-4">
+        <label class="label"><span class="label-text font-medium">Folder name</span></label>
+        <input type="text" x-model="name" placeholder="e.g. Dev, Social…"
+               class="input input-bordered focus:border-warning focus:outline-warning/20"
+               required autofocus>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" @click="close()">Cancel</button>
+        <button type="submit" class="btn btn-warning" :disabled="loading || !name.trim()">
+          <span x-show="loading" class="loading loading-spinner loading-sm"></span>
+          Create folder
+        </button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>

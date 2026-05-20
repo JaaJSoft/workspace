@@ -49,16 +49,6 @@ class DashboardConfig(AppConfig):
                 active=False,
                 order=70,
             ),
-            ModuleInfo(
-                name='Passwords',
-                slug='passwords',
-                description='Encrypted password vault.',
-                icon='lock',
-                color='error',
-                url=None,
-                active=False,
-                order=80,
-            ),
         ]
         for module in planned_modules:
             registry.register(module)

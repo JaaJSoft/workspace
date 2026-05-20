@@ -1,0 +1,37 @@
+{% load ui_tags %}
+{% help_items as items %}
+key-round | Vaults
+<ul>
+  <li><strong>Create</strong> &mdash; Click <strong>New vault</strong> in the toolbar. Choose a name, icon, and colour, then set a master password.</li>
+  <li><strong>Unlock</strong> &mdash; Click a vault card and enter your master password to decrypt its contents in this browser session.</li>
+  <li><strong>Favourites</strong> &mdash; Star a vault to pin it to the Favourites view in the sidebar.</li>
+  <li><strong>Shared with me</strong> &mdash; Vaults that another user has granted you access to appear in the <em>Shared with me</em> view.</li>
+  <li><strong>Delete</strong> &mdash; Open the vault settings and choose Delete vault (owner only, irreversible).</li>
+</ul>
+---
+lock | Entries & Folders
+<ul>
+  <li><strong>New entry</strong> &mdash; Unlock a vault, then click <strong>+</strong> to add a login, note, or card.</li>
+  <li><strong>Folders</strong> &mdash; Organise entries in folders using the folder panel inside a vault.</li>
+  <li><strong>Favourites</strong> &mdash; Star individual entries to surface them quickly.</li>
+  <li><strong>Copy &amp; autofill</strong> &mdash; Click a field to copy it to the clipboard; browser extensions handle autofill.</li>
+  <li><strong>Trash</strong> &mdash; Deleted entries move to trash and can be recovered or permanently removed.</li>
+</ul>
+---
+shield | Security
+<ul>
+  <li><strong>Zero-knowledge</strong> &mdash; Your master password never leaves your device. The server stores only a one-way hash.</li>
+  <li><strong>AES-256-GCM</strong> &mdash; All entry data (usernames, passwords, TOTP secrets) is encrypted in your browser before being sent.</li>
+  <li><strong>Per-vault keys</strong> &mdash; Each vault has its own randomly-generated encryption key, independently locked by its master password.</li>
+  <li><strong>Sharing</strong> &mdash; Vault keys are re-encrypted with the recipient's public key client-side before being shared — the server cannot read them.</li>
+  <li><strong>Master password</strong> &mdash; Choose a strong, unique master password. There is no server-side recovery if you forget it.</li>
+</ul>
+---
+code | API Access
+<ul>
+  <li><strong>Base URL:</strong> <code>/api/v1/passwords</code></li>
+  <li><strong>Authentication:</strong> Use your session cookie or API token.</li>
+  <li><strong>Documentation:</strong> Full API docs at <a href="/schema/swagger-ui/" class="link link-warning">/schema/swagger-ui/</a>.</li>
+</ul>
+{% endhelp_items %}
+{% include "ui/partials/help_dialog.html" with dialog_id="passwords-help-dialog" accent_color="warning" items=items %}

@@ -1,0 +1,85 @@
+<!-- Create entry dialog — rendered inside vault's x-data scope -->
+<dialog id="create-entry-dialog" class="modal"
+        x-data="{
+          form: { name: '', username: '', password: '', url: '' },
+          showPw: true,
+          loading: false,
+          error: '',
+          close() {
+            this.form = { name: '', username: '', password: '', url: '' };
+            this.error = '';
+            document.getElementById('create-entry-dialog').close();
+          },
+          generatePassword() {
+            const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%^&*';
+            const arr = new Uint8Array(20);
+            crypto.getRandomValues(arr);
+            this.form.password = Array.from(arr, b => chars[b % chars.length]).join('');
+          }
+        }">
+  <div class="modal-box max-w-md">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+      <i data-lucide="key-round" class="w-5 h-5 text-warning"></i>
+      New entry
+    </h3>
+
+    <div x-show="error" class="mb-4 text-error text-sm" x-text="error"></div>
+
+    <form @submit.prevent="
+      loading = true;
+      error = '';
+      createEntry(form).then(result => {
+        if (result) { close(); } else { error = 'Failed to save entry.'; }
+        loading = false;
+      }).catch(() => { error = 'An error occurred.'; loading = false; });
+    ">
+      <div class="form-control mb-3">
+        <label class="label"><span class="label-text font-medium">Title</span></label>
+        <input type="text" x-model="form.name" placeholder="e.g. GitHub, Gmail…"
+               class="input input-bordered focus:border-warning focus:outline-warning/20" required>
+      </div>
+
+      <div class="form-control mb-3">
+        <label class="label"><span class="label-text font-medium">Username / email</span></label>
+        <input type="text" x-model="form.username" placeholder="username or email"
+               class="input input-bordered focus:border-warning focus:outline-warning/20">
+      </div>
+
+      <div class="form-control mb-3">
+        <label class="label"><span class="label-text font-medium">Password</span></label>
+        <div class="relative">
+          <input :type="showPw ? 'text' : 'password'" x-model="form.password"
+                 class="input input-bordered w-full pr-20 focus:border-warning focus:outline-warning/20"
+                 placeholder="Password">
+          <div class="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+            <button type="button" class="btn btn-ghost btn-xs btn-square"
+                    @click="generatePassword()" title="Generate">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            </button>
+            <button type="button" class="btn btn-ghost btn-xs btn-square"
+                    @click="showPw = !showPw">
+              <i :data-lucide="showPw ? 'eye-off' : 'eye'" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-control mb-3">
+        <label class="label">
+          <span class="label-text font-medium">URL <span class="text-base-content/40">(optional)</span></span>
+        </label>
+        <input type="url" x-model="form.url" placeholder="https://example.com"
+               class="input input-bordered focus:border-warning focus:outline-warning/20">
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" @click="close()">Cancel</button>
+        <button type="submit" class="btn btn-warning" :disabled="loading || !form.name.trim()">
+          <span x-show="loading" class="loading loading-spinner loading-sm"></span>
+          Save entry
+        </button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>

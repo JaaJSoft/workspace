@@ -1,0 +1,138 @@
+<!-- vault_properties_panel.html — right-side detail panel for a selected entry -->
+<div
+  x-show="showPropertiesPanel"
+  x-cloak
+  x-transition:enter="transition-[width] ease-out duration-200"
+  x-transition:enter-start="w-0"
+  x-transition:enter-end="w-80"
+  x-transition:leave="transition-[width] ease-in duration-150"
+  x-transition:leave-start="w-80"
+  x-transition:leave-end="w-0"
+  class="w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden flex-shrink-0"
+>
+  <template x-if="activeEntry">
+    <div class="w-80 flex flex-col h-full">
+
+      <!-- Panel header -->
+      <div class="flex items-center gap-3 px-4 py-3 border-b border-base-300 flex-shrink-0">
+        <div class="w-9 h-9 rounded-lg bg-base-200 flex items-center justify-center flex-shrink-0">
+          <i :data-lucide="activeEntry.icon || 'key-round'" class="w-5 h-5 text-base-content/60"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h2 class="font-semibold text-sm truncate" x-text="activeEntry.name"></h2>
+          <p class="text-xs text-base-content/40" x-text="activeEntry.type === 'login' ? 'Login' : activeEntry.type"></p>
+        </div>
+        <button type="button" class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+                @click="closePropertiesPanel()" aria-label="Close panel">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Fields -->
+      <div class="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+
+        <!-- Username -->
+        <div x-show="activeEntry.username">
+          <p class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-1">Username</p>
+          <div class="flex items-center gap-2 bg-base-200 rounded-lg px-3 py-2">
+            <span class="flex-1 text-sm truncate font-mono" x-text="activeEntry.username"></span>
+            <button type="button" class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+                    title="Copy username"
+                    @click="copyToClipboard(activeEntry.username)">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div x-show="activeEntry.password">
+          <p class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-1">Password</p>
+          <div class="flex items-center gap-2 bg-base-200 rounded-lg px-3 py-2">
+            <span class="flex-1 text-sm truncate font-mono"
+                  x-text="showPasswordInPanel ? activeEntry.password : '••••••••••'"></span>
+            <button type="button" class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+                    :title="showPasswordInPanel ? 'Hide password' : 'Show password'"
+                    @click="showPasswordInPanel = !showPasswordInPanel">
+              <i :data-lucide="showPasswordInPanel ? 'eye-off' : 'eye'" class="w-3.5 h-3.5"></i>
+            </button>
+            <button type="button" class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+                    title="Copy password"
+                    @click="copyToClipboard(activeEntry.password)">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- TOTP secret -->
+        <div x-show="activeEntry.totp_secret">
+          <p class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-1">TOTP Secret</p>
+          <div class="flex items-center gap-2 bg-base-200 rounded-lg px-3 py-2">
+            <span class="flex-1 text-sm truncate font-mono text-base-content/60">••••••••</span>
+            <button type="button" class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+                    title="Copy TOTP secret"
+                    @click="copyToClipboard(activeEntry.totp_secret)">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- URIs -->
+        <div x-show="activeEntry.uris && activeEntry.uris.length > 0">
+          <p class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-1">URLs</p>
+          <template x-for="u in (activeEntry.uris || [])" :key="u.uri">
+            <div class="flex items-center gap-2 bg-base-200 rounded-lg px-3 py-2 mb-1">
+              <span class="flex-1 text-sm truncate text-base-content/80" x-text="u.uri"></span>
+              <a :href="u.uri" target="_blank" rel="noopener noreferrer"
+                 class="btn btn-ghost btn-xs btn-square flex-shrink-0" title="Open URL">
+                <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+              </a>
+            </div>
+          </template>
+        </div>
+
+        <!-- Notes -->
+        <div x-show="activeEntry.notes">
+          <p class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-1">Notes</p>
+          <div class="bg-base-200 rounded-lg px-3 py-2">
+            <p class="text-sm text-base-content/80 whitespace-pre-wrap" x-text="activeEntry.notes"></p>
+          </div>
+        </div>
+
+        <!-- Meta -->
+        <div class="pt-2 border-t border-base-300 space-y-1">
+          <p class="text-xs text-base-content/40">
+            Created: <span x-text="activeEntry.created_at ? new Date(activeEntry.created_at).toLocaleString() : '—'"></span>
+          </p>
+          <p class="text-xs text-base-content/40">
+            Modified: <span x-text="activeEntry.updated_at ? new Date(activeEntry.updated_at).toLocaleString() : '—'"></span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Footer actions -->
+      <div class="flex-shrink-0 border-t border-base-300 px-4 py-3 flex items-center gap-2">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm gap-2"
+          :class="activeEntry.is_favorite ? 'text-warning' : ''"
+          @click="toggleFavorite(activeEntry.uuid, activeEntry.is_favorite)"
+          :disabled="isActionLoading(activeEntry.uuid)"
+        >
+          <i data-lucide="star" class="w-4 h-4"
+             :class="activeEntry.is_favorite ? 'fill-current text-warning' : ''"></i>
+          <span x-text="activeEntry.is_favorite ? 'Unfavorite' : 'Favorite'"></span>
+        </button>
+        <div class="flex-1"></div>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm text-error gap-2"
+          @click="trashEntry(activeEntry.uuid)"
+          :disabled="isActionLoading(activeEntry.uuid)"
+        >
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Trash</span>
+        </button>
+      </div>
+    </div>
+  </template>
+</div>

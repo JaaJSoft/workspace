@@ -1,0 +1,74 @@
+<!-- Entry list — rendered inside vault's x-data scope -->
+
+<!-- Toolbar -->
+<div class="flex items-center gap-3 px-4 py-3 border-b border-base-300 flex-shrink-0">
+  <div class="relative flex-1 max-w-xs">
+    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40"></i>
+    <input type="text" x-model="search" placeholder="Search entries…"
+           class="input input-bordered input-sm w-full pl-9 focus:border-warning focus:outline-warning/20">
+  </div>
+  <select x-model="sortBy" class="select select-bordered select-sm focus:border-warning">
+    <option value="name">Name</option>
+    <option value="recent">Recently used</option>
+  </select>
+  <button @click="document.getElementById('create-entry-dialog').showModal()"
+          class="btn btn-warning btn-sm gap-2">
+    <i data-lucide="plus" class="w-4 h-4"></i>
+    <span class="hidden sm:inline">New entry</span>
+  </button>
+</div>
+
+<!-- Content area -->
+<div class="flex-1 overflow-y-auto">
+
+  <!-- Empty state (no entries, not searching) -->
+  <div x-show="filteredEntries.length === 0 && !search"
+       class="flex flex-col items-center justify-center h-full gap-4 text-base-content/40 py-16">
+    <i data-lucide="key-round" class="w-12 h-12 opacity-20"></i>
+    <p class="font-medium"
+       x-text="activeView === 'trash' ? 'Trash is empty' : activeView === 'favorites' ? 'No favorites yet' : 'No entries yet'"></p>
+    <button x-show="activeView === 'all'"
+            @click="document.getElementById('create-entry-dialog').showModal()"
+            class="btn btn-warning btn-sm gap-2 mt-2">
+      <i data-lucide="plus" class="w-4 h-4"></i>
+      Add first entry
+    </button>
+  </div>
+
+  <!-- No search results -->
+  <div x-show="filteredEntries.length === 0 && search"
+       class="flex flex-col items-center justify-center h-full gap-2 text-base-content/40 py-16">
+    <i data-lucide="search-x" class="w-10 h-10 opacity-20"></i>
+    <p>No entries match "<span x-text="search"></span>"</p>
+  </div>
+
+  <!-- Entry rows -->
+  <div class="divide-y divide-base-300" x-show="filteredEntries.length > 0">
+    <template x-for="entry in filteredEntries" :key="entry.uuid">
+      <div class="group flex items-center gap-4 px-4 py-3 hover:bg-base-200 transition-colors">
+        <!-- Icon -->
+        <div class="w-9 h-9 rounded-lg bg-base-300 flex items-center justify-center flex-shrink-0">
+          <i :data-lucide="entry.icon || 'key-round'" class="w-5 h-5 text-base-content/60"></i>
+        </div>
+        <!-- Info -->
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-sm text-base-content truncate" x-text="entry.name"></div>
+          <div class="text-xs text-base-content/40 truncate" x-text="entry.username"></div>
+        </div>
+        <!-- Actions -->
+        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button @click="copyPassword(entry)"
+                  class="btn btn-ghost btn-xs btn-square"
+                  title="Copy password">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+          </button>
+          <button @click="deleteEntry(entry.uuid)"
+                  class="btn btn-ghost btn-xs btn-square text-error"
+                  title="Delete">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>

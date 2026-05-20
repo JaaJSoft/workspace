@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.23.0 - Mail Rules & Faster Pages
+
+### Highlights
+
+The headline this release is a full filters and rules engine for mail: define conditions on any incoming message (sender, subject, body, attachments, ...) and automatically label, move, star, mark read, or delete - all from a per-account dialog with a beginner-friendly simple form and an advanced JSON mode for power users. Right-click any message to spin up a rule from its sender in one click. The rest of the release is a heavy round of performance work that touches video playback, large folder downloads, avatar and thumbnail caching, and the very first paint of every page.
+
+### Mail
+
+- New filters and rules engine. Per-account rules with conditions on sender, recipient, subject, body, folder, attachments, star, and date; actions to mark read/unread, star/unstar, add or remove a label, move to a folder, or delete. AND/OR groups, regex matching, and a "stop processing more rules after this one" flag. Manage everything from a per-account dialog with reorder controls and an enable/disable toggle per rule.
+- Right-click a message and pick "Create filter" to open a new rule pre-filled with that sender as the condition; tweak the action and save.
+- Right-clicking a message from the "All inboxes" view now correctly shows the labels of that message's account; previously the labels submenu was empty.
+
+### Calendar & AI
+
+- Email-based event extraction now anchors relative dates ("next Friday", "tomorrow at 9", ...) on the date the message was sent, not on today. Old emails no longer produce calendar entries placed in the present.
+
+### Files
+
+- Video files now stream and seek inside the player: jumping ahead in a video no longer redownloads from the start. The same fast-seek support extends to attachments and shared-link previews.
+- Bulk and full-folder ZIP downloads no longer load the whole archive in memory before sending. Multi-gigabyte folders now download with constant RAM, so large exports work on smaller deployments too.
+
+### Performance
+
+- First paint of every page is faster: Tailwind and DaisyUI are now bundled and served locally instead of pulled from a CDN, with only the classes actually used shipped to the browser.
+- HTTP responses use a faster compression layer, so pages and API replies come down quicker across the board.
+- Avatars and thumbnails are cached with stale-while-revalidate: revisits reuse the already-displayed image instantly while a fresh version loads in the background.
+- Avatar images now lazy-load (only fetched when they scroll into view) and the Lucide icon library loads after the main content, so the initial page is lighter.
+
+### Fixes
+
+- Pages with a fixed-height navbar no longer scroll in the background when an inner panel scrolls: the page is locked at the html level so only the intended area moves.
+
 ## 0.22.0 - Calendar AI & Onboarding
 
 ### Highlights

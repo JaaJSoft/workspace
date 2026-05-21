@@ -27,9 +27,9 @@ Used by:
     {% endif %}
     @contextmenu="openConvContextMenu($event, '{{ conv.uuid }}', '{{ conv.kind }}'{% if pinned %}, true{% endif %})">
   <button type="button"
-    class="flex items-center w-full p-2 rounded-lg transition-colors"
+    class="flex items-center w-full rounded-lg transition-colors"
     :class="[
-      collapsed ? 'justify-center w-10 h-10 px-0 mx-auto' : 'gap-3',
+      collapsed ? 'justify-center w-10 h-10 px-0 mx-auto' : (chatPrefs.compactConversationList ? 'gap-1.5 py-0.5 px-2' : 'gap-3 p-2'),
       activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info/10 text-info hover:bg-info/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-info'
     ]"
     @click="selectConversationById('{{ conv.uuid }}')"
@@ -37,14 +37,23 @@ Used by:
   >
     <div class="relative flex-shrink-0 flex">
       {% if conv.kind == 'dm' and conv.other_user %}
-        {% include "ui/partials/user_avatar.html" with user=conv.other_user size="sm" %}
+        <template x-if="collapsed || !chatPrefs.compactConversationList">
+          {% include "ui/partials/user_avatar.html" with user=conv.other_user size="sm" %}
+        </template>
+        <template x-if="!collapsed && chatPrefs.compactConversationList">
+          {% include "ui/partials/user_avatar.html" with user=conv.other_user size="xs" %}
+        </template>
       {% elif conv.has_avatar %}
-        <div class="w-8 h-8 rounded-full overflow-hidden">
+        <div class="rounded-full overflow-hidden"
+             :class="(!collapsed && chatPrefs.compactConversationList) ? 'w-6 h-6' : 'w-8 h-8'">
           <img src="/api/v1/chat/conversations/{{ conv.uuid }}/avatar/image" alt="{{ conv.display_name|escapejs }}" class="w-full h-full object-cover" loading="lazy" decoding="async" />
         </div>
       {% else %}
-        <div class="w-8 h-8 rounded-full flex items-center justify-center"
-             :class="activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info text-info-content' : 'bg-{% if conv.kind == 'dm' %}neutral text-neutral-content{% else %}info/20 text-info{% endif %}'">
+        <div class="rounded-full flex items-center justify-center"
+             :class="[
+               (!collapsed && chatPrefs.compactConversationList) ? 'w-6 h-6' : 'w-8 h-8',
+               activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-info text-info-content' : 'bg-{% if conv.kind == 'dm' %}neutral text-neutral-content{% else %}info/20 text-info{% endif %}'
+             ]">
           <span class="text-xs font-medium">{{ conv.avatar_initial }}</span>
         </div>
       {% endif %}
@@ -61,6 +70,9 @@ Used by:
           {% if pinned %}
           <i data-lucide="pin" class="w-3 h-3 text-base-content/30 flex-shrink-0"></i>
           {% endif %}
+          <span class="w-2 h-2 bg-info rounded-full flex-shrink-0"
+                x-show="chatPrefs.compactConversationList && (conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0)"
+                x-cloak></span>
         </span>
         <span class="flex-shrink-0 w-12 h-5 inline-flex items-center justify-end">
           <span class="text-xs text-base-content/50 whitespace-nowrap group-hover/conv:hidden">{{ conv.time_ago }}</span>
@@ -71,7 +83,8 @@ Used by:
           </span>
         </span>
       </div>
-      <div class="flex items-center justify-between gap-1 mt-0.5">
+      <div class="flex items-center justify-between gap-1 mt-0.5"
+           x-show="!chatPrefs.compactConversationList">
         <span class="text-xs text-base-content/50 truncate">{{ conv.last_message_preview }}</span>
         <span class="w-2 h-2 bg-info rounded-full flex-shrink-0"
               x-show="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0"

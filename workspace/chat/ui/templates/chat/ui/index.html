@@ -57,13 +57,21 @@ x-data="chatApp({{ user.id }})"
            'transition-all duration-300': sidebarMounted,
          }">
     <!-- Sidebar header -->
-    <div class="border-b border-base-300 py-4 px-3">
+    <div class="border-b border-base-300 py-4 px-3 relative" x-data="{ ...chatPreferences(), prefsOpen: false }">
       <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
         <h2 class="text-xl font-semibold flex items-center gap-2" :class="collapsed ? '' : 'pl-2'">
           <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
           <span x-show="!collapsed" x-transition>Chat</span>
         </h2>
         <div x-show="!collapsed" x-transition class="flex items-center gap-0.5">
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square hover:text-info"
+            @click="prefsOpen = !prefsOpen"
+            aria-label="Preferences" title="Preferences"
+          >
+            <i data-lucide="settings" class="w-4 h-4"></i>
+          </button>
           {% if ai_enabled %}
           <button
             class="btn btn-ghost btn-sm btn-square hover:text-secondary"
@@ -81,6 +89,16 @@ x-data="chatApp({{ user.id }})"
             <i data-lucide="plus" class="w-4 h-4"></i>
           </button>
         </div>
+      </div>
+      <!-- Preferences popover -->
+      <div x-show="prefsOpen" x-cloak x-transition
+           @click.outside="prefsOpen = false"
+           class="absolute left-3 right-3 top-full -mt-2 z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4">
+        <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+          <i data-lucide="settings" class="w-4 h-4 text-info"></i>
+          Preferences
+        </h4>
+        {% include "chat/ui/partials/_preferences_content.html" %}
       </div>
     </div>
 
@@ -139,10 +157,13 @@ x-data="chatApp({{ user.id }})"
       </ul>
     </div>
 
-    <!-- Collapse toggle -->
+    <!-- Bottom action: collapse toggle on desktop, preferences on mobile -->
     <div class="border-t border-base-300 py-4 px-3">
-      <ul class="menu p-0" x-show="!isMobile()">
+      <ul class="menu p-0 hidden lg:block">
         {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" color="info" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+      </ul>
+      <ul class="menu p-0 lg:hidden">
+        {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" %}
       </ul>
     </div>
   </aside>
@@ -605,6 +626,25 @@ x-data="chatApp({{ user.id }})"
 {% include "chat/ui/partials/add_member_dialog.html" %}
 {% include "chat/ui/partials/help_dialog.html" %}
 
+<!-- Preferences dialog (mobile) -->
+<dialog id="chat-prefs-dialog" class="modal" x-data="chatPreferences()">
+  <div class="modal-box max-w-sm">
+    <h3 class="font-semibold text-base mb-3 flex items-center gap-2">
+      <i data-lucide="settings" class="w-4 h-4 text-info"></i>
+      Preferences
+    </h3>
+    {% include "chat/ui/partials/_preferences_content.html" %}
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
 <!-- Bot picker dialog -->
 {% if ai_enabled %}
 <dialog :class="{'modal-open': showBotPicker}" class="modal">
@@ -683,6 +723,7 @@ x-data="chatApp({{ user.id }})"
 
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
+<script src="{% static 'chat/ui/js/chat_preferences.js' %}"></script>
 <script src="{% static 'chat/ui/js/conversations.js' %}"></script>
 <script src="{% static 'chat/ui/js/messages.js' %}"></script>
 <script src="{% static 'chat/ui/js/sse.js' %}"></script>

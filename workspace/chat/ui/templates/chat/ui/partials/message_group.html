@@ -1,10 +1,17 @@
 {% load chat_tags ui_filters %}
 {% with author=group.author is_own=group.is_own is_bot=group.is_bot messages=group.messages first_msg=group.messages.0 %}
-<div class="msg-group {% if is_own %}msg-group-end{% else %}msg-group-start{% endif %} flex gap-2 mb-3 {% if is_own %}flex-row-reverse{% endif %}">
+<div class="msg-group {% if is_own %}msg-group-end{% else %}msg-group-start{% endif %} flex gap-2 {% if is_own %}flex-row-reverse{% endif %}"
+     :class="chatPrefs.compactMessageView ? 'mb-1.5' : 'mb-3'">
 
-  {# Avatar column #}
-  <div class="flex-shrink-0 w-8 mt-auto">
-    {% include "ui/partials/user_avatar.html" with user=author size="sm" show_card=True %}
+  {# Avatar column - render at sm in normal mode, xs in compact mode #}
+  <div class="flex-shrink-0 mt-auto"
+       :class="chatPrefs.compactMessageView ? 'w-6' : 'w-8'">
+    <template x-if="!chatPrefs.compactMessageView">
+      {% include "ui/partials/user_avatar.html" with user=author size="sm" show_card=True %}
+    </template>
+    <template x-if="chatPrefs.compactMessageView">
+      {% include "ui/partials/user_avatar.html" with user=author size="xs" show_card=True %}
+    </template>
   </div>
 
   {# Message column #}
@@ -20,16 +27,18 @@
     {# Bubbles #}
     {% for msg in messages %}
       {% if msg.deleted_at %}
-        <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm italic
+        <div class="msg-bubble rounded-2xl text-sm italic
                     bg-base-200 text-base-content/40"
+             :class="chatPrefs.compactMessageView ? 'px-2.5 py-1' : 'px-3 py-1.5'"
              id="msg-{{ msg.uuid }}">
           Message deleted
         </div>
       {% else %}
         <div class="relative group/msg hover:z-20 max-w-full">
           {# Bubble #}
-          <div class="msg-bubble rounded-2xl px-3 py-1.5 text-sm
+          <div class="msg-bubble rounded-2xl text-sm
                       {% if is_own %}bg-info/15 text-base-content{% else %}bg-base-200 text-base-content{% endif %}"
+               :class="chatPrefs.compactMessageView ? 'px-2.5 py-1' : 'px-3 py-1.5'"
                id="msg-{{ msg.uuid }}"
                data-body="{{ msg.body }}">
             {% if msg.reply_to %}

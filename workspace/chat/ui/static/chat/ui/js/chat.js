@@ -16,6 +16,12 @@ function chatApp(currentUserId) {
     // subsequent toggleCollapse() calls.
     sidebarMounted: false,
 
+    // Reactive copy of chat preferences. Seeded synchronously from the
+    // global cache so the first Alpine paint already has the right
+    // density flags, then re-hydrated in init() once _chatPrefsReady
+    // resolves (in case the cache was still falling back to defaults).
+    chatPrefs: { ...window._chatPrefsCache },
+
     // ── Compose chatApp from domain mixins ──────────────────
     // Each mixin returns an object literal with its own state and
     // methods, and we spread them so they all share `this` at runtime.
@@ -37,6 +43,16 @@ function chatApp(currentUserId) {
       // its initial bind, so toggleCollapse() animates smoothly without
       // animating the very first paint.
       this.$nextTick(() => { this.sidebarMounted = true; });
+
+      // Hydrate chat preferences from the server once the initial fetch
+      // resolved, and keep listening for cross-component updates fired
+      // by the preferences popover/dialog.
+      window._chatPrefsReady.then(() => {
+        this.chatPrefs = { ...window._chatPrefsCache };
+      });
+      window.addEventListener('chat:preferences-changed', (e) => {
+        this.chatPrefs = { ...e.detail };
+      });
 
       // Load conversations from embedded JSON (fast first paint)
       const dataEl = document.getElementById('conversations-data');

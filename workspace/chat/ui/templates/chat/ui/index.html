@@ -150,13 +150,6 @@ x-data="chatApp({{ user.id }})"
       </ul>
     </div>
 
-    <!-- Preferences (mobile only - desktop uses the gear icon in the sidebar header) -->
-    <div class="px-3 pb-2 lg:hidden">
-      <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" %}
-      </ul>
-    </div>
-
     <!-- Help button -->
     <div class="px-3 pb-2">
       <ul class="menu p-0">
@@ -164,10 +157,13 @@ x-data="chatApp({{ user.id }})"
       </ul>
     </div>
 
-    <!-- Collapse toggle -->
+    <!-- Bottom action: collapse toggle on desktop, preferences on mobile -->
     <div class="border-t border-base-300 py-4 px-3">
-      <ul class="menu p-0" x-show="!isMobile()">
+      <ul class="menu p-0 hidden lg:block">
         {% include "ui/partials/drawer_item.html" with icon_binding="collapsed ? 'panel-left-open' : 'panel-left-close'" label="Collapse" color="info" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+      </ul>
+      <ul class="menu p-0 lg:hidden">
+        {% include "ui/partials/drawer_item.html" with icon="settings" label="Preferences" color="info" onclick="document.getElementById('chat-prefs-dialog').showModal()" tooltip="Preferences" %}
       </ul>
     </div>
   </aside>

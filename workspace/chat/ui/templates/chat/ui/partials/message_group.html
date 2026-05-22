@@ -44,7 +44,7 @@
             {% if msg.reply_to %}
               <a href="#msg-{{ msg.reply_to.uuid }}"
                  @click.prevent="scrollToMessage('{{ msg.reply_to.uuid }}')"
-                 class="flex gap-2 mb-1.5 rounded-lg px-2 py-1 cursor-pointer transition-colors no-underline
+                 class="flex gap-2 my-1.5 rounded-lg px-2 py-1 cursor-pointer transition-colors no-underline
                         {% if is_own %}bg-info/15 hover:bg-info/25{% else %}bg-base-300/50 hover:bg-base-300{% endif %}">
                 <div class="w-0.5 flex-shrink-0 rounded-full bg-info"></div>
                 <div class="min-w-0 flex-1">

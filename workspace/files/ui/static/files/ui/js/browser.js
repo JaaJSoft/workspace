@@ -1105,7 +1105,11 @@ window.fileBrowser = function fileBrowser() {
         window.AppAlert?.success(`Extracted ${data.files_created} item(s)`, { duration: 2500 });
 
         // If the user is currently viewing the destination folder, refresh.
-        if (folder.uuid && this.currentFolder === folder.uuid) {
+        // Normalise both sides to null so root (uuid=null) compares against
+        // an empty currentFolder ('' from the dataset) consistently.
+        const destId = folder.uuid || null;
+        const currentId = this.currentFolder || null;
+        if (destId === currentId) {
           this.refreshFolderBrowser();
         }
       } catch (e) {

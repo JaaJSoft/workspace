@@ -39,6 +39,10 @@ class ExtractActionTests(TestCase):
         f = _make_file(self.user, mime_type='application/zip')
         self.assertIn('extract', self._ids(f, FilePermission.MANAGE))
 
+    def test_extract_visible_for_x_zip_compressed_mime(self):
+        f = _make_file(self.user, mime_type='application/x-zip-compressed')
+        self.assertIn('extract', self._ids(f, FilePermission.EDIT))
+
     def test_extract_hidden_for_non_zip(self):
         f = _make_file(self.user, mime_type='text/plain', name='readme.txt')
         self.assertNotIn('extract', self._ids(f, FilePermission.EDIT))

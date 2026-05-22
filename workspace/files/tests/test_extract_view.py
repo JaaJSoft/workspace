@@ -122,6 +122,17 @@ class ExtractViewTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_extract_happy_path_with_x_zip_compressed_mime(self):
+        archive = self._make_archive(mime='application/x-zip-compressed')
+        resp = self.client.post(
+            self._url(archive),
+            {'destination_uuid': str(self.dest.uuid)},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        self.assertEqual(resp.json()['files_created'], 1)
+        self.assertTrue(File.objects.filter(parent=self.dest, name='hello.txt').exists())
+
     @override_settings(FILES_EXTRACT_MAX_BYTES=5)
     def test_extract_413_when_size_exceeded(self):
         payload = _make_zip([('big.txt', b'X' * 100)])

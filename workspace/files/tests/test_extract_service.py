@@ -212,6 +212,15 @@ class ExtractZipServiceTests(TestCase):
         nested = File.objects.get(parent=sub, name='nested.txt')
         self.assertEqual(nested.content.read(), b'nested')
 
+    def test_extract_accepts_x_zip_compressed_mime(self):
+        payload = _make_zip([('hello.txt', b'hi')])
+        archive = self._make_archive_file(payload, mime='application/x-zip-compressed')
+
+        result = extract_zip(archive, self.dest, acting_user=self.user)
+
+        self.assertGreater(result['files_created'], 0)
+        self.assertTrue(File.objects.filter(parent=self.dest, name='hello.txt').exists())
+
     def test_extract_reuses_existing_intermediate_folder(self):
         payload = _make_zip([
             ('sub/a.txt', b'a'),

@@ -22,6 +22,11 @@ from .files import FileService
 
 logger = logging.getLogger(__name__)
 
+# Windows browsers (Chrome / Edge) sometimes report uploaded .zip files as
+# 'application/x-zip-compressed' instead of the IANA-registered 'application/zip'.
+# Both values map to the same archive format - accept either.
+ZIP_MIME_TYPES = frozenset({'application/zip', 'application/x-zip-compressed'})
+
 _WINDOWS_DRIVE_RE = re.compile(r'^[A-Za-z]:')
 
 
@@ -76,7 +81,7 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
     """
     if file_obj.node_type != File.NodeType.FILE:
         raise ValueError("Source is not a file")
-    if file_obj.mime_type != 'application/zip':
+    if file_obj.mime_type not in ZIP_MIME_TYPES:
         raise ValueError("Not a ZIP archive")
 
     max_bytes = getattr(settings, 'FILES_EXTRACT_MAX_BYTES', 2 * 1024 * 1024 * 1024)

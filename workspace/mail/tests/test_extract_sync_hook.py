@@ -1,9 +1,12 @@
 from unittest.mock import patch, MagicMock
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 
+from workspace.ai.models import AITask
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 
@@ -19,24 +22,14 @@ class SyncExtractDispatchTests(TestCase):
             account=self.account, name='INBOX', folder_type='inbox',
         )
 
-    @patch('workspace.ai.services.dispatch.dispatch')
-    @patch('workspace.users.services.settings.get_setting', return_value=True)
-    @patch('workspace.ai.client.is_ai_enabled', return_value=True)
-    @patch('workspace.calendar.services.ics_processor.process_calendar_emails')
-    @patch('workspace.mail.services.imap_sync._reconcile_folder')
-    @patch('workspace.mail.services.imap_sync._parse_message')
-    @patch('workspace.mail.services.imap_sync.connect_imap')
-    def test_extract_dispatched_for_new_messages(
-        self, mock_conn, mock_parse, _mock_recon, _mock_proc,
-        _mock_ai, _mock_setting, mock_dispatch,
-    ):
-        from workspace.mail.services.imap_sync import sync_folder_messages
+    def tearDown(self):
+        cache.clear()
 
+    def _run_sync(self):
         new_msg = MailMessage.objects.create(
             account=self.account, folder=self.folder,
             message_id='<n@x>', imap_uid=2, subject='S', date='2026-05-14T10:00:00Z',
         )
-        mock_parse.return_value = new_msg
 
         conn = MagicMock()
         conn.uid.side_effect = [
@@ -44,33 +37,58 @@ class SyncExtractDispatchTests(TestCase):
             ('OK', [(b'2 (UID 2 FLAGS ())', b'fake'), b')']),
         ]
         conn.select.return_value = ('OK', [b'1'])
-        mock_conn.return_value = conn
 
-        sync_folder_messages(self.account, self.folder)
+        from workspace.mail.services.imap_sync import sync_folder_messages
 
+        with patch('workspace.mail.services.imap_sync.connect_imap', return_value=conn), \
+             patch('workspace.mail.services.imap_sync._parse_message', return_value=new_msg), \
+             patch('workspace.mail.services.imap_sync._reconcile_folder'), \
+             patch('workspace.calendar.services.ics_processor.process_calendar_emails'), \
+             patch('workspace.ai.client.is_ai_enabled', return_value=True), \
+             patch('workspace.ai.services.dispatch.dispatch') as mock_dispatch:
+            sync_folder_messages(self.account, self.folder)
+            return mock_dispatch
+
+    def test_both_dispatched_by_default(self):
+        mock_dispatch = self._run_sync()
         task_types = [c.kwargs.get('task_type') for c in mock_dispatch.call_args_list]
-        from workspace.ai.models import AITask
         self.assertIn(AITask.TaskType.CLASSIFY, task_types)
         self.assertIn(AITask.TaskType.EXTRACT, task_types)
 
-    @patch('workspace.ai.services.dispatch.dispatch')
-    @patch('workspace.users.services.settings.get_setting', return_value=False)
-    @patch('workspace.ai.client.is_ai_enabled', return_value=True)
-    @patch('workspace.calendar.services.ics_processor.process_calendar_emails')
-    @patch('workspace.mail.services.imap_sync._reconcile_folder')
-    @patch('workspace.mail.services.imap_sync._parse_message')
-    @patch('workspace.mail.services.imap_sync.connect_imap')
-    def test_extract_skipped_when_user_disabled_ai(
-        self, mock_conn, mock_parse, _mock_recon, _mock_proc,
-        _mock_ai, _mock_setting, mock_dispatch,
-    ):
-        from workspace.mail.services.imap_sync import sync_folder_messages
+    def test_only_classify_dispatched_when_extract_disabled(self):
+        set_setting(self.user, 'mail', 'ai_extract', False)
+        mock_dispatch = self._run_sync()
+        task_types = [c.kwargs.get('task_type') for c in mock_dispatch.call_args_list]
+        self.assertIn(AITask.TaskType.CLASSIFY, task_types)
+        self.assertNotIn(AITask.TaskType.EXTRACT, task_types)
 
+    def test_only_extract_dispatched_when_classify_disabled(self):
+        set_setting(self.user, 'mail', 'ai_classify', False)
+        mock_dispatch = self._run_sync()
+        task_types = [c.kwargs.get('task_type') for c in mock_dispatch.call_args_list]
+        self.assertNotIn(AITask.TaskType.CLASSIFY, task_types)
+        self.assertIn(AITask.TaskType.EXTRACT, task_types)
+
+    def test_neither_dispatched_when_both_disabled(self):
+        set_setting(self.user, 'mail', 'ai_classify', False)
+        set_setting(self.user, 'mail', 'ai_extract', False)
+        mock_dispatch = self._run_sync()
+        mock_dispatch.assert_not_called()
+
+    def test_legacy_ai_enabled_false_disables_both(self):
+        # Users who turned the single ai_enabled toggle off before the split
+        # must keep everything off until they explicitly opt in to a feature.
+        set_setting(self.user, 'mail', 'ai_enabled', False)
+        mock_dispatch = self._run_sync()
+        mock_dispatch.assert_not_called()
+
+    def test_extract_still_dispatched_when_classify_dispatch_raises(self):
+        # If the classify dispatch blows up, extract must still run - they're
+        # independently gated AND independently wrapped.
         new_msg = MailMessage.objects.create(
             account=self.account, folder=self.folder,
             message_id='<n@x>', imap_uid=2, subject='S', date='2026-05-14T10:00:00Z',
         )
-        mock_parse.return_value = new_msg
 
         conn = MagicMock()
         conn.uid.side_effect = [
@@ -78,8 +96,22 @@ class SyncExtractDispatchTests(TestCase):
             ('OK', [(b'2 (UID 2 FLAGS ())', b'fake'), b')']),
         ]
         conn.select.return_value = ('OK', [b'1'])
-        mock_conn.return_value = conn
 
-        sync_folder_messages(self.account, self.folder)
+        def dispatch_side_effect(*args, **kwargs):
+            if kwargs.get('task_type') == AITask.TaskType.CLASSIFY:
+                raise RuntimeError('classify dispatch failed')
+            return None
 
-        mock_dispatch.assert_not_called()
+        from workspace.mail.services.imap_sync import sync_folder_messages
+
+        with patch('workspace.mail.services.imap_sync.connect_imap', return_value=conn), \
+             patch('workspace.mail.services.imap_sync._parse_message', return_value=new_msg), \
+             patch('workspace.mail.services.imap_sync._reconcile_folder'), \
+             patch('workspace.calendar.services.ics_processor.process_calendar_emails'), \
+             patch('workspace.ai.client.is_ai_enabled', return_value=True), \
+             patch('workspace.ai.services.dispatch.dispatch', side_effect=dispatch_side_effect) as mock_dispatch:
+            sync_folder_messages(self.account, self.folder)
+
+        task_types = [c.kwargs.get('task_type') for c in mock_dispatch.call_args_list]
+        # Both attempted, classify failed but extract was still called.
+        self.assertEqual(task_types, [AITask.TaskType.CLASSIFY, AITask.TaskType.EXTRACT])

@@ -49,8 +49,8 @@ class SummarizeView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        from workspace.users.services.settings import get_setting
-        if get_setting(request.user, 'mail', 'ai_enabled', default=True) is False:
+        from workspace.mail.services.ai_settings import is_mail_ai_feature_enabled
+        if not is_mail_ai_feature_enabled(request.user, 'manual'):
             return Response(
                 {'detail': 'Mail AI features are disabled in your settings.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -97,8 +97,8 @@ class ComposeView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        from workspace.users.services.settings import get_setting
-        if get_setting(request.user, 'mail', 'ai_enabled', default=True) is False:
+        from workspace.mail.services.ai_settings import is_mail_ai_feature_enabled
+        if not is_mail_ai_feature_enabled(request.user, 'manual'):
             return Response(
                 {'detail': 'Mail AI features are disabled in your settings.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -144,8 +144,8 @@ class ReplyView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        from workspace.users.services.settings import get_setting
-        if get_setting(request.user, 'mail', 'ai_enabled', default=True) is False:
+        from workspace.mail.services.ai_settings import is_mail_ai_feature_enabled
+        if not is_mail_ai_feature_enabled(request.user, 'manual'):
             return Response(
                 {'detail': 'Mail AI features are disabled in your settings.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -242,8 +242,8 @@ class ClassifyView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        from workspace.users.services.settings import get_setting
-        if get_setting(request.user, 'mail', 'ai_enabled', default=True) is False:
+        from workspace.mail.services.ai_settings import is_mail_ai_feature_enabled
+        if not is_mail_ai_feature_enabled(request.user, 'classify'):
             return Response(
                 {'detail': 'Mail AI features are disabled in your settings.'},
                 status=status.HTTP_403_FORBIDDEN,

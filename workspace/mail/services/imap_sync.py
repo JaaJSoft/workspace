@@ -196,30 +196,49 @@ def sync_folder_messages(account, folder):
             except Exception:
                 logger.exception('rules engine failed for %s', scrub(folder.name))
 
-        # Dispatch AI classification for new messages (skip sent/drafts)
+        # Dispatch AI classification / extraction for new messages
+        # (skip sent/drafts). Classify and extract are gated by independent
+        # per-user toggles AND wrapped in independent try/except blocks so a
+        # failure dispatching one never prevents the other.
         if new_message_uuids and folder.folder_type not in ('sent', 'drafts'):
             try:
                 from workspace.ai.client import is_ai_enabled
-                from workspace.users.services.settings import get_setting
-                if is_ai_enabled() and get_setting(account.owner, 'mail', 'ai_enabled', default=True):
+                from workspace.mail.services.ai_settings import is_mail_ai_feature_enabled
+                if is_ai_enabled():
                     from workspace.ai.models import AITask
                     from workspace.ai.services.dispatch import dispatch
-                    dispatch(
-                        owner=account.owner,
-                        task_type=AITask.TaskType.CLASSIFY,
-                        input_data={'message_uuids': new_message_uuids},
-                    )
-                    dispatch(
-                        owner=account.owner,
-                        task_type=AITask.TaskType.EXTRACT,
-                        input_data={'message_uuids': new_message_uuids},
-                    )
-                    logger.info(
-                        'Dispatched classify+extract tasks for %d new messages in %s',
-                        len(new_message_uuids), scrub(folder.name),
-                    )
+                    dispatched = []
+                    if is_mail_ai_feature_enabled(account.owner, 'classify'):
+                        try:
+                            dispatch(
+                                owner=account.owner,
+                                task_type=AITask.TaskType.CLASSIFY,
+                                input_data={'message_uuids': new_message_uuids},
+                            )
+                            dispatched.append('classify')
+                        except Exception:
+                            logger.exception(
+                                'Failed to dispatch classify task for %s', scrub(folder.name),
+                            )
+                    if is_mail_ai_feature_enabled(account.owner, 'extract'):
+                        try:
+                            dispatch(
+                                owner=account.owner,
+                                task_type=AITask.TaskType.EXTRACT,
+                                input_data={'message_uuids': new_message_uuids},
+                            )
+                            dispatched.append('extract')
+                        except Exception:
+                            logger.exception(
+                                'Failed to dispatch extract task for %s', scrub(folder.name),
+                            )
+                    if dispatched:
+                        logger.info(
+                            'Dispatched %s tasks for %d new messages in %s',
+                            '+'.join(dispatched), len(new_message_uuids), scrub(folder.name),
+                        )
             except Exception:
-                logger.exception('Failed to dispatch classify+extract tasks for %s', scrub(folder.name))
+                logger.exception('Failed to dispatch classify/extract tasks for %s', scrub(folder.name))
 
         # Process calendar invitations among messages just synced.
         # Scoping on new_message_uuids avoids re-parsing every old ICS

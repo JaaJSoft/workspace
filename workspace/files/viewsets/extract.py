@@ -25,12 +25,15 @@ class ExtractMixin:
         request={
             'application/json': {
                 'type': 'object',
-                'required': ['destination_uuid'],
                 'properties': {
                     'destination_uuid': {
                         'type': 'string',
                         'format': 'uuid',
-                        'description': 'Folder UUID to extract into.',
+                        'nullable': True,
+                        'description': (
+                            "Folder UUID to extract into. Use null to extract "
+                            "into the user's root folder (no parent)."
+                        ),
                     },
                 },
             },
@@ -46,36 +49,38 @@ class ExtractMixin:
     def extract(self, request, uuid=None):
         file_obj = self.get_object()
 
-        raw = request.data.get('destination_uuid')
-        if not raw:
+        body = request.data
+        if 'destination_uuid' not in body:
             return Response(
                 {'detail': 'destination_uuid is required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        dest_uuid = parse_uuid_or_none(raw)
-        if dest_uuid is None:
-            return Response(
-                {'detail': 'destination_uuid is malformed.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        raw = body.get('destination_uuid')
 
-        dest = File.objects.filter(
-            uuid=dest_uuid,
-            node_type=File.NodeType.FOLDER,
-            deleted_at__isnull=True,
-        ).first()
-        if dest is None:
-            return Response(
-                {'detail': 'Destination folder not found.'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        perm = FileService.get_permission(request.user, dest)
-        if perm is None or perm < FilePermission.EDIT:
-            return Response(
-                {'detail': 'Destination folder not found.'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        dest = None
+        if raw is not None:
+            dest_uuid = parse_uuid_or_none(raw)
+            if dest_uuid is None:
+                return Response(
+                    {'detail': 'destination_uuid is malformed.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            dest = File.objects.filter(
+                uuid=dest_uuid,
+                node_type=File.NodeType.FOLDER,
+                deleted_at__isnull=True,
+            ).first()
+            if dest is None:
+                return Response(
+                    {'detail': 'Destination folder not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            perm = FileService.get_permission(request.user, dest)
+            if perm is None or perm < FilePermission.EDIT:
+                return Response(
+                    {'detail': 'Destination folder not found.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
         try:
             result = extract_zip(file_obj, dest, acting_user=request.user)
@@ -85,9 +90,10 @@ class ExtractMixin:
                 code = status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
             else:
                 code = status.HTTP_400_BAD_REQUEST
+            dest_uuid_for_log = str(dest.uuid) if dest is not None else 'root'
             logger.info(
                 "Extract rejected for %s into %s: %s",
-                scrub(str(file_obj.uuid)), scrub(str(dest.uuid)), scrub(msg),
+                scrub(str(file_obj.uuid)), scrub(dest_uuid_for_log), scrub(msg),
             )
             return Response({'detail': msg}, status=code)
 

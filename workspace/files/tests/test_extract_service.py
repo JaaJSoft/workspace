@@ -189,6 +189,29 @@ class ExtractZipServiceTests(TestCase):
                 extract_zip(archive, self.dest, acting_user=self.user)
         self.assertIn('too large', str(ctx.exception).lower())
 
+    def test_extract_to_root_when_dest_is_none(self):
+        payload = _make_zip([
+            ('hello.txt', b'hi'),
+            ('sub/nested.txt', b'nested'),
+        ])
+        archive = self._make_archive_file(payload)
+
+        result = extract_zip(archive, None, acting_user=self.user)
+
+        self.assertIsNone(result['destination_uuid'])
+        self.assertEqual(result['files_created'], 2)
+
+        hello = File.objects.get(
+            owner=self.user, parent=None, name='hello.txt', node_type='file',
+        )
+        self.assertEqual(hello.content.read(), b'hi')
+
+        sub = File.objects.get(
+            owner=self.user, parent=None, name='sub', node_type='folder',
+        )
+        nested = File.objects.get(parent=sub, name='nested.txt')
+        self.assertEqual(nested.content.read(), b'nested')
+
     def test_extract_reuses_existing_intermediate_folder(self):
         payload = _make_zip([
             ('sub/a.txt', b'a'),

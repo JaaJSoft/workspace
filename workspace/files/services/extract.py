@@ -69,7 +69,9 @@ def _read_capped(zf, info, total_bytes, max_bytes):
 def extract_zip(file_obj, dest_folder, *, acting_user):
     """Extract a .zip archive into ``dest_folder``.
 
-    Returns ``{'destination_uuid': str, 'files_created': int}``.
+    ``dest_folder`` may be ``None`` to extract into the user's root (no parent).
+
+    Returns ``{'destination_uuid': str or None, 'files_created': int}``.
     Raises ``ValueError`` on bad MIME, zip-slip, oversize archives, or corruption.
     """
     if file_obj.node_type != File.NodeType.FILE:
@@ -125,7 +127,7 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
         raise ValueError("Corrupted archive") from e
 
     return {
-        'destination_uuid': str(dest_folder.uuid),
+        'destination_uuid': str(dest_folder.uuid) if dest_folder is not None else None,
         'files_created': files_created,
     }
 

@@ -70,10 +70,26 @@ class ExtractViewTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_extract_400_for_missing_destination(self):
+    def test_extract_400_when_destination_key_absent(self):
         archive = self._make_archive()
         resp = self.client.post(self._url(archive), {}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_extract_to_root_when_destination_is_null(self):
+        archive = self._make_archive()
+        resp = self.client.post(
+            self._url(archive),
+            {'destination_uuid': None},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        body = resp.json()
+        self.assertEqual(body['files_created'], 1)
+        self.assertIsNone(body['destination_uuid'])
+        created = File.objects.get(
+            owner=self.user, parent=None, name='hello.txt', node_type='file',
+        )
+        self.assertEqual(created.content.read(), b'hi')
 
     def test_extract_404_when_destination_not_owned(self):
         other = User.objects.create_user(

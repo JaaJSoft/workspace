@@ -105,11 +105,13 @@ class ExtractMixin:
                 "Extract rejected for %s into %s: %s",
                 scrub(str(file_obj.uuid)), scrub(dest_uuid_for_log), scrub(msg),
             )
+            # Return generic detail strings - the precise reason stays in the
+            # logs (scrubbed) so internal text (e.g. entry names from a
+            # malicious archive) is never echoed to the client.
             # 'Archive content missing' -> 404 (the source blob has vanished -
-            # treat it like a missing file, matching the chat/mail attachment
-            # convention for vanished blobs).
+            # matches the chat/mail attachment convention for vanished blobs).
             if msg == 'Archive content missing':
-                return Response({'detail': msg}, status=status.HTTP_404_NOT_FOUND)
-            return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': 'Invalid request.'}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(result, status=status.HTTP_200_OK)

@@ -221,6 +221,41 @@ class ExtractZipServiceTests(TestCase):
         self.assertGreater(result['files_created'], 0)
         self.assertTrue(File.objects.filter(parent=self.dest, name='hello.txt').exists())
 
+    def test_extract_cleans_up_blobs_on_rollback(self):
+        """When extraction fails partway through, blobs already written to
+        storage before the failure must be deleted (no orphans). The atomic
+        block only rolls back DB rows - storage blobs need an explicit unlink.
+        """
+        from unittest.mock import patch
+
+        payload = _make_zip([
+            ('ok.txt', b'first entry, will succeed'),
+            ('../evil.txt', b'second entry, triggers zip-slip rejection'),
+        ])
+        archive = self._make_archive_file(payload)
+
+        storage = File._meta.get_field('content').storage
+        delete_calls = []
+        orig_delete = storage.delete
+
+        def tracking_delete(name):
+            delete_calls.append(name)
+            return orig_delete(name)
+
+        with patch.object(storage, 'delete', side_effect=tracking_delete):
+            with self.assertRaises(ValueError):
+                extract_zip(archive, self.dest, acting_user=self.user)
+
+        # DB: zero rows under dest (atomic rollback).
+        self.assertEqual(File.objects.filter(parent=self.dest).count(), 0)
+
+        # Storage: the blob for 'ok.txt' that was created before the rejection
+        # must have been deleted (storage.delete called for it).
+        self.assertTrue(
+            any('ok.txt' in c for c in delete_calls),
+            f"Expected a cleanup delete for the 'ok.txt' blob, got: {delete_calls}",
+        )
+
     def test_extract_streams_entries_via_tempfile_not_contentfile(self):
         """Regression test: large entries must flow through a temp file, not be
         buffered fully in RAM via ContentFile. Mirrors the outbound streaming

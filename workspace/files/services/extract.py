@@ -107,6 +107,10 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
         logger.warning("Cannot open archive %s: %s", scrub(file_obj.content.name), e)
         raise ValueError("Archive content missing") from e
 
+    # Paths of blobs already written to storage. When the atomic block rolls
+    # back, the File rows are gone but the storage blobs remain orphaned -
+    # walk this list and delete them by hand.
+    created_paths = []
     files_created = 0
     try:
         with source, zipfile.ZipFile(source) as zf:
@@ -114,39 +118,53 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
             if len(entries) > max_entries:
                 raise ValueError("Too many entries in archive")
 
-            with transaction.atomic():
-                folder_cache = {(): dest_folder}
-                total_bytes = 0
+            try:
+                with transaction.atomic():
+                    folder_cache = {(): dest_folder}
+                    total_bytes = 0
 
-                for info in entries:
-                    if _is_symlink(info):
-                        continue
-                    if _is_unsafe_path(info.filename):
-                        raise ValueError(f"Unsafe entry in archive: {scrub(info.filename)}")
+                    for info in entries:
+                        if _is_symlink(info):
+                            continue
+                        if _is_unsafe_path(info.filename):
+                            raise ValueError(f"Unsafe entry in archive: {scrub(info.filename)}")
 
-                    parts = [p for p in info.filename.replace('\\', '/').split('/') if p]
-                    if not parts:
-                        continue
+                        parts = [p for p in info.filename.replace('\\', '/').split('/') if p]
+                        if not parts:
+                            continue
 
-                    if info.is_dir():
-                        _ensure_folder_chain(parts, folder_cache, acting_user)
-                        continue
+                        if info.is_dir():
+                            _ensure_folder_chain(parts, folder_cache, acting_user)
+                            continue
 
-                    parent = _ensure_folder_chain(parts[:-1], folder_cache, acting_user)
-                    leaf = parts[-1]
+                        parent = _ensure_folder_chain(parts[:-1], folder_cache, acting_user)
+                        leaf = parts[-1]
 
-                    tmp, total_bytes = _stream_entry_to_tempfile(
-                        zf, info, leaf, total_bytes, max_bytes,
-                    )
-                    try:
-                        FileService.create_file(
-                            acting_user, leaf, parent=parent,
-                            content=tmp,
-                            acting_user=acting_user,
+                        tmp, total_bytes = _stream_entry_to_tempfile(
+                            zf, info, leaf, total_bytes, max_bytes,
                         )
-                    finally:
-                        tmp.close()
-                    files_created += 1
+                        try:
+                            new_file = FileService.create_file(
+                                acting_user, leaf, parent=parent,
+                                content=tmp,
+                                acting_user=acting_user,
+                            )
+                            created_paths.append(
+                                (new_file.content.storage, new_file.content.name),
+                            )
+                        finally:
+                            tmp.close()
+                        files_created += 1
+            except Exception:
+                # transaction.atomic already rolled back the DB rows. Clean up
+                # the storage blobs that were written before the failure so we
+                # don't leak orphans.
+                for storage, path in created_paths:
+                    try:
+                        storage.delete(path)
+                    except Exception:
+                        logger.warning("Failed to clean orphan blob %s", scrub(path))
+                raise
     except zipfile.BadZipFile as e:
         raise ValueError("Corrupted archive") from e
 

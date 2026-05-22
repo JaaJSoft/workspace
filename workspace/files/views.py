@@ -30,6 +30,7 @@ from .viewsets.comments import CommentsMixin
 from .viewsets.content import ContentMixin
 from .viewsets.copy import CopyMixin
 from .viewsets.events import EventsMixin
+from .viewsets.extract import ExtractMixin
 from .viewsets.favorites import FavoritesMixin
 from .viewsets.share import ShareMixin
 from .viewsets.sync import SyncMixin
@@ -204,6 +205,7 @@ RECENT_FILES_MAX_LIMIT = getattr(settings, 'RECENT_FILES_MAX_LIMIT', 200)
 class FileViewSet(
     CacheControlMixin,
     CopyMixin,
+    ExtractMixin,
     ContentMixin,
     TrashMixin,
     FavoritesMixin,

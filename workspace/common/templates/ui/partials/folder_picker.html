@@ -129,9 +129,9 @@
       <div :class="options.iconClass || 'bg-warning/10 text-warning'" class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center">
         <i :data-lucide="options.icon || 'folder-open'" class="w-5 h-5"></i>
       </div>
-      <div>
-        <h3 class="font-bold text-lg" x-text="options.title || 'Choose Folder'"></h3>
-        <p class="text-sm text-base-content/60" x-text="options.message || 'Select a destination folder.'"></p>
+      <div class="flex-1 min-w-0">
+        <h3 class="font-bold text-lg break-words" x-text="options.title || 'Choose Folder'"></h3>
+        <p class="text-sm text-base-content/60 break-words" x-text="options.message || 'Select a destination folder.'"></p>
       </div>
     </div>
 

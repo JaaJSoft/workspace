@@ -52,6 +52,7 @@ class ActionRegistryTests(TestCase):
             'download', 'copy_link',
             'toggle_favorite', 'toggle_pin', 'share',
             'rename', 'cut', 'copy', 'paste_into',
+            'extract',
             'properties',
             'delete',
             'restore', 'purge',

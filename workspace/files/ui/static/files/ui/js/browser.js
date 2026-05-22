@@ -94,6 +94,9 @@ window.fileBrowser = function fileBrowser() {
           case 'paste_into':
             this.pasteFromClipboard();
             break;
+          case 'extract':
+            this.extractArchive(uuid, name);
+            break;
         }
       });
 
@@ -1071,6 +1074,47 @@ window.fileBrowser = function fileBrowser() {
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
       this.refreshFolderBrowser();
       this._stopLoading(...itemUuids);
+    },
+
+    async extractArchive(uuid, name) {
+      const folder = await AppDialog.folderPicker({
+        title: 'Extract archive',
+        message: `Choose where to extract "${name}".`,
+        okLabel: 'Extract',
+        okClass: 'btn-primary',
+        icon: 'archive-restore',
+        iconClass: 'bg-primary/10 text-primary',
+      });
+      if (!folder) return;
+
+      try {
+        const resp = await fetch(`/api/v1/files/${uuid}/extract`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          body: JSON.stringify({ destination_uuid: folder.uuid }),
+        });
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          this.showAlert('error', body.detail || 'Extraction failed');
+          return;
+        }
+        const data = await resp.json();
+        this.showAlert('success', `Extracted ${data.files_created} item(s)`);
+
+        // If the user is currently viewing the destination folder, refresh.
+        // Normalise both sides to null so root (uuid=null) compares against
+        // an empty currentFolder ('' from the dataset) consistently.
+        const destId = folder.uuid || null;
+        const currentId = this.currentFolder || null;
+        if (destId === currentId) {
+          this.refreshFolderBrowser();
+        }
+      } catch (e) {
+        this.showAlert('error', 'Extraction failed');
+      }
     },
 
     async pinFolder(uuid) {

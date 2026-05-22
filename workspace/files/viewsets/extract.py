@@ -11,7 +11,11 @@ from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
 from workspace.files.services import FilePermission, FileService
-from workspace.files.services.extract import extract_zip
+from workspace.files.services.extract import (
+    ArchiveTooLargeError,
+    ArchiveTooManyEntriesError,
+    extract_zip,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,17 +88,28 @@ class ExtractMixin:
 
         try:
             result = extract_zip(file_obj, dest, acting_user=request.user)
+        except (ArchiveTooLargeError, ArchiveTooManyEntriesError) as e:
+            msg = str(e)
+            logger.info(
+                "Extract rejected (too large) for %s: %s",
+                scrub(str(file_obj.uuid)), scrub(msg),
+            )
+            return Response(
+                {'detail': msg},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
         except ValueError as e:
             msg = str(e)
-            if 'too large' in msg.lower() or 'too many' in msg.lower():
-                code = status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
-            else:
-                code = status.HTTP_400_BAD_REQUEST
             dest_uuid_for_log = str(dest.uuid) if dest is not None else 'root'
             logger.info(
                 "Extract rejected for %s into %s: %s",
                 scrub(str(file_obj.uuid)), scrub(dest_uuid_for_log), scrub(msg),
             )
-            return Response({'detail': msg}, status=code)
+            # 'Archive content missing' -> 404 (the source blob has vanished -
+            # treat it like a missing file, matching the chat/mail attachment
+            # convention for vanished blobs).
+            if msg == 'Archive content missing':
+                return Response({'detail': msg}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(result, status=status.HTTP_200_OK)

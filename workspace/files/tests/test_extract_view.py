@@ -143,3 +143,31 @@ class ExtractViewTests(APITestCase):
             format='json',
         )
         self.assertEqual(resp.status_code, status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+
+    @override_settings(FILES_EXTRACT_MAX_ENTRIES=1)
+    def test_extract_413_when_entry_count_exceeded(self):
+        payload = _make_zip([
+            ('a.txt', b'a'),
+            ('b.txt', b'b'),
+        ])
+        archive = self._make_archive(payload=payload)
+        resp = self.client.post(
+            self._url(archive),
+            {'destination_uuid': str(self.dest.uuid)},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+
+    def test_extract_404_when_archive_blob_missing(self):
+        """If the archive's underlying storage blob has vanished (deleted out
+        of band), the endpoint must report 404, not 400. Matches the chat /
+        mail attachment convention for missing blobs."""
+        archive = self._make_archive()
+        # Simulate a vanished blob: delete the stored file but keep the DB row.
+        archive.content.storage.delete(archive.content.name)
+        resp = self.client.post(
+            self._url(archive),
+            {'destination_uuid': str(self.dest.uuid)},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

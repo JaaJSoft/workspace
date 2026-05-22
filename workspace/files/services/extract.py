@@ -22,6 +22,25 @@ from .files import FileService
 
 logger = logging.getLogger(__name__)
 
+
+class ArchiveTooLargeError(ValueError):
+    """Raised when an archive's cumulative decompressed size exceeds the cap.
+
+    Distinct from generic ``ValueError`` so the view layer can dispatch this
+    case to HTTP 413 (Payload Too Large) instead of 400 (Bad Request) without
+    relying on fragile substring matching of the message.
+    """
+
+
+class ArchiveTooManyEntriesError(ValueError):
+    """Raised when an archive's entry count exceeds the cap.
+
+    Distinct from generic ``ValueError`` so the view layer can dispatch this
+    case to HTTP 413 (Payload Too Large) instead of 400 (Bad Request) without
+    relying on fragile substring matching of the message.
+    """
+
+
 # Windows browsers (Chrome / Edge) sometimes report uploaded .zip files as
 # 'application/x-zip-compressed' instead of the IANA-registered 'application/zip'.
 # Both values map to the same archive format - accept either.
@@ -76,7 +95,7 @@ def _stream_entry_to_tempfile(zf, info, leaf, total_bytes, max_bytes):
                     break
                 total_bytes += len(chunk)
                 if total_bytes > max_bytes:
-                    raise ValueError("Archive too large")
+                    raise ArchiveTooLargeError("Archive too large")
                 tmp.write(chunk)
         tmp.seek(0)
     except Exception:
@@ -116,7 +135,7 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
         with source, zipfile.ZipFile(source) as zf:
             entries = zf.infolist()
             if len(entries) > max_entries:
-                raise ValueError("Too many entries in archive")
+                raise ArchiveTooManyEntriesError("Too many entries in archive")
 
             try:
                 with transaction.atomic():

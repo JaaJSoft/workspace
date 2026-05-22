@@ -88,14 +88,22 @@ class ExtractMixin:
 
         try:
             result = extract_zip(file_obj, dest, acting_user=request.user)
-        except (ArchiveTooLargeError, ArchiveTooManyEntriesError) as e:
-            msg = str(e)
+        except ArchiveTooLargeError as e:
             logger.info(
                 "Extract rejected (too large) for %s: %s",
-                scrub(str(file_obj.uuid)), scrub(msg),
+                scrub(str(file_obj.uuid)), scrub(str(e)),
             )
             return Response(
-                {'detail': msg},
+                {'detail': 'Archive too large.'},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        except ArchiveTooManyEntriesError as e:
+            logger.info(
+                "Extract rejected (too many entries) for %s: %s",
+                scrub(str(file_obj.uuid)), scrub(str(e)),
+            )
+            return Response(
+                {'detail': 'Too many entries in archive.'},
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             )
         except ValueError as e:

@@ -1098,11 +1098,11 @@ window.fileBrowser = function fileBrowser() {
         });
         if (!resp.ok) {
           const body = await resp.json().catch(() => ({}));
-          window.AppAlert?.error(body.detail || 'Extraction failed');
+          this.showAlert('error', body.detail || 'Extraction failed');
           return;
         }
         const data = await resp.json();
-        window.AppAlert?.success(`Extracted ${data.files_created} item(s)`, { duration: 2500 });
+        this.showAlert('success', `Extracted ${data.files_created} item(s)`);
 
         // If the user is currently viewing the destination folder, refresh.
         // Normalise both sides to null so root (uuid=null) compares against
@@ -1113,7 +1113,7 @@ window.fileBrowser = function fileBrowser() {
           this.refreshFolderBrowser();
         }
       } catch (e) {
-        window.AppAlert?.error('Extraction failed');
+        this.showAlert('error', 'Extraction failed');
       }
     },
 

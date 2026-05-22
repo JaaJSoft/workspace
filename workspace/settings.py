@@ -706,6 +706,11 @@ OAUTH_GENERIC_SMTP_HOST = os.getenv('OAUTH_GENERIC_SMTP_HOST', '')
 # --------------------------------------------------
 STORAGE_QUOTA_BYTES = int(os.getenv('STORAGE_QUOTA_BYTES', str(1 * 1024 * 1024 * 1024)))  # 1 GB
 
+# Max total uncompressed bytes allowed when extracting an archive (zip bomb defence).
+FILES_EXTRACT_MAX_BYTES = 2 * 1024 * 1024 * 1024  # 2 GiB
+# Max number of entries allowed when extracting an archive.
+FILES_EXTRACT_MAX_ENTRIES = 10_000
+
 # --------------------------------------------------
 # AI Configuration
 # --------------------------------------------------

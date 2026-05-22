@@ -198,7 +198,8 @@ def sync_folder_messages(account, folder):
 
         # Dispatch AI classification / extraction for new messages
         # (skip sent/drafts). Classify and extract are gated by independent
-        # per-user toggles - a user can keep one and disable the other.
+        # per-user toggles AND wrapped in independent try/except blocks so a
+        # failure dispatching one never prevents the other.
         if new_message_uuids and folder.folder_type not in ('sent', 'drafts'):
             try:
                 from workspace.ai.client import is_ai_enabled
@@ -208,19 +209,29 @@ def sync_folder_messages(account, folder):
                     from workspace.ai.services.dispatch import dispatch
                     dispatched = []
                     if is_mail_ai_feature_enabled(account.owner, 'classify'):
-                        dispatch(
-                            owner=account.owner,
-                            task_type=AITask.TaskType.CLASSIFY,
-                            input_data={'message_uuids': new_message_uuids},
-                        )
-                        dispatched.append('classify')
+                        try:
+                            dispatch(
+                                owner=account.owner,
+                                task_type=AITask.TaskType.CLASSIFY,
+                                input_data={'message_uuids': new_message_uuids},
+                            )
+                            dispatched.append('classify')
+                        except Exception:
+                            logger.exception(
+                                'Failed to dispatch classify task for %s', scrub(folder.name),
+                            )
                     if is_mail_ai_feature_enabled(account.owner, 'extract'):
-                        dispatch(
-                            owner=account.owner,
-                            task_type=AITask.TaskType.EXTRACT,
-                            input_data={'message_uuids': new_message_uuids},
-                        )
-                        dispatched.append('extract')
+                        try:
+                            dispatch(
+                                owner=account.owner,
+                                task_type=AITask.TaskType.EXTRACT,
+                                input_data={'message_uuids': new_message_uuids},
+                            )
+                            dispatched.append('extract')
+                        except Exception:
+                            logger.exception(
+                                'Failed to dispatch extract task for %s', scrub(folder.name),
+                            )
                     if dispatched:
                         logger.info(
                             'Dispatched %s tasks for %d new messages in %s',

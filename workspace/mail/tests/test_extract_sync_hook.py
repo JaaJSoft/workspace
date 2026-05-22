@@ -81,3 +81,37 @@ class SyncExtractDispatchTests(TestCase):
         set_setting(self.user, 'mail', 'ai_enabled', False)
         mock_dispatch = self._run_sync()
         mock_dispatch.assert_not_called()
+
+    def test_extract_still_dispatched_when_classify_dispatch_raises(self):
+        # If the classify dispatch blows up, extract must still run - they're
+        # independently gated AND independently wrapped.
+        new_msg = MailMessage.objects.create(
+            account=self.account, folder=self.folder,
+            message_id='<n@x>', imap_uid=2, subject='S', date='2026-05-14T10:00:00Z',
+        )
+
+        conn = MagicMock()
+        conn.uid.side_effect = [
+            ('OK', [b'2']),
+            ('OK', [(b'2 (UID 2 FLAGS ())', b'fake'), b')']),
+        ]
+        conn.select.return_value = ('OK', [b'1'])
+
+        def dispatch_side_effect(*args, **kwargs):
+            if kwargs.get('task_type') == AITask.TaskType.CLASSIFY:
+                raise RuntimeError('classify dispatch failed')
+            return None
+
+        from workspace.mail.services.imap_sync import sync_folder_messages
+
+        with patch('workspace.mail.services.imap_sync.connect_imap', return_value=conn), \
+             patch('workspace.mail.services.imap_sync._parse_message', return_value=new_msg), \
+             patch('workspace.mail.services.imap_sync._reconcile_folder'), \
+             patch('workspace.calendar.services.ics_processor.process_calendar_emails'), \
+             patch('workspace.ai.client.is_ai_enabled', return_value=True), \
+             patch('workspace.ai.services.dispatch.dispatch', side_effect=dispatch_side_effect) as mock_dispatch:
+            sync_folder_messages(self.account, self.folder)
+
+        task_types = [c.kwargs.get('task_type') for c in mock_dispatch.call_args_list]
+        # Both attempted, classify failed but extract was still called.
+        self.assertEqual(task_types, [AITask.TaskType.CLASSIFY, AITask.TaskType.EXTRACT])

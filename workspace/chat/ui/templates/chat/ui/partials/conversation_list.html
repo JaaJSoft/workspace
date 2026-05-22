@@ -48,7 +48,7 @@ reference the parent chatApp() x-data scope.
         Pinned
       </span>
     </h3>
-    <ul :class="chatPrefs.compactConversationList ? 'space-y-0' : 'space-y-1'">
+    <ul class="space-y-1">
       {% for conv in pinned_conversations %}
         {% include "chat/ui/partials/_conversation_item.html" with conv=conv pinned=True %}
       {% endfor %}
@@ -63,7 +63,7 @@ reference the parent chatApp() x-data scope.
 
   {# ── Merged conversation list (DMs + Groups), sorted by recent activity ── #}
   {% if other_conversations %}
-  <ul :class="chatPrefs.compactConversationList ? 'space-y-0' : 'space-y-1'">
+  <ul class="space-y-1">
     {% for conv in other_conversations %}
       {% include "chat/ui/partials/_conversation_item.html" with conv=conv pinned=False %}
     {% endfor %}

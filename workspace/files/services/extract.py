@@ -13,7 +13,7 @@ import re
 import zipfile
 
 from django.conf import settings
-from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import TemporaryUploadedFile
 from django.db import transaction
 
 from workspace.common.logging import scrub
@@ -46,29 +46,43 @@ def _is_symlink(info):
     return (info.external_attr >> 16) & 0o170000 == 0o120000
 
 
-_READ_CHUNK = 64 * 1024  # 64 KiB
+_READ_CHUNK = 64 * 1024  # 64 KiB - same chunk size as the download-as-zip path.
 
 
-def _read_capped(zf, info, total_bytes, max_bytes):
-    """Decompress entry contents in chunks, raising ValueError if max_bytes is exceeded.
+def _stream_entry_to_tempfile(zf, info, leaf, total_bytes, max_bytes):
+    """Decompress ``info`` into a ``TemporaryUploadedFile`` in chunks.
 
-    Enforces the cap against the actually decompressed bytes, not the (untrusted)
-    ``ZipInfo.file_size`` header field, which a malicious archive can under-report
-    to slip past the cap and then expand to a much larger blob.
+    Returns ``(tmp, new_total)``. The caller owns ``tmp`` and must close it.
+    Raises ``ValueError`` ("Archive too large") when the running total exceeds
+    ``max_bytes`` - this matches the project's download-side pattern (see
+    ``ContentMixin._build_zip_stream``) of never holding more than one chunk
+    in memory.
 
-    Returns (bytes, new_total).
+    ``TemporaryUploadedFile`` spills to disk past ``FILE_UPLOAD_MAX_MEMORY_SIZE``
+    (default 2.5 MiB) and exposes ``_committed=False``, so ``FileField.pre_save``
+    routes it through ``storage.save()`` which streams via ``.chunks()``.
     """
-    chunks = []
-    with zf.open(info, 'r') as fh:
-        while True:
-            chunk = fh.read(_READ_CHUNK)
-            if not chunk:
-                break
-            total_bytes += len(chunk)
-            if total_bytes > max_bytes:
-                raise ValueError("Archive too large")
-            chunks.append(chunk)
-    return b''.join(chunks), total_bytes
+    tmp = TemporaryUploadedFile(
+        name=leaf,
+        content_type='application/octet-stream',
+        size=0,
+        charset=None,
+    )
+    try:
+        with zf.open(info, 'r') as src:
+            while True:
+                chunk = src.read(_READ_CHUNK)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                if total_bytes > max_bytes:
+                    raise ValueError("Archive too large")
+                tmp.write(chunk)
+        tmp.seek(0)
+    except Exception:
+        tmp.close()
+        raise
+    return tmp, total_bytes
 
 
 def extract_zip(file_obj, dest_folder, *, acting_user):
@@ -121,12 +135,17 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
                     parent = _ensure_folder_chain(parts[:-1], folder_cache, acting_user)
                     leaf = parts[-1]
 
-                    data, total_bytes = _read_capped(zf, info, total_bytes, max_bytes)
-                    FileService.create_file(
-                        acting_user, leaf, parent=parent,
-                        content=ContentFile(data, name=leaf),
-                        acting_user=acting_user,
+                    tmp, total_bytes = _stream_entry_to_tempfile(
+                        zf, info, leaf, total_bytes, max_bytes,
                     )
+                    try:
+                        FileService.create_file(
+                            acting_user, leaf, parent=parent,
+                            content=tmp,
+                            acting_user=acting_user,
+                        )
+                    finally:
+                        tmp.close()
                     files_created += 1
     except zipfile.BadZipFile as e:
         raise ValueError("Corrupted archive") from e

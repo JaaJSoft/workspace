@@ -221,6 +221,29 @@ class ExtractZipServiceTests(TestCase):
         self.assertGreater(result['files_created'], 0)
         self.assertTrue(File.objects.filter(parent=self.dest, name='hello.txt').exists())
 
+    def test_extract_streams_entries_via_tempfile_not_contentfile(self):
+        """Regression test: large entries must flow through a temp file, not be
+        buffered fully in RAM via ContentFile. Mirrors the outbound streaming
+        pattern in ``ContentMixin._build_zip_stream`` (constant-RAM downloads)."""
+        from workspace.files.services import extract as extract_mod
+
+        payload = _make_zip([('hello.txt', b'hello world')])
+        archive = self._make_archive_file(payload)
+
+        with patch.object(
+            extract_mod, 'TemporaryUploadedFile',
+            wraps=extract_mod.TemporaryUploadedFile,
+        ) as spy:
+            result = extract_zip(archive, self.dest, acting_user=self.user)
+
+        self.assertEqual(result['files_created'], 1)
+        self.assertGreaterEqual(
+            spy.call_count, 1,
+            "TemporaryUploadedFile must be instantiated for each extracted entry "
+            "to keep RAM bounded (see ContentMixin._build_zip_stream for the "
+            "outbound streaming pattern this mirrors).",
+        )
+
     def test_extract_reuses_existing_intermediate_folder(self):
         payload = _make_zip([
             ('sub/a.txt', b'a'),

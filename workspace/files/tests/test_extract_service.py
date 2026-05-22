@@ -1,5 +1,6 @@
 import io
 import zipfile
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -143,6 +144,50 @@ class ExtractZipServiceTests(TestCase):
         with self.assertRaises(ValueError):
             extract_zip(archive, self.dest, acting_user=self.user)
         self.assertEqual(File.objects.filter(parent=self.dest).count(), 0)
+
+    @override_settings(FILES_EXTRACT_MAX_BYTES=1024)
+    def test_extract_size_limit_enforced_on_actual_bytes_not_header(self):
+        """A malicious ZIP can under-report ``file_size`` in the central directory
+        to bypass a header-based pre-check, then decompress to a much larger blob.
+        Defence: the cap must be enforced on the *streamed decompressed bytes*,
+        not on the untrusted header. We simulate the bypass by making the entry
+        claim ``file_size = 1`` while the underlying decompressor streams 3 KiB.
+        With the cap at 1 KiB, the extractor must raise ``Archive too large``."""
+        payload = _make_zip([('big.txt', b'X' * 3000)])
+        archive = self._make_archive_file(payload)
+
+        # Stream that yields way more bytes than the header claims.
+        class FakeStream(io.RawIOBase):
+            def __init__(self):
+                self._chunks = [b'X' * 1024, b'Y' * 1024, b'Z' * 1024]
+            def read(self, n=-1):
+                return self._chunks.pop(0) if self._chunks else b''
+            def readable(self):
+                return True
+
+        orig_open = zipfile.ZipFile.open
+
+        def lying_open(self, name_or_info, *args, **kwargs):
+            # Honour the original `open` for everything except our target.
+            target = name_or_info.filename if hasattr(name_or_info, 'filename') else name_or_info
+            if target == 'big.txt':
+                return FakeStream()
+            return orig_open(self, name_or_info, *args, **kwargs)
+
+        orig_infolist = zipfile.ZipFile.infolist
+
+        def lying_infolist(self):
+            entries = orig_infolist(self)
+            for e in entries:
+                # Under-report file_size in the header so a naive pre-check passes.
+                e.file_size = 1
+            return entries
+
+        with patch.object(zipfile.ZipFile, 'open', lying_open), \
+             patch.object(zipfile.ZipFile, 'infolist', lying_infolist):
+            with self.assertRaises(ValueError) as ctx:
+                extract_zip(archive, self.dest, acting_user=self.user)
+        self.assertIn('too large', str(ctx.exception).lower())
 
     def test_extract_reuses_existing_intermediate_folder(self):
         payload = _make_zip([

@@ -41,6 +41,31 @@ def _is_symlink(info):
     return (info.external_attr >> 16) & 0o170000 == 0o120000
 
 
+_READ_CHUNK = 64 * 1024  # 64 KiB
+
+
+def _read_capped(zf, info, total_bytes, max_bytes):
+    """Decompress entry contents in chunks, raising ValueError if max_bytes is exceeded.
+
+    Enforces the cap against the actually decompressed bytes, not the (untrusted)
+    ``ZipInfo.file_size`` header field, which a malicious archive can under-report
+    to slip past the cap and then expand to a much larger blob.
+
+    Returns (bytes, new_total).
+    """
+    chunks = []
+    with zf.open(info, 'r') as fh:
+        while True:
+            chunk = fh.read(_READ_CHUNK)
+            if not chunk:
+                break
+            total_bytes += len(chunk)
+            if total_bytes > max_bytes:
+                raise ValueError("Archive too large")
+            chunks.append(chunk)
+    return b''.join(chunks), total_bytes
+
+
 def extract_zip(file_obj, dest_folder, *, acting_user):
     """Extract a .zip archive into ``dest_folder``.
 
@@ -89,11 +114,7 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
                     parent = _ensure_folder_chain(parts[:-1], folder_cache, acting_user)
                     leaf = parts[-1]
 
-                    total_bytes += info.file_size
-                    if total_bytes > max_bytes:
-                        raise ValueError("Archive too large")
-
-                    data = zf.read(info)
+                    data, total_bytes = _read_capped(zf, info, total_bytes, max_bytes)
                     FileService.create_file(
                         acting_user, leaf, parent=parent,
                         content=ContentFile(data, name=leaf),

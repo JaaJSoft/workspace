@@ -57,6 +57,7 @@ class ActionRegistry:
             'workspace.files.actions.transfer',
             'workspace.files.actions.organize',
             'workspace.files.actions.edit',
+            'workspace.files.actions.extract',
             'workspace.files.actions.info',
             'workspace.files.actions.danger',
             'workspace.files.actions.trash',

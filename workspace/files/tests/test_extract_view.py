@@ -102,7 +102,11 @@ class ExtractViewTests(APITestCase):
             {'destination_uuid': str(other_folder.uuid)},
             format='json',
         )
+        # Must be 404 (not 403) AND the detail must match the "not found" branch
+        # so an attacker can't tell "folder exists but I have no permission"
+        # apart from "folder does not exist".
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.json()['detail'], 'Destination folder not found.')
 
     def test_extract_400_for_non_zip_mime(self):
         archive = self._make_archive(payload=b'plain text', mime='text/plain', name='note.txt')

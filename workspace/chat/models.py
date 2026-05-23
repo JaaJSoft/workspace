@@ -250,3 +250,41 @@ class MessageLinkPreview(models.Model):
 
     def __str__(self):
         return f'Preview {self.preview_id} on {self.message_id}'
+
+
+class MessageInteraction(models.Model):
+    """Interactive content attached to a chat message (e.g. an AI question with
+    clickable answer suggestions). Generic shape via ``kind`` + ``payload``
+    / ``state`` so future kinds (poll, rating) reuse the same table.
+    """
+
+    class Kind(models.TextChoices):
+        QUESTION = 'question', 'Question'
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    message = models.OneToOneField(
+        Message,
+        on_delete=models.CASCADE,
+        related_name='interaction',
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    payload = models.JSONField()
+    state = models.JSONField(null=True, blank=True)
+    interacted_at = models.DateTimeField(null=True, blank=True)
+    interacted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='message_interactions',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['interacted_at']),
+        ]
+
+    def __str__(self):
+        state = 'pending' if self.interacted_at is None else 'answered'
+        return f'{self.kind} on {self.message_id} ({state})'

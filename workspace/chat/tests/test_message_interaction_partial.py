@@ -106,10 +106,6 @@ class MessageInteractionPartialTests(TestCase):
 
 
 class MessageInteractionQueryCountTests(TestCase):
-    """Guard against N+1 on the message list endpoints when many messages
-    carry an interaction. The query count must be constant across message
-    counts: adding more messages with interactions must NOT add queries.
-    """
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -140,7 +136,6 @@ class MessageInteractionQueryCountTests(TestCase):
                 payload={'question': f'Question {i}?', 'options': ['A', 'B']},
             )
             if i % 2 == 0:
-                # Half are answered (by 'other' so partial renders "Répondu par")
                 interaction.interacted_at = timezone.now()
                 interaction.interacted_by = self.other
                 interaction.state = {
@@ -149,15 +144,12 @@ class MessageInteractionQueryCountTests(TestCase):
                 interaction.save()
 
     def test_ui_partial_view_no_n_plus_1(self):
-        """The /chat/<id>/messages partial view must use a constant number
-        of queries regardless of how many messages have interactions."""
         from django.test import Client
 
         client = Client()
         client.force_login(self.user)
         url = f'/chat/{self.conv.uuid}/messages'
 
-        # Warm-up: one request to populate session, content types, etc.
         self._seed_messages(2)
         client.get(url)
 
@@ -180,8 +172,6 @@ class MessageInteractionQueryCountTests(TestCase):
         finally:
             dj_settings.DEBUG = prev_debug
 
-        # Adding 8 more messages must not add per-message queries.
-        # Allow small slack (5 queries) for incidental SQL noise.
         self.assertLessEqual(
             scaled_queries, baseline_queries + 5,
             f'N+1 detected: 2 msgs -> {baseline_queries} queries, '
@@ -189,8 +179,6 @@ class MessageInteractionQueryCountTests(TestCase):
         )
 
     def test_serializer_no_n_plus_1(self):
-        """MessageSerializer over a properly-prefetched queryset must use
-        a constant number of queries regardless of message count."""
         from django.db import connection, reset_queries
         from django.conf import settings as dj_settings
         from workspace.chat.serializers import MessageSerializer

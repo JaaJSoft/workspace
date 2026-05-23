@@ -7,8 +7,11 @@ from django.utils import timezone
 
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.sse_registry import SSEProvider
-from .models import ConversationMember, Message, MessageLinkPreview, PinnedMessage, Reaction
-from .serializers import MessageSerializer
+from .models import (
+    ConversationMember, Message, MessageInteraction, MessageLinkPreview,
+    PinnedMessage, Reaction,
+)
+from .serializers import MessageInteractionSerializer, MessageSerializer
 from .services.conversations import get_unread_counts, user_conversation_ids
 
 logger = logging.getLogger(__name__)
@@ -47,6 +50,7 @@ class ChatSSEProvider(SSEProvider):
         self._seen_reaction_ids = set()
         self._seen_pin_ids = set()
         self._seen_link_preview_ids = set()
+        self._seen_interaction_keys = set()
         self._last_unread_push = 0
         self._last_read_check = timezone.now()
         self._last_typing_state = {}
@@ -148,6 +152,30 @@ class ChatSSEProvider(SSEProvider):
                 'edited_at': msg.edited_at.isoformat(),
             }
             events.append(('message_edited', data, None))
+
+        # Interaction updates (someone answered an ask_user_question prompt)
+        updated_interactions = (
+            MessageInteraction.objects.filter(
+                message__conversation_id__in=self._member_conv_ids,
+                interacted_at__isnull=False,
+                interacted_at__gt=self._since - timedelta(seconds=5),
+            )
+            .exclude(interacted_by_id=user_id)
+            .select_related('message', 'interacted_by')
+            .order_by('interacted_at')[:50]
+        )
+        for interaction in updated_interactions:
+            key = f'{interaction.uuid}:{interaction.interacted_at.isoformat()}'
+            if key in self._seen_interaction_keys:
+                continue
+            self._seen_interaction_keys.add(key)
+            data = {
+                'type': 'message_interaction_updated',
+                'conversation_id': str(interaction.message.conversation_id),
+                'message_id': str(interaction.message_id),
+                'interaction': MessageInteractionSerializer(interaction).data,
+            }
+            events.append(('message_interaction_updated', data, None))
 
         # Deleted messages
         deleted_messages = (

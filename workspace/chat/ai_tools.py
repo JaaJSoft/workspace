@@ -15,6 +15,20 @@ class SearchMessagesParams(BaseModel):
     has_images: bool = Field(default=False, description="If true, only return messages with image attachments.")
 
 
+class AskUserQuestionParams(BaseModel):
+    question: str = Field(
+        min_length=1, max_length=500,
+        description="The question to ask the user, written in their language.",
+    )
+    options: list[str] = Field(
+        min_length=2, max_length=6,
+        description=(
+            "2-6 short, mutually exclusive answer suggestions. The user can "
+            "also type a free-form reply."
+        ),
+    )
+
+
 class ChatToolProvider(ToolProvider):
 
     @tool(badge_icon='🔍', badge_label='Searched messages', detail_key='query', params=SearchMessagesParams)
@@ -88,3 +102,30 @@ or references a past discussion."""
                 'body': snippet,
             })
         return json.dumps(results, ensure_ascii=False)
+
+    @tool(
+        badge_icon='💬',
+        badge_label='Asked the user',
+        detail_key='question',
+        params=AskUserQuestionParams,
+    )
+    def ask_user_question(self, args, user, bot, conversation_id, context):
+        """Ask the user a clarifying question with 2-6 suggested answers. \
+Use when you need a piece of information from the user and there's a small, \
+discrete set of likely answers. Do NOT use for open-ended questions or when \
+free-form text is clearly better. The user can click an option OR type their \
+own answer."""
+        seen = []
+        for opt in args.options:
+            o = opt.strip()
+            if o and o not in seen:
+                seen.append(o)
+        if len(seen) < 2:
+            return 'Error: at least 2 distinct, non-empty options are required.'
+
+        context.setdefault('question', {
+            'question': args.question.strip(),
+            'options': seen[:6],
+        })
+        context['stop_after_round'] = True
+        return 'Question presented to the user. Awaiting reply.'

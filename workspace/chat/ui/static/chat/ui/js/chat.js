@@ -144,6 +144,18 @@ function chatApp(currentUserId) {
         }
       });
 
+      window.addEventListener('chat-message_interaction_updated', (e) => {
+        // Someone else (or another tab) answered an AI question we can see.
+        // Reload the messages of the active conversation so the partial
+        // re-renders in the answered state.
+        const data = e.detail || {};
+        if (data.conversation_id === this.activeConversation?.uuid) {
+          window.dispatchEvent(new CustomEvent('chat:refresh-messages', {
+            detail: { reason: 'sse-interaction-update' },
+          }));
+        }
+      });
+
       // ?action=new - open new conversation dialog from command palette
       const params = new URLSearchParams(window.location.search);
       const action = params.get('action');

@@ -101,7 +101,15 @@ function chatApp(currentUserId) {
         this.saveAttachmentToFiles(e.detail.uuid);
       });
 
-      // ?action=new — open new conversation dialog from command palette
+      // Refresh messages after an interactive question is answered, so the
+      // server-rendered partial re-paints in its answered state.
+      window.addEventListener('chat:refresh-messages', () => {
+        if (this.activeConversation?.uuid && typeof this.loadMessages === 'function') {
+          this.loadMessages(this.activeConversation.uuid);
+        }
+      });
+
+      // ?action=new - open new conversation dialog from command palette
       const params = new URLSearchParams(window.location.search);
       const action = params.get('action');
       if (action === 'new') {

@@ -593,3 +593,45 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
   };
 };
+
+// Alpine component for the AI question buttons rendered by
+// chat/ui/partials/_message_interaction.html. The template instantiates this
+// via x-data="messageInteraction()". On click: POST to the answer endpoint,
+// then dispatch chat:refresh-messages so the chatApp reloads the partial in
+// its answered state (single source of truth = the Django template).
+window.messageInteraction = function messageInteraction() {
+  return {
+    loading: false,
+    pendingIndex: null,
+
+    async answer(messageUuid, optionIndex) {
+      if (this.loading) return;
+      this.loading = true;
+      this.pendingIndex = optionIndex;
+      try {
+        const resp = await fetch(`/api/v1/chat/messages/${messageUuid}/answer`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({ option_index: optionIndex }),
+        });
+
+        if (resp.status === 409 || resp.ok) {
+          window.dispatchEvent(new CustomEvent('chat:refresh-messages', {
+            detail: { reason: 'interaction-answered' },
+          }));
+          return;
+        }
+
+        throw new Error(`HTTP ${resp.status}`);
+      } catch (e) {
+        console.error('Failed to answer question:', e);
+        this.loading = false;
+        this.pendingIndex = null;
+      }
+    },
+  };
+};

@@ -6,6 +6,7 @@ import uuid as uuid_mod
 from pydantic import BaseModel, Field
 
 from workspace.ai.tool_registry import ToolProvider, tool
+from workspace.files.models import File
 
 
 class ReadFileParams(BaseModel):

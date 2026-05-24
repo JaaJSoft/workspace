@@ -176,6 +176,12 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
 
         tool_data.append(td_round)
         rounds.append(round_data)
+        if tool_context.get('stop_after_round'):
+            # A tool requested that we halt and wait for an external input
+            # (e.g. a user click on an ask_user_question prompt). Don't
+            # re-call the LLM until the user replies.
+            rounds[-1]['terminated_by_tool'] = True
+            break
         result = call_llm(messages, model=model, tools=tools)
     else:
         # Max rounds reached - capture the final response

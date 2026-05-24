@@ -593,3 +593,57 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
   };
 };
+
+// Alpine component for the AI question buttons rendered by
+// chat/ui/partials/_message_interaction.html. The template instantiates this
+// via x-data="messageInteraction()". On click: inject an optimistic message
+// bubble for the chosen option, POST to the answer endpoint, then dispatch
+// chat:refresh-messages so the chatApp reloads the partial in its answered
+// state. The optimistic UI matters in DEBUG mode where CELERY_TASK_ALWAYS_EAGER
+// blocks the POST until the bot's LLM reply completes (10-30s); without it
+// the user would see only a spinner during that wait.
+window.messageInteraction = function messageInteraction() {
+  return {
+    loading: false,
+    pendingIndex: null,
+
+    async answer(messageUuid, optionIndex, optionLabel) {
+      if (this.loading) return;
+      this.loading = true;
+      this.pendingIndex = optionIndex;
+
+      const tempId = '_optimistic_answer_' + Date.now();
+      window.dispatchEvent(new CustomEvent('chat:answer-optimistic', {
+        detail: { tempId, body: optionLabel },
+      }));
+
+      try {
+        const resp = await fetch(`/api/v1/chat/messages/${messageUuid}/answer`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({ option_index: optionIndex }),
+        });
+
+        if (resp.status === 409 || resp.ok) {
+          window.dispatchEvent(new CustomEvent('chat:refresh-messages', {
+            detail: { reason: 'interaction-answered' },
+          }));
+          return;
+        }
+
+        throw new Error(`HTTP ${resp.status}`);
+      } catch (e) {
+        console.error('Failed to answer question:', e);
+        window.dispatchEvent(new CustomEvent('chat:answer-optimistic-rollback', {
+          detail: { tempId },
+        }));
+        this.loading = false;
+        this.pendingIndex = null;
+      }
+    },
+  };
+};

@@ -5,6 +5,7 @@ from . import (
     views_attachments,
     views_avatar,
     views_bots,
+    views_interactions,
     views_messages,
     views_pins,
     views_scheduled,
@@ -123,6 +124,12 @@ urlpatterns = [
         'api/v1/chat/conversations/<uuid:conversation_id>/pinned-messages',
         views_pins.ConversationPinnedMessagesView.as_view(),
         name='chat-conversation-pinned-messages',
+    ),
+    # Interactive AI questions
+    path(
+        'api/v1/chat/messages/<uuid:message_id>/answer',
+        views_interactions.MessageInteractionAnswerView.as_view(),
+        name='chat-message-interaction-answer',
     ),
     # Clear conversation
     path(

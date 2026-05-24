@@ -1,0 +1,35 @@
+{% if not msg.interaction.interacted_at %}
+  <div class="mt-3 flex flex-col gap-1.5"
+       id="interaction-{{ msg.interaction.uuid }}"
+       x-data="messageInteraction()">
+    {% for opt in msg.interaction.payload.options %}
+      <button type="button"
+              class="btn btn-sm btn-outline justify-start text-left normal-case"
+              :disabled="loading"
+              @click="answer('{{ msg.uuid }}', {{ forloop.counter0 }}, '{{ opt|escapejs }}')">
+        <span x-show="loading && pendingIndex === {{ forloop.counter0 }}"
+              class="loading loading-spinner loading-xs"></span>
+        {{ opt }}
+      </button>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="mt-3 flex flex-col gap-1.5">
+    {% for opt in msg.interaction.payload.options %}
+      {% if forloop.counter0 == msg.interaction.state.selected_index %}
+        <div class="btn btn-sm btn-primary justify-start text-left normal-case no-animation pointer-events-none">
+          <span>✓</span> {{ opt }}
+        </div>
+      {% else %}
+        <div class="btn btn-sm btn-ghost justify-start text-left normal-case no-animation pointer-events-none opacity-40">
+          {{ opt }}
+        </div>
+      {% endif %}
+    {% endfor %}
+    {% if msg.conversation.kind == 'group' %}
+      <div class="text-xs text-base-content/40 mt-0.5">
+        Répondu par {{ msg.interaction.interacted_by.get_full_name|default:msg.interaction.interacted_by.username }}
+      </div>
+    {% endif %}
+  </div>
+{% endif %}

@@ -60,6 +60,9 @@
             {% if msg.body_html %}
               <div class="msg-body prose prose-sm max-w-none break-words">{{ msg.body_html|safe }}</div>
             {% endif %}
+            {% if msg.interaction %}
+              {% include "chat/ui/partials/_message_interaction.html" with msg=msg %}
+            {% endif %}
 
             {# Link previews #}
             {% with previews=msg.link_previews.all %}

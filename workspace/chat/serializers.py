@@ -1,7 +1,15 @@
 from rest_framework import serializers
 
 from workspace.ai.models import ScheduledMessage
-from .models import Conversation, ConversationMember, Message, MessageAttachment, PinnedMessage, Reaction
+from .models import (
+    Conversation,
+    ConversationMember,
+    Message,
+    MessageAttachment,
+    MessageInteraction,
+    PinnedMessage,
+    Reaction,
+)
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -80,6 +88,17 @@ class LinkPreviewSerializer(serializers.Serializer):
     site_name = serializers.CharField(source='preview.site_name')
 
 
+class MessageInteractionSerializer(serializers.ModelSerializer):
+    interacted_by = MemberUserSerializer(read_only=True)
+
+    class Meta:
+        model = MessageInteraction
+        fields = [
+            'uuid', 'kind', 'payload', 'state',
+            'interacted_at', 'interacted_by',
+        ]
+
+
 class MessageSerializer(serializers.ModelSerializer):
     author = MemberUserSerializer()
     reactions = ReactionSerializer(many=True, read_only=True)
@@ -87,6 +106,7 @@ class MessageSerializer(serializers.ModelSerializer):
     link_previews = LinkPreviewSerializer(many=True, read_only=True)
     conversation_id = serializers.UUIDField()
     reply_to = ReplyToSerializer(read_only=True, allow_null=True)
+    interaction = MessageInteractionSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = Message
@@ -94,6 +114,7 @@ class MessageSerializer(serializers.ModelSerializer):
             'uuid', 'conversation_id', 'author', 'body', 'body_html',
             'edited_at', 'created_at', 'deleted_at',
             'reactions', 'attachments', 'link_previews', 'reply_to',
+            'interaction',
         ]
 
 

@@ -58,7 +58,11 @@ class MessageListView(CacheControlMixin, APIView):
 
         messages = Message.objects.filter(
             conversation_id=conversation_id,
-        ).select_related('author', 'author__bot_profile', 'reply_to', 'reply_to__author').prefetch_related(
+        ).select_related(
+            'author', 'author__bot_profile',
+            'reply_to', 'reply_to__author',
+            'interaction', 'interaction__interacted_by',
+        ).prefetch_related(
             Prefetch(
                 'reactions',
                 queryset=Reaction.objects.select_related('user'),

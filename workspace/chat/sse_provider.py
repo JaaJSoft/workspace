@@ -106,7 +106,11 @@ class ChatSSEProvider(SSEProvider):
             )
             .exclude(author_id=user_id)
             .exclude(uuid__in=self._seen_message_ids)
-            .select_related('author', 'author__bot_profile', 'reply_to', 'reply_to__author')
+            .select_related(
+                'author', 'author__bot_profile',
+                'reply_to', 'reply_to__author',
+                'interaction', 'interaction__interacted_by',
+            )
             .prefetch_related(
                 Prefetch(
                     'reactions',

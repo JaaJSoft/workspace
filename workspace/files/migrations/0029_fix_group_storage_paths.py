@@ -15,6 +15,8 @@ from django.db import migrations
 
 def fix_db_content_names(apps, schema_editor):
     """Rewrite content.name: files/groups/<grp>/<root>/... -> files/groups/<root>/..."""
+    import re
+
     db = schema_editor.connection.alias
     File = apps.get_model('files', 'File')
     files = (
@@ -22,18 +24,22 @@ def fix_db_content_names(apps, schema_editor):
         .filter(node_type='file', group__isnull=False)
         .exclude(content='')
         .exclude(content__isnull=True)
-        .select_related('group')
     )
+
+    # Extract the group segment from the stored path itself rather than
+    # f.group.name, because the group may have been renamed since upload.
+    dup_re = re.compile(r'^files/groups/([^/]+)/\1(/.*)?$')
 
     updated = []
     for f in files.iterator(chunk_size=500):
         if not f.content.name:
             continue
         name = f.content.name.replace('\\', '/')
-        prefix = f'files/groups/{f.group.name}/'
-        # Only fix paths that have the duplicated group name prefix
-        if name.startswith(prefix):
-            f.content.name = 'files/groups/' + name[len(prefix):]
+        m = dup_re.match(name)
+        if m:
+            # Strip the duplicated first segment:
+            # files/groups/X/X/rest -> files/groups/X/rest
+            f.content.name = 'files/groups/' + name[len(f'files/groups/{m.group(1)}/'):]
             updated.append(f)
         if len(updated) >= 500:
             File.objects.using(db).bulk_update(updated, ['content'], batch_size=500)
@@ -61,6 +67,13 @@ def move_physical_dirs(apps, schema_editor):
         if not os.path.isdir(group_dir):
             continue
 
+        # Only operate on directories that have the legacy duplicated
+        # layout: a nested subdirectory with the same name as the parent.
+        # Already-flat directories (post-fix files) are left alone.
+        nested = os.path.join(group_dir, group_dir_name)
+        if not os.path.isdir(nested):
+            continue
+
         # Move each child of the old <group_name>/ dir up into groups/
         for child in os.listdir(group_dir):
             src = os.path.join(group_dir, child)
@@ -73,19 +86,18 @@ def move_physical_dirs(apps, schema_editor):
                         item_dest = os.path.join(dest, item)
                         if not os.path.exists(item_dest):
                             os.rename(item_src, item_dest)
-                    # Remove now-empty src dir
                     try:
                         os.rmdir(src)
                     except OSError:
-                        pass
+                        pass  # dir may not be empty due to concurrent writes
             else:
                 os.rename(src, dest)
 
-        # Remove the now-empty group namespace dir
+        # Best-effort cleanup: the namespace dir should be empty now.
         try:
             os.rmdir(group_dir)
         except OSError:
-            pass
+            pass  # dir may still contain files if moves were partial
 
 
 class Migration(migrations.Migration):

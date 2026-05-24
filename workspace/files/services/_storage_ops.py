@@ -29,7 +29,7 @@ def folder_storage_path(folder):
     """
     path = folder.path or folder.get_path()
     if folder.group_id:
-        return posixpath.join('files', 'groups', folder.group.name, *path.split('/'))
+        return posixpath.join('files', 'groups', *path.split('/'))
     return posixpath.join('files', 'users', folder.owner.username, *path.split('/'))
 
 

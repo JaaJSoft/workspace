@@ -4,7 +4,7 @@ from django.test import TestCase
 from workspace.ai.models import AITask
 from workspace.ai.services.responses import post_bot_message
 from workspace.chat.models import (
-    Conversation, ConversationMember, Message, MessageInteraction,
+    Conversation, ConversationMember, MessageInteraction,
 )
 
 User = get_user_model()

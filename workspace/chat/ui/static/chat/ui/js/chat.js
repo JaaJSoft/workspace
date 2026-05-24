@@ -102,10 +102,12 @@ function chatApp(currentUserId) {
       });
 
       // Refresh messages after an interactive question is answered, so the
-      // server-rendered partial re-paints in its answered state.
+      // server-rendered partial re-paints in its answered state. Use the
+      // incremental refresh (no container clear, preserves scroll position)
+      // instead of the full loadMessages which flashes empty + forces scroll.
       window.addEventListener('chat:refresh-messages', () => {
-        if (this.activeConversation?.uuid && typeof this.loadMessages === 'function') {
-          this.loadMessages(this.activeConversation.uuid);
+        if (this.activeConversation?.uuid && typeof this._refreshCurrentMessages === 'function') {
+          this._refreshCurrentMessages();
         }
       });
 

@@ -123,8 +123,14 @@ own answer."""
         if len(seen) < 2:
             return 'Error: at least 2 distinct, non-empty options are required.'
 
+        # Pydantic's min_length=1 counts characters incl. whitespace, so a
+        # value like "   " passes validation but strips to "" - catch it here.
+        question_text = args.question.strip()
+        if not question_text:
+            return 'Error: question cannot be empty or whitespace-only.'
+
         context.setdefault('question', {
-            'question': args.question.strip(),
+            'question': question_text,
             'options': seen[:6],
         })
         context['stop_after_round'] = True

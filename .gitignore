@@ -121,7 +121,8 @@ test_db.sqlite3*
 
 /files/
 /NUL
-.claude/
+.claude/*
+!.claude/skills/
 /thumbnails/
 /avatars/
 /mail/

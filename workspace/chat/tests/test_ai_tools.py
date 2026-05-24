@@ -77,9 +77,6 @@ class AskUserQuestionToolTests(TestCase):
             AskUserQuestionParams(question='', options=['A', 'B'])
 
     def test_tool_rejects_whitespace_only_question(self):
-        # Pydantic min_length=1 accepts whitespace-only ("   " has 3 chars),
-        # but after .strip() the question is empty. The tool must catch this
-        # at runtime so the LLM gets an Error and no empty question is stored.
         args = AskUserQuestionParams(question='   ', options=['A', 'B'])
         ctx = {}
         result = self.provider.ask_user_question(

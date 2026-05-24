@@ -599,9 +599,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 // via x-data="messageInteraction()". On click: inject an optimistic message
 // bubble for the chosen option, POST to the answer endpoint, then dispatch
 // chat:refresh-messages so the chatApp reloads the partial in its answered
-// state. The optimistic UI matters in DEBUG mode where CELERY_TASK_ALWAYS_EAGER
-// blocks the POST until the bot's LLM reply completes (10-30s); without it
-// the user would see only a spinner during that wait.
+// state.
 window.messageInteraction = function messageInteraction() {
   return {
     loading: false,

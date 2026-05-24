@@ -244,7 +244,11 @@ class MessageListView(CacheControlMixin, APIView):
 
         msg = (
             Message.objects.filter(pk=message.pk)
-            .select_related('author', 'author__bot_profile', 'reply_to', 'reply_to__author')
+            .select_related(
+                'author', 'author__bot_profile',
+                'reply_to', 'reply_to__author',
+                'interaction', 'interaction__interacted_by',
+            )
             .prefetch_related(
                 Prefetch(
                     'reactions',
@@ -325,7 +329,11 @@ class MessageDetailView(APIView):
         # Refetch with prefetches for serialization
         message = (
             Message.objects.filter(pk=message.pk)
-            .select_related('author', 'author__bot_profile', 'reply_to', 'reply_to__author')
+            .select_related(
+                'author', 'author__bot_profile',
+                'reply_to', 'reply_to__author',
+                'interaction', 'interaction__interacted_by',
+            )
             .prefetch_related(
                 Prefetch(
                     'reactions',

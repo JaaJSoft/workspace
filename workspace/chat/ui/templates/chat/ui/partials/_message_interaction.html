@@ -6,7 +6,7 @@
       <button type="button"
               class="btn btn-sm btn-outline justify-start text-left normal-case"
               :disabled="loading"
-              @click="answer('{{ msg.uuid }}', {{ forloop.counter0 }})">
+              @click="answer('{{ msg.uuid }}', {{ forloop.counter0 }}, '{{ opt|escapejs }}')">
         <span x-show="loading && pendingIndex === {{ forloop.counter0 }}"
               class="loading loading-spinner loading-xs"></span>
         {{ opt }}

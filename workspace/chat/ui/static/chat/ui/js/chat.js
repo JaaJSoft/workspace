@@ -109,6 +109,30 @@ function chatApp(currentUserId) {
         }
       });
 
+      // Optimistic UI for AI question answers: inject a temp message bubble +
+      // bot typing indicator immediately on click. Matters in DEBUG mode where
+      // CELERY_TASK_ALWAYS_EAGER blocks the POST until the LLM completes; the
+      // optimistic bubble lets the user see their choice without waiting.
+      window.addEventListener('chat:answer-optimistic', (e) => {
+        const detail = e.detail || {};
+        if (!detail.tempId || !detail.body) return;
+        if (typeof this._injectOptimisticMessage === 'function') {
+          this._injectOptimisticMessage(detail.tempId, detail.body, null, null);
+          if (this.isBotConversation?.(this.activeConversation)) {
+            this.botTyping = true;
+          }
+          this.$nextTick(() => this.scrollToBottom?.());
+        }
+      });
+
+      window.addEventListener('chat:answer-optimistic-rollback', (e) => {
+        const detail = e.detail || {};
+        if (detail.tempId && typeof this._removeOptimisticMessage === 'function') {
+          this._removeOptimisticMessage(detail.tempId);
+        }
+        this.botTyping = false;
+      });
+
       window.addEventListener('chat-message_interaction_updated', (e) => {
         // Someone else (or another tab) answered an AI question we can see.
         // Reload the messages of the active conversation so the partial

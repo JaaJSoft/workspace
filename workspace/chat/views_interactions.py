@@ -1,6 +1,7 @@
 import logging
 
 from django.db import transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -8,13 +9,30 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Message, MessageInteraction
+from .models import Message, MessageInteraction, Reaction
 from .serializers import MessageSerializer
 from .services.conversations import get_active_membership
 from .services.rendering import render_message_body
 from .views import _trigger_bot_response
 
 logger = logging.getLogger(__name__)
+
+
+def _refetch_for_serialization(message_pk):
+    return (
+        Message.objects.filter(pk=message_pk)
+        .select_related(
+            'author', 'author__bot_profile',
+            'reply_to', 'reply_to__author',
+            'interaction', 'interaction__interacted_by',
+        )
+        .prefetch_related(
+            Prefetch('reactions', queryset=Reaction.objects.select_related('user')),
+            'attachments',
+            'link_previews__preview',
+        )
+        .first()
+    )
 
 
 @extend_schema(tags=['Chat'])
@@ -74,8 +92,8 @@ class MessageInteractionAnswerView(APIView):
                     (locked.state or {}).get('selected_index') == option_index
                 )
                 if same_user and same_choice:
-                    answer = Message.objects.get(
-                        uuid=locked.state['answer_message_id']
+                    answer = _refetch_for_serialization(
+                        locked.state['answer_message_id'],
                     )
                     return Response(
                         MessageSerializer(answer).data,
@@ -108,6 +126,7 @@ class MessageInteractionAnswerView(APIView):
             interaction.message.conversation_id, answer, request.user,
         )
 
+        answer = _refetch_for_serialization(answer.pk)
         return Response(
             MessageSerializer(answer).data,
             status=status.HTTP_201_CREATED,

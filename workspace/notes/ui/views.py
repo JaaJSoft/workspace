@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Exists, OuterRef
+from django.db.models.functions import Lower
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -20,7 +21,7 @@ def _get_root_folders(qs):
     roots = list(
         qs.filter(parent__isnull=True)
         .annotate(has_children=Exists(child_exists))
-        .order_by('name')
+        .name_ordered()
         .values('uuid', 'name', 'icon', 'color', 'has_children')
     )
     for f in roots:
@@ -41,7 +42,7 @@ def _sidebar_context(user):
     )
     group_folders = _get_root_folders(group_qs)
 
-    tags = Tag.objects.filter(owner=user).order_by('name')
+    tags = Tag.objects.filter(owner=user)
 
     # Groups without a root folder yet (for create dialog)
     group_root_ids = File.objects.filter(
@@ -52,7 +53,7 @@ def _sidebar_context(user):
     ).values_list('group_id', flat=True)
     available_groups = user.groups.exclude(
         id__in=group_root_ids
-    ).order_by('name')
+    ).order_by(Lower('name'))
 
     return {
         'folders': folders,

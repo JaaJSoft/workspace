@@ -133,7 +133,7 @@ class ActionsMixin:
                     shared_with=request.user,
                 ).values('permission')[:1]
             ),
-        ).order_by('name')
+        ).name_ordered()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 

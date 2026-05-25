@@ -4,6 +4,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import OuterRef, Subquery
+from django.db.models.functions import Lower
 from django.http import Http404
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -16,9 +17,10 @@ from drf_spectacular.utils import (
     extend_schema_view,
 )
 from rest_framework import status, viewsets
-from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
+from workspace.common.filters import CaseInsensitiveOrderingFilter
 from workspace.common.mixins import CacheControlMixin
 from workspace.files.services import FilePermission, FileService
 from workspace.notifications.services.notifications import notify, notify_many
@@ -228,7 +230,7 @@ class FileViewSet(
     serializer_class = FileSerializer
     pagination_class = None
     lookup_field = 'uuid'
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filter_backends = [DjangoFilterBackend, SearchFilter, CaseInsensitiveOrderingFilter]
     filterset_fields = {
         'node_type': ['exact'],
         'parent': ['exact'],
@@ -237,7 +239,7 @@ class FileViewSet(
     }
     search_fields = ['name', 'mime_type']
     ordering_fields = ['name', 'created_at', 'updated_at', 'size']
-    ordering = ['node_type', 'name']
+    ordering = ['node_type', Lower('name')]
 
     LOCK_TTL = timedelta(minutes=5)
 

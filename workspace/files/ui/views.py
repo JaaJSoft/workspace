@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import Exists, OuterRef, Q, Subquery
+from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -131,40 +132,40 @@ def _build_context(request, folder=None, is_trash_view=False):
             pk__in=shared_file_ids,
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
-        ).order_by('name')
+        ).name_ordered()
     elif is_trash_view:
         nodes = File.objects.filter(
             owner=request.user,
             deleted_at__isnull=False,
         ).filter(
             Q(parent__isnull=True) | Q(parent__deleted_at__isnull=True)
-        ).order_by('-deleted_at', 'name')
+        ).name_ordered('-deleted_at')
     elif is_favorites_view:
         nodes = File.objects.filter(
             FileService.accessible_files_q(request.user),
             deleted_at__isnull=True,
             favorites__owner=request.user,
-        ).distinct().order_by('-node_type', 'name')
+        ).distinct().name_ordered('-node_type')
     elif is_recent_view:
         nodes = File.objects.filter(
             owner=request.user,
             deleted_at__isnull=True,
-        ).order_by('-updated_at', 'name')
+        ).name_ordered('-updated_at')
     elif current_folder:
         if current_folder.group_id:
             nodes = File.objects.filter(
                 group=current_folder.group,
                 deleted_at__isnull=True,
                 parent=current_folder,
-            ).order_by('-node_type', 'name')
+            ).name_ordered('-node_type')
         else:
             nodes = FileService.user_files_qs(request.user).filter(
                 parent=current_folder,
-            ).order_by('-node_type', 'name')
+            ).name_ordered('-node_type')
     else:
         nodes = FileService.user_files_qs(request.user).filter(
             parent__isnull=True,
-        ).order_by('-node_type', 'name')
+        ).name_ordered('-node_type')
 
     favorite_subquery = FileFavorite.objects.filter(
         owner=request.user,
@@ -225,11 +226,11 @@ def _build_context(request, folder=None, is_trash_view=False):
     group_folders = FileService.user_group_files_qs(request.user).filter(
         parent__isnull=True,
         node_type=File.NodeType.FOLDER,
-    ).select_related('group').order_by('name')
+    ).select_related('group').name_ordered()
 
     # Groups without a folder yet (for "Create group folder" action)
     groups_with_folders = group_folders.values_list('group_id', flat=True)
-    available_groups = request.user.groups.exclude(id__in=groups_with_folders).order_by('name')
+    available_groups = request.user.groups.exclude(id__in=groups_with_folders).order_by(Lower('name'))
 
     # Load pinned folders + their favorite status in a single query:
     # annotate via the FK (folder_id) rather than re-fetching the File rows.
@@ -507,12 +508,12 @@ def group_folders_sidebar(request):
     group_folders = FileService.user_group_files_qs(request.user).filter(
         parent__isnull=True,
         node_type=File.NodeType.FOLDER,
-    ).select_related('group').order_by('name')
+    ).select_related('group').name_ordered()
 
     groups_with_folders = group_folders.values_list('group_id', flat=True)
     available_groups = request.user.groups.exclude(
         id__in=groups_with_folders
-    ).order_by('name')
+    ).order_by(Lower('name'))
 
     return render(request, 'files/ui/partials/group_folders_section.html', {
         'group_folders': group_folders,

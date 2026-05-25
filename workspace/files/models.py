@@ -4,7 +4,7 @@ import secrets
 from django.contrib.auth import get_user_model
 from django.db import models, transaction
 from django.db.models import Value
-from django.db.models.functions import Concat, Substr
+from django.db.models.functions import Concat, Lower, Substr
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.utils import timezone
@@ -73,6 +73,18 @@ class MimeTypeRule(models.Model):
     def save(self, *args, **kwargs):
         self.is_wildcard = self.pattern.endswith('/*')
         super().save(*args, **kwargs)
+
+
+class FileQuerySet(models.QuerySet):
+    def name_ordered(self, *prefix_fields):
+        """Sort by name case-insensitively, with optional leading fields.
+
+        Usage:
+            qs.name_ordered()                    # ORDER BY LOWER(name)
+            qs.name_ordered('-node_type')         # ORDER BY node_type DESC, LOWER(name)
+            qs.name_ordered('-deleted_at')        # ORDER BY deleted_at DESC, LOWER(name)
+        """
+        return self.order_by(*prefix_fields, Lower('name'))
 
 
 class File(models.Model):
@@ -150,8 +162,10 @@ class File(models.Model):
     locked_at = models.DateTimeField(null=True, blank=True)
     lock_expires_at = models.DateTimeField(null=True, blank=True)
 
+    objects = FileQuerySet.as_manager()
+
     class Meta:
-        ordering = ['node_type', 'name']
+        ordering = ['node_type', Lower('name')]
         indexes = [
             models.Index(fields=['parent', 'node_type']),
             models.Index(fields=['owner', 'created_at']),
@@ -586,7 +600,7 @@ class Tag(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['name']
+        ordering = [Lower('name')]
         constraints = [
             models.UniqueConstraint(fields=['owner', 'name'], name='unique_tag_per_user'),
         ]

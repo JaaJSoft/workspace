@@ -542,6 +542,45 @@ class FileAPITests(APITestCase):
         file.refresh_from_db()
         self.assertEqual(file.size, len(b'much longer content'))
 
+    def test_list_ordering_case_insensitive(self):
+        """Name sort must be case-insensitive (a < B < c)."""
+        for name in ['banana', 'Cherry', 'apple']:
+            File.objects.create(
+                owner=self.user,
+                name=name,
+                node_type=File.NodeType.FILE,
+            )
+
+        response = self.client.get('/api/v1/files')
+        names = [f['name'] for f in response.data]
+        self.assertEqual(names, ['apple', 'banana', 'Cherry'])
+
+    def test_list_ordering_by_name_param_case_insensitive(self):
+        """Explicit ?ordering=name must also be case-insensitive."""
+        for name in ['banana', 'Cherry', 'apple']:
+            File.objects.create(
+                owner=self.user,
+                name=name,
+                node_type=File.NodeType.FILE,
+            )
+
+        response = self.client.get('/api/v1/files?ordering=name')
+        names = [f['name'] for f in response.data]
+        self.assertEqual(names, ['apple', 'banana', 'Cherry'])
+
+    def test_list_ordering_by_name_desc_case_insensitive(self):
+        """Explicit ?ordering=-name must also be case-insensitive."""
+        for name in ['banana', 'Cherry', 'apple']:
+            File.objects.create(
+                owner=self.user,
+                name=name,
+                node_type=File.NodeType.FILE,
+            )
+
+        response = self.client.get('/api/v1/files?ordering=-name')
+        names = [f['name'] for f in response.data]
+        self.assertEqual(names, ['Cherry', 'banana', 'apple'])
+
 
 class EdgeCaseTests(APITestCase):
     """Tests for edge cases and error handling."""

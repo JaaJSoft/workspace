@@ -239,6 +239,7 @@ class FileViewSet(
     }
     search_fields = ['name', 'mime_type']
     ordering_fields = ['name', 'created_at', 'updated_at', 'size']
+    ordering_case_insensitive_fields = ['name']
     ordering = ['node_type', Lower('name')]
 
     LOCK_TTL = timedelta(minutes=5)

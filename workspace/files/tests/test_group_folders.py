@@ -104,7 +104,7 @@ class GroupStoragePathTests(TestCase):
 
     def test_folder_storage_path_for_group_folder(self):
         path = FileService._folder_storage_path(self.root)
-        self.assertEqual(path, 'files/groups/Marketing/Marketing Files')
+        self.assertEqual(path, 'files/groups/Marketing Files')
 
     def test_folder_storage_path_for_group_subfolder(self):
         sub = File.objects.create(
@@ -115,7 +115,7 @@ class GroupStoragePathTests(TestCase):
             group=self.group,
         )
         path = FileService._folder_storage_path(sub)
-        self.assertEqual(path, 'files/groups/Marketing/Marketing Files/Reports')
+        self.assertEqual(path, 'files/groups/Marketing Files/Reports')
 
     def test_folder_storage_path_personal_unchanged(self):
         personal = File.objects.create(
@@ -138,7 +138,28 @@ class GroupStoragePathTests(TestCase):
         )
         f.path = 'Marketing Files/report.pdf'
         result = file_upload_path(f, 'report.pdf')
-        self.assertEqual(result, 'files/groups/Marketing/Marketing Files/report.pdf')
+        self.assertEqual(result, 'files/groups/Marketing Files/report.pdf')
+
+    def test_file_upload_path_for_group_file_in_subfolder(self):
+        from workspace.files.models import file_upload_path
+
+        sub = File.objects.create(
+            owner=self.user,
+            name='Reports',
+            node_type=File.NodeType.FOLDER,
+            parent=self.root,
+            group=self.group,
+        )
+        f = File(
+            owner=self.user,
+            name='report.pdf',
+            node_type=File.NodeType.FILE,
+            parent=sub,
+            group=self.group,
+        )
+        f.path = 'Marketing Files/Reports/report.pdf'
+        result = file_upload_path(f, 'report.pdf')
+        self.assertEqual(result, 'files/groups/Marketing Files/Reports/report.pdf')
 
     def test_file_upload_path_personal_unchanged(self):
         from workspace.files.models import file_upload_path

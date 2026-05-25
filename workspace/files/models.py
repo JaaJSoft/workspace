@@ -24,7 +24,7 @@ def file_upload_path(instance, filename):
     Personal files are stored under ``files/users/<username>/...``.
     """
     if instance.group_id:
-        root = 'files/groups/' + instance.group.name
+        root = 'files/groups'
     else:
         root = 'files/users/' + instance.owner.username
 

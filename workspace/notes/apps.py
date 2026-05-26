@@ -43,6 +43,16 @@ class NotesConfig(AppConfig):
                 icon='book-open', color='success', url='/notes?view=journal',
                 kind='action', module_slug='notes', order=32,
             ),
+            CommandInfo(
+                name='Favorite notes', keywords=['favorites', 'starred notes'],
+                icon='star', color='success', url='/notes?view=favorites',
+                kind='navigate', module_slug='notes', order=33,
+            ),
+            CommandInfo(
+                name='Recent notes', keywords=['recent notes', 'last edited'],
+                icon='clock', color='success', url='/notes?view=recent',
+                kind='navigate', module_slug='notes', order=34,
+            ),
         ])
 
         activity_registry.register(ActivityProviderInfo(

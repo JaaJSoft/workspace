@@ -6,7 +6,7 @@ class DashboardConfig(AppConfig):
     name = 'workspace.dashboard'
 
     def ready(self):
-        from workspace.core.module_registry import ModuleInfo, registry
+        from workspace.core.module_registry import CommandInfo, ModuleInfo, registry
 
         registry.register(ModuleInfo(
             name='Dashboard',
@@ -17,6 +17,19 @@ class DashboardConfig(AppConfig):
             url='/',
             order=0,
         ))
+
+        registry.register_commands([
+            CommandInfo(
+                name='Settings', keywords=['settings', 'preferences', 'configuration'],
+                icon='settings', color='secondary', url='/users/settings',
+                kind='navigate', module_slug='dashboard', order=1,
+            ),
+            CommandInfo(
+                name='My profile', keywords=['profile', 'account', 'avatar'],
+                icon='user', color='secondary', url='/users/profile',
+                kind='navigate', module_slug='dashboard', order=2,
+            ),
+        ])
 
         planned_modules = [
             ModuleInfo(

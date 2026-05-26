@@ -39,6 +39,26 @@ class FilesConfig(AppConfig):
                 icon='hard-drive', color='primary', url='/files',
                 kind='navigate', module_slug='files', order=10,
             ),
+            CommandInfo(
+                name='Favorite files', keywords=['favorites', 'starred', 'bookmarked'],
+                icon='star', color='primary', url='/files?favorites=1',
+                kind='navigate', module_slug='files', order=11,
+            ),
+            CommandInfo(
+                name='Recent files', keywords=['recent', 'last opened', 'history'],
+                icon='clock', color='primary', url='/files?recent=1',
+                kind='navigate', module_slug='files', order=12,
+            ),
+            CommandInfo(
+                name='Trash', keywords=['trash', 'deleted', 'recycle bin'],
+                icon='trash-2', color='primary', url='/files/trash',
+                kind='navigate', module_slug='files', order=13,
+            ),
+            CommandInfo(
+                name='Shared with me', keywords=['shared', 'sharing', 'received'],
+                icon='share-2', color='primary', url='/files?shared=1',
+                kind='navigate', module_slug='files', order=14,
+            ),
         ])
 
         from .models import MimeTypeRule

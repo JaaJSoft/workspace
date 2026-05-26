@@ -38,6 +38,11 @@ class NotesConfig(AppConfig):
                 icon='file-plus', color='success', url='/notes?action=new',
                 kind='action', module_slug='notes', order=31,
             ),
+            CommandInfo(
+                name="Today's journal", keywords=['journal', 'daily', 'today', 'diary'],
+                icon='book-open', color='success', url='/notes?view=journal',
+                kind='action', module_slug='notes', order=32,
+            ),
         ])
 
         activity_registry.register(ActivityProviderInfo(

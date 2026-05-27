@@ -170,7 +170,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     async sendMessage() {
       const body = this.messageBody.trim();
       const files = [...this.pendingFiles];
-      const wsFiles = [...(this.pendingWorkspaceFiles || [])];
+      const wsFiles = [...(this.pendingPickedFiles || [])];
       if ((!body && files.length === 0 && wsFiles.length === 0) || !this.activeConversation) return;
 
       const replyToUuid = this.replyingTo?.uuid || null;
@@ -178,7 +178,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       this.messageBody = '';
       this.pendingFiles = [];
-      this.pendingWorkspaceFiles = [];
+      this.pendingPickedFiles = [];
       this._lastTypingSent = 0;
       this._clearDraft();
       this.cancelReply();
@@ -206,7 +206,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
             formData.append('files', f);
           }
           for (const wf of wsFiles) {
-            formData.append('workspace_file_ids', wf.uuid);
+            formData.append('file_uuids', wf.uuid);
           }
           resp = await fetch(
             `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
@@ -220,7 +220,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         } else {
           const payload = { body };
           if (replyToUuid) payload.reply_to_uuid = replyToUuid;
-          if (wsFiles.length > 0) payload.workspace_file_ids = wsFiles.map(f => f.uuid);
+          if (wsFiles.length > 0) payload.file_uuids = wsFiles.map(f => f.uuid);
           resp = await fetch(
             `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
             {
@@ -253,7 +253,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this._removeOptimisticMessage(tempId);
           this.messageBody = body;
           this.pendingFiles = files;
-          this.pendingWorkspaceFiles = wsFiles;
+          this.pendingPickedFiles = wsFiles;
           this.botTyping = false;
         }
       } catch (e) {
@@ -261,7 +261,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         this._removeOptimisticMessage(tempId);
         this.messageBody = body;
         this.pendingFiles = files;
-        this.pendingWorkspaceFiles = wsFiles;
+        this.pendingPickedFiles = wsFiles;
         this.botTyping = false;
       }
     },

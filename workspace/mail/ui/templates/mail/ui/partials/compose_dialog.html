@@ -157,7 +157,7 @@
       </div>
 
       <!-- Attachments preview -->
-      <div class="px-4 flex flex-wrap gap-2" x-show="compose.attachments.length > 0 || (compose.workspace_files && compose.workspace_files.length > 0)" x-cloak>
+      <div class="px-4 flex flex-wrap gap-2" x-show="compose.attachments.length > 0 || (compose.picked_files && compose.picked_files.length > 0)" x-cloak>
         <template x-for="(file, idx) in compose.attachments" :key="'a-'+idx">
           <span class="badge badge-sm gap-1 pr-0.5 overflow-hidden">
             <i data-lucide="file" class="w-3 h-3 flex-shrink-0"></i>
@@ -166,12 +166,12 @@
                     @click="compose.attachments.splice(idx, 1)">&times;</button>
           </span>
         </template>
-        <template x-for="(wf, idx) in (compose.workspace_files || [])" :key="'wf-'+wf.uuid">
+        <template x-for="(wf, idx) in (compose.picked_files || [])" :key="'wf-'+wf.uuid">
           <span class="badge badge-sm gap-1 pr-0.5 overflow-hidden bg-info/10 text-info border-info/20">
             <i data-lucide="hard-drive" class="w-3 h-3 flex-shrink-0"></i>
             <span class="max-w-32 truncate" x-text="wf.name"></span>
             <button type="button" class="opacity-60 hover:opacity-100 leading-none text-xs"
-                    @click="compose.workspace_files.splice(idx, 1)">&times;</button>
+                    @click="compose.picked_files.splice(idx, 1)">&times;</button>
           </span>
         </template>
       </div>
@@ -197,7 +197,7 @@
           </button>
           <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-box shadow-lg w-48 mb-2 z-50">
             <li><a @click="document.activeElement.blur(); $refs.composeFileInput.click()"><i data-lucide="upload" class="w-4 h-4"></i> Upload file</a></li>
-            <li><a @click="document.activeElement.blur(); attachWorkspaceFiles()"><i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace</a></li>
+            <li><a @click="document.activeElement.blur(); attachPickedFiles()"><i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace</a></li>
           </ul>
         </div>
         <input type="file" multiple x-ref="composeFileInput" class="hidden"

@@ -476,7 +476,7 @@ function _defaultCompose() {
   return {
     account_id: '', to: [], cc: [], bcc: [],
     subject: '', body: '', is_reply: false, reply_message_id: null,
-    attachments: [], workspace_files: [], sending: false, error: '',
+    attachments: [], picked_files: [], sending: false, error: '',
     draft_id: null, saving: false, last_saved: null,
     _saveTimer: null,
   };

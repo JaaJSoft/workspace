@@ -135,15 +135,15 @@ class MessageListView(CacheControlMixin, APIView):
 
         body = serializer.validated_data.get('body', '').strip()
         files = request.FILES.getlist('files')
-        workspace_file_ids = serializer.validated_data.get('workspace_file_ids', [])
+        file_uuids = serializer.validated_data.get('file_uuids', [])
 
-        if not body and not files and not workspace_file_ids:
+        if not body and not files and not file_uuids:
             return Response(
                 {'detail': 'Message must have text or at least one file.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if len(files) + len(workspace_file_ids) > 10:
+        if len(files) + len(file_uuids) > 10:
             return Response(
                 {'detail': 'Maximum 10 files per message.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -157,25 +157,25 @@ class MessageListView(CacheControlMixin, APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        workspace_files = []
-        if workspace_file_ids:
-            workspace_file_ids = list(dict.fromkeys(workspace_file_ids))
+        picked_files = []
+        if file_uuids:
+            file_uuids = list(dict.fromkeys(file_uuids))
             from workspace.files.models import File as WorkspaceFile
-            ws_files = WorkspaceFile.objects.filter(
-                uuid__in=workspace_file_ids,
+            qs = WorkspaceFile.objects.filter(
+                uuid__in=file_uuids,
                 node_type=WorkspaceFile.NodeType.FILE,
                 deleted_at__isnull=True,
             )
             accessible = [
-                f for f in ws_files
+                f for f in qs
                 if FileService.can_access(request.user, f)
             ]
-            if len(accessible) != len(workspace_file_ids):
+            if len(accessible) != len(file_uuids):
                 return Response(
-                    {'detail': 'One or more workspace files not found or not accessible.'},
+                    {'detail': 'One or more files not found or not accessible.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            workspace_files = accessible
+            picked_files = accessible
 
         # Extract mentions and resolve to real usernames
         mention_map = {}
@@ -230,7 +230,7 @@ class MessageListView(CacheControlMixin, APIView):
                     )
 
                 from django.core.files.base import File as DjangoFile
-                for ws_file in workspace_files:
+                for ws_file in picked_files:
                     attachment = MessageAttachment(
                         message=message,
                         original_name=ws_file.name,

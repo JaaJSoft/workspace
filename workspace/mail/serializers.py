@@ -199,7 +199,7 @@ class SendEmailSerializer(serializers.Serializer):
     body_html = serializers.CharField(required=False, default='', allow_blank=True)
     body_text = serializers.CharField(required=False, default='', allow_blank=True)
     reply_to = serializers.CharField(max_length=255, required=False, default='', allow_blank=True)
-    workspace_file_ids = serializers.ListField(
+    file_uuids = serializers.ListField(
         child=serializers.UUIDField(),
         required=False,
         default=list,

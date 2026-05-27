@@ -5,7 +5,7 @@ window.chatInputMixin = function chatInputMixin() {
   return {
     // ── Pending file uploads ─────────────────────────────────
     pendingFiles: [],
-    pendingWorkspaceFiles: [],
+    pendingPickedFiles: [],
     isDraggingOver: false,
     _dragCounter: 0,
 
@@ -445,18 +445,18 @@ window.chatInputMixin = function chatInputMixin() {
         multiple: true,
       });
       if (!files || files.length === 0) return;
-      if (!this.pendingWorkspaceFiles) this.pendingWorkspaceFiles = [];
-      const existing = new Set(this.pendingWorkspaceFiles.map(f => f.uuid));
+      if (!this.pendingPickedFiles) this.pendingPickedFiles = [];
+      const existing = new Set(this.pendingPickedFiles.map(f => f.uuid));
       for (const f of files) {
         if (!existing.has(f.uuid)) {
-          this.pendingWorkspaceFiles.push(f);
+          this.pendingPickedFiles.push(f);
         }
       }
     },
 
-    removeWorkspaceFile(idx) {
-      if (this.pendingWorkspaceFiles) {
-        this.pendingWorkspaceFiles.splice(idx, 1);
+    removePickedFile(idx) {
+      if (this.pendingPickedFiles) {
+        this.pendingPickedFiles.splice(idx, 1);
       }
     },
 

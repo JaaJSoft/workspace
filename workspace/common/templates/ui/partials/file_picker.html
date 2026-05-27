@@ -1,4 +1,19 @@
 <!-- File Picker Dialog — include once in base.html -->
+<script>
+function _filePickerIconSvg(name, cls) {
+  if (typeof lucide === 'undefined' || !lucide.icons) return '';
+  const icon = lucide.icons[name];
+  if (!icon) return '';
+  const [tag, attrs, children] = icon;
+  const svgAttrs = Object.entries({...attrs, class: cls || 'w-4 h-4'})
+    .map(([k,v]) => k + '="' + v + '"').join(' ');
+  const inner = children.map(([t, a]) => {
+    const ca = Object.entries(a).map(([k,v]) => k + '="' + v + '"').join(' ');
+    return '<' + t + ' ' + ca + ' />';
+  }).join('');
+  return '<svg ' + svgAttrs + '>' + inner + '</svg>';
+}
+</script>
 <dialog id="app-dialog-file-picker" class="modal"
   x-data="{
     open: false,
@@ -148,16 +163,7 @@
     },
 
     iconSvg(name, cls) {
-      const icon = lucide.icons[name];
-      if (!icon) return '';
-      const [tag, attrs, children] = icon;
-      const svgAttrs = Object.entries({...attrs, class: cls || 'w-4 h-4'})
-        .map(([k,v]) => k + '=\"' + v + '\"').join(' ');
-      const inner = children.map(([t, a]) => {
-        const ca = Object.entries(a).map(([k,v]) => k + '=\"' + v + '\"').join(' ');
-        return '<' + t + ' ' + ca + ' />';
-      }).join('');
-      return '<svg ' + svgAttrs + '>' + inner + '</svg>';
+      return _filePickerIconSvg(name, cls);
     },
 
     formatSize(bytes) {

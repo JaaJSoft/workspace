@@ -43,6 +43,8 @@ dependencies = [
     "pywebpush>=2.3.0",
     # oauth2
     "authlib>=1.7.2",
+    # file type detection
+    "magika>=1.0.0",
     # ai
     "openai>=2.38.0",
     "ollama>=0.6.2",

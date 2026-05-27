@@ -5,6 +5,7 @@ from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.test import TestCase
 
+from workspace.chat.models import Conversation, ConversationMember, Message, MessageAttachment
 from workspace.files.models import File
 
 User = get_user_model()
@@ -69,6 +70,7 @@ class BackfillFileTypesTest(TestCase):
             node_type=File.NodeType.FILE,
             mime_type="text/plain",
             type="txt",
+            category="text",
         )
 
         out = StringIO()
@@ -78,7 +80,7 @@ class BackfillFileTypesTest(TestCase):
         self.assertEqual(f.type, "txt")
 
     def test_dry_run_does_not_update(self):
-        """Dry run reports what would happen but leaves the DB unchanged."""
+        """Dry run reports correct count but leaves the DB unchanged."""
         File.objects.create(
             owner=self.user,
             name="readme.md",
@@ -91,4 +93,69 @@ class BackfillFileTypesTest(TestCase):
 
         f = File.objects.get(name="readme.md")
         self.assertEqual(f.type, "unknown")
-        self.assertIn("Would update", out.getvalue())
+        output = out.getvalue()
+        self.assertIn("Would update 1 files", output)
+
+
+class BackfillAttachmentTypesTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="pass")
+        conv = Conversation.objects.create(title="test", kind=Conversation.Kind.GROUP, created_by=self.user)
+        ConversationMember.objects.create(conversation=conv, user=self.user)
+        self.message = Message.objects.create(conversation=conv, author=self.user, body="hi")
+
+    def _create_attachment(self, name, mime_type, content=None, **kwargs):
+        att = MessageAttachment(
+            message=self.message,
+            original_name=name,
+            mime_type=mime_type,
+            size=len(content) if content else 0,
+            **kwargs,
+        )
+        if content:
+            att.file.save(name, ContentFile(content), save=False)
+        att.save()
+        return att
+
+    def test_backfill_attachment_by_name(self):
+        """Attachments without readable content fall back to extension-based detection."""
+        att = self._create_attachment("photo.jpg", "image/jpeg")
+
+        out = StringIO()
+        call_command("backfill_file_types", stdout=out)
+
+        att.refresh_from_db()
+        self.assertEqual(att.type, "jpeg")
+        self.assertEqual(att.category, "image")
+
+    def test_backfill_attachment_with_content(self):
+        """Attachments with content get detected via Magika."""
+        att = self._create_attachment("script.py", "text/x-python", b'print("hello")')
+
+        out = StringIO()
+        call_command("backfill_file_types", stdout=out)
+
+        att.refresh_from_db()
+        self.assertNotEqual(att.type, "unknown")
+
+    def test_skips_already_labeled_attachment(self):
+        """Attachments that already have type and category are skipped."""
+        att = self._create_attachment("song.mp3", "audio/mpeg", type="mp3", category="audio")
+
+        out = StringIO()
+        call_command("backfill_file_types", stdout=out)
+
+        att.refresh_from_db()
+        self.assertEqual(att.type, "mp3")
+        self.assertIn("[MessageAttachment] Found 0", out.getvalue())
+
+    def test_dry_run_does_not_update_attachment(self):
+        """Dry run reports correct count but leaves attachments unchanged."""
+        att = self._create_attachment("clip.mp4", "video/mp4")
+
+        out = StringIO()
+        call_command("backfill_file_types", "--dry-run", stdout=out)
+
+        att.refresh_from_db()
+        self.assertEqual(att.type, "unknown")
+        self.assertIn("Would update 1 attachments", out.getvalue())

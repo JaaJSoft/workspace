@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Exists, OuterRef, Q, Subquery
 from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse
+from django.utils.html import escape
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -546,7 +547,7 @@ def view_file(request, uuid):
     # Check if viewable
     if not file_obj.is_viewable():
         return HttpResponse(
-            f'<div class="p-8 text-center text-error">No viewer available for {file_obj.name}</div>',
+            f'<div class="p-8 text-center text-error">No viewer available for {escape(file_obj.name)}</div>',
             status=400
         )
 
@@ -555,7 +556,7 @@ def view_file(request, uuid):
 
     if not ViewerClass:
         return HttpResponse(
-            f'<div class="p-8 text-center text-error">No viewer available for {file_obj.name}</div>',
+            f'<div class="p-8 text-center text-error">No viewer available for {escape(file_obj.name)}</div>',
             status=400
         )
 

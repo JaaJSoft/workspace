@@ -377,6 +377,7 @@ def view_attachment(request, attachment_uuid):
             self.name = att.original_name
             self.mime_type = att.mime_type
             self.type = att.type
+            self.category = att.category
             self.content = att.file
 
         def is_viewable(self):

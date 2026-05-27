@@ -1,19 +1,4 @@
 <!-- File Picker Dialog — include once in base.html -->
-<script>
-function _filePickerIconSvg(name, cls) {
-  if (typeof lucide === 'undefined' || !lucide.icons) return '';
-  const icon = lucide.icons[name];
-  if (!icon) return '';
-  const [tag, attrs, children] = icon;
-  const svgAttrs = Object.entries({...attrs, class: cls || 'w-4 h-4'})
-    .map(([k,v]) => k + '="' + v + '"').join(' ');
-  const inner = children.map(([t, a]) => {
-    const ca = Object.entries(a).map(([k,v]) => k + '="' + v + '"').join(' ');
-    return '<' + t + ' ' + ca + ' />';
-  }).join('');
-  return '<svg ' + svgAttrs + '>' + inner + '</svg>';
-}
-</script>
 <dialog id="app-dialog-file-picker" class="modal"
   x-data="{
     open: false,
@@ -122,6 +107,16 @@ function _filePickerIconSvg(name, cls) {
       return this.selectedFiles.some(f => f.uuid === file.uuid);
     },
 
+    isFileType(item, prefix) {
+      return item.node_type === 'file' && (item.mime_type || '').startsWith(prefix);
+    },
+
+    isGenericFile(item) {
+      if (item.node_type !== 'file') return false;
+      const mt = item.mime_type || '';
+      return !mt.startsWith('image/') && !mt.startsWith('video/') && !mt.startsWith('audio/') && mt !== 'application/pdf' && !mt.startsWith('text/');
+    },
+
     select() {
       if (this.selectedFiles.length === 0) return;
       const result = this.options.multiple === false ? this.selectedFiles[0] : this.selectedFiles;
@@ -139,31 +134,6 @@ function _filePickerIconSvg(name, cls) {
         this._resolve(result);
         this._resolve = null;
       }
-    },
-
-    fileIcon(item) {
-      if (item.node_type === 'folder') return item.icon || 'folder';
-      const mt = (item.mime_type || '');
-      if (mt.startsWith('image/')) return 'image';
-      if (mt.startsWith('video/')) return 'film';
-      if (mt.startsWith('audio/')) return 'music';
-      if (mt === 'application/pdf') return 'file-text';
-      if (mt.startsWith('text/')) return 'file-text';
-      return 'file';
-    },
-
-    fileIconColor(item) {
-      if (item.node_type === 'folder') return item.color || 'text-warning';
-      const mt = (item.mime_type || '');
-      if (mt.startsWith('image/')) return 'text-success';
-      if (mt.startsWith('video/')) return 'text-info';
-      if (mt.startsWith('audio/')) return 'text-secondary';
-      if (mt === 'application/pdf') return 'text-error';
-      return 'text-base-content/50';
-    },
-
-    iconSvg(name, cls) {
-      return _filePickerIconSvg(name, cls);
     },
 
     formatSize(bytes) {
@@ -262,10 +232,17 @@ function _filePickerIconSvg(name, cls) {
               :class="isSelected(item) ? 'bg-info/10' : ''"
               @click="item.node_type === 'folder' ? navigateToFolder(item) : toggleFile(item)"
             >
-              <span :class="fileIconColor(item)" class="flex-shrink-0" x-html="iconSvg(fileIcon(item), 'w-4 h-4')"></span>
+              <!-- Icon: one <i> per type, x-show toggles visibility -->
+              <i data-lucide="folder" x-show="item.node_type === 'folder'" class="w-4 h-4 text-warning flex-shrink-0"></i>
+              <i data-lucide="image" x-show="isFileType(item, 'image/')" class="w-4 h-4 text-success flex-shrink-0"></i>
+              <i data-lucide="film" x-show="isFileType(item, 'video/')" class="w-4 h-4 text-info flex-shrink-0"></i>
+              <i data-lucide="music" x-show="isFileType(item, 'audio/')" class="w-4 h-4 text-secondary flex-shrink-0"></i>
+              <i data-lucide="file-text" x-show="item.node_type === 'file' && (item.mime_type === 'application/pdf' || (item.mime_type || '').startsWith('text/'))" class="w-4 h-4 text-error flex-shrink-0"></i>
+              <i data-lucide="file" x-show="isGenericFile(item)" class="w-4 h-4 text-base-content/50 flex-shrink-0"></i>
+
               <span class="text-sm truncate flex-1" x-text="item.name"></span>
               <span x-show="item.node_type === 'file' && item.size" class="text-xs text-base-content/40 flex-shrink-0" x-text="formatSize(item.size)"></span>
-              <span x-show="item.node_type === 'folder'" class="text-base-content/30 flex-shrink-0" x-html="iconSvg('chevron-right', 'w-4 h-4')"></span>
+              <i data-lucide="chevron-right" x-show="item.node_type === 'folder'" class="w-4 h-4 text-base-content/30 flex-shrink-0"></i>
               <input
                 x-show="item.node_type === 'file'"
                 type="checkbox"

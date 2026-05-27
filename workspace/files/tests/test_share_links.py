@@ -167,7 +167,7 @@ class PublicShareLinkAPITests(APITestCase):
         self.file = File.objects.create(
             owner=self.user, name='test.txt',
             node_type=File.NodeType.FILE, mime_type='text/plain',
-            type='txt',
+            type='txt', category='text',
         )
         self.file.content = ContentFile(b'Hello World', name='test.txt')
         self.file.size = 11

@@ -228,6 +228,7 @@ class MessageListView(CacheControlMixin, APIView):
                         original_name=f.name,
                         mime_type=detection.mime_type,
                         type=detection.label,
+                        category=detection.group or 'unknown',
                         size=f.size,
                     )
 
@@ -238,6 +239,7 @@ class MessageListView(CacheControlMixin, APIView):
                         original_name=ws_file.name,
                         mime_type=ws_file.mime_type or 'application/octet-stream',
                         type=ws_file.type or 'unknown',
+                        category=ws_file.category or 'unknown',
                         size=ws_file.size or 0,
                     )
                     with ws_file.content.open('rb') as f:

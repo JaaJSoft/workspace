@@ -1,6 +1,7 @@
 import logging
 
 from django.core.management.base import BaseCommand
+from django.db import models
 
 from workspace.files.models import File
 
@@ -8,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Backfill File.type for files that have no type set."
+    help = "Backfill File.type and File.category for files that have no type set."
 
     def add_arguments(self, parser):
         parser.add_argument("--batch-size", type=int, default=100)
@@ -23,7 +24,8 @@ class Command(BaseCommand):
         pks = list(
             File.objects.filter(
                 node_type=File.NodeType.FILE,
-                type='unknown',
+            ).filter(
+                models.Q(type='unknown') | models.Q(category='unknown')
             )
             .order_by("pk")
             .values_list("pk", flat=True)
@@ -54,15 +56,17 @@ class Command(BaseCommand):
                         detection = detect_from_name(file_obj.name)
 
                     file_obj.type = detection.label
+                    file_obj.category = detection.group or 'unknown'
                     to_update.append(file_obj)
                 except Exception as e:
                     errors += 1
                     logger.warning("Failed to detect %s: %s", file_obj.uuid, e)
                     file_obj.type = "unknown"
+                    file_obj.category = "unknown"
                     to_update.append(file_obj)
 
             if not dry_run and to_update:
-                File.objects.bulk_update(to_update, ["type"])
+                File.objects.bulk_update(to_update, ["type", "category"])
                 updated += len(to_update)
 
             processed = min(i + batch_size, total)

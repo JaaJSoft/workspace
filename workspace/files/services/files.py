@@ -124,6 +124,7 @@ class FileService:
             parent=parent,
             mime_type=mime_type or 'application/octet-stream',
             type=detection.label,
+            category=detection.group or 'unknown',
             size=size,
             group=group,
         )
@@ -171,6 +172,7 @@ class FileService:
             parent=parent,
             mime_type=mime_type,
             type=detection.label,
+            category=detection.group or 'unknown',
             size=size,
         )
         file_obj.content.name = content_path
@@ -259,6 +261,7 @@ class FileService:
         file_obj.size = content.size
         file_obj.mime_type = mime_type or detection.mime_type
         file_obj.type = detection.label
+        file_obj.category = detection.group or 'unknown'
         file_obj.has_thumbnail = False
         file_obj.content = content
         file_obj.save()
@@ -276,6 +279,7 @@ class FileService:
         file_obj.size = size
         file_obj.mime_type = detection.mime_type
         file_obj.type = detection.label
+        file_obj.category = detection.group or 'unknown'
         file_obj.has_thumbnail = False
         file_obj.content.name = storage_path
         file_obj.save()

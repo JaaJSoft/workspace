@@ -75,6 +75,7 @@ class File(models.Model):
     size = models.BigIntegerField(null=True, blank=True, help_text="File size in bytes")
     mime_type = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     type = models.CharField(max_length=50, default='unknown', db_index=True)
+    category = models.CharField(max_length=20, default='unknown', db_index=True)
 
     has_thumbnail = models.BooleanField(default=False)
 

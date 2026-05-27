@@ -212,11 +212,10 @@ class MediaViewer(BaseViewer):
 
     def render(self, request) -> str:
         from django.template.loader import render_to_string
-        from workspace.files.services.filetype import get_group
 
         context = self.get_context(request)
-        context['is_video'] = get_group(self.file.type or '') == 'video'
-        context['is_audio'] = get_group(self.file.type or '') == 'audio'
+        context['is_video'] = self.file.category == 'video'
+        context['is_audio'] = self.file.category == 'audio'
 
         return render_to_string('files/ui/viewers/media_viewer.html', context, request=request)
 

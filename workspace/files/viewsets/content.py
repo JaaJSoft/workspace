@@ -125,10 +125,7 @@ class ContentMixin:
         if not_modified:
             return not_modified
 
-        # For text files, read and return directly (fixes streaming issues)
-        from workspace.files.services.filetype import get_group
-        label_group = get_group(file_obj.type or '')
-        if label_group in ('code', 'text'):
+        if file_obj.category in ('code', 'text'):
             file_handle = None
             try:
                 file_handle = file_obj.content.open('rb')

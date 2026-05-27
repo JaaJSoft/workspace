@@ -26,6 +26,7 @@ class AIEditEndpointTests(APITestCase):
             node_type=File.NodeType.FILE,
             mime_type='image/png',
             type='png',
+            category='image',
         )
         self.file.content.save('photo.png', ContentFile(FAKE_PNG))
 

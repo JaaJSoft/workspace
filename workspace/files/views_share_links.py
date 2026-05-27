@@ -91,13 +91,12 @@ class SharedFileMetaView(APIView):
             return err
 
         f = link.file
-        from workspace.files.services.filetype import get_group
         from workspace.files.ui.viewers import ViewerRegistry
         return Response({
             'name': f.name,
             'mime_type': f.mime_type,
             'size': f.size,
-            'category': get_group(f.type or ''),
+            'category': f.category,
             'is_viewable': ViewerRegistry.is_supported(f.type) if f.type else False,
             'has_password': link.has_password,
             'created_by_name': link.created_by.get_full_name() or link.created_by.username,
@@ -156,9 +155,7 @@ class SharedFileContentView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        from workspace.files.services.filetype import get_group
-        label_group = get_group(f.type or '')
-        if label_group in ('code', 'text'):
+        if f.category in ('code', 'text'):
             try:
                 handle = f.content.open('rb')
                 content = handle.read().decode('utf-8')

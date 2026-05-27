@@ -294,7 +294,7 @@ class FileResource(DAVNonCollection):
         return self._file.updated_at.timestamp()
 
     def get_display_info(self):
-        return {"type": self._file.mime_type or "File"}
+        return {"type": self._file.type or "File"}
 
     def get_content(self):
         if not self._file.content:

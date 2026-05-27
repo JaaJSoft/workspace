@@ -43,13 +43,14 @@ or when the user asks to read, open, view, or see a specific file."""
                 'mime_type': mime,
                 'data': base64.b64encode(raw).decode(),
             })
+
         # Fall back to text
         text = FileService.read_text_content(file_obj, max_bytes=32_768)
         if text is None:
             return f'Cannot read "{file_obj.name}" — unsupported file type.'
         header = f'File: {file_obj.name}'
-        if file_obj.mime_type:
-            header += f' ({file_obj.mime_type})'
+        if file_obj.type:
+            header += f' ({file_obj.type})'
         return f'{header}\n\n{text}'
 
     @tool(badge_icon='🔍', badge_label='Searched files', detail_key='query', params=SearchFilesParams)
@@ -83,8 +84,8 @@ Use read_file with the returned UUID to get the content."""
             results.append({
                 'uuid': str(f.uuid),
                 'name': f.name,
-                'type': f.node_type,
-                'mime_type': f.mime_type or '',
+                'node_type': f.node_type,
+                'type': f.type or '',
                 'parent_folder': f.parent.name if f.parent else '',
                 'updated_at': f.updated_at.strftime('%Y-%m-%d %H:%M'),
             })

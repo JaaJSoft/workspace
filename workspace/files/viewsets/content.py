@@ -126,12 +126,14 @@ class ContentMixin:
             return not_modified
 
         # For text files, read and return directly (fixes streaming issues)
-        if file_obj.mime_type and file_obj.mime_type.startswith('text/'):
+        from workspace.files.services.filetype import get_group
+        label_group = get_group(file_obj.type or '')
+        if label_group in ('code', 'text'):
             file_handle = None
             try:
                 file_handle = file_obj.content.open('rb')
                 content = file_handle.read().decode('utf-8')
-                response = HttpResponse(content, content_type=file_obj.mime_type)
+                response = HttpResponse(content, content_type=content_type)
                 response['Content-Disposition'] = f'inline; filename="{safe_filename(file_obj.name)}"'
                 response['Accept-Ranges'] = 'bytes'
                 self._set_file_cache_headers(response, file_obj)

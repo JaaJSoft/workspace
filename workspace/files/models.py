@@ -34,47 +34,6 @@ def file_upload_path(instance, filename):
     return posixpath.join(root, filename)
 
 
-class MimeTypeRule(models.Model):
-    """Referential table for MIME type rules: icon, color, category, viewer."""
-
-    class Category(models.TextChoices):
-        TEXT = 'text', 'Text'
-        IMAGE = 'image', 'Image'
-        PDF = 'pdf', 'PDF'
-        VIDEO = 'video', 'Video'
-        AUDIO = 'audio', 'Audio'
-        UNKNOWN = 'unknown', 'Unknown'
-
-    class ViewerType(models.TextChoices):
-        TEXT = 'text', 'Text'
-        IMAGE = 'image', 'Image'
-        MARKDOWN = 'markdown', 'Markdown'
-        PDF = 'pdf', 'PDF'
-        MEDIA = 'media', 'Media'
-
-    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
-    pattern = models.CharField(max_length=100, unique=True, help_text="MIME type or wildcard (e.g. 'text/*')")
-    is_wildcard = models.BooleanField(default=False, editable=False)
-    priority = models.IntegerField(default=100, help_text="Lower = matched first")
-    icon = models.CharField(max_length=50, help_text="Lucide icon name")
-    color = models.CharField(max_length=50, help_text="DaisyUI/Tailwind color class")
-    category = models.CharField(max_length=10, choices=Category.choices, default=Category.UNKNOWN)
-    viewer_type = models.CharField(max_length=10, choices=ViewerType.choices, null=True, blank=True)
-
-    class Meta:
-        ordering = ['priority', 'pattern']
-        indexes = [
-            models.Index(fields=['priority', 'pattern'], name='mime_priority_pattern'),
-        ]
-
-    def __str__(self):
-        return self.pattern
-
-    def save(self, *args, **kwargs):
-        self.is_wildcard = self.pattern.endswith('/*')
-        super().save(*args, **kwargs)
-
-
 class FileQuerySet(models.QuerySet):
     def name_ordered(self, *prefix_fields):
         """Sort by name case-insensitively, with optional leading fields.
@@ -115,6 +74,7 @@ class File(models.Model):
     )
     size = models.BigIntegerField(null=True, blank=True, help_text="File size in bytes")
     mime_type = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    type = models.CharField(max_length=50, default='unknown', db_index=True)
 
     has_thumbnail = models.BooleanField(default=False)
 
@@ -270,11 +230,10 @@ class File(models.Model):
         return self.node_type == self.NodeType.FILE
 
     def is_viewable(self):
-        """Check if this file can be viewed in the browser."""
-        from .utils import FileTypeDetector
+        from workspace.files.services.filetype import is_viewable
         if self.node_type != self.NodeType.FILE:
             return False
-        return FileTypeDetector.is_viewable(self.mime_type or '')
+        return is_viewable(self.type or '')
 
     def is_deleted(self):
         return self.deleted_at is not None

@@ -6,7 +6,6 @@ class FilesConfig(AppConfig):
     name = 'workspace.files'
 
     def ready(self):
-        from django.db.models.signals import post_save, post_delete
         from workspace.core.module_registry import CommandInfo, ModuleInfo, SearchProviderInfo, registry
         from workspace.core.sse_registry import SSEProviderInfo, sse_registry
         from workspace.files.search import search_files
@@ -60,15 +59,6 @@ class FilesConfig(AppConfig):
                 kind='navigate', module_slug='files', order=14,
             ),
         ])
-
-        from .models import MimeTypeRule
-        from .services.mime import invalidate_cache
-
-        def _invalidate(sender, **kwargs):
-            invalidate_cache()
-
-        post_save.connect(_invalidate, sender=MimeTypeRule)
-        post_delete.connect(_invalidate, sender=MimeTypeRule)
 
         from workspace.core.activity_registry import ActivityProviderInfo, activity_registry
         from workspace.files.activity import FilesActivityProvider

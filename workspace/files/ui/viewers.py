@@ -5,44 +5,27 @@ Each viewer class is responsible for generating the HTML to display
 a specific type of file in the browser.
 """
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, Type
+from typing import Optional, Type
 
 
 class ViewerRegistry:
-    """Registry for file viewers based on MIME types."""
-
-    _VIEWER_TYPE_MAP: Dict[str, Type['BaseViewer']] = {}
 
     @classmethod
-    def _ensure_map(cls):
-        if not cls._VIEWER_TYPE_MAP:
-            cls._VIEWER_TYPE_MAP = {
-                'text': TextViewer,
-                'image': ImageViewer,
-                'markdown': MarkdownViewer,
-                'pdf': PDFViewer,
-                'media': MediaViewer,
-            }
+    def get_viewer(cls, file_type_or_mime: str) -> Optional[Type['BaseViewer']]:
+        from workspace.files.services.filetype import get_viewer
+        return get_viewer(file_type_or_mime or '')
 
     @classmethod
-    def get_viewer(cls, mime_type: str) -> Optional[Type['BaseViewer']]:
-        """Get appropriate viewer for a MIME type."""
-        from workspace.files.services.mime import get_viewer_type
-
-        vt = get_viewer_type(mime_type)
-        if vt is None:
-            return None
-        cls._ensure_map()
-        return cls._VIEWER_TYPE_MAP.get(vt)
-
-    @classmethod
-    def is_supported(cls, mime_type: str) -> bool:
-        """Check if a MIME type is supported."""
-        return cls.get_viewer(mime_type) is not None
+    def is_supported(cls, file_type_or_mime: str) -> bool:
+        return cls.get_viewer(file_type_or_mime) is not None
 
 
 class BaseViewer(ABC):
     """Base class for all file viewers."""
+
+    handles_groups: frozenset = frozenset()
+    handles_labels: frozenset = frozenset()
+    weight: int = 100
 
     def __init__(self, file_obj):
         """
@@ -88,6 +71,9 @@ class BaseViewer(ABC):
 class TextViewer(BaseViewer):
     """Viewer for text and code files with Monaco Editor."""
 
+    handles_groups = frozenset({'code', 'text'})
+    weight = 100
+
     def render(self, request) -> str:
         """Render Monaco Editor for text files."""
         from django.template.loader import render_to_string
@@ -115,83 +101,43 @@ class TextViewer(BaseViewer):
         """Text files can be edited."""
         return True
 
+    _LABEL_TO_MONACO = {
+        'shell': 'shell',
+        'batch': 'bat',
+        'cs': 'csharp',
+        'cpp': 'cpp',
+        'h': 'c',
+        'hpp': 'cpp',
+        'objectivec': 'objective-c',
+        'txt': 'plaintext',
+        'txtascii': 'plaintext',
+        'txtutf8': 'plaintext',
+        'txtutf16': 'plaintext',
+        'ini': 'ini',
+        'toml': 'ini',
+        'latex': 'latex',
+        'rst': 'restructuredtext',
+        'diff': 'diff',
+        'dockerfile': 'dockerfile',
+        'makefile': 'makefile',
+        'cmake': 'cmake',
+        'powershell': 'powershell',
+        'proto': 'protobuf',
+        'hcl': 'hcl',
+        'verilog': 'systemverilog',
+        'vhdl': 'vhdl',
+    }
+
     def _detect_language(self) -> str:
-        """Detect programming language from file extension."""
-        # Handle files with no extension by name
-        name_lower = self.file.name.lower()
-        name_map = {
-            'dockerfile': 'dockerfile',
-            'makefile': 'makefile',
-            'gemfile': 'ruby',
-            'rakefile': 'ruby',
-        }
-        if '.' not in self.file.name and name_lower in name_map:
-            return name_map[name_lower]
-
-        ext = self.file.name.split('.')[-1].lower() if '.' in self.file.name else ''
-
-        lang_map = {
-            'js': 'javascript',
-            'jsx': 'javascript',
-            'ts': 'typescript',
-            'tsx': 'typescript',
-            'py': 'python',
-            'pyw': 'python',
-            'html': 'html',
-            'htm': 'html',
-            'css': 'css',
-            'scss': 'scss',
-            'less': 'less',
-            'json': 'json',
-            'jsonc': 'json',
-            'md': 'markdown',
-            'xml': 'xml',
-            'svg': 'xml',
-            'yaml': 'yaml',
-            'yml': 'yaml',
-            'sh': 'shell',
-            'bash': 'shell',
-            'zsh': 'shell',
-            'sql': 'sql',
-            'php': 'php',
-            'java': 'java',
-            'c': 'c',
-            'h': 'c',
-            'cpp': 'cpp',
-            'cxx': 'cpp',
-            'cc': 'cpp',
-            'hpp': 'cpp',
-            'cs': 'csharp',
-            'go': 'go',
-            'rs': 'rust',
-            'rb': 'ruby',
-            'lua': 'lua',
-            'swift': 'swift',
-            'kt': 'kotlin',
-            'kts': 'kotlin',
-            'r': 'r',
-            'R': 'r',
-            'pl': 'perl',
-            'pm': 'perl',
-            'ini': 'ini',
-            'toml': 'ini',
-            'cfg': 'ini',
-            'dockerfile': 'dockerfile',
-            'ps1': 'powershell',
-            'psm1': 'powershell',
-            'bat': 'bat',
-            'cmd': 'bat',
-            'graphql': 'graphql',
-            'gql': 'graphql',
-            'proto': 'protobuf',
-            'tf': 'hcl',
-        }
-
-        return lang_map.get(ext, 'plaintext')
+        label = self.file.type or ''
+        return self._LABEL_TO_MONACO.get(label, label or 'plaintext')
 
 
 class ImageViewer(BaseViewer):
     """Viewer for image files."""
+
+    handles_groups = frozenset({'image'})
+    weight = 100
 
     def get_context(self, request) -> dict:
         from django.conf import settings
@@ -219,6 +165,9 @@ class ImageViewer(BaseViewer):
 class MarkdownViewer(BaseViewer):
     """Viewer for Markdown files with rendered preview and raw editing."""
 
+    handles_labels = frozenset({'markdown'})
+    weight = 50
+
     def render(self, request) -> str:
         """Render Milkdown Crepe WYSIWYG editor for Markdown files."""
         from django.template.loader import render_to_string
@@ -245,6 +194,9 @@ class MarkdownViewer(BaseViewer):
 class PDFViewer(BaseViewer):
     """Viewer for PDF files."""
 
+    handles_labels = frozenset({'pdf'})
+    weight = 50
+
     def render(self, request) -> str:
         """Render PDF viewer."""
         from django.template.loader import render_to_string
@@ -255,13 +207,16 @@ class PDFViewer(BaseViewer):
 class MediaViewer(BaseViewer):
     """Viewer for video and audio files."""
 
+    handles_groups = frozenset({'video', 'audio'})
+    weight = 100
+
     def render(self, request) -> str:
-        """Render media player."""
         from django.template.loader import render_to_string
+        from workspace.files.services.filetype import get_group
 
         context = self.get_context(request)
-        context['is_video'] = self.file.mime_type.startswith('video/')
-        context['is_audio'] = self.file.mime_type.startswith('audio/')
+        context['is_video'] = get_group(self.file.type or '') == 'video'
+        context['is_audio'] = get_group(self.file.type or '') == 'audio'
 
         return render_to_string('files/ui/viewers/media_viewer.html', context, request=request)
 

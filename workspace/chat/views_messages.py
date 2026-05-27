@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -220,7 +221,9 @@ class MessageListView(CacheControlMixin, APIView):
                 )
 
                 for f in files:
-                    mime_type = FileService.infer_mime_type(f.name, uploaded=f)
+                    mime_type = getattr(f, 'content_type', None) or ''
+                    if not mime_type or mime_type == 'application/octet-stream':
+                        mime_type = mimetypes.guess_type(f.name or '')[0] or 'application/octet-stream'
                     MessageAttachment.objects.create(
                         message=message,
                         file=f,
@@ -234,7 +237,7 @@ class MessageListView(CacheControlMixin, APIView):
                     attachment = MessageAttachment(
                         message=message,
                         original_name=ws_file.name,
-                        mime_type=ws_file.mime_type or FileService.infer_mime_type(ws_file.name),
+                        mime_type=ws_file.mime_type or mimetypes.guess_type(ws_file.name or '')[0] or 'application/octet-stream',
                         size=ws_file.size or 0,
                     )
                     with ws_file.content.open('rb') as f:

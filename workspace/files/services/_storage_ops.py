@@ -276,6 +276,7 @@ def copy_node(node, parent, owner, _sibling_names=None):
         node_type=node.node_type,
         parent=parent,
         mime_type=node.mime_type,
+        type=node.type,
         icon=node.icon,
         color=node.color,
     )

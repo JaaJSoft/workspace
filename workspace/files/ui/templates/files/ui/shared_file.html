@@ -103,7 +103,7 @@
           </div>
           <div class="flex-1 min-w-0">
             <h1 class="text-xl font-bold text-white truncate">{{ file.name }}</h1>
-            <p class="text-white/70 text-sm">{{ file.mime_type }} — {{ file.size|filesizeformat }}</p>
+            <p class="text-white/70 text-sm">{{ file.type|default:"unknown" }} - {{ file.size|filesizeformat }}</p>
           </div>
           <a
             href="{{ download_url }}"

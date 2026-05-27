@@ -13,7 +13,6 @@ from rest_framework.views import APIView
 
 from workspace.common.http_ranges import serve_with_ranges
 from workspace.files.models import FileShareLink
-from workspace.files.utils import FileTypeDetector
 
 SIGNER = signing.TimestampSigner(salt='file-share-link')
 ACCESS_TOKEN_MAX_AGE = 3600  # 1 hour
@@ -92,13 +91,14 @@ class SharedFileMetaView(APIView):
             return err
 
         f = link.file
+        from workspace.files.services.filetype import get_group
         from workspace.files.ui.viewers import ViewerRegistry
         return Response({
             'name': f.name,
             'mime_type': f.mime_type,
             'size': f.size,
-            'category': FileTypeDetector.categorize(f.mime_type or '').value,
-            'is_viewable': ViewerRegistry.is_supported(f.mime_type) if f.mime_type else False,
+            'category': get_group(f.type or ''),
+            'is_viewable': ViewerRegistry.is_supported(f.type) if f.type else False,
             'has_password': link.has_password,
             'created_by_name': link.created_by.get_full_name() or link.created_by.username,
         })
@@ -156,8 +156,9 @@ class SharedFileContentView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Text files: return decoded content, fall back to binary on decode error
-        if f.mime_type and f.mime_type.startswith('text/'):
+        from workspace.files.services.filetype import get_group
+        label_group = get_group(f.type or '')
+        if label_group in ('code', 'text'):
             try:
                 handle = f.content.open('rb')
                 content = handle.read().decode('utf-8')

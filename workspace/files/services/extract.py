@@ -41,10 +41,7 @@ class ArchiveTooManyEntriesError(ValueError):
     """
 
 
-# Windows browsers (Chrome / Edge) sometimes report uploaded .zip files as
-# 'application/x-zip-compressed' instead of the IANA-registered 'application/zip'.
-# Both values map to the same archive format - accept either.
-ZIP_MIME_TYPES = frozenset({'application/zip', 'application/x-zip-compressed'})
+ZIP_LABELS = frozenset({'zip'})
 
 _WINDOWS_DRIVE_RE = re.compile(r'^[A-Za-z]:')
 
@@ -114,7 +111,7 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
     """
     if file_obj.node_type != File.NodeType.FILE:
         raise ValueError("Source is not a file")
-    if file_obj.mime_type not in ZIP_MIME_TYPES:
+    if file_obj.type not in ZIP_LABELS:
         raise ValueError("Not a ZIP archive")
 
     max_bytes = getattr(settings, 'FILES_EXTRACT_MAX_BYTES', 2 * 1024 * 1024 * 1024)

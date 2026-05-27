@@ -168,7 +168,8 @@ class ActionsMixin:
 
         file_obj = self.get_object()
 
-        if file_obj.node_type != File.NodeType.FILE or not (file_obj.mime_type or '').startswith('image/'):
+        from workspace.files.services.filetype import get_group
+        if file_obj.node_type != File.NodeType.FILE or get_group(file_obj.type or '') != 'image':
             return Response({'error': 'file is not an image'}, status=status.HTTP_400_BAD_REQUEST)
 
         prompt = request.data.get('prompt', '').strip()

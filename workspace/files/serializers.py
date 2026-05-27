@@ -67,6 +67,7 @@ class FileSerializer(serializers.ModelSerializer):
             'content',
             'size',
             'mime_type',
+            'type',
             'icon',
             'color',
             'owner',
@@ -121,19 +122,17 @@ class FileSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_category(self, obj):
-        from .utils import FileTypeDetector
-
+        from workspace.files.services.filetype import get_group
         if obj.node_type != File.NodeType.FILE:
             return None
-        return FileTypeDetector.categorize(obj.mime_type or '').value
+        return get_group(obj.type or '')
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_viewable(self, obj):
-        from .utils import FileTypeDetector
-
+        from workspace.files.services.filetype import is_viewable
         if obj.node_type != File.NodeType.FILE:
             return False
-        return FileTypeDetector.is_viewable(obj.mime_type or '')
+        return is_viewable(obj.type or '')
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_content_url(self, obj):

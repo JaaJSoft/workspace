@@ -19,7 +19,7 @@ Context:
   <div class="flex flex-col items-center text-center gap-2">
     <div class="w-14 h-14 flex items-center justify-center bg-base-200 rounded-xl mb-1" x-ref="previewIcon" {% if file.node_type == 'folder' %}x-init="$nextTick(() => updatePreviewIcon())"{% endif %}>
       {% if file.node_type != 'folder' %}
-        <i data-lucide="{{ file.mime_type|mime_to_lucide }}" class="w-8 h-8 {{ file.mime_type|mime_to_color }}"></i>
+        <i data-lucide="{{ file.type|type_to_icon }}" class="w-8 h-8 {{ file.type|type_to_color }}"></i>
       {% endif %}
     </div>
     <h3 class="font-bold text-base break-all">{{ file.name }}</h3>
@@ -61,7 +61,7 @@ Context:
     </div>
     <div class="flex items-center gap-2 text-base-content/60">
       <i data-lucide="file-type" class="w-3.5 h-3.5 flex-shrink-0"></i>
-      <span class="font-mono text-xs">{{ file.mime_type|default:"-" }}</span>
+      <span class="font-mono text-xs">{{ file.type|default:"-" }}</span>
     </div>
     {% endif %}
     {% if file.node_type == 'folder' %}

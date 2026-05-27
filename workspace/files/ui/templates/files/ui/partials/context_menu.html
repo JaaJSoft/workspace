@@ -270,7 +270,7 @@ function contextMenu() {
       switch (action.id) {
         case 'view':
           window.dispatchEvent(new CustomEvent('open-file-viewer', {
-            detail: { uuid: nd.uuid, name: nd.name, mime_type: nd.mimeType }
+            detail: { uuid: nd.uuid, name: nd.name, type: nd.fileType }
           }));
           break;
         case 'open':

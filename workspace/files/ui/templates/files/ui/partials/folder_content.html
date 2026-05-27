@@ -222,7 +222,7 @@
             data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
             data-pinned="{% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'1,0' }}{% else %}0{% endif %}"
             data-viewable="{{ node.is_viewable|yesno:'1,0' }}"
-            data-mime-type="{{ node.mime_type }}"
+            data-file-type="{{ node.type }}"
             data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
             data-created="{{ node.created_at|date:'U' }}"
             data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
@@ -231,13 +231,13 @@
             @dragstart="$event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
             @click="openFolderFromRow($event)"
             {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
-            @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.mime_type }}')"
+            @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')"
             {% endif %}
             @contextmenu="openContextMenu($event, {
               uuid: '{{ node.uuid }}',
               name: '{{ node.name|escapejs }}',
               nodeType: '{{ node.node_type }}',
-              mimeType: '{{ node.mime_type }}',
+              fileType: '{{ node.type }}',
               actions: actionsMap['{{ node.uuid }}'] || []
             })"
           >
@@ -253,7 +253,7 @@
               {% if node.node_type == 'folder' %}
                 <i data-lucide="{{ node.icon|default:'folder' }}" class="w-5 h-5 {{ node.color|default:'text-warning' }}"></i>
               {% else %}
-                <i data-lucide="{{ node.mime_type|mime_to_lucide }}" class="w-5 h-5 {{ node.mime_type|mime_to_color }}"></i>
+                <i data-lucide="{{ node.type|type_to_icon }}" class="w-5 h-5 {{ node.type|type_to_color }}"></i>
               {% endif %}
             </td>
             <td data-col="name">
@@ -327,7 +327,7 @@
                   uuid: '{{ node.uuid }}',
                   name: '{{ node.name|escapejs }}',
                   nodeType: '{{ node.node_type }}',
-                  mimeType: '{{ node.mime_type }}',
+                  fileType: '{{ node.type }}',
                   actions: actionsMap['{{ node.uuid }}'] || []
                 })"
               >
@@ -355,7 +355,7 @@
             data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
             data-pinned="{% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'1,0' }}{% else %}0{% endif %}"
             data-viewable="{{ node.is_viewable|yesno:'1,0' }}"
-            data-mime-type="{{ node.mime_type }}"
+            data-file-type="{{ node.type }}"
             data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
             data-created="{{ node.created_at|date:'U' }}"
             data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
@@ -366,13 +366,13 @@
             @dragstart="$event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))"
             @click="navigateToFolder($event, '/files/{{ node.uuid }}')"
             {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
-            @click="openFileFromCard($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.mime_type }}')"
+            @click="openFileFromCard($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')"
             {% endif %}
             @contextmenu.prevent="openContextMenu($event, {
               uuid: '{{ node.uuid }}',
               name: '{{ node.name|escapejs }}',
               nodeType: '{{ node.node_type }}',
-              mimeType: '{{ node.mime_type }}',
+              fileType: '{{ node.type }}',
               actions: actionsMap['{{ node.uuid }}'] || []
             })"
           >
@@ -434,7 +434,7 @@
                   {% if node.node_type == 'folder' %}
                     <i data-lucide="{{ node.icon|default:'folder' }}" class="w-full h-full {{ node.color|default:'text-warning' }}"></i>
                   {% else %}
-                    <i data-lucide="{{ node.mime_type|mime_to_lucide }}" class="w-full h-full {{ node.mime_type|mime_to_color }}"></i>
+                    <i data-lucide="{{ node.type|type_to_icon }}" class="w-full h-full {{ node.type|type_to_color }}"></i>
                   {% endif %}
                 </div>
               </div>
@@ -462,7 +462,7 @@
                     uuid: '{{ node.uuid }}',
                     name: '{{ node.name|escapejs }}',
                     nodeType: '{{ node.node_type }}',
-                    mimeType: '{{ node.mime_type }}',
+                    fileType: '{{ node.type }}',
                     actions: actionsMap['{{ node.uuid }}'] || []
                   })"
                 >

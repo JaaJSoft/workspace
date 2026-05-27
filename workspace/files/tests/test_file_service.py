@@ -3,7 +3,6 @@
 import os
 import shutil
 import tempfile
-from unittest.mock import MagicMock
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -13,49 +12,6 @@ from workspace.files.models import File
 from workspace.files.services import FileService
 
 User = get_user_model()
-
-
-class TestInferMimeType(TestCase):
-    """Tests for FileService.infer_mime_type()."""
-
-    def test_from_uploaded_content_type(self):
-        uploaded = MagicMock()
-        uploaded.content_type = 'image/png'
-        result = FileService.infer_mime_type('photo.jpg', uploaded=uploaded)
-        self.assertEqual(result, 'image/png')
-
-    def test_ignores_generic_octet_stream_from_upload(self):
-        uploaded = MagicMock()
-        uploaded.content_type = 'application/octet-stream'
-        uploaded.name = None
-        result = FileService.infer_mime_type('report.pdf', uploaded=uploaded)
-        self.assertEqual(result, 'application/pdf')
-
-    def test_from_filename(self):
-        result = FileService.infer_mime_type('style.css')
-        self.assertEqual(result, 'text/css')
-
-    def test_fallback_to_octet_stream(self):
-        result = FileService.infer_mime_type('noext')
-        self.assertEqual(result, 'application/octet-stream')
-
-    def test_from_filename_when_no_upload(self):
-        result = FileService.infer_mime_type('data.json')
-        self.assertEqual(result, 'application/json')
-
-    def test_uploaded_with_no_content_type_falls_back_to_filename(self):
-        uploaded = MagicMock()
-        uploaded.content_type = None
-        uploaded.name = None
-        result = FileService.infer_mime_type('image.gif', uploaded=uploaded)
-        self.assertEqual(result, 'image/gif')
-
-    def test_none_filename_with_upload_octet_stream(self):
-        uploaded = MagicMock()
-        uploaded.content_type = 'application/octet-stream'
-        uploaded.name = None
-        result = FileService.infer_mime_type(None, uploaded=uploaded)
-        self.assertEqual(result, 'application/octet-stream')
 
 
 @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.InMemoryStorage')
@@ -81,7 +37,10 @@ class TestCreateFile(TestCase):
         self.assertTrue(f.content)
 
     def test_mime_auto_detection(self):
-        content = ContentFile(b'{}', name='data.json')
+        content = ContentFile(
+            b'{"name": "test", "version": 1, "items": [1, 2, 3]}',
+            name='data.json',
+        )
         f = FileService.create_file(self.user, 'data.json', content=content)
         self.assertIn('json', f.mime_type)
 
@@ -220,13 +179,14 @@ class TestRename(TestCase):
         result = FileService.rename(f, 'same.txt')
         self.assertEqual(result.name, 'same.txt')
 
-    def test_rename_updates_mime_type(self):
+    def test_rename_preserves_mime_type(self):
+        """Rename does not re-infer MIME type because content didn't change."""
         content = ContentFile(b'hello', name='notes.txt')
         f = FileService.create_file(self.user, 'notes.txt', content=content)
         self.assertEqual(f.mime_type, 'text/plain')
         FileService.rename(f, 'notes.md')
         f.refresh_from_db()
-        self.assertEqual(f.mime_type, 'text/markdown')
+        self.assertEqual(f.mime_type, 'text/plain')
 
     def test_rename_folder_updates_name(self):
         folder = FileService.create_folder(self.user, 'OldFolder')
@@ -281,7 +241,10 @@ class TestUpdateContent(TestCase):
         original = ContentFile(b'text', name='file.txt')
         f = FileService.create_file(self.user, 'file.txt', content=original)
 
-        new_content = ContentFile(b'{}', name='file.json')
+        new_content = ContentFile(
+            b'{"name": "test", "version": 1, "items": [1, 2, 3]}',
+            name='file.json',
+        )
         FileService.update_content(f, new_content, name='file.json')
         f.refresh_from_db()
         self.assertIn('json', f.mime_type)

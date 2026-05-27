@@ -412,7 +412,7 @@ window.imageViewerData = function imageViewerData() {
         this.editMode = false;
 
         window.dispatchEvent(new CustomEvent('open-file-viewer', {
-          detail: { uuid: saved.uuid, name: saved.name, mime_type: saved.mime_type }
+          detail: { uuid: saved.uuid, name: saved.name, type: saved.type }
         }));
 
         window.dispatchEvent(new CustomEvent('files-changed'));

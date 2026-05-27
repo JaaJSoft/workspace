@@ -14,6 +14,7 @@ def _make_file(owner, **kwargs):
         'name': 'archive.zip',
         'node_type': 'file',
         'mime_type': 'application/zip',
+        'type': 'zip',
     }
     defaults.update(kwargs)
     f = File(owner=owner, **defaults)
@@ -44,11 +45,11 @@ class ExtractActionTests(TestCase):
         self.assertIn('extract', self._ids(f, FilePermission.EDIT))
 
     def test_extract_hidden_for_non_zip(self):
-        f = _make_file(self.user, mime_type='text/plain', name='readme.txt')
+        f = _make_file(self.user, mime_type='text/plain', type='txt', name='readme.txt')
         self.assertNotIn('extract', self._ids(f, FilePermission.EDIT))
 
     def test_extract_hidden_for_tar(self):
-        f = _make_file(self.user, mime_type='application/x-tar', name='archive.tar')
+        f = _make_file(self.user, mime_type='application/x-tar', type='tar', name='archive.tar')
         self.assertNotIn('extract', self._ids(f, FilePermission.EDIT))
 
     def test_extract_hidden_without_edit_permission(self):
@@ -62,5 +63,5 @@ class ExtractActionTests(TestCase):
         self.assertNotIn('extract', self._ids(f, FilePermission.EDIT))
 
     def test_extract_hidden_on_folder(self):
-        folder = _make_file(self.user, node_type='folder', mime_type=None, name='things')
+        folder = _make_file(self.user, node_type='folder', mime_type=None, type=None, name='things')
         self.assertNotIn('extract', self._ids(folder, FilePermission.EDIT))

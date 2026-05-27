@@ -235,9 +235,9 @@ class FileViewSet(
         'node_type': ['exact'],
         'parent': ['exact'],
         'owner': ['exact'],
-        'mime_type': ['exact'],
+        'type': ['exact'],
     }
-    search_fields = ['name', 'mime_type']
+    search_fields = ['name', 'type']
     ordering_fields = ['name', 'created_at', 'updated_at', 'size']
     ordering_case_insensitive_fields = ['name']
     ordering = ['node_type', Lower('name')]

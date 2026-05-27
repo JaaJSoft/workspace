@@ -204,11 +204,11 @@ class FileTagFilterTests(APITestCase):
         self.tag2 = Tag.objects.create(owner=self.user, name='personal', color='accent')
         self.file1 = File.objects.create(
             owner=self.user, name='note1.md', node_type=File.NodeType.FILE,
-            mime_type='text/markdown',
+            mime_type='text/markdown', type='markdown',
         )
         self.file2 = File.objects.create(
             owner=self.user, name='note2.md', node_type=File.NodeType.FILE,
-            mime_type='text/markdown',
+            mime_type='text/markdown', type='markdown',
         )
         FileTag.objects.create(file=self.file1, tag=self.tag1)
         FileTag.objects.create(file=self.file2, tag=self.tag2)
@@ -226,12 +226,12 @@ class FileTagFilterTests(APITestCase):
         self.assertEqual(len(resp.data), 1)
         self.assertEqual(resp.data[0]['uuid'], str(self.file1.uuid))
 
-    def test_filter_by_mime_type(self):
+    def test_filter_by_type(self):
         File.objects.create(
             owner=self.user, name='image.png', node_type=File.NodeType.FILE,
-            mime_type='image/png',
+            mime_type='image/png', type='png',
         )
-        resp = self.client.get('/api/v1/files?recent=1&mime_type=text/markdown')
+        resp = self.client.get('/api/v1/files?recent=1&type=markdown')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         names = {f['name'] for f in resp.data}
         self.assertIn('note1.md', names)

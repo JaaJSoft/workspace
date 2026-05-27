@@ -546,16 +546,16 @@ def view_file(request, uuid):
     # Check if viewable
     if not file_obj.is_viewable():
         return HttpResponse(
-            f'<div class="p-8 text-center text-error">No viewer available for {file_obj.mime_type}</div>',
+            f'<div class="p-8 text-center text-error">No viewer available for {file_obj.name}</div>',
             status=400
         )
 
     # Get appropriate viewer
-    ViewerClass = ViewerRegistry.get_viewer(file_obj.mime_type)
+    ViewerClass = ViewerRegistry.get_viewer(file_obj.type)
 
     if not ViewerClass:
         return HttpResponse(
-            f'<div class="p-8 text-center text-error">No viewer available for {file_obj.mime_type}</div>',
+            f'<div class="p-8 text-center text-error">No viewer available for {file_obj.name}</div>',
             status=400
         )
 
@@ -610,7 +610,7 @@ def shared_file_view(request, token):
     viewer_html = ''
     if not link.has_password or password_verified:
         from workspace.files.ui.viewers import ViewerRegistry
-        ViewerClass = ViewerRegistry.get_viewer(link.file.mime_type) if link.file.mime_type else None
+        ViewerClass = ViewerRegistry.get_viewer(link.file.type) if link.file.type else None
         if ViewerClass:
             viewer = ViewerClass(link.file)
             viewer._user_can_edit = False

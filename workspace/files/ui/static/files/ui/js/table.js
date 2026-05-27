@@ -148,7 +148,7 @@ window.fileTableControls = function fileTableControls() {
       }
     },
 
-    openFileFromRow(event, uuid, name, mimeType) {
+    openFileFromRow(event, uuid, name, fileType) {
       if (!event) return;
       const target = event.target instanceof Element ? event.target : event.target?.parentElement;
       if (target && target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
@@ -161,7 +161,7 @@ window.fileTableControls = function fileTableControls() {
       }
       // Normal behavior: open file viewer
       window.dispatchEvent(new CustomEvent('open-file-viewer', {
-        detail: { uuid, name, mime_type: mimeType }
+        detail: { uuid, name, type: fileType }
       }));
     },
 
@@ -510,7 +510,7 @@ window.fileTableControls = function fileTableControls() {
         uuid,
         name: row.dataset.displayName || row.dataset.name || '',
         nodeType: row.dataset.nodeType || 'file',
-        mimeType: row.dataset.mimeType || '',
+        fileType: row.dataset.fileType || '',
         actions: this.actionsMap[uuid] || [],
       };
     },
@@ -663,7 +663,7 @@ window.fileTableControls = function fileTableControls() {
           if (link) link.click();
         } else if (this._nodeHasAction(data, 'view')) {
           window.dispatchEvent(new CustomEvent('open-file-viewer', {
-            detail: { uuid: data.uuid, name: data.name, mime_type: data.mimeType }
+            detail: { uuid: data.uuid, name: data.name, type: data.fileType }
           }));
         }
         return;
@@ -1166,7 +1166,7 @@ window.viewToggle = function viewToggle() {
       }
     },
 
-    openFileFromCard(event, uuid, name, mimeType) {
+    openFileFromCard(event, uuid, name, fileType) {
       // Only open if not clicking checkbox or action button
       if (event.target.closest('input[type="checkbox"]') ||
           event.target.closest('button') ||
@@ -1180,7 +1180,7 @@ window.viewToggle = function viewToggle() {
       }
       // Normal behavior: open file viewer
       window.dispatchEvent(new CustomEvent('open-file-viewer', {
-        detail: { uuid, name, mime_type: mimeType }
+        detail: { uuid, name, type: fileType }
       }));
     }
   };

@@ -451,8 +451,8 @@ x-data="chatApp({{ user.id }})"
               <i data-lucide="paperclip" class="w-4 h-4"></i>
             </button>
             <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-box shadow-lg w-48 mb-2 z-50">
-              <li><a @click="openFileDialog()"><i data-lucide="upload" class="w-4 h-4"></i> Upload file</a></li>
-              <li><a @click="attachFromWorkspace()"><i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace</a></li>
+              <li><a @click="document.activeElement.blur(); openFileDialog()"><i data-lucide="upload" class="w-4 h-4"></i> Upload file</a></li>
+              <li><a @click="document.activeElement.blur(); attachFromWorkspace()"><i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace</a></li>
             </ul>
           </div>
           <div class="flex-1 flex items-center border border-base-300 rounded-2xl transition-colors focus-within:border-info/50 min-h-[38px]">
@@ -538,8 +538,8 @@ x-data="chatApp({{ user.id }})"
                 <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
               </button>
               <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-box shadow-lg w-48 mb-2 z-50">
-                <li><a @click="openFileDialog()"><i data-lucide="upload" class="w-4 h-4"></i> Upload file</a></li>
-                <li><a @click="attachFromWorkspace()"><i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace</a></li>
+                <li><a @click="document.activeElement.blur(); openFileDialog()"><i data-lucide="upload" class="w-4 h-4"></i> Upload file</a></li>
+                <li><a @click="document.activeElement.blur(); attachFromWorkspace()"><i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace</a></li>
               </ul>
             </div>
 

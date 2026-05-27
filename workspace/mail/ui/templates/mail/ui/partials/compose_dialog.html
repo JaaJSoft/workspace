@@ -196,8 +196,8 @@
             <i data-lucide="paperclip" class="w-4 h-4"></i>
           </button>
           <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-box shadow-lg w-48 mb-2 z-50">
-            <li><a @click="$refs.composeFileInput.click()"><i data-lucide="upload" class="w-4 h-4"></i> Upload file</a></li>
-            <li><a @click="attachWorkspaceFiles()"><i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace</a></li>
+            <li><a @click="document.activeElement.blur(); $refs.composeFileInput.click()"><i data-lucide="upload" class="w-4 h-4"></i> Upload file</a></li>
+            <li><a @click="document.activeElement.blur(); attachWorkspaceFiles()"><i data-lucide="hard-drive" class="w-4 h-4"></i> From workspace</a></li>
           </ul>
         </div>
         <input type="file" multiple x-ref="composeFileInput" class="hidden"

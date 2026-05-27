@@ -374,11 +374,11 @@ def view_attachment(request, attachment_uuid):
     # Create a file-like adapter for the viewer
     class AttachmentAdapter:
         def __init__(self, att):
-            from workspace.files.services.filetype import _resolve_label
+            from workspace.files.services.filetype import label_from_mime
             self.uuid = att.uuid
             self.name = att.original_name
             self.mime_type = att.mime_type
-            self.type = _resolve_label(att.mime_type or '')
+            self.type = label_from_mime(att.mime_type or '')
             self.content = att.file
 
         def is_viewable(self):

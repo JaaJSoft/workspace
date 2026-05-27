@@ -140,3 +140,8 @@ def get_mime_type(label: str) -> str:
 
 def is_viewable(label: str) -> bool:
     return get_info(label).viewer is not None
+
+
+def label_from_mime(mime_type: str) -> str:
+    """Convert a MIME type to a Magika label. Returns the input unchanged if no match."""
+    return _resolve_label(mime_type)

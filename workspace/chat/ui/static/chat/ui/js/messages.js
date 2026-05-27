@@ -170,20 +170,22 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     async sendMessage() {
       const body = this.messageBody.trim();
       const files = [...this.pendingFiles];
-      if ((!body && files.length === 0) || !this.activeConversation) return;
+      const wsFiles = [...(this.pendingPickedFiles || [])];
+      if ((!body && files.length === 0 && wsFiles.length === 0) || !this.activeConversation) return;
 
       const replyToUuid = this.replyingTo?.uuid || null;
       const replyInfo = this.replyingTo ? { ...this.replyingTo } : null;
 
       this.messageBody = '';
       this.pendingFiles = [];
+      this.pendingPickedFiles = [];
       this._lastTypingSent = 0;
       this._clearDraft();
       this.cancelReply();
 
       // ── Optimistic UI: inject temporary message immediately ──
       const tempId = '_optimistic_' + Date.now();
-      const hasFiles = files.length > 0;
+      const hasFiles = files.length > 0 || wsFiles.length > 0;
       const isBotConv = this.isBotConversation(this.activeConversation);
       this._injectOptimisticMessage(tempId, body, replyInfo, hasFiles ? files : null);
       if (isBotConv) this.botTyping = true;
@@ -196,12 +198,15 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
       try {
         let resp;
-        if (hasFiles) {
+        if (files.length > 0) {
           const formData = new FormData();
           formData.append('body', body);
           if (replyToUuid) formData.append('reply_to_uuid', replyToUuid);
           for (const f of files) {
             formData.append('files', f);
+          }
+          for (const wf of wsFiles) {
+            formData.append('file_uuids', wf.uuid);
           }
           resp = await fetch(
             `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
@@ -215,6 +220,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         } else {
           const payload = { body };
           if (replyToUuid) payload.reply_to_uuid = replyToUuid;
+          if (wsFiles.length > 0) payload.file_uuids = wsFiles.map(f => f.uuid);
           resp = await fetch(
             `/api/v1/chat/conversations/${this.activeConversation.uuid}/messages`,
             {
@@ -247,6 +253,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this._removeOptimisticMessage(tempId);
           this.messageBody = body;
           this.pendingFiles = files;
+          this.pendingPickedFiles = wsFiles;
           this.botTyping = false;
         }
       } catch (e) {
@@ -254,6 +261,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         this._removeOptimisticMessage(tempId);
         this.messageBody = body;
         this.pendingFiles = files;
+        this.pendingPickedFiles = wsFiles;
         this.botTyping = false;
       }
     },

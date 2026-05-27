@@ -5,6 +5,7 @@ window.chatInputMixin = function chatInputMixin() {
   return {
     // ── Pending file uploads ─────────────────────────────────
     pendingFiles: [],
+    pendingPickedFiles: [],
     isDraggingOver: false,
     _dragCounter: 0,
 
@@ -430,6 +431,32 @@ window.chatInputMixin = function chatInputMixin() {
         }
       } catch (e) {
         console.error('Failed to save attachment to files', e);
+      }
+    },
+
+    async attachFromWorkspace() {
+      const files = await AppDialog.filePicker({
+        title: 'Attach from Workspace',
+        message: 'Select files to attach to the message.',
+        okLabel: 'Attach',
+        okClass: 'btn-info',
+        icon: 'hard-drive',
+        iconClass: 'bg-info/10 text-info',
+        multiple: true,
+      });
+      if (!files || files.length === 0) return;
+      if (!this.pendingPickedFiles) this.pendingPickedFiles = [];
+      const existing = new Set(this.pendingPickedFiles.map(f => f.uuid));
+      for (const f of files) {
+        if (!existing.has(f.uuid)) {
+          this.pendingPickedFiles.push(f);
+        }
+      }
+    },
+
+    removePickedFile(idx) {
+      if (this.pendingPickedFiles) {
+        this.pendingPickedFiles.splice(idx, 1);
       }
     },
 

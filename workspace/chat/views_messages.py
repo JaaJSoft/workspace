@@ -135,14 +135,15 @@ class MessageListView(CacheControlMixin, APIView):
 
         body = serializer.validated_data.get('body', '').strip()
         files = request.FILES.getlist('files')
+        file_uuids = serializer.validated_data.get('file_uuids', [])
 
-        if not body and not files:
+        if not body and not files and not file_uuids:
             return Response(
                 {'detail': 'Message must have text or at least one file.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if len(files) > 10:
+        if len(files) + len(file_uuids) > 10:
             return Response(
                 {'detail': 'Maximum 10 files per message.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -155,6 +156,26 @@ class MessageListView(CacheControlMixin, APIView):
                     {'detail': f'File "{f.name}" exceeds the 50 MB limit.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+        picked_files = []
+        if file_uuids:
+            file_uuids = list(dict.fromkeys(file_uuids))
+            from workspace.files.models import File as WorkspaceFile
+            qs = WorkspaceFile.objects.filter(
+                uuid__in=file_uuids,
+                node_type=WorkspaceFile.NodeType.FILE,
+                deleted_at__isnull=True,
+            )
+            accessible = [
+                f for f in qs
+                if FileService.can_access(request.user, f)
+            ]
+            if len(accessible) != len(file_uuids):
+                return Response(
+                    {'detail': 'One or more files not found or not accessible.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            picked_files = accessible
 
         # Extract mentions and resolve to real usernames
         mention_map = {}
@@ -188,36 +209,55 @@ class MessageListView(CacheControlMixin, APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        with transaction.atomic():
-            message = Message.objects.create(
-                conversation_id=conversation_id,
-                author=request.user,
-                body=body,
-                body_html=body_html,
-                reply_to=reply_to,
-            )
-
-            for f in files:
-                mime_type = FileService.infer_mime_type(f.name, uploaded=f)
-                MessageAttachment.objects.create(
-                    message=message,
-                    file=f,
-                    original_name=f.name,
-                    mime_type=mime_type,
-                    size=f.size,
+        try:
+            with transaction.atomic():
+                message = Message.objects.create(
+                    conversation_id=conversation_id,
+                    author=request.user,
+                    body=body,
+                    body_html=body_html,
+                    reply_to=reply_to,
                 )
 
-            # Increment unread_count for other active members
-            ConversationMember.objects.filter(
-                conversation_id=conversation_id,
-                left_at__isnull=True,
-            ).exclude(user=request.user).update(
-                unread_count=F('unread_count') + 1,
-            )
+                for f in files:
+                    mime_type = FileService.infer_mime_type(f.name, uploaded=f)
+                    MessageAttachment.objects.create(
+                        message=message,
+                        file=f,
+                        original_name=f.name,
+                        mime_type=mime_type,
+                        size=f.size,
+                    )
 
-            # Bump conversation updated_at
-            Conversation.objects.filter(pk=conversation_id).update(
-                updated_at=timezone.now(),
+                from django.core.files.base import File as DjangoFile
+                for ws_file in picked_files:
+                    attachment = MessageAttachment(
+                        message=message,
+                        original_name=ws_file.name,
+                        mime_type=ws_file.mime_type or FileService.infer_mime_type(ws_file.name),
+                        size=ws_file.size or 0,
+                    )
+                    with ws_file.content.open('rb') as f:
+                        attachment.file = DjangoFile(f, name=ws_file.name)
+                        attachment.save()
+
+                # Increment unread_count for other active members
+                ConversationMember.objects.filter(
+                    conversation_id=conversation_id,
+                    left_at__isnull=True,
+                ).exclude(user=request.user).update(
+                    unread_count=F('unread_count') + 1,
+                )
+
+                # Bump conversation updated_at
+                Conversation.objects.filter(pk=conversation_id).update(
+                    updated_at=timezone.now(),
+                )
+        except (FileNotFoundError, OSError) as exc:
+            logger.warning("Workspace file content unavailable: %s", scrub(str(exc)))
+            return Response(
+                {'detail': 'One or more workspace file contents are unavailable.'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Notify other members via SSE + push notifications

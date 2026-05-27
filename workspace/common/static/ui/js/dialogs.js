@@ -214,9 +214,20 @@ const AppDialog = {
 
   folderPicker({ title, message, okLabel, cancelLabel, okClass, icon, iconClass } = {}) {
     return new Promise((resolve) => {
-      window.dispatchEvent(new CustomEvent('folder-picker:open', {
+      window.dispatchEvent(new CustomEvent('picker:open', {
         detail: {
-          options: { title, message, okLabel, cancelLabel, okClass, icon, iconClass },
+          options: { mode: 'folder', title, message, okLabel, cancelLabel, okClass, icon, iconClass },
+          resolve,
+        },
+      }));
+    });
+  },
+
+  filePicker({ title, message, okLabel, cancelLabel, okClass, icon, iconClass, multiple } = {}) {
+    return new Promise((resolve) => {
+      window.dispatchEvent(new CustomEvent('picker:open', {
+        detail: {
+          options: { mode: 'file', title, message, okLabel, cancelLabel, okClass, icon, iconClass, multiple },
           resolve,
         },
       }));

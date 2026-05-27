@@ -1,0 +1,400 @@
+<!-- Unified Picker Dialog (folder mode + file mode) — include once in base.html -->
+<dialog id="app-dialog-picker" class="modal"
+  x-data="{
+    open: false,
+    mode: 'folder',
+    currentFolder: null,
+    items: [],
+    breadcrumbs: [],
+    loading: false,
+    selectedFiles: [],
+    search: '',
+    _searchTimer: null,
+    newFolderName: '',
+    creatingFolder: false,
+    showNewFolder: false,
+    _resolve: null,
+    options: {},
+
+    init() {
+      window.addEventListener('picker:open', (e) => {
+        this.options = e.detail.options || {};
+        this.mode = this.options.mode || 'folder';
+        this._resolve = e.detail.resolve;
+        this.currentFolder = null;
+        this.items = [];
+        this.breadcrumbs = [];
+        this.selectedFiles = [];
+        this.search = '';
+        this.newFolderName = '';
+        this.creatingFolder = false;
+        this.showNewFolder = false;
+        this.fetchItems(null);
+        this.$refs.pickerDialog.showModal();
+        this.open = true;
+      });
+    },
+
+    get isFileMode() { return this.mode === 'file'; },
+
+    get defaultIcon() { return this.isFileMode ? 'file-search' : 'folder-open'; },
+    get defaultIconClass() { return this.isFileMode ? 'bg-info/10 text-info' : 'bg-warning/10 text-warning'; },
+    get defaultTitle() { return this.isFileMode ? 'Choose File' : 'Choose Folder'; },
+    get defaultMessage() { return this.isFileMode ? 'Select a file from your workspace.' : 'Select a destination folder.'; },
+    get defaultOkClass() { return this.isFileMode ? 'btn-info' : 'btn-warning'; },
+    get accent() {
+      const cls = this.options.okClass || this.defaultOkClass;
+      const m = cls.match(/btn-(\w+)/);
+      return m ? m[1] : 'info';
+    },
+
+    async fetchItems(parentUuid) {
+      this.loading = true;
+      try {
+        let url = '/api/v1/files';
+        if (!this.isFileMode) url += '?node_type=folder';
+        if (parentUuid) url += (url.includes('?') ? '&' : '?') + 'parent=' + parentUuid;
+        const res = await fetch(url, { credentials: 'same-origin' });
+        if (res.ok) {
+          const data = await res.json();
+          const all = (data.results || data);
+          this.items = all.sort((a, b) => {
+            if (a.node_type !== b.node_type) return a.node_type === 'folder' ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
+        }
+      } catch (e) { /* ignore */ }
+      this.loading = false;
+    },
+
+    async searchFiles(query) {
+      this.loading = true;
+      try {
+        const url = '/api/v1/files?node_type=file&search=' + encodeURIComponent(query);
+        const res = await fetch(url, { credentials: 'same-origin' });
+        if (res.ok) {
+          const data = await res.json();
+          this.items = (data.results || data).sort((a, b) => a.name.localeCompare(b.name));
+        }
+      } catch (e) { /* ignore */ }
+      this.loading = false;
+    },
+
+    handleSearch() {
+      if (this._searchTimer) clearTimeout(this._searchTimer);
+      const q = this.search.trim();
+      if (!q) {
+        this.fetchItems(this.currentFolder?.uuid || null);
+        return;
+      }
+      this._searchTimer = setTimeout(() => this.searchFiles(q), 300);
+    },
+
+    navigateToFolder(folder) {
+      this.search = '';
+      this.showNewFolder = false;
+      this.newFolderName = '';
+      this.breadcrumbs.push({ uuid: folder.uuid, name: folder.name });
+      this.currentFolder = { uuid: folder.uuid, name: folder.name };
+      this.fetchItems(folder.uuid);
+    },
+
+    navigateToBreadcrumb(index) {
+      this.search = '';
+      this.showNewFolder = false;
+      this.newFolderName = '';
+      if (index < 0) {
+        this.breadcrumbs = [];
+        this.currentFolder = null;
+        this.fetchItems(null);
+      } else {
+        const target = this.breadcrumbs[index];
+        this.breadcrumbs = this.breadcrumbs.slice(0, index + 1);
+        this.currentFolder = { uuid: target.uuid, name: target.name };
+        this.fetchItems(target.uuid);
+      }
+    },
+
+    toggleFile(file) {
+      const multi = this.options.multiple !== false;
+      const idx = this.selectedFiles.findIndex(f => f.uuid === file.uuid);
+      if (idx >= 0) {
+        this.selectedFiles.splice(idx, 1);
+      } else {
+        if (multi) {
+          this.selectedFiles.push({ uuid: file.uuid, name: file.name, mime_type: file.mime_type, size: file.size });
+        } else {
+          this.selectedFiles = [{ uuid: file.uuid, name: file.name, mime_type: file.mime_type, size: file.size }];
+        }
+      }
+    },
+
+    isSelected(file) {
+      return this.selectedFiles.some(f => f.uuid === file.uuid);
+    },
+
+    isFileType(item, prefix) {
+      return item.node_type === 'file' && (item.mime_type || '').startsWith(prefix);
+    },
+
+    isGenericFile(item) {
+      if (item.node_type !== 'file') return false;
+      const mt = item.mime_type || '';
+      return !mt.startsWith('image/') && !mt.startsWith('video/') && !mt.startsWith('audio/') && mt !== 'application/pdf' && !mt.startsWith('text/');
+    },
+
+    async createFolder() {
+      const name = this.newFolderName.trim();
+      if (!name) return;
+      this.creatingFolder = true;
+      try {
+        const body = { name, node_type: 'folder' };
+        if (this.currentFolder) body.parent = this.currentFolder.uuid;
+        const res = await fetch('/api/v1/files', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          this.newFolderName = '';
+          this.showNewFolder = false;
+          await this.fetchItems(this.currentFolder?.uuid || null);
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert(err.detail || err.name?.[0] || 'Failed to create folder');
+        }
+      } catch (e) { /* ignore */ }
+      this.creatingFolder = false;
+    },
+
+    select() {
+      if (this.isFileMode) {
+        if (this.selectedFiles.length === 0) return;
+        const result = this.options.multiple === false ? this.selectedFiles[0] : this.selectedFiles;
+        this._close(result);
+      } else {
+        const result = this.currentFolder
+          ? { uuid: this.currentFolder.uuid, name: this.currentFolder.name }
+          : { uuid: null, name: 'Root' };
+        this._close(result);
+      }
+    },
+
+    cancel() {
+      this._close(null);
+    },
+
+    _close(result) {
+      if (!this.open) return;
+      this.open = false;
+      const resolve = this._resolve;
+      this._resolve = null;
+      this.$refs.pickerDialog.close();
+      if (resolve) resolve(result);
+    },
+
+    currentLocationLabel() {
+      return this.currentFolder ? this.currentFolder.name : 'Root';
+    },
+
+    formatSize(bytes) {
+      if (!bytes) return '';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let val = bytes;
+      for (const unit of units) {
+        if (val < 1024) return unit === 'B' ? val + ' B' : val.toFixed(1) + ' ' + unit;
+        val /= 1024;
+      }
+      return val.toFixed(1) + ' TB';
+    }
+  }"
+  x-ref="pickerDialog"
+  @close.prevent="cancel()"
+>
+  <div class="modal-box flex flex-col max-h-[70vh]">
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-4">
+      <div :class="options.iconClass || defaultIconClass" class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center">
+        <i :data-lucide="options.icon || defaultIcon" class="w-5 h-5"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <h3 class="font-bold text-lg break-words" x-text="options.title || defaultTitle"></h3>
+        <p class="text-sm text-base-content/60 break-words" x-text="options.message || defaultMessage"></p>
+      </div>
+    </div>
+
+    <!-- Search (file mode only) -->
+    <div x-show="isFileMode" class="mb-3">
+      <div class="relative">
+        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40"></i>
+        <input
+          type="text"
+          class="input input-bordered input-sm w-full pl-9"
+          placeholder="Search files..."
+          x-model="search"
+          @input="handleSearch()"
+          @keydown.escape.prevent="if (search) { search = ''; handleSearch(); } else { cancel(); }"
+        />
+        <button
+          x-show="search"
+          x-cloak
+          class="btn btn-ghost btn-xs btn-circle absolute right-1 top-1/2 -translate-y-1/2"
+          @click="search = ''; handleSearch()"
+        >
+          <i data-lucide="x" class="w-3 h-3"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Breadcrumbs -->
+    <div x-show="!search" class="flex items-center gap-1 text-sm mb-3 px-1 flex-wrap min-h-[28px]">
+      <button
+        class="btn btn-ghost btn-xs gap-1"
+        :class="{ 'font-bold': !currentFolder }"
+        @click="navigateToBreadcrumb(-1)"
+      >
+        <i data-lucide="home" class="w-3 h-3"></i>
+        Root
+      </button>
+      <template x-for="(crumb, i) in breadcrumbs" :key="crumb.uuid">
+        <div class="flex items-center gap-1">
+          <span class="text-base-content/40">/</span>
+          <button
+            class="btn btn-ghost btn-xs"
+            :class="{ 'font-bold': i === breadcrumbs.length - 1 }"
+            @click="navigateToBreadcrumb(i)"
+            x-text="crumb.name"
+          ></button>
+        </div>
+      </template>
+    </div>
+
+    <!-- Item list -->
+    <div class="border border-base-300 rounded-lg flex-1 overflow-y-auto min-h-[200px] max-h-[300px]">
+      <!-- Loading spinner -->
+      <template x-if="loading">
+        <div class="flex items-center justify-center h-full py-8">
+          <span class="loading loading-spinner loading-md text-base-content/40"></span>
+        </div>
+      </template>
+
+      <!-- Entries -->
+      <template x-if="!loading">
+        <div>
+          <template x-if="items.length === 0">
+            <div class="flex flex-col items-center justify-center py-8 text-base-content/40">
+              <i x-show="!isFileMode" data-lucide="folder-x" class="w-8 h-8 mb-2"></i>
+              <i x-show="isFileMode" data-lucide="file-x" class="w-8 h-8 mb-2"></i>
+              <span class="text-sm" x-text="search ? 'No files found' : (isFileMode ? 'Empty folder' : 'No subfolders')"></span>
+            </div>
+          </template>
+          <template x-for="item in items" :key="item.uuid">
+            <button
+              class="w-full flex items-center gap-3 px-3 py-2 hover:bg-base-200 transition-colors text-left"
+              :class="isFileMode && isSelected(item) ? 'bg-' + accent + '/10' : ''"
+              @click="item.node_type === 'folder' ? navigateToFolder(item) : toggleFile(item)"
+            >
+              <!-- Folder icon -->
+              <i data-lucide="folder" x-show="item.node_type === 'folder'" class="w-4 h-4 text-warning flex-shrink-0"></i>
+              <!-- File icons (file mode only) -->
+              <i data-lucide="image" x-show="isFileType(item, 'image/')" class="w-4 h-4 text-success flex-shrink-0"></i>
+              <i data-lucide="film" x-show="isFileType(item, 'video/')" class="w-4 h-4 text-info flex-shrink-0"></i>
+              <i data-lucide="music" x-show="isFileType(item, 'audio/')" class="w-4 h-4 text-secondary flex-shrink-0"></i>
+              <i data-lucide="file-text" x-show="item.node_type === 'file' && (item.mime_type === 'application/pdf' || (item.mime_type || '').startsWith('text/'))" class="w-4 h-4 text-error flex-shrink-0"></i>
+              <i data-lucide="file" x-show="isGenericFile(item)" class="w-4 h-4 text-base-content/50 flex-shrink-0"></i>
+
+              <span class="text-sm truncate flex-1" x-text="item.name"></span>
+              <span x-show="isFileMode && item.node_type === 'file' && item.size" class="text-xs text-base-content/40 flex-shrink-0" x-text="formatSize(item.size)"></span>
+              <i data-lucide="chevron-right" x-show="item.node_type === 'folder'" class="w-4 h-4 text-base-content/30 ml-auto flex-shrink-0"></i>
+              <input
+                x-show="isFileMode && item.node_type === 'file'"
+                type="checkbox"
+                class="checkbox checkbox-sm pointer-events-none"
+                :class="'checkbox-' + accent"
+                :checked="isSelected(item)"
+                tabindex="-1"
+              />
+            </button>
+          </template>
+        </div>
+      </template>
+    </div>
+
+    <!-- New folder row (folder mode only) -->
+    <div x-show="!isFileMode" class="mt-3">
+      <template x-if="!showNewFolder">
+        <button class="btn btn-ghost btn-xs gap-1 text-base-content/60" @click="showNewFolder = true; $nextTick(() => $refs.newFolderInput?.focus())">
+          <i data-lucide="folder-plus" class="w-3.5 h-3.5"></i>
+          New folder
+        </button>
+      </template>
+      <template x-if="showNewFolder">
+        <div class="flex items-center gap-2">
+          <input
+            x-ref="newFolderInput"
+            type="text"
+            class="input input-bordered input-sm flex-1"
+            placeholder="Folder name"
+            x-model="newFolderName"
+            @keydown.enter.prevent="createFolder()"
+            @keydown.escape.prevent="showNewFolder = false; newFolderName = ''"
+            :disabled="creatingFolder"
+          />
+          <button
+            class="btn btn-warning btn-sm"
+            @click="createFolder()"
+            :disabled="!newFolderName.trim() || creatingFolder"
+          >
+            <template x-if="creatingFolder">
+              <span class="loading loading-spinner loading-xs"></span>
+            </template>
+            <template x-if="!creatingFolder">
+              <span>Create</span>
+            </template>
+          </button>
+          <button class="btn btn-ghost btn-sm" @click="showNewFolder = false; newFolderName = ''" :disabled="creatingFolder">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </template>
+    </div>
+
+    <!-- Footer -->
+    <div class="modal-action">
+      <div class="flex items-center gap-2 text-xs text-base-content/50 mr-auto">
+        <!-- Folder mode: current location -->
+        <template x-if="!isFileMode">
+          <span class="flex items-center gap-1.5">
+            <i data-lucide="info" class="w-3.5 h-3.5"></i>
+            Saving to: <strong x-text="currentLocationLabel()"></strong>
+          </span>
+        </template>
+        <!-- File mode: selection count -->
+        <span x-show="isFileMode && selectedFiles.length > 0">
+          <span x-text="selectedFiles.length + ' file' + (selectedFiles.length > 1 ? 's' : '') + ' selected'"></span>
+        </span>
+        <span x-show="isFileMode && selectedFiles.length === 0">
+          Click a file to select it
+        </span>
+      </div>
+      <button class="btn btn-ghost btn-sm" @click="cancel()">
+        <span x-text="options.cancelLabel || 'Cancel'"></span>
+      </button>
+      <button
+        :class="options.okClass || defaultOkClass"
+        class="btn btn-sm"
+        @click="select()"
+        :disabled="isFileMode && selectedFiles.length === 0"
+      >
+        <span x-text="options.okLabel || 'Select'"></span>
+      </button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button @click.prevent="cancel()">close</button>
+  </form>
+</dialog>

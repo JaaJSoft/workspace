@@ -395,7 +395,7 @@ class FileViewSet(
                 return queryset
             if ancestor_path:
                 return queryset.filter(path__startswith=ancestor_path + '/')
-            if not self._is_recent_query() and 'parent' not in self.request.query_params:
+            if not self._is_recent_query() and 'parent' not in self.request.query_params and not self.request.query_params.get('search'):
                 return queryset.filter(parent__isnull=True)
         return queryset
 

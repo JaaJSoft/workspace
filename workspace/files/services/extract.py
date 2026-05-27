@@ -1,7 +1,7 @@
 """Extract ZIP archives into the user's file tree.
 
 Security guardrails:
-- MIME must be application/zip (no auto-detect, no other formats).
+- File type must be in ZIP_LABELS (validated via file_obj.type, not MIME).
 - Path entries are rejected on zip-slip (`..`), absolute paths, Windows drives.
 - Symlink entries are silently skipped.
 - Total uncompressed bytes and total entry count are capped (zip-bomb defence).

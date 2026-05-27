@@ -13,14 +13,14 @@ logger = logging.getLogger(__name__)
 # Whitelist of labels used as the `mime_family` metric label.
 # Anything not in this set is reported as 'other' so the label cardinality
 # stays bounded even if THUMBNAIL_LABELS is later widened by mistake.
-_KNOWN_MIME_FAMILIES = frozenset({'jpeg', 'png', 'webp', 'bmp', 'tiff', 'gif', 'svg'})
+_KNOWN_IMAGE_LABELS = frozenset({'jpeg', 'png', 'webp', 'bmp', 'tiff', 'gif', 'svg'})
 
 
 def _label_family(content_label):
     """Return a bounded label value for the metric ('jpeg', 'png', ..., 'other')."""
     if not content_label:
         return 'unknown'
-    return content_label if content_label in _KNOWN_MIME_FAMILIES else 'other'
+    return content_label if content_label in _KNOWN_IMAGE_LABELS else 'other'
 
 _RASTER_LABELS = frozenset({'jpeg', 'png', 'webp', 'bmp', 'tiff', 'gif'})
 _SVG_LABELS = frozenset({'svg'})

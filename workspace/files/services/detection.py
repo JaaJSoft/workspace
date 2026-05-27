@@ -60,9 +60,11 @@ def detect_from_stream(stream) -> DetectionResult:
     try:
         result = _magika.identify_stream(raw)
     except TypeError:
-        stream.seek(pos)
+        if hasattr(stream, "seek"):
+            stream.seek(pos)
         data = stream.read()
-        stream.seek(pos)
+        if hasattr(stream, "seek"):
+            stream.seek(pos)
         result = _magika.identify_bytes(data)
     else:
         if hasattr(stream, "seek"):

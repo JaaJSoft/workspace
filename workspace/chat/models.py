@@ -207,11 +207,15 @@ class MessageAttachment(models.Model):
 
     @property
     def is_image(self):
-        return self.category == 'image'
+        return self.category == 'image' or (
+            self.category == 'unknown' and self.mime_type.startswith('image/')
+        )
 
     @property
     def is_video(self):
-        return self.category == 'video'
+        return self.category == 'video' or (
+            self.category == 'unknown' and self.mime_type.startswith('video/')
+        )
 
     def __str__(self):
         return f'{self.original_name} ({self.message_id})'

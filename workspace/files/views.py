@@ -50,7 +50,7 @@ RECENT_FILES_MAX_LIMIT = getattr(settings, 'RECENT_FILES_MAX_LIMIT', 200)
         summary="List files and folders",
         description=(
             "Return the current user's files and folders. Supports filtering by "
-            "node_type and parent, search by name or mime_type, and ordering by "
+            "node_type and parent, search by name or type, and ordering by "
             "name, created_at, updated_at, or size. When parent is omitted, "
             "only root-level nodes are returned."
         ),
@@ -106,7 +106,7 @@ RECENT_FILES_MAX_LIMIT = getattr(settings, 'RECENT_FILES_MAX_LIMIT', 200)
             OpenApiParameter(
                 name="search",
                 type=OpenApiTypes.STR,
-                description="Search in name or mime_type.",
+                description="Search in name or type.",
             ),
             OpenApiParameter(
                 name="ordering",

@@ -3,6 +3,7 @@ import logging
 from django.core.management.base import BaseCommand
 from django.db import models
 
+from workspace.common.logging import scrub
 from workspace.files.models import File
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,7 @@ class Command(BaseCommand):
                     to_update.append(file_obj)
                 except Exception as e:
                     errors += 1
-                    logger.warning("Failed to detect %s: %s", file_obj.uuid, e)
+                    logger.warning("Failed to detect %s: %s", scrub(str(file_obj.uuid)), scrub(str(e)))
                     file_obj.type = "unknown"
                     file_obj.category = "unknown"
                     to_update.append(file_obj)
@@ -121,7 +122,7 @@ class Command(BaseCommand):
                     to_update.append(att)
                 except Exception as e:
                     errors += 1
-                    logger.warning("Failed to detect attachment %s: %s", att.uuid, e)
+                    logger.warning("Failed to detect attachment %s: %s", scrub(str(att.uuid)), scrub(str(e)))
                     att.type = "unknown"
                     att.category = "unknown"
                     to_update.append(att)

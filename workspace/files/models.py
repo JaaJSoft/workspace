@@ -231,10 +231,11 @@ class File(models.Model):
         return self.node_type == self.NodeType.FILE
 
     def is_viewable(self):
-        from workspace.files.services.filetype import is_viewable
+        from workspace.files.services.filetype import is_viewable, label_from_mime
         if self.node_type != self.NodeType.FILE:
             return False
-        return is_viewable(self.type or '')
+        label = self.type if self.type and self.type != 'unknown' else label_from_mime(self.mime_type or '')
+        return is_viewable(label)
 
     def is_deleted(self):
         return self.deleted_at is not None

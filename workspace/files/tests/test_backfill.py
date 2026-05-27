@@ -32,6 +32,7 @@ class BackfillFileTypesTest(TestCase):
         f.refresh_from_db()
         self.assertIsNotNone(f.type)
         self.assertNotEqual(f.type, "")
+        self.assertNotEqual(f.type, "unknown")
 
     def test_backfill_file_without_content(self):
         """Files without content fall back to extension-based detection."""

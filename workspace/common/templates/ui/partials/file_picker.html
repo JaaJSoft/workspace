@@ -1,0 +1,302 @@
+<!-- File Picker Dialog — include once in base.html -->
+<dialog id="app-dialog-file-picker" class="modal"
+  x-data="{
+    open: false,
+    currentFolder: null,
+    items: [],
+    breadcrumbs: [],
+    loading: false,
+    selectedFiles: [],
+    search: '',
+    _searchTimer: null,
+    _resolve: null,
+    options: {},
+
+    init() {
+      window.addEventListener('file-picker:open', (e) => {
+        this.options = e.detail.options || {};
+        this._resolve = e.detail.resolve;
+        this.currentFolder = null;
+        this.items = [];
+        this.breadcrumbs = [];
+        this.selectedFiles = [];
+        this.search = '';
+        this.fetchItems(null);
+        this.$refs.filePickerDialog.showModal();
+        this.open = true;
+      });
+    },
+
+    async fetchItems(parentUuid) {
+      this.loading = true;
+      try {
+        let url = '/api/v1/files';
+        if (parentUuid) url += '?parent=' + parentUuid;
+        const res = await fetch(url, { credentials: 'same-origin' });
+        if (res.ok) {
+          const data = await res.json();
+          const all = (data.results || data);
+          this.items = all.sort((a, b) => {
+            if (a.node_type !== b.node_type) return a.node_type === 'folder' ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
+        }
+      } catch (e) { /* ignore */ }
+      this.loading = false;
+    },
+
+    async searchFiles(query) {
+      this.loading = true;
+      try {
+        const url = '/api/v1/files?node_type=file&search=' + encodeURIComponent(query);
+        const res = await fetch(url, { credentials: 'same-origin' });
+        if (res.ok) {
+          const data = await res.json();
+          this.items = (data.results || data).sort((a, b) => a.name.localeCompare(b.name));
+        }
+      } catch (e) { /* ignore */ }
+      this.loading = false;
+    },
+
+    handleSearch() {
+      if (this._searchTimer) clearTimeout(this._searchTimer);
+      const q = this.search.trim();
+      if (!q) {
+        this.fetchItems(this.currentFolder?.uuid || null);
+        return;
+      }
+      this._searchTimer = setTimeout(() => this.searchFiles(q), 300);
+    },
+
+    navigateToFolder(folder) {
+      this.search = '';
+      this.breadcrumbs.push({ uuid: folder.uuid, name: folder.name });
+      this.currentFolder = { uuid: folder.uuid, name: folder.name };
+      this.fetchItems(folder.uuid);
+    },
+
+    navigateToBreadcrumb(index) {
+      this.search = '';
+      if (index < 0) {
+        this.breadcrumbs = [];
+        this.currentFolder = null;
+        this.fetchItems(null);
+      } else {
+        const target = this.breadcrumbs[index];
+        this.breadcrumbs = this.breadcrumbs.slice(0, index + 1);
+        this.currentFolder = { uuid: target.uuid, name: target.name };
+        this.fetchItems(target.uuid);
+      }
+    },
+
+    toggleFile(file) {
+      const multi = this.options.multiple !== false;
+      const idx = this.selectedFiles.findIndex(f => f.uuid === file.uuid);
+      if (idx >= 0) {
+        this.selectedFiles.splice(idx, 1);
+      } else {
+        if (multi) {
+          this.selectedFiles.push({ uuid: file.uuid, name: file.name, mime_type: file.mime_type, size: file.size });
+        } else {
+          this.selectedFiles = [{ uuid: file.uuid, name: file.name, mime_type: file.mime_type, size: file.size }];
+        }
+      }
+    },
+
+    isSelected(file) {
+      return this.selectedFiles.some(f => f.uuid === file.uuid);
+    },
+
+    select() {
+      if (this.selectedFiles.length === 0) return;
+      const result = this.options.multiple === false ? this.selectedFiles[0] : this.selectedFiles;
+      this._close(result);
+    },
+
+    cancel() {
+      this._close(null);
+    },
+
+    _close(result) {
+      this.$refs.filePickerDialog.close();
+      this.open = false;
+      if (this._resolve) {
+        this._resolve(result);
+        this._resolve = null;
+      }
+    },
+
+    fileIcon(item) {
+      if (item.node_type === 'folder') return item.icon || 'folder';
+      const mt = (item.mime_type || '');
+      if (mt.startsWith('image/')) return 'image';
+      if (mt.startsWith('video/')) return 'film';
+      if (mt.startsWith('audio/')) return 'music';
+      if (mt === 'application/pdf') return 'file-text';
+      if (mt.startsWith('text/')) return 'file-text';
+      return 'file';
+    },
+
+    fileIconColor(item) {
+      if (item.node_type === 'folder') return item.color || 'text-warning';
+      const mt = (item.mime_type || '');
+      if (mt.startsWith('image/')) return 'text-success';
+      if (mt.startsWith('video/')) return 'text-info';
+      if (mt.startsWith('audio/')) return 'text-secondary';
+      if (mt === 'application/pdf') return 'text-error';
+      return 'text-base-content/50';
+    },
+
+    formatSize(bytes) {
+      if (!bytes) return '';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let val = bytes;
+      for (const unit of units) {
+        if (val < 1024) return unit === 'B' ? val + ' B' : val.toFixed(1) + ' ' + unit;
+        val /= 1024;
+      }
+      return val.toFixed(1) + ' TB';
+    }
+  }"
+  x-ref="filePickerDialog"
+  @close.prevent="cancel()"
+>
+  <div class="modal-box flex flex-col max-h-[70vh]">
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-4">
+      <div :class="options.iconClass || 'bg-info/10 text-info'" class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center">
+        <i :data-lucide="options.icon || 'file-search'" class="w-5 h-5"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <h3 class="font-bold text-lg break-words" x-text="options.title || 'Choose File'"></h3>
+        <p class="text-sm text-base-content/60 break-words" x-text="options.message || 'Select a file from your workspace.'"></p>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div class="mb-3">
+      <div class="relative">
+        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40"></i>
+        <input
+          type="text"
+          class="input input-bordered input-sm w-full pl-9"
+          placeholder="Search files..."
+          x-model="search"
+          @input="handleSearch()"
+          @keydown.escape.prevent="if (search) { search = ''; handleSearch(); } else { cancel(); }"
+        />
+        <button
+          x-show="search"
+          x-cloak
+          class="btn btn-ghost btn-xs btn-circle absolute right-1 top-1/2 -translate-y-1/2"
+          @click="search = ''; handleSearch()"
+        >
+          <i data-lucide="x" class="w-3 h-3"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Breadcrumbs -->
+    <div x-show="!search" class="flex items-center gap-1 text-sm mb-3 px-1 flex-wrap min-h-[28px]">
+      <button
+        class="btn btn-ghost btn-xs gap-1"
+        :class="{ 'font-bold': !currentFolder }"
+        @click="navigateToBreadcrumb(-1)"
+      >
+        <i data-lucide="home" class="w-3 h-3"></i>
+        Root
+      </button>
+      <template x-for="(crumb, i) in breadcrumbs" :key="crumb.uuid">
+        <div class="flex items-center gap-1">
+          <span class="text-base-content/40">/</span>
+          <button
+            class="btn btn-ghost btn-xs"
+            :class="{ 'font-bold': i === breadcrumbs.length - 1 }"
+            @click="navigateToBreadcrumb(i)"
+            x-text="crumb.name"
+          ></button>
+        </div>
+      </template>
+    </div>
+
+    <!-- File/Folder list -->
+    <div class="border border-base-300 rounded-lg flex-1 overflow-y-auto min-h-[200px] max-h-[300px]">
+      <!-- Loading spinner -->
+      <template x-if="loading">
+        <div class="flex items-center justify-center h-full py-8">
+          <span class="loading loading-spinner loading-md text-base-content/40"></span>
+        </div>
+      </template>
+
+      <!-- Items -->
+      <template x-if="!loading">
+        <div>
+          <template x-if="items.length === 0">
+            <div class="flex flex-col items-center justify-center py-8 text-base-content/40">
+              <i data-lucide="file-x" class="w-8 h-8 mb-2"></i>
+              <span class="text-sm" x-text="search ? 'No files found' : 'Empty folder'"></span>
+            </div>
+          </template>
+          <template x-for="item in items" :key="item.uuid">
+            <button
+              class="w-full flex items-center gap-3 px-3 py-2 hover:bg-base-200 transition-colors text-left"
+              :class="isSelected(item) ? 'bg-info/10' : ''"
+              @click="item.node_type === 'folder' ? navigateToFolder(item) : toggleFile(item)"
+            >
+              <i :data-lucide="fileIcon(item)" :class="fileIconColor(item)" class="w-4 h-4 flex-shrink-0"></i>
+              <span class="text-sm truncate flex-1" x-text="item.name"></span>
+              <template x-if="item.node_type === 'file' && item.size">
+                <span class="text-xs text-base-content/40 flex-shrink-0" x-text="formatSize(item.size)"></span>
+              </template>
+              <template x-if="item.node_type === 'folder'">
+                <i data-lucide="chevron-right" class="w-4 h-4 text-base-content/30 flex-shrink-0"></i>
+              </template>
+              <template x-if="item.node_type === 'file'">
+                <div class="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                  <template x-if="isSelected(item)">
+                    <i data-lucide="check-circle" class="w-4 h-4 text-info"></i>
+                  </template>
+                  <template x-if="!isSelected(item)">
+                    <i data-lucide="circle" class="w-4 h-4 text-base-content/20"></i>
+                  </template>
+                </div>
+              </template>
+            </button>
+          </template>
+        </div>
+      </template>
+    </div>
+
+    <!-- Footer -->
+    <div class="modal-action">
+      <div class="flex items-center gap-2 text-xs text-base-content/50 mr-auto">
+        <template x-if="selectedFiles.length > 0">
+          <span>
+            <i data-lucide="check-circle" class="w-3.5 h-3.5 inline"></i>
+            <span x-text="selectedFiles.length + ' file' + (selectedFiles.length > 1 ? 's' : '') + ' selected'"></span>
+          </span>
+        </template>
+        <template x-if="selectedFiles.length === 0">
+          <span>
+            <i data-lucide="info" class="w-3.5 h-3.5 inline"></i>
+            <span>Click a file to select it</span>
+          </span>
+        </template>
+      </div>
+      <button class="btn btn-ghost btn-sm" @click="cancel()">
+        <span x-text="options.cancelLabel || 'Cancel'"></span>
+      </button>
+      <button
+        :class="options.okClass || 'btn-info'"
+        class="btn btn-sm"
+        @click="select()"
+        :disabled="selectedFiles.length === 0"
+      >
+        <span x-text="options.okLabel || 'Select'"></span>
+      </button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button @click.prevent="cancel()">close</button>
+  </form>
+</dialog>

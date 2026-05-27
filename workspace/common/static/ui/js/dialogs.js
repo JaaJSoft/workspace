@@ -221,5 +221,16 @@ const AppDialog = {
         },
       }));
     });
+  },
+
+  filePicker({ title, message, okLabel, cancelLabel, okClass, icon, iconClass, multiple } = {}) {
+    return new Promise((resolve) => {
+      window.dispatchEvent(new CustomEvent('file-picker:open', {
+        detail: {
+          options: { title, message, okLabel, cancelLabel, okClass, icon, iconClass, multiple },
+          resolve,
+        },
+      }));
+    });
   }
 };

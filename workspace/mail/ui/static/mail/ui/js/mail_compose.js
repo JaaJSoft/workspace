@@ -165,6 +165,25 @@ window.mailComposeMixin = function mailComposeMixin() {
       this.compose.attachments = [...this.compose.attachments, ...event.target.files];
     },
 
+    async attachWorkspaceFiles() {
+      const files = await AppDialog.filePicker({
+        title: 'Attach from Workspace',
+        message: 'Select files to attach to the email.',
+        okLabel: 'Attach',
+        okClass: 'btn-warning',
+        icon: 'hard-drive',
+        iconClass: 'bg-warning/10 text-warning',
+        multiple: true,
+      });
+      if (!files || files.length === 0) return;
+      const existing = new Set((this.compose.workspace_files || []).map(f => f.uuid));
+      for (const f of files) {
+        if (!existing.has(f.uuid)) {
+          this.compose.workspace_files.push(f);
+        }
+      }
+    },
+
     // ----- Autocomplete -----
     _acSearch(field) {
       if (this._autocomplete._timer) clearTimeout(this._autocomplete._timer);
@@ -254,6 +273,7 @@ window.mailComposeMixin = function mailComposeMixin() {
       for (const addr of this.compose.cc) formData.append('cc', addr);
       for (const addr of this.compose.bcc) formData.append('bcc', addr);
       for (const file of this.compose.attachments) formData.append('attachments', file);
+      for (const wf of (this.compose.workspace_files || [])) formData.append('workspace_file_ids', wf.uuid);
 
       try {
         const res = await this._fetch('/api/v1/mail/messages/send', {

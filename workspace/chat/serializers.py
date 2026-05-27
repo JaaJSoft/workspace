@@ -208,6 +208,11 @@ class ConversationCreateSerializer(serializers.Serializer):
 class MessageCreateSerializer(serializers.Serializer):
     body = serializers.CharField(required=False, default='', allow_blank=True)
     reply_to_uuid = serializers.UUIDField(required=False, allow_null=True)
+    workspace_file_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=list,
+    )
 
 
 class MessageEditSerializer(serializers.Serializer):

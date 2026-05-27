@@ -39,7 +39,40 @@ class MailSendView(APIView):
 
         from .services.smtp import send_email
 
-        attachments = request.FILES.getlist('attachments', [])
+        attachments = list(request.FILES.getlist('attachments', []))
+
+        workspace_file_ids = d.get('workspace_file_ids', [])
+        ws_file_handles = []
+        if workspace_file_ids:
+            from workspace.files.models import File as WorkspaceFile
+            from workspace.files.services.files import FileService
+            ws_files = WorkspaceFile.objects.filter(
+                uuid__in=workspace_file_ids,
+                node_type=WorkspaceFile.NodeType.FILE,
+                deleted_at__isnull=True,
+            )
+            accessible = [
+                f for f in ws_files
+                if FileService.can_access(request.user, f)
+            ]
+            if len(accessible) != len(workspace_file_ids):
+                return Response(
+                    {'detail': 'One or more workspace files not found or not accessible.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            for ws_file in accessible:
+                try:
+                    handle = ws_file.content.open('rb')
+                    handle.name = ws_file.name
+                    ws_file_handles.append(handle)
+                    attachments.append(handle)
+                except (FileNotFoundError, OSError):
+                    for h in ws_file_handles:
+                        h.close()
+                    return Response(
+                        {'detail': f'File "{ws_file.name}" content is unavailable.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
         try:
             raw_msg = send_email(
@@ -82,6 +115,9 @@ class MailSendView(APIView):
                 {'status': 'error', 'error': 'Failed to send email'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+        finally:
+            for h in ws_file_handles:
+                h.close()
 
 
 @extend_schema(tags=['Mail'])

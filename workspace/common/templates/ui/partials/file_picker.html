@@ -42,6 +42,11 @@
     get defaultTitle() { return this.isFileMode ? 'Choose File' : 'Choose Folder'; },
     get defaultMessage() { return this.isFileMode ? 'Select a file from your workspace.' : 'Select a destination folder.'; },
     get defaultOkClass() { return this.isFileMode ? 'btn-info' : 'btn-warning'; },
+    get accent() {
+      const cls = this.options.okClass || this.defaultOkClass;
+      const m = cls.match(/btn-(\w+)/);
+      return m ? m[1] : 'info';
+    },
 
     async fetchItems(parentUuid) {
       this.loading = true;
@@ -290,7 +295,7 @@
           <template x-for="item in items" :key="item.uuid">
             <button
               class="w-full flex items-center gap-3 px-3 py-2 hover:bg-base-200 transition-colors text-left"
-              :class="isFileMode && isSelected(item) ? 'bg-info/10' : ''"
+              :class="isFileMode && isSelected(item) ? 'bg-' + accent + '/10' : ''"
               @click="item.node_type === 'folder' ? navigateToFolder(item) : toggleFile(item)"
             >
               <!-- Folder icon -->
@@ -308,7 +313,8 @@
               <input
                 x-show="isFileMode && item.node_type === 'file'"
                 type="checkbox"
-                class="checkbox checkbox-info checkbox-sm pointer-events-none"
+                class="checkbox checkbox-sm pointer-events-none"
+                :class="'checkbox-' + accent"
                 :checked="isSelected(item)"
                 tabindex="-1"
               />

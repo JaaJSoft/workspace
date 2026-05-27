@@ -11,7 +11,7 @@ class DetectFromBytesTest(TestCase):
         self.assertEqual(result.label, "python")
         self.assertEqual(result.group, "code")
         self.assertGreater(result.score, 0.0)
-        self.assertTrue(len(result.mime_type) > 0)
+        self.assertGreater(len(result.mime_type), 0)
 
     def test_detects_json(self):
         from workspace.files.services.detection import detect_from_bytes

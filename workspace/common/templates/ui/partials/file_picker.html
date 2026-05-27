@@ -147,6 +147,19 @@
       return 'text-base-content/50';
     },
 
+    iconSvg(name, cls) {
+      const icon = lucide.icons[name];
+      if (!icon) return '';
+      const [tag, attrs, children] = icon;
+      const svgAttrs = Object.entries({...attrs, class: cls || 'w-4 h-4'})
+        .map(([k,v]) => k + '=\"' + v + '\"').join(' ');
+      const inner = children.map(([t, a]) => {
+        const ca = Object.entries(a).map(([k,v]) => k + '=\"' + v + '\"').join(' ');
+        return '<' + t + ' ' + ca + ' />';
+      }).join('');
+      return '<svg ' + svgAttrs + '>' + inner + '</svg>';
+    },
+
     formatSize(bytes) {
       if (!bytes) return '';
       const units = ['B', 'KB', 'MB', 'GB'];
@@ -243,24 +256,17 @@
               :class="isSelected(item) ? 'bg-info/10' : ''"
               @click="item.node_type === 'folder' ? navigateToFolder(item) : toggleFile(item)"
             >
-              <i :data-lucide="fileIcon(item)" :class="fileIconColor(item)" class="w-4 h-4 flex-shrink-0"></i>
+              <span :class="fileIconColor(item)" class="flex-shrink-0" x-html="iconSvg(fileIcon(item), 'w-4 h-4')"></span>
               <span class="text-sm truncate flex-1" x-text="item.name"></span>
-              <template x-if="item.node_type === 'file' && item.size">
-                <span class="text-xs text-base-content/40 flex-shrink-0" x-text="formatSize(item.size)"></span>
-              </template>
-              <template x-if="item.node_type === 'folder'">
-                <i data-lucide="chevron-right" class="w-4 h-4 text-base-content/30 flex-shrink-0"></i>
-              </template>
-              <template x-if="item.node_type === 'file'">
-                <div class="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-                  <template x-if="isSelected(item)">
-                    <i data-lucide="check-circle" class="w-4 h-4 text-info"></i>
-                  </template>
-                  <template x-if="!isSelected(item)">
-                    <i data-lucide="circle" class="w-4 h-4 text-base-content/20"></i>
-                  </template>
-                </div>
-              </template>
+              <span x-show="item.node_type === 'file' && item.size" class="text-xs text-base-content/40 flex-shrink-0" x-text="formatSize(item.size)"></span>
+              <span x-show="item.node_type === 'folder'" class="text-base-content/30 flex-shrink-0" x-html="iconSvg('chevron-right', 'w-4 h-4')"></span>
+              <input
+                x-show="item.node_type === 'file'"
+                type="checkbox"
+                class="checkbox checkbox-info checkbox-sm pointer-events-none"
+                :checked="isSelected(item)"
+                tabindex="-1"
+              />
             </button>
           </template>
         </div>
@@ -270,18 +276,12 @@
     <!-- Footer -->
     <div class="modal-action">
       <div class="flex items-center gap-2 text-xs text-base-content/50 mr-auto">
-        <template x-if="selectedFiles.length > 0">
-          <span>
-            <i data-lucide="check-circle" class="w-3.5 h-3.5 inline"></i>
-            <span x-text="selectedFiles.length + ' file' + (selectedFiles.length > 1 ? 's' : '') + ' selected'"></span>
-          </span>
-        </template>
-        <template x-if="selectedFiles.length === 0">
-          <span>
-            <i data-lucide="info" class="w-3.5 h-3.5 inline"></i>
-            <span>Click a file to select it</span>
-          </span>
-        </template>
+        <span x-show="selectedFiles.length > 0">
+          <span x-text="selectedFiles.length + ' file' + (selectedFiles.length > 1 ? 's' : '') + ' selected'"></span>
+        </span>
+        <span x-show="selectedFiles.length === 0">
+          Click a file to select it
+        </span>
       </div>
       <button class="btn btn-ghost btn-sm" @click="cancel()">
         <span x-text="options.cancelLabel || 'Cancel'"></span>

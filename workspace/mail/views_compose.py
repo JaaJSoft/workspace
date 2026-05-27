@@ -41,7 +41,7 @@ class MailSendView(APIView):
 
         attachments = list(request.FILES.getlist('attachments', []))
 
-        workspace_file_ids = d.get('workspace_file_ids', [])
+        workspace_file_ids = list(dict.fromkeys(d.get('workspace_file_ids', [])))
         ws_file_handles = []
         if workspace_file_ids:
             from workspace.files.models import File as WorkspaceFile

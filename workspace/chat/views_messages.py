@@ -159,6 +159,7 @@ class MessageListView(CacheControlMixin, APIView):
 
         workspace_files = []
         if workspace_file_ids:
+            workspace_file_ids = list(dict.fromkeys(workspace_file_ids))
             from workspace.files.models import File as WorkspaceFile
             ws_files = WorkspaceFile.objects.filter(
                 uuid__in=workspace_file_ids,

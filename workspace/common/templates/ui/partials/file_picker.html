@@ -189,12 +189,12 @@
     },
 
     _close(result) {
-      this.$refs.pickerDialog.close();
+      if (!this.open) return;
       this.open = false;
-      if (this._resolve) {
-        this._resolve(result);
-        this._resolve = null;
-      }
+      const resolve = this._resolve;
+      this._resolve = null;
+      this.$refs.pickerDialog.close();
+      if (resolve) resolve(result);
     },
 
     currentLocationLabel() {

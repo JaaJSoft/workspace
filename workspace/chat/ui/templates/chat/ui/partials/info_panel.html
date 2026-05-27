@@ -242,7 +242,7 @@
       <div class="grid grid-cols-3 gap-1">
         <template x-for="item in conversationMedia.filter(m => m.is_image || m.is_video)" :key="item.uuid">
           <div class="group/media relative aspect-square rounded overflow-hidden cursor-pointer bg-base-300"
-               @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, mime_type: item.mime_type })"
+               @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })"
                :title="item.original_name">
             <template x-if="item.is_image">
               <img :src="item.url" :alt="item.original_name"
@@ -269,7 +269,7 @@
         <ul class="mt-2 space-y-1">
           <template x-for="item in conversationMedia.filter(m => !m.is_image && !m.is_video)" :key="item.uuid">
             <li class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
-                @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, mime_type: item.mime_type })">
+                @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })">
               <i data-lucide="file" class="w-3.5 h-3.5 text-base-content/40 flex-shrink-0"></i>
               <div class="flex-1 min-w-0">
                 <p class="text-xs truncate" x-text="item.original_name"></p>
@@ -287,7 +287,7 @@
     <ul class="space-y-1">
       <template x-for="item in conversationMedia" :key="item.uuid">
         <li class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
-            @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, mime_type: item.mime_type })">
+            @click="$dispatch('open-chat-attachment-viewer', { uuid: item.uuid, name: item.original_name, type: item.type })">
           <i data-lucide="file" class="w-3.5 h-3.5 text-base-content/40 flex-shrink-0"></i>
           <div class="flex-1 min-w-0">
             <p class="text-xs truncate" x-text="item.original_name"></p>

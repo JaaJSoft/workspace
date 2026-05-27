@@ -152,7 +152,7 @@
           const self = this;
           this._openHandler = function(e) {
             const d = e.detail;
-            self.openAttachment(d.uuid, d.name, d.mime_type);
+            self.openAttachment(d.uuid, d.name, d.type);
           };
           window.addEventListener('open-chat-attachment-viewer', this._openHandler);
         },

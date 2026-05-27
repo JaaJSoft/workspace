@@ -117,7 +117,7 @@
                     {% if att.is_image %}
                       <div class="relative group/att inline-block">
                         <div class="block cursor-pointer"
-                             @click="window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {detail: {uuid: '{{ att.uuid }}', name: '{{ att.original_name|escapejs }}', mime_type: '{{ att.mime_type }}'}}))">
+                             @click="window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {detail: {uuid: '{{ att.uuid }}', name: '{{ att.original_name|escapejs }}', type: '{{ att.type }}'}}))">
                           <img
                             src="/api/v1/chat/attachments/{{ att.uuid }}"
                             alt="{{ att.original_name }}"
@@ -137,7 +137,7 @@
                     {% elif att.is_video %}
                       <div class="relative group/att inline-block">
                         <div class="block cursor-pointer"
-                             @click="window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {detail: {uuid: '{{ att.uuid }}', name: '{{ att.original_name|escapejs }}', mime_type: '{{ att.mime_type }}'}}))">
+                             @click="window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {detail: {uuid: '{{ att.uuid }}', name: '{{ att.original_name|escapejs }}', type: '{{ att.type }}'}}))">
                           <div class="relative max-h-64 max-w-full rounded-lg overflow-hidden">
                             <video
                               src="/api/v1/chat/attachments/{{ att.uuid }}"
@@ -162,7 +162,7 @@
                     {% else %}
                       <div class="flex items-center gap-0.5 group/att min-w-0">
                         <div class="flex items-center gap-2 p-2 rounded-lg {% if is_own %}bg-info/15 hover:bg-info/25{% else %}bg-base-300/50 hover:bg-base-300{% endif %} transition-colors min-w-0 flex-1 cursor-pointer"
-                             @click="window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {detail: {uuid: '{{ att.uuid }}', name: '{{ att.original_name|escapejs }}', mime_type: '{{ att.mime_type }}'}}))">
+                             @click="window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {detail: {uuid: '{{ att.uuid }}', name: '{{ att.original_name|escapejs }}', type: '{{ att.type }}'}}))">
                           <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
                           <span class="truncate text-xs font-medium">{{ att.original_name }}</span>
                           <span class="text-[0.65rem] opacity-60 flex-shrink-0">{{ att.size|filesize }}</span>

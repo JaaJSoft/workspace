@@ -194,6 +194,7 @@ class MessageAttachment(models.Model):
     file = models.FileField(upload_to=attachment_upload_path, max_length=500)
     original_name = models.CharField(max_length=255)
     mime_type = models.CharField(max_length=255, default='application/octet-stream')
+    type = models.CharField(max_length=50, default='unknown', db_index=True)
     size = models.PositiveBigIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -205,11 +206,13 @@ class MessageAttachment(models.Model):
 
     @property
     def is_image(self):
-        return self.mime_type.startswith('image/')
+        from workspace.files.services.filetype import get_group
+        return get_group(self.type) == 'image'
 
     @property
     def is_video(self):
-        return self.mime_type.startswith('video/')
+        from workspace.files.services.filetype import get_group
+        return get_group(self.type) == 'video'
 
     def __str__(self):
         return f'{self.original_name} ({self.message_id})'

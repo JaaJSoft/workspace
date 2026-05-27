@@ -364,21 +364,19 @@ def view_attachment(request, attachment_uuid):
         from django.http import Http404
         raise Http404
 
-    ViewerClass = ViewerRegistry.get_viewer(attachment.mime_type)
+    ViewerClass = ViewerRegistry.get_viewer(attachment.type)
     if not ViewerClass:
         return HttpResponse(
-            f'<div class="p-8 text-center text-error">No viewer available for {attachment.mime_type}</div>',
+            f'<div class="p-8 text-center text-error">No viewer available for {attachment.type}</div>',
             status=400,
         )
 
-    # Create a file-like adapter for the viewer
     class AttachmentAdapter:
         def __init__(self, att):
-            from workspace.files.services.filetype import label_from_mime
             self.uuid = att.uuid
             self.name = att.original_name
             self.mime_type = att.mime_type
-            self.type = label_from_mime(att.mime_type or '')
+            self.type = att.type
             self.content = att.file
 
         def is_viewable(self):

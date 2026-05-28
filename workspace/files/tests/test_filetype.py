@@ -210,6 +210,66 @@ class ViewerResolutionTest(TestCase):
         self.assertEqual(get_viewer("html"), TextViewer)
 
 
+class ExtensionAwareViewerResolutionTest(TestCase):
+    """Viewers resolve from the content label AND the filename extension.
+
+    Magika is content-based, so a sparse Markdown file is often detected as
+    plain ``txt``. The ``.md`` extension must upgrade it to the MarkdownViewer
+    instead of falling back to the generic TextViewer.
+    """
+
+    def test_markdown_extension_upgrades_plaintext_to_markdown_viewer(self):
+        self.assertEqual(get_viewer("txt", "notes.md"), MarkdownViewer)
+
+    def test_markdown_long_extension_also_upgrades(self):
+        self.assertEqual(get_viewer("txt", "notes.markdown"), MarkdownViewer)
+
+    def test_content_label_wins_over_misleading_extension(self):
+        """A PNG renamed to .txt must still open in the ImageViewer."""
+        self.assertEqual(get_viewer("png", "photo.txt"), ImageViewer)
+
+    def test_specific_content_label_beats_extension(self):
+        """When content is detected as markdown, the .md extension agrees."""
+        self.assertEqual(get_viewer("markdown", "notes.md"), MarkdownViewer)
+
+    def test_extension_matching_content_keeps_text_viewer(self):
+        self.assertEqual(get_viewer("txt", "notes.txt"), TextViewer)
+
+    def test_extension_rescues_unknown_content(self):
+        """Unrecognised content with a known extension still finds a viewer."""
+        self.assertEqual(get_viewer("unknown", "readme.md"), MarkdownViewer)
+
+    def test_no_name_falls_back_to_content_label(self):
+        self.assertEqual(get_viewer("txt"), TextViewer)
+
+    def test_is_viewable_uses_extension(self):
+        self.assertTrue(is_viewable("unknown", "readme.md"))
+
+
+class ExtensionlessMarkdownTest(TestCase):
+    """The WYSIWYG MarkdownViewer (Milkdown Crepe) crashes on content it was
+    never authored to handle. A file detected as ``markdown`` by content but
+    with no extension is treated as plain text instead, which renders safely.
+    """
+
+    def test_extensionless_markdown_falls_back_to_text_viewer(self):
+        self.assertEqual(get_viewer("markdown", "mynotes"), TextViewer)
+
+    def test_extensionless_markdown_is_still_viewable(self):
+        self.assertTrue(is_viewable("markdown", "mynotes"))
+
+    def test_markdown_with_md_extension_keeps_markdown_viewer(self):
+        self.assertEqual(get_viewer("markdown", "notes.md"), MarkdownViewer)
+
+    def test_markdown_label_without_name_keeps_markdown_viewer(self):
+        """Label-only callers (no filename) keep the markdown viewer."""
+        self.assertEqual(get_viewer("markdown"), MarkdownViewer)
+
+    def test_md_extension_still_upgrades_plaintext(self):
+        """The extension upgrade from the previous fix must keep working."""
+        self.assertEqual(get_viewer("txt", "notes.md"), MarkdownViewer)
+
+
 class IsViewableTest(TestCase):
     def test_viewable_code(self):
         self.assertTrue(is_viewable("python"))

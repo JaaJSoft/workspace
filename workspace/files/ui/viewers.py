@@ -11,13 +11,13 @@ from typing import Optional, Type
 class ViewerRegistry:
 
     @classmethod
-    def get_viewer(cls, file_type_or_mime: str) -> Optional[Type['BaseViewer']]:
+    def get_viewer(cls, file_type_or_mime: str, name: str = '') -> Optional[Type['BaseViewer']]:
         from workspace.files.services.filetype import get_viewer
-        return get_viewer(file_type_or_mime or '')
+        return get_viewer(file_type_or_mime or '', name or '')
 
     @classmethod
-    def is_supported(cls, file_type_or_mime: str) -> bool:
-        return cls.get_viewer(file_type_or_mime) is not None
+    def is_supported(cls, file_type_or_mime: str, name: str = '') -> bool:
+        return cls.get_viewer(file_type_or_mime, name) is not None
 
 
 class BaseViewer(ABC):
@@ -26,6 +26,10 @@ class BaseViewer(ABC):
     handles_groups: frozenset = frozenset()
     handles_labels: frozenset = frozenset()
     weight: int = 100
+    # When True, this viewer is only selected if the filename has an extension.
+    # Used by fragile viewers (e.g. the Milkdown WYSIWYG editor) that should
+    # not run on files merely detected by content without the user's intent.
+    requires_extension: bool = False
 
     def __init__(self, file_obj):
         """
@@ -166,6 +170,10 @@ class MarkdownViewer(BaseViewer):
     """Viewer for Markdown files with rendered preview and raw editing."""
 
     handles_labels = frozenset({'markdown'})
+    # The Crepe WYSIWYG editor throws on content it was not authored for, so
+    # only claim files whose extension confirms markdown. Content-only
+    # markdown (no extension) falls back to the robust TextViewer.
+    requires_extension = True
     weight = 50
 
     def render(self, request) -> str:

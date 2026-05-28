@@ -235,7 +235,7 @@ class File(models.Model):
         if self.node_type != self.NodeType.FILE:
             return False
         label = self.type if self.type and self.type != 'unknown' else label_from_mime(self.mime_type or '')
-        return is_viewable(label)
+        return is_viewable(label, self.name or '')
 
     def is_deleted(self):
         return self.deleted_at is not None

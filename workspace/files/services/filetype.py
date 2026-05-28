@@ -3,7 +3,11 @@
 from dataclasses import dataclass
 from typing import Optional, Type
 
-from workspace.files.services.detection import get_all_labels
+from workspace.files.services.detection import (
+    get_all_labels,
+    has_extension,
+    label_from_name,
+)
 
 _KB = get_all_labels()
 
@@ -68,23 +72,45 @@ def _normalize_group(label: str) -> str:
     return 'unknown'
 
 
-def _resolve_viewer(label: str, group: str):
+def _resolve_viewer(label: str, group: str, ext_label: str = '', ext_group: str = '',
+                    file_has_extension: bool = True):
+    """Pick the best viewer from the content type and the extension hint.
+
+    Content detection stays primary; the extension only acts as a tiebreaker
+    that can upgrade a generic content label (e.g. ``txt``) to a more specific
+    viewer (e.g. MarkdownViewer for a ``.md`` file). Priority, strongest first:
+
+      1. content label match   (viewer.handles_labels contains the content label)
+      2. extension label match  (handles_labels contains the extension label)
+      3. content group match    (viewer.handles_groups contains the content group)
+      4. extension group match  (handles_groups contains the extension group)
+
+    Within a tier, the lowest weight wins.
+
+    Viewers declaring ``requires_extension`` are skipped entirely when the file
+    has no extension, so content-only detection never routes to them.
+    """
     from workspace.files.ui.viewers import BaseViewer
 
-    label_matches = []
-    group_matches = []
+    tiers = ([], [], [], [])
     for viewer_cls in BaseViewer.__subclasses__():
         if not hasattr(viewer_cls, 'handles_labels'):
             continue
-        if label in viewer_cls.handles_labels:
-            label_matches.append((viewer_cls.weight, viewer_cls))
-        elif group in viewer_cls.handles_groups:
-            group_matches.append((viewer_cls.weight, viewer_cls))
+        if getattr(viewer_cls, 'requires_extension', False) and not file_has_extension:
+            continue
+        if label and label in viewer_cls.handles_labels:
+            tiers[0].append((viewer_cls.weight, viewer_cls))
+        elif ext_label and ext_label in viewer_cls.handles_labels:
+            tiers[1].append((viewer_cls.weight, viewer_cls))
+        elif group and group in viewer_cls.handles_groups:
+            tiers[2].append((viewer_cls.weight, viewer_cls))
+        elif ext_group and ext_group in viewer_cls.handles_groups:
+            tiers[3].append((viewer_cls.weight, viewer_cls))
 
-    candidates = label_matches or group_matches
-    if not candidates:
-        return None
-    return min(candidates, key=lambda x: x[0])[1]
+    for candidates in tiers:
+        if candidates:
+            return min(candidates, key=lambda x: x[0])[1]
+    return None
 
 
 def _resolve_label(label_or_mime: str) -> str:
@@ -96,8 +122,15 @@ def _resolve_label(label_or_mime: str) -> str:
     return label_or_mime
 
 
-def get_info(label: str) -> FileTypeInfo:
-    if not label:
+def get_info(label: str, name: str = '') -> FileTypeInfo:
+    """Resolve display properties and viewer for a content label.
+
+    ``name`` is the optional filename; its extension supplements viewer
+    resolution so that e.g. a ``.md`` file detected as plain ``txt`` still
+    opens in the MarkdownViewer. Icon/color/group stay driven by the
+    content label - the extension only influences which viewer handles it.
+    """
+    if not label and not name:
         return FileTypeInfo(icon=_DEFAULT_ICON, color=_DEFAULT_COLOR, group='unknown')
 
     label = _resolve_label(label)
@@ -113,7 +146,18 @@ def get_info(label: str) -> FileTypeInfo:
     icon = overrides.get('icon', icon)
     color = overrides.get('color', color)
 
-    viewer = _resolve_viewer(label, group)
+    ext_label = ''
+    ext_group = ''
+    # No name supplied means a label-only caller; don't suppress extension-gated
+    # viewers in that case. Only an explicit, extensionless filename does.
+    file_has_extension = has_extension(name) if name else True
+    if name:
+        candidate = label_from_name(name)
+        if candidate and candidate != 'unknown' and candidate != label:
+            ext_label = candidate
+            ext_group = _normalize_group(candidate)
+
+    viewer = _resolve_viewer(label, group, ext_label, ext_group, file_has_extension)
 
     return FileTypeInfo(icon=icon, color=color, group=group, viewer=viewer, mime_type=mime_type)
 
@@ -130,16 +174,16 @@ def get_group(label: str) -> str:
     return get_info(label).group
 
 
-def get_viewer(label: str):
-    return get_info(label).viewer
+def get_viewer(label: str, name: str = ''):
+    return get_info(label, name).viewer
 
 
 def get_mime_type(label: str) -> str:
     return get_info(label).mime_type
 
 
-def is_viewable(label: str) -> bool:
-    return get_info(label).viewer is not None
+def is_viewable(label: str, name: str = '') -> bool:
+    return get_info(label, name).viewer is not None
 
 
 def label_from_mime(mime_type: str) -> str:

@@ -122,7 +122,7 @@ class FileSerializer(serializers.ModelSerializer):
         from workspace.files.services.filetype import is_viewable
         if obj.node_type != File.NodeType.FILE:
             return False
-        return is_viewable(obj.type or '')
+        return is_viewable(obj.type or '', obj.name or '')
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_content_url(self, obj):

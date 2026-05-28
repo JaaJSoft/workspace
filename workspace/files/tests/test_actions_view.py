@@ -31,7 +31,12 @@ class ViewActionTests(TestCase):
         self.assertTrue(action.is_available(self.other, f, permission=VIEW))
 
     def test_not_viewable_file(self):
-        f = _make_file(self.user, mime_type='application/octet-stream', type='unknown')
+        f = _make_file(
+            self.user,
+            name='mystery.bin',
+            mime_type='application/octet-stream',
+            type='unknown',
+        )
         action = ActionRegistry.get('view')
         self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
 

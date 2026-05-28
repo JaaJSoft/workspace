@@ -142,7 +142,7 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
                 title="Move to folder">
           <i data-lucide="folder-input" class="w-4 h-4"></i>
         </button>
-        <a class="btn btn-ghost btn-sm btn-square" :href="'/files?file=' + selectedNote?.uuid"
+        <a class="btn btn-ghost btn-sm btn-square" :href="openInFilesHref(selectedNote)"
            title="Open in Files">
           <i data-lucide="hard-drive" class="w-4 h-4"></i>
         </a>

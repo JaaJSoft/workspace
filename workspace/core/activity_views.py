@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.core.activity_registry import activity_registry
-from workspace.core.services.activity import get_recent_events, get_sources, serialize_timestamps
+from workspace.core.services.activity import get_recent_events, get_sources, get_usage_stats, serialize_timestamps
 
 
 class ActivityRecentView(APIView):
@@ -117,5 +117,5 @@ class ActivityStatsView(APIView):
             user_id = request.user.id
             viewer_id = None
 
-        stats = activity_registry.get_stats(user_id, viewer_id=viewer_id)
+        stats = get_usage_stats(user_id, viewer_id=viewer_id)
         return Response(stats)

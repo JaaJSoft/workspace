@@ -5,7 +5,15 @@ Shared between the REST API views and the dashboard template views.
 
 from django.utils import timezone
 
+from workspace.common.cache import cached
 from workspace.core.activity_registry import activity_registry
+
+# Usage stats are aggregate counts (file totals, message counts, ...) that
+# change slowly and are purely informational. The dashboard and profile views
+# read them on every page load, where they otherwise trigger a query fan-out
+# across every activity provider. A short time-based cache removes that cost;
+# worst-case staleness is the TTL.
+_USAGE_STATS_TTL = 60  # seconds
 
 
 def get_sources():
@@ -14,6 +22,21 @@ def get_sources():
         {'slug': info.slug, 'label': info.label, 'icon': info.icon, 'color': info.color}
         for info in activity_registry.get_all().values()
     ]
+
+
+@cached(
+    key=lambda user_id, viewer_id=None: f'activity:stats:{user_id}:{viewer_id}',
+    ttl=_USAGE_STATS_TTL,
+)
+def get_usage_stats(user_id, viewer_id=None):
+    """Return per-module usage stats for *user_id*, cached for a short TTL.
+
+    Thin wrapper over ``activity_registry.get_stats`` that the dashboard and
+    profile views call on the hot path. Caching lives here, at the service
+    layer, rather than inside the registry so the registry stays pure and
+    deterministic for its own unit tests.
+    """
+    return activity_registry.get_stats(user_id, viewer_id=viewer_id)
 
 
 def get_recent_events(

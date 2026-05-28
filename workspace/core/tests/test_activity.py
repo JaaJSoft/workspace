@@ -382,3 +382,62 @@ class ActivityServiceTests(TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['label'], 'meeting')
+
+
+class UsageStatsCacheTests(TestCase):
+    """Tests for the cached get_usage_stats wrapper.
+
+    The wrapper exists to keep the dashboard / profile hot path from
+    re-running the full per-provider stats fan-out on every request. It
+    delegates to the registry and memoizes the result for a short TTL.
+    """
+
+    def tearDown(self):
+        # LocMemCache is process-global and NOT reset between TestCase runs;
+        # clear it so cached stats don't leak into later tests via pk reuse.
+        from django.core.cache import cache
+        cache.clear()
+
+    def test_delegates_to_registry_and_passes_args(self):
+        from unittest.mock import patch
+        from workspace.core.services import activity as activity_service
+
+        with patch.object(
+            activity_service.activity_registry,
+            'get_stats',
+            return_value={'files': {'total_files': 7}},
+        ) as mock_stats:
+            result = activity_service.get_usage_stats(1)
+
+        self.assertEqual(result, {'files': {'total_files': 7}})
+        mock_stats.assert_called_once_with(1, viewer_id=None)
+
+    def test_second_call_within_ttl_hits_cache(self):
+        from unittest.mock import patch
+        from workspace.core.services import activity as activity_service
+
+        with patch.object(
+            activity_service.activity_registry,
+            'get_stats',
+            return_value={'files': {'total_files': 7}},
+        ) as mock_stats:
+            first = activity_service.get_usage_stats(1)
+            second = activity_service.get_usage_stats(1)
+
+        self.assertEqual(first, second)
+        mock_stats.assert_called_once()  # second read served from cache
+
+    def test_distinct_cache_entry_per_user_and_viewer(self):
+        from unittest.mock import patch
+        from workspace.core.services import activity as activity_service
+
+        with patch.object(
+            activity_service.activity_registry,
+            'get_stats',
+            return_value={},
+        ) as mock_stats:
+            activity_service.get_usage_stats(1)
+            activity_service.get_usage_stats(2)
+            activity_service.get_usage_stats(1, viewer_id=9)
+
+        self.assertEqual(mock_stats.call_count, 3)

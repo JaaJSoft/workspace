@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from workspace.core.activity_registry import activity_registry
-from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources
+from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources, get_usage_stats
 from workspace.users.banner_palettes import BANNER_PALETTES, gradient_from_palette_value
 from workspace.users.services import avatar as avatar_service, presence as presence_service
 from workspace.users.services.settings import get_module_settings
@@ -133,7 +133,7 @@ def profile_view(request, username=None):
     viewer_id = None if is_own_profile else request.user.id
 
     # Activity stats
-    stats = activity_registry.get_stats(user_id, viewer_id=viewer_id)
+    stats = get_usage_stats(user_id, viewer_id=viewer_id)
 
     # Heatmap
     heatmap = _build_heatmap_data(user_id, viewer_id=viewer_id)
@@ -200,7 +200,7 @@ def settings_view(request):
     dashboard_settings = get_module_settings(request.user, 'dashboard')
     return render(request, 'users/ui/settings.html', {
         'has_avatar': avatar_service.has_avatar(request.user),
-        'usage_stats': activity_registry.get_stats(request.user.id),
+        'usage_stats': get_usage_stats(request.user.id),
         'storage_quota': django_settings.STORAGE_QUOTA_BYTES,
         'profile_bio': profile_settings.get('bio') or '',
         'profile_role': profile_settings.get('role') or '',

@@ -85,7 +85,7 @@
     </template>
     <template x-if="ctxMenu.actions !== null">
       <li>
-        <a :href="'/files?file=' + ctxMenu.data?.uuid" class="gap-3 rounded" @click="closeCtxMenu()">
+        <a :href="openInFilesHref(ctxMenu.data)" class="gap-3 rounded" @click="closeCtxMenu()">
           <i data-lucide="hard-drive" class="w-4 h-4"></i>
           <span>Open in Files</span>
         </a>

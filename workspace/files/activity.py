@@ -92,7 +92,7 @@ class FilesActivityProvider(ActivityProvider):
                 'label': ev.short_label,
                 'description': ev.file.name,
                 'timestamp': ev.created_at,
-                'url': f'/files?preview={ev.file.pk}',
+                'url': f'/files?open={ev.file.pk}',
                 'actor': actor_data,
             })
         return events

@@ -538,6 +538,15 @@ window.notesApp = function notesApp(config) {
             return this.selectedNoteActionIds.indexOf(actionId) !== -1;
         },
 
+        // Build the "Open in Files" URL: land in the note's parent folder
+        // (path segment) with the file viewer opened (?open=). Falls back to
+        // the files root when the note lives at the top level.
+        openInFilesHref(note) {
+            if (!note || !note.uuid) return '/files';
+            const folder = note.parent ? '/' + note.parent : '';
+            return '/files' + folder + '?open=' + note.uuid;
+        },
+
         async _fetchActionsForSelected(uuid) {
             const gen = ++this._actionsFetchGen;
             try {

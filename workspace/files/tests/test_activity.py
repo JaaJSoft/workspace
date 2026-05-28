@@ -91,6 +91,16 @@ class FilesActivityProviderTests(TestCase):
         names = {e['description'] for e in events}
         self.assertEqual(names, {'alice_doc.txt', 'alice_notes.txt'})
 
+    def test_recent_events_url_opens_file_viewer(self):
+        """The activity link must open the file viewer via ?open=. The files
+        app never reads ?preview=, so the old link silently landed on the
+        files root instead of opening the file."""
+        events = self.provider.get_recent_events(self.alice.id)
+        urls = {e['description']: e['url'] for e in events}
+        self.assertEqual(urls['alice_doc.txt'], f'/files?open={self.alice_file1.uuid}')
+        for url in urls.values():
+            self.assertNotIn('preview=', url)
+
     def test_recent_events_viewer_sees_only_shared(self):
         """Bob looking at Alice's activity only sees the 1 shared file event."""
         events = self.provider.get_recent_events(

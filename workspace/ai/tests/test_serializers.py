@@ -41,6 +41,15 @@ class AITaskResultHtmlEscapingTests(TestCase):
         self.assertNotIn('<script>', html)
         self.assertIn('&lt;script&gt;', html)
 
+    def test_editor_summarize_escapes_raw_html(self):
+        html = self._result_html(
+            task_type=AITask.TaskType.EDITOR,
+            action='summarize',
+            result='Hi <img src=x onerror=alert(1)> there',
+        )
+        self.assertNotIn('<img', html)
+        self.assertIn('&lt;img', html)
+
     def test_markdown_still_renders(self):
         html = self._result_html(
             task_type=AITask.TaskType.SUMMARIZE,

@@ -7,9 +7,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from workspace.calendar.upcoming import get_upcoming_for_user
-from workspace.core.activity_registry import activity_registry
 from workspace.core.module_registry import registry
-from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources
+from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources, get_usage_stats
 from workspace.users.services.settings import get_setting
 
 ACTIVITY_LIMIT = 10
@@ -63,7 +62,7 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
     context = {
         'modules': modules,
         'show_upcoming_events': get_setting(user, 'dashboard', 'show_upcoming_events', default=True),
-        'usage_stats': activity_registry.get_stats(user.id),
+        'usage_stats': get_usage_stats(user.id),
         'storage_quota': django_settings.STORAGE_QUOTA_BYTES,
     }
     if include_activity:

@@ -35,32 +35,32 @@ class DescendantsAPITests(APITestCase):
         self.note_root = File.objects.create(
             owner=self.user, name='root.md',
             node_type=File.NodeType.FILE,
-            mime_type='text/markdown',
+            mime_type='text/markdown', type='markdown',
             parent=self.root,
         )
         self.note_sub = File.objects.create(
             owner=self.user, name='sub.md',
             node_type=File.NodeType.FILE,
-            mime_type='text/markdown',
+            mime_type='text/markdown', type='markdown',
             parent=self.sub,
         )
         self.note_deep = File.objects.create(
             owner=self.user, name='deep.md',
             node_type=File.NodeType.FILE,
-            mime_type='text/markdown',
+            mime_type='text/markdown', type='markdown',
             parent=self.deep,
         )
         # File outside the tree
         self.other = File.objects.create(
             owner=self.user, name='other.md',
             node_type=File.NodeType.FILE,
-            mime_type='text/markdown',
+            mime_type='text/markdown', type='markdown',
         )
 
     def test_without_descendants_returns_direct_children(self):
         resp = self.client.get(
             '/api/v1/files',
-            {'parent': str(self.root.uuid), 'mime_type': 'text/markdown'},
+            {'parent': str(self.root.uuid), 'type': 'markdown'},
         )
         self.assertEqual(resp.status_code, 200)
         uuids = {item['uuid'] for item in resp.data}
@@ -71,7 +71,7 @@ class DescendantsAPITests(APITestCase):
             '/api/v1/files',
             {
                 'parent': str(self.root.uuid),
-                'mime_type': 'text/markdown',
+                'type': 'markdown',
                 'descendants': '1',
             },
         )
@@ -112,7 +112,7 @@ class DescendantsAPITests(APITestCase):
             '/api/v1/files',
             {
                 'parent': str(self.sub.uuid),
-                'mime_type': 'text/markdown',
+                'type': 'markdown',
                 'descendants': '1',
             },
         )
@@ -139,14 +139,14 @@ class DescendantsAPITests(APITestCase):
         group_note = File.objects.create(
             owner=self.user, name='doc.md',
             node_type=File.NodeType.FILE,
-            mime_type='text/markdown',
+            mime_type='text/markdown', type='markdown',
             parent=group_sub, group=group,
         )
         resp = self.client.get(
             '/api/v1/files',
             {
                 'parent': str(group_root.uuid),
-                'mime_type': 'text/markdown',
+                'type': 'markdown',
                 'descendants': '1',
             },
         )
@@ -159,7 +159,7 @@ class DescendantsAPITests(APITestCase):
         sneaky = File.objects.create(
             owner=other, name='sneaky.md',
             node_type=File.NodeType.FILE,
-            mime_type='text/markdown',
+            mime_type='text/markdown', type='markdown',
         )
         resp = self.client.get(
             '/api/v1/files',

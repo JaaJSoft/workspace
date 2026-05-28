@@ -173,7 +173,6 @@ class FileSyncService:
                     self.log.info("Created folder: %s", entry_name)
                 else:
                     content_path = f'{storage_prefix}/{entry_name}'
-                    mime_type = FileService.infer_mime_type(entry_name)
 
                     try:
                         size = entry.stat(follow_symlinks=False).st_size
@@ -182,10 +181,10 @@ class FileSyncService:
 
                     FileService.register_disk_file(
                         user, entry_name, parent_db, content_path,
-                        mime_type=mime_type, size=size, acting_user=user,
+                        size=size, acting_user=user,
                     )
                     result.files_created += 1
-                    self.log.info("Created file: %s (%s, %s bytes)", entry_name, mime_type, size)
+                    self.log.info("Created file: %s (%s bytes)", entry_name, size)
 
             except Exception as e:
                 result.errors.append(f"Error creating {entry_name}: {e}")

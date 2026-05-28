@@ -195,6 +195,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
                 'uuid': att.uuid,
                 'original_name': att.original_name,
                 'mime_type': att.mime_type,
+                'type': att.type,
                 'size': att.size,
                 'is_image': att.is_image,
                 'is_video': att.is_video,

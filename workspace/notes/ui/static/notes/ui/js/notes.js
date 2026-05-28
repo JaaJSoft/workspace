@@ -511,7 +511,7 @@ window.notesApp = function notesApp(config) {
             if (!journalUuid) return;
 
             this.activeId = journalUuid;
-            await this.loadNotes('/api/v1/files?mime_type=text/markdown&parent=' + journalUuid + '&ordering=-name');
+            await this.loadNotes('/api/v1/files?type=markdown&parent=' + journalUuid + '&ordering=-name');
 
             // Create today's note if needed
             const today = new Date().toISOString().split('T')[0];
@@ -1198,7 +1198,7 @@ window.notesApp = function notesApp(config) {
 
         _buildNotesUrl() {
             const sort = '&ordering=' + this._sortParam();
-            let base = '/api/v1/files?mime_type=text/markdown';
+            let base = '/api/v1/files?type=markdown';
             const hasSearch = this.filters.search.trim();
 
             if (this.activeView === 'all') {

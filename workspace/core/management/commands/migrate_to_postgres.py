@@ -140,17 +140,17 @@ class Command(BaseCommand):
 
         # -- 3. Apply migrations on target ---------------------------------
         # Deferred until after the dry-run early-return so --dry-run leaves
-        # the target untouched. Data migrations (e.g. files.MimeTypeRule
-        # seed, mail default-label seed) write rows on the target, so this
-        # step must only run on a real migration.
+        # the target untouched. Data migrations (e.g. mail default-label
+        # seed) write rows on the target, so this step must only run on a
+        # real migration.
         self.stdout.write("Applying migrations on target database...")
         call_command("migrate", database=TARGET_ALIAS, verbosity=0)
         self.stdout.write(self.style.SUCCESS("  Migrations applied OK"))
 
         # -- 4. Clear target data tables -----------------------------------
-        # Data migrations populated seed data (e.g. files.MimeTypeRule) that
-        # would conflict with loaddata when the same rows are re-imported
-        # from the source. Truncate everything user-facing while keeping the
+        # Data migrations populated seed data that would conflict with
+        # loaddata when the same rows are re-imported from the source.
+        # Truncate everything user-facing while keeping the
         # migration history and the contenttype/permission tables that the
         # dump excludes.
         self.stdout.write("Clearing target data tables...")

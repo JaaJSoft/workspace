@@ -220,12 +220,15 @@ class MessageListView(CacheControlMixin, APIView):
                 )
 
                 for f in files:
-                    mime_type = FileService.infer_mime_type(f.name, uploaded=f)
+                    from workspace.files.services.detection import detect_from_stream
+                    detection = detect_from_stream(f)
                     MessageAttachment.objects.create(
                         message=message,
                         file=f,
                         original_name=f.name,
-                        mime_type=mime_type,
+                        mime_type=detection.mime_type,
+                        type=detection.label,
+                        category=detection.group or 'unknown',
                         size=f.size,
                     )
 
@@ -234,7 +237,9 @@ class MessageListView(CacheControlMixin, APIView):
                     attachment = MessageAttachment(
                         message=message,
                         original_name=ws_file.name,
-                        mime_type=ws_file.mime_type or FileService.infer_mime_type(ws_file.name),
+                        mime_type=ws_file.mime_type or 'application/octet-stream',
+                        type=ws_file.type or 'unknown',
+                        category=ws_file.category or 'unknown',
                         size=ws_file.size or 0,
                     )
                     with ws_file.content.open('rb') as f:

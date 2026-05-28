@@ -172,14 +172,14 @@ window.fileBrowser = function fileBrowser() {
       }
     },
 
-    openFileFromRow(event, uuid, name, mimeType) {
+    openFileFromRow(event, uuid, name, fileType) {
       if (!event) return;
       const target = event.target instanceof Element ? event.target : event.target?.parentElement;
       if (target && target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
         return;
       }
       window.dispatchEvent(new CustomEvent('open-file-viewer', {
-        detail: { uuid, name, mime_type: mimeType }
+        detail: { uuid, name, type: fileType }
       }));
     },
 

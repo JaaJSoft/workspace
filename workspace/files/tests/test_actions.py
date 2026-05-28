@@ -24,6 +24,7 @@ def _make_file(owner, **kwargs):
         'name': 'test.txt',
         'node_type': 'file',
         'mime_type': 'text/plain',
+        'type': 'txt',
     }
     defaults.update(kwargs)
     f = File(owner=owner, **defaults)

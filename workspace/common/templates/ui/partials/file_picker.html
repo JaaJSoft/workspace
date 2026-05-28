@@ -122,9 +122,9 @@
         this.selectedFiles.splice(idx, 1);
       } else {
         if (multi) {
-          this.selectedFiles.push({ uuid: file.uuid, name: file.name, mime_type: file.mime_type, size: file.size });
+          this.selectedFiles.push({ uuid: file.uuid, name: file.name, type: file.type, size: file.size });
         } else {
-          this.selectedFiles = [{ uuid: file.uuid, name: file.name, mime_type: file.mime_type, size: file.size }];
+          this.selectedFiles = [{ uuid: file.uuid, name: file.name, type: file.type, size: file.size }];
         }
       }
     },
@@ -133,14 +133,14 @@
       return this.selectedFiles.some(f => f.uuid === file.uuid);
     },
 
-    isFileType(item, prefix) {
-      return item.node_type === 'file' && (item.mime_type || '').startsWith(prefix);
+    isFileType(item, category) {
+      return item.node_type === 'file' && item.category === category;
     },
 
     isGenericFile(item) {
       if (item.node_type !== 'file') return false;
-      const mt = item.mime_type || '';
-      return !mt.startsWith('image/') && !mt.startsWith('video/') && !mt.startsWith('audio/') && mt !== 'application/pdf' && !mt.startsWith('text/');
+      const cat = item.category || '';
+      return cat !== 'image' && cat !== 'video' && cat !== 'audio' && cat !== 'document' && cat !== 'text';
     },
 
     async createFolder() {
@@ -301,10 +301,10 @@
               <!-- Folder icon -->
               <i data-lucide="folder" x-show="item.node_type === 'folder'" class="w-4 h-4 text-warning flex-shrink-0"></i>
               <!-- File icons (file mode only) -->
-              <i data-lucide="image" x-show="isFileType(item, 'image/')" class="w-4 h-4 text-success flex-shrink-0"></i>
-              <i data-lucide="film" x-show="isFileType(item, 'video/')" class="w-4 h-4 text-info flex-shrink-0"></i>
-              <i data-lucide="music" x-show="isFileType(item, 'audio/')" class="w-4 h-4 text-secondary flex-shrink-0"></i>
-              <i data-lucide="file-text" x-show="item.node_type === 'file' && (item.mime_type === 'application/pdf' || (item.mime_type || '').startsWith('text/'))" class="w-4 h-4 text-error flex-shrink-0"></i>
+              <i data-lucide="image" x-show="isFileType(item, 'image')" class="w-4 h-4 text-success flex-shrink-0"></i>
+              <i data-lucide="film" x-show="isFileType(item, 'video')" class="w-4 h-4 text-info flex-shrink-0"></i>
+              <i data-lucide="music" x-show="isFileType(item, 'audio')" class="w-4 h-4 text-secondary flex-shrink-0"></i>
+              <i data-lucide="file-text" x-show="isFileType(item, 'document') || isFileType(item, 'text')" class="w-4 h-4 text-error flex-shrink-0"></i>
               <i data-lucide="file" x-show="isGenericFile(item)" class="w-4 h-4 text-base-content/50 flex-shrink-0"></i>
 
               <span class="text-sm truncate flex-1" x-text="item.name"></span>

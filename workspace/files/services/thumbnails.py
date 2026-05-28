@@ -10,37 +10,21 @@ from ..metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
 
 logger = logging.getLogger(__name__)
 
-# Whitelist of MIME subtypes used as the `mime_family` metric label.
+# Whitelist of labels used as the `mime_family` metric label.
 # Anything not in this set is reported as 'other' so the label cardinality
-# stays bounded even if THUMBNAIL_MIME_TYPES is later widened by mistake.
-_KNOWN_MIME_FAMILIES = frozenset({'jpeg', 'png', 'webp', 'bmp', 'tiff', 'gif', 'svg'})
+# stays bounded even if THUMBNAIL_LABELS is later widened by mistake.
+_KNOWN_IMAGE_LABELS = frozenset({'jpeg', 'png', 'webp', 'bmp', 'tiff', 'gif', 'svg'})
 
 
-def _mime_family(mime_type):
+def _label_family(content_label):
     """Return a bounded label value for the metric ('jpeg', 'png', ..., 'other')."""
-    if not mime_type or '/' not in mime_type:
+    if not content_label:
         return 'unknown'
-    subtype = mime_type.split('/', 1)[1].lower().split('+', 1)[0] or 'unknown'
-    if subtype == 'unknown':
-        return 'unknown'
-    return subtype if subtype in _KNOWN_MIME_FAMILIES else 'other'
+    return content_label if content_label in _KNOWN_IMAGE_LABELS else 'other'
 
-# Raster image MIME types that Pillow can handle
-_RASTER_MIME_TYPES = frozenset({
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'image/bmp',
-    'image/tiff',
-    'image/gif',
-})
-
-# SVG MIME types (rasterized via cairosvg before Pillow processing)
-_SVG_MIME_TYPES = frozenset({
-    'image/svg+xml',
-})
-
-THUMBNAIL_MIME_TYPES = _RASTER_MIME_TYPES | _SVG_MIME_TYPES
+_RASTER_LABELS = frozenset({'jpeg', 'png', 'webp', 'bmp', 'tiff', 'gif'})
+_SVG_LABELS = frozenset({'svg'})
+THUMBNAIL_LABELS = _RASTER_LABELS | _SVG_LABELS
 
 THUMBNAIL_MAX_SIZE = (512, 512)
 THUMBNAIL_QUALITY = 80
@@ -52,9 +36,9 @@ def get_thumbnail_path(uuid):
     return f'thumbnails/{uuid}.webp'
 
 
-def can_generate_thumbnail(mime_type):
-    """Check if a thumbnail can be generated for the given MIME type."""
-    return mime_type in THUMBNAIL_MIME_TYPES
+def can_generate_thumbnail(content_label):
+    """Check if a thumbnail can be generated for the given content label."""
+    return content_label in THUMBNAIL_LABELS
 
 
 def _rasterize_svg(svg_data):
@@ -81,16 +65,16 @@ def generate_thumbnail(file_obj):
     """
     from PIL import Image, ImageOps
 
-    if not file_obj.content or not can_generate_thumbnail(file_obj.mime_type):
+    if not file_obj.content or not can_generate_thumbnail(file_obj.type):
         FILES_THUMBNAIL_RESULT.labels(result='skipped').inc()
         return False
 
-    family = _mime_family(file_obj.mime_type)
+    family = _label_family(file_obj.type)
     try:
         with FILES_THUMBNAIL_DURATION.labels(mime_family=family).time():
             file_obj.content.open('rb')
 
-            if file_obj.mime_type in _SVG_MIME_TYPES:
+            if file_obj.type in _SVG_LABELS:
                 svg_data = file_obj.content.read()
                 img = _rasterize_svg(svg_data)
             else:
@@ -165,7 +149,7 @@ def generate_missing_thumbnails():
         node_type=File.NodeType.FILE,
         has_thumbnail=False,
         deleted_at__isnull=True,
-        mime_type__in=THUMBNAIL_MIME_TYPES,
+        type__in=THUMBNAIL_LABELS,
     ).exclude(content='').exclude(content__isnull=True)
 
     stats = {'generated': 0, 'failed': 0, 'total': 0}

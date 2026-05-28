@@ -6,17 +6,15 @@ register = template.Library()
 
 
 @register.filter
-def mime_to_lucide(mime_type):
-    """Convert MIME type to Lucide icon name."""
-    from workspace.files.services.mime import get_icon
-    return get_icon(mime_type)
+def type_to_icon(file_type):
+    from workspace.files.services.filetype import get_icon
+    return get_icon(file_type or '')
 
 
 @register.filter
-def mime_to_color(mime_type):
-    """Convert MIME type to Tailwind color class."""
-    from workspace.files.services.mime import get_color
-    return get_color(mime_type)
+def type_to_color(file_type):
+    from workspace.files.services.filetype import get_color
+    return get_color(file_type or '')
 
 
 @register.filter

@@ -1,26 +1,6 @@
 """Internal naming and validation helpers for the file service."""
 
-import mimetypes
-
 from ..models import File
-
-
-def infer_mime_type(filename, *, uploaded=None):
-    """Infer MIME type with priority: upload metadata > filename > default."""
-    if uploaded is not None:
-        content_type = getattr(uploaded, 'content_type', None)
-        if content_type and content_type != 'application/octet-stream':
-            return content_type
-
-    candidate = filename or (getattr(uploaded, 'name', None) if uploaded else None)
-    if candidate:
-        guessed, _ = mimetypes.guess_type(candidate)
-        if guessed:
-            return guessed
-
-    if uploaded is not None:
-        return getattr(uploaded, 'content_type', None) or 'application/octet-stream'
-    return 'application/octet-stream'
 
 
 def check_name_available(owner, parent, name, node_type, *, exclude_pk=None):

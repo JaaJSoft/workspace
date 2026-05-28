@@ -100,13 +100,15 @@ class ThumbnailMetricsTests(TestCase):
     def test_failed_generation_increments_failed_counter(self):
         from workspace.files.services.thumbnails import generate_thumbnail
 
-        # Pretend the file is a JPEG so we pass can_generate_thumbnail, but the
-        # bytes are garbage so Pillow will raise — that's the failure path.
+        # Force type='jpeg' so we pass can_generate_thumbnail, but the
+        # bytes are garbage so Pillow will raise - that's the failure path.
         f = FileService.create_file(
             owner=self.user, name='broken.jpg',
             content=ContentFile(b'not actually an image', name='broken.jpg'),
             mime_type='image/jpeg',
         )
+        f.type = 'jpeg'
+        f.save(update_fields=['type'])
         before = _sample('files_thumbnail_generation_total', {'result': 'failed'})
         result = generate_thumbnail(f)
         self.assertFalse(result)

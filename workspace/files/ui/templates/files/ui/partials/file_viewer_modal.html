@@ -72,7 +72,7 @@
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
           <div class="flex items-center gap-2">
-            <p class="text-sm text-base-content/60" x-text="mimeType"></p>
+            <p class="text-sm text-base-content/60" x-text="fileType"></p>
             <span
               class="text-xs text-base-content/40"
               x-show="_totalViewable() > 1"
@@ -130,7 +130,7 @@
         error: null,
         fileUuid: null,
         fileName: '',
-        mimeType: '',
+        fileType: '',
         loadedScripts: [],
         expanded: false,
 
@@ -142,7 +142,7 @@
               return {
                 uuid: r.dataset.uuid,
                 name: r.dataset.displayName,
-                mimeType: r.dataset.mimeType,
+                fileType: r.dataset.fileType,
               };
             });
         },
@@ -152,7 +152,7 @@
           const idx = files.findIndex(f => f.uuid === this.fileUuid);
           if (idx >= 0 && idx < files.length - 1) {
             const next = files[idx + 1];
-            this.openFile(next.uuid, next.name, next.mimeType);
+            this.openFile(next.uuid, next.name, next.fileType);
           }
         },
 
@@ -161,7 +161,7 @@
           const idx = files.findIndex(f => f.uuid === this.fileUuid);
           if (idx > 0) {
             const prev = files[idx - 1];
-            this.openFile(prev.uuid, prev.name, prev.mimeType);
+            this.openFile(prev.uuid, prev.name, prev.fileType);
           }
         },
 
@@ -191,10 +191,10 @@
           }, 500);
         },
 
-        async openFile(uuid, name, mimeType, updateUrl = true) {
+        async openFile(uuid, name, fileType, updateUrl = true) {
           this.fileUuid = uuid;
           this.fileName = name || 'File';
-          this.mimeType = mimeType || '';
+          this.fileType = fileType || '';
           this.error = null;
 
           const container = this.$refs.viewerContainer;
@@ -266,7 +266,7 @@
           this.open = false;
           this.fileUuid = null;
           this.fileName = '';
-          this.mimeType = '';
+          this.fileType = '';
           this.error = null;
           // Clear viewer content
           this.$refs.viewerContainer.replaceChildren();
@@ -308,7 +308,7 @@
             const response = await fetch('/api/v1/files/' + fileUuid);
             if (response.ok) {
               const fileData = await response.json();
-              this.openFile(fileData.uuid, fileData.name, fileData.mime_type, false);
+              this.openFile(fileData.uuid, fileData.name, fileData.type, false);
             }
           } catch (err) {
             console.error('Failed to open file from URL:', err);
@@ -335,19 +335,19 @@
 
           this._keydownHandler = (e) => this.handleKeydown(e);
           this._openFileHandler = (e) => {
-            const { uuid, name, mime_type } = e.detail;
-            this.openFile(uuid, name, mime_type);
+            const { uuid, name, type } = e.detail;
+            this.openFile(uuid, name, type);
           };
 
           this._fileUpdatedHandler = (e) => {
             if (this.open && this.fileUuid && e.detail && e.detail.file_uuid === this.fileUuid) {
-              this.openFile(this.fileUuid, this.fileName, this.mimeType, false);
+              this.openFile(this.fileUuid, this.fileName, this.fileType, false);
             }
           };
 
           this._lockReleasedHandler = (e) => {
             if (this.open && this.fileUuid && e.detail && e.detail.file_uuid === this.fileUuid) {
-              this.openFile(this.fileUuid, this.fileName, this.mimeType, false);
+              this.openFile(this.fileUuid, this.fileName, this.fileType, false);
             }
           };
 
@@ -370,7 +370,7 @@
               this.open = false;
               this.fileUuid = null;
               this.fileName = '';
-              this.mimeType = '';
+              this.fileType = '';
               this.error = null;
               this.$refs.viewerContainer.replaceChildren();
               this.loadedScripts.forEach(script => script.remove());

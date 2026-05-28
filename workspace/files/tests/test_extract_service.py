@@ -46,12 +46,17 @@ class ExtractZipServiceTests(TestCase):
         )
         self.dest = FileService.create_folder(self.user, 'dest')
 
-    def _make_archive_file(self, payload, name='archive.zip', mime='application/zip'):
-        return FileService.create_file(
+    def _make_archive_file(self, payload, name='archive.zip', mime='application/zip',
+                           type_label=None):
+        f = FileService.create_file(
             self.user, name, parent=None,
             content=ContentFile(payload, name=name),
             mime_type=mime,
         )
+        if type_label is not None:
+            f.type = type_label
+            f.save(update_fields=['type'])
+        return f
 
     def test_extract_creates_files_and_subfolders(self):
         payload = _make_zip([
@@ -130,7 +135,8 @@ class ExtractZipServiceTests(TestCase):
         self.assertIn('zip', str(ctx.exception).lower())
 
     def test_extract_rejects_corrupted_archive(self):
-        archive = self._make_archive_file(b'PK\x03\x04 garbage', mime='application/zip')
+        archive = self._make_archive_file(b'PK\x03\x04 garbage', mime='application/zip',
+                                          type_label='zip')
         with self.assertRaises(ValueError) as ctx:
             extract_zip(archive, self.dest, acting_user=self.user)
         self.assertIn('corrupt', str(ctx.exception).lower())

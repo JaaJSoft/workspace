@@ -102,11 +102,18 @@ class FileService:
     @staticmethod
     def create_file(owner, name, parent=None, *, content=None, mime_type=None, group=None, acting_user=None):
         """Create a new file record, optionally with uploaded content."""
+        from workspace.files.services.detection import detect_from_stream, detect_from_name
+
         if group is None and parent and parent.group_id:
             group = parent.group
 
-        if not mime_type and content is not None:
-            mime_type = FileService.infer_mime_type(name, uploaded=content)
+        if content is not None:
+            detection = detect_from_stream(content)
+        else:
+            detection = detect_from_name(name)
+
+        if not mime_type:
+            mime_type = detection.mime_type
 
         size = content.size if content is not None else None
 
@@ -116,6 +123,8 @@ class FileService:
             node_type=File.NodeType.FILE,
             parent=parent,
             mime_type=mime_type or 'application/octet-stream',
+            type=detection.label,
+            category=detection.group or 'unknown',
             size=size,
             group=group,
         )
@@ -150,8 +159,11 @@ class FileService:
     @staticmethod
     def register_disk_file(owner, name, parent, content_path, *, mime_type=None, size=None, acting_user=None):
         """Register a file that already exists on disk (used by sync)."""
+        from workspace.files.services.detection import detect_from_name
+
+        detection = detect_from_name(name)
         if not mime_type:
-            mime_type = FileService.infer_mime_type(name)
+            mime_type = detection.mime_type
 
         file_obj = File(
             owner=owner,
@@ -159,6 +171,8 @@ class FileService:
             node_type=File.NodeType.FILE,
             parent=parent,
             mime_type=mime_type,
+            type=detection.label,
+            category=detection.group or 'unknown',
             size=size,
         )
         file_obj.content.name = content_path
@@ -229,7 +243,6 @@ class FileService:
         else:
             if file_obj.content and file_obj.content.name:
                 FileService._rename_file_storage(file_obj, new_name)
-            file_obj.mime_type = FileService.infer_mime_type(new_name)
 
         file_obj.name = new_name
         file_obj.save()
@@ -242,11 +255,13 @@ class FileService:
     @staticmethod
     def update_content(file_obj, content, *, name=None, mime_type=None, acting_user=None):
         """Replace a file's content, updating size and MIME type."""
-        effective_name = name or file_obj.name
+        from workspace.files.services.detection import detect_from_stream
+
+        detection = detect_from_stream(content)
         file_obj.size = content.size
-        file_obj.mime_type = mime_type or FileService.infer_mime_type(
-            effective_name, uploaded=content,
-        )
+        file_obj.mime_type = mime_type or detection.mime_type
+        file_obj.type = detection.label
+        file_obj.category = detection.group or 'unknown'
         file_obj.has_thumbnail = False
         file_obj.content = content
         file_obj.save()
@@ -258,8 +273,13 @@ class FileService:
     @staticmethod
     def replace_content_storage(file_obj, *, storage_path, size, acting_user=None):
         """Point *file_obj* at content already written to *storage_path*."""
+        from workspace.files.services.detection import detect_from_name
+
+        detection = detect_from_name(file_obj.name)
         file_obj.size = size
-        file_obj.mime_type = FileService.infer_mime_type(file_obj.name)
+        file_obj.mime_type = detection.mime_type
+        file_obj.type = detection.label
+        file_obj.category = detection.group or 'unknown'
         file_obj.has_thumbnail = False
         file_obj.content.name = storage_path
         file_obj.save()
@@ -348,15 +368,6 @@ class FileService:
     def validate_move_target(file_obj, new_parent, user=None):
         """Raise ``ValueError`` if *new_parent* is an invalid move target."""
         return _name_helpers.validate_move_target(file_obj, new_parent, user=user)
-
-    # ------------------------------------------------------------------
-    # Utility
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def infer_mime_type(filename, *, uploaded=None):
-        """Infer MIME type with priority: upload metadata > filename > default."""
-        return _name_helpers.infer_mime_type(filename, uploaded=uploaded)
 
     # ------------------------------------------------------------------
     # Reading

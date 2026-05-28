@@ -140,8 +140,8 @@ class DryRunTests(TestCase):
         # --dry-run must leave the target untouched: no schema or seed-data
         # migrations may run on it. Regression test: an earlier version
         # called migrate before the dry-run early-return, which created
-        # the full schema and inserted seed rows (MimeTypeRule, default
-        # mail labels, the assistant bot user) on the target.
+        # the full schema and inserted seed rows (default mail labels,
+        # the assistant bot user) on the target.
         self.assertNotIn("migrate", call_names)
 
 

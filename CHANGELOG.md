@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.24.0 - Attachments & Smart Files type detection
+
+### Highlights
+
+This release lets you attach files you already have in your workspace straight to chat messages and emails, with no re-uploading: a new picker with folder navigation, search, and multi-select. File type detection is now based on a file's actual content rather than its extension, so files open in the right viewer and show the right icon even when the extension is wrong or missing. The command palette gains quick actions for notes, files, and the dashboard (including a one-step jump to today's journal), chat picks up a compact display mode and clickable AI answer suggestions, and mail's AI features split into separate switches you can toggle individually.
+
+### Files & Sharing
+
+- Attach workspace files to chat messages and emails directly: a new picker lets you browse folders, search, and select several files at once without re-uploading them. Attached files are copied, so they stay available even if you later delete the original.
+- Right-click a .zip file and extract its contents into a folder of your choice.
+- Smarter file type detection: types are now recognized from a file's actual content rather than just its name, so files open in the correct viewer and show the right icon even when the extension is wrong or missing. You can also search and filter files by type.
+- File and folder lists now sort by name case-insensitively, so names order naturally instead of grouping all the capitalized ones first.
+
+### Chat
+
+- New compact mode, with independent toggles for the conversation list and the message view, set from a preferences popover in the sidebar. The compact list fits about 4-5 more conversations on screen, and both densities persist per user.
+- AI bots can now offer clickable answer suggestions: when a bot asks a question with a few likely answers, it can present 2-6 buttons, and tapping one sends it as your reply. In group chats, everyone sees which option was chosen.
+- Fixed minor visual glitches in the compact list: reply quotes now align with media embeds, and avatar status rings no longer overlap.
+
+### Mail
+
+- The single "Enable AI features" switch is now three independent toggles: automatic classification, event extraction, and on-demand actions (summarize, compose, reply). Turn on only the ones you want; your existing preference carries over until you change it.
+
+### Command Palette
+
+- New quick actions for notes, files, and the dashboard, reachable straight from the command palette.
+- "Open today's journal" jumps to today's journal note, creating it if it does not exist yet.
+
+### Fixes
+
+- Fixed a security issue where specially crafted file names, titles, mail subjects, contact names, or AI summary content could run scripts in another person's browser when shown in global search results or AI summaries.
+- "Open in Files" from a note (toolbar or right-click) now opens the note in the files viewer and lands in its folder, instead of dropping you at the files root. Clicking a file in the activity feed now opens it too.
+- Short or extensionless Markdown notes now open in the Markdown viewer instead of the plain-text viewer or failing to open.
+
 ## 0.23.0 - Mail Rules & Faster Pages
 
 ### Highlights

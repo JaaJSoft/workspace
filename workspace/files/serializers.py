@@ -119,10 +119,10 @@ class FileSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_viewable(self, obj):
-        from workspace.files.services.filetype import is_viewable
-        if obj.node_type != File.NodeType.FILE:
-            return False
-        return is_viewable(obj.type or '', obj.name or '')
+        # Delegate to the model so the MIME fallback (for 'unknown'/empty type)
+        # and the non-FILE guard stay in one place. File.is_viewable() already
+        # returns False for folders.
+        return obj.is_viewable()
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_content_url(self, obj):

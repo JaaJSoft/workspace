@@ -11,6 +11,38 @@ from workspace.mail.serializers import MailMessageDetailSerializer
 User = get_user_model()
 
 
+class MailAiSummaryHtmlEscapingTests(TestCase):
+    """ai_summary_html is rendered into Alpine x-html, so raw HTML in the
+    (LLM-produced, attacker-influenced) summary must be escaped, not executed."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='a', password='p')
+        self.account = MailAccount.objects.create(
+            owner=self.user, email='a@x.com',
+            imap_host='x', imap_port=993, smtp_host='x', smtp_port=587,
+        )
+        self.folder = MailFolder.objects.create(
+            account=self.account, name='INBOX', folder_type='inbox',
+        )
+
+    def _summary_html(self, summary):
+        message = MailMessage.objects.create(
+            account=self.account, folder=self.folder, imap_uid=1,
+            message_id='<m@x>', date=datetime.now(timezone.utc),
+            ai_summary=summary,
+        )
+        return MailMessageDetailSerializer(message).data['ai_summary_html']
+
+    def test_raw_html_is_escaped(self):
+        html = self._summary_html('Hi <img src=x onerror=alert(1)> there')
+        self.assertNotIn('<img', html)
+        self.assertIn('&lt;img', html)
+
+    def test_markdown_still_renders(self):
+        html = self._summary_html('**bold** text')
+        self.assertIn('<strong>bold</strong>', html)
+
+
 class MailMessageDetailExtractionsTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='s', password='p')

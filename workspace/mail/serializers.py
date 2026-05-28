@@ -1,3 +1,4 @@
+import mistune
 from rest_framework import serializers
 
 from .models import MailAccount, MailAttachment, MailExtraction, MailFolder, MailLabel, MailMessage, MailRule, MailRuleLog
@@ -6,6 +7,13 @@ from .services.rules.schema import (
     parse_actions,
     parse_conditions,
     validate_tree_limits,
+)
+
+# escape=True so raw HTML in the AI summary is escaped instead of executed when
+# the rendered string is injected via Alpine x-html. mistune.html() uses escape=False.
+_md = mistune.create_markdown(
+    escape=True,
+    plugins=['strikethrough', 'footnotes', 'table', 'speedup'],
 )
 
 
@@ -166,8 +174,7 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
 
     def get_ai_summary_html(self, obj):
         if obj.ai_summary:
-            import mistune
-            return mistune.html(obj.ai_summary)
+            return _md(obj.ai_summary)
         return None
 
     def get_labels(self, obj):

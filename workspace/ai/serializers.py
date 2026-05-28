@@ -1,6 +1,14 @@
+import mistune
 from rest_framework import serializers
 
 from .models import AITask, BotProfile, UserMemory
+
+# escape=True so raw HTML in LLM output is escaped instead of executed when the
+# rendered string is injected via Alpine x-html. mistune.html() uses escape=False.
+_md = mistune.create_markdown(
+    escape=True,
+    plugins=['strikethrough', 'footnotes', 'table', 'speedup'],
+)
 
 
 class BotProfileSerializer(serializers.ModelSerializer):
@@ -42,14 +50,12 @@ class AITaskSerializer(serializers.ModelSerializer):
         if obj.status != AITask.Status.COMPLETED or not obj.result:
             return None
         if obj.task_type == AITask.TaskType.SUMMARIZE:
-            import mistune
-            return mistune.html(obj.result)
+            return _md(obj.result)
         if (
             obj.task_type == AITask.TaskType.EDITOR
             and obj.input_data.get('action') in ('explain', 'summarize')
         ):
-            import mistune
-            return mistune.html(obj.result)
+            return _md(obj.result)
         return None
 
 

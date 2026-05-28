@@ -97,7 +97,7 @@ class SharedFileMetaView(APIView):
             'mime_type': f.mime_type,
             'size': f.size,
             'category': f.category,
-            'is_viewable': ViewerRegistry.is_supported(f.type) if f.type else False,
+            'is_viewable': ViewerRegistry.is_supported(f.type, f.name) if f.type else False,
             'has_password': link.has_password,
             'created_by_name': link.created_by.get_full_name() or link.created_by.username,
         })

@@ -552,7 +552,7 @@ def view_file(request, uuid):
         )
 
     # Get appropriate viewer
-    ViewerClass = ViewerRegistry.get_viewer(file_obj.type)
+    ViewerClass = ViewerRegistry.get_viewer(file_obj.type, file_obj.name)
 
     if not ViewerClass:
         return HttpResponse(
@@ -611,7 +611,7 @@ def shared_file_view(request, token):
     viewer_html = ''
     if not link.has_password or password_verified:
         from workspace.files.ui.viewers import ViewerRegistry
-        ViewerClass = ViewerRegistry.get_viewer(link.file.type) if link.file.type else None
+        ViewerClass = ViewerRegistry.get_viewer(link.file.type, link.file.name) if link.file.type else None
         if ViewerClass:
             viewer = ViewerClass(link.file)
             viewer._user_can_edit = False

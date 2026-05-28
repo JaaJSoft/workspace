@@ -63,6 +63,28 @@ class DetectFromStreamTest(TestCase):
         self.assertIsNotNone(result.label)
 
 
+class LabelFromNameTest(TestCase):
+    def test_known_extension(self):
+        from workspace.files.services.detection import label_from_name
+
+        self.assertEqual(label_from_name("notes.md"), "markdown")
+
+    def test_unknown_extension(self):
+        from workspace.files.services.detection import label_from_name
+
+        self.assertEqual(label_from_name("data.xyz123"), "unknown")
+
+    def test_empty_filename(self):
+        from workspace.files.services.detection import label_from_name
+
+        self.assertEqual(label_from_name(""), "unknown")
+
+    def test_case_insensitive(self):
+        from workspace.files.services.detection import label_from_name
+
+        self.assertEqual(label_from_name("PHOTO.JPG"), "jpeg")
+
+
 class DetectFromNameTest(TestCase):
     def test_known_extension(self):
         from workspace.files.services.detection import detect_from_name

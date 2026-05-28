@@ -364,7 +364,7 @@ def view_attachment(request, attachment_uuid):
         from django.http import Http404
         raise Http404
 
-    ViewerClass = ViewerRegistry.get_viewer(attachment.type)
+    ViewerClass = ViewerRegistry.get_viewer(attachment.type, attachment.original_name)
     if not ViewerClass:
         return HttpResponse(
             f'<div class="p-8 text-center text-error">No viewer available for {attachment.type}</div>',

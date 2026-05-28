@@ -77,6 +77,31 @@ def detect_from_stream(stream) -> DetectionResult:
     )
 
 
+def label_from_name(filename: str) -> str:
+    """Return the Magika label implied by a filename's extension, or 'unknown'.
+
+    Extension-only lookup, no content inspection. Used as a supplementary hint
+    when content detection yields a generic label (e.g. ``txt`` for a sparse
+    Markdown file whose ``.md`` extension reveals the real intent).
+    """
+    if not filename:
+        return "unknown"
+    _, ext = os.path.splitext(filename)
+    return _EXT_TO_LABEL.get(ext.lower(), "unknown")
+
+
+def has_extension(filename: str) -> bool:
+    """True if the filename carries a non-empty extension.
+
+    Dotfiles like ``.gitignore`` count as having no extension (matching
+    ``os.path.splitext``), which is the intended behaviour: a viewer that
+    needs an explicit extension should not claim them.
+    """
+    if not filename:
+        return False
+    return bool(os.path.splitext(filename)[1])
+
+
 def detect_from_name(filename: str) -> DetectionResult:
     """Guess file type from filename extension when content is unavailable."""
     if not filename:
@@ -84,8 +109,7 @@ def detect_from_name(filename: str) -> DetectionResult:
             label="unknown", mime_type="application/octet-stream", group="", score=0.0
         )
 
-    _, ext = os.path.splitext(filename)
-    label = _EXT_TO_LABEL.get(ext.lower(), "unknown")
+    label = label_from_name(filename)
     info = _KB.get(label, {})
     return DetectionResult(
         label=label,

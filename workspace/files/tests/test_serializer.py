@@ -6,8 +6,43 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
+from workspace.files.serializers import FileSerializer
 
 User = get_user_model()
+
+
+class FileSerializerIsViewableTests(APITestCase):
+    """get_is_viewable must mirror File.is_viewable (incl. the MIME fallback)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='viewuser', email='view@example.com', password='testpass123'
+        )
+
+    def test_is_viewable_uses_mime_fallback_for_unknown_type(self):
+        """An 'unknown'-typed file with a viewable MIME type must report True.
+
+        File.is_viewable() falls back to the MIME type when ``type`` is empty or
+        'unknown'. The serializer must not bypass that fallback by passing the
+        raw ``type`` straight to the standalone is_viewable utility.
+        """
+        # 'photo' has no extension, so the only viewability signal is the MIME type.
+        file_obj = File(
+            owner=self.user, name='photo', node_type=File.NodeType.FILE,
+            type='unknown', mime_type='image/jpeg',
+        )
+
+        self.assertTrue(file_obj.is_viewable())
+        self.assertEqual(
+            FileSerializer().get_is_viewable(file_obj),
+            file_obj.is_viewable(),
+        )
+
+    def test_is_viewable_false_for_folder(self):
+        folder = File(
+            owner=self.user, name='Docs', node_type=File.NodeType.FOLDER,
+        )
+        self.assertFalse(FileSerializer().get_is_viewable(folder))
 
 
 class FileSerializerCreateTests(APITestCase):

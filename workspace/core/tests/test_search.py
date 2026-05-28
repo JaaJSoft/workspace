@@ -84,6 +84,27 @@ class FilesSearchTests(TestCase):
         results = search_files('Documents', self.alice, 10)
         self.assertGreaterEqual(len(results), 1)
 
+    def test_file_in_folder_url_opens_folder_and_viewer(self):
+        from workspace.files.models import File
+        from workspace.files.search import search_files
+        nested = File.objects.create(
+            owner=self.alice, name='nested.pdf',
+            node_type=File.NodeType.FILE, parent=self.folder,
+        )
+        result = next(r for r in search_files('nested', self.alice, 10))
+        # Path lands in the parent folder, ?open= triggers the file viewer.
+        self.assertEqual(result.url, f'/files/{self.folder.uuid}?open={nested.uuid}')
+
+    def test_root_file_url_opens_viewer(self):
+        from workspace.files.search import search_files
+        result = next(r for r in search_files('report', self.alice, 10))
+        self.assertEqual(result.url, f'/files?open={self.f1.uuid}')
+
+    def test_folder_url_has_no_open_param(self):
+        from workspace.files.search import search_files
+        result = next(r for r in search_files('Documents', self.alice, 10))
+        self.assertEqual(result.url, f'/files/{self.folder.uuid}')
+
     def test_excludes_other_users_files(self):
         from workspace.files.models import File
         from workspace.files.search import search_files

@@ -16,7 +16,11 @@ def search_files(query, user, limit):
             url = f'/files/{f.uuid}'
             type_icon = f.icon or 'folder'
         else:
-            url = f'/files/{f.parent_id}' if f.parent_id else '/files'
+            # Land in the file's parent folder (path) and open its viewer
+            # (?open=), so a search hit reveals the file in context rather
+            # than dropping the user at the folder listing.
+            folder = f'/files/{f.parent_id}' if f.parent_id else '/files'
+            url = f'{folder}?open={f.uuid}'
             type_icon = 'file'
 
         tags = ()

@@ -325,6 +325,24 @@ class IndexViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, '/dashboard/upcoming')
 
+    @patch('workspace.dashboard.views.get_recent_events')
+    def test_does_not_compute_feed_on_initial_render(self, mock_events):
+        """The activity feed is deferred to an async load, so the initial
+        dashboard render must not run the per-provider feed fan-out."""
+        mock_events.return_value = []
+        self.client.login(username='viewuser', password='pass123')
+        resp = self.client.get('/')
+        self.assertEqual(resp.status_code, 200)
+        mock_events.assert_not_called()
+
+    def test_renders_async_feed_loader(self):
+        """The feed area must render an empty target that fetches itself via
+        alpine-ajax after paint, instead of the server-rendered feed."""
+        self.client.login(username='viewuser', password='pass123')
+        resp = self.client.get('/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "$ajax(feedUrl, { target: 'dashboard-activity' })")
+
 
 # ── activity_feed view ──────────────────────────────────────────
 
@@ -418,6 +436,23 @@ class ActivityFeedViewTests(TestCase):
         mock_activity.assert_called_once()
         call_kwargs = mock_activity.call_args.kwargs
         self.assertEqual(call_kwargs['search'], 'deploy')
+
+    @patch('workspace.dashboard.views._get_activity_context')
+    @patch('workspace.dashboard.views._build_dashboard_context')
+    def test_alpine_request_does_not_recompute_dashboard_context(self, mock_ctx, mock_activity):
+        """The async feed fetch renders only the feed partial, so it must not
+        recompute pending-action counts / usage stats via the full context."""
+        mock_ctx.return_value = {'modules': []}
+        mock_activity.return_value = {
+            'activity_events': [], 'activity_sources': [],
+            'activity_source': None, 'activity_search': '',
+            'activity_has_more': False, 'activity_next_offset': 10,
+            'activity_prefix': 'dashboard-activity',
+            'activity_base_url': '/dashboard/activity',
+        }
+        resp = self.client.get('/dashboard/activity', HTTP_X_ALPINE_REQUEST='true')
+        self.assertEqual(resp.status_code, 200)
+        mock_ctx.assert_not_called()
 
 
 # ── upcoming_fragment view ──────────────────────────────────────

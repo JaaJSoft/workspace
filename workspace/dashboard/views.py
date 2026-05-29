@@ -51,6 +51,23 @@ def _get_activity_context(user, source=None, offset=0, search=None):
     }
 
 
+def _activity_shell_context(source=None):
+    """Cheap activity context for the dashboard shell - no feed query.
+
+    The feed itself is fetched asynchronously (see ``activity_feed``); the
+    initial render only needs the source tabs and the URLs/prefix to wire the
+    alpine-ajax swap. ``get_sources()`` reads in-memory registry metadata, so
+    this adds no database cost to the page load.
+    """
+    return {
+        'activity_sources': get_sources(),
+        'activity_source': source,
+        'activity_search': '',
+        'activity_prefix': 'dashboard-activity',
+        'activity_base_url': reverse('dashboard:activity_feed'),
+    }
+
+
 def _build_dashboard_context(user, include_activity=True, activity_source=None):
     pending_action_counts = registry.get_pending_action_counts(user)
     modules = []
@@ -72,8 +89,14 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
 
 @login_required
 def index(request):
-    """Dashboard home page."""
-    context = _build_dashboard_context(request.user)
+    """Dashboard home page.
+
+    The activity feed loads asynchronously (see ``activity_feed``), so the
+    initial render stays off the heavy per-provider feed fan-out and the page
+    paints immediately.
+    """
+    context = _build_dashboard_context(request.user, include_activity=False)
+    context.update(_activity_shell_context())
     context['activity_tab'] = 'all'
     return render(request, 'dashboard/index.html', context)
 
@@ -104,15 +127,15 @@ def activity_feed(request):
     append = offset > 0
 
     if request.headers.get('X-Alpine-Request'):
-        context = _build_dashboard_context(
-            request.user,
-            include_activity=False,
-            activity_source=source,
-        )
-        context.update(_get_activity_context(request.user, source=source, offset=offset, search=search))
+        # Only the feed partial is rendered here - it uses none of the
+        # dashboard shell context (modules / pending counts / usage stats),
+        # so we skip recomputing them on every feed fetch.
+        context = _get_activity_context(request.user, source=source, offset=offset, search=search)
         template = 'ui/partials/activity_page.html' if append else 'ui/partials/activity_feed.html'
         return render(request, template, context)
 
-    context = _build_dashboard_context(request.user, activity_source=source)
+    # Direct full-page navigation: render the shell; the feed loads async.
+    context = _build_dashboard_context(request.user, include_activity=False)
+    context.update(_activity_shell_context(source=source))
     context['activity_tab'] = tab
     return render(request, 'dashboard/index.html', context)

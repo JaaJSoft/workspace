@@ -218,7 +218,6 @@
          activityTab: 'all',
          activitySearch: '',
          searchOpen: false,
-         loading: false,
          get feedUrl() {
            let u = '{% url 'users_ui:profile_activity_feed' username=profile_user.username %}';
            let p = [];
@@ -227,8 +226,8 @@
            return p.length ? u + '?' + p.join('&') : u;
          }
        }"
-       @ajax:before="loading = true"
-       @ajax:after="loading = false"
+       @ajax:before="$el.querySelector('#profile-activity').innerHTML = $refs.feedSkeleton.innerHTML"
+       @ajax:error="$el.querySelector('#profile-activity').innerHTML = $refs.feedFailed.innerHTML"
   >
     <div class="card-body gap-4 p-4 sm:p-6">
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -246,29 +245,43 @@
           >
             <i data-lucide="search" class="w-4 h-4"></i>
           </button>
-          {% include "ui/partials/refresh_button.html" with url_expr="feedUrl" target="profile-activity" %}
+          {% include "ui/partials/refresh_button.html" with url_expr="feedUrl" target="profile-activity" loading_expr="false" %}
         </div>
       </div>
 
       {% include "ui/partials/activity_search.html" with activity_prefix="profile-activity" %}
 
-      <!-- Loading skeleton -->
-      <div x-show="loading" x-cloak class="animate-pulse">
-        <ul class="divide-y divide-base-200">
-          {% for _ in "12345" %}
-          <li class="py-3 flex items-center gap-3">
-            <div class="w-9 h-9 rounded-lg bg-base-300 flex-shrink-0"></div>
-            <div class="flex-1 min-w-0 space-y-2">
-              <div class="h-4 bg-base-300 rounded w-3/4"></div>
-              <div class="h-3 bg-base-300 rounded w-1/2"></div>
-            </div>
-          </li>
-          {% endfor %}
-        </ul>
+      {% comment %}
+      Self-loading feed. The skeleton (feedSkeleton) is shown before every fetch
+      - on first paint via x-init, and on tab/search/refresh via the card's
+      @ajax:before - then alpine-ajax overwrites the target with the response.
+      No loading flag to get stuck; on failure the card's @ajax:error swaps in
+      feedFailed instead.
+      {% endcomment %}
+      <div x-ref="feedSkeleton" hidden>
+        <div class="animate-pulse">
+          <ul class="divide-y divide-base-200">
+            {% for _ in "12345" %}
+            <li class="py-3 flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-base-300 flex-shrink-0"></div>
+              <div class="flex-1 min-w-0 space-y-2">
+                <div class="h-4 bg-base-300 rounded w-3/4"></div>
+                <div class="h-3 bg-base-300 rounded w-1/2"></div>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
       </div>
 
-      <div x-show="!loading">
-        {% include 'ui/partials/activity_feed.html' %}
+      <div
+        id="profile-activity"
+        x-init="$el.innerHTML = $refs.feedSkeleton.innerHTML; $ajax(feedUrl, { target: 'profile-activity' })"
+      ></div>
+
+      {# Error markup, copied into the feed target by the card's @ajax:error so the card is never left blank #}
+      <div x-ref="feedFailed" hidden>
+        <p class="py-3 text-sm text-base-content/60">Couldn't load activity. <a href="{% url 'users_ui:profile_by_username' username=profile_user.username %}" class="link link-hover">Reload</a></p>
       </div>
     </div>
   </div>

@@ -144,9 +144,6 @@ def profile_view(request, username=None):
     profile_role = profile_settings.get('role')
     banner_gradient = gradient_from_palette_value(profile_settings.get('banner_palette'))
 
-    # Activity feed
-    activity_ctx = _get_profile_activity_context(profile_user.username, user_id, viewer_id=viewer_id)
-
     context = {
         'profile_user': profile_user,
         'is_own_profile': is_own_profile,
@@ -156,8 +153,15 @@ def profile_view(request, username=None):
         'profile_bio': profile_bio,
         'profile_role': profile_role,
         'banner_gradient': banner_gradient,
+        # Activity feed shell only - the feed itself loads asynchronously (see
+        # profile_activity_feed) so the initial render skips the per-provider
+        # fan-out. get_sources() is in-memory, so this adds no DB cost.
+        'activity_sources': get_sources(),
+        'activity_source': None,
+        'activity_search': '',
+        'activity_prefix': 'profile-activity',
+        'activity_base_url': reverse('users_ui:profile_activity_feed', kwargs={'username': profile_user.username}),
     }
-    context.update(activity_ctx)
     return render(request, 'users/ui/profile.html', context)
 
 

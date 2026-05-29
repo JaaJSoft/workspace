@@ -94,7 +94,7 @@
   {# ── Activity feed ── #}
   <section class="max-w-4xl mx-auto w-full">
     <div>
-      <div class="card bg-base-100 shadow border border-base-300" x-data="{ activityTab: '{{ activity_tab|default:"all" }}', activitySearch: '', searchOpen: false, loading: true, feedError: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }" x-init="$ajax(feedUrl, { target: 'dashboard-activity' })" @ajax:before="loading = true; feedError = false" @ajax:error="feedError = true; loading = false" @ajax:after="loading = false">
+      <div class="card bg-base-100 shadow border border-base-300" x-data="{ activityTab: '{{ activity_tab|default:"all" }}', activitySearch: '', searchOpen: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }" @ajax:error="$el.querySelector('#dashboard-activity').innerHTML = $refs.feedFailed.innerHTML">
         <div class="card-body gap-4 p-4 sm:p-6">
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div class="space-y-1">
@@ -114,41 +114,41 @@
             >
               <i data-lucide="search" class="w-4 h-4"></i>
             </button>
-            {% include "ui/partials/refresh_button.html" with url_expr="feedUrl" target="dashboard-activity" %}
+            {% include "ui/partials/refresh_button.html" with url_expr="feedUrl" target="dashboard-activity" loading_expr="false" %}
             </div>
           </div>
           {% include "ui/partials/activity_search.html" with activity_prefix="dashboard-activity" %}
 
-          {# ── Activity skeleton ── #}
-          <div x-show="loading" x-cloak class="animate-pulse">
-            <ul class="divide-y divide-base-200">
-              {% for _ in "123456" %}
-              <li class="py-3 flex items-center gap-3">
-                <div class="w-9 h-9 rounded-lg bg-base-300 flex-shrink-0"></div>
-                <div class="flex-1 min-w-0 space-y-2">
-                  <div class="h-4 bg-base-300 rounded w-3/4"></div>
-                  <div class="h-3 bg-base-300 rounded w-1/2"></div>
-                </div>
-                <div class="h-6 w-12 bg-base-300 rounded hidden sm:block"></div>
-              </li>
-              {% endfor %}
-            </ul>
-          </div>
-
           {% comment %}
-          Empty swap target. The card's x-init fires the fetch (see above) so the
-          ajax lifecycle events reach the card and reset `loading`; firing from the
-          target itself would lose ajax:after when the morph replaces this element.
+          Self-loading feed: the skeleton below is the placeholder. alpine-ajax
+          fetches the feed after paint and replaces this element's content, so
+          the page paints immediately without the per-provider feed fan-out.
+          The response overwriting the skeleton is the "done" signal - there is
+          no loading flag to get stuck. On failure, swap in the error message.
           {% endcomment %}
-          <div x-show="!loading && !feedError">
-            <div id="dashboard-activity"></div>
+          <div
+            id="dashboard-activity"
+            x-init="$ajax(feedUrl, { target: 'dashboard-activity' })"
+          >
+            <div class="animate-pulse">
+              <ul class="divide-y divide-base-200">
+                {% for _ in "123456" %}
+                <li class="py-3 flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-lg bg-base-300 flex-shrink-0"></div>
+                  <div class="flex-1 min-w-0 space-y-2">
+                    <div class="h-4 bg-base-300 rounded w-3/4"></div>
+                    <div class="h-3 bg-base-300 rounded w-1/2"></div>
+                  </div>
+                  <div class="h-6 w-12 bg-base-300 rounded hidden sm:block"></div>
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
           </div>
 
-          {# Fallback when the async feed fetch fails, so the card is never left blank #}
-          <div x-show="feedError" x-cloak class="py-3 text-sm text-base-content/60 flex items-center gap-2">
-            <i data-lucide="alert-circle" class="w-4 h-4"></i>
-            <span>Couldn't load activity.</span>
-            <button class="link link-hover" @click="$ajax(feedUrl, { target: 'dashboard-activity' })">Retry</button>
+          {# Error markup, copied into the feed target by @ajax:error above so the card is never left blank #}
+          <div x-ref="feedFailed" hidden>
+            <p class="py-3 text-sm text-base-content/60">Couldn't load activity. <a href="{% url 'dashboard:index' %}" class="link link-hover">Reload</a></p>
           </div>
         </div>
       </div>

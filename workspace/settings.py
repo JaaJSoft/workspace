@@ -703,7 +703,7 @@ OAUTH_GENERIC_IMAP_HOST = os.getenv('OAUTH_GENERIC_IMAP_HOST', '')
 OAUTH_GENERIC_SMTP_HOST = os.getenv('OAUTH_GENERIC_SMTP_HOST', '')
 
 # --------------------------------------------------
-# OIDC login (self-hosted SSO)
+# OIDC login (SSO)
 # --------------------------------------------------
 # Enabled only when the core RP credentials + endpoints are all set. All values
 # default to '' so the mozilla-django-oidc views never raise ImproperlyConfigured
@@ -730,7 +730,8 @@ OIDC_ALLOWED_DOMAINS = [
     if d.strip()
 ]
 OIDC_REQUIRE_EMAIL_VERIFIED = os.getenv(
-    'OIDC_REQUIRE_EMAIL_VERIFIED', '').lower() in {'1', 'true', 'yes', 'on'}
+    'OIDC_REQUIRE_EMAIL_VERIFIED', ''
+).lower() in {'1', 'true', 'yes', 'on'}
 OIDC_USERNAME_CLAIM = os.getenv('OIDC_USERNAME_CLAIM', 'preferred_username')
 
 # RS*/ES* signing (our default RS256) requires a JWKS endpoint or the backend's

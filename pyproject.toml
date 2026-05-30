@@ -53,6 +53,7 @@ dependencies = [
     "trafilatura>=2.0.0",
     # streaming ZIP generation for bulk downloads (constant RAM)
     "zipstream-ng>=1.9.2",
+    "mozilla-django-oidc>=5.0.2",
 ]
 
 [build-system]

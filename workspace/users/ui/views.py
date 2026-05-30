@@ -1,7 +1,9 @@
 from datetime import date as date_type, timedelta
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.contrib.auth.views import LoginView
 from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -14,6 +16,22 @@ from workspace.users.services import avatar as avatar_service, presence as prese
 from workspace.users.services.settings import get_module_settings
 
 ACTIVITY_LIMIT = 10
+
+
+class WorkspaceLoginView(LoginView):
+    """Login view that also exposes the OIDC flag to the template.
+
+    Read at request time (not frozen at urls-import) so tests can toggle it with
+    override_settings.
+    """
+
+    template_name = 'users/ui/auth/login.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['oidc_enabled'] = getattr(settings, 'OIDC_ENABLED', False)
+        ctx['oidc_provider_name'] = getattr(settings, 'OIDC_PROVIDER_NAME', 'OpenID')
+        return ctx
 
 
 def _build_heatmap_data(user_id, viewer_id=None):

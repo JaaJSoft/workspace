@@ -217,6 +217,7 @@ def profile_activity_feed(request, username):
 @login_required
 def settings_view(request):
     from django.conf import settings as django_settings
+    from workspace.users.services.oidc import is_oidc_managed
     # Batch reads per module — 2 queries instead of one per key.
     profile_settings = get_module_settings(request.user, 'profile')
     dashboard_settings = get_module_settings(request.user, 'dashboard')
@@ -230,6 +231,8 @@ def settings_view(request):
         'banner_palettes': BANNER_PALETTES,
         'show_upcoming_events': dashboard_settings.get('show_upcoming_events', True),
         'show_upcoming_empty': dashboard_settings.get('show_upcoming_empty', True),
+        'oidc_managed': is_oidc_managed(request.user),
+        'oidc_provider_name': getattr(django_settings, 'OIDC_PROVIDER_NAME', 'OpenID'),
     })
 
 

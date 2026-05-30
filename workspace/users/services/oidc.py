@@ -68,8 +68,42 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
         user.first_name = str(claims.get('given_name') or '')[:150]
         user.last_name = str(claims.get('family_name') or '')[:150]
         user.save(update_fields=['first_name', 'last_name'])
+        self._link_identity(user, claims)
         logger.info('OIDC JIT-provisioned user %s', scrub(username))
         return user
+
+    def update_user(self, user, claims):
+        """Sync IdP-managed profile fields on each login and keep the link.
+
+        The identity provider is authoritative for the display name, so refresh
+        first_name / last_name from the claims - but only when the claim is
+        present, so a provider that omits them never wipes an existing value.
+        """
+        fields = []
+        given_name = claims.get('given_name')
+        if given_name:
+            user.first_name = str(given_name)[:150]
+            fields.append('first_name')
+        family_name = claims.get('family_name')
+        if family_name:
+            user.last_name = str(family_name)[:150]
+            fields.append('last_name')
+        if fields:
+            user.save(update_fields=fields)
+        self._link_identity(user, claims)
+        return user
+
+    def _link_identity(self, user, claims):
+        """Record the user's OIDC identity link (the OIDC-managed marker).
+
+        Created on first login (JIT or first email match); left untouched on
+        subsequent logins.
+        """
+        from ..models import OIDCIdentity
+        sub = str(claims.get('sub') or '')
+        if not sub:
+            return
+        OIDCIdentity.objects.get_or_create(user=user, defaults={'sub': sub})
 
     def _generate_username(self, claims):
         """Build a unique, sanitized username from the configured claim.
@@ -93,3 +127,15 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
             suffix += 1
             username = f'{base}{suffix}'[:150]
         return username
+
+
+def is_oidc_managed(user):
+    """Return True if *user* is linked to an external OIDC identity.
+
+    Such users authenticate through the identity provider, so their display
+    name is IdP-managed and local password changes are disabled.
+    """
+    from ..models import OIDCIdentity
+    if not getattr(user, 'is_authenticated', False):
+        return False
+    return OIDCIdentity.objects.filter(user=user).exists()

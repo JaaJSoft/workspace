@@ -1,5 +1,19 @@
 <!-- Security Tab -->
-<div x-show="tab === 'security'" x-cloak x-data="changePasswordForm()">
+<div x-show="tab === 'security'" x-cloak {% if not oidc_managed %}x-data="changePasswordForm()"{% endif %}>
+{% if oidc_managed %}
+  <div class="card bg-base-100 border border-base-300 shadow-sm">
+    <div class="card-body">
+      <h2 class="card-title text-lg gap-2">
+        <i data-lucide="shield-check" class="w-5 h-5"></i>
+        Password
+      </h2>
+      <p class="text-sm text-base-content/70 mt-1">
+        Your account signs in through {{ oidc_provider_name }} (single sign-on),
+        so there is no local password to change here.
+      </p>
+    </div>
+  </div>
+{% else %}
   <div class="card bg-base-100 border border-base-300 shadow-sm">
     <div class="card-body">
       <h2 class="card-title text-lg gap-2">
@@ -110,8 +124,10 @@
       </form>
     </div>
   </div>
+{% endif %}
 </div>
 
+{% if not oidc_managed %}
 <script>
   function changePasswordForm() {
     return {
@@ -190,3 +206,4 @@
     };
   }
 </script>
+{% endif %}

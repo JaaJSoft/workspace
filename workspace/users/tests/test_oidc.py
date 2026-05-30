@@ -1,7 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from workspace.users.services.oidc import WorkspaceOIDCBackend
+from workspace.users.models import OIDCIdentity
+from workspace.users.services.oidc import WorkspaceOIDCBackend, is_oidc_managed
 
 User = get_user_model()
 
@@ -114,11 +115,6 @@ class CreateUserTests(TestCase):
         self.assertEqual(user.first_name, 'John')
         self.assertEqual(user.last_name, 'Doe')
 
-    def test_update_user_not_overridden(self):
-        # Must stay the library's no-op so local profile edits are not
-        # clobbered on every login.
-        self.assertNotIn('update_user', WorkspaceOIDCBackend.__dict__)
-
 
 from django.conf import settings as dj_settings  # noqa: E402
 
@@ -167,3 +163,104 @@ class LoginPageOidcButtonTests(TestCase):
         self.assertContains(resp, 'oidc-login-button')
         self.assertContains(resp, 'Sign in with Keycloak')
         self.assertContains(resp, reverse('oidc_authentication_init'))
+
+
+@override_settings(**OIDC_OP_SETTINGS)
+class OidcIdentitySyncTests(TestCase):
+    def setUp(self):
+        self.backend = WorkspaceOIDCBackend()
+
+    def test_create_user_creates_identity_marker(self):
+        user = self.backend.create_user(
+            {'preferred_username': 'jdoe', 'email': 'jdoe@corp.com', 'sub': 'sub-1'})
+        self.assertTrue(OIDCIdentity.objects.filter(user=user, sub='sub-1').exists())
+        self.assertTrue(is_oidc_managed(user))
+
+    def test_create_user_without_sub_is_not_managed(self):
+        user = self.backend.create_user(
+            {'preferred_username': 'nosub', 'email': 'nosub@corp.com'})
+        self.assertFalse(is_oidc_managed(user))
+
+    def test_update_user_syncs_names_from_claims(self):
+        user = User.objects.create_user(
+            'existing', email='e@corp.com', first_name='Old', last_name='Name')
+        returned = self.backend.update_user(
+            user,
+            {'email': 'e@corp.com', 'given_name': 'New',
+             'family_name': 'Person', 'sub': 'sub-2'},
+        )
+        user.refresh_from_db()
+        self.assertEqual(user.first_name, 'New')
+        self.assertEqual(user.last_name, 'Person')
+        self.assertEqual(returned, user)
+
+    def test_update_user_does_not_wipe_names_when_claims_absent(self):
+        user = User.objects.create_user(
+            'keep', email='k@corp.com', first_name='Keep', last_name='Me')
+        self.backend.update_user(user, {'email': 'k@corp.com', 'sub': 'sub-3'})
+        user.refresh_from_db()
+        self.assertEqual(user.first_name, 'Keep')
+        self.assertEqual(user.last_name, 'Me')
+
+    def test_update_user_links_identity_for_email_matched_user(self):
+        user = User.objects.create_user('existing2', email='e2@corp.com')
+        self.assertFalse(is_oidc_managed(user))
+        self.backend.update_user(user, {'email': 'e2@corp.com', 'sub': 'sub-4'})
+        self.assertTrue(is_oidc_managed(user))
+
+    def test_is_oidc_managed_false_for_plain_user(self):
+        user = User.objects.create_user('plain', email='p@corp.com')
+        self.assertFalse(is_oidc_managed(user))
+
+    def test_is_oidc_managed_false_for_anonymous(self):
+        from django.contrib.auth.models import AnonymousUser
+        self.assertFalse(is_oidc_managed(AnonymousUser()))
+
+    def test_identity_str_includes_sub(self):
+        user = User.objects.create_user('struser', email='s@corp.com')
+        identity = OIDCIdentity.objects.create(user=user, sub='sub-str')
+        self.assertIn('sub-str', str(identity))
+
+
+class OidcPasswordLockTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            'pwuser', email='pw@corp.com', password='oldpass123')
+        self.client.force_login(self.user)
+
+    def test_password_change_allowed_for_plain_user(self):
+        resp = self.client.post(
+            reverse('user-change-password'),
+            data={'current_password': 'oldpass123', 'new_password': 'NewPass!9xyz'},
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    def test_password_change_blocked_for_oidc_user(self):
+        OIDCIdentity.objects.create(user=self.user, sub='sub-pw')
+        resp = self.client.post(
+            reverse('user-change-password'),
+            data={'current_password': 'oldpass123', 'new_password': 'NewPass!9xyz'},
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 403)
+
+
+class OidcPasswordUiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            'uiuser', email='ui@corp.com', password='localpass1')
+        self.client.force_login(self.user)
+
+    def test_password_form_shown_for_plain_user(self):
+        resp = self.client.get(reverse('users_ui:settings'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'changePasswordForm()')
+
+    @override_settings(OIDC_PROVIDER_NAME='Keycloak')
+    def test_password_form_hidden_for_oidc_user(self):
+        OIDCIdentity.objects.create(user=self.user, sub='sub-ui')
+        resp = self.client.get(reverse('users_ui:settings'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'changePasswordForm()')
+        self.assertContains(resp, 'single sign-on')

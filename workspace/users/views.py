@@ -211,6 +211,14 @@ class ChangePasswordView(APIView):
         },
     )
     def post(self, request):
+        from workspace.users.services.oidc import is_oidc_managed
+        if is_oidc_managed(request.user):
+            return Response(
+                {'errors': ['Your password is managed by your identity provider '
+                            'and cannot be changed here.']},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         current_password = request.data.get('current_password', '')
         new_password = request.data.get('new_password', '')
 

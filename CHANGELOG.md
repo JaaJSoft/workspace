@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.25.0 - Note Linking & Faster Dashboard
+
+### Highlights
+
+This release brings Obsidian-style note linking to the Markdown editor: type `[[` anywhere in a note to search your other notes and drop in a link to one, without leaving the keyboard. The dashboard home page also feels noticeably snappier: it now appears right away and fills in the recent-activity feed afterwards, and the usage-stats panel on both the dashboard and your profile loads faster on repeat visits. Two fixes round things out: short Markdown notes that had quietly dropped out of the notes browser are back, and clicking a file in global search now opens it directly.
+
+### Notes
+
+- Link your notes together by typing `[[` in the Markdown editor: a search box opens, you pick a note (with the mouse or the keyboard), and a link to it is inserted right where you are. Available in both the Notes and Files apps.
+
+### Performance
+
+- The dashboard home page appears immediately instead of waiting on the recent-activity feed. The page paints first, then the feed streams in with a loading skeleton; if it cannot load, a Retry button is shown instead of a blank card.
+- The usage-stats panel (file counts and sizes, message and note counts, ...) on the dashboard and profile loads faster, and revisiting either page within a minute is near-instant.
+
+### Fixes
+
+- Short Markdown notes (for example, one that contains only a heading) are no longer misfiled as plain text. They show up in the notes browser and in Markdown-type searches again, and notes that had already slipped out are restored automatically.
+- Clicking a file in the global search results now opens it directly in the viewer, instead of only taking you to its folder.
+
 ## 0.24.0 - Attachments & Smart Files type detection
 
 ### Highlights

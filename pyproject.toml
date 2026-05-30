@@ -1,6 +1,6 @@
 [project]
 name = "workspace"
-version = "0.24.0"
+version = "0.25.0"
 description = "Self-hosted productivity suite (files, chat, mail, calendar, notes, AI assistants) designed to run anywhere — from a single Raspberry Pi to a multi-node Kubernetes deployment."
 readme = "README.md"
 requires-python = ">=3.14"

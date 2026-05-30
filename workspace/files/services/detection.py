@@ -90,6 +90,30 @@ def label_from_name(filename: str) -> str:
     return _EXT_TO_LABEL.get(ext.lower(), "unknown")
 
 
+# Labels Magika emits when the content alone is inconclusive. For these, the
+# filename extension is a better signal of the author's intent.
+_GENERIC_CONTENT_LABELS = frozenset({"txt", "unknown", "empty"})
+
+
+def refine_with_name(label: str, filename: str) -> str:
+    """Refine an inconclusive content label using the filename extension.
+
+    Magika classifies a sparse Markdown file (e.g. ``# Title``) as ``txt``; its
+    ``.md`` extension reveals the real type. Only the generic labels in
+    ``_GENERIC_CONTENT_LABELS`` are refined, and only toward another text-group
+    label, so a confidently detected binary -- or a text blob misnamed
+    ``.png`` -- is never rewritten.
+    """
+    if label not in _GENERIC_CONTENT_LABELS:
+        return label
+    ext_label = label_from_name(filename)
+    if ext_label in _GENERIC_CONTENT_LABELS or ext_label == label:
+        return label
+    if _KB.get(ext_label, {}).get("group") != "text":
+        return label
+    return ext_label
+
+
 def has_extension(filename: str) -> bool:
     """True if the filename carries a non-empty extension.
 

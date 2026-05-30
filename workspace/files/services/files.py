@@ -102,7 +102,9 @@ class FileService:
     @staticmethod
     def create_file(owner, name, parent=None, *, content=None, mime_type=None, group=None, acting_user=None):
         """Create a new file record, optionally with uploaded content."""
-        from workspace.files.services.detection import detect_from_stream, detect_from_name
+        from workspace.files.services.detection import (
+            detect_from_stream, detect_from_name, refine_with_name,
+        )
 
         if group is None and parent and parent.group_id:
             group = parent.group
@@ -111,6 +113,11 @@ class FileService:
             detection = detect_from_stream(content)
         else:
             detection = detect_from_name(name)
+
+        # Magika reads a sparse ".md" as txt; honour the extension for the
+        # stored label so notes stay discoverable (the notes browser and the
+        # [[ search both filter on type=markdown).
+        label = refine_with_name(detection.label, name)
 
         if not mime_type:
             mime_type = detection.mime_type
@@ -123,7 +130,7 @@ class FileService:
             node_type=File.NodeType.FILE,
             parent=parent,
             mime_type=mime_type or 'application/octet-stream',
-            type=detection.label,
+            type=label,
             category=detection.group or 'unknown',
             size=size,
             group=group,
@@ -255,12 +262,16 @@ class FileService:
     @staticmethod
     def update_content(file_obj, content, *, name=None, mime_type=None, acting_user=None):
         """Replace a file's content, updating size and MIME type."""
-        from workspace.files.services.detection import detect_from_stream
+        from workspace.files.services.detection import (
+            detect_from_stream, refine_with_name,
+        )
 
         detection = detect_from_stream(content)
         file_obj.size = content.size
         file_obj.mime_type = mime_type or detection.mime_type
-        file_obj.type = detection.label
+        # Honour the extension when Magika's content label is generic (a sparse
+        # ".md" reads as txt) so an edited note keeps type=markdown.
+        file_obj.type = refine_with_name(detection.label, name or file_obj.name)
         file_obj.category = detection.group or 'unknown'
         file_obj.has_thumbnail = False
         file_obj.content = content

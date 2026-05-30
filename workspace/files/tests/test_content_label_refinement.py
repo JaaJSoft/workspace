@@ -63,3 +63,45 @@ class StoredTypeHonoursExtensionTest(TestCase):
         )
         f.refresh_from_db()
         self.assertEqual(f.type, "markdown")
+
+
+class RelabelMigrationTest(TestCase):
+    """The 0032 data migration repairs rows mislabeled before the fix shipped:
+    a sparse .md stored as type='txt' must be relabeled to 'markdown'."""
+
+    def setUp(self):
+        from workspace.files.models import File
+        self.File = File
+        self.user = get_user_model().objects.create_user("relabel", password="x")
+
+    def _make(self, name, type_, category="text"):
+        return self.File.objects.create(
+            owner=self.user,
+            name=name,
+            node_type=self.File.NodeType.FILE,
+            mime_type="application/octet-stream",
+            type=type_,
+            category=category,
+        )
+
+    def test_relabels_only_misdetected_text_files(self):
+        import importlib
+        mig = importlib.import_module(
+            "workspace.files.migrations.0032_relabel_misdetected_text"
+        )
+
+        md_txt = self._make("note.md", "txt")        # -> markdown
+        md_empty = self._make("blank.md", "empty")   # -> markdown
+        plain = self._make("plain.txt", "txt")       # stays txt
+        already = self._make("good.md", "markdown")  # untouched (not generic)
+        image = self._make("photo.png", "png", "image")  # untouched (not generic)
+
+        mig.relabel_generic_text_types(self.File)
+
+        for f in (md_txt, md_empty, plain, already, image):
+            f.refresh_from_db()
+        self.assertEqual(md_txt.type, "markdown")
+        self.assertEqual(md_empty.type, "markdown")
+        self.assertEqual(plain.type, "txt")
+        self.assertEqual(already.type, "markdown")
+        self.assertEqual(image.type, "png")

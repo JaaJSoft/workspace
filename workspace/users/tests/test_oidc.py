@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.exceptions import SuspiciousOperation
 from django.test import TestCase, override_settings
 
 from workspace.users.models import OIDCIdentity
@@ -95,6 +96,17 @@ class GenerateUsernameTests(TestCase):
         User.objects.create_user('jdoe')
         u = self.backend._generate_username({'preferred_username': 'jdoe'})
         self.assertEqual(u, 'jdoe2')
+
+    def test_dedupes_at_max_length_without_infinite_loop(self):
+        # A 150-char username that collides must still resolve to a unique
+        # name. The naive `f'{base}{suffix}'[:150]` truncates back to `base`,
+        # so the dedup loop never terminates and the login request hangs.
+        long_name = 'a' * 150
+        User.objects.create_user(long_name)
+        result = self.backend._generate_username({'preferred_username': long_name})
+        self.assertNotEqual(result, long_name)
+        self.assertLessEqual(len(result), 150)
+        self.assertFalse(User.objects.filter(username=result).exists())
 
 
 @override_settings(**OIDC_OP_SETTINGS)
@@ -220,6 +232,34 @@ class OidcIdentitySyncTests(TestCase):
         user = User.objects.create_user('struser', email='s@corp.com')
         identity = OIDCIdentity.objects.create(user=user, sub='sub-str')
         self.assertIn('sub-str', str(identity))
+
+    def test_update_user_refuses_changed_sub(self):
+        # An existing identity is immutable: a login whose sub disagrees with
+        # the stored one (e.g. the email was reused for a different subject)
+        # must be refused, not silently accepted.
+        user = User.objects.create_user('subchg', email='sc@corp.com')
+        OIDCIdentity.objects.create(user=user, sub='sub-A')
+        with self.assertRaises(SuspiciousOperation):
+            self.backend.update_user(
+                user, {'email': 'sc@corp.com', 'sub': 'sub-B'})
+
+    def test_update_user_refuses_sub_owned_by_another_user(self):
+        other = User.objects.create_user('owner', email='o@corp.com')
+        OIDCIdentity.objects.create(user=other, sub='sub-shared')
+        victim = User.objects.create_user('victim', email='v@corp.com')
+        with self.assertRaises(SuspiciousOperation):
+            self.backend.update_user(
+                victim, {'email': 'v@corp.com', 'sub': 'sub-shared'})
+
+    def test_create_user_refuses_sub_owned_by_another_user(self):
+        other = User.objects.create_user('owner2', email='o2@corp.com')
+        OIDCIdentity.objects.create(user=other, sub='sub-dup')
+        with self.assertRaises(SuspiciousOperation):
+            self.backend.create_user(
+                {'preferred_username': 'newbie', 'email': 'new@corp.com',
+                 'sub': 'sub-dup'})
+        # The JIT user must be rolled back, not left orphaned.
+        self.assertFalse(User.objects.filter(username='newbie').exists())
 
 
 class OidcPasswordLockTests(TestCase):

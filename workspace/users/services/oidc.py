@@ -13,6 +13,8 @@ import logging
 import re
 
 from django.conf import settings
+from django.core.exceptions import SuspiciousOperation
+from django.db import transaction
 from mozilla_django_oidc.auth import OIDCAuthenticationBackend
 
 from workspace.common.logging import scrub
@@ -64,11 +66,12 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
         """
         username = self._generate_username(claims)
         email = str(claims.get('email') or '')
-        user = self.UserModel.objects.create_user(username, email=email)
-        user.first_name = str(claims.get('given_name') or '')[:150]
-        user.last_name = str(claims.get('family_name') or '')[:150]
-        user.save(update_fields=['first_name', 'last_name'])
-        self._link_identity(user, claims)
+        with transaction.atomic():
+            user = self.UserModel.objects.create_user(username, email=email)
+            user.first_name = str(claims.get('given_name') or '')[:150]
+            user.last_name = str(claims.get('family_name') or '')[:150]
+            user.save(update_fields=['first_name', 'last_name'])
+            self._link_identity(user, claims)
         logger.info('OIDC JIT-provisioned user %s', scrub(username))
         return user
 
@@ -78,7 +81,10 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
         The identity provider is authoritative for the display name, so refresh
         first_name / last_name from the claims - but only when the claim is
         present, so a provider that omits them never wipes an existing value.
+        The identity link is validated first, so a subject mismatch refuses the
+        login before any profile field is touched.
         """
+        self._link_identity(user, claims)
         fields = []
         given_name = claims.get('given_name')
         if given_name:
@@ -90,20 +96,38 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
             fields.append('last_name')
         if fields:
             user.save(update_fields=fields)
-        self._link_identity(user, claims)
         return user
 
     def _link_identity(self, user, claims):
         """Record the user's OIDC identity link (the OIDC-managed marker).
 
-        Created on first login (JIT or first email match); left untouched on
-        subsequent logins.
+        The link is created once on first login (JIT or first email match) and
+        is then immutable. A login whose ``sub`` disagrees with the stored one,
+        or a ``sub`` already bound to a different account, is refused - so the
+        stored subject is a real anti-takeover check (e.g. against a recycled
+        email address), not just a passive marker.
         """
         from ..models import OIDCIdentity
         sub = str(claims.get('sub') or '')
         if not sub:
             return
-        OIDCIdentity.objects.get_or_create(user=user, defaults={'sub': sub})
+
+        existing = OIDCIdentity.objects.filter(user=user).first()
+        if existing is not None:
+            if existing.sub != sub:
+                logger.warning(
+                    'OIDC login refused: subject changed for user %s',
+                    scrub(user.get_username()))
+                raise SuspiciousOperation('OIDC subject mismatch for existing user')
+            return
+
+        if OIDCIdentity.objects.filter(sub=sub).exists():
+            logger.warning(
+                'OIDC login refused: subject already linked to another account')
+            raise SuspiciousOperation(
+                'OIDC subject already linked to another account')
+
+        OIDCIdentity.objects.create(user=user, sub=sub)
 
     def _generate_username(self, claims):
         """Build a unique, sanitized username from the configured claim.
@@ -125,7 +149,8 @@ class WorkspaceOIDCBackend(OIDCAuthenticationBackend):
         suffix = 1
         while self.UserModel.objects.filter(username=username).exists():
             suffix += 1
-            username = f'{base}{suffix}'[:150]
+            suffix_text = str(suffix)
+            username = f'{base[:150 - len(suffix_text)]}{suffix_text}'
         return username
 
 

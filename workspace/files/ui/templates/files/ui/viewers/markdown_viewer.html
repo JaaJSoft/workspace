@@ -1,4 +1,23 @@
+{% load static %}
 <!-- Markdown WYSIWYG Editor with Milkdown Crepe -->
+<style>
+  .wikilink-menu {
+    position: absolute; z-index: 50; min-width: 14rem; max-width: 22rem;
+    background: var(--fallback-b1, oklch(var(--b1))); color: inherit;
+    border: 1px solid var(--fallback-b3, oklch(var(--b3)));
+    border-radius: 0.5rem; box-shadow: 0 4px 16px rgba(0,0,0,.18);
+    padding: 0.25rem; font-size: 0.875rem; max-height: 16rem; overflow-y: auto;
+  }
+  .wikilink-item {
+    padding: 0.35rem 0.6rem; border-radius: 0.375rem; cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .wikilink-item.is-active, .wikilink-item:hover { background: var(--fallback-b2, oklch(var(--b2))); }
+  .wikilink-empty, .wikilink-error { padding: 0.35rem 0.6rem; opacity: 0.6; }
+  /* Force the dismissed state hidden: beats the provider's inline display so
+     Escape hides immediately (provider.hide() only repaints on next update). */
+  .wikilink-menu[data-show="false"] { display: none !important; }
+</style>
 <div class="flex flex-col h-full"
      x-data="markdownViewerCrepe()"
      x-init="initEditor()"
@@ -107,6 +126,23 @@ window.markdownViewerCrepe = function() {
     return match ? match.split('=')[1] : '';
   }
 
+  async function _searchNotes(query) {
+    const base = '/api/v1/files?type=markdown';
+    const url = query
+      ? base + '&search=' + encodeURIComponent(query)
+      : base + '&recent=1&recent_limit=8';
+    const resp = await fetch(url, { credentials: 'same-origin' });
+    if (!resp.ok) throw new Error('search failed: ' + resp.status);
+    const data = await resp.json();
+    return (Array.isArray(data) ? data : []).slice(0, 8).map(function(f) {
+      return {
+        uuid: f.uuid,
+        name: (f.name || '').replace(/\.md$/i, ''),  // drop the .md for display
+        path: f.path || '',
+      };
+    });
+  }
+
   function _clearAutosave() {
     if (_debounceTimer) {
       clearTimeout(_debounceTimer);
@@ -196,10 +232,15 @@ window.markdownViewerCrepe = function() {
       _lock = window.fileLock(this.fileUuid, getCSRFToken);
 
       try {
-        const mod = await import('https://esm.sh/@milkdown/crepe@7.17.3?bundle');
+        // No ?bundle: lets the [[ slash plugin share Milkdown/ProseMirror internals.
+        // Pin codemirror so esm.sh resolves its basicSetup export (the ^6.0.1
+        // range otherwise serves a build missing that export).
+        const mod = await import('https://esm.sh/@milkdown/crepe@7.17.3?deps=codemirror@6.0.1');
         const Crepe = mod.Crepe;
+        const wikilink = await import('{% static "files/ui/js/wikilink_autocomplete.js" %}');
 
         _crepe = new Crepe({ root: container, defaultValue: self.originalContent });
+        wikilink.createWikilinkSlash({ search: _searchNotes })(_crepe.editor);
         await _crepe.create();
 
         if (!self.canEdit || self.lockOwner) {

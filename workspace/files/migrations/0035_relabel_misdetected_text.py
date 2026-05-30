@@ -42,7 +42,7 @@ def forward(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("files", "0031_file_owner_label_unique"),
+        ("files", "0034_remove_file_file_owner_del_type_and_more"),
     ]
 
     operations = [

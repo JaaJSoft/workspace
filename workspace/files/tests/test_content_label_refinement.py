@@ -87,7 +87,7 @@ class RelabelMigrationTest(TestCase):
     def test_relabels_only_misdetected_text_files(self):
         import importlib
         mig = importlib.import_module(
-            "workspace.files.migrations.0032_relabel_misdetected_text"
+            "workspace.files.migrations.0035_relabel_misdetected_text"
         )
 
         md_txt = self._make("note.md", "txt")        # -> markdown

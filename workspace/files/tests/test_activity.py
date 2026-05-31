@@ -101,6 +101,29 @@ class FilesActivityProviderTests(TestCase):
         for url in urls.values():
             self.assertNotIn('preview=', url)
 
+    def test_recent_events_url_lands_in_parent_folder(self):
+        """A file inside a folder links to that folder with the viewer opened
+        (``/files/<folder>?open=``), mirroring the notes module's "Open in
+        Files" so the browser lands next to the file instead of at the root."""
+        folder = File.objects.create(
+            owner=self.alice, name='Reports',
+            node_type=File.NodeType.FOLDER,
+        )
+        nested = File.objects.create(
+            owner=self.alice, name='q1.txt', parent=folder,
+            node_type=File.NodeType.FILE, mime_type='text/plain', size=10,
+        )
+        FileEvent.objects.all().delete()
+        record_event(nested, self.alice, FileEvent.Action.CREATED)
+
+        events = self.provider.get_recent_events(self.alice.id)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(
+            events[0]['url'],
+            f'/files/{folder.uuid}?open={nested.uuid}',
+        )
+
     def test_recent_events_viewer_sees_only_shared(self):
         """Bob looking at Alice's activity only sees the 1 shared file event."""
         events = self.provider.get_recent_events(

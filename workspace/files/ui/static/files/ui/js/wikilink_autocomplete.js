@@ -11,6 +11,10 @@ export function createWikilinkSlash({ search } = {}) {
   const menu = document.createElement('div');
   menu.className = 'wikilink-menu';
   menu.setAttribute('data-testid', 'wikilink-menu');
+  // Start hidden. SlashProvider only writes data-show on its first editor
+  // update, so without this the empty popup flashes at the top-left corner
+  // until the user starts typing. It flips this to 'true' when "[[" triggers.
+  menu.dataset.show = 'false';
 
   let provider;
   let view = null;

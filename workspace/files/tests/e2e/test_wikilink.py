@@ -87,6 +87,15 @@ class WikilinkEditorTests(PlaywrightTestCase):
         expect(editor).to_be_visible(timeout=20000)
         return editor
 
+    def test_menu_hidden_before_trigger(self):
+        # Regression: on open, before any "[[" is typed, the popup must stay
+        # hidden. SlashProvider only writes data-show="false" on its first
+        # editor update, so without an initial hidden state the empty menu
+        # flashed at the top-left until the user started typing.
+        self._open_editor()
+        menu = self.page.locator('[data-testid="wikilink-menu"]')
+        expect(menu).to_be_hidden(timeout=5000)
+
     def test_double_bracket_opens_menu(self):
         editor = self._open_editor()
         editor.click()

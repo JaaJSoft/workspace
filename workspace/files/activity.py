@@ -87,12 +87,20 @@ class FilesActivityProvider(ActivityProvider):
                 }
             else:
                 actor_data = None
+            # Mirror the notes module's "Open in Files": land in the file's
+            # parent folder (/files/<folder>) with the viewer opened (?open=),
+            # falling back to the files root for top-level files.
+            parent_id = ev.file.parent_id
+            url = (
+                f'/files/{parent_id}?open={ev.file.pk}'
+                if parent_id else f'/files?open={ev.file.pk}'
+            )
             events.append({
                 'icon': ev.icon,
                 'label': ev.short_label,
                 'description': ev.file.name,
                 'timestamp': ev.created_at,
-                'url': f'/files?open={ev.file.pk}',
+                'url': url,
                 'actor': actor_data,
             })
         return events

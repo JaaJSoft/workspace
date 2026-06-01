@@ -1,37 +1,49 @@
-// Programmatic alert builder. The default <inline_alert> partial is for
-// server-rendered messages; this helper lets JS code construct equivalent
-// alerts at runtime (e.g. after a fetch error).
+// Programmatic alert builder. The default inline_alert partial
+// (ui/partials/inline_alert.html) is for server-rendered messages; this helper
+// builds the SAME markup at runtime (e.g. after a fetch error), so a JS-driven
+// alert is visually identical to a server-rendered one. Keep the two in sync:
+// any class/icon change here must mirror the partial and vice-versa.
 const InlineAlert = {
-  create({ type = 'info', message, title, dismissible = false, iconName, className = '' } = {}) {
-    const icons = {
-      success: 'check-circle',
-      error: 'x-circle',
-      warning: 'alert-triangle',
-      info: 'info',
-    };
-    const icon = iconName || icons[type] || icons.info;
+  // Per-type styling, mirrored from inline_alert.html.
+  _styles: {
+    success: { border: 'border-success/30', icon: 'circle-check', iconColor: 'text-success' },
+    error: { border: 'border-error/30', icon: 'circle-x', iconColor: 'text-error' },
+    warning: { border: 'border-warning/30', icon: 'triangle-alert', iconColor: 'text-warning' },
+    info: { border: 'border-info/30', icon: 'info', iconColor: 'text-info' },
+  },
+
+  create({ type = 'info', message, title, dismissible = false, icon = true, iconName, className = '' } = {}) {
+    const style = this._styles[type] || this._styles.info;
 
     const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} text-white ${className}`;
+    alertDiv.setAttribute('role', 'alert');
+    alertDiv.className =
+      `flex items-start gap-3 rounded-lg border bg-base-200/50 px-4 py-3 ${className} ${style.border}`.trim();
 
-    const iconEl = document.createElement('i');
-    iconEl.setAttribute('data-lucide', icon);
-    iconEl.className = 'w-5 h-5 stroke-current shrink-0';
-    alertDiv.appendChild(iconEl);
+    if (icon) {
+      const iconEl = document.createElement('i');
+      iconEl.setAttribute('data-lucide', iconName || style.icon);
+      // Runtime-injected data-lucide icons are rendered by the global
+      // observeLucideIcons() MutationObserver (see base.html / lucide.js).
+      iconEl.className = `w-4 h-4 shrink-0 mt-0.5 ${style.iconColor}`;
+      alertDiv.appendChild(iconEl);
+    }
 
     if (title) {
       const wrap = document.createElement('div');
-      const h3 = document.createElement('h3');
-      h3.className = 'font-bold';
-      h3.textContent = title;
-      const sub = document.createElement('div');
-      sub.className = 'text-sm';
-      sub.textContent = message;
-      wrap.appendChild(h3);
-      wrap.appendChild(sub);
+      wrap.className = 'flex-1';
+      const titleEl = document.createElement('p');
+      titleEl.className = 'text-sm font-semibold text-base-content';
+      titleEl.textContent = title;
+      const messageEl = document.createElement('p');
+      messageEl.className = 'text-sm text-base-content/70 mt-0.5';
+      messageEl.textContent = message;
+      wrap.appendChild(titleEl);
+      wrap.appendChild(messageEl);
       alertDiv.appendChild(wrap);
     } else {
       const span = document.createElement('span');
+      span.className = 'flex-1 text-sm text-base-content/80';
       span.textContent = message;
       alertDiv.appendChild(span);
     }
@@ -39,9 +51,12 @@ const InlineAlert = {
     if (dismissible) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'btn btn-ghost btn-xs btn-square ml-auto';
+      btn.className = 'shrink-0 mt-0.5 text-base-content/40 hover:text-base-content/70 transition-colors';
       btn.setAttribute('aria-label', 'Dismiss');
-      btn.textContent = '✕';
+      const btnIcon = document.createElement('i');
+      btnIcon.setAttribute('data-lucide', 'x');
+      btnIcon.className = 'w-4 h-4';
+      btn.appendChild(btnIcon);
       btn.addEventListener('click', () => alertDiv.remove());
       alertDiv.appendChild(btn);
     }

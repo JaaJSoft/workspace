@@ -39,7 +39,7 @@ const InlineAlert = {
     if (dismissible) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'btn btn-ghost btn-xs btn-circle ml-auto';
+      btn.className = 'btn btn-ghost btn-xs btn-square ml-auto';
       btn.setAttribute('aria-label', 'Dismiss');
       btn.textContent = '✕';
       btn.addEventListener('click', () => alertDiv.remove());

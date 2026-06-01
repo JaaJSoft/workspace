@@ -49,7 +49,7 @@
           <div class="h-1.5"
                :style="'background-color: oklch(var(--' + ({primary:'p',secondary:'s',accent:'a',info:'in',success:'su',warning:'wa',error:'er'}[eventCalendarColor()]) + '))'"></div>
           <div class="flex items-start justify-between p-4 pb-3 gap-2">
-            <button type="button" class="btn btn-sm btn-circle btn-ghost flex-shrink-0 -mt-1 -ml-1 lg:hidden" @click="closePanel()" aria-label="Back to calendar">
+            <button type="button" class="btn btn-sm btn-square btn-ghost flex-shrink-0 -mt-1 -ml-1 lg:hidden" @click="closePanel()" aria-label="Back to calendar">
               <i data-lucide="arrow-left" class="w-4 h-4"></i>
             </button>
             <div class="flex-1 min-w-0">
@@ -61,7 +61,7 @@
                 <span class="text-xs text-base-content/50 truncate" x-text="eventCalendarObj()?.name"></span>
               </div>
             </div>
-            <button type="button" class="btn btn-sm btn-circle btn-ghost flex-shrink-0 -mt-1 -mr-1 hidden lg:inline-flex" @click="closePanel()" aria-label="Close">
+            <button type="button" class="btn btn-sm btn-square btn-ghost flex-shrink-0 -mt-1 -mr-1 hidden lg:inline-flex" @click="closePanel()" aria-label="Close">
               <i data-lucide="x" class="w-4 h-4"></i>
             </button>
           </div>

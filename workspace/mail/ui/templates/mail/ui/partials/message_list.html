@@ -6,12 +6,12 @@
   </label>
   <h3 class="font-semibold text-sm flex-1 truncate"
       x-text="unifiedInbox ? 'All Inboxes' : (selectedLabel?.name || selectedFolder?.display_name || 'Messages')"></h3>
-  <button class="btn btn-ghost btn-sm lg:btn-xs btn-circle" @click="classifyFolder()"
+  <button class="btn btn-ghost btn-sm lg:btn-xs btn-square" @click="classifyFolder()"
           :disabled="classifyingFolder" title="Classify with AI">
     <i data-lucide="sparkles" class="w-3.5 h-3.5" x-show="!classifyingFolder"></i>
     <span class="loading loading-spinner loading-xs" x-show="classifyingFolder" x-cloak></span>
   </button>
-  <button class="btn btn-ghost btn-sm lg:btn-xs btn-circle" @click="refreshFolder()"
+  <button class="btn btn-ghost btn-sm lg:btn-xs btn-square" @click="refreshFolder()"
           :disabled="unifiedInbox ? accounts.some(a => syncingAccounts[a.uuid]) : syncingAccounts[selectedFolder?.account_id || selectedLabel?.account_id] === true" title="Refresh">
     <i data-lucide="refresh-cw" class="w-3.5 h-3.5"
        x-show="unifiedInbox ? !accounts.some(a => syncingAccounts[a.uuid]) : syncingAccounts[selectedFolder?.account_id || selectedLabel?.account_id] !== true"></i>
@@ -32,7 +32,7 @@
            @input="onSearchInput()"
            @keydown.escape.stop="filters.search = ''; applyFilters()"
     />
-    <button class="absolute right-1.5 top-1/2 -translate-y-1/2 btn btn-ghost btn-circle btn-xs"
+    <button class="absolute right-1.5 top-1/2 -translate-y-1/2 btn btn-ghost btn-square btn-xs"
             x-show="filters.search" x-cloak
             @click="filters.search = ''; applyFilters()">
       <i data-lucide="x" class="w-3 h-3"></i>

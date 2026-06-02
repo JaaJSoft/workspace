@@ -206,45 +206,45 @@
             <div class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-sm px-0.5 py-0.5">
               {# Quick reactions #}
               <template x-for="emoji in quickEmojis" :key="emoji">
-                <button class="btn btn-ghost btn-xs btn-circle text-base leading-none"
+                <button class="btn btn-ghost btn-xs btn-square text-base leading-none"
                         @click="toggleReaction('{{ msg.uuid }}', emoji)"
                         x-text="emoji"></button>
               </template>
               <div class="w-px self-stretch my-0.5 bg-base-300"></div>
               {# Full emoji picker #}
-              <button class="btn btn-ghost btn-xs btn-circle"
+              <button class="btn btn-ghost btn-xs btn-square"
                       @click="openEmojiPicker('reaction', $event, '{{ msg.uuid }}')"
                       title="More reactions">
                 <i data-lucide="smile-plus" class="w-3.5 h-3.5"></i>
               </button>
               {# Reply #}
-              <button class="btn btn-ghost btn-xs btn-circle"
+              <button class="btn btn-ghost btn-xs btn-square"
                       @click="startReply('{{ msg.uuid }}', '{{ msg.author.get_full_name|default:msg.author.username|escapejs }}', '{{ msg.body|truncatechars:100|escapejs }}')"
                       title="Reply">
                 <i data-lucide="reply" class="w-3.5 h-3.5"></i>
               </button>
               {% if msg.uuid in pinned_message_ids %}
-                <button class="btn btn-ghost btn-xs btn-circle"
+                <button class="btn btn-ghost btn-xs btn-square"
                         @click="unpinMessage('{{ msg.uuid }}')"
                         title="Unpin">
                   <i data-lucide="pin-off" class="w-3.5 h-3.5"></i>
                 </button>
               {% else %}
-                <button class="btn btn-ghost btn-xs btn-circle"
+                <button class="btn btn-ghost btn-xs btn-square"
                         @click="pinMessage('{{ msg.uuid }}')"
                         title="Pin">
                   <i data-lucide="pin" class="w-3.5 h-3.5"></i>
                 </button>
               {% endif %}
               {% if is_own %}
-                <button class="btn btn-ghost btn-xs btn-circle"
+                <button class="btn btn-ghost btn-xs btn-square"
                         @click="startEdit('{{ msg.uuid }}')"
                         title="Edit">
                   <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
                 </button>
               {% endif %}
               {% if is_own or is_bot %}
-                <button class="btn btn-ghost btn-xs btn-circle text-error"
+                <button class="btn btn-ghost btn-xs btn-square text-error"
                         @click="deleteMessage('{{ msg.uuid }}')"
                         title="Delete">
                   <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>

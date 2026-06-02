@@ -28,7 +28,7 @@
       <i data-lucide="tag" class="w-3 h-3"></i>
       Tags
     </span>
-    <button class="btn btn-ghost btn-circle btn-xs" @click="showTagModal()" title="New tag">
+    <button class="btn btn-ghost btn-square btn-xs" @click="showTagModal()" title="New tag">
       <i data-lucide="plus" class="w-3 h-3"></i>
     </button>
   </div>
@@ -74,7 +74,7 @@
       <i data-lucide="folder-tree" class="w-3 h-3"></i>
       Folders
     </span>
-    <button class="btn btn-ghost btn-circle btn-xs" @click="showCreateFolderDialog()" title="New folder">
+    <button class="btn btn-ghost btn-square btn-xs" @click="showCreateFolderDialog()" title="New folder">
       <i data-lucide="plus" class="w-3 h-3"></i>
     </button>
   </div>
@@ -179,7 +179,7 @@
       Groups
     </span>
     {% if available_groups %}
-    <button class="btn btn-ghost btn-circle btn-xs"
+    <button class="btn btn-ghost btn-square btn-xs"
             @click="document.getElementById('notes-create-group-folder-dialog').showModal()"
             title="Create group folder">
       <i data-lucide="plus" class="w-3 h-3"></i>

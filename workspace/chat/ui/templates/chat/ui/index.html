@@ -447,7 +447,7 @@ x-data="chatApp({{ user.id }})"
         <!-- Mobile input (< sm) -->
         <div class="flex sm:hidden items-center gap-1.5">
           <div class="dropdown dropdown-top flex-shrink-0 self-end">
-            <button tabindex="0" class="btn btn-ghost btn-circle w-9 h-9 min-h-0" title="Attach file">
+            <button tabindex="0" class="btn btn-ghost btn-square w-9 h-9 min-h-0" title="Attach file">
               <i data-lucide="paperclip" class="w-4 h-4"></i>
             </button>
             <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-box shadow-lg w-48 mb-2 z-50">
@@ -469,7 +469,7 @@ x-data="chatApp({{ user.id }})"
             ></textarea>
           </div>
           <button
-            class="btn btn-info btn-circle flex-shrink-0 self-end w-9 h-9 min-h-0"
+            class="btn btn-info btn-square flex-shrink-0 self-end w-9 h-9 min-h-0"
             @click="sendOrEdit()"
             :disabled="(!messageBody.trim() && pendingFiles.length === 0 && pendingPickedFiles.length === 0) || (botTyping && isBotConversation(activeConversation))"
           >
@@ -547,7 +547,7 @@ x-data="chatApp({{ user.id }})"
 
             <!-- Send button -->
             <button
-              class="btn btn-info btn-sm btn-circle"
+              class="btn btn-info btn-sm btn-square"
               @click="sendOrEdit()"
               :disabled="(!messageBody.trim() && pendingFiles.length === 0 && pendingPickedFiles.length === 0) || (botTyping && isBotConversation(activeConversation))"
             >

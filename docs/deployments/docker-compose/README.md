@@ -71,6 +71,18 @@ All settings are configurable via environment variables or a `.env` file next to
 | `OAUTH_GENERIC_SCOPES` | *(empty)* | Space-separated OAuth2 scopes |
 | `OAUTH_GENERIC_IMAP_HOST` | *(empty)* | IMAP server hostname |
 | `OAUTH_GENERIC_SMTP_HOST` | *(empty)* | SMTP server hostname |
+| `OIDC_RP_CLIENT_ID` | *(empty)* | OIDC client ID. Set this plus the secret and the four endpoints to enable SSO login |
+| `OIDC_RP_CLIENT_SECRET` | *(empty)* | OIDC client secret |
+| `OIDC_OP_AUTHORIZATION_ENDPOINT` | *(empty)* | Provider authorization endpoint |
+| `OIDC_OP_TOKEN_ENDPOINT` | *(empty)* | Provider token endpoint |
+| `OIDC_OP_USER_ENDPOINT` | *(empty)* | Provider userinfo endpoint |
+| `OIDC_OP_JWKS_ENDPOINT` | *(empty)* | Provider JWKS endpoint (required for RS256) |
+| `OIDC_PROVIDER_NAME` | `OpenID` | Label shown on the login button |
+| `OIDC_RP_SIGN_ALGO` | `RS256` | ID token signing algorithm |
+| `OIDC_RP_SCOPES` | `openid email profile` | Requested scopes (`profile` provides the display name) |
+| `OIDC_ALLOWED_DOMAINS` | *(empty)* | Comma-separated email-domain allowlist for sign-up |
+| `OIDC_REQUIRE_EMAIL_VERIFIED` | *(empty)* | Set to `1` to require the `email_verified` claim |
+| `OIDC_USERNAME_CLAIM` | `preferred_username` | Claim used for the Django username |
 | `AI_API_KEY` | *(empty)* | OpenAI API key (or compatible provider). AI disabled if empty |
 | `AI_BASE_URL` | *(empty)* | Custom base URL for the LLM API (Ollama, LM Studio, etc.) |
 | `AI_MODEL` | `gpt-5` | Default LLM model for chat and tasks |

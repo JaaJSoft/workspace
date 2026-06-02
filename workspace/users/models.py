@@ -85,3 +85,28 @@ class APITokenLabel(models.Model):
 
     def __str__(self):
         return self.name or self.auth_token.token_key
+
+
+class OIDCIdentity(models.Model):
+    """Links a Django user to an external OIDC identity (single provider).
+
+    The presence of a row marks the user as managed by the identity provider:
+    the profile name is synced from the IdP on each login and local password
+    changes are disabled. ``sub`` is the provider's stable subject identifier.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='oidc_identity',
+    )
+    sub = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'OIDC identity'
+        verbose_name_plural = 'OIDC identities'
+
+    def __str__(self):
+        return f'{self.user} <oidc:{self.sub}>'

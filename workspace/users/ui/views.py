@@ -1,7 +1,9 @@
 from datetime import date as date_type, timedelta
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.contrib.auth.views import LoginView
 from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -14,6 +16,22 @@ from workspace.users.services import avatar as avatar_service, presence as prese
 from workspace.users.services.settings import get_module_settings
 
 ACTIVITY_LIMIT = 10
+
+
+class WorkspaceLoginView(LoginView):
+    """Login view that also exposes the OIDC flag to the template.
+
+    Read at request time (not frozen at urls-import) so tests can toggle it with
+    override_settings.
+    """
+
+    template_name = 'users/ui/auth/login.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['oidc_enabled'] = getattr(settings, 'OIDC_ENABLED', False)
+        ctx['oidc_provider_name'] = getattr(settings, 'OIDC_PROVIDER_NAME', 'OpenID')
+        return ctx
 
 
 def _build_heatmap_data(user_id, viewer_id=None):
@@ -199,6 +217,7 @@ def profile_activity_feed(request, username):
 @login_required
 def settings_view(request):
     from django.conf import settings as django_settings
+    from workspace.users.services.oidc import is_oidc_managed
     # Batch reads per module — 2 queries instead of one per key.
     profile_settings = get_module_settings(request.user, 'profile')
     dashboard_settings = get_module_settings(request.user, 'dashboard')
@@ -212,6 +231,8 @@ def settings_view(request):
         'banner_palettes': BANNER_PALETTES,
         'show_upcoming_events': dashboard_settings.get('show_upcoming_events', True),
         'show_upcoming_empty': dashboard_settings.get('show_upcoming_empty', True),
+        'oidc_managed': is_oidc_managed(request.user),
+        'oidc_provider_name': getattr(django_settings, 'OIDC_PROVIDER_NAME', 'OpenID'),
     })
 
 

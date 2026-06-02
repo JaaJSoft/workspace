@@ -27,6 +27,16 @@
         {% endif %}
       {% endif %}
 
+      {% if oidc_enabled %}
+        <a id="oidc-login-button"
+           href="{% url 'oidc_authentication_init' %}?next={{ next|urlencode }}"
+           class="btn btn-outline w-full gap-2 mb-2">
+          <i data-lucide="key-round" class="w-5 h-5"></i>
+          Sign in with {{ oidc_provider_name }}
+        </a>
+        <div class="divider text-xs text-base-content/40 my-2">OR</div>
+      {% endif %}
+
       <!-- Login Form -->
       <form method="post" action="{% url 'login' %}" x-data="{ isSubmitting: false }" @submit="isSubmitting = true">
         {% csrf_token %}
@@ -83,11 +93,10 @@
         </div>
       </form>
 
-      <!-- Additional Links -->
-      <div class="divider text-xs text-base-content/40 my-6">OR</div>
-      <div class="text-center">
-        <a href="/admin/" class="link link-primary text-sm font-medium hover:text-secondary transition-colors inline-flex items-center gap-2">
-          <i data-lucide="shield" class="w-4 h-4"></i>
+      <!-- Admin Login (discreet secondary link) -->
+      <div class="text-center mt-6">
+        <a href="/admin/" class="text-xs text-base-content/50 hover:text-base-content transition-colors inline-flex items-center gap-1.5">
+          <i data-lucide="shield" class="w-3.5 h-3.5"></i>
           Admin Login
         </a>
       </div>

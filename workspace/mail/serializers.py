@@ -309,6 +309,11 @@ class MailRuleReorderSerializer(serializers.Serializer):
     position = serializers.IntegerField(min_value=0)
 
 
+class MailRuleApplySerializer(serializers.Serializer):
+    folder_id = serializers.UUIDField()
+    dry_run = serializers.BooleanField(required=False, default=False)
+
+
 class MailRuleTestSerializer(serializers.Serializer):
     message_id = serializers.UUIDField()
     rule_id = serializers.UUIDField(required=False)

@@ -168,7 +168,16 @@ window.mailRulesMixin = function mailRulesMixin() {
       });
       if (!ok) return;
       const result = await this._rulesApplyRequest(false);
-      if (result) this.rulesApplyResult = { ...result, applied_run: true };
+      if (!result) return;
+      this.rulesApplyResult = { ...result, applied_run: true };
+      // A real apply can move/delete/relabel messages, so the sidebar folder
+      // counts and the open message list are now stale. Refresh both when
+      // something actually changed.
+      if (result.applied > 0) {
+        const accountId = this.rulesAccount && this.rulesAccount.uuid;
+        if (accountId) await this.loadFolders(accountId);
+        await this.loadMessages();
+      }
     },
 
     async rulesDelete(rule) {

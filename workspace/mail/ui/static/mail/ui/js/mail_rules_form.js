@@ -63,6 +63,17 @@ window.mailRulesFormMixin = function mailRulesFormMixin() {
           this.rulesForm.mode = 'simple';
           this.rulesForm.simpleCondition = { ...cond };
           this.rulesForm.simpleAction = { ...actions[0] };
+          // The condition field/op (and action label/folder) <select>s are
+          // populated by x-for, so their <option>s don't exist yet when
+          // Alpine first binds x-model as the form renders: `el.value =
+          // <stored>` no-ops on an option-less <select> and it falls back to
+          // its first option ("From"/"contains"). Re-assign once the options
+          // are in the DOM; fresh object refs force x-model to re-sync, so the
+          // form shows the rule's real values instead of the defaults.
+          this.$nextTick(() => {
+            this.rulesForm.simpleCondition = { ...cond };
+            this.rulesForm.simpleAction = { ...actions[0] };
+          });
         } else {
           this.rulesForm.mode = 'advanced';
         }

@@ -123,6 +123,54 @@ window.mailRulesMixin = function mailRulesMixin() {
       return idx !== -1 && idx < this.rulesList.length - 1;
     },
 
+    rulesOpenApply(rule) {
+      this.rulesApplying = rule;
+      this.rulesApplyResult = null;
+      this.rulesApplyBusy = false;
+      // Default to the first folder of the account, if any.
+      const folders = this.rulesAccountFolders();
+      this.rulesApplyFolderId = folders.length ? folders[0].uuid : '';
+    },
+
+    rulesCancelApply() {
+      this.rulesApplying = null;
+      this.rulesApplyResult = null;
+      this.rulesApplyFolderId = '';
+    },
+
+    async _rulesApplyRequest(dryRun) {
+      if (!this.rulesApplying || !this.rulesApplyFolderId) return null;
+      this.rulesApplyBusy = true;
+      try {
+        const resp = await fetch(`/api/v1/mail/rules/${this.rulesApplying.uuid}/apply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ folder_id: this.rulesApplyFolderId, dry_run: dryRun }),
+        });
+        if (!resp.ok) return null;
+        return await resp.json();
+      } finally {
+        this.rulesApplyBusy = false;
+      }
+    },
+
+    async rulesPreviewApply() {
+      const result = await this._rulesApplyRequest(true);
+      if (result) this.rulesApplyResult = { ...result, applied_run: false };
+    },
+
+    async rulesRunApply() {
+      const ok = await AppDialog.confirm({
+        title: 'Apply rule',
+        message: `Apply rule "${this.rulesApplying.name}" to the selected folder now? Actions like move and delete cannot be undone.`,
+        okLabel: 'Apply',
+        okClass: 'btn-warning',
+      });
+      if (!ok) return;
+      const result = await this._rulesApplyRequest(false);
+      if (result) this.rulesApplyResult = { ...result, applied_run: true };
+    },
+
     async rulesDelete(rule) {
       const ok = await AppDialog.confirm({
         title: 'Delete rule',

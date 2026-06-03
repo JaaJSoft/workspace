@@ -46,7 +46,7 @@ dependencies = [
     # file type detection
     "magika>=1.0.0",
     # ai
-    "openai>=2.38.0",
+    "openai>=2.40.0",
     "ollama>=0.6.2",
     # web search & scraping
     "httpx>=0.28.0",

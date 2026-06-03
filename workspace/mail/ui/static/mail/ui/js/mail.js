@@ -113,6 +113,12 @@ function mailApp() {
     },
     rulesShowAdvancedHelp: false,
 
+    // Apply-a-rule-to-a-folder sub-view (sibling of the edit form)
+    rulesApplying: null,
+    rulesApplyFolderId: '',
+    rulesApplyResult: null,
+    rulesApplyBusy: false,
+
     // AI features
     aiSummarizing: false,
     aiSummary: null,

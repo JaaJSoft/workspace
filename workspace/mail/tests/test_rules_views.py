@@ -255,3 +255,81 @@ class MailRuleLogsEndpointTests(_Base):
         r = MailRule.objects.create(account=other_acc, name='r')
         resp = self.client.get(f'/api/v1/mail/rules/{r.uuid}/logs')
         self.assertEqual(resp.status_code, 404)
+
+
+class MailRuleApplyTests(_Base):
+    def setUp(self):
+        super().setUp()
+        self.folder = MailFolder.objects.create(
+            account=self.account, name='INBOX',
+            display_name='Inbox', folder_type='inbox',
+        )
+        self.rule = MailRule.objects.create(
+            account=self.account, name='r',
+            conditions={'field': 'from', 'op': 'contains', 'value': '@news.com'},
+            actions=[{'type': 'add_label', 'label_id': str(self.label.uuid)}],
+        )
+        MailMessage.objects.create(
+            account=self.account, folder=self.folder, imap_uid=1,
+            from_address={'name': '', 'email': 'n@news.com'}, subject='hi',
+        )
+
+    def test_dry_run_ok(self):
+        resp = self.client.post(
+            f'/api/v1/mail/rules/{self.rule.uuid}/apply',
+            {'folder_id': str(self.folder.uuid), 'dry_run': True},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data['matched'], 1)
+        self.assertEqual(resp.data['applied'], 0)
+
+    def test_real_apply_ok(self):
+        resp = self.client.post(
+            f'/api/v1/mail/rules/{self.rule.uuid}/apply',
+            {'folder_id': str(self.folder.uuid), 'dry_run': False},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data['applied'], 1)
+
+    def test_missing_folder_id_400(self):
+        resp = self.client.post(
+            f'/api/v1/mail/rules/{self.rule.uuid}/apply', {}, format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_other_user_rule_404(self):
+        other = User.objects.create_user(username='o2', password='p')
+        other_acc = MailAccount.objects.create(
+            owner=other, email='o2@x.com',
+            imap_host='x', smtp_host='x', username='o2@x.com',
+        )
+        other_rule = MailRule.objects.create(
+            account=other_acc, name='r',
+            conditions={'field': 'from', 'op': 'contains', 'value': '@x.com'},
+            actions=[{'type': 'mark_read'}],
+        )
+        resp = self.client.post(
+            f'/api/v1/mail/rules/{other_rule.uuid}/apply',
+            {'folder_id': str(self.folder.uuid)},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_folder_of_other_account_404(self):
+        other = User.objects.create_user(username='o3', password='p')
+        other_acc = MailAccount.objects.create(
+            owner=other, email='o3@x.com',
+            imap_host='x', smtp_host='x', username='o3@x.com',
+        )
+        other_folder = MailFolder.objects.create(
+            account=other_acc, name='INBOX',
+            display_name='Inbox', folder_type='inbox',
+        )
+        resp = self.client.post(
+            f'/api/v1/mail/rules/{self.rule.uuid}/apply',
+            {'folder_id': str(other_folder.uuid)},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 404)

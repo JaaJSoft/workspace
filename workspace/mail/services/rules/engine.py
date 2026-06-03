@@ -128,3 +128,77 @@ def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
                 last_matched_at=now,
             )
     return summary
+
+
+def _count_imap_failures(audit: list) -> int:
+    """Number of action results that flagged an IMAP failure.
+
+    Move/delete/flag handlers record either ``error == 'imap_failed'`` (move)
+    or ``imap_warning == 'imap_failed'`` (flag/delete) in their audit dict.
+    """
+    failures = 0
+    for entry in audit:
+        if entry.get('error') == 'imap_failed' or entry.get('imap_warning') == 'imap_failed':
+            failures += 1
+    return failures
+
+
+def apply_rule_to_folder(rule, folder, *, dry_run: bool, limit: int = 500) -> dict:
+    """Evaluate ``rule`` against the messages of ``folder`` and optionally apply.
+
+    Unlike the sync engine this targets *existing* messages and runs a single
+    rule regardless of ``rule.is_enabled`` (explicit user action). Scans the
+    ``limit`` most recent non-deleted messages; ``capped`` is True when the
+    folder holds more than ``limit``.
+
+    Returns ``{scanned, total, matched, applied, imap_failed, capped}``.
+    """
+    base = MailMessage.objects.filter(
+        account=rule.account, folder=folder, deleted_at__isnull=True,
+    )
+    total = base.count()
+    # nulls_last keeps the "most recent" cap deterministic across backends
+    # (Postgres sorts NULLs first on DESC, SQLite sorts them last by default).
+    messages = list(
+        base.select_related('account', 'folder')
+        .order_by(F('date').desc(nulls_last=True))[:limit]
+    )
+
+    matched = 0
+    applied = 0
+    imap_failed = 0
+    matched_pks: list = []
+    for message in messages:
+        if not _matches(rule, message):
+            continue
+        matched += 1
+        if dry_run:
+            continue
+        audit, _short_circuit, ok = _apply(rule, message)
+        if not ok:
+            continue
+        applied += 1
+        imap_failed += _count_imap_failures(audit)
+        matched_pks.append(message.pk)
+        try:
+            MailRuleLog.objects.create(
+                rule=rule, rule_name_snapshot=rule.name,
+                message=message, actions_applied=audit,
+            )
+        except Exception:
+            logger.exception('failed to write rule log for %s / %s', rule.uuid, message.uuid)
+
+    if matched_pks:
+        MailRule.objects.filter(pk=rule.pk).update(
+            match_count=F('match_count') + len(matched_pks),
+            last_matched_at=timezone.now(),
+        )
+
+    return {
+        'scanned': len(messages),
+        'total': total,
+        'matched': matched,
+        'applied': applied,
+        'imap_failed': imap_failed,
+        'capped': total > limit,
+    }

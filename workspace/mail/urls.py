@@ -24,6 +24,7 @@ urlpatterns = [
     path('api/v1/mail/rules', views_rules.MailRuleListView.as_view(), name='mail-rule-list'),
     path('api/v1/mail/rules/<uuid:uuid>', views_rules.MailRuleDetailView.as_view(), name='mail-rule-detail'),
     path('api/v1/mail/rules/<uuid:uuid>/reorder', views_rules.MailRuleReorderView.as_view(), name='mail-rule-reorder'),
+    path('api/v1/mail/rules/<uuid:uuid>/apply', views_rules.MailRuleApplyView.as_view(), name='mail-rule-apply'),
     path('api/v1/mail/rules/test', views_rules.MailRuleTestView.as_view(), name='mail-rule-test'),
     path('api/v1/mail/rules/<uuid:uuid>/logs', views_rules.MailRuleLogsView.as_view(), name='mail-rule-logs'),
     path('api/v1/mail/folders', views_folders.MailFolderListView.as_view(), name='mail-folder-list'),

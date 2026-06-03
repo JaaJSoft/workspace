@@ -8,11 +8,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.uuids import parse_uuid_or_none
-from .models import MailAccount, MailMessage, MailRule, MailRuleLog
+from .models import MailAccount, MailFolder, MailMessage, MailRule, MailRuleLog
 from .queries import user_account_ids
 from .services.rules.conditions import evaluate_node
+from .services.rules.engine import apply_rule_to_folder
 from .services.rules.schema import SchemaError, parse_conditions
 from .serializers import (
+    MailRuleApplySerializer,
     MailRuleCreateSerializer,
     MailRuleLogSerializer,
     MailRuleReorderSerializer,
@@ -239,3 +241,29 @@ class MailRuleLogsView(APIView):
             'page': page,
             'page_size': page_size,
         })
+
+
+@extend_schema(tags=['Mail'])
+class MailRuleApplyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Apply a rule to all messages in a folder (preview or real)",
+        request=MailRuleApplySerializer,
+    )
+    def post(self, request, uuid):
+        rule = _get_user_rule(request, uuid)
+        if not rule:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        ser = MailRuleApplySerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            folder = MailFolder.objects.get(
+                uuid=ser.validated_data['folder_id'], account=rule.account,
+            )
+        except MailFolder.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        result = apply_rule_to_folder(
+            rule, folder, dry_run=ser.validated_data['dry_run'],
+        )
+        return Response(result)

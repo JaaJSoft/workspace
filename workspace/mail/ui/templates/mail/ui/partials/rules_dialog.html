@@ -96,7 +96,8 @@
 
         <div class="space-y-2">
           <div class="text-sm font-semibold">Folder</div>
-          <select class="select select-bordered select-sm w-full" x-model="rulesApplyFolderId">
+          <select class="select select-bordered select-sm w-full" x-model="rulesApplyFolderId"
+                  @change="rulesApplyResult = null">
             <template x-for="f in rulesAccountFolders()" :key="f.uuid">
               <option :value="f.uuid" x-text="f.display_name"></option>
             </template>

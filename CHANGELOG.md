@@ -1,10 +1,36 @@
 # Changelog
 
+## 0.26.0 - Mail Rules & UI Polish
+
+### Highlights
+
+You can now run a mail rule against messages you already have, not just new arrivals. The rest of the release is interface polish and fixes: a more consistent button style across the app, plus smaller corrections in mail, files, and chat.
+
+### Mail
+
+- Apply a rule to an existing folder, straight from the rules list. Until now rules only ran on newly arrived messages, so a rule you created after a message had arrived never touched it. Now you can run any rule against a folder's existing messages: a preview first shows how many would match, then you confirm to apply. Works even on a disabled rule, since you are triggering it on purpose.
+- Editing a rule now shows the condition's real field and operator again. Reopening a saved rule could display the wrong values (falling back to "From / contains") even though the rule itself was unchanged; the editor now fills in the values you actually saved.
+
+### Files & Notes
+
+- Opening a file from the activity feed now lands in the folder where the file lives, with the viewer open, instead of dropping you at the files root.
+- Fixed two Markdown viewer glitches: an empty popup that briefly flashed in the top-left corner when opening a note, and a stray background behind the scroll area.
+
+### Chat
+
+- Long answer options in an "ask user" prompt now wrap cleanly on narrow mobile screens instead of overflowing their button and pushing the check mark onto its own line.
+- The desktop send button now lines up with the message input column.
+- The attach-file menu stays on screen instead of being clipped at the edge.
+
+### Profile & UI
+
+- Squared the remaining round action buttons across the mail and notes sidebars, their list headers, the chat composer, and the chat message toolbar, so they match the square buttons already used next to them. Modal and toast close buttons get the same rounded-square treatment.
+
 ## 0.25.0 - Note Linking & Faster Dashboard
 
 ### Highlights
 
-This release brings Obsidian-style note linking to the Markdown editor: type `[[` anywhere in a note to search your other notes and drop in a link to one, without leaving the keyboard. The dashboard home page also feels noticeably snappier: it now appears right away and fills in the recent-activity feed afterwards, and the usage-stats panel on both the dashboard and your profile loads faster on repeat visits. Two fixes round things out: short Markdown notes that had quietly dropped out of the notes browser are back, and clicking a file in global search now opens it directly.
+Notes can now link to each other Obsidian-style: type `[[` in the Markdown editor to find and insert a link to another note. The dashboard also feels noticeably faster, painting right away and streaming in your activity afterwards, along with a couple of fixes to note filing and global search.
 
 ### Notes
 
@@ -24,7 +50,7 @@ This release brings Obsidian-style note linking to the Markdown editor: type `[[
 
 ### Highlights
 
-This release lets you attach files you already have in your workspace straight to chat messages and emails, with no re-uploading: a new picker with folder navigation, search, and multi-select. File type detection is now based on a file's actual content rather than its extension, so files open in the right viewer and show the right icon even when the extension is wrong or missing. The command palette gains quick actions for notes, files, and the dashboard (including a one-step jump to today's journal), chat picks up a compact display mode and clickable AI answer suggestions, and mail's AI features split into separate switches you can toggle individually.
+Attach files you already have in your workspace to chat messages and emails, with no re-uploading. File types are now detected from a file's actual content rather than its extension, so files open in the right viewer even when the extension is wrong or missing. The release also adds command-palette quick actions, a compact chat mode, and more granular mail AI switches.
 
 ### Files & Sharing
 
@@ -58,7 +84,7 @@ This release lets you attach files you already have in your workspace straight t
 
 ### Highlights
 
-The headline this release is a full filters and rules engine for mail: define conditions on any incoming message (sender, subject, body, attachments, ...) and automatically label, move, star, mark read, or delete - all from a per-account dialog with a beginner-friendly simple form and an advanced JSON mode for power users. Right-click any message to spin up a rule from its sender in one click. The rest of the release is a heavy round of performance work that touches video playback, large folder downloads, avatar and thumbnail caching, and the very first paint of every page.
+Mail gains a full filters and rules engine: set conditions on incoming messages and automatically label, move, star, or delete them. The rest of the release is a broad round of performance work, from video playback and large folder downloads to image caching and first paint.
 
 ### Mail
 

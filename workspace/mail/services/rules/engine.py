@@ -157,8 +157,11 @@ def apply_rule_to_folder(rule, folder, *, dry_run: bool, limit: int = 500) -> di
         account=rule.account, folder=folder, deleted_at__isnull=True,
     )
     total = base.count()
+    # nulls_last keeps the "most recent" cap deterministic across backends
+    # (Postgres sorts NULLs first on DESC, SQLite sorts them last by default).
     messages = list(
-        base.select_related('account', 'folder').order_by('-date')[:limit]
+        base.select_related('account', 'folder')
+        .order_by(F('date').desc(nulls_last=True))[:limit]
     )
 
     matched = 0

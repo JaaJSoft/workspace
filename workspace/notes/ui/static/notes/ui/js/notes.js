@@ -1,6 +1,7 @@
 // ── Notes Preferences ────────────────────────────────────
 window._notesPrefsDefaults = {
     showTags: true,
+    compactList: false,
     showFolders: true,
     showJournal: true,
     showGroupFolders: true,

@@ -12,6 +12,12 @@
       @change="update('showTags', $event.target.checked)">
   </label>
   <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Compact note list</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-success"
+      :checked="prefs.compactList"
+      @change="update('compactList', $event.target.checked)">
+  </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
     <span class="text-sm">Show folders</span>
     <input type="checkbox" class="toggle toggle-sm toggle-success"
       :checked="prefs.showFolders"

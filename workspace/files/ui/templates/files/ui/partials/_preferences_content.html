@@ -11,6 +11,12 @@
       :checked="prefs.confirmBeforeDelete"
       @change="update('confirmBeforeDelete', $event.target.checked)">
   </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Compact file list</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-primary"
+      :checked="prefs.compactList"
+      @change="update('compactList', $event.target.checked)">
+  </label>
   <hr class="border-base-300">
   <label class="text-sm text-base-content/60 block mb-1">Sidebar sections</label>
   <label class="flex items-center justify-between gap-2 cursor-pointer">

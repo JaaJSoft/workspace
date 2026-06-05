@@ -1088,18 +1088,21 @@ window.viewToggle = function viewToggle() {
   return {
     viewMode: 'list',
     mosaicTileSize: 3,
+    compactList: false,
 
     init() {
       // Initialize from user preferences
       const prefs = window.getFilePrefs();
       this.viewMode = prefs.defaultViewMode || 'list';
       this.mosaicTileSize = prefs.mosaicTileSize || 3;
+      this.compactList = prefs.compactList === true;
 
       // Listen for preference changes
       window.addEventListener('preferences-changed', (e) => {
         if (e.detail) {
           if (e.detail.defaultViewMode) this.viewMode = e.detail.defaultViewMode;
           if (e.detail.mosaicTileSize) this.mosaicTileSize = e.detail.mosaicTileSize;
+          this.compactList = e.detail.compactList === true;
         }
       });
 

@@ -1,5 +1,5 @@
 // --- File browser preferences ---
-window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list', mosaicTileSize: 3, showPinned: true, showGroups: true };
+window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list', mosaicTileSize: 3, showPinned: true, showGroups: true, compactList: false };
 
 // Initial prefs are embedded server-side via |json_script (see index.html).
 // Reading from the DOM avoids a redundant fetch and the 404 a fresh user

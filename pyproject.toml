@@ -5,7 +5,7 @@ description = "Self-hosted productivity suite (files, chat, mail, calendar, note
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "django>=6.0.5,<7.0",
+    "django>=6.0.6,<7.0",
     "djangorestframework==3.17.1",
     "django-filter==25.2",
     "drf-spectacular==0.29.0",

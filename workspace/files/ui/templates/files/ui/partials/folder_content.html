@@ -183,7 +183,7 @@
     <!-- Table container with overflow -->
     <div class="overflow-auto flex-1 min-h-0"{% if not is_trash_view %} @contextmenu="openBackgroundContextMenu($event)"{% endif %}>
       {% if nodes %}
-      <table class="table table-fixed [&_td]:align-middle [&_th]:align-middle" :class="compactList ? 'table-xs' : ''" x-show="viewMode === 'list'" x-cloak>
+      <table class="table table-fixed [&_td]:align-middle [&_th]:align-middle" :class="compactList ? 'table-xs [&_svg]:h-4 [&_svg]:w-4 [&_.checkbox]:h-4 [&_.checkbox]:w-4 [&_.btn-circle]:h-5 [&_.btn-circle]:w-5 [&_.btn-circle]:min-h-0' : ''" x-show="viewMode === 'list'" x-cloak>
         <thead class="sticky top-0 z-10">
           <tr class="bg-base-200">
             <th class="w-10" data-col="select">

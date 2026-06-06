@@ -60,6 +60,22 @@ class BackfillFileSizesTest(TestCase):
         self.assertEqual(f.size, 5)
         self.assertIn("Updated: 0", out.getvalue())
 
+    def test_batches_updates(self):
+        """3 rows with --batch-size 2 exercise both the in-loop flush (full
+        batch of 2) and the post-loop flush of the remainder (1)."""
+        files = [
+            self._create_file(f"f{i}.txt", b"x" * (i + 1), 0)
+            for i in range(3)
+        ]
+
+        out = StringIO()
+        call_command("backfill_file_sizes", "--batch-size", "2", stdout=out)
+
+        for i, f in enumerate(files):
+            f.refresh_from_db()
+            self.assertEqual(f.size, i + 1)
+        self.assertIn("Updated: 3", out.getvalue())
+
     def test_dry_run_does_not_update(self):
         f = self._create_file("dry.txt", b"hello world", None)
 

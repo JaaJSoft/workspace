@@ -101,14 +101,14 @@
               <div class="divider my-2"></div>
               <div class="text-xs uppercase tracking-wide text-base-content/60 px-2 py-1">Order</div>
               <div class="space-y-1">
-                <template x-for="(col, index) in orderedColumns" :key="col.id">
+                <template x-for="(col, index) in orderedColumns()" :key="col.id">
                   <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-base-200">
                     <span class="text-sm" x-text="col.label"></span>
                     <div class="ml-auto flex items-center gap-1">
                       <button type="button" class="btn btn-ghost btn-xs" @click="moveColumn(col.id, -1)" :disabled="index === 0">
                         <i data-lucide="chevron-up" class="w-3 h-3"></i>
                       </button>
-                      <button type="button" class="btn btn-ghost btn-xs" @click="moveColumn(col.id, 1)" :disabled="index === orderedColumns.length - 1">
+                      <button type="button" class="btn btn-ghost btn-xs" @click="moveColumn(col.id, 1)" :disabled="index === orderedColumns().length - 1">
                         <i data-lucide="chevron-down" class="w-3 h-3"></i>
                       </button>
                     </div>
@@ -191,8 +191,8 @@
                 type="checkbox"
                 class="checkbox checkbox-sm align-middle"
                 @click="toggleSelectAll()"
-                :checked="selectAllState === 'all'"
-                :indeterminate="selectAllState === 'partial'"
+                :checked="selectAllState() === 'all'"
+                x-effect="$el.indeterminate = selectAllState() === 'partial'"
               />
             </th>
             <th class="w-12" data-col="icon"><span class="sr-only">Type</span></th>
@@ -491,27 +491,36 @@
       <div class="flex items-center justify-between gap-4 flex-wrap">
         <div class="flex items-center gap-4 flex-wrap">
           {% if nodes %}
-            <!-- Total items -->
-            <span class="flex items-center gap-1">
-              <i data-lucide="layers" class="w-3 h-3"></i>
-              <span>{{ nodes|length }} item{{ nodes|length|pluralize }}</span>
+            <!-- Selection summary (replaces stats while items are selected) -->
+            <span class="flex items-center gap-1" x-show="selectedUuids.size > 0" x-cloak>
+              <i data-lucide="check" class="w-3 h-3"></i>
+              <span x-text="selectionSummaryText()"></span>
             </span>
 
-            <!-- Folders count -->
-            {% if folder_stats.folder_count > 0 %}
-            <span class="flex items-center gap-1">
-              <i data-lucide="folder" class="w-3 h-3"></i>
-              <span>{{ folder_stats.folder_count }} folder{{ folder_stats.folder_count|pluralize }}</span>
-            </span>
-            {% endif %}
+            <!-- Default stats (when nothing is selected) -->
+            <span class="flex items-center gap-4 flex-wrap" x-show="selectedUuids.size === 0">
+              <!-- Total / filtered items -->
+              <span class="flex items-center gap-1">
+                <i data-lucide="layers" class="w-3 h-3"></i>
+                <span x-text="footerCountText()">{{ nodes|length }} item{{ nodes|length|pluralize }}</span>
+              </span>
 
-            <!-- Files count -->
-            {% if folder_stats.file_count > 0 %}
-            <span class="flex items-center gap-1">
-              <i data-lucide="file" class="w-3 h-3"></i>
-              <span>{{ folder_stats.file_count }} file{{ folder_stats.file_count|pluralize }}</span>
+              <!-- Folders count (hidden while a filter is active) -->
+              {% if folder_stats.folder_count > 0 %}
+              <span class="flex items-center gap-1" x-show="visibleCount() === totalCount()">
+                <i data-lucide="folder" class="w-3 h-3"></i>
+                <span>{{ folder_stats.folder_count }} folder{{ folder_stats.folder_count|pluralize }}</span>
+              </span>
+              {% endif %}
+
+              <!-- Files count (hidden while a filter is active) -->
+              {% if folder_stats.file_count > 0 %}
+              <span class="flex items-center gap-1" x-show="visibleCount() === totalCount()">
+                <i data-lucide="file" class="w-3 h-3"></i>
+                <span>{{ folder_stats.file_count }} file{{ folder_stats.file_count|pluralize }}</span>
+              </span>
+              {% endif %}
             </span>
-            {% endif %}
           {% else %}
             <span class="flex items-center gap-1">
               <i data-lucide="folder-open" class="w-3 h-3"></i>
@@ -520,13 +529,25 @@
           {% endif %}
         </div>
 
-        <!-- Total size -->
-        {% if folder_stats.total_size > 0 %}
-        <div class="flex items-center gap-1">
-          <i data-lucide="hard-drive" class="w-3 h-3"></i>
-          <span>{{ folder_stats.total_size|filesize }}</span>
+        <div class="flex items-center gap-2">
+          <!-- Total size -->
+          {% if folder_stats.total_size > 0 %}
+          <span class="flex items-center gap-1">
+            <i data-lucide="hard-drive" class="w-3 h-3"></i>
+            <span>{{ folder_stats.total_size|filesize }}</span>
+          </span>
+          {% endif %}
+
+          <!-- Current folder properties -->
+          {% if current_folder %}
+          <button type="button"
+                  class="btn btn-ghost btn-xs btn-square -mr-2"
+                  title="Folder properties"
+                  @click="window.dispatchEvent(new CustomEvent('open-properties', { detail: { uuid: '{{ current_folder.uuid }}', nodeType: 'folder' } }))">
+            <i data-lucide="info" class="w-3.5 h-3.5"></i>
+          </button>
+          {% endif %}
         </div>
-        {% endif %}
       </div>
     </div>
   </div>

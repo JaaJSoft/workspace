@@ -1,5 +1,3 @@
-{% load ui_filters %}
-
 <div class="space-y-1">
   <div class="text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-2 flex items-center gap-1.5">
     Workspace usage
@@ -17,7 +15,7 @@
       <div class="w-full bg-base-300 rounded-full h-1.5 mt-1">
         <div class="bg-primary rounded-full h-1.5 transition-all duration-700" x-ref="storageBar" style="width: 0%"></div>
       </div>
-      <div class="text-xs text-base-content/50 mt-0.5">{{ usage_stats.files.total_size|default:"0"|filesize }} / {{ storage_quota|filesize }}</div>
+      <div class="text-xs text-base-content/50 mt-0.5">{{ usage_stats.files.total_size|default:"0"|filesizeformat }} / {{ storage_quota|filesizeformat }}</div>
     </div>
     <div class="font-semibold text-sm flex-shrink-0" x-ref="countFiles" data-target="{{ usage_stats.files.total_files|default:"0" }}">0</div>
   </a>

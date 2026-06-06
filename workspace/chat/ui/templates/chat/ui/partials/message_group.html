@@ -165,7 +165,7 @@
                              @click="window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {detail: {uuid: '{{ att.uuid }}', name: '{{ att.original_name|escapejs }}', type: '{{ att.type|escapejs }}'}}))">
                           <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>
                           <span class="truncate text-xs font-medium">{{ att.original_name }}</span>
-                          <span class="text-[0.65rem] opacity-60 flex-shrink-0">{{ att.size|filesize }}</span>
+                          <span class="text-[0.65rem] opacity-60 flex-shrink-0">{{ att.size|filesizeformat }}</span>
                           <i data-lucide="eye" class="w-3.5 h-3.5 flex-shrink-0 opacity-60"></i>
                         </div>
                         <button

@@ -103,6 +103,28 @@ workspace/<module>/tests/
 
 Tests run in parallel in CI with one job per module (see `.github/workflows/tests.yml`). When creating a new Django app module, add it to the `matrix.module` list in the workflow file.
 
+### JS unit tests
+
+Frontend helpers are tested with Node's built-in test runner - no npm dependencies, no package.json:
+
+```bash
+node --test "workspace/*/tests/js/**/*.test.js"    # Node >= 22
+```
+
+- Test files live in `workspace/<module>/tests/js/<name>.test.js`, next to the module's Python tests. No `__init__.py` in `js/`, so Django test discovery ignores it.
+- Production JS files are classic scripts (globals + `window.X = ...`), not ES modules - they can't be `require()`d. Load them through the shared loader (`workspace/common/tests/js/loader.js`), which executes the file in a `node:vm` context with browser-like `window === globalThis` semantics and returns the context:
+
+```js
+const { loadScript } = require('../../../common/tests/js/loader');
+const ctx = loadScript('workspace/common/static/ui/js/uuid.js');
+assert.equal(ctx.isValidUuid('...'), true);
+```
+
+- Only top-level `function`/`var` declarations and `window.X` assignments are reachable on the returned context; top-level `const`/`let` are not (global lexical scope). Test the public surface.
+- If a script touches `document`/`fetch` at load time, pass stubs: `loadScript(path, { document: stub })`.
+- **Cross-realm gotcha:** arrays/objects created inside the vm carry that realm's prototypes, so `assert.deepStrictEqual` fails its prototype check against test-side literals ("same structure but not reference-equal"). Normalize first: `Array.from(ctx.fn(...))` or `{ ...result }`.
+- CI runs these in the `js` job of `.github/workflows/tests.yml`.
+
 ## Backend Conventions
 
 ### API

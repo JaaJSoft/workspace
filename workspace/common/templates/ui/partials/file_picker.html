@@ -199,17 +199,6 @@
 
     currentLocationLabel() {
       return this.currentFolder ? this.currentFolder.name : 'Root';
-    },
-
-    formatSize(bytes) {
-      if (!bytes) return '';
-      const units = ['B', 'KB', 'MB', 'GB'];
-      let val = bytes;
-      for (const unit of units) {
-        if (val < 1024) return unit === 'B' ? val + ' B' : val.toFixed(1) + ' ' + unit;
-        val /= 1024;
-      }
-      return val.toFixed(1) + ' TB';
     }
   }"
   x-ref="pickerDialog"
@@ -308,7 +297,7 @@
               <i data-lucide="file" x-show="isGenericFile(item)" class="w-4 h-4 text-base-content/50 flex-shrink-0"></i>
 
               <span class="text-sm truncate flex-1" x-text="item.name"></span>
-              <span x-show="isFileMode && item.node_type === 'file' && item.size" class="text-xs text-base-content/40 flex-shrink-0" x-text="formatSize(item.size)"></span>
+              <span x-show="isFileMode && item.node_type === 'file' && item.size" class="text-xs text-base-content/40 flex-shrink-0" x-text="formatFileSize(item.size)"></span>
               <i data-lucide="chevron-right" x-show="item.node_type === 'folder'" class="w-4 h-4 text-base-content/30 ml-auto flex-shrink-0"></i>
               <input
                 x-show="isFileMode && item.node_type === 'file'"

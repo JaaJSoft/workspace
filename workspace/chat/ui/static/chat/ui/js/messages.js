@@ -320,7 +320,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
               </div>
             </div>`;
           }
-          const size = f.size ? this.formatFileSize(f.size) : '';
+          const size = f.size ? formatFileSize(f.size) : '';
           return `<div class="flex items-center gap-0.5 min-w-0">
             <div class="flex items-center gap-2 p-2 rounded-lg bg-info/15 min-w-0 flex-1">
               <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>

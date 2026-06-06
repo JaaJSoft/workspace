@@ -356,17 +356,6 @@ window.chatInputMixin = function chatInputMixin() {
       this.pendingFiles.splice(idx, 1);
     },
 
-    formatFileSize(bytes) {
-      if (!bytes) return '0 B';
-      const units = ['B', 'KB', 'MB', 'GB'];
-      let val = bytes;
-      for (const unit of units) {
-        if (val < 1024) return unit === 'B' ? `${val} B` : `${val.toFixed(1)} ${unit}`;
-        val /= 1024;
-      }
-      return `${val.toFixed(1)} TB`;
-    },
-
     isImageFile(file) {
       return file.type?.startsWith('image/');
     },

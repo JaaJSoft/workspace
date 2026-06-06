@@ -25,10 +25,9 @@ function chatApp(currentUserId) {
     // ── Compose chatApp from domain mixins ──────────────────
     // Each mixin returns an object literal with its own state and
     // methods, and we spread them so they all share `this` at runtime.
-    // Order matters when two mixins define the same key — later spreads
-    // override earlier ones. Today the only intentional override is
-    // chatInputMixin.formatFileSize taking precedence over no longer
-    // existing duplicates from older revisions.
+    // Order matters when two mixins define the same key - later spreads
+    // override earlier ones. Today no mixin intentionally overrides
+    // another's keys.
     ...chatConversationsMixin(),
     ...chatMessagesMixin(),
     ...chatSseMixin(),

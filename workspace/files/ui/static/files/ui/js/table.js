@@ -351,17 +351,6 @@ window.fileTableControls = function fileTableControls() {
     },
 
     // --- Footer (status bar) helpers ---
-    formatFileSize(bytes) {
-      let size = Number(bytes) || 0;
-      for (const unit of ['B', 'KB', 'MB', 'GB', 'TB']) {
-        if (size < 1024) {
-          return unit === 'B' ? `${size} ${unit}` : `${size.toFixed(1)} ${unit}`;
-        }
-        size /= 1024;
-      }
-      return `${size.toFixed(1)} PB`;
-    },
-
     totalCount() {
       return this.originalRows.length;
     },
@@ -395,7 +384,8 @@ window.fileTableControls = function fileTableControls() {
       let text = `${count} selected`;
       const size = this.selectedSize();
       if (size > 0) {
-        text += ` - ${this.formatFileSize(size)}`;
+        // formatFileSize is the shared global from common/static/ui/js/filesize.js
+        text += ` - ${formatFileSize(size)}`;
       }
       return text;
     },

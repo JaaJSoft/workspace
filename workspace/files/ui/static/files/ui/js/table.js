@@ -346,6 +346,56 @@ window.fileTableControls = function fileTableControls() {
       return this.selectedUuids.size;
     },
 
+    // --- Footer (status bar) helpers ---
+    formatFileSize(bytes) {
+      let size = Number(bytes) || 0;
+      for (const unit of ['B', 'KB', 'MB', 'GB', 'TB']) {
+        if (size < 1024) {
+          return unit === 'B' ? `${size} ${unit}` : `${size.toFixed(1)} ${unit}`;
+        }
+        size /= 1024;
+      }
+      return `${size.toFixed(1)} PB`;
+    },
+
+    totalCount() {
+      return this.originalRows.length;
+    },
+
+    visibleCount() {
+      const query = (this.searchQuery || '').trim().toLowerCase();
+      return this.originalRows.filter((row) => this.matchesFilter(row, query)).length;
+    },
+
+    footerCountText() {
+      const total = this.totalCount();
+      const visible = this.visibleCount();
+      if (visible === total) {
+        return `${total} item${total === 1 ? '' : 's'}`;
+      }
+      return `${visible} of ${total} item${total === 1 ? '' : 's'}`;
+    },
+
+    selectedSize() {
+      let total = 0;
+      for (const row of this.originalRows) {
+        if (this.selectedUuids.has(row.dataset.uuid)) {
+          total += parseInt(row.dataset.size || '0', 10) || 0;
+        }
+      }
+      return total;
+    },
+
+    selectionSummaryText() {
+      const count = this.selectedUuids.size;
+      let text = `${count} selected`;
+      const size = this.selectedSize();
+      if (size > 0) {
+        text += ` - ${this.formatFileSize(size)}`;
+      }
+      return text;
+    },
+
     // Fetch actions for all visible rows from the API
     async fetchActions() {
       // Get elements with data-uuid from both list view (tr) and mosaic view (div)

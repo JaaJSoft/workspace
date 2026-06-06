@@ -119,6 +119,21 @@ jobs:
         run: |
           uv run python manage.py test workspace.${{ matrix.module }}.tests.e2e -v 2
 
+  js:
+    runs-on: ubuntu-latest
+    name: JS unit tests
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Run JS unit tests
+        run: node --test "workspace/*/tests/js/**/*.test.js"
+
   webdav-mount:
     runs-on: ubuntu-latest
     name: WebDAV (davfs2 mount)

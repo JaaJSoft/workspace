@@ -45,9 +45,7 @@ Thumbs.db
 htmlcov/
 .pytest_cache/
 .tox/
-# Test suites (Python + JS) are never executed, served, or imported in the
-# container: manage.py test does not run there, collectstatic only collects
-# static/ dirs, and the Tailwind stage only scans templates and static JS.
+
 workspace/*/tests
 
 # Documentation

@@ -63,7 +63,10 @@ window.fileTableControls = function fileTableControls() {
     bulkActions: [],
     bulkActionsLoading: false,
 
-    get orderedColumns() {
+    // Plain method, not an ES getter: fileTableWithView() merges its mixins
+    // with object spread, which invokes getters once at spread time and
+    // freezes their value. Methods survive the spread.
+    orderedColumns() {
       return this.columnOrder
         .map((id) => this.columns.find((col) => col.id === id))
         .filter(Boolean);
@@ -322,7 +325,8 @@ window.fileTableControls = function fileTableControls() {
       this.selectedUuids = new Set(this.selectedUuids);
     },
 
-    get selectAllState() {
+    // Plain method, not an ES getter (see orderedColumns above).
+    selectAllState() {
       if (!this.tbody) return 'none';
       const visibleRows = Array.from(this.tbody.querySelectorAll('tr[data-uuid]'));
       const visibleUuids = visibleRows.map(r => r.dataset.uuid).filter(Boolean);

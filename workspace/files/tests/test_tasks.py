@@ -31,6 +31,11 @@ User = get_user_model()
 class SyncAllUsersTaskTests(TestCase):
     @classmethod
     def setUpTestData(cls):
+        # Data migrations can seed extra active users (the AI assistant bot
+        # from ai.0002_create_default_bot when AI_API_KEY is configured).
+        # sync_all_users iterates every active user, so deactivate any
+        # pre-existing ones to keep the task's input deterministic.
+        User.objects.update(is_active=False)
         cls.alice = User.objects.create_user(username='alice', password='pass')
         cls.bob = User.objects.create_user(username='bob', password='pass')
         cls.inactive = User.objects.create_user(

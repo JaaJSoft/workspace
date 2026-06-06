@@ -101,14 +101,14 @@
               <div class="divider my-2"></div>
               <div class="text-xs uppercase tracking-wide text-base-content/60 px-2 py-1">Order</div>
               <div class="space-y-1">
-                <template x-for="(col, index) in orderedColumns" :key="col.id">
+                <template x-for="(col, index) in orderedColumns()" :key="col.id">
                   <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-base-200">
                     <span class="text-sm" x-text="col.label"></span>
                     <div class="ml-auto flex items-center gap-1">
                       <button type="button" class="btn btn-ghost btn-xs" @click="moveColumn(col.id, -1)" :disabled="index === 0">
                         <i data-lucide="chevron-up" class="w-3 h-3"></i>
                       </button>
-                      <button type="button" class="btn btn-ghost btn-xs" @click="moveColumn(col.id, 1)" :disabled="index === orderedColumns.length - 1">
+                      <button type="button" class="btn btn-ghost btn-xs" @click="moveColumn(col.id, 1)" :disabled="index === orderedColumns().length - 1">
                         <i data-lucide="chevron-down" class="w-3 h-3"></i>
                       </button>
                     </div>
@@ -191,8 +191,8 @@
                 type="checkbox"
                 class="checkbox checkbox-sm align-middle"
                 @click="toggleSelectAll()"
-                :checked="selectAllState === 'all'"
-                :indeterminate="selectAllState === 'partial'"
+                :checked="selectAllState() === 'all'"
+                x-effect="$el.indeterminate = selectAllState() === 'partial'"
               />
             </th>
             <th class="w-12" data-col="icon"><span class="sr-only">Type</span></th>

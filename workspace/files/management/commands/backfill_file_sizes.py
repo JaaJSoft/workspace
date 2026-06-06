@@ -1,12 +1,17 @@
 from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.db.models import Q
 
 from workspace.files.models import File
 
 
 class Command(BaseCommand):
-    help = "Backfill File.size from storage for file nodes with missing size."
+    help = (
+        "Backfill File.size from storage for file nodes with missing (NULL) "
+        "or zero size. Zero-size rows are re-checked because ZIP extraction "
+        "used to persist size=0 for entries whose blob has real content."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -27,8 +32,8 @@ class Command(BaseCommand):
 
         queryset = (
             File.objects.filter(
+                Q(size__isnull=True) | Q(size=0),
                 node_type=File.NodeType.FILE,
-                size__isnull=True,
                 content__isnull=False,
             )
             .exclude(content="")

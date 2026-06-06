@@ -84,17 +84,25 @@ def _stream_entry_to_tempfile(zf, info, leaf, total_bytes, max_bytes):
         size=0,
         charset=None,
     )
+    entry_bytes = 0
     try:
         with zf.open(info, 'r') as src:
             while True:
                 chunk = src.read(_READ_CHUNK)
                 if not chunk:
                     break
+                entry_bytes += len(chunk)
                 total_bytes += len(chunk)
                 if total_bytes > max_bytes:
                     raise ArchiveTooLargeError("Archive too large")
                 tmp.write(chunk)
         tmp.seek(0)
+        # UploadedFile.size is a plain attribute set in __init__, NOT
+        # recomputed from the underlying file after writes - leaving it at 0
+        # made FileService.create_file persist size=0 for every extracted
+        # entry. Set the real byte count, mirroring what Django's
+        # TemporaryFileUploadHandler.file_complete does after an upload.
+        tmp.size = entry_bytes
     except Exception:
         tmp.close()
         raise

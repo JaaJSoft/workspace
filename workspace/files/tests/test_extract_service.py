@@ -285,6 +285,27 @@ class ExtractZipServiceTests(TestCase):
             "outbound streaming pattern this mirrors).",
         )
 
+    def test_extract_stores_real_file_sizes(self):
+        """Regression test: extracted entries must persist their real byte
+        count. ``UploadedFile.size`` is a plain attribute set in ``__init__``
+        (not recomputed after writes), so streaming chunks into a
+        ``TemporaryUploadedFile(size=0)`` left every extracted file recorded
+        as 0 bytes in the DB while the blob on storage was fine."""
+        payload = _make_zip([
+            ('hello.txt', b'hello world'),
+            ('sub/', None),
+            ('sub/nested.txt', b'nested content'),
+        ])
+        archive = self._make_archive_file(payload)
+
+        extract_zip(archive, self.dest, acting_user=self.user)
+
+        hello = File.objects.get(parent=self.dest, name='hello.txt')
+        self.assertEqual(hello.size, len(b'hello world'))
+        sub = File.objects.get(parent=self.dest, name='sub', node_type='folder')
+        nested = File.objects.get(parent=sub, name='nested.txt')
+        self.assertEqual(nested.size, len(b'nested content'))
+
     def test_extract_reuses_existing_intermediate_folder(self):
         payload = _make_zip([
             ('sub/a.txt', b'a'),

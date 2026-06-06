@@ -4,7 +4,8 @@
 // (the project's fixed LANGUAGE_CODE, no LocaleMiddleware), including the
 // non-breaking space Django inserts via avoid_wrapping.
 function formatFileSize(bytes) {
-  let size = Number(bytes) || 0;
+  // Math.trunc mirrors the filter's int() conversion (truncation toward zero)
+  let size = Math.trunc(Number(bytes)) || 0;
   const NBSP = '\u00a0';
   if (size < 1024) {
     return `${size}${NBSP}${size === 1 ? 'byte' : 'bytes'}`;

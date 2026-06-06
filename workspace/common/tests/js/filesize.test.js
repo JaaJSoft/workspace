@@ -49,6 +49,12 @@ test('accepts numeric strings (dataset attributes)', () => {
   assert.equal(formatFileSize('1536'), `1.5${NBSP}KB`);
 });
 
+test('truncates fractional input like Django int()', () => {
+  assert.equal(formatFileSize(117.7), `117${NBSP}bytes`);
+  assert.equal(formatFileSize(1023.9), `1023${NBSP}bytes`);
+  assert.equal(formatFileSize(1.9), `1${NBSP}byte`);
+});
+
 test('separates number and unit with a non-breaking space', () => {
   assert.ok(formatFileSize(1536).includes(NBSP));
   assert.ok(!formatFileSize(1536).includes(' '), 'no regular space expected');

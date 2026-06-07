@@ -53,6 +53,8 @@ class AttachmentDownloadTests(APITestCase):
         try:
             b''.join(response.streaming_content)
         except AttributeError:
+            # Non-streaming responses (e.g. JSON error bodies) have no
+            # streaming_content attribute: nothing to consume.
             pass
 
     def test_unauthenticated_rejected(self):

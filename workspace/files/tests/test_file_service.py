@@ -101,7 +101,7 @@ class TestCreateFolderOnStorage(TestCase):
     @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.FileSystemStorage')
     def test_root_folder_created_on_disk(self):
         with self.settings(MEDIA_ROOT=self.media_root):
-            folder = FileService.create_folder(self.user, 'Photos')
+            FileService.create_folder(self.user, 'Photos')
             expected = os.path.join(self.media_root, 'files', 'users', self.user.username, 'Photos')
             self.assertTrue(os.path.isdir(expected))
 
@@ -109,7 +109,7 @@ class TestCreateFolderOnStorage(TestCase):
     def test_nested_folder_created_on_disk(self):
         with self.settings(MEDIA_ROOT=self.media_root):
             parent = FileService.create_folder(self.user, 'Documents')
-            child = FileService.create_folder(self.user, 'Work', parent=parent)
+            FileService.create_folder(self.user, 'Work', parent=parent)
             expected = os.path.join(
                 self.media_root, 'files', 'users', self.user.username, 'Documents', 'Work'
             )
@@ -120,7 +120,7 @@ class TestCreateFolderOnStorage(TestCase):
         with self.settings(MEDIA_ROOT=self.media_root):
             a = FileService.create_folder(self.user, 'A')
             b = FileService.create_folder(self.user, 'B', parent=a)
-            c = FileService.create_folder(self.user, 'C', parent=b)
+            FileService.create_folder(self.user, 'C', parent=b)
             expected = os.path.join(
                 self.media_root, 'files', 'users', self.user.username, 'A', 'B', 'C'
             )

@@ -56,13 +56,8 @@ class FileSerializerCreateTests(APITestCase):
 
     # ── Folder creation ───────────────────────────────────
 
-    def test_create_folder_delegates_to_file_service(self):
-        """create(node_type=folder) must call FileService.create_folder."""
-        with patch('workspace.files.serializers.FileService.create_folder', wraps=File.objects.create) as mock:
-            # wraps won't perfectly replicate create_folder, so we call the real API
-            pass
-
-        # Just verify via the API that it works end-to-end
+    def test_create_folder_end_to_end(self):
+        """create(node_type=folder) works end-to-end through the API."""
         response = self.client.post('/api/v1/files', {
             'name': 'TestFolder',
             'node_type': 'folder',

@@ -140,7 +140,9 @@ window.notesPreferences = function notesPreferences() {
 window.notesApp = function notesApp(config) {
     config = config || {};
     const prefs = window._notesPrefsCache;
-    const initialView = config.view || prefs.defaultView || 'all';
+    // `let`: init() reassigns this once the prefs fetch resolves (the
+    // component is created before _notesPrefsReady settles).
+    let initialView = config.view || prefs.defaultView || 'all';
     const titleMap = { all: 'All notes', favorites: 'Favorites', recent: 'Recent', journal: 'Journal' };
 
     return {

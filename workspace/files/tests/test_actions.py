@@ -74,7 +74,7 @@ class ActionRegistryTests(TestCase):
             self.assertTrue(action.icon, f"Action {action.id} missing icon")
             self.assertIsInstance(action.category, ActionCategory)
             self.assertIsInstance(action.node_types, tuple)
-            self.assertTrue(len(action.node_types) > 0)
+            self.assertGreater(len(action.node_types), 0, f"Action {action.id} has no node_types")
 
     def test_registration_order(self):
         all_actions = ActionRegistry.all()

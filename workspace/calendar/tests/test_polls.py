@@ -340,7 +340,7 @@ class GuestVoteTests(PollTestMixin, APITestCase):
             format='json',
         )
         self.assertIn('voter_token', resp.data)
-        self.assertTrue(len(resp.data['voter_token']) > 0)
+        self.assertGreater(len(resp.data['voter_token']), 0)
         # Cookie should be set
         self.assertIn(f'poll_voter_{self.poll.share_token}', resp.cookies)
 
@@ -356,7 +356,7 @@ class GuestVoteTests(PollTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         vote = PollVote.objects.get(guest_name='Carol')
-        self.assertTrue(len(vote.voter_token) > 0)
+        self.assertGreater(len(vote.voter_token), 0)
 
     def test_guest_vote_reuses_token(self):
         """Same voter_token updates existing votes instead of creating new ones."""
@@ -449,7 +449,7 @@ class GuestVoteTests(PollTestMixin, APITestCase):
             'guest_name': 'Spammer',
             'votes': [{'slot_id': str(self.slot1.uuid), 'choice': 'yes'}],
         }
-        for i in range(10):
+        for _ in range(10):
             resp = self.client.post(url, payload, format='json')
             self.assertEqual(resp.status_code, status.HTTP_200_OK)
         # 11th should be rate limited

@@ -261,7 +261,7 @@ class FileAPITests(APITestCase):
             name='Root',
             node_type=File.NodeType.FOLDER
         )
-        child = File.objects.create(
+        File.objects.create(
             owner=self.user,
             name='Child',
             node_type=File.NodeType.FOLDER,

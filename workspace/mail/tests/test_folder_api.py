@@ -363,7 +363,7 @@ class MailFolderMoveTests(MailTestMixin, APITestCase):
     @patch('workspace.mail.services.imap_folders.move_folder')
     def test_move_folder_to_parent(self, mock_move):
         """Move a root folder under another folder."""
-        parent = MailFolder.objects.create(
+        MailFolder.objects.create(
             account=self.account, name='Work', display_name='Work', folder_type='other',
         )
 
@@ -445,7 +445,6 @@ class MailFolderDeleteTests(MailTestMixin, APITestCase):
     @patch('workspace.mail.services.imap_folders.delete_folder')
     def test_delete_custom_folder(self, mock_delete):
         self.client.force_authenticate(self.user)
-        folder_uuid = self.custom.uuid
         resp = self.client.delete(self._url(self.custom))
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         mock_delete.assert_called_once()

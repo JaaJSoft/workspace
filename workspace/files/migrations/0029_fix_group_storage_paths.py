@@ -51,7 +51,6 @@ def fix_db_content_names(apps, schema_editor):
 def move_physical_dirs(apps, schema_editor):
     """Move files/groups/<grp>/<contents> up one level so <grp> IS the root dir."""
     import os
-    import shutil
     from django.core.files.storage import default_storage
 
     try:

@@ -605,6 +605,8 @@ def shared_file_view(request, token):
             value = signer.unsign(access_token, max_age=3600)
             password_verified = (value == link.token)
         except (signing.BadSignature, signing.SignatureExpired):
+            # Invalid or expired access token: leave password_verified
+            # False so the password prompt is rendered again.
             pass
 
     # Render viewer HTML if accessible

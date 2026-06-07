@@ -207,7 +207,7 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
         future_occs = list(next_occurrences_after(master, after=now, limit=2))
         target_occ = future_occs[0]
 
-        exception = Event.objects.create(
+        Event.objects.create(
             calendar=self.cal,
             owner=self.owner,
             title='Moved meeting',

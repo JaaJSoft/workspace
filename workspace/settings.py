@@ -359,7 +359,6 @@ LOGOUT_REDIRECT_URL = '/login'
 # --------------------------------------------------
 # Par défaut on loggue vers stdout, pour que l'orchestrateur (Docker/K8s)
 # collecte les logs. Le niveau peut être contrôlé via l'env DJANGO_LOG_LEVEL.
-import logging
 import sys
 
 DJANGO_LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO").upper()
@@ -447,6 +446,8 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
     try:
         Path(DATABASES['default']['NAME']).parent.mkdir(parents=True, exist_ok=True)
     except Exception:
+        # Best effort: if the directory cannot be created (read-only fs,
+        # exotic path), sqlite will raise a clearer error at connect time.
         pass
 
     DATABASES['default'].setdefault('OPTIONS', {})

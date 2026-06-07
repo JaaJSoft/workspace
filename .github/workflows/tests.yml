@@ -14,6 +14,25 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint (ruff)
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # ruff-action resolves the ruff version from the exact pin in
+      # pyproject.toml, so CI and local runs always use the same release.
+      - name: Ruff check
+        uses: astral-sh/ruff-action@v4
+        with:
+          args: check --output-format=github
+
+      - name: Ruff format check
+        uses: astral-sh/ruff-action@v4
+        with:
+          args: format --check --diff
+
   test:
     runs-on: ubuntu-latest
     strategy:

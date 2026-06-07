@@ -24,12 +24,12 @@ jobs:
       # ruff-action resolves the ruff version from the exact pin in
       # pyproject.toml, so CI and local runs always use the same release.
       - name: Ruff check
-        uses: astral-sh/ruff-action@v4
+        uses: astral-sh/ruff-action@v4.0.0
         with:
           args: check --output-format=github
 
       - name: Ruff format check
-        uses: astral-sh/ruff-action@v4
+        uses: astral-sh/ruff-action@v4.0.0
         with:
           args: format --check --diff
 

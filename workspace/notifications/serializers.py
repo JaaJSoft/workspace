@@ -16,7 +16,7 @@ class NotificationSerializer(serializers.Serializer):
 
     def get_actor(self, obj):
         if obj.actor:
-            return {'id': obj.actor_id, 'username': obj.actor.username}
+            return {"id": obj.actor_id, "username": obj.actor.username}
         return None
 
     def get_is_read(self, obj):

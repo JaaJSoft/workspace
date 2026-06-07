@@ -11,15 +11,15 @@ def is_journal_note(user, file_obj) -> bool:
     """
     if file_obj is None:
         return False
-    if getattr(file_obj, 'node_type', None) != File.NodeType.FILE:
+    if getattr(file_obj, "node_type", None) != File.NodeType.FILE:
         return False
-    if getattr(file_obj, 'deleted_at', None) is not None:
+    if getattr(file_obj, "deleted_at", None) is not None:
         return False
-    if getattr(file_obj, 'parent_id', None) is None:
+    if getattr(file_obj, "parent_id", None) is None:
         return False
 
-    prefs = get_setting(user, 'notes', 'preferences', default={}) or {}
-    journal_uuid = prefs.get('journalFolderUuid')
+    prefs = get_setting(user, "notes", "preferences", default={}) or {}
+    journal_uuid = prefs.get("journalFolderUuid")
     if not journal_uuid:
         return False
 

@@ -17,18 +17,26 @@ class CalendarSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Calendar
-        fields = ['uuid', 'name', 'color', 'owner', 'is_synced', 'is_external', 'created_at']
+        fields = [
+            "uuid",
+            "name",
+            "color",
+            "owner",
+            "is_synced",
+            "is_external",
+            "created_at",
+        ]
 
     def get_is_synced(self, obj):
         return obj.mail_account_id is not None
 
     def get_is_external(self, obj):
-        return hasattr(obj, 'external_source')
+        return hasattr(obj, "external_source")
 
 
 class CalendarCreateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255)
-    color = serializers.CharField(max_length=30, required=False, default='primary')
+    color = serializers.CharField(max_length=30, required=False, default="primary")
 
 
 class EventMemberSerializer(serializers.ModelSerializer):
@@ -36,13 +44,13 @@ class EventMemberSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EventMember
-        fields = ['uuid', 'user', 'status', 'created_at']
+        fields = ["uuid", "user", "status", "created_at"]
 
 
 class EventSerializer(serializers.ModelSerializer):
     owner = MemberUserSerializer()
     members = EventMemberSerializer(many=True, read_only=True)
-    calendar_id = serializers.UUIDField(source='calendar.uuid', read_only=True)
+    calendar_id = serializers.UUIDField(source="calendar.uuid", read_only=True)
     is_recurring = serializers.BooleanField(read_only=True)
     is_exception = serializers.BooleanField(read_only=True)
     poll_id = serializers.SerializerMethodField()
@@ -52,27 +60,43 @@ class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = [
-            'uuid', 'calendar_id', 'title', 'description', 'start', 'end',
-            'all_day', 'location', 'owner', 'members',
-            'recurrence_frequency', 'recurrence_interval', 'recurrence_end',
-            'is_recurring', 'is_exception', 'poll_id',
-            'ical_uid', 'external_organizer',
-            'created_at', 'updated_at',
+            "uuid",
+            "calendar_id",
+            "title",
+            "description",
+            "start",
+            "end",
+            "all_day",
+            "location",
+            "owner",
+            "members",
+            "recurrence_frequency",
+            "recurrence_interval",
+            "recurrence_end",
+            "is_recurring",
+            "is_exception",
+            "poll_id",
+            "ical_uid",
+            "external_organizer",
+            "created_at",
+            "updated_at",
         ]
 
     def get_poll_id(self, obj):
-        poll_id = getattr(obj, '_poll_id', None)
+        poll_id = getattr(obj, "_poll_id", None)
         return str(poll_id) if poll_id else None
 
 
 class EventCreateSerializer(serializers.Serializer):
     calendar_id = serializers.UUIDField()
     title = serializers.CharField(max_length=255)
-    description = serializers.CharField(required=False, default='', allow_blank=True)
+    description = serializers.CharField(required=False, default="", allow_blank=True)
     start = serializers.DateTimeField()
     end = serializers.DateTimeField(required=False, allow_null=True, default=None)
     all_day = serializers.BooleanField(required=False, default=False)
-    location = serializers.CharField(max_length=255, required=False, default='', allow_blank=True)
+    location = serializers.CharField(
+        max_length=255, required=False, default="", allow_blank=True
+    )
     member_ids = serializers.ListField(
         child=serializers.IntegerField(),
         required=False,
@@ -80,13 +104,19 @@ class EventCreateSerializer(serializers.Serializer):
     )
     recurrence_frequency = serializers.ChoiceField(
         choices=Event.RecurrenceFrequency.choices,
-        required=False, allow_null=True, default=None,
+        required=False,
+        allow_null=True,
+        default=None,
     )
     recurrence_interval = serializers.IntegerField(
-        required=False, default=1, min_value=1,
+        required=False,
+        default=1,
+        min_value=1,
     )
     recurrence_end = serializers.DateTimeField(
-        required=False, allow_null=True, default=None,
+        required=False,
+        allow_null=True,
+        default=None,
     )
 
 
@@ -104,23 +134,28 @@ class EventUpdateSerializer(serializers.Serializer):
     )
     recurrence_frequency = serializers.ChoiceField(
         choices=Event.RecurrenceFrequency.choices,
-        required=False, allow_null=True,
+        required=False,
+        allow_null=True,
     )
     recurrence_interval = serializers.IntegerField(
-        required=False, min_value=1,
+        required=False,
+        min_value=1,
     )
     recurrence_end = serializers.DateTimeField(
-        required=False, allow_null=True,
+        required=False,
+        allow_null=True,
     )
     scope = serializers.ChoiceField(
-        choices=['this', 'future', 'all'],
-        required=False, default='all',
+        choices=["this", "future", "all"],
+        required=False,
+        default="all",
     )
     original_start = serializers.DateTimeField(required=False)
 
 
 class OccurrenceSerializer(serializers.Serializer):
     """Serializes virtual occurrence dicts (not backed by a model instance)."""
+
     uuid = serializers.CharField()
     calendar_id = serializers.CharField()
     title = serializers.CharField()
@@ -143,4 +178,4 @@ class OccurrenceSerializer(serializers.Serializer):
 
 
 class EventRespondSerializer(serializers.Serializer):
-    status = serializers.ChoiceField(choices=['accepted', 'declined'])
+    status = serializers.ChoiceField(choices=["accepted", "declined"])

@@ -42,15 +42,15 @@ from rest_framework.response import Response
 
 
 def _build_key(prefix, request, per_user):
-    parts = [f'view:{prefix}']
-    if per_user and hasattr(request, 'user') and request.user.is_authenticated:
-        parts.append(f'u:{request.user.pk}')
-    raw_params = getattr(request, 'query_params', None) or getattr(request, 'GET', {})
-    params = raw_params.dict() if hasattr(raw_params, 'dict') else dict(raw_params)
+    parts = [f"view:{prefix}"]
+    if per_user and hasattr(request, "user") and request.user.is_authenticated:
+        parts.append(f"u:{request.user.pk}")
+    raw_params = getattr(request, "query_params", None) or getattr(request, "GET", {})
+    params = raw_params.dict() if hasattr(raw_params, "dict") else dict(raw_params)
     if params:
-        raw = '&'.join(f'{k}={v}' for k, v in sorted(params.items()))
-        parts.append(f'q:{hashlib.md5(raw.encode()).hexdigest()[:10]}')
-    return ':'.join(parts)
+        raw = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+        parts.append(f"q:{hashlib.md5(raw.encode()).hexdigest()[:10]}")
+    return ":".join(parts)
 
 
 def cached_response(timeout=300, per_user=True):
@@ -60,10 +60,11 @@ def cached_response(timeout=300, per_user=True):
     built from the view class name, user id, and query parameters.
     Only caches successful (2xx) GET responses.
     """
+
     def decorator(method):
         @wraps(method)
         def wrapper(self, request, *args, **kwargs):
-            if request.method != 'GET':
+            if request.method != "GET":
                 return method(self, request, *args, **kwargs)
             prefix = self.__class__.__name__
             key = _build_key(prefix, request, per_user)
@@ -74,7 +75,9 @@ def cached_response(timeout=300, per_user=True):
             if 200 <= response.status_code < 300:
                 cache.set(key, response.data, timeout)
             return response
+
         return wrapper
+
     return decorator
 
 
@@ -84,11 +87,11 @@ def invalidate(view_name, user=None):
     Pass *user* for per-user caches.  Without *user*, deletes the global
     (non-per-user) entry.  Query-param variants expire naturally via TTL.
     """
-    parts = [f'view:{view_name}']
+    parts = [f"view:{view_name}"]
     if user is not None:
-        uid = user.pk if hasattr(user, 'pk') else user
-        parts.append(f'u:{uid}')
-    cache.delete(':'.join(parts))
+        uid = user.pk if hasattr(user, "pk") else user
+        parts.append(f"u:{uid}")
+    cache.delete(":".join(parts))
 
 
 # ── Function-level cache with tag-based invalidation ────────────────────────
@@ -105,7 +108,7 @@ def invalidate(view_name, user=None):
 # and Redis.
 
 _CACHED_MISS = object()
-_TAG_VERSION_PREFIX = 'cache:v:'
+_TAG_VERSION_PREFIX = "cache:v:"
 
 
 def _resolve(spec, args, kwargs):
@@ -114,7 +117,7 @@ def _resolve(spec, args, kwargs):
 
 
 def _tag_version(tag):
-    vkey = f'{_TAG_VERSION_PREFIX}{tag}'
+    vkey = f"{_TAG_VERSION_PREFIX}{tag}"
     v = cache.get(vkey)
     if v is None:
         cache.set(vkey, 1, None)
@@ -130,7 +133,7 @@ def invalidate_tags(*tags):
     data a cached reader relies on.
     """
     for tag in tags:
-        vkey = f'{_TAG_VERSION_PREFIX}{tag}'
+        vkey = f"{_TAG_VERSION_PREFIX}{tag}"
         current = cache.get(vkey) or 1
         cache.set(vkey, current + 1, None)
 
@@ -155,14 +158,15 @@ def cached(*, key, ttl, tags=None):
             ...
             invalidate_tags(f'notif:user:{recipient.id}')
     """
+
     def decorator(fn):
         @wraps(fn)
         def wrapped(*args, **kwargs):
             base_key = _resolve(key, args, kwargs)
             tag_list = _resolve(tags, args, kwargs) or []
             if tag_list:
-                versions = '|'.join(str(_tag_version(t)) for t in tag_list)
-                full_key = f'{base_key}|v:{versions}'
+                versions = "|".join(str(_tag_version(t)) for t in tag_list)
+                full_key = f"{base_key}|v:{versions}"
             else:
                 full_key = base_key
             hit = cache.get(full_key, _CACHED_MISS)
@@ -171,5 +175,7 @@ def cached(*, key, ttl, tags=None):
             result = fn(*args, **kwargs)
             cache.set(full_key, result, ttl)
             return result
+
         return wrapped
+
     return decorator

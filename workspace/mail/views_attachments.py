@@ -9,13 +9,14 @@ from rest_framework.views import APIView
 from workspace.common.http_ranges import serve_with_ranges
 from workspace.common.logging import scrub
 from workspace.common.uuids import parse_uuid_or_none
+
 from .models import MailAttachment
 from .queries import user_account_ids
 
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=['Mail'])
+@extend_schema(tags=["Mail"])
 class MailAttachmentDownloadView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -23,7 +24,7 @@ class MailAttachmentDownloadView(APIView):
     def get(self, request, uuid):
         try:
             attachment = MailAttachment.objects.select_related(
-                'message__account',
+                "message__account",
             ).get(
                 uuid=uuid,
                 message__account_id__in=user_account_ids(request.user),
@@ -35,11 +36,11 @@ class MailAttachmentDownloadView(APIView):
         # otherwise propagate as a bare 500. 404 is more truthful and mirrors
         # MailAttachmentSaveToFilesView below.
         try:
-            src = attachment.content.open('rb')
+            src = attachment.content.open("rb")
         except FileNotFoundError:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        size = attachment.size or getattr(src, 'size', 0)
+        size = attachment.size or getattr(src, "size", 0)
         if not size:
             src.seek(0, 2)
             size = src.tell()
@@ -52,46 +53,52 @@ class MailAttachmentDownloadView(APIView):
             file_size=size,
             content_type=attachment.content_type,
             attachment_filename=attachment.filename,
-            cache_control='private, max-age=2592000, immutable',
+            cache_control="private, max-age=2592000, immutable",
         )
 
 
-@extend_schema(tags=['Mail'])
+@extend_schema(tags=["Mail"])
 class MailAttachmentSaveToFilesView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         summary="Save a mail attachment to the user's Files",
-        request=inline_serializer('MailAttachmentSaveToFiles', fields={
-            'folder_id': serializers.UUIDField(required=False, help_text='Target folder UUID.'),
-        }),
+        request=inline_serializer(
+            "MailAttachmentSaveToFiles",
+            fields={
+                "folder_id": serializers.UUIDField(
+                    required=False, help_text="Target folder UUID."
+                ),
+            },
+        ),
     )
     def post(self, request, uuid):
         from django.core.files.base import File as DjangoFile
+
         from workspace.files.models import File
         from workspace.files.services.files import FileService
 
         try:
             attachment = MailAttachment.objects.select_related(
-                'message__account',
+                "message__account",
             ).get(
                 uuid=uuid,
                 message__account_id__in=user_account_ids(request.user),
             )
         except MailAttachment.DoesNotExist:
             return Response(
-                {'detail': 'Attachment not found.'},
+                {"detail": "Attachment not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         # Resolve target folder
         parent = None
-        folder_id = request.data.get('folder_id')
+        folder_id = request.data.get("folder_id")
         if folder_id:
             folder_uuid = parse_uuid_or_none(folder_id)
             if folder_uuid is None:
                 return Response(
-                    {'detail': '"folder_id" must be a valid UUID.'},
+                    {"detail": '"folder_id" must be a valid UUID.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             try:
@@ -101,7 +108,7 @@ class MailAttachmentSaveToFilesView(APIView):
                 )
             except File.DoesNotExist:
                 return Response(
-                    {'detail': 'Folder not found.'},
+                    {"detail": "Folder not found."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
@@ -118,7 +125,7 @@ class MailAttachmentSaveToFilesView(APIView):
         # before being re-raised, so middleware turns them into 500 with a
         # breadcrumb instead of a bare stack trace.
         try:
-            src = attachment.content.open('rb')
+            src = attachment.content.open("rb")
             with src as f:
                 file_obj = FileService.create_file(
                     owner=request.user,
@@ -130,7 +137,7 @@ class MailAttachmentSaveToFilesView(APIView):
                 )
         except FileNotFoundError:
             return Response(
-                {'detail': 'Attachment not found.'},
+                {"detail": "Attachment not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
         except OSError:
@@ -141,6 +148,6 @@ class MailAttachmentSaveToFilesView(APIView):
             raise
 
         return Response(
-            {'detail': 'File saved.', 'file_uuid': str(file_obj.uuid)},
+            {"detail": "File saved.", "file_uuid": str(file_obj.uuid)},
             status=status.HTTP_201_CREATED,
         )

@@ -16,4 +16,4 @@ analyzer will lose track of the taint cleansing.
 
 def scrub(value):
     """Return ``value`` with CR/LF stripped, safe to put in a log entry."""
-    return str(value).replace('\r', '').replace('\n', '')
+    return str(value).replace("\r", "").replace("\n", "")

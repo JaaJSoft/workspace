@@ -25,7 +25,7 @@ class EventsMixin:
         ),
         parameters=[
             OpenApiParameter(
-                name='limit',
+                name="limit",
                 type=OpenApiTypes.INT,
                 description=(
                     f"Number of events to return (default {DEFAULT_EVENTS_LIMIT}, "
@@ -33,7 +33,7 @@ class EventsMixin:
                 ),
             ),
             OpenApiParameter(
-                name='offset',
+                name="offset",
                 type=OpenApiTypes.INT,
                 description="Pagination offset (default 0).",
             ),
@@ -46,7 +46,7 @@ class EventsMixin:
             404: OpenApiResponse(description="File not found."),
         },
     )
-    @action(detail=True, methods=['get'], url_path='events')
+    @action(detail=True, methods=["get"], url_path="events")
     def events(self, request, uuid=None):
         """List events for a single file - shared users included."""
         try:
@@ -55,23 +55,25 @@ class EventsMixin:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         try:
-            limit = int(request.query_params.get('limit', DEFAULT_EVENTS_LIMIT))
-        except (TypeError, ValueError):
+            limit = int(request.query_params.get("limit", DEFAULT_EVENTS_LIMIT))
+        except TypeError, ValueError:
             limit = DEFAULT_EVENTS_LIMIT
         try:
-            offset = int(request.query_params.get('offset', 0))
-        except (TypeError, ValueError):
+            offset = int(request.query_params.get("offset", 0))
+        except TypeError, ValueError:
             offset = 0
         limit = max(1, min(limit, MAX_EVENTS_LIMIT))
         offset = max(0, offset)
 
         qs = events_for_file(file_obj)
         total = qs.count()
-        events = list(qs[offset:offset + limit])
+        events = list(qs[offset : offset + limit])
 
-        return Response({
-            'count': total,
-            'limit': limit,
-            'offset': offset,
-            'results': [serialize_event(e) for e in events],
-        })
+        return Response(
+            {
+                "count": total,
+                "limit": limit,
+                "offset": offset,
+                "results": [serialize_event(e) for e in events],
+            }
+        )

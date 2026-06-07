@@ -17,22 +17,29 @@ class CalendarTestMixin:
 
     def setUp(self):
         self.owner = User.objects.create_user(
-            username='owner', email='owner@test.com', password='pass123',
+            username="owner",
+            email="owner@test.com",
+            password="pass123",
         )
         self.member = User.objects.create_user(
-            username='member', email='member@test.com', password='pass123',
+            username="member",
+            email="member@test.com",
+            password="pass123",
         )
         self.outsider = User.objects.create_user(
-            username='outsider', email='outsider@test.com', password='pass123',
+            username="outsider",
+            email="outsider@test.com",
+            password="pass123",
         )
 
         self.calendar = Calendar.objects.create(
-            name='Work', owner=self.owner,
+            name="Work",
+            owner=self.owner,
         )
 
         self.event = Event.objects.create(
             calendar=self.calendar,
-            title='Team Meeting',
+            title="Team Meeting",
             start=timezone.now() + timedelta(days=1),
             end=timezone.now() + timedelta(days=1, hours=1),
             owner=self.owner,

@@ -19,28 +19,30 @@ User = get_user_model()
 
 class AttachmentSaveToFilesTests(APITestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='u', password='p')
+        self.user = User.objects.create_user(username="u", password="p")
         self.conv = Conversation.objects.create(
             kind=Conversation.Kind.GROUP,
-            title='G',
+            title="G",
             created_by=self.user,
         )
         ConversationMember.objects.create(conversation=self.conv, user=self.user)
         self.message = Message.objects.create(
-            conversation=self.conv, author=self.user, body='hi',
+            conversation=self.conv,
+            author=self.user,
+            body="hi",
         )
         self.attachment = MessageAttachment.objects.create(
             message=self.message,
             file=SimpleUploadedFile(
-                'doc.pdf', b'pdf', content_type='application/pdf',
+                "doc.pdf",
+                b"pdf",
+                content_type="application/pdf",
             ),
-            original_name='doc.pdf',
-            mime_type='application/pdf',
+            original_name="doc.pdf",
+            mime_type="application/pdf",
             size=3,
         )
-        self.url = (
-            f'/api/v1/chat/attachments/{self.attachment.uuid}/save-to-files'
-        )
+        self.url = f"/api/v1/chat/attachments/{self.attachment.uuid}/save-to-files"
 
     def test_malformed_folder_id_returns_400(self):
         """Regression: folder_id was passed straight to File.objects.get(uuid=...)
@@ -50,16 +52,18 @@ class AttachmentSaveToFilesTests(APITestCase):
         """
         self.client.force_authenticate(self.user)
         resp = self.client.post(
-            self.url, data={'folder_id': 'not-a-uuid'}, format='json',
+            self.url,
+            data={"folder_id": "not-a-uuid"},
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_save_to_root_succeeds(self):
         """Sanity: omitting folder_id saves the attachment at the root."""
         self.client.force_authenticate(self.user)
-        resp = self.client.post(self.url, data={}, format='json')
+        resp = self.client.post(self.url, data={}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertIn('file_uuid', resp.data)
+        self.assertIn("file_uuid", resp.data)
 
     def test_save_creates_independent_copy(self):
         """The saved file must be a real copy of the attachment blob, not a
@@ -71,13 +75,13 @@ class AttachmentSaveToFilesTests(APITestCase):
         storage.save() and the two rows would point at the same blob.
         """
         self.client.force_authenticate(self.user)
-        resp = self.client.post(self.url, data={}, format='json')
+        resp = self.client.post(self.url, data={}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
 
-        saved = File.objects.get(uuid=resp.data['file_uuid'])
+        saved = File.objects.get(uuid=resp.data["file_uuid"])
         self.assertNotEqual(saved.content.name, self.attachment.file.name)
-        with saved.content.open('rb') as f:
-            self.assertEqual(f.read(), b'pdf')
+        with saved.content.open("rb") as f:
+            self.assertEqual(f.read(), b"pdf")
 
     def test_missing_blob_returns_404(self):
         """Regression: if the underlying attachment blob has gone missing,
@@ -87,7 +91,9 @@ class AttachmentSaveToFilesTests(APITestCase):
         """
         self.client.force_authenticate(self.user)
         with patch.object(
-            default_storage, 'open', side_effect=FileNotFoundError('gone'),
+            default_storage,
+            "open",
+            side_effect=FileNotFoundError("gone"),
         ):
-            resp = self.client.post(self.url, data={}, format='json')
+            resp = self.client.post(self.url, data={}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

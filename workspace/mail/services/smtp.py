@@ -22,11 +22,14 @@ def connect_smtp(account):
         server = smtplib.SMTP_SSL(account.smtp_host, account.smtp_port)
         server.ehlo()
 
-    if account.auth_method == 'oauth2':
+    if account.auth_method == "oauth2":
         from workspace.mail.services.oauth2 import get_valid_access_token
+
         token = get_valid_access_token(account)
-        auth_string = f'user={account.username}\x01auth=Bearer {token}\x01\x01'
-        server.docmd('AUTH', 'XOAUTH2 ' + base64.b64encode(auth_string.encode()).decode())
+        auth_string = f"user={account.username}\x01auth=Bearer {token}\x01\x01"
+        server.docmd(
+            "AUTH", "XOAUTH2 " + base64.b64encode(auth_string.encode()).decode()
+        )
     else:
         server.login(account.username, account.get_password())
     return server
@@ -42,9 +45,18 @@ def test_smtp_connection(account):
         return False, str(e)
 
 
-def build_draft_message(account, to=None, subject='', body_html='',
-                        body_text='', cc=None, bcc=None, reply_to=None,
-                        attachments=None, include_bcc=False):
+def build_draft_message(
+    account,
+    to=None,
+    subject="",
+    body_html="",
+    body_text="",
+    cc=None,
+    bcc=None,
+    reply_to=None,
+    attachments=None,
+    include_bcc=False,
+):
     """Build a MIME message and return the raw bytes.
 
     Parameters
@@ -70,46 +82,61 @@ def build_draft_message(account, to=None, subject='', body_html='',
     bcc = bcc or []
     attachments = attachments or []
 
-    msg = MIMEMultipart('mixed')
-    msg['From'] = formataddr((account.display_name, account.email))
-    msg['To'] = ', '.join(to)
-    msg['Subject'] = subject
-    msg['Date'] = formatdate(localtime=True)
-    msg['Message-ID'] = make_msgid(domain=account.email.split('@')[-1])
+    msg = MIMEMultipart("mixed")
+    msg["From"] = formataddr((account.display_name, account.email))
+    msg["To"] = ", ".join(to)
+    msg["Subject"] = subject
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=account.email.split("@")[-1])
     if cc:
-        msg['Cc'] = ', '.join(cc)
+        msg["Cc"] = ", ".join(cc)
     if include_bcc and bcc:
-        msg['Bcc'] = ', '.join(bcc)
+        msg["Bcc"] = ", ".join(bcc)
     if reply_to:
-        msg['Reply-To'] = reply_to
+        msg["Reply-To"] = reply_to
 
     # Body: multipart/alternative with text + html
-    body_part = MIMEMultipart('alternative')
+    body_part = MIMEMultipart("alternative")
     if body_text:
-        body_part.attach(MIMEText(body_text, 'plain', 'utf-8'))
+        body_part.attach(MIMEText(body_text, "plain", "utf-8"))
     if body_html:
-        body_part.attach(MIMEText(body_html, 'html', 'utf-8'))
+        body_part.attach(MIMEText(body_html, "html", "utf-8"))
     elif body_text:
-        body_part.attach(MIMEText(f'<pre>{body_text}</pre>', 'html', 'utf-8'))
+        body_part.attach(MIMEText(f"<pre>{body_text}</pre>", "html", "utf-8"))
     msg.attach(body_part)
 
     for attachment in attachments:
         part = MIMEApplication(attachment.read(), Name=attachment.name)
-        part['Content-Disposition'] = f'attachment; filename="{attachment.name}"'
+        part["Content-Disposition"] = f'attachment; filename="{attachment.name}"'
         msg.attach(part)
 
-    return msg.as_string().encode('utf-8')
+    return msg.as_string().encode("utf-8")
 
 
-def send_email(account, to, subject, body_html='', body_text='',
-               cc=None, bcc=None, reply_to=None, attachments=None):
+def send_email(
+    account,
+    to,
+    subject,
+    body_html="",
+    body_text="",
+    cc=None,
+    bcc=None,
+    reply_to=None,
+    attachments=None,
+):
     """Send an email through the account's SMTP server."""
     cc = cc or []
     bcc = bcc or []
 
     raw_msg = build_draft_message(
-        account, to=to, subject=subject, body_html=body_html,
-        body_text=body_text, cc=cc, bcc=bcc, reply_to=reply_to,
+        account,
+        to=to,
+        subject=subject,
+        body_html=body_html,
+        body_text=body_text,
+        cc=cc,
+        bcc=bcc,
+        reply_to=reply_to,
         attachments=attachments,
     )
 
@@ -117,7 +144,7 @@ def send_email(account, to, subject, body_html='', body_text='',
 
     server = connect_smtp(account)
     try:
-        server.sendmail(account.email, all_recipients, raw_msg.decode('utf-8'))
+        server.sendmail(account.email, all_recipients, raw_msg.decode("utf-8"))
     finally:
         server.quit()
 

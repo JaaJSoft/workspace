@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 
-@extend_schema_view(post=extend_schema(tags=['Thumbnails']))
+@extend_schema_view(post=extend_schema(tags=["Thumbnails"]))
 class GenerateThumbnailsView(APIView):
     """Trigger thumbnail generation for image files missing a thumbnail."""
 
@@ -19,5 +19,6 @@ class GenerateThumbnailsView(APIView):
     )
     def post(self, request):
         from workspace.files.tasks import generate_thumbnails
+
         result = generate_thumbnails.delay()
-        return Response({'task_id': result.id}, status=status.HTTP_202_ACCEPTED)
+        return Response({"task_id": result.id}, status=status.HTTP_202_ACCEPTED)

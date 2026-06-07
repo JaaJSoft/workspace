@@ -1,16 +1,17 @@
 from workspace.files.services import FilePermission
+
 from . import ActionRegistry
 from .base import ActionCategory, BaseAction
 
 
 @ActionRegistry.register
 class ToggleFavoriteAction(BaseAction):
-    id = 'toggle_favorite'
-    label = 'Add to favorites'
-    icon = 'star'
+    id = "toggle_favorite"
+    label = "Add to favorites"
+    icon = "star"
     category = ActionCategory.ORGANIZE
-    node_types = ('file', 'folder')
-    keyboard_shortcut = 'F'
+    node_types = ("file", "folder")
+    keyboard_shortcut = "F"
     supports_bulk = True
 
     def is_available(self, user, file_obj, *, permission):
@@ -19,27 +20,27 @@ class ToggleFavoriteAction(BaseAction):
         return permission is not None
 
     def get_label(self, file_obj):
-        if getattr(file_obj, 'is_favorite', False):
-            return 'Remove from favorites'
-        return 'Add to favorites'
+        if getattr(file_obj, "is_favorite", False):
+            return "Remove from favorites"
+        return "Add to favorites"
 
     def get_icon(self, file_obj):
-        return 'star'
+        return "star"
 
     def serialize(self, file_obj):
         data = super().serialize(file_obj)
-        data['state'] = {'is_favorite': bool(getattr(file_obj, 'is_favorite', False))}
+        data["state"] = {"is_favorite": bool(getattr(file_obj, "is_favorite", False))}
         return data
 
 
 @ActionRegistry.register
 class TogglePinAction(BaseAction):
-    id = 'toggle_pin'
-    label = 'Pin to sidebar'
-    icon = 'pin'
+    id = "toggle_pin"
+    label = "Pin to sidebar"
+    icon = "pin"
     category = ActionCategory.ORGANIZE
-    node_types = ('folder',)
-    keyboard_shortcut = 'P'
+    node_types = ("folder",)
+    keyboard_shortcut = "P"
     supports_bulk = True
 
     def is_available(self, user, file_obj, *, permission):
@@ -51,26 +52,26 @@ class TogglePinAction(BaseAction):
         return permission is not None and permission >= FilePermission.EDIT
 
     def get_label(self, file_obj):
-        if getattr(file_obj, 'is_pinned', False):
-            return 'Unpin from sidebar'
-        return 'Pin to sidebar'
+        if getattr(file_obj, "is_pinned", False):
+            return "Unpin from sidebar"
+        return "Pin to sidebar"
 
     def get_icon(self, file_obj):
-        return 'pin'
+        return "pin"
 
     def serialize(self, file_obj):
         data = super().serialize(file_obj)
-        data['state'] = {'is_pinned': bool(getattr(file_obj, 'is_pinned', False))}
+        data["state"] = {"is_pinned": bool(getattr(file_obj, "is_pinned", False))}
         return data
 
 
 @ActionRegistry.register
 class ShareAction(BaseAction):
-    id = 'share'
-    label = 'Share'
-    icon = 'share-2'
+    id = "share"
+    label = "Share"
+    icon = "share-2"
     category = ActionCategory.ORGANIZE
-    node_types = ('file',)
+    node_types = ("file",)
 
     def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:

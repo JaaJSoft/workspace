@@ -4,11 +4,11 @@ from .base import ActionCategory, BaseAction
 
 @ActionRegistry.register
 class DownloadAction(BaseAction):
-    id = 'download'
-    label = 'Download'
-    icon = 'download'
+    id = "download"
+    label = "Download"
+    icon = "download"
     category = ActionCategory.TRANSFER
-    node_types = ('file', 'folder')
+    node_types = ("file", "folder")
     supports_bulk = True
 
     def is_available(self, user, file_obj, *, permission):
@@ -17,18 +17,18 @@ class DownloadAction(BaseAction):
         return permission is not None
 
     def get_label(self, file_obj):
-        if file_obj.node_type == 'folder':
-            return 'Download as ZIP'
-        return 'Download'
+        if file_obj.node_type == "folder":
+            return "Download as ZIP"
+        return "Download"
 
 
 @ActionRegistry.register
 class CopyLinkAction(BaseAction):
-    id = 'copy_link'
-    label = 'Copy link'
-    icon = 'link'
+    id = "copy_link"
+    label = "Copy link"
+    icon = "link"
     category = ActionCategory.TRANSFER
-    node_types = ('file',)
+    node_types = ("file",)
 
     def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:

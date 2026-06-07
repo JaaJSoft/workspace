@@ -18,21 +18,21 @@ class _OpenView(CacheControlMixin, APIView):
 
 class DefaultView(_OpenView):
     def get(self, request):
-        return Response({'ok': True})
+        return Response({"ok": True})
 
 
 class PublicRevalidateView(_OpenView):
     cache_private = False
 
     def get(self, request):
-        return Response({'ok': True})
+        return Response({"ok": True})
 
 
 class PrivateMaxAgeView(_OpenView):
     cache_max_age = 120
 
     def get(self, request):
-        return Response({'ok': True})
+        return Response({"ok": True})
 
 
 class PublicMaxAgeView(_OpenView):
@@ -40,15 +40,15 @@ class PublicMaxAgeView(_OpenView):
     cache_private = False
 
     def get(self, request):
-        return Response({'ok': True})
+        return Response({"ok": True})
 
 
 class PresetCacheControlView(_OpenView):
     cache_max_age = 300
 
     def get(self, request):
-        response = Response({'ok': True})
-        response['Cache-Control'] = 'no-store'
+        response = Response({"ok": True})
+        response["Cache-Control"] = "no-store"
         return response
 
 
@@ -56,7 +56,7 @@ class ErrorView(_OpenView):
     cache_max_age = 300
 
     def get(self, request):
-        return Response({'detail': 'nope'}, status=404)
+        return Response({"detail": "nope"}, status=404)
 
 
 class SwrView(_OpenView):
@@ -64,7 +64,7 @@ class SwrView(_OpenView):
     cache_stale_while_revalidate = 86400
 
     def get(self, request):
-        return Response({'ok': True})
+        return Response({"ok": True})
 
 
 class SwrIgnoredWithoutMaxAgeView(_OpenView):
@@ -73,55 +73,55 @@ class SwrIgnoredWithoutMaxAgeView(_OpenView):
     cache_stale_while_revalidate = 60
 
     def get(self, request):
-        return Response({'ok': True})
+        return Response({"ok": True})
 
 
 class CacheControlMixinTests(SimpleTestCase):
     def _get(self, view_cls):
-        request = factory.get('/whatever')
+        request = factory.get("/whatever")
         view = view_cls.as_view()
         return view(request)
 
     def test_default_is_private_and_must_revalidate(self):
         response = self._get(DefaultView)
         self.assertEqual(
-            response['Cache-Control'],
-            'private, max-age=0, must-revalidate',
+            response["Cache-Control"],
+            "private, max-age=0, must-revalidate",
         )
 
     def test_public_revalidate_when_not_private(self):
         response = self._get(PublicRevalidateView)
         self.assertEqual(
-            response['Cache-Control'],
-            'public, max-age=0, must-revalidate',
+            response["Cache-Control"],
+            "public, max-age=0, must-revalidate",
         )
 
     def test_private_max_age(self):
         response = self._get(PrivateMaxAgeView)
-        self.assertEqual(response['Cache-Control'], 'private, max-age=120')
+        self.assertEqual(response["Cache-Control"], "private, max-age=120")
 
     def test_public_max_age(self):
         response = self._get(PublicMaxAgeView)
-        self.assertEqual(response['Cache-Control'], 'public, max-age=60')
+        self.assertEqual(response["Cache-Control"], "public, max-age=60")
 
     def test_does_not_override_existing_header(self):
         response = self._get(PresetCacheControlView)
-        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.assertEqual(response["Cache-Control"], "no-store")
 
     def test_skips_error_responses(self):
         response = self._get(ErrorView)
-        self.assertNotIn('Cache-Control', response)
+        self.assertNotIn("Cache-Control", response)
 
     def test_stale_while_revalidate_appended_when_set(self):
         response = self._get(SwrView)
         self.assertEqual(
-            response['Cache-Control'],
-            'private, max-age=300, stale-while-revalidate=86400',
+            response["Cache-Control"],
+            "private, max-age=300, stale-while-revalidate=86400",
         )
 
     def test_stale_while_revalidate_ignored_when_max_age_zero(self):
         response = self._get(SwrIgnoredWithoutMaxAgeView)
         self.assertEqual(
-            response['Cache-Control'],
-            'private, max-age=0, must-revalidate',
+            response["Cache-Control"],
+            "private, max-age=0, must-revalidate",
         )

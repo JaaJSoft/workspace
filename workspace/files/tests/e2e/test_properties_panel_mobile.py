@@ -13,6 +13,7 @@ Two bugs are pinned here, both visible only in a real browser:
    perceived as an unwanted gap between the collapsed left nav and the
    panel.
 """
+
 from __future__ import annotations
 
 import re
@@ -36,7 +37,9 @@ class PropertiesPanelMobileOverlayTests(PlaywrightTestCase):
         # row click handler dispatches instead of clicking a row — the
         # row affordance is not what this test is about.
         file = File.objects.create(
-            owner=user, name="hello.txt", node_type=File.NodeType.FILE,
+            owner=user,
+            name="hello.txt",
+            node_type=File.NodeType.FILE,
         )
 
         # iPhone-ish width: below the ``md`` breakpoint (768 px) so the
@@ -52,9 +55,7 @@ class PropertiesPanelMobileOverlayTests(PlaywrightTestCase):
         # timeout on a slow CI runner. Without this the folder-browser
         # column would still be measured against a ``w-72`` left nav and
         # the baseline sanity check would trip.
-        expect(self.page.locator("aside").first).to_have_class(
-            re.compile(r"\bw-16\b")
-        )
+        expect(self.page.locator("aside").first).to_have_class(re.compile(r"\bw-16\b"))
 
         folder_browser = self.page.locator("#folder-browser")
         expect(folder_browser).to_be_visible()

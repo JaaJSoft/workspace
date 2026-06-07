@@ -63,10 +63,7 @@ class BackfillFileSizesTest(TestCase):
     def test_batches_updates(self):
         """3 rows with --batch-size 2 exercise both the in-loop flush (full
         batch of 2) and the post-loop flush of the remainder (1)."""
-        files = [
-            self._create_file(f"f{i}.txt", b"x" * (i + 1), 0)
-            for i in range(3)
-        ]
+        files = [self._create_file(f"f{i}.txt", b"x" * (i + 1), 0) for i in range(3)]
 
         out = StringIO()
         call_command("backfill_file_sizes", "--batch-size", "2", stdout=out)

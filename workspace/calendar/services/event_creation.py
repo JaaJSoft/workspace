@@ -17,12 +17,12 @@ def get_or_create_invitation_calendar(account):
         expected_name = account.display_name or account.email
         if calendar.name != expected_name:
             calendar.name = expected_name
-            calendar.save(update_fields=['name', 'updated_at'])
+            calendar.save(update_fields=["name", "updated_at"])
         return calendar
 
     return Calendar.objects.create(
         name=account.display_name or account.email,
-        color='secondary',
+        color="secondary",
         owner=account.owner,
         mail_account=account,
     )
@@ -34,10 +34,10 @@ def create_event_from_payload(
     user,
     payload: dict,
     source_message,
-    source: str = '',
-    ical_uid: str = '',
+    source: str = "",
+    ical_uid: str = "",
     ical_sequence: int = 0,
-    external_organizer: str = '',
+    external_organizer: str = "",
 ) -> Event:
     """Create an Event from a normalised payload.
 
@@ -56,12 +56,12 @@ def create_event_from_payload(
 
     create_kwargs = dict(
         calendar=calendar,
-        title=payload['title'],
-        description=payload.get('description', ''),
-        start=payload['start'],
-        end=payload.get('end'),
-        all_day=payload.get('all_day', False),
-        location=payload.get('location', ''),
+        title=payload["title"],
+        description=payload.get("description", ""),
+        start=payload["start"],
+        end=payload.get("end"),
+        all_day=payload.get("all_day", False),
+        location=payload.get("location", ""),
         owner=user,
         ical_uid=ical_uid or None,
         ical_sequence=ical_sequence,
@@ -69,5 +69,5 @@ def create_event_from_payload(
         source_message=source_message,
     )
     if source:
-        create_kwargs['source'] = source
+        create_kwargs["source"] = source
     return Event.objects.create(**create_kwargs)

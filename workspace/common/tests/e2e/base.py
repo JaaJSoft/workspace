@@ -14,6 +14,7 @@ matrix (which runs ``manage.py test workspace.<module>``) fast and avoids
 requiring Playwright browsers everywhere. A dedicated CI job sets ``E2E=1``
 and installs the browsers before running the suite.
 """
+
 from __future__ import annotations
 
 import os
@@ -31,7 +32,6 @@ os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 
 from django.contrib.auth import get_user_model  # noqa: E402
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase  # noqa: E402
-
 
 E2E_ENABLED = os.environ.get("E2E", "").lower() in {"1", "true", "yes", "on"}
 
@@ -167,7 +167,8 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
             return
 
         own_failed = [
-            r for r in self._failed_requests
+            r
+            for r in self._failed_requests
             if self.live_server_url in r and "ERR_ABORTED" not in r
         ]
         if not self._page_errors and not own_failed:
@@ -215,8 +216,15 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
 
     # ---- helpers ---------------------------------------------------------
 
-    def create_user(self, username="alice", password="pass12345", *,
-                    seen_changelog=True, completed_onboarding=True, **extra):
+    def create_user(
+        self,
+        username="alice",
+        password="pass12345",
+        *,
+        seen_changelog=True,
+        completed_onboarding=True,
+        **extra,
+    ):
         """Create and return a regular user for use in tests.
 
         By default the user is marked as having already seen the latest
@@ -237,16 +245,21 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
         )
         if seen_changelog:
             from workspace.core.changelog import get_latest_version
+
             latest = get_latest_version()
             if latest:
                 set_setting(
-                    user, setting_keys.MODULE,
-                    setting_keys.CHANGELOG_LAST_SEEN_VERSION, latest,
+                    user,
+                    setting_keys.MODULE,
+                    setting_keys.CHANGELOG_LAST_SEEN_VERSION,
+                    latest,
                 )
         if completed_onboarding:
             set_setting(
-                user, setting_keys.MODULE,
-                setting_keys.ONBOARDING_COMPLETED, True,
+                user,
+                setting_keys.MODULE,
+                setting_keys.ONBOARDING_COMPLETED,
+                True,
             )
         return user
 
@@ -286,8 +299,12 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
         client = Client()
         client.force_login(user)
         cookie = client.cookies[settings.SESSION_COOKIE_NAME]
-        self.context.add_cookies([{
-            "name": settings.SESSION_COOKIE_NAME,
-            "value": cookie.value,
-            "url": self.live_server_url,
-        }])
+        self.context.add_cookies(
+            [
+                {
+                    "name": settings.SESSION_COOKIE_NAME,
+                    "value": cookie.value,
+                    "url": self.live_server_url,
+                }
+            ]
+        )

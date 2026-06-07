@@ -8,7 +8,7 @@ import time
 from django.conf import settings as django_settings
 from django.core.files.base import File as DjangoFile
 from django.db import transaction
-from wsgidav.dav_error import DAVError, HTTP_BAD_REQUEST
+from wsgidav.dav_error import HTTP_BAD_REQUEST, DAVError
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.files.models import File, file_upload_path
@@ -153,12 +153,17 @@ class RootCollection(DAVCollection):
         # (e.g. Windows retries while a slow upload is still in progress).
         file_obj = File.objects.filter(
             FileService.accessible_files_q(self._user),
-            name=name, parent__isnull=True,
-            node_type=File.NodeType.FILE, deleted_at__isnull=True,
+            name=name,
+            parent__isnull=True,
+            node_type=File.NodeType.FILE,
+            deleted_at__isnull=True,
         ).first()
         if file_obj is None:
             file_obj = FileService.create_file(
-                self._user, name, parent=None, acting_user=self._user,
+                self._user,
+                name,
+                parent=None,
+                acting_user=self._user,
             )
         child_path = self.path.rstrip("/") + "/" + name
         return FileResource(child_path, self.environ, file_obj)
@@ -229,19 +234,27 @@ class FolderResource(DAVCollection):
         # members in group folders — not just files owned by self._user.
         file_obj = File.objects.filter(
             FileService.accessible_files_q(self._user),
-            name=name, parent=self._file,
-            node_type=File.NodeType.FILE, deleted_at__isnull=True,
+            name=name,
+            parent=self._file,
+            node_type=File.NodeType.FILE,
+            deleted_at__isnull=True,
         ).first()
         if file_obj is None:
             file_obj = FileService.create_file(
-                self._user, name, parent=self._file, acting_user=self._user,
+                self._user,
+                name,
+                parent=self._file,
+                acting_user=self._user,
             )
         child_path = self.path.rstrip("/") + "/" + name
         return FileResource(child_path, self.environ, file_obj)
 
     def create_collection(self, name):
         FileService.create_folder(
-            self._user, name, parent=self._file, acting_user=self._user,
+            self._user,
+            name,
+            parent=self._file,
+            acting_user=self._user,
         )
         return True
 
@@ -309,25 +322,31 @@ class FileResource(DAVNonCollection):
 
         self._storage_path = storage_path
         self._write_buf = _StreamingWriteBuffer(
-            full_path, DjangoFile.DEFAULT_CHUNK_SIZE,
+            full_path,
+            DjangoFile.DEFAULT_CHUNK_SIZE,
         )
         self._write_started_at = time.monotonic()
         logger.info(
             "PUT started for %s by %s",
-            self.path, getattr(self._user, "username", "?"),
+            self.path,
+            getattr(self._user, "username", "?"),
         )
         return self._write_buf
 
     def end_write(self, *, with_errors):
         buf = self._write_buf
-        elapsed = time.monotonic() - getattr(self, "_write_started_at", time.monotonic())
+        elapsed = time.monotonic() - getattr(
+            self, "_write_started_at", time.monotonic()
+        )
         username = getattr(self._user, "username", "?")
 
         if with_errors:
             buf.abort()
             logger.warning(
                 "PUT failed for %s by %s (%.2fs)",
-                self.path, username, elapsed,
+                self.path,
+                username,
+                elapsed,
             )
             # Only hard-delete if the record still exists and has never
             # had content (size is None).  Refresh first so we don't
@@ -350,7 +369,11 @@ class FileResource(DAVNonCollection):
             logger.warning(
                 "PUT rejected for %s by %s: incomplete transfer "
                 "(%d of %d bytes, %.2fs)",
-                self.path, username, buf.size, expected, elapsed,
+                self.path,
+                username,
+                buf.size,
+                expected,
+                elapsed,
             )
             try:
                 self._file.refresh_from_db()
@@ -374,10 +397,12 @@ class FileResource(DAVNonCollection):
             except File.DoesNotExist:
                 logger.warning(
                     "File record deleted during upload for %s by %s, recreating",
-                    self.path, username,
+                    self.path,
+                    username,
                 )
                 self._file = FileService.create_file(
-                    self._user, self._file.name,
+                    self._user,
+                    self._file.name,
                     parent=self._file.parent,
                     acting_user=self._user,
                 )
@@ -390,8 +415,10 @@ class FileResource(DAVNonCollection):
 
         logger.info(
             "PUT completed for %s by %s (%d bytes, %.2fs)",
-            self.path, username,
-            buf.size, time.monotonic() - self._write_started_at,
+            self.path,
+            username,
+            buf.size,
+            time.monotonic() - self._write_started_at,
         )
 
     def delete(self):
@@ -438,11 +465,15 @@ def _copy_as(file_obj, dest_parent, owner, new_name):
     """
     if file_obj.is_folder():
         folder = FileService.create_folder(
-            owner, new_name, parent=dest_parent, acting_user=owner,
+            owner,
+            new_name,
+            parent=dest_parent,
+            acting_user=owner,
         )
         children = File.objects.filter(
             FileService.accessible_files_q(owner),
-            parent=file_obj, deleted_at__isnull=True,
+            parent=file_obj,
+            deleted_at__isnull=True,
         )
         for child in children:
             _copy_as(child, folder, owner, child.name)
@@ -455,8 +486,11 @@ def _copy_as(file_obj, dest_parent, owner, new_name):
 
     try:
         return FileService.create_file(
-            owner, new_name, parent=dest_parent,
-            content=content, mime_type=file_obj.mime_type,
+            owner,
+            new_name,
+            parent=dest_parent,
+            content=content,
+            mime_type=file_obj.mime_type,
             acting_user=owner,
         )
     finally:

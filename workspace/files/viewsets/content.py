@@ -8,8 +8,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from workspace.common.http_ranges import (
-    safe_filename,
     parse_byte_range as _parse_byte_range,
+)
+from workspace.common.http_ranges import (
+    safe_filename,
+)
+from workspace.common.http_ranges import (
     stream_range as _stream_range,
 )
 from workspace.files.metrics import FILES_DOWNLOAD_BYTES
@@ -23,7 +27,7 @@ def _chunked_field_file(field_file, block_size=65536):
     Used as the data source for ZipStream so a multi-GB folder download
     can be streamed without ever holding more than one block in memory.
     """
-    fh = field_file.open('rb')
+    fh = field_file.open("rb")
     try:
         while True:
             chunk = fh.read(block_size)
@@ -70,7 +74,7 @@ class ContentMixin:
             404: OpenApiResponse(description="File not found or no content."),
         },
     )
-    @action(detail=True, methods=['get'], url_path='content')
+    @action(detail=True, methods=["get"], url_path="content")
     def content(self, request, uuid=None):
         """Serve file content with proper headers for inline viewing."""
         from django.http import FileResponse, HttpResponse, StreamingHttpResponse
@@ -78,45 +82,49 @@ class ContentMixin:
         try:
             file_obj, perm = self._resolve_file_with_access(uuid)
         except Http404:
-            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Only serve files, not folders
         if file_obj.node_type != File.NodeType.FILE:
-            return Response({'detail': 'Not a file.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Not a file."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         # File must have content
         if not file_obj.content:
-            return Response({'detail': 'No content.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "No content."}, status=status.HTTP_404_NOT_FOUND)
 
-        content_type = file_obj.mime_type or 'application/octet-stream'
+        content_type = file_obj.mime_type or "application/octet-stream"
 
         # Range path: when the client requests a byte range (e.g. <video> seeking),
         # serve a 206 Partial Content. Bypasses the 304 short-circuit because the
         # client wants a specific slice, not a cache revalidation.
-        range_header = request.META.get('HTTP_RANGE')
+        range_header = request.META.get("HTTP_RANGE")
         if range_header:
             file_size = file_obj.size or file_obj.content.size
             parsed = _parse_byte_range(range_header, file_size)
             if parsed is None:
                 resp = HttpResponse(status=416)
-                resp['Content-Range'] = f'bytes */{file_size}'
-                resp['Accept-Ranges'] = 'bytes'
+                resp["Content-Range"] = f"bytes */{file_size}"
+                resp["Accept-Ranges"] = "bytes"
                 return resp
             start, end = parsed
-            file_handle = file_obj.content.open('rb')
+            file_handle = file_obj.content.open("rb")
             response = StreamingHttpResponse(
                 _stream_range(file_handle, start, end),
                 status=206,
                 content_type=content_type,
             )
-            response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
-            response['Content-Length'] = str(end - start + 1)
-            response['Accept-Ranges'] = 'bytes'
-            response['Content-Disposition'] = f'inline; filename="{safe_filename(file_obj.name)}"'
+            response["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+            response["Content-Length"] = str(end - start + 1)
+            response["Accept-Ranges"] = "bytes"
+            response["Content-Disposition"] = (
+                f'inline; filename="{safe_filename(file_obj.name)}"'
+            )
             # Intentionally no ETag on 206: ConditionalGetMiddleware would
             # turn the 206 into a 304 whenever the client sends both Range
             # and If-None-Match (common from Chrome), starving the player.
-            response['Cache-Control'] = 'private, no-cache'
+            response["Cache-Control"] = "private, no-cache"
             FILES_DOWNLOAD_BYTES.inc(end - start + 1)
             return response
 
@@ -125,14 +133,16 @@ class ContentMixin:
         if not_modified:
             return not_modified
 
-        if file_obj.category in ('code', 'text'):
+        if file_obj.category in ("code", "text"):
             file_handle = None
             try:
-                file_handle = file_obj.content.open('rb')
-                content = file_handle.read().decode('utf-8')
+                file_handle = file_obj.content.open("rb")
+                content = file_handle.read().decode("utf-8")
                 response = HttpResponse(content, content_type=content_type)
-                response['Content-Disposition'] = f'inline; filename="{safe_filename(file_obj.name)}"'
-                response['Accept-Ranges'] = 'bytes'
+                response["Content-Disposition"] = (
+                    f'inline; filename="{safe_filename(file_obj.name)}"'
+                )
+                response["Accept-Ranges"] = "bytes"
                 self._set_file_cache_headers(response, file_obj)
                 if file_obj.size:
                     FILES_DOWNLOAD_BYTES.inc(file_obj.size)
@@ -146,14 +156,14 @@ class ContentMixin:
 
         # For other files, use FileResponse with proper streaming
         # FileResponse will close the file handle when done
-        file_handle = file_obj.content.open('rb')
+        file_handle = file_obj.content.open("rb")
         response = FileResponse(
-            file_handle,
-            content_type=content_type,
-            as_attachment=False
+            file_handle, content_type=content_type, as_attachment=False
         )
-        response['Content-Disposition'] = f'inline; filename="{safe_filename(file_obj.name)}"'
-        response['Accept-Ranges'] = 'bytes'
+        response["Content-Disposition"] = (
+            f'inline; filename="{safe_filename(file_obj.name)}"'
+        )
+        response["Accept-Ranges"] = "bytes"
         self._set_file_cache_headers(response, file_obj)
 
         if file_obj.size:
@@ -168,7 +178,7 @@ class ContentMixin:
             404: OpenApiResponse(description="No thumbnail available."),
         },
     )
-    @action(detail=True, methods=['get'], url_path='thumbnail')
+    @action(detail=True, methods=["get"], url_path="thumbnail")
     def thumbnail(self, request, uuid=None):
         """Serve a pre-generated thumbnail for an image file."""
         from django.core.files.storage import default_storage
@@ -179,35 +189,44 @@ class ContentMixin:
         try:
             file_obj, perm = self._resolve_file_with_access(uuid)
         except Http404:
-            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if file_obj.node_type != File.NodeType.FILE:
-            return Response({'detail': 'Not a file.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Not a file."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         thumb_path = get_thumbnail_path(file_obj.uuid)
         if not default_storage.exists(thumb_path):
-            return Response({'detail': 'No thumbnail.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No thumbnail."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Thumbnails are content-addressed: the file's updated_at changes
         # whenever it gets regenerated, so a UUID+timestamp ETag is exact.
         etag = self._file_etag(file_obj)
-        if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
+        if_none_match = request.META.get("HTTP_IF_NONE_MATCH")
         if if_none_match and if_none_match.strip('"') == etag.strip('"'):
             from django.http import HttpResponse as DjHttpResponse
+
             resp = DjHttpResponse(status=304)
-            resp['ETag'] = etag
-            resp['Cache-Control'] = 'private, max-age=86400, stale-while-revalidate=604800'
+            resp["ETag"] = etag
+            resp["Cache-Control"] = (
+                "private, max-age=86400, stale-while-revalidate=604800"
+            )
             return resp
 
-        file_handle = default_storage.open(thumb_path, 'rb')
-        response = FileResponse(file_handle, content_type='image/webp')
-        response['ETag'] = etag
+        file_handle = default_storage.open(thumb_path, "rb")
+        response = FileResponse(file_handle, content_type="image/webp")
+        response["ETag"] = etag
         # 24 h hot cache, 7 d stale-while-revalidate. `private` so a shared
         # proxy can't leak one user's thumbnail to another. Set inline rather
         # than via CacheControlMixin: the viewset mixes CacheControlMixin in
         # at the class level for its JSON endpoints, and a per-action override
         # would need bespoke plumbing the mixin does not provide.
-        response['Cache-Control'] = 'private, max-age=86400, stale-while-revalidate=604800'
+        response["Cache-Control"] = (
+            "private, max-age=86400, stale-while-revalidate=604800"
+        )
         return response
 
     @extend_schema(
@@ -223,7 +242,7 @@ class ContentMixin:
             404: OpenApiResponse(description="File not found or no content."),
         },
     )
-    @action(detail=True, methods=['get'], url_path='download')
+    @action(detail=True, methods=["get"], url_path="download")
     def download(self, request, uuid=None):
         """Download a file or a folder as a ZIP archive."""
         from django.http import FileResponse, StreamingHttpResponse
@@ -231,7 +250,7 @@ class ContentMixin:
         try:
             file_obj, perm = self._resolve_file_with_access(uuid)
         except Http404:
-            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Short-circuit: return 304 if ETag matches (single files only)
         if file_obj.node_type == File.NodeType.FILE:
@@ -242,11 +261,13 @@ class ContentMixin:
         # Single file download
         if file_obj.node_type == File.NodeType.FILE:
             if not file_obj.content:
-                return Response({'detail': 'No content.'}, status=status.HTTP_404_NOT_FOUND)
-            file_handle = file_obj.content.open('rb')
+                return Response(
+                    {"detail": "No content."}, status=status.HTTP_404_NOT_FOUND
+                )
+            file_handle = file_obj.content.open("rb")
             response = FileResponse(
                 file_handle,
-                content_type=file_obj.mime_type or 'application/octet-stream',
+                content_type=file_obj.mime_type or "application/octet-stream",
                 as_attachment=True,
                 filename=file_obj.name,
             )
@@ -266,19 +287,21 @@ class ContentMixin:
         desc_filter = Q(owner_id=file_obj.owner_id)
         if file_obj.group_id:
             desc_filter = Q(group_id=file_obj.group_id)
-        descendants = File.objects.filter(
-            desc_filter,
-            node_type=File.NodeType.FILE,
-            deleted_at__isnull=True,
-            path__startswith=prefix,
-        ).exclude(content='').exclude(content__isnull=True)
-
-        zs = _build_zip_stream(
-            (desc, desc.path[len(prefix):]) for desc in descendants
+        descendants = (
+            File.objects.filter(
+                desc_filter,
+                node_type=File.NodeType.FILE,
+                deleted_at__isnull=True,
+                path__startswith=prefix,
+            )
+            .exclude(content="")
+            .exclude(content__isnull=True)
         )
+
+        zs = _build_zip_stream((desc, desc.path[len(prefix) :]) for desc in descendants)
         zip_name = f"{safe_filename(file_obj.name)}.zip"
-        response = StreamingHttpResponse(zs, content_type='application/zip')
-        response['Content-Disposition'] = f'attachment; filename="{zip_name}"'
+        response = StreamingHttpResponse(zs, content_type="application/zip")
+        response["Content-Disposition"] = f'attachment; filename="{zip_name}"'
         return response
 
     @extend_schema(
@@ -288,16 +311,16 @@ class ContentMixin:
             "Folders are included recursively with their contents."
         ),
         request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'uuids': {
-                        'type': 'array',
-                        'items': {'type': 'string', 'format': 'uuid'},
-                        'description': 'List of file/folder UUIDs to download',
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "uuids": {
+                        "type": "array",
+                        "items": {"type": "string", "format": "uuid"},
+                        "description": "List of file/folder UUIDs to download",
                     },
                 },
-                'required': ['uuids'],
+                "required": ["uuids"],
             },
         },
         responses={
@@ -306,20 +329,20 @@ class ContentMixin:
             404: OpenApiResponse(description="One or more UUIDs not found."),
         },
     )
-    @action(detail=False, methods=['post'], url_path='bulk-download')
+    @action(detail=False, methods=["post"], url_path="bulk-download")
     def bulk_download(self, request):
         """Download multiple files/folders as a single ZIP archive."""
         from django.http import StreamingHttpResponse
 
-        uuids = request.data.get('uuids', [])
+        uuids = request.data.get("uuids", [])
         if not isinstance(uuids, list) or len(uuids) == 0:
             return Response(
-                {'detail': 'uuids must be a non-empty list.'},
+                {"detail": "uuids must be a non-empty list."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if len(uuids) > 200:
             return Response(
-                {'detail': 'Too many UUIDs (max 200).'},
+                {"detail": "Too many UUIDs (max 200)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -328,14 +351,21 @@ class ContentMixin:
                 FileService.accessible_files_q(request.user),
                 uuid__in=uuids,
                 deleted_at__isnull=True,
-            ).only(
-                'uuid', 'name', 'path', 'content', 'node_type', 'owner_id',
-            ).distinct()
+            )
+            .only(
+                "uuid",
+                "name",
+                "path",
+                "content",
+                "node_type",
+                "owner_id",
+            )
+            .distinct()
         )
 
         if len(file_objects) != len(set(uuids)):
             return Response(
-                {'detail': 'One or more UUIDs not found.'},
+                {"detail": "One or more UUIDs not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -348,18 +378,26 @@ class ContentMixin:
                     # Folder: add all descendant files under <folder name>/
                     folder_path = obj.path or obj.get_path()
                     prefix = f"{folder_path}/"
-                    descendants = File.objects.filter(
-                        owner=request.user,
-                        node_type=File.NodeType.FILE,
-                        deleted_at__isnull=True,
-                        path__startswith=prefix,
-                    ).only(
-                        'uuid', 'name', 'path', 'content',
-                    ).exclude(content='').exclude(content__isnull=True)
+                    descendants = (
+                        File.objects.filter(
+                            owner=request.user,
+                            node_type=File.NodeType.FILE,
+                            deleted_at__isnull=True,
+                            path__startswith=prefix,
+                        )
+                        .only(
+                            "uuid",
+                            "name",
+                            "path",
+                            "content",
+                        )
+                        .exclude(content="")
+                        .exclude(content__isnull=True)
+                    )
                     for desc in descendants:
-                        yield desc, f"{obj.name}/{desc.path[len(prefix):]}"
+                        yield desc, f"{obj.name}/{desc.path[len(prefix) :]}"
 
         zs = _build_zip_stream(_entries())
-        response = StreamingHttpResponse(zs, content_type='application/zip')
-        response['Content-Disposition'] = 'attachment; filename="download.zip"'
+        response = StreamingHttpResponse(zs, content_type="application/zip")
+        response["Content-Disposition"] = 'attachment; filename="download.zip"'
         return response

@@ -4,48 +4,48 @@ from . import views
 
 urlpatterns = [
     path(
-        'api/v1/ai/bots',
+        "api/v1/ai/bots",
         views.BotListView.as_view(),
-        name='ai-bots',
+        name="ai-bots",
     ),
     path(
-        'api/v1/ai/tasks/mail/summarize',
+        "api/v1/ai/tasks/mail/summarize",
         views.SummarizeView.as_view(),
-        name='ai-summarize',
+        name="ai-summarize",
     ),
     path(
-        'api/v1/ai/tasks/mail/compose',
+        "api/v1/ai/tasks/mail/compose",
         views.ComposeView.as_view(),
-        name='ai-compose',
+        name="ai-compose",
     ),
     path(
-        'api/v1/ai/tasks/mail/reply',
+        "api/v1/ai/tasks/mail/reply",
         views.ReplyView.as_view(),
-        name='ai-reply',
+        name="ai-reply",
     ),
     path(
-        'api/v1/ai/tasks/mail/classify',
+        "api/v1/ai/tasks/mail/classify",
         views.ClassifyView.as_view(),
-        name='ai-classify',
+        name="ai-classify",
     ),
     path(
-        'api/v1/ai/tasks/editor',
+        "api/v1/ai/tasks/editor",
         views.EditorActionView.as_view(),
-        name='ai-editor-action',
+        name="ai-editor-action",
     ),
     path(
-        'api/v1/ai/tasks/<uuid:task_id>',
+        "api/v1/ai/tasks/<uuid:task_id>",
         views.TaskDetailView.as_view(),
-        name='ai-task-detail',
+        name="ai-task-detail",
     ),
     path(
-        'api/v1/ai/memories',
+        "api/v1/ai/memories",
         views.MemoryListView.as_view(),
-        name='ai-memories',
+        name="ai-memories",
     ),
     path(
-        'api/v1/ai/memories/<int:pk>',
+        "api/v1/ai/memories/<int:pk>",
         views.MemoryDetailView.as_view(),
-        name='ai-memory-detail',
+        name="ai-memory-detail",
     ),
 ]

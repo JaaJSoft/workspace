@@ -20,41 +20,41 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Show what would be changed without writing.',
+            "--dry-run",
+            action="store_true",
+            help="Show what would be changed without writing.",
         )
         parser.add_argument(
-            '--user',
+            "--user",
             type=str,
             default=None,
-            help='Sync only the specified username. Default: all users.',
+            help="Sync only the specified username. Default: all users.",
         )
         parser.add_argument(
-            '--folder',
+            "--folder",
             type=str,
             default=None,
-            help='UUID of a specific folder to sync (shallow). Requires --user.',
+            help="UUID of a specific folder to sync (shallow). Requires --user.",
         )
         parser.add_argument(
-            '--shallow',
-            action='store_true',
-            help='Only sync immediate children (not recursive).',
+            "--shallow",
+            action="store_true",
+            help="Only sync immediate children (not recursive).",
         )
 
     def handle(self, *args, **options):
-        dry_run = options['dry_run']
-        username = options['user']
-        folder_uuid = options['folder']
-        shallow = options['shallow']
+        dry_run = options["dry_run"]
+        username = options["user"]
+        folder_uuid = options["folder"]
+        shallow = options["shallow"]
 
         service = FileSyncService(dry_run=dry_run, log=logger)
 
         if folder_uuid:
             if not username:
-                self.stderr.write(self.style.ERROR(
-                    '--folder requires --user to be specified.'
-                ))
+                self.stderr.write(
+                    self.style.ERROR("--folder requires --user to be specified.")
+                )
                 return
 
             user = User.objects.get(username=username)
@@ -82,13 +82,15 @@ class Command(BaseCommand):
             self._print_result(result, f"user '{user.username}'")
 
     def _print_result(self, result, scope):
-        self.stdout.write(self.style.SUCCESS(
-            f"Sync complete for {scope}: "
-            f"files_created={result.files_created}, "
-            f"folders_created={result.folders_created}, "
-            f"files_soft_deleted={result.files_soft_deleted}, "
-            f"folders_soft_deleted={result.folders_soft_deleted}"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Sync complete for {scope}: "
+                f"files_created={result.files_created}, "
+                f"folders_created={result.folders_created}, "
+                f"files_soft_deleted={result.files_soft_deleted}, "
+                f"folders_soft_deleted={result.folders_soft_deleted}"
+            )
+        )
         if result.errors:
             for err in result.errors:
                 self.stderr.write(self.style.WARNING(f"  ERROR: {err}"))

@@ -27,6 +27,7 @@ process ``SQLITE_BUSY_SNAPSHOT`` we hit in production). A multi-process
 integration test would belong with the E2E suite (``E2E=1`` env), not
 in a unit test.
 """
+
 from __future__ import annotations
 
 import unittest
@@ -37,12 +38,12 @@ from django.db import connection
 
 class SQLiteTransactionModeConfigTests(unittest.TestCase):
     def test_transaction_mode_is_immediate_when_sqlite(self):
-        if connection.vendor != 'sqlite':
+        if connection.vendor != "sqlite":
             self.skipTest("Configuration only applies to SQLite backends.")
-        options = settings.DATABASES['default'].get('OPTIONS', {})
+        options = settings.DATABASES["default"].get("OPTIONS", {})
         self.assertEqual(
-            options.get('transaction_mode'),
-            'IMMEDIATE',
+            options.get("transaction_mode"),
+            "IMMEDIATE",
             "SQLite must use BEGIN IMMEDIATE to avoid SQLITE_BUSY_SNAPSHOT "
             "on concurrent update_or_create calls; see the comment block in "
             "workspace/settings.py next to this option.",

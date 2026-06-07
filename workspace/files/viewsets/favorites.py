@@ -20,21 +20,24 @@ class FavoritesMixin:
             200: OpenApiResponse(description="Favorite status updated."),
         },
     )
-    @action(detail=True, methods=['post', 'delete'], url_path='favorite')
+    @action(detail=True, methods=["post", "delete"], url_path="favorite")
     def favorite(self, request, uuid=None):
         """Add or remove a file/folder from favorites."""
         from workspace.files.actions import ActionRegistry
+
         file_obj, perm = self._resolve_file_with_access(uuid)
         if not ActionRegistry.is_action_available(
-            'toggle_favorite', request.user, file_obj,
+            "toggle_favorite",
+            request.user,
+            file_obj,
             permission=perm,
         ):
             return Response(status=status.HTTP_403_FORBIDDEN)
-        if request.method == 'POST':
+        if request.method == "POST":
             FileFavorite.objects.get_or_create(owner=request.user, file=file_obj)
-            return Response({'is_favorite': True}, status=status.HTTP_200_OK)
+            return Response({"is_favorite": True}, status=status.HTTP_200_OK)
         FileFavorite.objects.filter(owner=request.user, file=file_obj).delete()
-        return Response({'is_favorite': False}, status=status.HTTP_200_OK)
+        return Response({"is_favorite": False}, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Pin or unpin a folder from sidebar",
@@ -44,29 +47,42 @@ class FavoritesMixin:
             400: OpenApiResponse(description="Not a folder."),
         },
     )
-    @action(detail=True, methods=['post', 'delete'], url_path='pin')
+    @action(detail=True, methods=["post", "delete"], url_path="pin")
     def pin(self, request, uuid=None):
         """Pin or unpin a folder from the sidebar."""
         from workspace.files.actions import ActionRegistry
+
         file_obj = self.get_object()
         # Distinguish "wrong shape" (400) from "not allowed for this user/state"
         # (403). The action also blocks group-root folders, deleted files and
         # users without EDIT permission, so the 400 message would have lied.
         if file_obj.node_type != File.NodeType.FOLDER:
-            return Response({'detail': 'Only folders can be pinned.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Only folders can be pinned."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         perm = FileService.get_permission(request.user, file_obj)
         if not ActionRegistry.is_action_available(
-            'toggle_pin', request.user, file_obj,
+            "toggle_pin",
+            request.user,
+            file_obj,
             permission=perm,
         ):
             return Response(status=status.HTTP_403_FORBIDDEN)
-        if request.method == 'POST':
-            max_pos = PinnedFolder.objects.filter(owner=request.user).order_by('-position').values_list('position', flat=True).first()
+        if request.method == "POST":
+            max_pos = (
+                PinnedFolder.objects.filter(owner=request.user)
+                .order_by("-position")
+                .values_list("position", flat=True)
+                .first()
+            )
             position = (max_pos or 0) + 1
-            PinnedFolder.objects.get_or_create(owner=request.user, folder=file_obj, defaults={'position': position})
-            return Response({'is_pinned': True}, status=status.HTTP_200_OK)
+            PinnedFolder.objects.get_or_create(
+                owner=request.user, folder=file_obj, defaults={"position": position}
+            )
+            return Response({"is_pinned": True}, status=status.HTTP_200_OK)
         PinnedFolder.objects.filter(owner=request.user, folder=file_obj).delete()
-        return Response({'is_pinned': False}, status=status.HTTP_200_OK)
+        return Response({"is_pinned": False}, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="List pinned folders",
@@ -75,13 +91,17 @@ class FavoritesMixin:
             200: OpenApiResponse(description="List of pinned folders."),
         },
     )
-    @action(detail=False, methods=['get'], url_path='pinned')
+    @action(detail=False, methods=["get"], url_path="pinned")
     def pinned(self, request):
         """List pinned folders."""
-        pinned_qs = PinnedFolder.objects.filter(
-            owner=request.user,
-            folder__deleted_at__isnull=True,
-        ).select_related('folder').order_by('position', 'created_at')
+        pinned_qs = (
+            PinnedFolder.objects.filter(
+                owner=request.user,
+                folder__deleted_at__isnull=True,
+            )
+            .select_related("folder")
+            .order_by("position", "created_at")
+        )
         folder_ids = [p.folder_id for p in pinned_qs]
         # Use the access-aware filter so pinned group subfolders are included.
         # ``self.get_queryset()`` is owner-scoped (group__isnull=True) and would
@@ -104,16 +124,16 @@ class FavoritesMixin:
         summary="Reorder pinned folders",
         description="Update the order of pinned folders. Send an array of folder UUIDs in the desired order.",
         request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'order': {
-                        'type': 'array',
-                        'items': {'type': 'string', 'format': 'uuid'},
-                        'description': 'Array of folder UUIDs in the desired order',
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "order": {
+                        "type": "array",
+                        "items": {"type": "string", "format": "uuid"},
+                        "description": "Array of folder UUIDs in the desired order",
                     },
                 },
-                'required': ['order'],
+                "required": ["order"],
             },
         },
         responses={
@@ -121,19 +141,21 @@ class FavoritesMixin:
             400: OpenApiResponse(description="Invalid request."),
         },
     )
-    @action(detail=False, methods=['post'], url_path='pinned/reorder')
+    @action(detail=False, methods=["post"], url_path="pinned/reorder")
     def pinned_reorder(self, request):
         """Reorder pinned folders."""
         serializer = PinnedReorderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        order = serializer.validated_data['order']  # list[UUID]
+        order = serializer.validated_data["order"]  # list[UUID]
 
         # Fetch existing pins, preserving previous order for any that the
         # caller did not mention (handles concurrent unpin gracefully -
         # silently skipping unknown UUIDs is fine, but unmentioned pins must
         # land somewhere or we get duplicate positions).
         pins = list(
-            PinnedFolder.objects.filter(owner=request.user).order_by('position', 'created_at')
+            PinnedFolder.objects.filter(owner=request.user).order_by(
+                "position", "created_at"
+            )
         )
         by_uuid = {p.folder_id: p for p in pins}
 
@@ -157,6 +179,6 @@ class FavoritesMixin:
                 to_update.append(pin)
 
         if to_update:
-            PinnedFolder.objects.bulk_update(to_update, ['position'])
+            PinnedFolder.objects.bulk_update(to_update, ["position"])
 
-        return Response({'success': True}, status=status.HTTP_200_OK)
+        return Response({"success": True}, status=status.HTTP_200_OK)

@@ -23,17 +23,17 @@ class AjaxLoginRedirectMiddleware:
         response = self.get_response(request)
         if (
             response.status_code == 302
-            and response.get('Location', '').startswith(settings.LOGIN_URL)
+            and response.get("Location", "").startswith(settings.LOGIN_URL)
             and self._is_ajax(request)
         ):
-            return HttpResponse('login_required', status=401)
+            return HttpResponse("login_required", status=401)
         return response
 
     @staticmethod
     def _is_ajax(request):
         return (
-            request.headers.get('X-Alpine-Request')
-            or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            request.headers.get("X-Alpine-Request")
+            or request.headers.get("X-Requested-With") == "XMLHttpRequest"
         )
 
 
@@ -46,9 +46,9 @@ class PresenceMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
         if (
-            hasattr(request, 'user')
+            hasattr(request, "user")
             and request.user.is_authenticated
-            and not getattr(request, '_is_sse_stream', False)
+            and not getattr(request, "_is_sse_stream", False)
         ):
             presence_service.touch(request.user.id)
         return response

@@ -20,7 +20,7 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=['Mail'])
+@extend_schema(tags=["Mail"])
 class MailSendView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -31,95 +31,103 @@ class MailSendView(APIView):
         d = ser.validated_data
 
         try:
-            account = MailAccount.objects.get(uuid=d['account_id'], owner=request.user)
+            account = MailAccount.objects.get(uuid=d["account_id"], owner=request.user)
         except MailAccount.DoesNotExist:
             return Response(
-                {'detail': 'Account not found'},
+                {"detail": "Account not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         from .services.smtp import send_email
 
-        attachments = list(request.FILES.getlist('attachments', []))
+        attachments = list(request.FILES.getlist("attachments", []))
 
-        file_uuids = list(dict.fromkeys(d.get('file_uuids', [])))
+        file_uuids = list(dict.fromkeys(d.get("file_uuids", [])))
         ws_file_handles = []
         if file_uuids:
             from workspace.files.models import File as WorkspaceFile
             from workspace.files.services.files import FileService
+
             qs = WorkspaceFile.objects.filter(
                 uuid__in=file_uuids,
                 node_type=WorkspaceFile.NodeType.FILE,
                 deleted_at__isnull=True,
             )
-            accessible = [
-                f for f in qs
-                if FileService.can_access(request.user, f)
-            ]
+            accessible = [f for f in qs if FileService.can_access(request.user, f)]
             if len(accessible) != len(file_uuids):
                 return Response(
-                    {'detail': 'One or more workspace files not found or not accessible.'},
+                    {
+                        "detail": "One or more workspace files not found or not accessible."
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             for ws_file in accessible:
                 try:
-                    handle = ws_file.content.open('rb')
+                    handle = ws_file.content.open("rb")
                     handle.name = ws_file.name
                     ws_file_handles.append(handle)
                     attachments.append(handle)
-                except (FileNotFoundError, OSError):
+                except FileNotFoundError, OSError:
                     close_all(ws_file_handles)
                     return Response(
-                        {'detail': f'File "{ws_file.name}" content is unavailable.'},
+                        {"detail": f'File "{ws_file.name}" content is unavailable.'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
         try:
             raw_msg = send_email(
                 account=account,
-                to=d['to'],
-                subject=d['subject'],
-                body_html=d['body_html'],
-                body_text=d['body_text'],
-                cc=d.get('cc'),
-                bcc=d.get('bcc'),
-                reply_to=d.get('reply_to'),
+                to=d["to"],
+                subject=d["subject"],
+                body_html=d["body_html"],
+                body_text=d["body_text"],
+                cc=d.get("cc"),
+                bcc=d.get("bcc"),
+                reply_to=d.get("reply_to"),
                 attachments=attachments,
             )
 
             # Copy to Sent folder via IMAP APPEND, then sync the Sent folder
             from .services.imap_messages import append_to_sent
             from .services.imap_sync import sync_folder_messages
+
             try:
                 append_to_sent(account, raw_msg)
             except Exception:
-                logger.warning("Failed to append sent message to IMAP for %s", scrub(account.email))
+                logger.warning(
+                    "Failed to append sent message to IMAP for %s", scrub(account.email)
+                )
 
             try:
                 sent_folder = MailFolder.objects.filter(
-                    account=account, folder_type='sent',
+                    account=account,
+                    folder_type="sent",
                 ).first()
                 if sent_folder:
                     sync_folder_messages(account, sent_folder)
             except Exception:
-                logger.warning("Failed to sync sent folder after send for %s", scrub(account.email))
+                logger.warning(
+                    "Failed to sync sent folder after send for %s", scrub(account.email)
+                )
 
-            return Response({'status': 'sent'}, status=status.HTTP_201_CREATED)
+            return Response({"status": "sent"}, status=status.HTTP_201_CREATED)
         except Exception as e:
             # Use logger.error + scrub(str(e)) instead of logger.exception:
             # the latter would include the raw traceback which can contain
             # un-scrubbed exception text (e.g. an IMAP/SMTP server response
             # with embedded \r\n).
-            logger.error("Failed to send email from %s: %s", scrub(account.email), scrub(str(e)))
+            logger.error(
+                "Failed to send email from %s: %s", scrub(account.email), scrub(str(e))
+            )
             return Response(
-                {'status': 'error', 'error': 'Failed to send email'},
+                {"status": "error", "error": "Failed to send email"},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         finally:
             close_all(ws_file_handles)
 
 
-@extend_schema(tags=['Mail'])
+@extend_schema(tags=["Mail"])
 class MailDraftView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -130,10 +138,10 @@ class MailDraftView(APIView):
         d = ser.validated_data
 
         try:
-            account = MailAccount.objects.get(uuid=d['account_id'], owner=request.user)
+            account = MailAccount.objects.get(uuid=d["account_id"], owner=request.user)
         except MailAccount.DoesNotExist:
             return Response(
-                {'detail': 'Account not found'},
+                {"detail": "Account not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -141,22 +149,24 @@ class MailDraftView(APIView):
 
         raw_msg = build_draft_message(
             account,
-            to=d.get('to'),
-            subject=d.get('subject', ''),
-            body_html=d.get('body_html', ''),
-            body_text=d.get('body_text', ''),
-            cc=d.get('cc'),
-            bcc=d.get('bcc'),
-            reply_to=d.get('reply_to'),
+            to=d.get("to"),
+            subject=d.get("subject", ""),
+            body_html=d.get("body_html", ""),
+            body_text=d.get("body_text", ""),
+            cc=d.get("cc"),
+            bcc=d.get("bcc"),
+            reply_to=d.get("reply_to"),
             include_bcc=True,
         )
 
         # If updating an existing draft, find the old IMAP UID
         old_uid = None
-        if d.get('draft_id'):
+        if d.get("draft_id"):
             try:
                 old_msg = MailMessage.objects.get(
-                    uuid=d['draft_id'], account=account, deleted_at__isnull=True,
+                    uuid=d["draft_id"],
+                    account=account,
+                    deleted_at__isnull=True,
                 )
                 old_uid = old_msg.imap_uid
             except MailMessage.DoesNotExist:
@@ -175,14 +185,16 @@ class MailDraftView(APIView):
                     status=status.HTTP_201_CREATED,
                 )
             return Response(
-                {'detail': 'Failed to save draft'},
+                {"detail": "Failed to save draft"},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         except Exception as e:
             # See comment in MailSendView above re: logger.error vs exception.
-            logger.error("Failed to save draft for %s: %s", scrub(account.email), scrub(str(e)))
+            logger.error(
+                "Failed to save draft for %s: %s", scrub(account.email), scrub(str(e))
+            )
             return Response(
-                {'detail': 'Failed to save draft'},
+                {"detail": "Failed to save draft"},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -192,8 +204,9 @@ class MailDraftView(APIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            msg = MailMessage.objects.select_related('account', 'folder').get(
-                uuid=uuid, deleted_at__isnull=True,
+            msg = MailMessage.objects.select_related("account", "folder").get(
+                uuid=uuid,
+                deleted_at__isnull=True,
             )
         except MailMessage.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
@@ -206,7 +219,9 @@ class MailDraftView(APIView):
         try:
             delete_draft(msg.account, msg)
         except Exception as e:
-            logger.warning("Failed to delete draft on IMAP for %s: %s", msg.uuid, scrub(str(e)))
+            logger.warning(
+                "Failed to delete draft on IMAP for %s: %s", msg.uuid, scrub(str(e))
+            )
             # Fall back to a local soft-delete so the user gets immediate
             # feedback. delete_draft would have set deleted_at after the IMAP
             # call but never reached that line due to the exception, leaving
@@ -214,8 +229,9 @@ class MailDraftView(APIView):
             # The next sync will reconcile if the server still has the message.
             if msg.deleted_at is None:
                 msg.deleted_at = timezone.now()
-                msg.save(update_fields=['deleted_at', 'updated_at'])
+                msg.save(update_fields=["deleted_at", "updated_at"])
 
         from .views import _refresh_folder_counts
+
         _refresh_folder_counts(msg.folder)
         return Response(status=status.HTTP_204_NO_CONTENT)

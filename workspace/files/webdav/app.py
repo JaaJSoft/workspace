@@ -51,7 +51,9 @@ def _build_lock_storage():
     db = int(parsed.path.lstrip("/")) if parsed.path and parsed.path != "/" else 0
     logger.info(
         "Using Redis lock storage (host=%s port=%s db=%s)",
-        parsed.hostname or "127.0.0.1", parsed.port or 6379, db,
+        parsed.hostname or "127.0.0.1",
+        parsed.port or 6379,
+        db,
     )
     return LockStorageRedis(
         host=parsed.hostname or "127.0.0.1",

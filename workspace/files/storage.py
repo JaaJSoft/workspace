@@ -1,4 +1,5 @@
 """Custom file storage that overwrites files instead of creating duplicates."""
+
 import os
 
 from django.core.files.base import File as DjangoFile
@@ -39,6 +40,7 @@ class OverwriteStorage(FileSystemStorage):
                 self.delete(name)
             except Exception as e:
                 import logging
+
                 logger = logging.getLogger(__name__)
                 logger.warning(f"Could not delete existing file '{name}': {e}")
                 # Fall back to Django's default behaviour (unique suffix)

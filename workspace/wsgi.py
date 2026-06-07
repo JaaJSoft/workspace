@@ -12,7 +12,7 @@ import threading
 
 from django.core.wsgi import get_wsgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'workspace.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "workspace.settings")
 
 _django_app = get_wsgi_application()
 
@@ -28,6 +28,7 @@ def _get_webdav_app():
         with _webdav_lock:
             if _webdav_app is None:
                 from workspace.files.webdav.app import create_webdav_app
+
                 _webdav_app = create_webdav_app()
     return _webdav_app
 
@@ -42,7 +43,7 @@ def application(environ, start_response):
     if path == DAV_PREFIX or path.startswith(DAV_PREFIX + "/"):
         # Strip the /dav prefix so WsgiDAV sees paths relative to its root.
         environ["SCRIPT_NAME"] = environ.get("SCRIPT_NAME", "") + DAV_PREFIX
-        environ["PATH_INFO"] = path[len(DAV_PREFIX):] or "/"
+        environ["PATH_INFO"] = path[len(DAV_PREFIX) :] or "/"
         return _get_webdav_app()(environ, start_response)
 
     # Windows WebDAV MiniRedir sends PROPFIND to "/" to check quota before

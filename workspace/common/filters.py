@@ -13,17 +13,19 @@ class CaseInsensitiveOrderingFilter(OrderingFilter):
         ordering = super().get_ordering(request, queryset, view)
         if not ordering:
             return ordering
-        ci_fields = set(getattr(view, 'ordering_case_insensitive_fields', None)
-                        or getattr(view, 'ordering_fields', []))
+        ci_fields = set(
+            getattr(view, "ordering_case_insensitive_fields", None)
+            or getattr(view, "ordering_fields", [])
+        )
         result = []
         for field in ordering:
             if not isinstance(field, str):
                 result.append(field)
                 continue
-            bare = field.lstrip('-')
+            bare = field.lstrip("-")
             if bare in ci_fields:
                 expr = Lower(bare)
-                result.append(expr.desc() if field.startswith('-') else expr)
+                result.append(expr.desc() if field.startswith("-") else expr)
             else:
                 result.append(field)
         return result

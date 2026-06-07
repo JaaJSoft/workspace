@@ -1,4 +1,5 @@
 """E2E smoke test: the authenticated user settings page renders."""
+
 from __future__ import annotations
 
 import re

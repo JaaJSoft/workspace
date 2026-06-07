@@ -36,22 +36,28 @@ class SyncAllUsersTaskTests(TestCase):
         # sync_all_users iterates every active user, so deactivate any
         # pre-existing ones to keep the task's input deterministic.
         User.objects.update(is_active=False)
-        cls.alice = User.objects.create_user(username='alice', password='pass')
-        cls.bob = User.objects.create_user(username='bob', password='pass')
+        cls.alice = User.objects.create_user(username="alice", password="pass")
+        cls.bob = User.objects.create_user(username="bob", password="pass")
         cls.inactive = User.objects.create_user(
-            username='ghost', password='pass', is_active=False,
+            username="ghost",
+            password="pass",
+            is_active=False,
         )
 
     def test_aggregates_results_across_active_users(self):
         per_user_results = {
             self.alice.pk: SyncResult(
-                files_created=2, folders_created=1,
-                files_soft_deleted=0, folders_soft_deleted=0,
-                errors=['boom-alice'],
+                files_created=2,
+                folders_created=1,
+                files_soft_deleted=0,
+                folders_soft_deleted=0,
+                errors=["boom-alice"],
             ),
             self.bob.pk: SyncResult(
-                files_created=3, folders_created=0,
-                files_soft_deleted=1, folders_soft_deleted=2,
+                files_created=3,
+                folders_created=0,
+                files_soft_deleted=1,
+                folders_soft_deleted=2,
                 errors=[],
             ),
         }
@@ -63,16 +69,17 @@ class SyncAllUsersTaskTests(TestCase):
         fake_service.sync_user_recursive.side_effect = _fake_sync
 
         with mock.patch(
-            'workspace.files.sync.FileSyncService', return_value=fake_service,
+            "workspace.files.sync.FileSyncService",
+            return_value=fake_service,
         ) as service_cls:
             result = files_tasks.sync_all_users.run()
 
-        self.assertEqual(result['users_processed'], 2)
-        self.assertEqual(result['files_created'], 5)
-        self.assertEqual(result['folders_created'], 1)
-        self.assertEqual(result['files_soft_deleted'], 1)
-        self.assertEqual(result['folders_soft_deleted'], 2)
-        self.assertEqual(result['errors'], ['boom-alice'])
+        self.assertEqual(result["users_processed"], 2)
+        self.assertEqual(result["files_created"], 5)
+        self.assertEqual(result["folders_created"], 1)
+        self.assertEqual(result["files_soft_deleted"], 1)
+        self.assertEqual(result["folders_soft_deleted"], 2)
+        self.assertEqual(result["errors"], ["boom-alice"])
         service_cls.assert_called_once()
         # Inactive user must be skipped.
         synced_pks = {
@@ -84,7 +91,7 @@ class SyncAllUsersTaskTests(TestCase):
 class PurgeTrashTaskTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user(username='owner', password='pass')
+        cls.user = User.objects.create_user(username="owner", password="pass")
 
     def _make_file(self, name, node_type, deleted_days_ago=None):
         f = File.objects.create(
@@ -100,16 +107,20 @@ class PurgeTrashTaskTests(TestCase):
 
     @override_settings(TRASH_RETENTION_DAYS=30)
     def test_deletes_old_trashed_entries(self):
-        old_file = self._make_file('old.txt', File.NodeType.FILE, deleted_days_ago=45)
-        old_folder = self._make_file('old-dir', File.NodeType.FOLDER, deleted_days_ago=60)
-        recent_file = self._make_file('recent.txt', File.NodeType.FILE, deleted_days_ago=5)
-        live_file = self._make_file('live.txt', File.NodeType.FILE)
+        old_file = self._make_file("old.txt", File.NodeType.FILE, deleted_days_ago=45)
+        old_folder = self._make_file(
+            "old-dir", File.NodeType.FOLDER, deleted_days_ago=60
+        )
+        recent_file = self._make_file(
+            "recent.txt", File.NodeType.FILE, deleted_days_ago=5
+        )
+        live_file = self._make_file("live.txt", File.NodeType.FILE)
 
         result = files_tasks.purge_trash.run()
 
-        self.assertEqual(result['files_deleted'], 1)
-        self.assertEqual(result['folders_deleted'], 1)
-        self.assertEqual(result['retention_days'], 30)
+        self.assertEqual(result["files_deleted"], 1)
+        self.assertEqual(result["folders_deleted"], 1)
+        self.assertEqual(result["retention_days"], 30)
 
         self.assertFalse(File.objects.filter(pk=old_file.pk).exists())
         self.assertFalse(File.objects.filter(pk=old_folder.pk).exists())
@@ -118,11 +129,12 @@ class PurgeTrashTaskTests(TestCase):
 
     @override_settings(TRASH_RETENTION_DAYS=30)
     def test_noop_when_trash_empty(self):
-        self._make_file('live.txt', File.NodeType.FILE)
+        self._make_file("live.txt", File.NodeType.FILE)
         result = files_tasks.purge_trash.run()
 
         self.assertEqual(
-            result, {'files_deleted': 0, 'folders_deleted': 0, 'retention_days': 30},
+            result,
+            {"files_deleted": 0, "folders_deleted": 0, "retention_days": 30},
         )
 
     def test_retention_days_defaults_to_30_when_unset(self):
@@ -135,25 +147,29 @@ class PurgeTrashTaskTests(TestCase):
         # would still exist and getattr would return None, not 30.
         with self.settings():
             del dj_settings.TRASH_RETENTION_DAYS
-            self.assertFalse(hasattr(dj_settings, 'TRASH_RETENTION_DAYS'))
+            self.assertFalse(hasattr(dj_settings, "TRASH_RETENTION_DAYS"))
             result = files_tasks.purge_trash.run()
 
-        self.assertEqual(result['retention_days'], 30)
+        self.assertEqual(result["retention_days"], 30)
 
 
 class SyncFolderTaskTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user(username='dave', password='pass')
+        cls.user = User.objects.create_user(username="dave", password="pass")
         cls.folder = File.objects.create(
-            owner=cls.user, name='Work', node_type=File.NodeType.FOLDER,
+            owner=cls.user,
+            name="Work",
+            node_type=File.NodeType.FOLDER,
         )
 
     def _fake_service(self, result=None):
         fake = mock.Mock()
         fake.sync_folder_shallow.return_value = result or SyncResult(
-            files_created=4, folders_created=1,
-            files_soft_deleted=0, folders_soft_deleted=0,
+            files_created=4,
+            folders_created=1,
+            files_soft_deleted=0,
+            folders_soft_deleted=0,
             errors=[],
         )
         return fake
@@ -161,19 +177,21 @@ class SyncFolderTaskTests(TestCase):
     def test_root_sync_when_no_folder_uuid(self):
         fake = self._fake_service()
         with mock.patch(
-            'workspace.files.sync.FileSyncService', return_value=fake,
+            "workspace.files.sync.FileSyncService",
+            return_value=fake,
         ):
             result = files_tasks.sync_folder.run(self.user.pk)
 
         fake.sync_folder_shallow.assert_called_once_with(self.user, None)
-        self.assertEqual(result['files_created'], 4)
-        self.assertEqual(result['folders_created'], 1)
-        self.assertEqual(result['errors'], [])
+        self.assertEqual(result["files_created"], 4)
+        self.assertEqual(result["folders_created"], 1)
+        self.assertEqual(result["errors"], [])
 
     def test_sync_specific_folder(self):
         fake = self._fake_service()
         with mock.patch(
-            'workspace.files.sync.FileSyncService', return_value=fake,
+            "workspace.files.sync.FileSyncService",
+            return_value=fake,
         ):
             files_tasks.sync_folder.run(self.user.pk, folder_uuid=str(self.folder.uuid))
 

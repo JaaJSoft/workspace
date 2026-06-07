@@ -20,6 +20,7 @@ We use Django's test client (not Playwright) on purpose:
   (file-based PG + Redis sessions in production) and shouldn't gate
   our coverage of cache invalidation.
 """
+
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
@@ -35,7 +36,7 @@ class ThemeRenderAfterSetTests(TestCase):
     """A page rendered after ``set_setting`` carries the new theme."""
 
     def setUp(self):
-        self.user = User.objects.create_user(username='alice', password='pass12345')
+        self.user = User.objects.create_user(username="alice", password="pass12345")
         self.client = Client()
         self.client.force_login(self.user)
 
@@ -47,16 +48,16 @@ class ThemeRenderAfterSetTests(TestCase):
         # without warming, ``get_setting`` would always read fresh and
         # miss the bug class.
         self.assertEqual(
-            get_setting(self.user, 'core', 'theme', default='light'),
-            'light',
+            get_setting(self.user, "core", "theme", default="light"),
+            "light",
         )
 
         # Production write path goes through ``set_setting`` (also via the
         # PUT endpoint - test_views covers that side). The point here is
         # that the very next render sees the new value.
-        set_setting(self.user, 'core', 'theme', 'dark')
+        set_setting(self.user, "core", "theme", "dark")
 
-        resp = self.client.get('/users/settings')
+        resp = self.client.get("/users/settings")
         self.assertEqual(resp.status_code, 200)
         # base.html: ``<html lang="en"{% if user_theme %} data-theme="{{ user_theme }}"{% endif %}>``
         self.assertIn(b'data-theme="dark"', resp.content)
@@ -65,7 +66,7 @@ class ThemeRenderAfterSetTests(TestCase):
     def test_theme_unset_renders_light_default(self):
         # No UserSetting row -> ``user_preferences`` falls back to 'light'
         # via the ``or 'light'`` guard in the context processor.
-        resp = self.client.get('/users/settings')
+        resp = self.client.get("/users/settings")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b'data-theme="light"', resp.content)
 
@@ -73,16 +74,16 @@ class ThemeRenderAfterSetTests(TestCase):
         # The navbar toggle reads these data-* attributes off <html> to know
         # which themes to swap between. Regression for the toggle being
         # hard-coded to 'light'/'dark'.
-        set_setting(self.user, 'core', 'light_theme', 'nord')
-        set_setting(self.user, 'core', 'dark_theme', 'dracula')
+        set_setting(self.user, "core", "light_theme", "nord")
+        set_setting(self.user, "core", "dark_theme", "dracula")
 
-        resp = self.client.get('/users/settings')
+        resp = self.client.get("/users/settings")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b'data-light-theme="nord"', resp.content)
         self.assertIn(b'data-dark-theme="dracula"', resp.content)
 
     def test_light_and_dark_theme_attributes_default_when_unset(self):
-        resp = self.client.get('/users/settings')
+        resp = self.client.get("/users/settings")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b'data-light-theme="light"', resp.content)
         self.assertIn(b'data-dark-theme="dark"', resp.content)

@@ -12,13 +12,19 @@ from rest_framework.views import APIView
 
 from workspace.common.logging import scrub
 from workspace.common.mixins import CacheControlMixin
+
 from .models import Conversation, ConversationMember, Message, PinnedConversation
 from .serializers import (
     ConversationCreateSerializer,
     ConversationDetailSerializer,
     ConversationListSerializer,
 )
-from .services.conversations import get_active_membership, get_or_create_dm, get_unread_counts, user_conversation_ids
+from .services.conversations import (
+    get_active_membership,
+    get_or_create_dm,
+    get_unread_counts,
+    user_conversation_ids,
+)
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -33,22 +39,26 @@ def _trigger_bot_response(conversation_id, message, sender):
             user__bot_profile__isnull=False,
         )
         .exclude(user=sender)
-        .select_related('user')
+        .select_related("user")
         .first()
     )
     if bot_member:
         try:
             from workspace.ai.tasks.chat import generate_chat_response
+
             generate_chat_response.delay(
                 str(conversation_id),
                 str(message.uuid),
                 bot_member.user_id,
             )
         except Exception:
-            logger.exception('Failed to trigger bot response for conversation=%s', scrub(conversation_id))
+            logger.exception(
+                "Failed to trigger bot response for conversation=%s",
+                scrub(conversation_id),
+            )
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class ConversationListView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
 
@@ -63,27 +73,27 @@ class ConversationListView(CacheControlMixin, APIView):
             Conversation.objects.filter(uuid__in=member_convos)
             .prefetch_related(
                 Prefetch(
-                    'members',
+                    "members",
                     queryset=ConversationMember.objects.filter(
                         left_at__isnull=True,
-                    ).select_related('user', 'user__bot_profile'),
+                    ).select_related("user", "user__bot_profile"),
                 ),
             )
-            .order_by('-updated_at')
+            .order_by("-updated_at")
         )
 
         # Compute unread counts
         unread_data = get_unread_counts(user)
-        unread_map = unread_data.get('conversations', {})
+        unread_map = unread_data.get("conversations", {})
 
         # Prefetch last message per conversation
         last_msg_subquery = (
             Message.objects.filter(
-                conversation=OuterRef('pk'),
+                conversation=OuterRef("pk"),
                 deleted_at__isnull=True,
             )
-            .order_by('-created_at')
-            .values('uuid')[:1]
+            .order_by("-created_at")
+            .values("uuid")[:1]
         )
         conversations = conversations.annotate(
             _last_msg_id=Subquery(last_msg_subquery),
@@ -94,7 +104,9 @@ class ConversationListView(CacheControlMixin, APIView):
         last_msg_ids = [c._last_msg_id for c in conv_list if c._last_msg_id]
         last_msgs = {
             m.uuid: m
-            for m in Message.objects.filter(uuid__in=last_msg_ids).select_related('author').prefetch_related('attachments')
+            for m in Message.objects.filter(uuid__in=last_msg_ids)
+            .select_related("author")
+            .prefetch_related("attachments")
         }
 
         # Build pin map
@@ -122,23 +134,27 @@ class ConversationListView(CacheControlMixin, APIView):
         serializer = ConversationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        member_ids = serializer.validated_data['member_ids']
-        title = serializer.validated_data.get('title', '')
+        member_ids = serializer.validated_data["member_ids"]
+        title = serializer.validated_data.get("title", "")
 
         # Validate that all member_ids exist and are active
-        users = User.objects.filter(id__in=member_ids, is_active=True).select_related('bot_profile')
+        users = User.objects.filter(id__in=member_ids, is_active=True).select_related(
+            "bot_profile"
+        )
         if users.count() != len(member_ids):
             return Response(
-                {'detail': 'One or more user IDs are invalid.'},
+                {"detail": "One or more user IDs are invalid."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Check bot access permissions
-        bot_users = users.filter(bot_profile__isnull=False).select_related('bot_profile')
+        bot_users = users.filter(bot_profile__isnull=False).select_related(
+            "bot_profile"
+        )
         for bot_user in bot_users:
             if not bot_user.bot_profile.is_accessible_by(request.user):
                 return Response(
-                    {'detail': 'You do not have access to this bot.'},
+                    {"detail": "You do not have access to this bot."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
@@ -152,10 +168,10 @@ class ConversationListView(CacheControlMixin, APIView):
             other_user = users.first()
             if other_user.id == request.user.id:
                 return Response(
-                    {'detail': 'Cannot create a DM with yourself.'},
+                    {"detail": "Cannot create a DM with yourself."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            if hasattr(other_user, 'bot_profile'):
+            if hasattr(other_user, "bot_profile"):
                 conversation = Conversation.objects.create(
                     kind=Conversation.Kind.DM,
                     created_by=request.user,
@@ -184,16 +200,16 @@ class ConversationListView(CacheControlMixin, APIView):
             ConversationMember.objects.bulk_create(created_members)
 
         if created_members is not None:
-            conversation._prefetched_objects_cache = {'members': created_members}
+            conversation._prefetched_objects_cache = {"members": created_members}
         else:
             conversation = (
                 Conversation.objects.filter(pk=conversation.pk)
                 .prefetch_related(
                     Prefetch(
-                        'members',
+                        "members",
                         queryset=ConversationMember.objects.filter(
                             left_at__isnull=True,
-                        ).select_related('user', 'user__bot_profile'),
+                        ).select_related("user", "user__bot_profile"),
                     ),
                 )
                 .first()
@@ -204,7 +220,7 @@ class ConversationListView(CacheControlMixin, APIView):
         )
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class ConversationDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -213,7 +229,7 @@ class ConversationDetailView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {'detail': 'Not a member of this conversation.'},
+                {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -221,10 +237,10 @@ class ConversationDetailView(APIView):
             Conversation.objects.filter(pk=conversation_id)
             .prefetch_related(
                 Prefetch(
-                    'members',
+                    "members",
                     queryset=ConversationMember.objects.filter(
                         left_at__isnull=True,
-                    ).select_related('user', 'user__bot_profile'),
+                    ).select_related("user", "user__bot_profile"),
                 ),
             )
             .first()
@@ -233,16 +249,19 @@ class ConversationDetailView(APIView):
 
     @extend_schema(
         summary="Update conversation details",
-        request=inline_serializer('ConversationUpdate', fields={
-            'title': serializers.CharField(required=False),
-            'description': serializers.CharField(required=False),
-        }),
+        request=inline_serializer(
+            "ConversationUpdate",
+            fields={
+                "title": serializers.CharField(required=False),
+                "description": serializers.CharField(required=False),
+            },
+        ),
     )
     def patch(self, request, conversation_id):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {'detail': 'Not a member of this conversation.'},
+                {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -250,53 +269,56 @@ class ConversationDetailView(APIView):
         update_fields = []
 
         # Title update (groups and bot conversations)
-        if 'title' in request.data:
+        if "title" in request.data:
             is_bot_conv = conversation.members.filter(
-                user__bot_profile__isnull=False, left_at__isnull=True,
+                user__bot_profile__isnull=False,
+                left_at__isnull=True,
             ).exists()
             if conversation.kind != Conversation.Kind.GROUP and not is_bot_conv:
                 return Response(
-                    {'detail': 'Only group conversations can be renamed.'},
+                    {"detail": "Only group conversations can be renamed."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            title = request.data['title'].strip() if request.data['title'] else ''
+            title = request.data["title"].strip() if request.data["title"] else ""
             if not title:
                 return Response(
-                    {'detail': 'Title cannot be empty.'},
+                    {"detail": "Title cannot be empty."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             conversation.title = title
-            update_fields.append('title')
+            update_fields.append("title")
 
         # Description update (all conversation types)
-        if 'description' in request.data:
-            conversation.description = (request.data['description'] or '').strip()
-            update_fields.append('description')
+        if "description" in request.data:
+            conversation.description = (request.data["description"] or "").strip()
+            update_fields.append("description")
 
         if not update_fields:
             return Response(
-                {'detail': 'No fields to update. Provide title or description.'},
+                {"detail": "No fields to update. Provide title or description."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         conversation.save(update_fields=update_fields)
-        return Response({
-            'uuid': str(conversation.uuid),
-            'title': conversation.title,
-            'description': conversation.description,
-        })
+        return Response(
+            {
+                "uuid": str(conversation.uuid),
+                "title": conversation.title,
+                "description": conversation.description,
+            }
+        )
 
     @extend_schema(summary="Leave conversation")
     def delete(self, request, conversation_id):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {'detail': 'Not a member of this conversation.'},
+                {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         membership.left_at = timezone.now()
-        membership.save(update_fields=['left_at'])
+        membership.save(update_fields=["left_at"])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -307,7 +329,7 @@ class MemberAddSerializer(serializers.Serializer):
     )
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class ConversationMembersView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -320,25 +342,25 @@ class ConversationMembersView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {'detail': 'Not a member of this conversation.'},
+                {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         conversation = Conversation.objects.get(pk=conversation_id)
         if conversation.kind != Conversation.Kind.GROUP:
             return Response(
-                {'detail': 'Can only add members to group conversations.'},
+                {"detail": "Can only add members to group conversations."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         ser = MemberAddSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        user_ids = ser.validated_data['user_ids']
+        user_ids = ser.validated_data["user_ids"]
 
         users = User.objects.filter(id__in=user_ids, is_active=True)
         if users.count() != len(user_ids):
             return Response(
-                {'detail': 'One or more user IDs are invalid.'},
+                {"detail": "One or more user IDs are invalid."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -346,7 +368,8 @@ class ConversationMembersView(APIView):
         existing_members = {
             m.user_id: m
             for m in ConversationMember.objects.filter(
-                conversation=conversation, user__in=users,
+                conversation=conversation,
+                user__in=users,
             )
         }
 
@@ -358,13 +381,11 @@ class ConversationMembersView(APIView):
                 if existing.left_at is not None:
                     existing.left_at = None
                     existing.unread_count = 0
-                    existing.save(update_fields=['left_at', 'unread_count'])
+                    existing.save(update_fields=["left_at", "unread_count"])
                     added.append(u.id)
                 # Already active member - skip silently
             else:
-                to_create.append(
-                    ConversationMember(conversation=conversation, user=u)
-                )
+                to_create.append(ConversationMember(conversation=conversation, user=u))
                 added.append(u.id)
 
         if to_create:
@@ -375,10 +396,10 @@ class ConversationMembersView(APIView):
             Conversation.objects.filter(pk=conversation.pk)
             .prefetch_related(
                 Prefetch(
-                    'members',
+                    "members",
                     queryset=ConversationMember.objects.filter(
                         left_at__isnull=True,
-                    ).select_related('user', 'user__bot_profile'),
+                    ).select_related("user", "user__bot_profile"),
                 ),
             )
             .first()
@@ -389,7 +410,7 @@ class ConversationMembersView(APIView):
         )
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class ConversationMemberRemoveView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -398,26 +419,26 @@ class ConversationMemberRemoveView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {'detail': 'Not a member of this conversation.'},
+                {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         conversation = Conversation.objects.get(pk=conversation_id)
         if conversation.kind != Conversation.Kind.GROUP:
             return Response(
-                {'detail': 'Can only remove members from group conversations.'},
+                {"detail": "Can only remove members from group conversations."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if conversation.created_by_id != request.user.id:
             return Response(
-                {'detail': 'Only the group creator can remove members.'},
+                {"detail": "Only the group creator can remove members."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         if user_id == request.user.id:
             return Response(
-                {'detail': 'Cannot remove yourself. Use leave instead.'},
+                {"detail": "Cannot remove yourself. Use leave instead."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -428,10 +449,10 @@ class ConversationMemberRemoveView(APIView):
         ).first()
         if not target_membership:
             return Response(
-                {'detail': 'User is not an active member.'},
+                {"detail": "User is not an active member."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         target_membership.left_at = timezone.now()
-        target_membership.save(update_fields=['left_at'])
+        target_membership.save(update_fields=["left_at"])
         return Response(status=status.HTTP_204_NO_CONTENT)

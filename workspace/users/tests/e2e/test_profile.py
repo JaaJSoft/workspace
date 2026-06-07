@@ -5,6 +5,7 @@ The profile template (``profile.html``) picks between
 test proves the full-name branch is exercised end-to-end — template
 extension, context injection, and rendering.
 """
+
 from __future__ import annotations
 
 from playwright.sync_api import expect
@@ -23,6 +24,6 @@ class ProfileFullNameTests(PlaywrightTestCase):
         )
         self.login_as(user)
         self.page.goto(f"{self.live_server_url}/users/profile")
-        expect(
-            self.page.get_by_role("heading", level=1)
-        ).to_contain_text("Pierre Chopinet")
+        expect(self.page.get_by_role("heading", level=1)).to_contain_text(
+            "Pierre Chopinet"
+        )

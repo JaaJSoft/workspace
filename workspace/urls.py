@@ -14,70 +14,107 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 from pathlib import Path
 
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
-from django.urls import path, include
+from django.urls import include, path
 from django.views.decorators.cache import cache_page
 from django.views.static import serve
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
+)
 
 from workspace.core.views_health import LiveView, ReadyView, StartupView
 
 api_urlpatterns = [
     # OpenAPI schema and documentation
-    path('schema/', login_required(cache_page(3600)(SpectacularAPIView.as_view())), name='schema'),
-    path('schema/swagger-ui/', login_required(SpectacularSwaggerView.as_view(url_name='schema')), name='swagger-ui'),
-    path('schema/redoc/', login_required(SpectacularRedocView.as_view(url_name='schema')), name='redoc'),
+    path(
+        "schema/",
+        login_required(cache_page(3600)(SpectacularAPIView.as_view())),
+        name="schema",
+    ),
+    path(
+        "schema/swagger-ui/",
+        login_required(SpectacularSwaggerView.as_view(url_name="schema")),
+        name="swagger-ui",
+    ),
+    path(
+        "schema/redoc/",
+        login_required(SpectacularRedocView.as_view(url_name="schema")),
+        name="redoc",
+    ),
     # API endpoints
-    path('', include('workspace.core.urls')),
-    path('', include('workspace.files.urls')),
-    path('', include('workspace.users.urls')),
-    path('', include('workspace.dashboard.urls')),
-    path('', include('workspace.chat.urls')),
-    path('', include('workspace.calendar.urls')),
-    path('', include('workspace.mail.urls')),
-    path('', include('workspace.notifications.urls')),
-    path('', include('workspace.ai.urls')),
+    path("", include("workspace.core.urls")),
+    path("", include("workspace.files.urls")),
+    path("", include("workspace.users.urls")),
+    path("", include("workspace.dashboard.urls")),
+    path("", include("workspace.chat.urls")),
+    path("", include("workspace.calendar.urls")),
+    path("", include("workspace.mail.urls")),
+    path("", include("workspace.notifications.urls")),
+    path("", include("workspace.ai.urls")),
 ]
 
 ui_urlpatterns = [
     # UI apps
-    path('files', include('workspace.files.ui.urls')),
-    path('notes', include('workspace.notes.ui.urls')),
-    path('users', include('workspace.users.ui.urls')),
-    path('chat', include('workspace.chat.ui.urls')),
-    path('calendar', include('workspace.calendar.ui.urls')),
-    path('mail', include('workspace.mail.ui.urls')),
+    path("files", include("workspace.files.ui.urls")),
+    path("notes", include("workspace.notes.ui.urls")),
+    path("users", include("workspace.users.ui.urls")),
+    path("chat", include("workspace.chat.ui.urls")),
+    path("calendar", include("workspace.calendar.ui.urls")),
+    path("mail", include("workspace.mail.ui.urls")),
 ]
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path("admin/", admin.site.urls),
     # Authentication
-    path('login', auth_views.LoginView.as_view(template_name='users/ui/auth/login.html'), name='login'),
-    path('logout', auth_views.LogoutView.as_view(), name='logout'),
+    path(
+        "login",
+        auth_views.LoginView.as_view(template_name="users/ui/auth/login.html"),
+        name="login",
+    ),
+    path("logout", auth_views.LogoutView.as_view(), name="logout"),
     # Service Worker (must be at root scope for push notifications)
-    path('sw.js', serve, {'path': 'sw.js', 'document_root': Path(__file__).resolve().parent / 'common' / 'static'}, name='service-worker'),
+    path(
+        "sw.js",
+        serve,
+        {
+            "path": "sw.js",
+            "document_root": Path(__file__).resolve().parent / "common" / "static",
+        },
+        name="service-worker",
+    ),
     # Web App Manifest (must be at root for PWA install)
-    path('manifest.json', serve, {'path': 'manifest.json', 'document_root': Path(__file__).resolve().parent / 'common' / 'static'}, name='manifest'),
+    path(
+        "manifest.json",
+        serve,
+        {
+            "path": "manifest.json",
+            "document_root": Path(__file__).resolve().parent / "common" / "static",
+        },
+        name="manifest",
+    ),
     # Health probes (k8s)
-    path('health/startup', StartupView.as_view(), name='health-startup'),
-    path('health/live', LiveView.as_view(), name='health-live'),
-    path('health/ready', ReadyView.as_view(), name='health-ready'),
+    path("health/startup", StartupView.as_view(), name="health-startup"),
+    path("health/live", LiveView.as_view(), name="health-live"),
+    path("health/ready", ReadyView.as_view(), name="health-ready"),
     # Prometheus metrics
-    path('', include('django_prometheus.urls')),
+    path("", include("django_prometheus.urls")),
 ]
 
 urlpatterns += api_urlpatterns
 urlpatterns += ui_urlpatterns
 
 # Debug Toolbar URLs (only in DEBUG mode)
-if __name__ != '__main__':
+if __name__ != "__main__":
     from django.conf import settings
 
     if settings.DEBUG:
         import debug_toolbar
 
-        urlpatterns += [path('__debug__/', include(debug_toolbar.urls))]
+        urlpatterns += [path("__debug__/", include(debug_toolbar.urls))]

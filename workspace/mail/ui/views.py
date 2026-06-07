@@ -12,7 +12,11 @@ from workspace.mail.services.oauth2 import get_available_providers
 def index(request):
     accounts = MailAccount.objects.filter(owner=request.user, is_active=True)
 
-    return render(request, 'mail/ui/index.html', {
-        'accounts': MailAccountSerializer(accounts, many=True).data,
-        'oauth_providers': get_available_providers(),
-    })
+    return render(
+        request,
+        "mail/ui/index.html",
+        {
+            "accounts": MailAccountSerializer(accounts, many=True).data,
+            "oauth_providers": get_available_providers(),
+        },
+    )

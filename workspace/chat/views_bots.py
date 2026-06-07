@@ -13,7 +13,7 @@ from .services.conversations import get_active_membership
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class BotRetryView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -30,15 +30,15 @@ class BotRetryView(APIView):
         # is a bot message before deleting. Otherwise any active member could
         # pass an arbitrary message_id and hard-delete it.
         target = (
-            Message.objects.select_related('author__bot_profile')
+            Message.objects.select_related("author__bot_profile")
             .filter(uuid=message_id, conversation_id=conversation_id)
             .first()
         )
         if not target:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        if not hasattr(target.author, 'bot_profile'):
+        if not hasattr(target.author, "bot_profile"):
             return Response(
-                {'detail': 'Only bot messages can be retried.'},
+                {"detail": "Only bot messages can be retried."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -49,22 +49,22 @@ class BotRetryView(APIView):
                 author=request.user,
                 deleted_at__isnull=True,
             )
-            .order_by('-created_at')
+            .order_by("-created_at")
             .first()
         )
         if not last_user_msg:
             return Response(
-                {'detail': 'No user message found to retry.'},
+                {"detail": "No user message found to retry."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         target.delete()
 
         _trigger_bot_response(conversation_id, last_user_msg, request.user)
-        return Response({'status': 'ok'})
+        return Response({"status": "ok"})
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class BotCancelView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -82,11 +82,13 @@ class BotCancelView(APIView):
             input_data__conversation_id=str(conversation_id),
         ).update(
             status=AITask.Status.FAILED,
-            error='Cancelled by user',
+            error="Cancelled by user",
             completed_at=timezone.now(),
         )
 
         if not cancelled:
-            return Response({'detail': 'No active task found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No active task found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
-        return Response({'status': 'cancelled'})
+        return Response({"status": "cancelled"})

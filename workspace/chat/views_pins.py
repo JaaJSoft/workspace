@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.uuids import parse_uuid_or_none
+
 from .models import Message, PinnedConversation, PinnedMessage
 from .serializers import PinnedMessageSerializer
 from .services.conversations import get_active_membership
@@ -16,7 +17,7 @@ from .services.notifications import notify_conversation_members
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class ConversationPinView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -25,13 +26,13 @@ class ConversationPinView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {'detail': 'Not a member of this conversation.'},
+                {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         max_pos = PinnedConversation.objects.filter(
             owner=request.user,
-        ).aggregate(max_pos=Max('position'))['max_pos']
+        ).aggregate(max_pos=Max("position"))["max_pos"]
         next_pos = (max_pos or 0) + 1
 
         # get_or_create avoids the exists()+create() race that would otherwise
@@ -40,40 +41,44 @@ class ConversationPinView(APIView):
         _, created = PinnedConversation.objects.get_or_create(
             owner=request.user,
             conversation_id=conversation_id,
-            defaults={'position': next_pos},
+            defaults={"position": next_pos},
         )
         if not created:
-            return Response({'detail': 'Already pinned.'}, status=status.HTTP_200_OK)
-        return Response({'status': 'pinned'}, status=status.HTTP_201_CREATED)
+            return Response({"detail": "Already pinned."}, status=status.HTTP_200_OK)
+        return Response({"status": "pinned"}, status=status.HTTP_201_CREATED)
 
     @extend_schema(summary="Unpin a conversation")
     def delete(self, request, conversation_id):
         deleted, _ = PinnedConversation.objects.filter(
-            owner=request.user, conversation_id=conversation_id,
+            owner=request.user,
+            conversation_id=conversation_id,
         ).delete()
         if not deleted:
             return Response(
-                {'detail': 'Not pinned.'},
+                {"detail": "Not pinned."},
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class ConversationPinReorderView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         summary="Reorder pinned conversations",
-        request=inline_serializer('ConversationPinReorder', fields={
-            'order': serializers.ListField(child=serializers.UUIDField()),
-        }),
+        request=inline_serializer(
+            "ConversationPinReorder",
+            fields={
+                "order": serializers.ListField(child=serializers.UUIDField()),
+            },
+        ),
     )
     def post(self, request):
-        order = request.data.get('order', [])
+        order = request.data.get("order", [])
         if not isinstance(order, list):
             return Response(
-                {'detail': '"order" must be a list of conversation UUIDs.'},
+                {"detail": '"order" must be a list of conversation UUIDs.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -85,7 +90,7 @@ class ConversationPinReorderView(APIView):
             parsed = parse_uuid_or_none(entry)
             if parsed is None:
                 return Response(
-                    {'detail': '"order" entries must be UUID strings.'},
+                    {"detail": '"order" entries must be UUID strings.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             normalized_order.append(str(parsed))
@@ -101,38 +106,50 @@ class ConversationPinReorderView(APIView):
                 to_update.append(pin)
 
         if to_update:
-            PinnedConversation.objects.bulk_update(to_update, ['position'])
+            PinnedConversation.objects.bulk_update(to_update, ["position"])
 
-        return Response({'status': 'ok'})
+        return Response({"status": "ok"})
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class MessagePinToggleView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Pin a message")
     def post(self, request, message_id):
         try:
-            message = Message.objects.select_related('conversation').get(uuid=message_id)
+            message = Message.objects.select_related("conversation").get(
+                uuid=message_id
+            )
         except Message.DoesNotExist:
-            return Response({'detail': 'Message not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Message not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         membership = get_active_membership(request.user, message.conversation_id)
         if not membership:
-            return Response({'detail': 'Not a member of this conversation.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "Not a member of this conversation."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         if message.deleted_at:
-            return Response({'detail': 'Cannot pin a deleted message.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Cannot pin a deleted message."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         pin, created = PinnedMessage.objects.get_or_create(
             conversation=message.conversation,
             message=message,
-            defaults={'pinned_by': request.user},
+            defaults={"pinned_by": request.user},
         )
 
         notify_conversation_members(message.conversation, exclude_user=request.user)
 
-        pin = PinnedMessage.objects.select_related('message__author', 'pinned_by').get(pk=pin.pk)
+        pin = PinnedMessage.objects.select_related("message__author", "pinned_by").get(
+            pk=pin.pk
+        )
         return Response(
             PinnedMessageSerializer(pin).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
@@ -141,27 +158,36 @@ class MessagePinToggleView(APIView):
     @extend_schema(summary="Unpin a message")
     def delete(self, request, message_id):
         try:
-            message = Message.objects.select_related('conversation').get(uuid=message_id)
+            message = Message.objects.select_related("conversation").get(
+                uuid=message_id
+            )
         except Message.DoesNotExist:
-            return Response({'detail': 'Message not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Message not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         membership = get_active_membership(request.user, message.conversation_id)
         if not membership:
-            return Response({'detail': 'Not a member of this conversation.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "Not a member of this conversation."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         deleted, _ = PinnedMessage.objects.filter(
             conversation=message.conversation,
             message=message,
         ).delete()
         if not deleted:
-            return Response({'detail': 'Message is not pinned.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Message is not pinned."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         notify_conversation_members(message.conversation, exclude_user=request.user)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class ConversationPinnedMessagesView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -169,12 +195,14 @@ class ConversationPinnedMessagesView(APIView):
     def get(self, request, conversation_id):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
-            return Response({'detail': 'Not a member of this conversation.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "Not a member of this conversation."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         pins = (
-            PinnedMessage.objects
-            .filter(conversation_id=conversation_id)
-            .select_related('message__author', 'pinned_by')
-            .order_by('-created_at')
+            PinnedMessage.objects.filter(conversation_id=conversation_id)
+            .select_related("message__author", "pinned_by")
+            .order_by("-created_at")
         )
         return Response(PinnedMessageSerializer(pins, many=True).data)

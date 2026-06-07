@@ -1,12 +1,12 @@
 from io import BytesIO
 from unittest.mock import patch
 
-from PIL import Image
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -20,99 +20,113 @@ User = get_user_model()
 class UserTestMixin:
     def setUp(self):
         self.user = User.objects.create_user(
-            username='alice', password='Str0ngP@ss!', email='alice@example.com',
-            first_name='Alice', last_name='Smith',
+            username="alice",
+            password="Str0ngP@ss!",
+            email="alice@example.com",
+            first_name="Alice",
+            last_name="Smith",
         )
         self.client.force_authenticate(self.user)
 
 
 # ── UserSearchView ──────────────────────────────────────────────
 
+
 class UserSearchTests(UserTestMixin, APITestCase):
-    URL = '/api/v1/users/search'
+    URL = "/api/v1/users/search"
 
     def setUp(self):
         super().setUp()
         self.bob = User.objects.create_user(
-            username='bob', password='pass', first_name='Bob', last_name='Jones',
+            username="bob",
+            password="pass",
+            first_name="Bob",
+            last_name="Jones",
         )
         self.carol = User.objects.create_user(
-            username='carol', password='pass', first_name='Carol', last_name='Bobson',
+            username="carol",
+            password="pass",
+            first_name="Carol",
+            last_name="Bobson",
         )
 
     def test_unauthenticated_rejected(self):
         self.client.force_authenticate(None)
-        resp = self.client.get(self.URL, {'q': 'bob'})
+        resp = self.client.get(self.URL, {"q": "bob"})
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_short_query_returns_empty(self):
-        resp = self.client.get(self.URL, {'q': 'b'})
+        resp = self.client.get(self.URL, {"q": "b"})
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['results'], [])
+        self.assertEqual(resp.data["results"], [])
 
     def test_empty_query_returns_empty(self):
-        resp = self.client.get(self.URL, {'q': ''})
-        self.assertEqual(resp.data['results'], [])
+        resp = self.client.get(self.URL, {"q": ""})
+        self.assertEqual(resp.data["results"], [])
 
     def test_search_by_username(self):
-        resp = self.client.get(self.URL, {'q': 'bob'})
-        usernames = [r['username'] for r in resp.data['results']]
-        self.assertIn('bob', usernames)
+        resp = self.client.get(self.URL, {"q": "bob"})
+        usernames = [r["username"] for r in resp.data["results"]]
+        self.assertIn("bob", usernames)
 
     def test_search_by_first_name(self):
-        resp = self.client.get(self.URL, {'q': 'Carol'})
-        usernames = [r['username'] for r in resp.data['results']]
-        self.assertIn('carol', usernames)
+        resp = self.client.get(self.URL, {"q": "Carol"})
+        usernames = [r["username"] for r in resp.data["results"]]
+        self.assertIn("carol", usernames)
 
     def test_search_by_last_name(self):
-        resp = self.client.get(self.URL, {'q': 'Jones'})
-        usernames = [r['username'] for r in resp.data['results']]
-        self.assertIn('bob', usernames)
+        resp = self.client.get(self.URL, {"q": "Jones"})
+        usernames = [r["username"] for r in resp.data["results"]]
+        self.assertIn("bob", usernames)
 
     def test_excludes_current_user(self):
-        resp = self.client.get(self.URL, {'q': 'alice'})
-        usernames = [r['username'] for r in resp.data['results']]
-        self.assertNotIn('alice', usernames)
+        resp = self.client.get(self.URL, {"q": "alice"})
+        usernames = [r["username"] for r in resp.data["results"]]
+        self.assertNotIn("alice", usernames)
 
     def test_excludes_inactive_users(self):
         self.bob.is_active = False
         self.bob.save()
-        resp = self.client.get(self.URL, {'q': 'bob'})
-        usernames = [r['username'] for r in resp.data['results']]
-        self.assertNotIn('bob', usernames)
+        resp = self.client.get(self.URL, {"q": "bob"})
+        usernames = [r["username"] for r in resp.data["results"]]
+        self.assertNotIn("bob", usernames)
 
     def test_excludes_bots(self):
         from workspace.ai.models import BotProfile
-        bot_user = User.objects.create_user(username='botuser', password='pass')
-        BotProfile.objects.create(user=bot_user, system_prompt='hi')
-        resp = self.client.get(self.URL, {'q': 'botuser'})
-        usernames = [r['username'] for r in resp.data['results']]
-        self.assertNotIn('botuser', usernames)
+
+        bot_user = User.objects.create_user(username="botuser", password="pass")
+        BotProfile.objects.create(user=bot_user, system_prompt="hi")
+        resp = self.client.get(self.URL, {"q": "botuser"})
+        usernames = [r["username"] for r in resp.data["results"]]
+        self.assertNotIn("botuser", usernames)
 
     def test_limit_parameter(self):
-        resp = self.client.get(self.URL, {'q': 'bob', 'limit': 1})
-        self.assertLessEqual(len(resp.data['results']), 1)
+        resp = self.client.get(self.URL, {"q": "bob", "limit": 1})
+        self.assertLessEqual(len(resp.data["results"]), 1)
 
     def test_limit_clamped_to_max_50(self):
-        resp = self.client.get(self.URL, {'q': 'bob', 'limit': 999})
+        resp = self.client.get(self.URL, {"q": "bob", "limit": 999})
         self.assertEqual(resp.status_code, 200)
 
     def test_invalid_limit_defaults_to_10(self):
-        resp = self.client.get(self.URL, {'q': 'bob', 'limit': 'abc'})
+        resp = self.client.get(self.URL, {"q": "bob", "limit": "abc"})
         self.assertEqual(resp.status_code, 200)
 
     def test_result_fields(self):
-        resp = self.client.get(self.URL, {'q': 'bob'})
-        result = next(r for r in resp.data['results'] if r['username'] == 'bob')
-        self.assertEqual(set(result.keys()), {'id', 'username', 'first_name', 'last_name'})
-        self.assertEqual(result['first_name'], 'Bob')
-        self.assertEqual(result['last_name'], 'Jones')
+        resp = self.client.get(self.URL, {"q": "bob"})
+        result = next(r for r in resp.data["results"] if r["username"] == "bob")
+        self.assertEqual(
+            set(result.keys()), {"id", "username", "first_name", "last_name"}
+        )
+        self.assertEqual(result["first_name"], "Bob")
+        self.assertEqual(result["last_name"], "Jones")
 
 
 # ── UserMeView ──────────────────────────────────────────────────
 
+
 class UserMeTests(UserTestMixin, APITestCase):
-    URL = '/api/v1/users/me'
+    URL = "/api/v1/users/me"
 
     def test_unauthenticated_rejected(self):
         self.client.force_authenticate(None)
@@ -122,18 +136,19 @@ class UserMeTests(UserTestMixin, APITestCase):
     def test_returns_current_user_data(self):
         resp = self.client.get(self.URL)
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['username'], 'alice')
-        self.assertEqual(resp.data['email'], 'alice@example.com')
-        self.assertEqual(resp.data['first_name'], 'Alice')
-        self.assertEqual(resp.data['last_name'], 'Smith')
-        self.assertIn('date_joined', resp.data)
-        self.assertIn('last_login', resp.data)
+        self.assertEqual(resp.data["username"], "alice")
+        self.assertEqual(resp.data["email"], "alice@example.com")
+        self.assertEqual(resp.data["first_name"], "Alice")
+        self.assertEqual(resp.data["last_name"], "Smith")
+        self.assertIn("date_joined", resp.data)
+        self.assertIn("last_login", resp.data)
 
 
 # ── PasswordRulesView ──────────────────────────────────────────
 
+
 class PasswordRulesTests(UserTestMixin, APITestCase):
-    URL = '/api/v1/users/password-rules'
+    URL = "/api/v1/users/password-rules"
 
     def test_unauthenticated_rejected(self):
         self.client.force_authenticate(None)
@@ -143,17 +158,18 @@ class PasswordRulesTests(UserTestMixin, APITestCase):
     def test_returns_rules(self):
         resp = self.client.get(self.URL)
         self.assertEqual(resp.status_code, 200)
-        self.assertIn('rules', resp.data)
-        self.assertIsInstance(resp.data['rules'], list)
-        for rule in resp.data['rules']:
-            self.assertIn('text', rule)
-            self.assertIn('code', rule)
+        self.assertIn("rules", resp.data)
+        self.assertIsInstance(resp.data["rules"], list)
+        for rule in resp.data["rules"]:
+            self.assertIn("text", rule)
+            self.assertIn("code", rule)
 
 
 # ── ChangePasswordView ──────────────────────────────────────────
 
+
 class ChangePasswordTests(UserTestMixin, APITestCase):
-    URL = '/api/v1/users/me/password'
+    URL = "/api/v1/users/me/password"
 
     def test_unauthenticated_rejected(self):
         self.client.force_authenticate(None)
@@ -163,80 +179,93 @@ class ChangePasswordTests(UserTestMixin, APITestCase):
     def test_missing_fields(self):
         resp = self.client.post(self.URL, {})
         self.assertEqual(resp.status_code, 400)
-        self.assertIn('errors', resp.data)
+        self.assertIn("errors", resp.data)
 
     def test_wrong_current_password(self):
-        resp = self.client.post(self.URL, {
-            'current_password': 'wrongpass',
-            'new_password': 'N3wStr0ng!Pass',
-        })
+        resp = self.client.post(
+            self.URL,
+            {
+                "current_password": "wrongpass",
+                "new_password": "N3wStr0ng!Pass",
+            },
+        )
         self.assertEqual(resp.status_code, 400)
-        self.assertIn('incorrect', resp.data['errors'][0].lower())
+        self.assertIn("incorrect", resp.data["errors"][0].lower())
 
     def test_weak_new_password(self):
-        resp = self.client.post(self.URL, {
-            'current_password': 'Str0ngP@ss!',
-            'new_password': '123',
-        })
+        resp = self.client.post(
+            self.URL,
+            {
+                "current_password": "Str0ngP@ss!",
+                "new_password": "123",
+            },
+        )
         self.assertEqual(resp.status_code, 400)
 
     def test_successful_password_change(self):
-        resp = self.client.post(self.URL, {
-            'current_password': 'Str0ngP@ss!',
-            'new_password': 'N3wStr0ng!Pass',
-        })
+        resp = self.client.post(
+            self.URL,
+            {
+                "current_password": "Str0ngP@ss!",
+                "new_password": "N3wStr0ng!Pass",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         self.user.refresh_from_db()
-        self.assertTrue(self.user.check_password('N3wStr0ng!Pass'))
+        self.assertTrue(self.user.check_password("N3wStr0ng!Pass"))
 
     def test_session_preserved_after_change(self):
         # Use session-based client instead of force_authenticate
         session_client = self.client_class()
-        session_client.login(username='alice', password='Str0ngP@ss!')
-        resp = session_client.post(self.URL, {
-            'current_password': 'Str0ngP@ss!',
-            'new_password': 'N3wStr0ng!Pass',
-        }, format='json')
+        session_client.login(username="alice", password="Str0ngP@ss!")
+        resp = session_client.post(
+            self.URL,
+            {
+                "current_password": "Str0ngP@ss!",
+                "new_password": "N3wStr0ng!Pass",
+            },
+            format="json",
+        )
         self.assertEqual(resp.status_code, 200)
         # Session should still be valid
-        resp2 = session_client.get('/api/v1/users/me')
+        resp2 = session_client.get("/api/v1/users/me")
         self.assertEqual(resp2.status_code, 200)
 
 
 # ── UserAvatarRetrieveView ──────────────────────────────────────
 
-class UserAvatarRetrieveTests(UserTestMixin, APITestCase):
 
+class UserAvatarRetrieveTests(UserTestMixin, APITestCase):
     def _url(self, user_id):
-        return f'/api/v1/users/{user_id}/avatar'
+        return f"/api/v1/users/{user_id}/avatar"
 
     def test_returns_404_for_nonexistent_user(self):
         resp = self.client.get(self._url(99999))
         self.assertEqual(resp.status_code, 404)
 
-    @patch('workspace.users.views.default_storage')
+    @patch("workspace.users.views.default_storage")
     def test_returns_404_when_no_avatar(self, mock_storage):
         mock_storage.exists.return_value = False
         resp = self.client.get(self._url(self.user.pk))
         self.assertEqual(resp.status_code, 404)
 
-    @patch('workspace.users.views.default_storage')
-    @patch('workspace.users.views.avatar_service')
+    @patch("workspace.users.views.default_storage")
+    @patch("workspace.users.views.avatar_service")
     def test_returns_avatar_when_exists(self, mock_avatar_svc, mock_storage):
         mock_storage.exists.return_value = True
-        mock_storage.open.return_value = BytesIO(b'fake-webp-data')
-        mock_avatar_svc.get_avatar_path.return_value = 'avatars/1.webp'
-        mock_avatar_svc.get_avatar_etag.return_value = 'abc123'
+        mock_storage.open.return_value = BytesIO(b"fake-webp-data")
+        mock_avatar_svc.get_avatar_path.return_value = "avatars/1.webp"
+        mock_avatar_svc.get_avatar_etag.return_value = "abc123"
 
         resp = self.client.get(self._url(self.user.pk))
         self.assertEqual(resp.status_code, 200)
 
-    @patch('workspace.users.views.default_storage')
-    @patch('workspace.users.views.avatar_service')
+    @patch("workspace.users.views.default_storage")
+    @patch("workspace.users.views.avatar_service")
     def test_returns_304_with_matching_etag(self, mock_avatar_svc, mock_storage):
         mock_storage.exists.return_value = True
-        mock_avatar_svc.get_avatar_path.return_value = 'avatars/1.webp'
-        mock_avatar_svc.get_avatar_etag.return_value = 'abc123'
+        mock_avatar_svc.get_avatar_path.return_value = "avatars/1.webp"
+        mock_avatar_svc.get_avatar_etag.return_value = "abc123"
 
         resp = self.client.get(
             self._url(self.user.pk),
@@ -245,22 +274,25 @@ class UserAvatarRetrieveTests(UserTestMixin, APITestCase):
         self.assertEqual(resp.status_code, 304)
 
     def test_returns_404_for_inactive_user(self):
-        inactive = User.objects.create_user(username='gone', password='pass', is_active=False)
+        inactive = User.objects.create_user(
+            username="gone", password="pass", is_active=False
+        )
         resp = self.client.get(self._url(inactive.pk))
         self.assertEqual(resp.status_code, 404)
 
 
 # ── UserAvatarUploadView ────────────────────────────────────────
 
-class UserAvatarUploadTests(UserTestMixin, APITestCase):
-    URL = '/api/v1/users/me/avatar'
 
-    def _make_image(self, fmt='PNG', size=(100, 100)):
+class UserAvatarUploadTests(UserTestMixin, APITestCase):
+    URL = "/api/v1/users/me/avatar"
+
+    def _make_image(self, fmt="PNG", size=(100, 100)):
         buf = BytesIO()
-        img = Image.new('RGB', size, color='red')
+        img = Image.new("RGB", size, color="red")
         img.save(buf, format=fmt)
         buf.seek(0)
-        buf.name = f'avatar.{fmt.lower()}'
+        buf.name = f"avatar.{fmt.lower()}"
         return buf
 
     def test_unauthenticated_rejected(self):
@@ -269,43 +301,77 @@ class UserAvatarUploadTests(UserTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_no_image_returns_400(self):
-        resp = self.client.post(self.URL, {
-            'crop_x': 0, 'crop_y': 0, 'crop_w': 50, 'crop_h': 50,
-        })
+        resp = self.client.post(
+            self.URL,
+            {
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 50,
+                "crop_h": 50,
+            },
+        )
         self.assertEqual(resp.status_code, 400)
 
     def test_unsupported_content_type_returns_400(self):
-        buf = BytesIO(b'not-an-image')
-        buf.name = 'avatar.bmp'
-        resp = self.client.post(self.URL, {
-            'image': buf,
-            'crop_x': 0, 'crop_y': 0, 'crop_w': 50, 'crop_h': 50,
-        }, format='multipart')
+        buf = BytesIO(b"not-an-image")
+        buf.name = "avatar.bmp"
+        resp = self.client.post(
+            self.URL,
+            {
+                "image": buf,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 50,
+                "crop_h": 50,
+            },
+            format="multipart",
+        )
         self.assertEqual(resp.status_code, 400)
 
-    @patch('workspace.users.views.AVATAR_MAX_SIZE', 10)
+    @patch("workspace.users.views.AVATAR_MAX_SIZE", 10)
     def test_oversized_image_returns_400(self):
         buf = self._make_image()
-        resp = self.client.post(self.URL, {
-            'image': buf,
-            'crop_x': 0, 'crop_y': 0, 'crop_w': 50, 'crop_h': 50,
-        }, format='multipart')
+        resp = self.client.post(
+            self.URL,
+            {
+                "image": buf,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 50,
+                "crop_h": 50,
+            },
+            format="multipart",
+        )
         self.assertEqual(resp.status_code, 400)
 
     def test_invalid_crop_coordinates_returns_400(self):
         buf = self._make_image()
-        resp = self.client.post(self.URL, {
-            'image': buf,
-            'crop_x': 'abc', 'crop_y': 0, 'crop_w': 50, 'crop_h': 50,
-        }, format='multipart')
+        resp = self.client.post(
+            self.URL,
+            {
+                "image": buf,
+                "crop_x": "abc",
+                "crop_y": 0,
+                "crop_w": 50,
+                "crop_h": 50,
+            },
+            format="multipart",
+        )
         self.assertEqual(resp.status_code, 400)
 
     def test_zero_crop_dimensions_returns_400(self):
         buf = self._make_image()
-        resp = self.client.post(self.URL, {
-            'image': buf,
-            'crop_x': 0, 'crop_y': 0, 'crop_w': 0, 'crop_h': 50,
-        }, format='multipart')
+        resp = self.client.post(
+            self.URL,
+            {
+                "image": buf,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 0,
+                "crop_h": 50,
+            },
+            format="multipart",
+        )
         self.assertEqual(resp.status_code, 400)
 
     def test_malformed_image_returns_400(self):
@@ -313,25 +379,41 @@ class UserAvatarUploadTests(UserTestMixin, APITestCase):
         # (raises UnidentifiedImageError, an OSError subclass). Without
         # the try/except in the view this propagates as a 500.
         bad = SimpleUploadedFile(
-            'avatar.png', b'not-actually-a-png', content_type='image/png',
+            "avatar.png",
+            b"not-actually-a-png",
+            content_type="image/png",
         )
-        resp = self.client.post(self.URL, {
-            'image': bad,
-            'crop_x': 0, 'crop_y': 0, 'crop_w': 50, 'crop_h': 50,
-        }, format='multipart')
+        resp = self.client.post(
+            self.URL,
+            {
+                "image": bad,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 50,
+                "crop_h": 50,
+            },
+            format="multipart",
+        )
         self.assertEqual(resp.status_code, 400)
 
-    @patch('workspace.users.views.avatar_service')
+    @patch("workspace.users.views.avatar_service")
     def test_successful_upload(self, mock_svc):
         buf = self._make_image()
-        resp = self.client.post(self.URL, {
-            'image': buf,
-            'crop_x': 0, 'crop_y': 0, 'crop_w': 50, 'crop_h': 50,
-        }, format='multipart')
+        resp = self.client.post(
+            self.URL,
+            {
+                "image": buf,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 50,
+                "crop_h": 50,
+            },
+            format="multipart",
+        )
         self.assertEqual(resp.status_code, 200)
         mock_svc.process_and_save_avatar.assert_called_once()
 
-    @patch('workspace.users.views.avatar_service')
+    @patch("workspace.users.views.avatar_service")
     def test_delete_avatar(self, mock_svc):
         resp = self.client.delete(self.URL)
         self.assertEqual(resp.status_code, 200)
@@ -340,8 +422,9 @@ class UserAvatarUploadTests(UserTestMixin, APITestCase):
 
 # ── UserStatusView ──────────────────────────────────────────────
 
+
 class UserStatusTests(UserTestMixin, APITestCase):
-    URL = '/api/v1/users/me/status'
+    URL = "/api/v1/users/me/status"
 
     def test_unauthenticated_rejected(self):
         self.client.force_authenticate(None)
@@ -351,23 +434,24 @@ class UserStatusTests(UserTestMixin, APITestCase):
     def test_get_status(self):
         resp = self.client.get(self.URL)
         self.assertEqual(resp.status_code, 200)
-        self.assertIn('status', resp.data)
+        self.assertIn("status", resp.data)
 
     def test_set_valid_status(self):
-        for s in ('auto', 'online', 'away', 'busy', 'invisible'):
-            resp = self.client.put(self.URL, {'status': s}, format='json')
-            self.assertEqual(resp.status_code, 200, f'Failed for status {s}')
-            self.assertEqual(resp.data['status'], s)
+        for s in ("auto", "online", "away", "busy", "invisible"):
+            resp = self.client.put(self.URL, {"status": s}, format="json")
+            self.assertEqual(resp.status_code, 200, f"Failed for status {s}")
+            self.assertEqual(resp.data["status"], s)
 
     def test_set_invalid_status(self):
-        resp = self.client.put(self.URL, {'status': 'bogus'}, format='json')
+        resp = self.client.put(self.URL, {"status": "bogus"}, format="json")
         self.assertEqual(resp.status_code, 400)
 
 
 # ── SettingsListView ────────────────────────────────────────────
 
+
 class SettingsListTests(UserTestMixin, APITestCase):
-    URL = '/api/v1/settings'
+    URL = "/api/v1/settings"
 
     def test_unauthenticated_rejected(self):
         self.client.force_authenticate(None)
@@ -377,113 +461,147 @@ class SettingsListTests(UserTestMixin, APITestCase):
     def test_list_empty(self):
         resp = self.client.get(self.URL)
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['results'], [])
+        self.assertEqual(resp.data["results"], [])
 
     def test_list_returns_settings(self):
-        UserSetting.objects.create(user=self.user, module='core', key='theme', value='dark')
-        UserSetting.objects.create(user=self.user, module='core', key='lang', value='fr')
+        UserSetting.objects.create(
+            user=self.user, module="core", key="theme", value="dark"
+        )
+        UserSetting.objects.create(
+            user=self.user, module="core", key="lang", value="fr"
+        )
         resp = self.client.get(self.URL)
-        self.assertEqual(len(resp.data['results']), 2)
+        self.assertEqual(len(resp.data["results"]), 2)
 
     def test_filter_by_module(self):
-        UserSetting.objects.create(user=self.user, module='core', key='theme', value='dark')
-        UserSetting.objects.create(user=self.user, module='mail', key='sig', value='hi')
-        resp = self.client.get(self.URL, {'module': 'core'})
-        self.assertEqual(len(resp.data['results']), 1)
-        self.assertEqual(resp.data['results'][0]['module'], 'core')
+        UserSetting.objects.create(
+            user=self.user, module="core", key="theme", value="dark"
+        )
+        UserSetting.objects.create(user=self.user, module="mail", key="sig", value="hi")
+        resp = self.client.get(self.URL, {"module": "core"})
+        self.assertEqual(len(resp.data["results"]), 1)
+        self.assertEqual(resp.data["results"][0]["module"], "core")
 
     def test_does_not_return_other_users_settings(self):
-        other = User.objects.create_user(username='other', password='pass')
-        UserSetting.objects.create(user=other, module='core', key='theme', value='dark')
+        other = User.objects.create_user(username="other", password="pass")
+        UserSetting.objects.create(user=other, module="core", key="theme", value="dark")
         resp = self.client.get(self.URL)
-        self.assertEqual(resp.data['results'], [])
+        self.assertEqual(resp.data["results"], [])
 
 
 # ── SettingDetailView ───────────────────────────────────────────
 
-class SettingDetailTests(UserTestMixin, APITestCase):
 
+class SettingDetailTests(UserTestMixin, APITestCase):
     def _url(self, module, key):
-        return f'/api/v1/settings/{module}/{key}'
+        return f"/api/v1/settings/{module}/{key}"
 
     def test_get_nonexistent_returns_404(self):
-        resp = self.client.get(self._url('core', 'missing'))
+        resp = self.client.get(self._url("core", "missing"))
         self.assertEqual(resp.status_code, 404)
 
     def test_get_existing(self):
-        UserSetting.objects.create(user=self.user, module='core', key='theme', value='dark')
-        resp = self.client.get(self._url('core', 'theme'))
+        UserSetting.objects.create(
+            user=self.user, module="core", key="theme", value="dark"
+        )
+        resp = self.client.get(self._url("core", "theme"))
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['value'], 'dark')
+        self.assertEqual(resp.data["value"], "dark")
 
     def test_put_creates_setting(self):
         resp = self.client.put(
-            self._url('core', 'theme'), {'value': 'dark'}, format='json',
+            self._url("core", "theme"),
+            {"value": "dark"},
+            format="json",
         )
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['value'], 'dark')
-        self.assertTrue(UserSetting.objects.filter(
-            user=self.user, module='core', key='theme',
-        ).exists())
+        self.assertEqual(resp.data["value"], "dark")
+        self.assertTrue(
+            UserSetting.objects.filter(
+                user=self.user,
+                module="core",
+                key="theme",
+            ).exists()
+        )
 
     def test_put_updates_existing(self):
-        UserSetting.objects.create(user=self.user, module='core', key='theme', value='light')
-        resp = self.client.put(
-            self._url('core', 'theme'), {'value': 'dark'}, format='json',
+        UserSetting.objects.create(
+            user=self.user, module="core", key="theme", value="light"
         )
-        self.assertEqual(resp.data['value'], 'dark')
+        resp = self.client.put(
+            self._url("core", "theme"),
+            {"value": "dark"},
+            format="json",
+        )
+        self.assertEqual(resp.data["value"], "dark")
 
     def test_put_json_value(self):
         resp = self.client.put(
-            self._url('core', 'prefs'), {'value': {'a': 1, 'b': [2, 3]}}, format='json',
+            self._url("core", "prefs"),
+            {"value": {"a": 1, "b": [2, 3]}},
+            format="json",
         )
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['value'], {'a': 1, 'b': [2, 3]})
+        self.assertEqual(resp.data["value"], {"a": 1, "b": [2, 3]})
 
     def test_put_null_value(self):
         resp = self.client.put(
-            self._url('core', 'key'), {'value': None}, format='json',
+            self._url("core", "key"),
+            {"value": None},
+            format="json",
         )
         self.assertEqual(resp.status_code, 200)
-        self.assertIsNone(resp.data['value'])
+        self.assertIsNone(resp.data["value"])
 
     def test_delete_existing(self):
-        UserSetting.objects.create(user=self.user, module='core', key='theme', value='dark')
-        resp = self.client.delete(self._url('core', 'theme'))
+        UserSetting.objects.create(
+            user=self.user, module="core", key="theme", value="dark"
+        )
+        resp = self.client.delete(self._url("core", "theme"))
         self.assertEqual(resp.status_code, 204)
-        self.assertFalse(UserSetting.objects.filter(
-            user=self.user, module='core', key='theme',
-        ).exists())
+        self.assertFalse(
+            UserSetting.objects.filter(
+                user=self.user,
+                module="core",
+                key="theme",
+            ).exists()
+        )
 
     def test_delete_nonexistent_returns_404(self):
-        resp = self.client.delete(self._url('core', 'missing'))
+        resp = self.client.delete(self._url("core", "missing"))
         self.assertEqual(resp.status_code, 404)
 
     def test_cannot_access_other_users_setting(self):
-        other = User.objects.create_user(username='other', password='pass')
-        UserSetting.objects.create(user=other, module='core', key='theme', value='dark')
-        resp = self.client.get(self._url('core', 'theme'))
+        other = User.objects.create_user(username="other", password="pass")
+        UserSetting.objects.create(user=other, module="core", key="theme", value="dark")
+        resp = self.client.get(self._url("core", "theme"))
         self.assertEqual(resp.status_code, 404)
 
     def test_put_invalidates_cache_so_get_setting_sees_fresh_value(self):
         # Prime the cache with the default-miss sentinel.
-        self.assertEqual(get_setting(self.user, 'core', 'theme', default='light'), 'light')
+        self.assertEqual(
+            get_setting(self.user, "core", "theme", default="light"), "light"
+        )
 
-        resp = self.client.put(self._url('core', 'theme'), {'value': 'dark'}, format='json')
+        resp = self.client.put(
+            self._url("core", "theme"), {"value": "dark"}, format="json"
+        )
         self.assertEqual(resp.status_code, 200)
 
         # Without cache invalidation, this returns the stale 'light' default.
-        self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dark')
+        self.assertEqual(get_setting(self.user, "core", "theme"), "dark")
 
     def test_delete_invalidates_cache_so_get_setting_sees_removal(self):
-        set_setting(self.user, 'core', 'theme', 'dark')
-        self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dark')
+        set_setting(self.user, "core", "theme", "dark")
+        self.assertEqual(get_setting(self.user, "core", "theme"), "dark")
 
-        resp = self.client.delete(self._url('core', 'theme'))
+        resp = self.client.delete(self._url("core", "theme"))
         self.assertEqual(resp.status_code, 204)
 
         # Without cache invalidation, this still returns the stale 'dark'.
-        self.assertEqual(get_setting(self.user, 'core', 'theme', default='fallback'), 'fallback')
+        self.assertEqual(
+            get_setting(self.user, "core", "theme", default="fallback"), "fallback"
+        )
 
     def tearDown(self):
         cache.clear()
@@ -491,71 +609,72 @@ class SettingDetailTests(UserTestMixin, APITestCase):
 
 # ── SettingsModuleView (bulk read / write) ──────────────────────
 
-class SettingsModuleTests(UserTestMixin, APITestCase):
 
+class SettingsModuleTests(UserTestMixin, APITestCase):
     def _url(self, module):
-        return f'/api/v1/settings/{module}'
+        return f"/api/v1/settings/{module}"
 
     def test_unauthenticated_rejected(self):
         self.client.force_authenticate(None)
-        resp = self.client.get(self._url('core'))
+        resp = self.client.get(self._url("core"))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_get_returns_empty_dict_when_module_has_no_settings(self):
-        resp = self.client.get(self._url('core'))
+        resp = self.client.get(self._url("core"))
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data, {})
 
     def test_get_returns_all_keys_in_module_as_flat_dict(self):
-        set_setting(self.user, 'core', 'theme', 'dark')
-        set_setting(self.user, 'core', 'light_theme', 'nord')
-        set_setting(self.user, 'mail', 'sig', 'hi')  # other module: must not leak in
+        set_setting(self.user, "core", "theme", "dark")
+        set_setting(self.user, "core", "light_theme", "nord")
+        set_setting(self.user, "mail", "sig", "hi")  # other module: must not leak in
 
-        resp = self.client.get(self._url('core'))
+        resp = self.client.get(self._url("core"))
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data, {'theme': 'dark', 'light_theme': 'nord'})
+        self.assertEqual(resp.data, {"theme": "dark", "light_theme": "nord"})
 
     def test_get_does_not_return_other_users_settings(self):
-        other = User.objects.create_user(username='other', password='pass')
-        set_setting(other, 'core', 'theme', 'dark')
-        resp = self.client.get(self._url('core'))
+        other = User.objects.create_user(username="other", password="pass")
+        set_setting(other, "core", "theme", "dark")
+        resp = self.client.get(self._url("core"))
         self.assertEqual(resp.data, {})
 
     def test_patch_creates_multiple_settings_in_one_request(self):
         resp = self.client.patch(
-            self._url('core'),
-            {'theme': 'dracula', 'light_theme': 'nord', 'dark_theme': 'dracula'},
-            format='json',
+            self._url("core"),
+            {"theme": "dracula", "light_theme": "nord", "dark_theme": "dracula"},
+            format="json",
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
             resp.data,
-            {'theme': 'dracula', 'light_theme': 'nord', 'dark_theme': 'dracula'},
+            {"theme": "dracula", "light_theme": "nord", "dark_theme": "dracula"},
         )
         self.assertEqual(
-            UserSetting.objects.filter(user=self.user, module='core').count(),
+            UserSetting.objects.filter(user=self.user, module="core").count(),
             3,
         )
 
     def test_patch_updates_existing_settings(self):
-        set_setting(self.user, 'core', 'theme', 'light')
-        set_setting(self.user, 'core', 'light_theme', 'light')
+        set_setting(self.user, "core", "theme", "light")
+        set_setting(self.user, "core", "light_theme", "light")
 
         resp = self.client.patch(
-            self._url('core'),
-            {'theme': 'nord', 'light_theme': 'nord'},
-            format='json',
+            self._url("core"),
+            {"theme": "nord", "light_theme": "nord"},
+            format="json",
         )
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data, {'theme': 'nord', 'light_theme': 'nord'})
+        self.assertEqual(resp.data, {"theme": "nord", "light_theme": "nord"})
 
     def test_patch_runs_inside_single_transaction(self):
         # All set_setting calls must happen inside the same atomic block,
         # so on SQLite the writer-lock is acquired once for the whole batch.
         # We assert this by patching ``set_setting`` and checking that the
         # outer connection is in an atomic block when each call lands.
-        from django.db import transaction as dj_transaction
         from unittest.mock import patch as mock_patch
+
+        from django.db import transaction as dj_transaction
 
         seen_in_atomic: list[bool] = []
         real = set_setting
@@ -564,62 +683,64 @@ class SettingsModuleTests(UserTestMixin, APITestCase):
             seen_in_atomic.append(not dj_transaction.get_autocommit())
             return real(user, module, key, value)
 
-        with mock_patch('workspace.users.views.set_setting', side_effect=spy):
+        with mock_patch("workspace.users.views.set_setting", side_effect=spy):
             resp = self.client.patch(
-                self._url('core'),
-                {'a': 1, 'b': 2, 'c': 3},
-                format='json',
+                self._url("core"),
+                {"a": 1, "b": 2, "c": 3},
+                format="json",
             )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(seen_in_atomic, [True, True, True])
 
     def test_patch_rejects_non_object_body(self):
         resp = self.client.patch(
-            self._url('core'),
-            [{'theme': 'dark'}],  # list at top-level, not an object
-            format='json',
+            self._url("core"),
+            [{"theme": "dark"}],  # list at top-level, not an object
+            format="json",
         )
         self.assertEqual(resp.status_code, 400)
 
     def test_patch_accepts_empty_body_as_no_op(self):
-        resp = self.client.patch(self._url('core'), {}, format='json')
+        resp = self.client.patch(self._url("core"), {}, format="json")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data, {})
         self.assertFalse(UserSetting.objects.filter(user=self.user).exists())
 
     def test_patch_supports_json_value_types(self):
         resp = self.client.patch(
-            self._url('core'),
+            self._url("core"),
             {
-                'string': 'hi',
-                'number': 42,
-                'list': [1, 2, 3],
-                'nested': {'a': 1},
-                'null_value': None,
+                "string": "hi",
+                "number": 42,
+                "list": [1, 2, 3],
+                "nested": {"a": 1},
+                "null_value": None,
             },
-            format='json',
+            format="json",
         )
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['string'], 'hi')
-        self.assertEqual(resp.data['number'], 42)
-        self.assertEqual(resp.data['list'], [1, 2, 3])
-        self.assertEqual(resp.data['nested'], {'a': 1})
-        self.assertIsNone(resp.data['null_value'])
+        self.assertEqual(resp.data["string"], "hi")
+        self.assertEqual(resp.data["number"], 42)
+        self.assertEqual(resp.data["list"], [1, 2, 3])
+        self.assertEqual(resp.data["nested"], {"a": 1})
+        self.assertIsNone(resp.data["null_value"])
 
     def test_patch_invalidates_module_cache_so_subsequent_get_is_fresh(self):
         # Prime the module-level cache with an empty result.
-        self.assertEqual(get_setting(self.user, 'core', 'theme', default='light'), 'light')
+        self.assertEqual(
+            get_setting(self.user, "core", "theme", default="light"), "light"
+        )
 
         resp = self.client.patch(
-            self._url('core'),
-            {'theme': 'dracula'},
-            format='json',
+            self._url("core"),
+            {"theme": "dracula"},
+            format="json",
         )
         self.assertEqual(resp.status_code, 200)
 
         # Without cache invalidation by ``set_setting``, this would still
         # return the stale 'light' default.
-        self.assertEqual(get_setting(self.user, 'core', 'theme'), 'dracula')
+        self.assertEqual(get_setting(self.user, "core", "theme"), "dracula")
 
     def tearDown(self):
         cache.clear()
@@ -627,8 +748,9 @@ class SettingsModuleTests(UserTestMixin, APITestCase):
 
 # ── UserGroupsView ──────────────────────────────────────────────
 
+
 class UserGroupsTests(UserTestMixin, APITestCase):
-    URL = '/api/v1/users/groups'
+    URL = "/api/v1/users/groups"
 
     def test_unauthenticated_rejected(self):
         self.client.force_authenticate(None)
@@ -641,27 +763,30 @@ class UserGroupsTests(UserTestMixin, APITestCase):
         self.assertEqual(resp.data, [])
 
     def test_returns_user_groups(self):
-        group = Group.objects.create(name='Engineering')
+        group = Group.objects.create(name="Engineering")
         self.user.groups.add(group)
         resp = self.client.get(self.URL)
         self.assertEqual(len(resp.data), 1)
-        self.assertEqual(resp.data[0]['name'], 'Engineering')
-        self.assertIn('has_folder', resp.data[0])
+        self.assertEqual(resp.data[0]["name"], "Engineering")
+        self.assertIn("has_folder", resp.data[0])
 
     def test_has_folder_annotation(self):
-        group = Group.objects.create(name='Team')
+        group = Group.objects.create(name="Team")
         self.user.groups.add(group)
         # Create a root folder for the group
         File.objects.create(
-            owner=self.user, name='Team Folder', node_type=File.NodeType.FOLDER,
-            group=group, parent=None,
+            owner=self.user,
+            name="Team Folder",
+            node_type=File.NodeType.FOLDER,
+            group=group,
+            parent=None,
         )
         resp = self.client.get(self.URL)
-        self.assertTrue(resp.data[0]['has_folder'])
+        self.assertTrue(resp.data[0]["has_folder"])
 
     def test_does_not_return_other_users_groups(self):
-        other = User.objects.create_user(username='other', password='pass')
-        group = Group.objects.create(name='Secret')
+        other = User.objects.create_user(username="other", password="pass")
+        group = Group.objects.create(name="Secret")
         other.groups.add(group)
         resp = self.client.get(self.URL)
         self.assertEqual(resp.data, [])
@@ -669,16 +794,18 @@ class UserGroupsTests(UserTestMixin, APITestCase):
 
 # ── SettingsViewDashboardContext ────────────────────────────────
 
+
 class SettingsViewDashboardContextTests(TestCase):
     """Smoke tests that the settings page exposes the dashboard toggles."""
 
-    SETTINGS_URL = '/users/settings'
+    SETTINGS_URL = "/users/settings"
 
     def setUp(self):
         self.user = User.objects.create_user(
-            username='settingsuser', password='pass123',
+            username="settingsuser",
+            password="pass123",
         )
-        self.client.login(username='settingsuser', password='pass123')
+        self.client.login(username="settingsuser", password="pass123")
 
     def tearDown(self):
         cache.clear()
@@ -686,15 +813,15 @@ class SettingsViewDashboardContextTests(TestCase):
     def test_show_upcoming_events_default_true_in_context(self):
         resp = self.client.get(self.SETTINGS_URL)
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.context['show_upcoming_events'], True)
+        self.assertEqual(resp.context["show_upcoming_events"], True)
 
     def test_show_upcoming_empty_default_true_in_context(self):
         resp = self.client.get(self.SETTINGS_URL)
-        self.assertEqual(resp.context['show_upcoming_empty'], True)
+        self.assertEqual(resp.context["show_upcoming_empty"], True)
 
     def test_stored_false_values_reflected_in_context(self):
-        set_setting(self.user, 'dashboard', 'show_upcoming_events', False)
-        set_setting(self.user, 'dashboard', 'show_upcoming_empty', False)
+        set_setting(self.user, "dashboard", "show_upcoming_events", False)
+        set_setting(self.user, "dashboard", "show_upcoming_empty", False)
         resp = self.client.get(self.SETTINGS_URL)
-        self.assertEqual(resp.context['show_upcoming_events'], False)
-        self.assertEqual(resp.context['show_upcoming_empty'], False)
+        self.assertEqual(resp.context["show_upcoming_events"], False)
+        self.assertEqual(resp.context["show_upcoming_empty"], False)

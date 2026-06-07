@@ -16,33 +16,33 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from workspace.common.cache import cached, invalidate_tags
 from workspace.users.models import UserSetting
 
-UTC = ZoneInfo('UTC')
+UTC = ZoneInfo("UTC")
 
 _CACHE_TTL = 300  # 5 minutes
-_DB_MISS = '__SETTING_NOT_FOUND__'
+_DB_MISS = "__SETTING_NOT_FOUND__"
 
 
 def _key_tag(user_id: int, module: str, key: str) -> str:
-    return f'usetting:{user_id}:{module}:{key}'
+    return f"usetting:{user_id}:{module}:{key}"
 
 
 def _module_tag(user_id: int, module: str) -> str:
-    return f'usetting_mod:{user_id}:{module}'
+    return f"usetting_mod:{user_id}:{module}"
 
 
 def get_user_timezone(user) -> ZoneInfo:
     """Return the user's configured timezone, or UTC if unset/invalid."""
-    tz_name = get_setting(user, 'core', 'timezone')
+    tz_name = get_setting(user, "core", "timezone")
     if not tz_name:
         return UTC
     try:
         return ZoneInfo(tz_name)
-    except (ZoneInfoNotFoundError, KeyError):
+    except ZoneInfoNotFoundError, KeyError:
         return UTC
 
 
 @cached(
-    key=lambda user, module, key: f'usetting:{user.pk}:{module}:{key}',
+    key=lambda user, module, key: f"usetting:{user.pk}:{module}:{key}",
     ttl=_CACHE_TTL,
     tags=lambda user, module, key: [_key_tag(user.pk, module, key)],
 )
@@ -93,8 +93,10 @@ def set_setting(user, module: str, key: str, value: Any) -> UserSetting:
             # else: stale cache, DB drifted; fall through to write
 
     obj, _ = UserSetting.objects.update_or_create(
-        user=user, module=module, key=key,
-        defaults={'value': value},
+        user=user,
+        module=module,
+        key=key,
+        defaults={"value": value},
     )
     invalidate_tags(
         _key_tag(user.pk, module, key),
@@ -106,7 +108,9 @@ def set_setting(user, module: str, key: str, value: Any) -> UserSetting:
 def delete_setting(user, module: str, key: str) -> bool:
     """Delete a setting. Return ``True`` if it existed."""
     deleted, _ = UserSetting.objects.filter(
-        user=user, module=module, key=key,
+        user=user,
+        module=module,
+        key=key,
     ).delete()
     invalidate_tags(
         _key_tag(user.pk, module, key),
@@ -116,21 +120,20 @@ def delete_setting(user, module: str, key: str) -> bool:
 
 
 @cached(
-    key=lambda user, module: f'usetting_mod:{user.pk}:{module}',
+    key=lambda user, module: f"usetting_mod:{user.pk}:{module}",
     ttl=_CACHE_TTL,
     tags=lambda user, module: [_module_tag(user.pk, module)],
 )
 def get_module_settings(user, module: str) -> dict[str, Any]:
     """Return all settings for a given module as a ``{key: value}`` dict."""
     return {
-        s.key: s.value
-        for s in UserSetting.objects.filter(user=user, module=module)
+        s.key: s.value for s in UserSetting.objects.filter(user=user, module=module)
     }
 
 
 def get_all_settings(user) -> list[dict]:
     """Return every setting for *user* as a list of dicts."""
     return [
-        {'module': s.module, 'key': s.key, 'value': s.value}
+        {"module": s.module, "key": s.key, "value": s.value}
         for s in UserSetting.objects.filter(user=user)
     ]

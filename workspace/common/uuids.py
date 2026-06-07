@@ -42,5 +42,5 @@ def parse_uuid_or_none(value) -> uuid.UUID | None:
         return None
     try:
         return uuid.UUID(str(value))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None

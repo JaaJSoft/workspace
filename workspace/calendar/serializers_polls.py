@@ -10,7 +10,7 @@ class PollSlotSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PollSlot
-        fields = ['uuid', 'start', 'end', 'position', 'yes_count', 'maybe_count']
+        fields = ["uuid", "start", "end", "position", "yes_count", "maybe_count"]
 
 
 class PollVoteSerializer(serializers.ModelSerializer):
@@ -18,7 +18,7 @@ class PollVoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PollVote
-        fields = ['uuid', 'slot_id', 'user', 'guest_name', 'voter_token', 'choice']
+        fields = ["uuid", "slot_id", "user", "guest_name", "voter_token", "choice"]
 
 
 class PollInviteeSerializer(serializers.ModelSerializer):
@@ -26,7 +26,7 @@ class PollInviteeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PollInvitee
-        fields = ['uuid', 'user', 'created_at']
+        fields = ["uuid", "user", "created_at"]
 
 
 class PollSerializer(serializers.ModelSerializer):
@@ -39,24 +39,34 @@ class PollSerializer(serializers.ModelSerializer):
     class Meta:
         model = Poll
         fields = [
-            'uuid', 'title', 'description', 'created_by', 'status',
-            'share_token', 'chosen_slot_id', 'event_id',
-            'slots', 'votes', 'invitees', 'share_url',
-            'created_at', 'updated_at',
+            "uuid",
+            "title",
+            "description",
+            "created_by",
+            "status",
+            "share_token",
+            "chosen_slot_id",
+            "event_id",
+            "slots",
+            "votes",
+            "invitees",
+            "share_url",
+            "created_at",
+            "updated_at",
         ]
 
     def get_votes(self, obj):
         # Use prefetched votes if available (via _prefetched_poll_votes)
-        if hasattr(obj, '_prefetched_poll_votes'):
+        if hasattr(obj, "_prefetched_poll_votes"):
             return PollVoteSerializer(obj._prefetched_poll_votes, many=True).data
         votes = PollVote.objects.filter(
             slot__poll=obj,
-        ).select_related('user')
+        ).select_related("user")
         return PollVoteSerializer(votes, many=True).data
 
     def get_share_url(self, obj):
-        request = self.context.get('request')
-        path = f'/calendar/polls/shared/{obj.share_token}'
+        request = self.context.get("request")
+        path = f"/calendar/polls/shared/{obj.share_token}"
         if request:
             return request.build_absolute_uri(path)
         return path
@@ -68,30 +78,39 @@ class PollListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Poll
-        fields = ['uuid', 'title', 'status', 'created_by', 'participant_count', 'created_at']
+        fields = [
+            "uuid",
+            "title",
+            "status",
+            "created_by",
+            "participant_count",
+            "created_at",
+        ]
 
     def get_participant_count(self, obj):
         # Use annotation if available (via _participant_count)
-        if hasattr(obj, '_participant_count'):
+        if hasattr(obj, "_participant_count"):
             return obj._participant_count
         # Fallback: distinct authenticated users + distinct guest tokens
         auth_count = (
-            PollVote.objects
-            .filter(slot__poll=obj, user__isnull=False)
-            .values('user').distinct().count()
+            PollVote.objects.filter(slot__poll=obj, user__isnull=False)
+            .values("user")
+            .distinct()
+            .count()
         )
         guest_count = (
-            PollVote.objects
-            .filter(slot__poll=obj, user__isnull=True)
-            .exclude(voter_token='')
-            .values('voter_token').distinct().count()
+            PollVote.objects.filter(slot__poll=obj, user__isnull=True)
+            .exclude(voter_token="")
+            .values("voter_token")
+            .distinct()
+            .count()
         )
         return auth_count + guest_count
 
 
 class PollCreateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255)
-    description = serializers.CharField(required=False, default='', allow_blank=True)
+    description = serializers.CharField(required=False, default="", allow_blank=True)
     slots = serializers.ListField(
         child=serializers.DictField(),
         min_length=2,
@@ -99,7 +118,7 @@ class PollCreateSerializer(serializers.Serializer):
 
     def validate_slots(self, value):
         for i, slot in enumerate(value):
-            if 'start' not in slot:
+            if "start" not in slot:
                 raise serializers.ValidationError(f'Slot {i}: "start" is required.')
         return value
 
@@ -115,14 +134,17 @@ class PollUpdateSerializer(serializers.Serializer):
 
     def validate_slots(self, value):
         for i, slot in enumerate(value):
-            if 'start' not in slot:
+            if "start" not in slot:
                 raise serializers.ValidationError(f'Slot {i}: "start" is required.')
-            if 'uuid' in slot and slot['uuid']:
+            if "uuid" in slot and slot["uuid"]:
                 try:
                     import uuid as _uuid
-                    _uuid.UUID(str(slot['uuid']))
+
+                    _uuid.UUID(str(slot["uuid"]))
                 except ValueError:
-                    raise serializers.ValidationError(f'Slot {i}: invalid uuid.')
+                    raise serializers.ValidationError(
+                        f"Slot {i}: invalid uuid."
+                    ) from None
         return value
 
 
@@ -137,8 +159,10 @@ class VoteSubmitSerializer(serializers.Serializer):
 
 class GuestVoteSubmitSerializer(serializers.Serializer):
     guest_name = serializers.CharField(max_length=100)
-    guest_email = serializers.EmailField(required=False, default='', allow_blank=True)
-    voter_token = serializers.CharField(max_length=36, required=False, default='', allow_blank=True)
+    guest_email = serializers.EmailField(required=False, default="", allow_blank=True)
+    voter_token = serializers.CharField(
+        max_length=36, required=False, default="", allow_blank=True
+    )
     votes = VoteItemSerializer(many=True, min_length=1)
 
 

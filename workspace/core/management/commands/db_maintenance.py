@@ -15,14 +15,14 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--skip-vacuum',
-            action='store_true',
-            help='Skip VACUUM (can be slow on large databases).',
+            "--skip-vacuum",
+            action="store_true",
+            help="Skip VACUUM (can be slow on large databases).",
         )
         parser.add_argument(
-            '--skip-integrity-check',
-            action='store_true',
-            help='Skip PRAGMA integrity_check.',
+            "--skip-integrity-check",
+            action="store_true",
+            help="Skip PRAGMA integrity_check.",
         )
 
     def handle(self, *args, **options):
@@ -31,56 +31,62 @@ class Command(BaseCommand):
         self.stdout.write("Starting SQLite maintenance…")
 
         result = _run_maintenance(
-            skip_vacuum=options['skip_vacuum'],
-            skip_integrity_check=options['skip_integrity_check'],
+            skip_vacuum=options["skip_vacuum"],
+            skip_integrity_check=options["skip_integrity_check"],
         )
 
-        if result.get('skipped'):
-            self.stdout.write(self.style.WARNING(result['reason']))
+        if result.get("skipped"):
+            self.stdout.write(self.style.WARNING(result["reason"]))
             return
 
         # optimize
-        self.stdout.write(self.style.SUCCESS(
-            f"  PRAGMA optimize: {result['optimize_ms']} ms"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(f"  PRAGMA optimize: {result['optimize_ms']} ms")
+        )
 
         # WAL checkpoint
-        wal = result['wal_checkpoint']
-        self.stdout.write(self.style.SUCCESS(
-            f"  WAL checkpoint: {result['wal_checkpoint_ms']} ms "
-            f"(code={wal['return_code']}, written={wal['pages_written']}, "
-            f"checkpointed={wal['pages_checkpointed']})"
-        ))
+        wal = result["wal_checkpoint"]
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"  WAL checkpoint: {result['wal_checkpoint_ms']} ms "
+                f"(code={wal['return_code']}, written={wal['pages_written']}, "
+                f"checkpointed={wal['pages_checkpointed']})"
+            )
+        )
 
         # VACUUM
-        if result.get('vacuum_skipped'):
+        if result.get("vacuum_skipped"):
             self.stdout.write(self.style.WARNING("  VACUUM: skipped"))
         else:
             size_info = ""
-            if result.get('size_before') is not None:
-                before_kb = result['size_before'] / 1024
-                after_kb = result['size_after'] / 1024
-                saved_kb = result.get('size_saved', 0) / 1024
+            if result.get("size_before") is not None:
+                before_kb = result["size_before"] / 1024
+                after_kb = result["size_after"] / 1024
+                saved_kb = result.get("size_saved", 0) / 1024
                 size_info = (
                     f" (before={before_kb:.1f} KB, after={after_kb:.1f} KB, "
                     f"saved={saved_kb:.1f} KB)"
                 )
-            self.stdout.write(self.style.SUCCESS(
-                f"  VACUUM: {result['vacuum_ms']} ms{size_info}"
-            ))
+            self.stdout.write(
+                self.style.SUCCESS(f"  VACUUM: {result['vacuum_ms']} ms{size_info}")
+            )
 
         # Integrity check
-        if result.get('integrity_check_skipped'):
+        if result.get("integrity_check_skipped"):
             self.stdout.write(self.style.WARNING("  Integrity check: skipped"))
         else:
-            check = result['integrity_check']
-            if check == 'ok':
-                self.stdout.write(self.style.SUCCESS(
-                    f"  Integrity check: ok ({result['integrity_check_ms']} ms)"
-                ))
+            check = result["integrity_check"]
+            if check == "ok":
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"  Integrity check: ok ({result['integrity_check_ms']} ms)"
+                    )
+                )
             else:
-                self.stderr.write(self.style.ERROR(
-                    f"  Integrity check FAILED ({result['integrity_check_ms']} ms): {check}"
-                ))
+                self.stderr.write(
+                    self.style.ERROR(
+                        f"  Integrity check FAILED ({result['integrity_check_ms']} ms): {check}"
+                    )
+                )
 
         self.stdout.write(self.style.SUCCESS("Maintenance complete."))

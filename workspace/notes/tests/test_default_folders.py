@@ -30,7 +30,9 @@ class EnsureDefaultFoldersStorageTests(TestCase):
         self._media_override.enable()
 
         self.user = User.objects.create_user(
-            username='journalmig', email='jmig@test.com', password='pass',
+            username="journalmig",
+            email="jmig@test.com",
+            password="pass",
         )
 
     def tearDown(self):
@@ -38,7 +40,9 @@ class EnsureDefaultFoldersStorageTests(TestCase):
         self._media_override.disable()
         shutil.rmtree(self._tmpdir, ignore_errors=True)
 
-    @override_settings(DEFAULT_FILE_STORAGE='django.core.files.storage.FileSystemStorage')
+    @override_settings(
+        DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage"
+    )
     def test_legacy_journal_migration_moves_descendant_content(self):
         """A root-level Journal containing a note must migrate the note's bytes
         when re-parented under Notes.
@@ -48,11 +52,16 @@ class EnsureDefaultFoldersStorageTests(TestCase):
         the root-level path while the DB row pointed under Notes/Journal.
         """
         journal = FileService.create_folder(
-            self.user, 'Journal', icon='book-open', color='success',
+            self.user,
+            "Journal",
+            icon="book-open",
+            color="success",
         )
         note = FileService.create_file(
-            self.user, '2026-04-26.md', parent=journal,
-            content=ContentFile(b'today I refactored', name='2026-04-26.md'),
+            self.user,
+            "2026-04-26.md",
+            parent=journal,
+            content=ContentFile(b"today I refactored", name="2026-04-26.md"),
         )
         old_full_path = os.path.join(self._tmpdir, note.content.name)
         self.assertTrue(os.path.isfile(old_full_path))
@@ -60,10 +69,10 @@ class EnsureDefaultFoldersStorageTests(TestCase):
         _ensure_default_folders(self.user)
 
         note.refresh_from_db()
-        new_content_name = note.content.name.replace('\\', '/')
+        new_content_name = note.content.name.replace("\\", "/")
         self.assertTrue(
-            new_content_name.startswith('files/users/journalmig/Notes/Journal/'),
-            f'Expected new path under Notes/Journal/, got {new_content_name}',
+            new_content_name.startswith("files/users/journalmig/Notes/Journal/"),
+            f"Expected new path under Notes/Journal/, got {new_content_name}",
         )
         new_full_path = os.path.join(self._tmpdir, note.content.name)
         self.assertTrue(os.path.isfile(new_full_path))
@@ -72,7 +81,7 @@ class EnsureDefaultFoldersStorageTests(TestCase):
         # The Journal folder itself must now live under Notes.
         journal.refresh_from_db()
         self.assertIsNotNone(journal.parent_id)
-        self.assertEqual(journal.parent.name, 'Notes')
+        self.assertEqual(journal.parent.name, "Notes")
 
 
 class EnsureDefaultFoldersMalformedPrefsTests(TestCase):
@@ -81,7 +90,9 @@ class EnsureDefaultFoldersMalformedPrefsTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
-            username='badprefs', email='bp@test.com', password='pass',
+            username="badprefs",
+            email="bp@test.com",
+            password="pass",
         )
 
     def tearDown(self):
@@ -93,10 +104,15 @@ class EnsureDefaultFoldersMalformedPrefsTests(TestCase):
         UUIDField.to_python raised ValidationError on filter(uuid=...)."""
         from workspace.users.services.settings import set_setting
 
-        set_setting(self.user, 'notes', 'preferences', {
-            'defaultFolderUuid': 'not-a-uuid',
-            'journalFolderUuid': 'also-bad',
-        })
+        set_setting(
+            self.user,
+            "notes",
+            "preferences",
+            {
+                "defaultFolderUuid": "not-a-uuid",
+                "journalFolderUuid": "also-bad",
+            },
+        )
 
         # Did not raise: malformed UUIDs fall back to "no preference",
         # so the bootstrap creates fresh folders as if no prefs existed.
@@ -104,5 +120,6 @@ class EnsureDefaultFoldersMalformedPrefsTests(TestCase):
         self.assertTrue(changed)
         # The bootstrap rewrote prefs with valid UUIDs.
         from uuid import UUID
-        UUID(prefs['defaultFolderUuid'])
-        UUID(prefs['journalFolderUuid'])
+
+        UUID(prefs["defaultFolderUuid"])
+        UUID(prefs["journalFolderUuid"])

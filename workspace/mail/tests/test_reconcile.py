@@ -15,23 +15,25 @@ class ReconcileFolderMixin:
 
     def setUp(self):
         self.user = User.objects.create_user(
-            username='reconcileuser', email='reconcile@test.com', password='pass',
+            username="reconcileuser",
+            email="reconcile@test.com",
+            password="pass",
         )
         self.account = MailAccount.objects.create(
             owner=self.user,
-            email='user@example.com',
-            imap_host='imap.example.com',
+            email="user@example.com",
+            imap_host="imap.example.com",
             imap_use_ssl=True,
-            smtp_host='smtp.example.com',
-            username='user@example.com',
+            smtp_host="smtp.example.com",
+            username="user@example.com",
         )
-        self.account.set_password('secret')
+        self.account.set_password("secret")
         self.account.save()
         self.folder = MailFolder.objects.create(
             account=self.account,
-            name='INBOX',
-            display_name='Inbox',
-            folder_type='inbox',
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
         )
 
     def _make_msg(self, uid, is_read=False, is_starred=False, deleted_at=None):
@@ -54,23 +56,23 @@ class ReconcileFolderMixin:
         conn = MagicMock()
 
         # UID SEARCH ALL
-        uid_bytes = b' '.join(str(u).encode() for u in remote_uids)
-        conn.uid.return_value = ('OK', [uid_bytes])
+        uid_bytes = b" ".join(str(u).encode() for u in remote_uids)
+        conn.uid.return_value = ("OK", [uid_bytes])
 
         if flags is None:
-            flags = {u: '' for u in remote_uids}
+            flags = {u: "" for u in remote_uids}
 
         def uid_side_effect(cmd, *args):
-            if cmd == 'SEARCH':
-                return ('OK', [uid_bytes])
-            if cmd == 'FETCH':
+            if cmd == "SEARCH":
+                return ("OK", [uid_bytes])
+            if cmd == "FETCH":
                 responses = []
                 for uid, flag_str in flags.items():
                     responses.append(
-                        (f'* {uid} FETCH (UID {uid} FLAGS ({flag_str}))'.encode(), b'')
+                        (f"* {uid} FETCH (UID {uid} FLAGS ({flag_str}))".encode(), b"")
                     )
-                return ('OK', responses)
-            return ('OK', [b''])
+                return ("OK", responses)
+            return ("OK", [b""])
 
         conn.uid.side_effect = uid_side_effect
         return conn
@@ -135,7 +137,7 @@ class ReconcileSoftDeleteTests(ReconcileFolderMixin, TestCase):
         self._make_msg(100)
 
         conn = MagicMock()
-        conn.uid.return_value = ('NO', [b''])
+        conn.uid.return_value = ("NO", [b""])
         _reconcile_folder(conn, self.folder)
 
         msg = MailMessage.objects.get(imap_uid=100, folder=self.folder)
@@ -149,7 +151,7 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         """Unread local message marked read when server has \\Seen."""
         self._make_msg(100, is_read=False)
 
-        conn = self._mock_conn([100], flags={100: r'\Seen'})
+        conn = self._mock_conn([100], flags={100: r"\Seen"})
         _reconcile_folder(conn, self.folder)
 
         msg = MailMessage.objects.get(imap_uid=100, folder=self.folder)
@@ -159,7 +161,7 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         """Read local message marked unread when server lacks \\Seen."""
         self._make_msg(100, is_read=True)
 
-        conn = self._mock_conn([100], flags={100: ''})
+        conn = self._mock_conn([100], flags={100: ""})
         _reconcile_folder(conn, self.folder)
 
         msg = MailMessage.objects.get(imap_uid=100, folder=self.folder)
@@ -169,7 +171,7 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         """Unstarred local message marked starred when server has \\Flagged."""
         self._make_msg(100, is_starred=False)
 
-        conn = self._mock_conn([100], flags={100: r'\Flagged'})
+        conn = self._mock_conn([100], flags={100: r"\Flagged"})
         _reconcile_folder(conn, self.folder)
 
         msg = MailMessage.objects.get(imap_uid=100, folder=self.folder)
@@ -179,7 +181,7 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         """Starred local message unmarked when server lacks \\Flagged."""
         self._make_msg(100, is_starred=True)
 
-        conn = self._mock_conn([100], flags={100: ''})
+        conn = self._mock_conn([100], flags={100: ""})
         _reconcile_folder(conn, self.folder)
 
         msg = MailMessage.objects.get(imap_uid=100, folder=self.folder)
@@ -189,7 +191,7 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         """Both \\Seen and \\Flagged are applied together."""
         self._make_msg(100, is_read=False, is_starred=False)
 
-        conn = self._mock_conn([100], flags={100: r'\Seen \Flagged'})
+        conn = self._mock_conn([100], flags={100: r"\Seen \Flagged"})
         _reconcile_folder(conn, self.folder)
 
         msg = MailMessage.objects.get(imap_uid=100, folder=self.folder)
@@ -201,10 +203,13 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         self._make_msg(100, is_read=False, is_starred=False)
         self._make_msg(200, is_read=True, is_starred=True)
 
-        conn = self._mock_conn([100, 200], flags={
-            100: r'\Seen \Flagged',
-            200: '',
-        })
+        conn = self._mock_conn(
+            [100, 200],
+            flags={
+                100: r"\Seen \Flagged",
+                200: "",
+            },
+        )
         _reconcile_folder(conn, self.folder)
 
         msg100 = MailMessage.objects.get(imap_uid=100, folder=self.folder)
@@ -219,13 +224,16 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         for any label attached to that message - otherwise the sidebar badge
         stays stale until the next user-side toggle."""
         from workspace.mail.models import MailLabel, MailMessageLabel
+
         msg = self._make_msg(100, is_read=False)
         label = MailLabel.objects.create(
-            account=self.account, name='Important', unread_count=1,
+            account=self.account,
+            name="Important",
+            unread_count=1,
         )
         MailMessageLabel.objects.create(message=msg, label=label)
 
-        conn = self._mock_conn([100], flags={100: r'\Seen'})
+        conn = self._mock_conn([100], flags={100: r"\Seen"})
         _reconcile_folder(conn, self.folder)
 
         label.refresh_from_db()
@@ -235,13 +243,16 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         """The reverse direction: server marked a message unread, label
         unread_count should reflect the increment."""
         from workspace.mail.models import MailLabel, MailMessageLabel
+
         msg = self._make_msg(100, is_read=True)
         label = MailLabel.objects.create(
-            account=self.account, name='Important', unread_count=0,
+            account=self.account,
+            name="Important",
+            unread_count=0,
         )
         MailMessageLabel.objects.create(message=msg, label=label)
 
-        conn = self._mock_conn([100], flags={100: ''})
+        conn = self._mock_conn([100], flags={100: ""})
         _reconcile_folder(conn, self.folder)
 
         label.refresh_from_db()
@@ -252,13 +263,14 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
         self._make_msg(100, is_read=False)
 
         conn = MagicMock()
+
         # SEARCH succeeds, FETCH fails
         def uid_side_effect(cmd, *args):
-            if cmd == 'SEARCH':
-                return ('OK', [b'100'])
-            if cmd == 'FETCH':
-                return ('NO', [b''])
-            return ('OK', [b''])
+            if cmd == "SEARCH":
+                return ("OK", [b"100"])
+            if cmd == "FETCH":
+                return ("NO", [b""])
+            return ("OK", [b""])
 
         conn.uid.side_effect = uid_side_effect
         _reconcile_folder(conn, self.folder)
@@ -270,7 +282,7 @@ class ReconcileFlagTests(ReconcileFolderMixin, TestCase):
 class SyncReconciliationIntegrationTests(ReconcileFolderMixin, TestCase):
     """Tests that sync_folder_messages always runs reconciliation."""
 
-    @patch('workspace.mail.services.imap_sync.connect_imap')
+    @patch("workspace.mail.services.imap_sync.connect_imap")
     def test_reconciliation_runs_with_no_new_messages(self, mock_connect):
         """Reconciliation runs even when there are no new UIDs to fetch."""
         self.folder.last_sync_uid = 500
@@ -282,39 +294,40 @@ class SyncReconciliationIntegrationTests(ReconcileFolderMixin, TestCase):
 
         conn = MagicMock()
         # SELECT OK
-        conn.select.return_value = ('OK', [b'1'])
+        conn.select.return_value = ("OK", [b"1"])
         # Make _get_uidvalidity return same value (no reset)
-        conn.untagged_responses = {'OK': [b'[UIDVALIDITY 12345]']}
+        conn.untagged_responses = {"OK": [b"[UIDVALIDITY 12345]"]}
 
         call_count = 0
 
         def uid_side_effect(cmd, *args):
             nonlocal call_count
             call_count += 1
-            if cmd == 'SEARCH':
-                search_arg = args[1] if len(args) > 1 else ''
-                if 'UID' in str(search_arg) and 'ALL' not in str(search_arg):
+            if cmd == "SEARCH":
+                search_arg = args[1] if len(args) > 1 else ""
+                if "UID" in str(search_arg) and "ALL" not in str(search_arg):
                     # Incremental search — no new UIDs
-                    return ('OK', [b''])
+                    return ("OK", [b""])
                 else:
                     # Reconciliation SEARCH ALL — server is empty
-                    return ('OK', [b''])
-            if cmd == 'FETCH':
-                return ('OK', [])
-            return ('OK', [b''])
+                    return ("OK", [b""])
+            if cmd == "FETCH":
+                return ("OK", [])
+            return ("OK", [b""])
 
         conn.uid.side_effect = uid_side_effect
-        conn.logout.return_value = ('OK', [b'BYE'])
+        conn.logout.return_value = ("OK", [b"BYE"])
         mock_connect.return_value = conn
 
         from workspace.mail.services.imap_sync import sync_folder_messages
+
         sync_folder_messages(self.account, self.folder)
 
         # Reconciliation should have soft-deleted the message
         msg.refresh_from_db()
         self.assertIsNotNone(msg.deleted_at)
 
-    @patch('workspace.mail.services.imap_sync.connect_imap')
+    @patch("workspace.mail.services.imap_sync.connect_imap")
     def test_last_sync_uid_advances_for_already_present_messages(self, mock_connect):
         """When FETCH returns UIDs that _parse_message recognises as already
         in DB (returns None), max_uid must still advance so last_sync_uid
@@ -329,32 +342,34 @@ class SyncReconciliationIntegrationTests(ReconcileFolderMixin, TestCase):
         self._make_msg(42)
 
         conn = MagicMock()
-        conn.select.return_value = ('OK', [b'1'])
-        conn.untagged_responses = {'OK': [b'[UIDVALIDITY 12345]']}
+        conn.select.return_value = ("OK", [b"1"])
+        conn.untagged_responses = {"OK": [b"[UIDVALIDITY 12345]"]}
 
         def uid_side_effect(cmd, *args):
-            if cmd == 'SEARCH':
-                search_arg = str(args[1]) if len(args) > 1 else ''
-                if 'UID 42:' in search_arg:
-                    return ('OK', [b'42'])
+            if cmd == "SEARCH":
+                search_arg = str(args[1]) if len(args) > 1 else ""
+                if "UID 42:" in search_arg:
+                    return ("OK", [b"42"])
                 # Reconciliation SEARCH ALL: keep UID 42 present so it isn't
                 # soft-deleted by the reconciliation step.
-                return ('OK', [b'42'])
-            if cmd == 'FETCH':
+                return ("OK", [b"42"])
+            if cmd == "FETCH":
                 # _parse_message will short-circuit on MailMessage.exists() so
                 # the body doesn't have to be a real RFC822 message.
-                return ('OK', [(b'1 (UID 42 FLAGS ())', b'')])
-            return ('OK', [b''])
+                return ("OK", [(b"1 (UID 42 FLAGS ())", b"")])
+            return ("OK", [b""])
 
         conn.uid.side_effect = uid_side_effect
-        conn.logout.return_value = ('OK', [b'BYE'])
+        conn.logout.return_value = ("OK", [b"BYE"])
         mock_connect.return_value = conn
 
         from workspace.mail.services.imap_sync import sync_folder_messages
+
         sync_folder_messages(self.account, self.folder)
 
         self.folder.refresh_from_db()
         self.assertGreaterEqual(
-            self.folder.last_sync_uid, 42,
+            self.folder.last_sync_uid,
+            42,
             "last_sync_uid must advance past confirmed-present UIDs",
         )

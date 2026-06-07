@@ -17,6 +17,7 @@ from django.core.files.uploadedfile import TemporaryUploadedFile
 from django.db import transaction
 
 from workspace.common.logging import scrub
+
 from ..models import File
 from .files import FileService
 
@@ -41,20 +42,20 @@ class ArchiveTooManyEntriesError(ValueError):
     """
 
 
-ZIP_LABELS = frozenset({'zip'})
+ZIP_LABELS = frozenset({"zip"})
 
-_WINDOWS_DRIVE_RE = re.compile(r'^[A-Za-z]:')
+_WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:")
 
 
 def _is_unsafe_path(name):
     if not name:
         return True
-    if name.startswith('/') or name.startswith('\\'):
+    if name.startswith("/") or name.startswith("\\"):
         return True
     if _WINDOWS_DRIVE_RE.match(name):
         return True
-    parts = name.replace('\\', '/').split('/')
-    return any(p == '..' for p in parts)
+    parts = name.replace("\\", "/").split("/")
+    return any(p == ".." for p in parts)
 
 
 def _is_symlink(info):
@@ -80,13 +81,13 @@ def _stream_entry_to_tempfile(zf, info, leaf, total_bytes, max_bytes):
     """
     tmp = TemporaryUploadedFile(
         name=leaf,
-        content_type='application/octet-stream',
+        content_type="application/octet-stream",
         size=0,
         charset=None,
     )
     entry_bytes = 0
     try:
-        with zf.open(info, 'r') as src:
+        with zf.open(info, "r") as src:
             while True:
                 chunk = src.read(_READ_CHUNK)
                 if not chunk:
@@ -122,11 +123,11 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
     if file_obj.type not in ZIP_LABELS:
         raise ValueError("Not a ZIP archive")
 
-    max_bytes = getattr(settings, 'FILES_EXTRACT_MAX_BYTES', 2 * 1024 * 1024 * 1024)
-    max_entries = getattr(settings, 'FILES_EXTRACT_MAX_ENTRIES', 10_000)
+    max_bytes = getattr(settings, "FILES_EXTRACT_MAX_BYTES", 2 * 1024 * 1024 * 1024)
+    max_entries = getattr(settings, "FILES_EXTRACT_MAX_ENTRIES", 10_000)
 
     try:
-        source = file_obj.content.open('rb')
+        source = file_obj.content.open("rb")
     except (FileNotFoundError, OSError) as e:
         logger.warning("Cannot open archive %s: %s", scrub(file_obj.content.name), e)
         raise ValueError("Archive content missing") from e
@@ -151,9 +152,13 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
                         if _is_symlink(info):
                             continue
                         if _is_unsafe_path(info.filename):
-                            raise ValueError(f"Unsafe entry in archive: {scrub(info.filename)}")
+                            raise ValueError(
+                                f"Unsafe entry in archive: {scrub(info.filename)}"
+                            )
 
-                        parts = [p for p in info.filename.replace('\\', '/').split('/') if p]
+                        parts = [
+                            p for p in info.filename.replace("\\", "/").split("/") if p
+                        ]
                         if not parts:
                             continue
 
@@ -161,15 +166,23 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
                             _ensure_folder_chain(parts, folder_cache, acting_user)
                             continue
 
-                        parent = _ensure_folder_chain(parts[:-1], folder_cache, acting_user)
+                        parent = _ensure_folder_chain(
+                            parts[:-1], folder_cache, acting_user
+                        )
                         leaf = parts[-1]
 
                         tmp, total_bytes = _stream_entry_to_tempfile(
-                            zf, info, leaf, total_bytes, max_bytes,
+                            zf,
+                            info,
+                            leaf,
+                            total_bytes,
+                            max_bytes,
                         )
                         try:
                             new_file = FileService.create_file(
-                                acting_user, leaf, parent=parent,
+                                acting_user,
+                                leaf,
+                                parent=parent,
                                 content=tmp,
                                 acting_user=acting_user,
                             )
@@ -193,8 +206,8 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
         raise ValueError("Corrupted archive") from e
 
     return {
-        'destination_uuid': str(dest_folder.uuid) if dest_folder is not None else None,
-        'files_created': files_created,
+        "destination_uuid": str(dest_folder.uuid) if dest_folder is not None else None,
+        "files_created": files_created,
     }
 
 
@@ -217,7 +230,10 @@ def _ensure_folder_chain(parts, folder_cache, acting_user):
         ).first()
         if existing is None:
             existing = FileService.create_folder(
-                acting_user, segment, parent=current, acting_user=acting_user,
+                acting_user,
+                segment,
+                parent=current,
+                acting_user=acting_user,
             )
         folder_cache[next_key] = existing
         current = existing

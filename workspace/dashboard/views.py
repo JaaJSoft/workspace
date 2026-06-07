@@ -8,7 +8,12 @@ from django.utils import timezone
 
 from workspace.calendar.upcoming import get_upcoming_for_user
 from workspace.core.module_registry import registry
-from workspace.core.services.activity import annotate_time_ago, get_recent_events, get_sources, get_usage_stats
+from workspace.core.services.activity import (
+    annotate_time_ago,
+    get_recent_events,
+    get_sources,
+    get_usage_stats,
+)
 from workspace.users.services.settings import get_setting
 
 ACTIVITY_LIMIT = 10
@@ -40,14 +45,14 @@ def _get_activity_context(user, source=None, offset=0, search=None):
     annotate_time_ago(events)
 
     return {
-        'activity_events': events,
-        'activity_sources': get_sources(),
-        'activity_source': source,
-        'activity_search': search or '',
-        'activity_has_more': has_more,
-        'activity_next_offset': offset + ACTIVITY_LIMIT,
-        'activity_prefix': 'dashboard-activity',
-        'activity_base_url': reverse('dashboard:activity_feed'),
+        "activity_events": events,
+        "activity_sources": get_sources(),
+        "activity_source": source,
+        "activity_search": search or "",
+        "activity_has_more": has_more,
+        "activity_next_offset": offset + ACTIVITY_LIMIT,
+        "activity_prefix": "dashboard-activity",
+        "activity_base_url": reverse("dashboard:activity_feed"),
     }
 
 
@@ -60,11 +65,11 @@ def _activity_shell_context(source=None):
     this adds no database cost to the page load.
     """
     return {
-        'activity_sources': get_sources(),
-        'activity_source': source,
-        'activity_search': '',
-        'activity_prefix': 'dashboard-activity',
-        'activity_base_url': reverse('dashboard:activity_feed'),
+        "activity_sources": get_sources(),
+        "activity_source": source,
+        "activity_search": "",
+        "activity_prefix": "dashboard-activity",
+        "activity_base_url": reverse("dashboard:activity_feed"),
     }
 
 
@@ -72,15 +77,17 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
     pending_action_counts = registry.get_pending_action_counts(user)
     modules = []
     for m in registry.get_for_template():
-        if m['slug'] != 'dashboard':
-            m['pending_action_count'] = pending_action_counts.get(m['slug'], 0)
+        if m["slug"] != "dashboard":
+            m["pending_action_count"] = pending_action_counts.get(m["slug"], 0)
             modules.append(m)
 
     context = {
-        'modules': modules,
-        'show_upcoming_events': get_setting(user, 'dashboard', 'show_upcoming_events', default=True),
-        'usage_stats': get_usage_stats(user.id),
-        'storage_quota': django_settings.STORAGE_QUOTA_BYTES,
+        "modules": modules,
+        "show_upcoming_events": get_setting(
+            user, "dashboard", "show_upcoming_events", default=True
+        ),
+        "usage_stats": get_usage_stats(user.id),
+        "storage_quota": django_settings.STORAGE_QUOTA_BYTES,
     }
     if include_activity:
         context.update(_get_activity_context(user, source=activity_source))
@@ -97,8 +104,8 @@ def index(request):
     """
     context = _build_dashboard_context(request.user, include_activity=False)
     context.update(_activity_shell_context())
-    context['activity_tab'] = 'all'
-    return render(request, 'dashboard/index.html', context)
+    context["activity_tab"] = "all"
+    return render(request, "dashboard/index.html", context)
 
 
 @login_required
@@ -106,11 +113,14 @@ def upcoming_fragment(request):
     """Dashboard upcoming-events widget, loaded async via alpine-ajax."""
     return render(
         request,
-        'dashboard/partials/upcoming_events.html',
+        "dashboard/partials/upcoming_events.html",
         {
-            'upcoming_events': _get_upcoming_events(request.user),
-            'show_upcoming_empty': get_setting(
-                request.user, 'dashboard', 'show_upcoming_empty', default=True,
+            "upcoming_events": _get_upcoming_events(request.user),
+            "show_upcoming_empty": get_setting(
+                request.user,
+                "dashboard",
+                "show_upcoming_empty",
+                default=True,
             ),
         },
     )
@@ -119,23 +129,29 @@ def upcoming_fragment(request):
 @login_required
 def activity_feed(request):
     """Activity feed partial (or full page if not Alpine AJAX)."""
-    source = request.GET.get('source')
-    tab = source or 'all'
+    source = request.GET.get("source")
+    tab = source or "all"
 
-    offset = int(request.GET.get('offset', 0))
-    search = request.GET.get('q', '').strip() or None
+    offset = int(request.GET.get("offset", 0))
+    search = request.GET.get("q", "").strip() or None
     append = offset > 0
 
-    if request.headers.get('X-Alpine-Request'):
+    if request.headers.get("X-Alpine-Request"):
         # Only the feed partial is rendered here - it uses none of the
         # dashboard shell context (modules / pending counts / usage stats),
         # so we skip recomputing them on every feed fetch.
-        context = _get_activity_context(request.user, source=source, offset=offset, search=search)
-        template = 'ui/partials/activity_page.html' if append else 'ui/partials/activity_feed.html'
+        context = _get_activity_context(
+            request.user, source=source, offset=offset, search=search
+        )
+        template = (
+            "ui/partials/activity_page.html"
+            if append
+            else "ui/partials/activity_feed.html"
+        )
         return render(request, template, context)
 
     # Direct full-page navigation: render the shell; the feed loads async.
     context = _build_dashboard_context(request.user, include_activity=False)
     context.update(_activity_shell_context(source=source))
-    context['activity_tab'] = tab
-    return render(request, 'dashboard/index.html', context)
+    context["activity_tab"] = tab
+    return render(request, "dashboard/index.html", context)

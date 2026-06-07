@@ -26,38 +26,38 @@ def _sample(name, labels=None):
 class UploadBytesTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user(username='uploader', password='p')
+        cls.user = User.objects.create_user(username="uploader", password="p")
 
     def test_create_file_bumps_upload_bytes_total_by_size(self):
-        before = _sample('files_upload_bytes_total')
+        before = _sample("files_upload_bytes_total")
         FileService.create_file(
             owner=self.user,
-            name='hello.txt',
-            content=ContentFile(b'hello world', name='hello.txt'),
+            name="hello.txt",
+            content=ContentFile(b"hello world", name="hello.txt"),
         )
-        self.assertEqual(_sample('files_upload_bytes_total') - before, 11)
+        self.assertEqual(_sample("files_upload_bytes_total") - before, 11)
 
     def test_create_file_without_content_does_not_bump_counter(self):
-        before = _sample('files_upload_bytes_total')
-        FileService.create_folder(owner=self.user, name='empty')
+        before = _sample("files_upload_bytes_total")
+        FileService.create_folder(owner=self.user, name="empty")
         # Folders never have content; the counter must not move.
-        self.assertEqual(_sample('files_upload_bytes_total'), before)
+        self.assertEqual(_sample("files_upload_bytes_total"), before)
 
     def test_update_content_bumps_counter_with_new_size(self):
         f = FileService.create_file(
             owner=self.user,
-            name='a.txt',
-            content=ContentFile(b'abc', name='a.txt'),
+            name="a.txt",
+            content=ContentFile(b"abc", name="a.txt"),
         )
-        before = _sample('files_upload_bytes_total')
-        FileService.update_content(f, ContentFile(b'abcdefghij', name='a.txt'))
-        self.assertEqual(_sample('files_upload_bytes_total') - before, 10)
+        before = _sample("files_upload_bytes_total")
+        FileService.update_content(f, ContentFile(b"abcdefghij", name="a.txt"))
+        self.assertEqual(_sample("files_upload_bytes_total") - before, 10)
 
 
 class DownloadBytesTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user(username='downloader', password='p')
+        cls.user = User.objects.create_user(username="downloader", password="p")
 
     def setUp(self):
         self.client = APIClient()
@@ -66,34 +66,35 @@ class DownloadBytesTests(TestCase):
     def test_single_file_download_bumps_counter(self):
         f = FileService.create_file(
             owner=self.user,
-            name='dl.txt',
-            content=ContentFile(b'download-me!', name='dl.txt'),
+            name="dl.txt",
+            content=ContentFile(b"download-me!", name="dl.txt"),
         )
-        before = _sample('files_download_bytes_total')
+        before = _sample("files_download_bytes_total")
 
-        resp = self.client.get(f'/api/v1/files/{f.uuid}/download')
+        resp = self.client.get(f"/api/v1/files/{f.uuid}/download")
 
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(_sample('files_download_bytes_total') - before, 12)
+        self.assertEqual(_sample("files_download_bytes_total") - before, 12)
 
 
 class ThumbnailMetricsTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user(username='thumb', password='p')
+        cls.user = User.objects.create_user(username="thumb", password="p")
 
     def test_skipped_for_non_image_increments_skipped_counter(self):
         from workspace.files.services.thumbnails import generate_thumbnail
 
         f = FileService.create_file(
-            owner=self.user, name='t.txt',
-            content=ContentFile(b'plain', name='t.txt'),
+            owner=self.user,
+            name="t.txt",
+            content=ContentFile(b"plain", name="t.txt"),
         )
-        before = _sample('files_thumbnail_generation_total', {'result': 'skipped'})
+        before = _sample("files_thumbnail_generation_total", {"result": "skipped"})
         result = generate_thumbnail(f)
         self.assertFalse(result)
         self.assertEqual(
-            _sample('files_thumbnail_generation_total', {'result': 'skipped'}) - before,
+            _sample("files_thumbnail_generation_total", {"result": "skipped"}) - before,
             1,
         )
 
@@ -103,18 +104,17 @@ class ThumbnailMetricsTests(TestCase):
         # Force type='jpeg' so we pass can_generate_thumbnail, but the
         # bytes are garbage so Pillow will raise - that's the failure path.
         f = FileService.create_file(
-            owner=self.user, name='broken.jpg',
-            content=ContentFile(b'not actually an image', name='broken.jpg'),
-            mime_type='image/jpeg',
+            owner=self.user,
+            name="broken.jpg",
+            content=ContentFile(b"not actually an image", name="broken.jpg"),
+            mime_type="image/jpeg",
         )
-        f.type = 'jpeg'
-        f.save(update_fields=['type'])
-        before = _sample('files_thumbnail_generation_total', {'result': 'failed'})
+        f.type = "jpeg"
+        f.save(update_fields=["type"])
+        before = _sample("files_thumbnail_generation_total", {"result": "failed"})
         result = generate_thumbnail(f)
         self.assertFalse(result)
         self.assertEqual(
-            _sample('files_thumbnail_generation_total', {'result': 'failed'}) - before,
+            _sample("files_thumbnail_generation_total", {"result": "failed"}) - before,
             1,
         )
-
-

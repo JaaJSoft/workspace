@@ -9,12 +9,12 @@ def gt(value, arg):
     """Return True if value > arg. Both are cast to int."""
     try:
         return int(value) > int(arg)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return False
 
 
 @register.filter
-def localtime_tag(value, fmt='time'):
+def localtime_tag(value, fmt="time"):
     """Render a ``<time>`` element that JS converts to the user's local timezone.
 
     Supported formats (passed as the filter argument):
@@ -32,12 +32,11 @@ def localtime_tag(value, fmt='time'):
         {{ msg.created_at|localtime_tag:"datetime" }}
     """
     if not value:
-        return ''
+        return ""
     iso = value.isoformat()
     # Server-side UTC fallback displayed until JS upgrades the element
     from django.utils import timezone
+
     local = timezone.localtime(value)
-    fallback = local.strftime('%H:%M')
-    return mark_safe(
-        f'<time datetime="{iso}" data-localtime="{fmt}">{fallback}</time>'
-    )
+    fallback = local.strftime("%H:%M")
+    return mark_safe(f'<time datetime="{iso}" data-localtime="{fmt}">{fallback}</time>')

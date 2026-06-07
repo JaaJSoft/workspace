@@ -21,25 +21,25 @@ User = get_user_model()
 def _make_file(owner, **kwargs):
     """Create an unsaved File with common defaults and annotations."""
     defaults = {
-        'name': 'test.txt',
-        'node_type': 'file',
-        'mime_type': 'text/plain',
-        'type': 'txt',
+        "name": "test.txt",
+        "node_type": "file",
+        "mime_type": "text/plain",
+        "type": "txt",
     }
     defaults.update(kwargs)
     f = File(owner=owner, **defaults)
     # Attach default annotations
-    f.is_favorite = getattr(f, 'is_favorite', False)
-    f.is_pinned = getattr(f, 'is_pinned', False)
-    f.is_shared = getattr(f, 'is_shared', False)
-    f.has_children = getattr(f, 'has_children', False)
-    f.deleted_at = getattr(f, 'deleted_at', None)
+    f.is_favorite = getattr(f, "is_favorite", False)
+    f.is_pinned = getattr(f, "is_pinned", False)
+    f.is_shared = getattr(f, "is_shared", False)
+    f.has_children = getattr(f, "has_children", False)
+    f.deleted_at = getattr(f, "deleted_at", None)
     return f
 
 
 def _make_folder(owner, **kwargs):
     """Create an unsaved folder File with common defaults and annotations."""
-    defaults = {'name': 'Dir', 'node_type': 'folder'}
+    defaults = {"name": "Dir", "node_type": "folder"}
     defaults.update(kwargs)
     return _make_file(owner, **defaults)
 
@@ -49,14 +49,23 @@ class ActionRegistryTests(TestCase):
 
     def test_all_actions_registered(self):
         expected_ids = {
-            'view', 'open', 'open_new_tab',
-            'download', 'copy_link',
-            'toggle_favorite', 'toggle_pin', 'share',
-            'rename', 'cut', 'copy', 'paste_into',
-            'extract',
-            'properties',
-            'delete',
-            'restore', 'purge',
+            "view",
+            "open",
+            "open_new_tab",
+            "download",
+            "copy_link",
+            "toggle_favorite",
+            "toggle_pin",
+            "share",
+            "rename",
+            "cut",
+            "copy",
+            "paste_into",
+            "extract",
+            "properties",
+            "delete",
+            "restore",
+            "purge",
         }
         all_actions = ActionRegistry.all()
         actual_ids = {a.id for a in all_actions}
@@ -74,12 +83,14 @@ class ActionRegistryTests(TestCase):
             self.assertTrue(action.icon, f"Action {action.id} missing icon")
             self.assertIsInstance(action.category, ActionCategory)
             self.assertIsInstance(action.node_types, tuple)
-            self.assertGreater(len(action.node_types), 0, f"Action {action.id} has no node_types")
+            self.assertGreater(
+                len(action.node_types), 0, f"Action {action.id} has no node_types"
+            )
 
     def test_registration_order(self):
         all_actions = ActionRegistry.all()
-        self.assertEqual(all_actions[0].id, 'view')
-        self.assertEqual(all_actions[-1].id, 'purge')
+        self.assertEqual(all_actions[0].id, "view")
+        self.assertEqual(all_actions[-1].id, "purge")
 
     def test_category_order_contiguous(self):
         """Actions within each category should be contiguous."""
@@ -93,12 +104,12 @@ class ActionRegistryTests(TestCase):
         self.assertEqual(len(seen_categories), len(set(seen_categories)))
 
     def test_get_existing_action(self):
-        action = ActionRegistry.get('view')
+        action = ActionRegistry.get("view")
         self.assertIsNotNone(action)
-        self.assertEqual(action.id, 'view')
+        self.assertEqual(action.id, "view")
 
     def test_get_nonexistent_action(self):
-        action = ActionRegistry.get('nonexistent')
+        action = ActionRegistry.get("nonexistent")
         self.assertIsNone(action)
 
 
@@ -110,139 +121,157 @@ class GetAvailableActionsTests(TestCase):
         self.other = User(pk=2)
 
     def test_owner_file_actions(self):
-        f = _make_file(self.user, mime_type='text/plain')
+        f = _make_file(self.user, mime_type="text/plain")
         actions = ActionRegistry.get_available_actions(
-            self.user, f, permission=MANAGE,
+            self.user,
+            f,
+            permission=MANAGE,
         )
-        action_ids = [a['id'] for a in actions]
+        action_ids = [a["id"] for a in actions]
         # Owner of a viewable file should see all non-trash, non-folder actions
-        self.assertIn('view', action_ids)
-        self.assertIn('open_new_tab', action_ids)
-        self.assertIn('download', action_ids)
-        self.assertIn('copy_link', action_ids)
-        self.assertIn('toggle_favorite', action_ids)
-        self.assertIn('share', action_ids)
-        self.assertIn('rename', action_ids)
-        self.assertIn('cut', action_ids)
-        self.assertIn('copy', action_ids)
-        self.assertIn('properties', action_ids)
-        self.assertIn('delete', action_ids)
+        self.assertIn("view", action_ids)
+        self.assertIn("open_new_tab", action_ids)
+        self.assertIn("download", action_ids)
+        self.assertIn("copy_link", action_ids)
+        self.assertIn("toggle_favorite", action_ids)
+        self.assertIn("share", action_ids)
+        self.assertIn("rename", action_ids)
+        self.assertIn("cut", action_ids)
+        self.assertIn("copy", action_ids)
+        self.assertIn("properties", action_ids)
+        self.assertIn("delete", action_ids)
         # Should not see folder-only or trash actions
-        self.assertNotIn('open', action_ids)
-        self.assertNotIn('toggle_pin', action_ids)
-        self.assertNotIn('paste_into', action_ids)
-        self.assertNotIn('restore', action_ids)
-        self.assertNotIn('purge', action_ids)
+        self.assertNotIn("open", action_ids)
+        self.assertNotIn("toggle_pin", action_ids)
+        self.assertNotIn("paste_into", action_ids)
+        self.assertNotIn("restore", action_ids)
+        self.assertNotIn("purge", action_ids)
 
     def test_owner_folder_actions(self):
         folder = _make_folder(self.user)
         actions = ActionRegistry.get_available_actions(
-            self.user, folder, permission=MANAGE,
+            self.user,
+            folder,
+            permission=MANAGE,
         )
-        action_ids = [a['id'] for a in actions]
-        self.assertIn('open', action_ids)
-        self.assertIn('download', action_ids)
-        self.assertIn('toggle_favorite', action_ids)
-        self.assertIn('toggle_pin', action_ids)
-        self.assertIn('rename', action_ids)
-        self.assertIn('paste_into', action_ids)
-        self.assertIn('properties', action_ids)
-        self.assertIn('delete', action_ids)
+        action_ids = [a["id"] for a in actions]
+        self.assertIn("open", action_ids)
+        self.assertIn("download", action_ids)
+        self.assertIn("toggle_favorite", action_ids)
+        self.assertIn("toggle_pin", action_ids)
+        self.assertIn("rename", action_ids)
+        self.assertIn("paste_into", action_ids)
+        self.assertIn("properties", action_ids)
+        self.assertIn("delete", action_ids)
         # Should not see file-only actions
-        self.assertNotIn('view', action_ids)
-        self.assertNotIn('open_new_tab', action_ids)
-        self.assertNotIn('copy_link', action_ids)
-        self.assertNotIn('share', action_ids)
+        self.assertNotIn("view", action_ids)
+        self.assertNotIn("open_new_tab", action_ids)
+        self.assertNotIn("copy_link", action_ids)
+        self.assertNotIn("share", action_ids)
 
     def test_shared_ro_file_actions(self):
-        f = _make_file(self.user, mime_type='text/plain')
+        f = _make_file(self.user, mime_type="text/plain")
         actions = ActionRegistry.get_available_actions(
-            self.other, f, permission=VIEW,
+            self.other,
+            f,
+            permission=VIEW,
         )
-        action_ids = [a['id'] for a in actions]
-        self.assertIn('view', action_ids)
-        self.assertIn('download', action_ids)
-        self.assertIn('toggle_favorite', action_ids)
-        self.assertIn('properties', action_ids)
+        action_ids = [a["id"] for a in actions]
+        self.assertIn("view", action_ids)
+        self.assertIn("download", action_ids)
+        self.assertIn("toggle_favorite", action_ids)
+        self.assertIn("properties", action_ids)
         # Should not see owner-only actions
-        self.assertNotIn('rename', action_ids)
-        self.assertNotIn('cut', action_ids)
-        self.assertNotIn('copy', action_ids)
-        self.assertNotIn('delete', action_ids)
-        self.assertNotIn('share', action_ids)
+        self.assertNotIn("rename", action_ids)
+        self.assertNotIn("cut", action_ids)
+        self.assertNotIn("copy", action_ids)
+        self.assertNotIn("delete", action_ids)
+        self.assertNotIn("share", action_ids)
 
     def test_shared_rw_file_actions(self):
-        f = _make_file(self.user, mime_type='text/plain')
+        f = _make_file(self.user, mime_type="text/plain")
         actions = ActionRegistry.get_available_actions(
-            self.other, f, permission=WRITE,
+            self.other,
+            f,
+            permission=WRITE,
         )
-        action_ids = [a['id'] for a in actions]
+        action_ids = [a["id"] for a in actions]
         # RW shared still can't rename, delete, share - same as RO for menu actions
-        self.assertNotIn('rename', action_ids)
-        self.assertNotIn('delete', action_ids)
-        self.assertNotIn('share', action_ids)
+        self.assertNotIn("rename", action_ids)
+        self.assertNotIn("delete", action_ids)
+        self.assertNotIn("share", action_ids)
 
     def test_trash_file_actions(self):
         f = _make_file(self.user)
         f.deleted_at = timezone.now()
         actions = ActionRegistry.get_available_actions(
-            self.user, f, permission=MANAGE,
+            self.user,
+            f,
+            permission=MANAGE,
         )
-        action_ids = [a['id'] for a in actions]
-        self.assertIn('restore', action_ids)
-        self.assertIn('purge', action_ids)
+        action_ids = [a["id"] for a in actions]
+        self.assertIn("restore", action_ids)
+        self.assertIn("purge", action_ids)
         # Should not see normal actions
-        self.assertNotIn('view', action_ids)
-        self.assertNotIn('download', action_ids)
-        self.assertNotIn('rename', action_ids)
-        self.assertNotIn('delete', action_ids)
+        self.assertNotIn("view", action_ids)
+        self.assertNotIn("download", action_ids)
+        self.assertNotIn("rename", action_ids)
+        self.assertNotIn("delete", action_ids)
 
     def test_no_access_returns_empty(self):
         f = _make_file(self.user)
         actions = ActionRegistry.get_available_actions(
-            self.other, f, permission=None,
+            self.other,
+            f,
+            permission=None,
         )
         # No share permission - only actions that don't require access
         # For file: no actions should be available without owner or share
-        action_ids = [a['id'] for a in actions]
-        self.assertNotIn('view', action_ids)
-        self.assertNotIn('download', action_ids)
-        self.assertNotIn('rename', action_ids)
+        action_ids = [a["id"] for a in actions]
+        self.assertNotIn("view", action_ids)
+        self.assertNotIn("download", action_ids)
+        self.assertNotIn("rename", action_ids)
 
     def test_serialized_format(self):
-        f = _make_file(self.user, mime_type='text/plain')
+        f = _make_file(self.user, mime_type="text/plain")
         actions = ActionRegistry.get_available_actions(
-            self.user, f, permission=MANAGE,
+            self.user,
+            f,
+            permission=MANAGE,
         )
         for action in actions:
-            self.assertIn('id', action)
-            self.assertIn('label', action)
-            self.assertIn('icon', action)
-            self.assertIn('category', action)
-            self.assertIn('shortcut', action)
-            self.assertIn('css_class', action)
-            self.assertIn('bulk', action)
+            self.assertIn("id", action)
+            self.assertIn("label", action)
+            self.assertIn("icon", action)
+            self.assertIn("category", action)
+            self.assertIn("shortcut", action)
+            self.assertIn("css_class", action)
+            self.assertIn("bulk", action)
 
     def test_bulk_flag_in_serialized(self):
-        f = _make_file(self.user, mime_type='text/plain')
+        f = _make_file(self.user, mime_type="text/plain")
         actions = ActionRegistry.get_available_actions(
-            self.user, f, permission=MANAGE,
+            self.user,
+            f,
+            permission=MANAGE,
         )
-        by_id = {a['id']: a for a in actions}
-        self.assertTrue(by_id['download']['bulk'])
-        self.assertTrue(by_id['delete']['bulk'])
-        self.assertFalse(by_id['rename']['bulk'])
-        self.assertFalse(by_id['view']['bulk'])
+        by_id = {a["id"]: a for a in actions}
+        self.assertTrue(by_id["download"]["bulk"])
+        self.assertTrue(by_id["delete"]["bulk"])
+        self.assertFalse(by_id["rename"]["bulk"])
+        self.assertFalse(by_id["view"]["bulk"])
 
     def test_categories_grouped(self):
         """Actions should be grouped by category with no interleaving."""
-        f = _make_file(self.user, mime_type='text/plain')
+        f = _make_file(self.user, mime_type="text/plain")
         actions = ActionRegistry.get_available_actions(
-            self.user, f, permission=MANAGE,
+            self.user,
+            f,
+            permission=MANAGE,
         )
         seen = []
         for a in actions:
-            cat = a['category']
+            cat = a["category"]
             if not seen or seen[-1] != cat:
                 seen.append(cat)
         self.assertEqual(len(seen), len(set(seen)))
@@ -259,7 +288,10 @@ class IsActionAvailableTests(TestCase):
         f = _make_file(self.user)
         self.assertTrue(
             ActionRegistry.is_action_available(
-                'download', self.user, f, permission=MANAGE,
+                "download",
+                self.user,
+                f,
+                permission=MANAGE,
             )
         )
 
@@ -267,7 +299,10 @@ class IsActionAvailableTests(TestCase):
         folder = _make_folder(self.user)
         self.assertFalse(
             ActionRegistry.is_action_available(
-                'view', self.user, folder, permission=MANAGE,
+                "view",
+                self.user,
+                folder,
+                permission=MANAGE,
             )
         )
 
@@ -275,7 +310,10 @@ class IsActionAvailableTests(TestCase):
         f = _make_file(self.user)
         self.assertFalse(
             ActionRegistry.is_action_available(
-                'rename', self.other, f, permission=None,
+                "rename",
+                self.other,
+                f,
+                permission=None,
             )
         )
 
@@ -283,7 +321,10 @@ class IsActionAvailableTests(TestCase):
         f = _make_file(self.user)
         self.assertFalse(
             ActionRegistry.is_action_available(
-                'nonexistent', self.user, f, permission=MANAGE,
+                "nonexistent",
+                self.user,
+                f,
+                permission=MANAGE,
             )
         )
 
@@ -293,39 +334,50 @@ class SerializerIntegrationTests(APITestCase):
 
     def setUp(self):
         self.owner = User.objects.create_user(
-            username='owner', email='owner@example.com', password='pass123',
+            username="owner",
+            email="owner@example.com",
+            password="pass123",
         )
 
     def test_file_has_no_actions_field(self):
         self.client.force_authenticate(user=self.owner)
         f = File.objects.create(
-            owner=self.owner, name='doc.txt',
-            node_type=File.NodeType.FILE, mime_type='text/plain',
-            content=ContentFile(b'hello', name='doc.txt'),
+            owner=self.owner,
+            name="doc.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            content=ContentFile(b"hello", name="doc.txt"),
         )
-        resp = self.client.get(f'/api/v1/files/{f.uuid}')
+        resp = self.client.get(f"/api/v1/files/{f.uuid}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.json()
-        self.assertNotIn('actions', data)
+        self.assertNotIn("actions", data)
 
     def test_folder_has_no_actions_field(self):
         self.client.force_authenticate(user=self.owner)
         folder = File.objects.create(
-            owner=self.owner, name='Folder',
+            owner=self.owner,
+            name="Folder",
             node_type=File.NodeType.FOLDER,
         )
-        resp = self.client.get(f'/api/v1/files/{folder.uuid}')
+        resp = self.client.get(f"/api/v1/files/{folder.uuid}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.json()
-        self.assertNotIn('actions', data)
+        self.assertNotIn("actions", data)
 
 
 class BulkFlagTests(TestCase):
     """Verify the expected actions have supports_bulk=True."""
 
     EXPECTED_BULK = {
-        'toggle_favorite', 'toggle_pin', 'download',
-        'cut', 'copy', 'delete', 'restore', 'purge',
+        "toggle_favorite",
+        "toggle_pin",
+        "download",
+        "cut",
+        "copy",
+        "delete",
+        "restore",
+        "purge",
     }
 
     def test_bulk_actions_flagged(self):
@@ -355,21 +407,21 @@ class BulkFlagSerializationTests(TestCase):
     def test_bulk_flag_present_in_serialize(self):
         f = _make_file(self.user)
         for action in ActionRegistry.all():
-            if 'file' not in action.node_types:
+            if "file" not in action.node_types:
                 continue
             data = action.serialize(f)
-            self.assertIn('bulk', data, f"{action.id} serialize() missing 'bulk'")
-            self.assertIsInstance(data['bulk'], bool)
+            self.assertIn("bulk", data, f"{action.id} serialize() missing 'bulk'")
+            self.assertIsInstance(data["bulk"], bool)
 
     def test_bulk_true_for_bulk_actions(self):
         f = _make_file(self.user)
-        action = ActionRegistry.get('download')
-        self.assertTrue(action.serialize(f)['bulk'])
+        action = ActionRegistry.get("download")
+        self.assertTrue(action.serialize(f)["bulk"])
 
     def test_bulk_false_for_non_bulk_actions(self):
         f = _make_file(self.user)
-        action = ActionRegistry.get('rename')
-        self.assertFalse(action.serialize(f)['bulk'])
+        action = ActionRegistry.get("rename")
+        self.assertFalse(action.serialize(f)["bulk"])
 
 
 class FilesActionsEndpointTests(APITestCase):
@@ -377,23 +429,29 @@ class FilesActionsEndpointTests(APITestCase):
 
     def setUp(self):
         self.owner = User.objects.create_user(
-            username='bulkowner', email='bulk@example.com', password='pass123',
+            username="bulkowner",
+            email="bulk@example.com",
+            password="pass123",
         )
         self.other = User.objects.create_user(
-            username='bulkother', email='bulkother@example.com', password='pass123',
+            username="bulkother",
+            email="bulkother@example.com",
+            password="pass123",
         )
 
     def test_basic_request(self):
         self.client.force_authenticate(user=self.owner)
         f = File.objects.create(
-            owner=self.owner, name='a.txt',
-            node_type=File.NodeType.FILE, mime_type='text/plain',
-            content=ContentFile(b'a', name='a.txt'),
+            owner=self.owner,
+            name="a.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            content=ContentFile(b"a", name="a.txt"),
         )
         resp = self.client.post(
-            '/api/v1/files/actions',
-            {'uuids': [str(f.uuid)]},
-            format='json',
+            "/api/v1/files/actions",
+            {"uuids": [str(f.uuid)]},
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.json()
@@ -402,132 +460,145 @@ class FilesActionsEndpointTests(APITestCase):
         self.assertIn(str(f.uuid), data)
         actions = data[str(f.uuid)]
         self.assertIsInstance(actions, list)
-        action_ids = [a['id'] for a in actions]
-        self.assertIn('download', action_ids)
-        self.assertIn('delete', action_ids)
+        action_ids = [a["id"] for a in actions]
+        self.assertIn("download", action_ids)
+        self.assertIn("delete", action_ids)
 
     def test_per_uuid_actions(self):
         """Each UUID gets its own action list."""
         self.client.force_authenticate(user=self.owner)
         f = File.objects.create(
-            owner=self.owner, name='f.txt',
-            node_type=File.NodeType.FILE, mime_type='text/plain',
-            content=ContentFile(b'f', name='f.txt'),
+            owner=self.owner,
+            name="f.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            content=ContentFile(b"f", name="f.txt"),
         )
         folder = File.objects.create(
-            owner=self.owner, name='Dir',
+            owner=self.owner,
+            name="Dir",
             node_type=File.NodeType.FOLDER,
         )
         resp = self.client.post(
-            '/api/v1/files/actions',
-            {'uuids': [str(f.uuid), str(folder.uuid)]},
-            format='json',
+            "/api/v1/files/actions",
+            {"uuids": [str(f.uuid), str(folder.uuid)]},
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.json()
-        file_ids = [a['id'] for a in data[str(f.uuid)]]
-        folder_ids = [a['id'] for a in data[str(folder.uuid)]]
+        file_ids = [a["id"] for a in data[str(f.uuid)]]
+        folder_ids = [a["id"] for a in data[str(folder.uuid)]]
         # File has share, folder has toggle_pin
-        self.assertIn('share', file_ids)
-        self.assertNotIn('share', folder_ids)
-        self.assertIn('toggle_pin', folder_ids)
-        self.assertNotIn('toggle_pin', file_ids)
+        self.assertIn("share", file_ids)
+        self.assertNotIn("share", folder_ids)
+        self.assertIn("toggle_pin", folder_ids)
+        self.assertNotIn("toggle_pin", file_ids)
 
     def test_actions_include_bulk_flag(self):
         self.client.force_authenticate(user=self.owner)
         f = File.objects.create(
-            owner=self.owner, name='b.txt',
-            node_type=File.NodeType.FILE, mime_type='text/plain',
-            content=ContentFile(b'b', name='b.txt'),
+            owner=self.owner,
+            name="b.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            content=ContentFile(b"b", name="b.txt"),
         )
         resp = self.client.post(
-            '/api/v1/files/actions',
-            {'uuids': [str(f.uuid)]},
-            format='json',
+            "/api/v1/files/actions",
+            {"uuids": [str(f.uuid)]},
+            format="json",
         )
         data = resp.json()
         for action in data[str(f.uuid)]:
-            self.assertIn('bulk', action)
+            self.assertIn("bulk", action)
 
     def test_empty_uuids(self):
         self.client.force_authenticate(user=self.owner)
         resp = self.client.post(
-            '/api/v1/files/actions',
-            {'uuids': []},
-            format='json',
+            "/api/v1/files/actions",
+            {"uuids": []},
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_missing_uuids(self):
         self.client.force_authenticate(user=self.owner)
         resp = self.client.post(
-            '/api/v1/files/actions',
+            "/api/v1/files/actions",
             {},
-            format='json',
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_unknown_uuid(self):
         self.client.force_authenticate(user=self.owner)
         resp = self.client.post(
-            '/api/v1/files/actions',
-            {'uuids': ['00000000-0000-0000-0000-000000000000']},
-            format='json',
+            "/api/v1/files/actions",
+            {"uuids": ["00000000-0000-0000-0000-000000000000"]},
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_trash_file_actions(self):
         self.client.force_authenticate(user=self.owner)
         f = File.objects.create(
-            owner=self.owner, name='trashed.txt',
-            node_type=File.NodeType.FILE, mime_type='text/plain',
-            content=ContentFile(b'x', name='trashed.txt'),
+            owner=self.owner,
+            name="trashed.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            content=ContentFile(b"x", name="trashed.txt"),
             deleted_at=timezone.now(),
         )
         resp = self.client.post(
-            '/api/v1/files/actions',
-            {'uuids': [str(f.uuid)]},
-            format='json',
+            "/api/v1/files/actions",
+            {"uuids": [str(f.uuid)]},
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        action_ids = [a['id'] for a in resp.json()[str(f.uuid)]]
-        self.assertIn('restore', action_ids)
-        self.assertIn('purge', action_ids)
-        self.assertNotIn('delete', action_ids)
+        action_ids = [a["id"] for a in resp.json()[str(f.uuid)]]
+        self.assertIn("restore", action_ids)
+        self.assertIn("purge", action_ids)
+        self.assertNotIn("delete", action_ids)
 
     def test_other_user_no_access(self):
         self.client.force_authenticate(user=self.other)
         f = File.objects.create(
-            owner=self.owner, name='private.txt',
-            node_type=File.NodeType.FILE, mime_type='text/plain',
-            content=ContentFile(b'secret', name='private.txt'),
+            owner=self.owner,
+            name="private.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            content=ContentFile(b"secret", name="private.txt"),
         )
         resp = self.client.post(
-            '/api/v1/files/actions',
-            {'uuids': [str(f.uuid)]},
-            format='json',
+            "/api/v1/files/actions",
+            {"uuids": [str(f.uuid)]},
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_shared_file_restricted_actions(self):
         f = File.objects.create(
-            owner=self.owner, name='shared.txt',
-            node_type=File.NodeType.FILE, mime_type='text/plain',
-            content=ContentFile(b'shared', name='shared.txt'),
+            owner=self.owner,
+            name="shared.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            content=ContentFile(b"shared", name="shared.txt"),
         )
         FileShare.objects.create(
-            file=f, shared_by=self.owner, shared_with=self.other,
+            file=f,
+            shared_by=self.owner,
+            shared_with=self.other,
             permission=FileShare.Permission.READ_ONLY,
         )
         self.client.force_authenticate(user=self.other)
         resp = self.client.post(
-            '/api/v1/files/actions',
-            {'uuids': [str(f.uuid)]},
-            format='json',
+            "/api/v1/files/actions",
+            {"uuids": [str(f.uuid)]},
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        action_ids = [a['id'] for a in resp.json()[str(f.uuid)]]
-        self.assertIn('toggle_favorite', action_ids)
-        self.assertIn('download', action_ids)
-        self.assertNotIn('cut', action_ids)
-        self.assertNotIn('delete', action_ids)
+        action_ids = [a["id"] for a in resp.json()[str(f.uuid)]]
+        self.assertIn("toggle_favorite", action_ids)
+        self.assertIn("download", action_ids)
+        self.assertNotIn("cut", action_ids)
+        self.assertNotIn("delete", action_ids)

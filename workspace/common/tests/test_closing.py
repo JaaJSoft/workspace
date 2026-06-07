@@ -17,7 +17,7 @@ class CloseAllTests(SimpleTestCase):
     def test_failing_close_does_not_leak_the_rest(self):
         first = MagicMock()
         bad = MagicMock()
-        bad.close.side_effect = OSError('already gone')
+        bad.close.side_effect = OSError("already gone")
         last = MagicMock()
 
         close_all([first, bad, last])

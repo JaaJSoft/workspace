@@ -6,36 +6,38 @@ from workspace.files.services import FileService
 def search_files(query, user, limit):
     qs = (
         FileService.user_files_qs(user)
-        .select_related('parent')
+        .select_related("parent")
         .filter(name__icontains=query)
-        .order_by('-updated_at')[:limit]
+        .order_by("-updated_at")[:limit]
     )
     results = []
     for f in qs:
         if f.node_type == File.NodeType.FOLDER:
-            url = f'/files/{f.uuid}'
-            type_icon = f.icon or 'folder'
+            url = f"/files/{f.uuid}"
+            type_icon = f.icon or "folder"
         else:
             # Land in the file's parent folder (path) and open its viewer
             # (?open=), so a search hit reveals the file in context rather
             # than dropping the user at the folder listing.
-            folder = f'/files/{f.parent_id}' if f.parent_id else '/files'
-            url = f'{folder}?open={f.uuid}'
-            type_icon = 'file'
+            folder = f"/files/{f.parent_id}" if f.parent_id else "/files"
+            url = f"{folder}?open={f.uuid}"
+            type_icon = "file"
 
         tags = ()
         if f.parent:
-            tags = (SearchTag(f.parent.name, 'primary'),)
+            tags = (SearchTag(f.parent.name, "primary"),)
 
-        results.append(SearchResult(
-            uuid=str(f.uuid),
-            name=f.name,
-            url=url,
-            matched_value=f.name,
-            match_type='name',
-            type_icon=type_icon,
-            module_slug='files',
-            module_color='primary',
-            tags=tags,
-        ))
+        results.append(
+            SearchResult(
+                uuid=str(f.uuid),
+                name=f.name,
+                url=url,
+                matched_value=f.name,
+                match_type="name",
+                type_icon=type_icon,
+                module_slug="files",
+                module_color="primary",
+                tags=tags,
+            )
+        )
     return results

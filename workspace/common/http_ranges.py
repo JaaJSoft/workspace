@@ -24,6 +24,7 @@ Typical usage:
             inline_filename=meta.name,
         )
 """
+
 import re
 
 # bytes=start-end, bytes=start-, bytes=-N. Multi-range is rejected.
@@ -31,7 +32,7 @@ import re
 # at the call site, internal whitespace inside the directive is not
 # allowed by RFC 7233 and the redundant `\s*` opens a polynomial
 # backtracking surface (CodeQL py/polynomial-redos).
-_RANGE_RE = re.compile(r'^bytes=(\d*)-(\d*)$')
+_RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 
 def parse_byte_range(range_header, file_size):
@@ -91,10 +92,10 @@ def safe_filename(name):
     quotes so the value cannot terminate the quoted-string parameter.
     """
     return (
-        name.replace('\\', '\\\\')
-            .replace('"', '\\"')
-            .replace('\r', '')
-            .replace('\n', '')
+        name.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\r", "")
+        .replace("\n", "")
     )
 
 
@@ -134,14 +135,14 @@ def serve_with_ranges(
     """
     from django.http import FileResponse, HttpResponse, StreamingHttpResponse
 
-    range_header = request.META.get('HTTP_RANGE')
+    range_header = request.META.get("HTTP_RANGE")
     if range_header:
         parsed = parse_byte_range(range_header, file_size)
         if parsed is None:
             file_handle.close()
             resp = HttpResponse(status=416)
-            resp['Content-Range'] = f'bytes */{file_size}'
-            resp['Accept-Ranges'] = 'bytes'
+            resp["Content-Range"] = f"bytes */{file_size}"
+            resp["Accept-Ranges"] = "bytes"
             return resp
         start, end = parsed
         response = StreamingHttpResponse(
@@ -149,15 +150,19 @@ def serve_with_ranges(
             status=206,
             content_type=content_type,
         )
-        response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
-        response['Content-Length'] = str(end - start + 1)
-        response['Accept-Ranges'] = 'bytes'
+        response["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+        response["Content-Length"] = str(end - start + 1)
+        response["Accept-Ranges"] = "bytes"
         if inline_filename:
-            response['Content-Disposition'] = f'inline; filename="{safe_filename(inline_filename)}"'
+            response["Content-Disposition"] = (
+                f'inline; filename="{safe_filename(inline_filename)}"'
+            )
         elif attachment_filename:
-            response['Content-Disposition'] = f'attachment; filename="{safe_filename(attachment_filename)}"'
+            response["Content-Disposition"] = (
+                f'attachment; filename="{safe_filename(attachment_filename)}"'
+            )
         if cache_control:
-            response['Cache-Control'] = cache_control
+            response["Cache-Control"] = cache_control
         if download_metric is not None:
             download_metric.inc(end - start + 1)
         return response
@@ -169,12 +174,14 @@ def serve_with_ranges(
         filename=attachment_filename or inline_filename,
     )
     if inline_filename and not attachment_filename:
-        response['Content-Disposition'] = f'inline; filename="{safe_filename(inline_filename)}"'
-    response['Accept-Ranges'] = 'bytes'
+        response["Content-Disposition"] = (
+            f'inline; filename="{safe_filename(inline_filename)}"'
+        )
+    response["Accept-Ranges"] = "bytes"
     if cache_control:
-        response['Cache-Control'] = cache_control
+        response["Cache-Control"] = cache_control
     if etag:
-        response['ETag'] = etag
+        response["ETag"] = etag
     if download_metric is not None and file_size:
         download_metric.inc(file_size)
     return response

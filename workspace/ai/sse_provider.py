@@ -9,17 +9,27 @@ class AISSEProvider(SSEProvider):
         tasks = AITask.objects.filter(
             owner=self.user,
             status__in=[AITask.Status.PENDING, AITask.Status.PROCESSING],
-        ).values('uuid', 'task_type', 'status')
+        ).values("uuid", "task_type", "status")
 
         if not tasks:
             return []
 
-        return [('ai_tasks', {
-            'tasks': [
-                {'uuid': str(t['uuid']), 'task_type': t['task_type'], 'status': t['status']}
-                for t in tasks
-            ],
-        }, None)]
+        return [
+            (
+                "ai_tasks",
+                {
+                    "tasks": [
+                        {
+                            "uuid": str(t["uuid"]),
+                            "task_type": t["task_type"],
+                            "status": t["status"],
+                        }
+                        for t in tasks
+                    ],
+                },
+                None,
+            )
+        ]
 
     def poll(self, cache_value):
         # Only query when notify_sse('ai', user_id) was called
@@ -35,16 +45,22 @@ class AISSEProvider(SSEProvider):
             owner=self.user,
             status__in=[AITask.Status.COMPLETED, AITask.Status.FAILED],
             completed_at__gte=cutoff,
-        ).values('uuid', 'task_type', 'status', 'result', 'error')
+        ).values("uuid", "task_type", "status", "result", "error")
 
         events = []
         for t in tasks:
-            events.append(('ai_task_complete', {
-                'uuid': str(t['uuid']),
-                'task_type': t['task_type'],
-                'status': t['status'],
-                'result': t['result'],
-                'error': t['error'],
-            }, str(t['uuid'])))
+            events.append(
+                (
+                    "ai_task_complete",
+                    {
+                        "uuid": str(t["uuid"]),
+                        "task_type": t["task_type"],
+                        "status": t["status"],
+                        "result": t["result"],
+                        "error": t["error"],
+                    },
+                    str(t["uuid"]),
+                )
+            )
 
         return events

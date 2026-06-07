@@ -4,6 +4,7 @@ Guards against a URL-routing regression (e.g., a catch-all that
 accidentally matches too much, or a misconfigured middleware that
 converts every miss into a 500).
 """
+
 from __future__ import annotations
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase

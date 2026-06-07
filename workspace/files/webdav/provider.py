@@ -7,6 +7,7 @@ from wsgidav.dav_provider import DAVProvider
 
 from workspace.files.models import File
 from workspace.files.services import FileService
+
 from .resources import FileResource, FolderResource, RootCollection
 
 logger = logging.getLogger(__name__)
@@ -64,14 +65,12 @@ class WorkspaceDAVProvider(DAVProvider):
         accessible = FileService.accessible_files_q(user)
 
         if len(parts) == 1:
-            return (
-                File.objects.filter(
-                    accessible,
-                    parent__isnull=True,
-                    name=parts[0],
-                    deleted_at__isnull=True,
-                ).first()
-            )
+            return File.objects.filter(
+                accessible,
+                parent__isnull=True,
+                name=parts[0],
+                deleted_at__isnull=True,
+            ).first()
 
         parent_path = "/".join(parts[:-1])
         parent = File.objects.filter(
@@ -81,14 +80,12 @@ class WorkspaceDAVProvider(DAVProvider):
         ).first()
         if parent is None:
             return None
-        return (
-            File.objects.filter(
-                accessible,
-                parent=parent,
-                name=parts[-1],
-                deleted_at__isnull=True,
-            ).first()
-        )
+        return File.objects.filter(
+            accessible,
+            parent=parent,
+            name=parts[-1],
+            deleted_at__isnull=True,
+        ).first()
 
     @staticmethod
     def _get_user(environ):

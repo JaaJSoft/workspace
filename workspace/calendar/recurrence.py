@@ -1,10 +1,10 @@
-from dateutil.rrule import rrule, DAILY, WEEKLY, MONTHLY, YEARLY
+from dateutil.rrule import DAILY, MONTHLY, WEEKLY, YEARLY, rrule
 
 FREQ_MAP = {
-    'daily': DAILY,
-    'weekly': WEEKLY,
-    'monthly': MONTHLY,
-    'yearly': YEARLY,
+    "daily": DAILY,
+    "weekly": WEEKLY,
+    "monthly": MONTHLY,
+    "yearly": YEARLY,
 }
 
 
@@ -72,19 +72,19 @@ def next_occurrences_after(master, after, limit=None):
 
 def _user_dict(user):
     return {
-        'id': user.id,
-        'username': user.username,
-        'first_name': user.first_name,
-        'last_name': user.last_name,
+        "id": user.id,
+        "username": user.username,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
     }
 
 
 def _member_dict(member):
     return {
-        'uuid': str(member.uuid),
-        'user': _user_dict(member.user),
-        'status': member.status,
-        'created_at': member.created_at.isoformat(),
+        "uuid": str(member.uuid),
+        "user": _user_dict(member.user),
+        "status": member.status,
+        "created_at": member.created_at.isoformat(),
     }
 
 
@@ -94,50 +94,61 @@ def make_virtual_occurrence(master, occ_start):
     occ_end = (occ_start + duration) if duration else None
 
     return {
-        'uuid': f'{master.uuid}:{occ_start.isoformat()}',
-        'calendar_id': str(master.calendar_id),
-        'title': master.title,
-        'description': master.description,
-        'start': occ_start.isoformat(),
-        'end': occ_end.isoformat() if occ_end else None,
-        'all_day': master.all_day,
-        'location': master.location,
-        'owner': _user_dict(master.owner),
-        'members': getattr(master, '_cached_member_dicts', None) or [_member_dict(m) for m in master.members.all()],
-        'created_at': master.created_at.isoformat(),
-        'updated_at': master.updated_at.isoformat(),
-        'is_recurring': True,
-        'is_exception': False,
-        'master_event_id': str(master.uuid),
-        'original_start': occ_start.isoformat(),
-        'recurrence_frequency': master.recurrence_frequency,
-        'recurrence_interval': master.recurrence_interval,
-        'recurrence_end': master.recurrence_end.isoformat() if master.recurrence_end else None,
+        "uuid": f"{master.uuid}:{occ_start.isoformat()}",
+        "calendar_id": str(master.calendar_id),
+        "title": master.title,
+        "description": master.description,
+        "start": occ_start.isoformat(),
+        "end": occ_end.isoformat() if occ_end else None,
+        "all_day": master.all_day,
+        "location": master.location,
+        "owner": _user_dict(master.owner),
+        "members": getattr(master, "_cached_member_dicts", None)
+        or [_member_dict(m) for m in master.members.all()],
+        "created_at": master.created_at.isoformat(),
+        "updated_at": master.updated_at.isoformat(),
+        "is_recurring": True,
+        "is_exception": False,
+        "master_event_id": str(master.uuid),
+        "original_start": occ_start.isoformat(),
+        "recurrence_frequency": master.recurrence_frequency,
+        "recurrence_interval": master.recurrence_interval,
+        "recurrence_end": master.recurrence_end.isoformat()
+        if master.recurrence_end
+        else None,
     }
 
 
 def make_exception_dict(exc):
     """Convert a materialized exception Event to the occurrence dict format."""
     return {
-        'uuid': str(exc.uuid),
-        'calendar_id': str(exc.calendar_id),
-        'title': exc.title,
-        'description': exc.description,
-        'start': exc.start.isoformat(),
-        'end': exc.end.isoformat() if exc.end else None,
-        'all_day': exc.all_day,
-        'location': exc.location,
-        'owner': _user_dict(exc.owner),
-        'members': [_member_dict(m) for m in exc.members.all()],
-        'created_at': exc.created_at.isoformat(),
-        'updated_at': exc.updated_at.isoformat(),
-        'is_recurring': True,
-        'is_exception': True,
-        'master_event_id': str(exc.recurrence_parent_id),
-        'original_start': exc.original_start.isoformat() if exc.original_start else None,
-        'recurrence_frequency': exc.recurrence_parent.recurrence_frequency if exc.recurrence_parent else None,
-        'recurrence_interval': exc.recurrence_parent.recurrence_interval if exc.recurrence_parent else 1,
-        'recurrence_end': exc.recurrence_parent.recurrence_end.isoformat() if exc.recurrence_parent and exc.recurrence_parent.recurrence_end else None,
+        "uuid": str(exc.uuid),
+        "calendar_id": str(exc.calendar_id),
+        "title": exc.title,
+        "description": exc.description,
+        "start": exc.start.isoformat(),
+        "end": exc.end.isoformat() if exc.end else None,
+        "all_day": exc.all_day,
+        "location": exc.location,
+        "owner": _user_dict(exc.owner),
+        "members": [_member_dict(m) for m in exc.members.all()],
+        "created_at": exc.created_at.isoformat(),
+        "updated_at": exc.updated_at.isoformat(),
+        "is_recurring": True,
+        "is_exception": True,
+        "master_event_id": str(exc.recurrence_parent_id),
+        "original_start": exc.original_start.isoformat()
+        if exc.original_start
+        else None,
+        "recurrence_frequency": exc.recurrence_parent.recurrence_frequency
+        if exc.recurrence_parent
+        else None,
+        "recurrence_interval": exc.recurrence_parent.recurrence_interval
+        if exc.recurrence_parent
+        else 1,
+        "recurrence_end": exc.recurrence_parent.recurrence_end.isoformat()
+        if exc.recurrence_parent and exc.recurrence_parent.recurrence_end
+        else None,
     }
 
 
@@ -146,8 +157,9 @@ def expand_recurring_events(masters_qs, range_start, range_end):
     Expand recurring master events into occurrence dicts.
     Substitutes materialized exceptions, skips cancelled ones.
     """
-    from .models import Event, EventMember
     from django.db.models import Prefetch
+
+    from .models import Event, EventMember
 
     master_ids = [m.uuid for m in masters_qs]
     if not master_ids:
@@ -156,9 +168,9 @@ def expand_recurring_events(masters_qs, range_start, range_end):
     # Fetch all exceptions for these masters, prefetch members
     exceptions = (
         Event.objects.filter(recurrence_parent_id__in=master_ids)
-        .select_related('owner', 'calendar', 'recurrence_parent')
+        .select_related("owner", "calendar", "recurrence_parent")
         .prefetch_related(
-            Prefetch('members', queryset=EventMember.objects.select_related('user'))
+            Prefetch("members", queryset=EventMember.objects.select_related("user"))
         )
     )
 

@@ -32,7 +32,7 @@ from workspace.mail.services.threads import get_thread
 
 logger = logging.getLogger(__name__)
 
-_FENCE_RE = re.compile(r'^```(?:json)?\s*|\s*```$', re.MULTILINE)
+_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
 
 class ExtractedEvent(BaseModel):
@@ -40,13 +40,13 @@ class ExtractedEvent(BaseModel):
     start: datetime
     end: datetime | None = None
     all_day: bool = False
-    location: str = ''
-    description: str = ''
-    confidence: Literal['high', 'medium', 'low']
-    reasoning: str = ''
+    location: str = ""
+    description: str = ""
+    confidence: Literal["high", "medium", "low"]
+    reasoning: str = ""
 
 
-@shared_task(name='ai.extract_from_mail', bind=True, max_retries=0)
+@shared_task(name="ai.extract_from_mail", bind=True, max_retries=0)
 def extract_from_mail_messages(self, task_id: str):
     """Run LLM event extraction over the messages referenced by `task_id`.
 
@@ -55,47 +55,49 @@ def extract_from_mail_messages(self, task_id: str):
     fatal exception.
     """
     try:
-        with ai_task_lifecycle(task_id, log_label='Extract') as ai_task:
-            message_uuids = ai_task.input_data.get('message_uuids', [])
+        with ai_task_lifecycle(task_id, log_label="Extract") as ai_task:
+            message_uuids = ai_task.input_data.get("message_uuids", [])
             msgs = list(
                 MailMessage.objects.filter(
                     uuid__in=message_uuids,
                     account__owner=ai_task.owner,
-                ).select_related('account')
+                ).select_related("account")
             )
 
             if not msgs:
-                ai_task.result = 'No messages to extract from'
-                return {'status': 'ok', 'task_id': task_id}
+                ai_task.result = "No messages to extract from"
+                return {"status": "ok", "task_id": task_id}
 
             total_prompt = 0
             total_completion = 0
-            model_used = ''
+            model_used = ""
             event_ct = ContentType.objects.get_for_model(Event)
             extractions_created = 0
 
             for msg in msgs:
                 try:
                     created = _extract_one_message(msg, event_ct)
-                    extractions_created += created['count']
-                    total_prompt += created['prompt_tokens']
-                    total_completion += created['completion_tokens']
-                    if created['model']:
-                        model_used = created['model']
+                    extractions_created += created["count"]
+                    total_prompt += created["prompt_tokens"]
+                    total_completion += created["completion_tokens"]
+                    if created["model"]:
+                        model_used = created["model"]
                 except Exception:
                     logger.exception(
-                        'Extract: failed for message %s', scrub(str(msg.pk))
+                        "Extract: failed for message %s", scrub(str(msg.pk))
                     )
 
-            ai_task.result = f'Created {extractions_created} extractions from {len(msgs)} messages'
+            ai_task.result = (
+                f"Created {extractions_created} extractions from {len(msgs)} messages"
+            )
             ai_task.model_used = model_used
             ai_task.prompt_tokens = total_prompt
             ai_task.completion_tokens = total_completion
 
-            return {'status': 'ok', 'task_id': task_id}
+            return {"status": "ok", "task_id": task_id}
     except AITask.DoesNotExist:
-        logger.warning('Extract: AITask %s not found', scrub(task_id))
-        return {'status': 'error', 'task_id': task_id}
+        logger.warning("Extract: AITask %s not found", scrub(task_id))
+        return {"status": "error", "task_id": task_id}
 
 
 def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
@@ -107,24 +109,24 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
     model = settings.AI_EXTRACT_MODEL or settings.AI_MODEL
     result = call_llm(messages, model=model)
 
-    raw_content = _FENCE_RE.sub('', (result.get('content') or '').strip())
+    raw_content = _FENCE_RE.sub("", (result.get("content") or "").strip())
     try:
         items = orjson.loads(raw_content)
-    except (ValueError, TypeError):
-        logger.warning('Extract: malformed JSON for message %s', scrub(str(msg.pk)))
+    except ValueError, TypeError:
+        logger.warning("Extract: malformed JSON for message %s", scrub(str(msg.pk)))
         return {
-            'count': 0,
-            'prompt_tokens': result.get('prompt_tokens', 0) or 0,
-            'completion_tokens': result.get('completion_tokens', 0) or 0,
-            'model': result.get('model', ''),
+            "count": 0,
+            "prompt_tokens": result.get("prompt_tokens", 0) or 0,
+            "completion_tokens": result.get("completion_tokens", 0) or 0,
+            "model": result.get("model", ""),
         }
     if not isinstance(items, list):
-        logger.warning('Extract: expected JSON array, got %s', type(items).__name__)
+        logger.warning("Extract: expected JSON array, got %s", type(items).__name__)
         return {
-            'count': 0,
-            'prompt_tokens': result.get('prompt_tokens', 0) or 0,
-            'completion_tokens': result.get('completion_tokens', 0) or 0,
-            'model': result.get('model', ''),
+            "count": 0,
+            "prompt_tokens": result.get("prompt_tokens", 0) or 0,
+            "completion_tokens": result.get("completion_tokens", 0) or 0,
+            "model": result.get("model", ""),
         }
 
     created = 0
@@ -135,26 +137,26 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
         try:
             extracted = ExtractedEvent.model_validate(raw_item)
         except ValidationError:
-            logger.debug('Extract: invalid event shape from LLM, dropping')
+            logger.debug("Extract: invalid event shape from LLM, dropping")
             continue
 
-        if extracted.confidence != 'high':
-            logger.debug('Extract: dropping non-high confidence event')
+        if extracted.confidence != "high":
+            logger.debug("Extract: dropping non-high confidence event")
             continue
         if extracted.start <= now:
-            logger.debug('Extract: dropping past-dated event')
+            logger.debug("Extract: dropping past-dated event")
             continue
 
         with transaction.atomic():
             event = create_event_from_payload(
                 user=msg.account.owner,
                 payload={
-                    'title': extracted.title,
-                    'start': extracted.start,
-                    'end': extracted.end,
-                    'all_day': extracted.all_day,
-                    'location': extracted.location,
-                    'description': extracted.description,
+                    "title": extracted.title,
+                    "start": extracted.start,
+                    "end": extracted.end,
+                    "all_day": extracted.all_day,
+                    "location": extracted.location,
+                    "description": extracted.description,
                 },
                 source=Event.Source.LLM,
                 source_message=msg,
@@ -165,14 +167,14 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
                 target_content_type=event_ct,
                 target_object_id=event.uuid,
                 confidence=extracted.confidence,
-                model_used=result.get('model', ''),
+                model_used=result.get("model", ""),
                 raw_output=raw_item,
             )
         created += 1
 
     return {
-        'count': created,
-        'prompt_tokens': result.get('prompt_tokens', 0) or 0,
-        'completion_tokens': result.get('completion_tokens', 0) or 0,
-        'model': result.get('model', ''),
+        "count": created,
+        "prompt_tokens": result.get("prompt_tokens", 0) or 0,
+        "completion_tokens": result.get("completion_tokens", 0) or 0,
+        "model": result.get("model", ""),
     }

@@ -21,10 +21,11 @@ from .events import record_event
 
 class FilePermission(enum.IntEnum):
     """Permission levels for file access, ordered by capability."""
-    VIEW = 10     # share-ro: read/download only
-    WRITE = 20    # share-rw: update content only
-    EDIT = 30     # group member: full CRUD
-    MANAGE = 40   # owner: full control + share management
+
+    VIEW = 10  # share-ro: read/download only
+    WRITE = 20  # share-rw: update content only
+    EDIT = 30  # group member: full CRUD
+    MANAGE = 40  # owner: full control + share management
 
 
 logger = logging.getLogger(__name__)
@@ -41,16 +42,17 @@ class FileService:
     def accessible_files_q(user):
         """Return a Q filter matching all files *user* can access."""
         from django.db.models import Q
+
         return (
-            Q(owner=user)
-            | Q(group__in=user.groups.all())
-            | Q(shares__shared_with=user)
+            Q(owner=user) | Q(group__in=user.groups.all()) | Q(shares__shared_with=user)
         )
 
     @staticmethod
     def user_files_qs(user):
         """Return a queryset of active (non-deleted) personal files owned by the user."""
-        return File.objects.filter(owner=user, group__isnull=True, deleted_at__isnull=True)
+        return File.objects.filter(
+            owner=user, group__isnull=True, deleted_at__isnull=True
+        )
 
     @staticmethod
     def user_group_files_qs(user):
@@ -64,30 +66,31 @@ class FileService:
     def annotate_for_serializer(queryset, user):
         """Prepare a File queryset for ``FileSerializer``."""
         from django.db.models import Exists, OuterRef
+
         from workspace.files.models import FileFavorite, FileShare, PinnedFolder
+
         return queryset.annotate(
             is_favorite=Exists(
-                FileFavorite.objects.filter(owner=user, file_id=OuterRef('pk'))
+                FileFavorite.objects.filter(owner=user, file_id=OuterRef("pk"))
             ),
             is_pinned=Exists(
-                PinnedFolder.objects.filter(owner=user, folder_id=OuterRef('pk'))
+                PinnedFolder.objects.filter(owner=user, folder_id=OuterRef("pk"))
             ),
-            is_shared=Exists(
-                FileShare.objects.filter(file_id=OuterRef('pk'))
-            ),
+            is_shared=Exists(FileShare.objects.filter(file_id=OuterRef("pk"))),
             has_children=Exists(
                 File.objects.filter(
-                    parent_id=OuterRef('pk'),
+                    parent_id=OuterRef("pk"),
                     node_type=File.NodeType.FOLDER,
                     deleted_at__isnull=True,
                 )
             ),
-        ).prefetch_related('file_tags__tag')
+        ).prefetch_related("file_tags__tag")
 
     @staticmethod
     def storage_used(user):
         """Return total bytes used by *user*'s non-deleted files."""
         from django.db.models import Sum
+
         total = File.objects.filter(
             owner=user,
             deleted_at__isnull=True,
@@ -100,10 +103,21 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def create_file(owner, name, parent=None, *, content=None, mime_type=None, group=None, acting_user=None):
+    def create_file(
+        owner,
+        name,
+        parent=None,
+        *,
+        content=None,
+        mime_type=None,
+        group=None,
+        acting_user=None,
+    ):
         """Create a new file record, optionally with uploaded content."""
         from workspace.files.services.detection import (
-            detect_from_stream, detect_from_name, refine_with_name,
+            detect_from_name,
+            detect_from_stream,
+            refine_with_name,
         )
 
         if group is None and parent and parent.group_id:
@@ -129,9 +143,9 @@ class FileService:
             name=name,
             node_type=File.NodeType.FILE,
             parent=parent,
-            mime_type=mime_type or 'application/octet-stream',
+            mime_type=mime_type or "application/octet-stream",
             type=label,
-            category=detection.group or 'unknown',
+            category=detection.group or "unknown",
             size=size,
             group=group,
         )
@@ -144,7 +158,9 @@ class FileService:
         return file_obj
 
     @staticmethod
-    def create_folder(owner, name, parent=None, *, icon=None, color=None, group=None, acting_user=None):
+    def create_folder(
+        owner, name, parent=None, *, icon=None, color=None, group=None, acting_user=None
+    ):
         """Create a new folder record."""
         if group is None and parent and parent.group_id:
             group = parent.group
@@ -164,7 +180,16 @@ class FileService:
         return folder
 
     @staticmethod
-    def register_disk_file(owner, name, parent, content_path, *, mime_type=None, size=None, acting_user=None):
+    def register_disk_file(
+        owner,
+        name,
+        parent,
+        content_path,
+        *,
+        mime_type=None,
+        size=None,
+        acting_user=None,
+    ):
         """Register a file that already exists on disk (used by sync)."""
         from workspace.files.services.detection import detect_from_name
 
@@ -179,7 +204,7 @@ class FileService:
             parent=parent,
             mime_type=mime_type,
             type=detection.label,
-            category=detection.group or 'unknown',
+            category=detection.group or "unknown",
             size=size,
         )
         file_obj.content.name = content_path
@@ -204,13 +229,17 @@ class FileService:
         old_group = file_obj.group
 
         # Determine new owner for storage path computation
-        new_owner = acting_user if (old_group and not new_group and acting_user) else None
+        new_owner = (
+            acting_user if (old_group and not new_group and acting_user) else None
+        )
 
         if file_obj.node_type == File.NodeType.FOLDER:
             FileService._move_folder_storage(file_obj, new_parent, new_owner=new_owner)
         else:
             if file_obj.content and file_obj.content.name:
-                FileService._move_file_storage(file_obj, new_parent, new_owner=new_owner)
+                FileService._move_file_storage(
+                    file_obj, new_parent, new_owner=new_owner
+                )
 
         # Update parent in DB before propagating group to avoid unique constraint
         # violations (e.g. unique_group_root_folder).
@@ -226,10 +255,15 @@ class FileService:
             File.objects.filter(file_obj._descendant_filter()).update(owner=new_owner)
             file_obj.owner = new_owner
 
-        record_event(file_obj, acting_user, FileEvent.Action.MOVED, {
-            'old_parent_id': str(old_parent_id) if old_parent_id else None,
-            'new_parent_id': str(new_parent_id) if new_parent_id else None,
-        })
+        record_event(
+            file_obj,
+            acting_user,
+            FileEvent.Action.MOVED,
+            {
+                "old_parent_id": str(old_parent_id) if old_parent_id else None,
+                "new_parent_id": str(new_parent_id) if new_parent_id else None,
+            },
+        )
 
     @staticmethod
     def propagate_group(file_obj, group):
@@ -253,17 +287,25 @@ class FileService:
 
         file_obj.name = new_name
         file_obj.save()
-        record_event(file_obj, acting_user, FileEvent.Action.RENAMED, {
-            'old_name': old_name,
-            'new_name': new_name,
-        })
+        record_event(
+            file_obj,
+            acting_user,
+            FileEvent.Action.RENAMED,
+            {
+                "old_name": old_name,
+                "new_name": new_name,
+            },
+        )
         return file_obj
 
     @staticmethod
-    def update_content(file_obj, content, *, name=None, mime_type=None, acting_user=None):
+    def update_content(
+        file_obj, content, *, name=None, mime_type=None, acting_user=None
+    ):
         """Replace a file's content, updating size and MIME type."""
         from workspace.files.services.detection import (
-            detect_from_stream, refine_with_name,
+            detect_from_stream,
+            refine_with_name,
         )
 
         detection = detect_from_stream(content)
@@ -272,7 +314,7 @@ class FileService:
         # Honour the extension when Magika's content label is generic (a sparse
         # ".md" reads as txt) so an edited note keeps type=markdown.
         file_obj.type = refine_with_name(detection.label, name or file_obj.name)
-        file_obj.category = detection.group or 'unknown'
+        file_obj.category = detection.group or "unknown"
         file_obj.has_thumbnail = False
         file_obj.content = content
         file_obj.save()
@@ -290,7 +332,7 @@ class FileService:
         file_obj.size = size
         file_obj.mime_type = detection.mime_type
         file_obj.type = detection.label
-        file_obj.category = detection.group or 'unknown'
+        file_obj.category = detection.group or "unknown"
         file_obj.has_thumbnail = False
         file_obj.content.name = storage_path
         file_obj.save()
@@ -303,10 +345,15 @@ class FileService:
     def copy(file_obj, target_parent, owner, *, acting_user=None):
         """Recursively copy a file or folder to *target_parent*."""
         copied = _storage.copy_node(file_obj, target_parent, owner)
-        record_event(copied, acting_user or owner, FileEvent.Action.CREATED, {
-            'source_uuid': str(file_obj.uuid),
-            'source_name': file_obj.name,
-        })
+        record_event(
+            copied,
+            acting_user or owner,
+            FileEvent.Action.CREATED,
+            {
+                "source_uuid": str(file_obj.uuid),
+                "source_name": file_obj.name,
+            },
+        )
         return copied
 
     # ------------------------------------------------------------------
@@ -317,18 +364,28 @@ class FileService:
     def soft_delete(file_obj, *, acting_user=None):
         """Soft-delete a file or folder (cascades to descendants)."""
         count = file_obj.soft_delete()
-        record_event(file_obj, acting_user, FileEvent.Action.DELETED, {
-            'cascade_count': count,
-        })
+        record_event(
+            file_obj,
+            acting_user,
+            FileEvent.Action.DELETED,
+            {
+                "cascade_count": count,
+            },
+        )
         return count
 
     @staticmethod
     def restore(file_obj, *, acting_user=None):
         """Restore a soft-deleted file or folder from trash."""
         count = file_obj.restore()
-        record_event(file_obj, acting_user, FileEvent.Action.RESTORED, {
-            'cascade_count': count,
-        })
+        record_event(
+            file_obj,
+            acting_user,
+            FileEvent.Action.RESTORED,
+            {
+                "cascade_count": count,
+            },
+        )
         return count
 
     @staticmethod
@@ -352,12 +409,17 @@ class FileService:
             return None
         if file_obj.group_id and user.groups.filter(id=file_obj.group_id).exists():
             return FilePermission.EDIT
-        share = FileShare.objects.filter(
-            file=file_obj, shared_with=user,
-        ).values_list('permission', flat=True).first()
+        share = (
+            FileShare.objects.filter(
+                file=file_obj,
+                shared_with=user,
+            )
+            .values_list("permission", flat=True)
+            .first()
+        )
         if share is None:
             return None
-        return FilePermission.WRITE if share == 'rw' else FilePermission.VIEW
+        return FilePermission.WRITE if share == "rw" else FilePermission.VIEW
 
     @staticmethod
     def can_access(user, file_obj):
@@ -372,7 +434,11 @@ class FileService:
     def check_name_available(owner, parent, name, node_type, *, exclude_pk=None):
         """Raise ``ValueError`` if a file with the same name already exists."""
         return _name_helpers.check_name_available(
-            owner, parent, name, node_type, exclude_pk=exclude_pk,
+            owner,
+            parent,
+            name,
+            node_type,
+            exclude_pk=exclude_pk,
         )
 
     @staticmethod
@@ -384,7 +450,13 @@ class FileService:
     # Reading
     # ------------------------------------------------------------------
 
-    _IMAGE_MIME_PREFIXES = ('image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml')
+    _IMAGE_MIME_PREFIXES = (
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "image/svg+xml",
+    )
 
     @staticmethod
     def read_text_content(file_obj, *, max_bytes=32_768):

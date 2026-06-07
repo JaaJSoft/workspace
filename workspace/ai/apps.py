@@ -2,17 +2,19 @@ from django.apps import AppConfig
 
 
 class AIConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'workspace.ai'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "workspace.ai"
 
     def ready(self):
         from workspace.ai.sse_provider import AISSEProvider
         from workspace.core.sse_registry import SSEProviderInfo, sse_registry
 
-        sse_registry.register(SSEProviderInfo(
-            slug='ai',
-            provider_cls=AISSEProvider,
-        ))
+        sse_registry.register(
+            SSEProviderInfo(
+                slug="ai",
+                provider_cls=AISSEProvider,
+            )
+        )
 
         from workspace.ai.tool_registry import tool_registry
         from workspace.ai.tools import CoreToolProvider
@@ -20,15 +22,19 @@ class AIConfig(AppConfig):
         tool_registry.register_provider(CoreToolProvider())
 
         from workspace.ai.tools import ScheduleToolProvider
+
         tool_registry.register_provider(ScheduleToolProvider())
 
         from django.conf import settings
-        if getattr(settings, 'AI_IMAGE_MODEL', ''):
+
+        if getattr(settings, "AI_IMAGE_MODEL", ""):
             from workspace.ai.tools import ImageToolProvider
+
             tool_registry.register_provider(ImageToolProvider())
 
-        if getattr(settings, 'SEARXNG_URL', ''):
+        if getattr(settings, "SEARXNG_URL", ""):
             from workspace.ai.tools import WebToolProvider
+
             tool_registry.register_provider(WebToolProvider())
 
         # Import task submodules so Celery's autodiscover_tasks() sees them

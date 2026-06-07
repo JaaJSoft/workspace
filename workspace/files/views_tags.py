@@ -1,69 +1,70 @@
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import viewsets, status
+from rest_framework import status, viewsets
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from .models import Tag
+from workspace.common.uuids import parse_uuid_or_none
+from workspace.files.services import FileService
+
+from .models import FileTag, Tag
 from .serializers_tags import TagSerializer
 
 
 @extend_schema_view(
-    list=extend_schema(summary="List tags", tags=['Tags']),
-    create=extend_schema(summary="Create a tag", tags=['Tags']),
-    partial_update=extend_schema(summary="Update a tag", tags=['Tags']),
-    destroy=extend_schema(summary="Delete a tag", tags=['Tags']),
+    list=extend_schema(summary="List tags", tags=["Tags"]),
+    create=extend_schema(summary="Create a tag", tags=["Tags"]),
+    partial_update=extend_schema(summary="Update a tag", tags=["Tags"]),
+    destroy=extend_schema(summary="Delete a tag", tags=["Tags"]),
 )
-@extend_schema(tags=['Tags'])
+@extend_schema(tags=["Tags"])
 class TagViewSet(viewsets.ModelViewSet):
     serializer_class = TagSerializer
-    lookup_field = 'uuid'
-    http_method_names = ['get', 'post', 'patch', 'delete']
+    lookup_field = "uuid"
+    http_method_names = ["get", "post", "patch", "delete"]
     pagination_class = None
 
     def get_queryset(self):
         return Tag.objects.filter(owner=self.request.user)
 
 
-from rest_framework.views import APIView
-from django.shortcuts import get_object_or_404
-
-from .models import FileTag
-from workspace.common.uuids import parse_uuid_or_none
-from workspace.files.services import FileService
-
-
 class FileTagView(APIView):
     """Add or remove tags on a file."""
 
-    @extend_schema(summary="Add a tag to a file", tags=['Tags'])
+    @extend_schema(summary="Add a tag to a file", tags=["Tags"])
     def post(self, request, file_uuid):
         file_obj = get_object_or_404(
-            FileService.user_files_qs(request.user), uuid=file_uuid,
+            FileService.user_files_qs(request.user),
+            uuid=file_uuid,
         )
-        tag_uuid_raw = request.data.get('tag')
+        tag_uuid_raw = request.data.get("tag")
         if not tag_uuid_raw:
-            return Response({'tag': 'This field is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"tag": "This field is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         tag_uuid = parse_uuid_or_none(tag_uuid_raw)
         if tag_uuid is None:
-            return Response({'tag': 'Invalid tag.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"tag": "Invalid tag."}, status=status.HTTP_400_BAD_REQUEST)
 
         tag = Tag.objects.filter(uuid=tag_uuid, owner=request.user).first()
         if not tag:
-            return Response({'tag': 'Invalid tag.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"tag": "Invalid tag."}, status=status.HTTP_400_BAD_REQUEST)
 
         if FileTag.objects.filter(file=file_obj, tag=tag).exists():
             return Response(
-                {'detail': 'Tag already assigned.'},
+                {"detail": "Tag already assigned."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         FileTag.objects.create(file=file_obj, tag=tag)
         return Response(TagSerializer(tag).data, status=status.HTTP_201_CREATED)
 
-    @extend_schema(summary="Remove a tag from a file", tags=['Tags'])
+    @extend_schema(summary="Remove a tag from a file", tags=["Tags"])
     def delete(self, request, file_uuid, tag_uuid):
         file_obj = get_object_or_404(
-            FileService.user_files_qs(request.user), uuid=file_uuid,
+            FileService.user_files_qs(request.user),
+            uuid=file_uuid,
         )
         ft = FileTag.objects.filter(file=file_obj, tag__uuid=tag_uuid).first()
         if not ft:

@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from workspace.chat.models import Message
-from workspace.chat.services.rendering import render_message_body, extract_mentions
+from workspace.chat.services.rendering import extract_mentions, render_message_body
 
 
 class Command(BaseCommand):
@@ -16,6 +16,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
 
         dry_run = options["dry_run"]
@@ -32,11 +33,12 @@ class Command(BaseCommand):
             mention_map = {}
             if usernames or has_everyone:
                 users = User.objects.filter(
-                    username__in=usernames, is_active=True,
-                ).values_list('username', 'id')
+                    username__in=usernames,
+                    is_active=True,
+                ).values_list("username", "id")
                 mention_map = dict(users)
                 if has_everyone:
-                    mention_map['everyone'] = None
+                    mention_map["everyone"] = None
 
             new_html = render_message_body(msg.body, mention_map or None)
             if new_html != msg.body_html:

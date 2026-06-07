@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from workspace.ai.prompts.mail import INJECTION_GUARD
 
-_UTC = ZoneInfo('UTC')
+_UTC = ZoneInfo("UTC")
 
 MAX_BODY_CHARS = 4000  # per message; threads can have many messages.
 
@@ -16,8 +16,8 @@ SYSTEM_PROMPT = (
     "2. ONLY extract events that are CONFIRMED and SCHEDULED: a meeting "
     "with a date and time, a flight, a train ticket, a concert booking, "
     "a medical appointment, a restaurant reservation.\n"
-    "3. REJECT vague proposals (\"we should meet sometime\"), questions "
-    "(\"can we catch up next week?\"), brainstorms, marketing or "
+    '3. REJECT vague proposals ("we should meet sometime"), questions '
+    '("can we catch up next week?"), brainstorms, marketing or '
     "promotional fluff, and anything where the user has not committed.\n"
     "4. Each event MUST have: title (string), start (ISO 8601 with "
     "timezone), end (ISO 8601 with timezone OR null), all_day (bool), "
@@ -30,11 +30,11 @@ SYSTEM_PROMPT = (
     "7. Do NOT extract recurring events as a series; if a mail describes "
     "a recurrence, extract only the next occurrence.\n"
     "Output format: a JSON array, no other text, no markdown fences.\n"
-    "Example: [{\"title\":\"Train Paris-Lyon\",\"start\":"
-    "\"2026-06-01T08:00:00+02:00\",\"end\":\"2026-06-01T10:00:00+02:00\","
-    "\"all_day\":false,\"location\":\"Gare de Lyon\",\"description\":\"\","
-    "\"confidence\":\"high\",\"reasoning\":\"Booking confirmation with "
-    "departure time and station.\"}]"
+    'Example: [{"title":"Train Paris-Lyon","start":'
+    '"2026-06-01T08:00:00+02:00","end":"2026-06-01T10:00:00+02:00",'
+    '"all_day":false,"location":"Gare de Lyon","description":"",'
+    '"confidence":"high","reasoning":"Booking confirmation with '
+    'departure time and station."}]'
 )
 
 
@@ -61,36 +61,40 @@ def build_event_extraction_messages(
     """
     rendered = []
     for i, m in enumerate(thread_messages, 1):
-        body = (m.body_text or m.body_html or '').strip()
+        body = (m.body_text or m.body_html or "").strip()
         if len(body) > MAX_BODY_CHARS:
-            body = body[:MAX_BODY_CHARS] + '... [truncated]'
+            body = body[:MAX_BODY_CHARS] + "... [truncated]"
         from_addr = m.from_address if isinstance(m.from_address, dict) else {}
-        sender = from_addr.get('email', '') or '(unknown)'
-        date_str = m.date.isoformat() if m.date else ''
+        sender = from_addr.get("email", "") or "(unknown)"
+        date_str = m.date.isoformat() if m.date else ""
         rendered.append(
             f"[Message {i} | {date_str} | From: {sender} | Subject: {m.subject}]\n{body}"
         )
-    thread_block = '\n\n---\n\n'.join(rendered)
+    thread_block = "\n\n---\n\n".join(rendered)
     tz = user_tz or _UTC
-    anchor_dt = next(
-        (m.date for m in reversed(thread_messages) if m.date), None
-    ) or timezone.now()
-    anchor = anchor_dt.astimezone(tz).strftime('%Y-%m-%d %H:%M')
+    anchor_dt = (
+        next((m.date for m in reversed(thread_messages) if m.date), None)
+        or timezone.now()
+    )
+    anchor = anchor_dt.astimezone(tz).strftime("%Y-%m-%d %H:%M")
     tz_name = str(tz)
 
     return [
-        {'role': 'system', 'content': SYSTEM_PROMPT},
-        {'role': 'user', 'content': (
-            f"Resolve relative references ('tomorrow', 'demain', 'next "
-            f"Tuesday', 'in three weeks') in each message against the "
-            f"date that message was sent (the ISO timestamp shown after "
-            f"'[Message N |'), NOT against today's date. The most "
-            f"recent message in this thread was sent on {anchor} "
-            f"({tz_name}); use that as the default anchor. When an "
-            f"email mentions a time WITHOUT an explicit timezone (e.g., "
-            f"'8h', '3pm'), interpret it in {tz_name}, NOT in UTC.\n\n"
-            f"Extract events from this email thread:\n\n"
-            f"<untrusted-content>\n{thread_block}\n</untrusted-content>\n\n"
-            f"{INJECTION_GUARD}"
-        )},
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": (
+                f"Resolve relative references ('tomorrow', 'demain', 'next "
+                f"Tuesday', 'in three weeks') in each message against the "
+                f"date that message was sent (the ISO timestamp shown after "
+                f"'[Message N |'), NOT against today's date. The most "
+                f"recent message in this thread was sent on {anchor} "
+                f"({tz_name}); use that as the default anchor. When an "
+                f"email mentions a time WITHOUT an explicit timezone (e.g., "
+                f"'8h', '3pm'), interpret it in {tz_name}, NOT in UTC.\n\n"
+                f"Extract events from this email thread:\n\n"
+                f"<untrusted-content>\n{thread_block}\n</untrusted-content>\n\n"
+                f"{INJECTION_GUARD}"
+            ),
+        },
     ]

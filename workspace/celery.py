@@ -10,12 +10,12 @@ from prometheus_client.core import GaugeMetricFamily
 
 from workspace.common.metrics import safe_counter, safe_histogram, safe_register
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'workspace.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "workspace.settings")
 
 logger = logging.getLogger(__name__)
 
-app = Celery('workspace')
-app.config_from_object('django.conf:settings', namespace='CELERY')
+app = Celery("workspace")
+app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
 
@@ -24,18 +24,18 @@ app.autodiscover_tasks()
 #
 # All metric names in this file MUST start with "celery_".
 # ---------------------------------------------------------------------------
-_P = 'celery'
+_P = "celery"
 
 CELERY_TASK_DURATION = safe_histogram(
-    f'{_P}_task_duration_seconds',
-    'Time between task_prerun and task_postrun for one execution attempt',
-    ['task'],
+    f"{_P}_task_duration_seconds",
+    "Time between task_prerun and task_postrun for one execution attempt",
+    ["task"],
 )
 
 CELERY_TASKS_TOTAL = safe_counter(
-    f'{_P}_tasks_total',
-    'Task executions completed, by task name and final state (success/failure/retry)',
-    ['task', 'state'],
+    f"{_P}_tasks_total",
+    "Task executions completed, by task name and final state (success/failure/retry)",
+    ["task", "state"],
 )
 
 # Per-task wall-clock start time, keyed by task_id. Cleared in task_postrun.
@@ -51,11 +51,11 @@ def _on_task_prerun(task_id=None, task=None, **kwargs):
 @task_postrun.connect
 def _on_task_postrun(task_id=None, task=None, state=None, **kwargs):
     started = _task_starts.pop(task_id, None) if task_id else None
-    name = getattr(task, 'name', 'unknown')
+    name = getattr(task, "name", "unknown")
     if started is not None:
         CELERY_TASK_DURATION.labels(task=name).observe(time.monotonic() - started)
     # state is one of 'SUCCESS', 'FAILURE', 'RETRY' (uppercase from celery.states).
-    label = (state or 'unknown').lower()
+    label = (state or "unknown").lower()
     CELERY_TASKS_TOTAL.labels(task=name, state=label).inc()
 
 
@@ -86,20 +86,22 @@ class _CeleryQueueLengthCollector:
 
     def collect(self):
         gauge = GaugeMetricFamily(
-            f'{_P}_queue_length',
-            'Number of pending messages in a Celery broker queue',
-            labels=['queue'],
+            f"{_P}_queue_length",
+            "Number of pending messages in a Celery broker queue",
+            labels=["queue"],
         )
         try:
             from django.conf import settings
-            broker = getattr(settings, 'CELERY_BROKER_URL', '') or ''
-            if not broker.startswith('redis://') and not broker.startswith('rediss://'):
+
+            broker = getattr(settings, "CELERY_BROKER_URL", "") or ""
+            if not broker.startswith("redis://") and not broker.startswith("rediss://"):
                 return  # skip non-Redis brokers (memory://, amqp://, ...)
 
-            queues = getattr(settings, 'CELERY_TASK_QUEUES', None) or []
-            queue_names = [q.name for q in queues] or ['celery']
+            queues = getattr(settings, "CELERY_TASK_QUEUES", None) or []
+            queue_names = [q.name for q in queues] or ["celery"]
 
             import redis
+
             client = redis.Redis.from_url(broker)
             try:
                 for name in queue_names:
@@ -112,7 +114,7 @@ class _CeleryQueueLengthCollector:
             finally:
                 client.close()
         except Exception:
-            logger.exception('celery_queue_length collector failed')
+            logger.exception("celery_queue_length collector failed")
             return
         yield gauge
 

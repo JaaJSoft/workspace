@@ -1,15 +1,16 @@
 from workspace.files.services import FilePermission
+
 from . import ActionRegistry
 from .base import ActionCategory, BaseAction
 
 
 @ActionRegistry.register
 class RestoreAction(BaseAction):
-    id = 'restore'
-    label = 'Restore'
-    icon = 'rotate-ccw'
+    id = "restore"
+    label = "Restore"
+    icon = "rotate-ccw"
     category = ActionCategory.TRASH
-    node_types = ('file', 'folder')
+    node_types = ("file", "folder")
     supports_bulk = True
 
     def is_available(self, user, file_obj, *, permission):
@@ -20,12 +21,12 @@ class RestoreAction(BaseAction):
 
 @ActionRegistry.register
 class PurgeAction(BaseAction):
-    id = 'purge'
-    label = 'Delete permanently'
-    icon = 'trash-2'
+    id = "purge"
+    label = "Delete permanently"
+    icon = "trash-2"
     category = ActionCategory.TRASH
-    node_types = ('file', 'folder')
-    css_class = 'text-error'
+    node_types = ("file", "folder")
+    css_class = "text-error"
     supports_bulk = True
 
     def is_available(self, user, file_obj, *, permission):

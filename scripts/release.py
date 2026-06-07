@@ -175,7 +175,7 @@ def main() -> None:
     print()
 
     print(f"Done! Released v{version}")
-    print(f"Push with: git push && git push --tags")
+    print("Push with: git push && git push --tags")
 
 
 if __name__ == "__main__":

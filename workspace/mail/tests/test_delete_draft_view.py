@@ -18,34 +18,38 @@ User = get_user_model()
 
 class DeleteDraftIMAPFailureTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='draftdel', password='pass')
+        self.user = User.objects.create_user(username="draftdel", password="pass")
         self.account = MailAccount.objects.create(
             owner=self.user,
-            email='user@example.com',
-            imap_host='imap.example.com',
-            smtp_host='smtp.example.com',
-            username='user@example.com',
+            email="user@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="user@example.com",
         )
-        self.account.set_password('secret')
+        self.account.set_password("secret")
         self.account.save()
         self.drafts = MailFolder.objects.create(
-            account=self.account, name='Drafts',
-            display_name='Drafts', folder_type='drafts',
+            account=self.account,
+            name="Drafts",
+            display_name="Drafts",
+            folder_type="drafts",
         )
         self.draft = MailMessage.objects.create(
-            account=self.account, folder=self.drafts, imap_uid=42,
+            account=self.account,
+            folder=self.drafts,
+            imap_uid=42,
         )
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
-    @patch('workspace.mail.services.imap_messages.delete_draft')
+    @patch("workspace.mail.services.imap_messages.delete_draft")
     def test_imap_failure_falls_back_to_local_soft_delete(self, mock_delete):
         """When delete_draft raises, the view must soft-delete locally and
         still return 204 - otherwise the user sees the draft re-appear on
         the next page refresh."""
-        mock_delete.side_effect = RuntimeError('IMAP timeout')
+        mock_delete.side_effect = RuntimeError("IMAP timeout")
 
-        resp = self.client.delete(f'/api/v1/mail/drafts/{self.draft.uuid}')
+        resp = self.client.delete(f"/api/v1/mail/drafts/{self.draft.uuid}")
 
         self.assertEqual(resp.status_code, 204)
         self.draft.refresh_from_db()
@@ -54,7 +58,7 @@ class DeleteDraftIMAPFailureTests(TestCase):
             "Draft must be soft-deleted in DB even when IMAP delete fails",
         )
 
-    @patch('workspace.mail.services.imap_messages.delete_draft')
+    @patch("workspace.mail.services.imap_messages.delete_draft")
     def test_imap_success_path_unchanged(self, mock_delete):
         """Sanity check: when delete_draft succeeds (and itself sets
         deleted_at), the view returns 204 with the draft soft-deleted."""
@@ -62,10 +66,11 @@ class DeleteDraftIMAPFailureTests(TestCase):
 
         def _succeed(account, msg):
             msg.deleted_at = timezone.now()
-            msg.save(update_fields=['deleted_at', 'updated_at'])
+            msg.save(update_fields=["deleted_at", "updated_at"])
+
         mock_delete.side_effect = _succeed
 
-        resp = self.client.delete(f'/api/v1/mail/drafts/{self.draft.uuid}')
+        resp = self.client.delete(f"/api/v1/mail/drafts/{self.draft.uuid}")
 
         self.assertEqual(resp.status_code, 204)
         self.draft.refresh_from_db()

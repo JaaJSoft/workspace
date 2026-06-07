@@ -16,21 +16,29 @@ class FileLockAPITests(APITestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
-            username='alice', email='alice@test.com', password='pass123',
+            username="alice",
+            email="alice@test.com",
+            password="pass123",
         )
         # ``other`` is a collaborator: alice's file is shared with him r/w,
         # so he can hit the lock endpoint - just like in the real flow
         # where two co-authors race to acquire on the same shared file.
         self.other = User.objects.create_user(
-            username='bob', email='bob@test.com', password='pass123',
+            username="bob",
+            email="bob@test.com",
+            password="pass123",
         )
         # ``outsider`` has no access to alice's file - used to assert that
         # a UUID alone doesn't grant lock visibility / mutation rights.
         self.outsider = User.objects.create_user(
-            username='eve', email='eve@test.com', password='pass123',
+            username="eve",
+            email="eve@test.com",
+            password="pass123",
         )
         self.file = File.objects.create(
-            owner=self.user, name='doc.md', node_type=File.NodeType.FILE,
+            owner=self.user,
+            name="doc.md",
+            node_type=File.NodeType.FILE,
         )
         FileShare.objects.create(
             file=self.file,
@@ -40,7 +48,7 @@ class FileLockAPITests(APITestCase):
         )
 
     def _url(self, uuid=None):
-        return f'/api/v1/files/{uuid or self.file.uuid}/lock'
+        return f"/api/v1/files/{uuid or self.file.uuid}/lock"
 
     # ── POST (acquire / renew) ───────────────────────────
 
@@ -71,7 +79,7 @@ class FileLockAPITests(APITestCase):
         self.client.force_authenticate(self.other)
         resp = self.client.post(self._url())
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
-        self.assertIn('locked_by', resp.data)
+        self.assertIn("locked_by", resp.data)
 
     def test_acquire_expired_lock(self):
         """Can acquire a lock that has expired."""
@@ -130,15 +138,15 @@ class FileLockAPITests(APITestCase):
         self.client.force_authenticate(self.user)
         resp = self.client.get(self._url())
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIsNone(resp.data['locked_by'])
+        self.assertIsNone(resp.data["locked_by"])
 
     def test_get_lock_info_locked(self):
         self.client.force_authenticate(self.user)
         self.client.post(self._url())
         resp = self.client.get(self._url())
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data['locked_by']['username'], 'alice')
-        self.assertFalse(resp.data['is_expired'])
+        self.assertEqual(resp.data["locked_by"]["username"], "alice")
+        self.assertFalse(resp.data["is_expired"])
 
     # ── Save protection ──────────────────────────────────
 
@@ -149,8 +157,8 @@ class FileLockAPITests(APITestCase):
 
         self.client.force_authenticate(self.other)
         resp = self.client.patch(
-            f'/api/v1/files/{self.file.uuid}',
-            {'name': 'renamed.md'},
+            f"/api/v1/files/{self.file.uuid}",
+            {"name": "renamed.md"},
         )
         self.assertEqual(resp.status_code, status.HTTP_423_LOCKED)
 
@@ -160,8 +168,8 @@ class FileLockAPITests(APITestCase):
         self.client.post(self._url())
 
         resp = self.client.patch(
-            f'/api/v1/files/{self.file.uuid}',
-            {'name': 'renamed.md'},
+            f"/api/v1/files/{self.file.uuid}",
+            {"name": "renamed.md"},
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
@@ -169,8 +177,8 @@ class FileLockAPITests(APITestCase):
         """PATCH succeeds when no lock exists."""
         self.client.force_authenticate(self.user)
         resp = self.client.patch(
-            f'/api/v1/files/{self.file.uuid}',
-            {'name': 'renamed.md'},
+            f"/api/v1/files/{self.file.uuid}",
+            {"name": "renamed.md"},
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
@@ -178,7 +186,7 @@ class FileLockAPITests(APITestCase):
 
     def test_lock_nonexistent_file(self):
         self.client.force_authenticate(self.user)
-        resp = self.client.post(self._url('00000000-0000-0000-0000-000000000000'))
+        resp = self.client.post(self._url("00000000-0000-0000-0000-000000000000"))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_lock_requires_authentication(self):
@@ -216,10 +224,10 @@ class FileLockAPITests(APITestCase):
             lock_expires_at=boundary,
         )
         self.client.force_authenticate(self.user)
-        with patch('workspace.files.views.timezone.now', return_value=boundary):
+        with patch("workspace.files.views.timezone.now", return_value=boundary):
             resp = self.client.get(self._url())
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertTrue(resp.data['is_expired'])
+        self.assertTrue(resp.data["is_expired"])
 
     def test_release_lock_404_for_user_without_access(self):
         """Outsiders can't release someone else's lock either."""
@@ -250,7 +258,11 @@ class FileLockAPITests(APITestCase):
 
         def first_then_inject(qs_self):
             result = real_first(qs_self)
-            if isinstance(result, File) and result.pk == file_pk and result.locked_by_id is None:
+            if (
+                isinstance(result, File)
+                and result.pk == file_pk
+                and result.locked_by_id is None
+            ):
                 now = timezone.now()
                 File.objects.filter(pk=file_pk).update(
                     locked_by=injector_user,
@@ -260,7 +272,7 @@ class FileLockAPITests(APITestCase):
             return result
 
         self.client.force_authenticate(self.other)
-        with patch.object(QuerySet, 'first', first_then_inject):
+        with patch.object(QuerySet, "first", first_then_inject):
             resp = self.client.post(self._url())
 
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)

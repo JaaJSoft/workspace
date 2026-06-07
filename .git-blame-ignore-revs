@@ -1,0 +1,6 @@
+# Bulk, behavior-preserving reformat commits to skip in git blame.
+# Usage: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub picks this file up automatically.)
+
+# style: apply ruff formatting and lint fixes
+82e87d7cf6cedfa5042963d00333b5009c8f491b

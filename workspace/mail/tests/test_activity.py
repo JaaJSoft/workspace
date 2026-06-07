@@ -9,76 +9,105 @@ User = get_user_model()
 
 
 class MailActivityProviderTests(TestCase):
-
     def setUp(self):
         self.user = User.objects.create_user(
-            username='alice', email='alice@test.com', password='pass123',
+            username="alice",
+            email="alice@test.com",
+            password="pass123",
         )
         self.other_user = User.objects.create_user(
-            username='bob', email='bob@test.com', password='pass123',
+            username="bob",
+            email="bob@test.com",
+            password="pass123",
         )
 
         self.account = MailAccount.objects.create(
             owner=self.user,
-            email='alice@example.com',
-            imap_host='imap.example.com',
-            smtp_host='smtp.example.com',
-            username='alice@example.com',
+            email="alice@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="alice@example.com",
         )
         self.other_account = MailAccount.objects.create(
             owner=self.other_user,
-            email='bob@example.com',
-            imap_host='imap.example.com',
-            smtp_host='smtp.example.com',
-            username='bob@example.com',
+            email="bob@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="bob@example.com",
         )
 
         self.inbox = MailFolder.objects.create(
-            account=self.account, name='INBOX',
-            display_name='Inbox', folder_type='inbox',
+            account=self.account,
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
         )
         self.sent = MailFolder.objects.create(
-            account=self.account, name='Sent',
-            display_name='Sent', folder_type='sent',
+            account=self.account,
+            name="Sent",
+            display_name="Sent",
+            folder_type="sent",
         )
         self.other_inbox = MailFolder.objects.create(
-            account=self.other_account, name='INBOX',
-            display_name='Inbox', folder_type='inbox',
+            account=self.other_account,
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
         )
         self.other_sent = MailFolder.objects.create(
-            account=self.other_account, name='Sent',
-            display_name='Sent', folder_type='sent',
+            account=self.other_account,
+            name="Sent",
+            display_name="Sent",
+            folder_type="sent",
         )
 
         self.ts = timezone.now()
 
         # alice: 2 received, 1 sent
         MailMessage.objects.create(
-            account=self.account, folder=self.inbox, imap_uid=1,
-            subject='Received 1', date=self.ts,
-            from_address={'name': 'External', 'email': 'ext@example.com'},
+            account=self.account,
+            folder=self.inbox,
+            imap_uid=1,
+            subject="Received 1",
+            date=self.ts,
+            from_address={"name": "External", "email": "ext@example.com"},
         )
         MailMessage.objects.create(
-            account=self.account, folder=self.inbox, imap_uid=2,
-            subject='Received 2', date=self.ts,
+            account=self.account,
+            folder=self.inbox,
+            imap_uid=2,
+            subject="Received 2",
+            date=self.ts,
         )
         MailMessage.objects.create(
-            account=self.account, folder=self.sent, imap_uid=3,
-            subject='Sent by Alice', date=self.ts,
+            account=self.account,
+            folder=self.sent,
+            imap_uid=3,
+            subject="Sent by Alice",
+            date=self.ts,
         )
 
         # bob: 1 received, 2 sent
         MailMessage.objects.create(
-            account=self.other_account, folder=self.other_inbox, imap_uid=1,
-            subject='Received by Bob', date=self.ts,
+            account=self.other_account,
+            folder=self.other_inbox,
+            imap_uid=1,
+            subject="Received by Bob",
+            date=self.ts,
         )
         MailMessage.objects.create(
-            account=self.other_account, folder=self.other_sent, imap_uid=2,
-            subject='Sent by Bob 1', date=self.ts,
+            account=self.other_account,
+            folder=self.other_sent,
+            imap_uid=2,
+            subject="Sent by Bob 1",
+            date=self.ts,
         )
         MailMessage.objects.create(
-            account=self.other_account, folder=self.other_sent, imap_uid=3,
-            subject='Sent by Bob 2', date=self.ts,
+            account=self.other_account,
+            folder=self.other_sent,
+            imap_uid=3,
+            subject="Sent by Bob 2",
+            date=self.ts,
         )
 
         self.provider = MailActivityProvider()
@@ -89,14 +118,18 @@ class MailActivityProviderTests(TestCase):
         """Profile/heatmap: only sent mails count as user activity."""
         today = self.ts.date()
         counts = self.provider.get_daily_counts(
-            self.user.id, today, today,
+            self.user.id,
+            today,
+            today,
         )
         self.assertEqual(counts.get(today, 0), 1)  # only alice's 1 sent
 
     def test_daily_counts_with_user_counts_other_user(self):
         today = self.ts.date()
         counts = self.provider.get_daily_counts(
-            self.other_user.id, today, today,
+            self.other_user.id,
+            today,
+            today,
         )
         self.assertEqual(counts.get(today, 0), 2)  # bob's 2 sent
 
@@ -104,7 +137,9 @@ class MailActivityProviderTests(TestCase):
         """Dashboard/workspace: only received (inbox) mails."""
         today = self.ts.date()
         counts = self.provider.get_daily_counts(
-            None, today, today,
+            None,
+            today,
+            today,
         )
         # 2 inbox alice + 1 inbox bob = 3
         self.assertEqual(counts.get(today, 0), 3)
@@ -115,39 +150,42 @@ class MailActivityProviderTests(TestCase):
         """Profile feed: only sent mails for that user."""
         events = self.provider.get_recent_events(self.user.id)
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0]['label'], 'Email sent')
-        self.assertEqual(events[0]['description'], 'Sent by Alice')
+        self.assertEqual(events[0]["label"], "Email sent")
+        self.assertEqual(events[0]["description"], "Sent by Alice")
 
     def test_recent_events_without_user_returns_inbox_only(self):
         """Dashboard feed: only inbox mails across all users."""
         events = self.provider.get_recent_events(None)
         self.assertEqual(len(events), 3)
         for e in events:
-            self.assertEqual(e['label'], 'Email received')
+            self.assertEqual(e["label"], "Email received")
 
     def test_recent_events_sent_actor_uses_owner_name(self):
         """Sent mail actor should be the account owner."""
         events = self.provider.get_recent_events(self.user.id)
-        self.assertEqual(events[0]['actor']['id'], self.user.id)
-        self.assertEqual(events[0]['actor']['username'], 'alice')
+        self.assertEqual(events[0]["actor"]["id"], self.user.id)
+        self.assertEqual(events[0]["actor"]["username"], "alice")
 
     def test_recent_events_received_actor_uses_from_address(self):
         """Received mail actor should use the from_address when available."""
         events = self.provider.get_recent_events(None)
-        received_1 = next(e for e in events if e['description'] == 'Received 1')
-        self.assertEqual(received_1['actor']['full_name'], 'External')
+        received_1 = next(e for e in events if e["description"] == "Received 1")
+        self.assertEqual(received_1["actor"]["full_name"], "External")
 
     def test_recent_events_received_actor_falls_back_to_email_key(self):
         """When from_address has no name, actor must fall back to the 'email'
         key produced by _parse_address - not a legacy 'address' key."""
         MailMessage.objects.create(
-            account=self.account, folder=self.inbox, imap_uid=10,
-            subject='No name sender', date=self.ts,
-            from_address={'name': '', 'email': 'noname@example.com'},
+            account=self.account,
+            folder=self.inbox,
+            imap_uid=10,
+            subject="No name sender",
+            date=self.ts,
+            from_address={"name": "", "email": "noname@example.com"},
         )
         events = self.provider.get_recent_events(None)
-        evt = next(e for e in events if e['description'] == 'No name sender')
-        self.assertEqual(evt['actor']['full_name'], 'noname@example.com')
+        evt = next(e for e in events if e["description"] == "No name sender")
+        self.assertEqual(evt["actor"]["full_name"], "noname@example.com")
 
     def test_recent_events_respects_limit_and_offset(self):
         events = self.provider.get_recent_events(None, limit=2, offset=0)
@@ -160,18 +198,21 @@ class MailActivityProviderTests(TestCase):
     def test_stats_with_user_counts_all_messages(self):
         """Stats should count all messages (sent + received), not filtered."""
         stats = self.provider.get_stats(self.user.id)
-        self.assertEqual(stats['total_messages'], 3)  # 2 inbox + 1 sent
+        self.assertEqual(stats["total_messages"], 3)  # 2 inbox + 1 sent
 
     def test_stats_without_user_counts_all(self):
         stats = self.provider.get_stats(None)
-        self.assertEqual(stats['total_messages'], 6)  # all messages
+        self.assertEqual(stats["total_messages"], 6)  # all messages
 
     # ── deleted messages excluded ─────────────────────────
 
     def test_deleted_messages_excluded_from_counts(self):
         MailMessage.objects.create(
-            account=self.account, folder=self.sent, imap_uid=99,
-            subject='Deleted sent', date=self.ts,
+            account=self.account,
+            folder=self.sent,
+            imap_uid=99,
+            subject="Deleted sent",
+            date=self.ts,
             deleted_at=timezone.now(),
         )
         today = self.ts.date()
@@ -180,8 +221,11 @@ class MailActivityProviderTests(TestCase):
 
     def test_deleted_messages_excluded_from_events(self):
         MailMessage.objects.create(
-            account=self.account, folder=self.sent, imap_uid=99,
-            subject='Deleted sent', date=self.ts,
+            account=self.account,
+            folder=self.sent,
+            imap_uid=99,
+            subject="Deleted sent",
+            date=self.ts,
             deleted_at=timezone.now(),
         )
         events = self.provider.get_recent_events(self.user.id)

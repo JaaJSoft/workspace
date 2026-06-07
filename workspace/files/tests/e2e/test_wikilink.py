@@ -6,6 +6,7 @@ Split into two classes:
   * WikilinkEditorTests - drives the real Crepe editor; skips when the esm.sh
     CDN is unreachable so offline CI stays green.
 """
+
 from __future__ import annotations
 
 import urllib.request
@@ -64,12 +65,14 @@ class WikilinkEditorTests(PlaywrightTestCase):
         self.user = self.create_user(username="wikilink")
         self.login_as(self.user)
         self.alpha = FileService.create_file(
-            self.user, "Alpha.md",
+            self.user,
+            "Alpha.md",
             content=ContentFile(b"# Alpha\n\nStart typing here.\n", name="Alpha.md"),
             mime_type="text/markdown",
         )
         self.beta = FileService.create_file(
-            self.user, "Beta Target.md",
+            self.user,
+            "Beta Target.md",
             # Markdown-shaped body so the content sniffer labels it 'markdown'
             # (a bare "# Beta" is too short and detects as plain text, which the
             # ?type=markdown search filter would then exclude).
@@ -109,7 +112,9 @@ class WikilinkEditorTests(PlaywrightTestCase):
         editor.click()
         self.page.keyboard.press("Control+End")
         self.page.keyboard.type("[[beta")
-        item = self.page.locator('[data-testid="wikilink-item"]', has_text="Beta Target")
+        item = self.page.locator(
+            '[data-testid="wikilink-item"]', has_text="Beta Target"
+        )
         expect(item).to_be_visible(timeout=5000)
 
     def test_picking_note_inserts_link(self):
@@ -117,12 +122,12 @@ class WikilinkEditorTests(PlaywrightTestCase):
         editor.click()
         self.page.keyboard.press("Control+End")
         self.page.keyboard.type("[[beta")
-        item = self.page.locator('[data-testid="wikilink-item"]', has_text="Beta Target")
+        item = self.page.locator(
+            '[data-testid="wikilink-item"]', has_text="Beta Target"
+        )
         expect(item).to_be_visible(timeout=5000)
         item.click()
-        link = self.page.locator(
-            '.ProseMirror a[href*="' + str(self.beta.uuid) + '"]'
-        )
+        link = self.page.locator('.ProseMirror a[href*="' + str(self.beta.uuid) + '"]')
         expect(link).to_be_visible(timeout=5000)
         expect(link).to_have_text("Beta Target")
         # The literal "[[beta" trigger text must be gone.
@@ -135,11 +140,15 @@ class WikilinkEditorTests(PlaywrightTestCase):
 
         # Empty "[[" lists recent notes (both created notes qualify).
         self.page.keyboard.type("[[")
-        expect(self.page.locator('[data-testid="wikilink-menu"]')).to_be_visible(timeout=5000)
+        expect(self.page.locator('[data-testid="wikilink-menu"]')).to_be_visible(
+            timeout=5000
+        )
 
         # Esc closes the menu and leaves the text alone.
         self.page.keyboard.press("Escape")
-        expect(self.page.locator('[data-testid="wikilink-menu"]')).to_be_hidden(timeout=3000)
+        expect(self.page.locator('[data-testid="wikilink-menu"]')).to_be_hidden(
+            timeout=3000
+        )
 
         # Re-open, narrow to Beta, Enter inserts the link.
         self.page.keyboard.type("beta")

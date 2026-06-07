@@ -25,7 +25,7 @@ def record_event(file, actor, action, metadata=None):
     # calling here; the guard is for tests that mock FileService.create_*
     # to return a non-persisted File and would otherwise trigger a
     # deferred-FK violation at transaction commit.
-    state = getattr(file, '_state', None)
+    state = getattr(file, "_state", None)
     if state is not None and state.adding:
         return None
     try:
@@ -42,7 +42,11 @@ def record_event(file, actor, action, metadata=None):
 
 def events_for_file(file):
     """Return the queryset of events for *file*, newest first."""
-    return FileEvent.objects.filter(file=file).select_related('actor').order_by('-created_at')
+    return (
+        FileEvent.objects.filter(file=file)
+        .select_related("actor")
+        .order_by("-created_at")
+    )
 
 
 def serialize_event(event):
@@ -55,16 +59,16 @@ def serialize_event(event):
     actor_data = None
     if actor is not None:
         actor_data = {
-            'id': actor.pk,
-            'username': actor.username,
-            'full_name': actor.get_full_name() or actor.username,
+            "id": actor.pk,
+            "username": actor.username,
+            "full_name": actor.get_full_name() or actor.username,
         }
     return {
-        'uuid': str(event.uuid),
-        'action': event.action,
-        'label': event.short_label,
-        'icon': event.icon,
-        'actor': actor_data,
-        'metadata': event.metadata or {},
-        'created_at': event.created_at.isoformat(),
+        "uuid": str(event.uuid),
+        "action": event.action,
+        "label": event.short_label,
+        "icon": event.icon,
+        "actor": actor_data,
+        "metadata": event.metadata or {},
+        "created_at": event.created_at.isoformat(),
     }

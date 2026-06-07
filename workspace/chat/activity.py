@@ -5,7 +5,6 @@ from workspace.core.activity_registry import ActivityProvider
 
 
 class ChatActivityProvider(ActivityProvider):
-
     def _base_qs(self, user_id, viewer_id):
         from workspace.chat.models import Conversation
         from workspace.chat.services.conversations import user_conversation_ids
@@ -22,34 +21,45 @@ class ChatActivityProvider(ActivityProvider):
             created_at__date__gte=date_from,
             created_at__date__lte=date_to,
         )
-        rows = qs.annotate(day=TruncDate('created_at')).values('day').annotate(
-            count=Count('pk'),
-        ).order_by('day')
-        return {row['day']: row['count'] for row in rows}
+        rows = (
+            qs.annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(
+                count=Count("pk"),
+            )
+            .order_by("day")
+        )
+        return {row["day"]: row["count"] for row in rows}
 
     def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
-        qs = self._base_qs(user_id, viewer_id).select_related(
-            'created_by',
-        ).order_by('-created_at')[offset:offset + limit]
+        qs = (
+            self._base_qs(user_id, viewer_id)
+            .select_related(
+                "created_by",
+            )
+            .order_by("-created_at")[offset : offset + limit]
+        )
 
         events = []
         for conv in qs:
-            events.append({
-                'icon': 'message-circle-plus',
-                'label': 'Group created',
-                'description': conv.title or 'Untitled group',
-                'timestamp': conv.created_at,
-                'url': f'/chat/{conv.pk}',
-                'actor': {
-                    'id': conv.created_by_id,
-                    'username': conv.created_by.username,
-                    'full_name': conv.created_by.get_full_name(),
-                },
-            })
+            events.append(
+                {
+                    "icon": "message-circle-plus",
+                    "label": "Group created",
+                    "description": conv.title or "Untitled group",
+                    "timestamp": conv.created_at,
+                    "url": f"/chat/{conv.pk}",
+                    "actor": {
+                        "id": conv.created_by_id,
+                        "username": conv.created_by.username,
+                        "full_name": conv.created_by.get_full_name(),
+                    },
+                }
+            )
         return events
 
     def get_stats(self, user_id, *, viewer_id=None):
-        from workspace.chat.models import Message, ConversationMember
+        from workspace.chat.models import ConversationMember, Message
         from workspace.chat.services.conversations import user_conversation_ids
 
         visible_convs = None
@@ -58,7 +68,7 @@ class ChatActivityProvider(ActivityProvider):
 
         conv_filter = {}
         if user_id is not None:
-            conv_filter['user_id'] = user_id
+            conv_filter["user_id"] = user_id
         conv_qs = ConversationMember.objects.filter(
             left_at__isnull=True,
             **conv_filter,
@@ -75,6 +85,6 @@ class ChatActivityProvider(ActivityProvider):
         msg_count = msg_qs.count()
 
         return {
-            'total_messages': msg_count,
-            'active_conversations': conv_count,
+            "total_messages": msg_count,
+            "active_conversations": conv_count,
         }

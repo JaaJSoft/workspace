@@ -21,36 +21,41 @@ User = get_user_model()
 
 class DraftSaveBccTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='draftbcc', password='pass')
+        self.user = User.objects.create_user(username="draftbcc", password="pass")
         self.account = MailAccount.objects.create(
             owner=self.user,
-            email='user@example.com',
-            imap_host='imap.example.com',
-            smtp_host='smtp.example.com',
-            username='user@example.com',
+            email="user@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="user@example.com",
         )
-        self.account.set_password('secret')
+        self.account.set_password("secret")
         self.account.save()
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
-    @patch('workspace.mail.services.imap_messages.save_draft')
+    @patch("workspace.mail.services.imap_messages.save_draft")
     def test_saved_draft_contains_bcc_header(self, mock_save):
         mock_save.return_value = None
 
-        self.client.post('/api/v1/mail/drafts', {
-            'account_id': str(self.account.uuid),
-            'to': ['bob@example.com'],
-            'subject': 'Draft with bcc',
-            'body_text': 'hi',
-            'bcc': ['dave@example.com'],
-        }, format='json')
+        self.client.post(
+            "/api/v1/mail/drafts",
+            {
+                "account_id": str(self.account.uuid),
+                "to": ["bob@example.com"],
+                "subject": "Draft with bcc",
+                "body_text": "hi",
+                "bcc": ["dave@example.com"],
+            },
+            format="json",
+        )
 
         mock_save.assert_called_once()
         raw_msg = mock_save.call_args[0][1]
-        msg = message_from_string(raw_msg.decode('utf-8'))
+        msg = message_from_string(raw_msg.decode("utf-8"))
         self.assertEqual(
-            msg['Bcc'], 'dave@example.com',
+            msg["Bcc"],
+            "dave@example.com",
             "Draft saved to IMAP must carry its Bcc recipients in the header, "
             "otherwise reopening the draft loses them",
         )

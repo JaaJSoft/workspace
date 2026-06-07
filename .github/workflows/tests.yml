@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   lint:
-    runs-on: jaaj-ubuntu
+    runs-on: ubuntu-latest
     name: Lint (ruff)
     steps:
       - name: Checkout repository
@@ -34,7 +34,7 @@ jobs:
           args: format --check --diff
 
   test:
-    runs-on: jaaj-ubuntu
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +96,7 @@ jobs:
             --fail-under=${{ matrix.min_coverage }}
 
   e2e:
-    runs-on: jaaj-ubuntu
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -139,7 +139,7 @@ jobs:
           uv run python manage.py test workspace.${{ matrix.module }}.tests.e2e -v 2
 
   js:
-    runs-on: jaaj-ubuntu
+    runs-on: ubuntu-latest
     name: JS unit tests
     steps:
       - name: Checkout repository
@@ -154,7 +154,7 @@ jobs:
         run: node --test "workspace/*/tests/js/**/*.test.js"
 
   webdav-mount:
-    runs-on: jaaj-ubuntu
+    runs-on: ubuntu-latest
     name: WebDAV (davfs2 mount)
     steps:
       - name: Checkout repository

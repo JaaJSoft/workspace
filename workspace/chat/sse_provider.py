@@ -7,9 +7,14 @@ from django.utils import timezone
 
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.sse_registry import SSEProvider
+
 from .models import (
-    ConversationMember, Message, MessageInteraction, MessageLinkPreview,
-    PinnedMessage, Reaction,
+    ConversationMember,
+    Message,
+    MessageInteraction,
+    MessageLinkPreview,
+    PinnedMessage,
+    Reaction,
 )
 from .serializers import MessageInteractionSerializer, MessageSerializer
 from .services.conversations import get_unread_counts, user_conversation_ids
@@ -34,9 +39,10 @@ class ChatSSEProvider(SSEProvider):
         last_event_uuid = parse_uuid_or_none(last_event_id) if last_event_id else None
         if last_event_uuid is not None:
             msg = (
-                Message.objects
-                .filter(uuid=last_event_uuid, conversation_id__in=self._member_conv_ids)
-                .only('created_at')
+                Message.objects.filter(
+                    uuid=last_event_uuid, conversation_id__in=self._member_conv_ids
+                )
+                .only("created_at")
                 .first()
             )
             self._since = msg.created_at if msg is not None else timezone.now()
@@ -58,11 +64,12 @@ class ChatSSEProvider(SSEProvider):
         events = []
         try:
             unread = get_unread_counts(self.user)
-            events.append(('unread', unread, None))
+            events.append(("unread", unread, None))
             self._last_unread_push = time.time()
         except Exception:
             logger.exception(
-                "Failed to send initial unread counts for user %s", self.user.id,
+                "Failed to send initial unread counts for user %s",
+                self.user.id,
             )
         return events
 
@@ -72,10 +79,11 @@ class ChatSSEProvider(SSEProvider):
 
         # Typing — always check (independent of dirty flag)
         from .services.typing import get_typing_users
+
         typing_data = get_typing_users(self._member_conv_ids, exclude_user_id=user_id)
         if typing_data != self._last_typing_state:
             self._last_typing_state = typing_data
-            events.append(('typing', typing_data, None))
+            events.append(("typing", typing_data, None))
 
         # Only query for new events if dirty flag changed
         if cache_value is None:
@@ -86,10 +94,11 @@ class ChatSSEProvider(SSEProvider):
         if now - self._last_unread_push >= 5:
             try:
                 unread = get_unread_counts(self.user)
-                events.append(('unread', unread, None))
+                events.append(("unread", unread, None))
             except Exception:
                 logger.exception(
-                    "Failed to send unread counts for user %s", user_id,
+                    "Failed to send unread counts for user %s",
+                    user_id,
                 )
             self._last_unread_push = now
 
@@ -106,28 +115,31 @@ class ChatSSEProvider(SSEProvider):
             .exclude(author_id=user_id)
             .exclude(uuid__in=self._seen_message_ids)
             .select_related(
-                'author', 'author__bot_profile',
-                'reply_to', 'reply_to__author',
-                'interaction', 'interaction__interacted_by',
+                "author",
+                "author__bot_profile",
+                "reply_to",
+                "reply_to__author",
+                "interaction",
+                "interaction__interacted_by",
             )
             .prefetch_related(
                 Prefetch(
-                    'reactions',
-                    queryset=Reaction.objects.select_related('user'),
+                    "reactions",
+                    queryset=Reaction.objects.select_related("user"),
                 ),
-                'attachments',
-                'link_previews__preview',
+                "attachments",
+                "link_previews__preview",
             )
-            .order_by('created_at')[:50]
+            .order_by("created_at")[:50]
         )
         for msg in new_messages:
             self._seen_message_ids.add(msg.uuid)
             data = {
-                'type': 'message',
-                'conversation_id': str(msg.conversation_id),
-                'message': MessageSerializer(msg).data,
+                "type": "message",
+                "conversation_id": str(msg.conversation_id),
+                "message": MessageSerializer(msg).data,
             }
-            events.append(('message', data, str(msg.uuid)))
+            events.append(("message", data, str(msg.uuid)))
             self._since = max(self._since, msg.created_at)
 
         # Edited messages
@@ -138,23 +150,23 @@ class ChatSSEProvider(SSEProvider):
                 edited_at__gt=self._since - timedelta(seconds=5),
             )
             .exclude(author_id=user_id)
-            .select_related('author')
-            .order_by('edited_at')[:50]
+            .select_related("author")
+            .order_by("edited_at")[:50]
         )
         for msg in edited_messages:
-            edit_key = f'{msg.uuid}:{msg.edited_at.isoformat()}'
+            edit_key = f"{msg.uuid}:{msg.edited_at.isoformat()}"
             if edit_key in self._seen_edit_keys:
                 continue
             self._seen_edit_keys.add(edit_key)
             data = {
-                'type': 'message_edited',
-                'conversation_id': str(msg.conversation_id),
-                'message_id': str(msg.uuid),
-                'body': msg.body,
-                'body_html': msg.body_html,
-                'edited_at': msg.edited_at.isoformat(),
+                "type": "message_edited",
+                "conversation_id": str(msg.conversation_id),
+                "message_id": str(msg.uuid),
+                "body": msg.body,
+                "body_html": msg.body_html,
+                "edited_at": msg.edited_at.isoformat(),
             }
-            events.append(('message_edited', data, None))
+            events.append(("message_edited", data, None))
 
         # Interaction updates (someone answered an ask_user_question prompt)
         updated_interactions = (
@@ -164,21 +176,21 @@ class ChatSSEProvider(SSEProvider):
                 interacted_at__gt=self._since - timedelta(seconds=5),
             )
             .exclude(interacted_by_id=user_id)
-            .select_related('message', 'interacted_by')
-            .order_by('interacted_at')[:50]
+            .select_related("message", "interacted_by")
+            .order_by("interacted_at")[:50]
         )
         for interaction in updated_interactions:
-            key = f'{interaction.uuid}:{interaction.interacted_at.isoformat()}'
+            key = f"{interaction.uuid}:{interaction.interacted_at.isoformat()}"
             if key in self._seen_interaction_keys:
                 continue
             self._seen_interaction_keys.add(key)
             data = {
-                'type': 'message_interaction_updated',
-                'conversation_id': str(interaction.message.conversation_id),
-                'message_id': str(interaction.message_id),
-                'interaction': MessageInteractionSerializer(interaction).data,
+                "type": "message_interaction_updated",
+                "conversation_id": str(interaction.message.conversation_id),
+                "message_id": str(interaction.message_id),
+                "interaction": MessageInteractionSerializer(interaction).data,
             }
-            events.append(('message_interaction_updated', data, None))
+            events.append(("message_interaction_updated", data, None))
 
         # Deleted messages
         deleted_messages = (
@@ -188,7 +200,7 @@ class ChatSSEProvider(SSEProvider):
                 deleted_at__gt=self._since - timedelta(seconds=5),
             )
             .exclude(author_id=user_id)
-            .order_by('deleted_at')[:50]
+            .order_by("deleted_at")[:50]
         )
         for msg in deleted_messages:
             del_key = str(msg.uuid)
@@ -196,11 +208,11 @@ class ChatSSEProvider(SSEProvider):
                 continue
             self._seen_delete_keys.add(del_key)
             data = {
-                'type': 'message_deleted',
-                'conversation_id': str(msg.conversation_id),
-                'message_id': str(msg.uuid),
+                "type": "message_deleted",
+                "conversation_id": str(msg.conversation_id),
+                "message_id": str(msg.uuid),
             }
-            events.append(('message_deleted', data, None))
+            events.append(("message_deleted", data, None))
 
         # Reactions
         new_reactions = (
@@ -210,23 +222,23 @@ class ChatSSEProvider(SSEProvider):
             )
             .exclude(user_id=user_id)
             .exclude(uuid__in=self._seen_reaction_ids)
-            .select_related('user', 'message')
-            .order_by('created_at')[:50]
+            .select_related("user", "message")
+            .order_by("created_at")[:50]
         )
         for reaction in new_reactions:
             self._seen_reaction_ids.add(reaction.uuid)
             data = {
-                'type': 'reaction',
-                'conversation_id': str(reaction.message.conversation_id),
-                'message_id': str(reaction.message.uuid),
-                'emoji': reaction.emoji,
-                'user': {
-                    'id': reaction.user.id,
-                    'username': reaction.user.username,
+                "type": "reaction",
+                "conversation_id": str(reaction.message.conversation_id),
+                "message_id": str(reaction.message.uuid),
+                "emoji": reaction.emoji,
+                "user": {
+                    "id": reaction.user.id,
+                    "username": reaction.user.username,
                 },
-                'action': 'added',
+                "action": "added",
             }
-            events.append(('reaction', data, None))
+            events.append(("reaction", data, None))
 
         # Pinned messages
         new_pins = (
@@ -236,21 +248,21 @@ class ChatSSEProvider(SSEProvider):
             )
             .exclude(pinned_by_id=user_id)
             .exclude(uuid__in=self._seen_pin_ids)
-            .select_related('pinned_by')
-            .order_by('created_at')[:50]
+            .select_related("pinned_by")
+            .order_by("created_at")[:50]
         )
         for pin in new_pins:
             self._seen_pin_ids.add(pin.uuid)
             data = {
-                'type': 'message_pinned',
-                'conversation_id': str(pin.conversation_id),
-                'message_id': str(pin.message_id),
-                'pinned_by': {
-                    'id': pin.pinned_by.id,
-                    'username': pin.pinned_by.username,
+                "type": "message_pinned",
+                "conversation_id": str(pin.conversation_id),
+                "message_id": str(pin.message_id),
+                "pinned_by": {
+                    "id": pin.pinned_by.id,
+                    "username": pin.pinned_by.username,
                 },
             }
-            events.append(('message_pinned', data, None))
+            events.append(("message_pinned", data, None))
 
         # Link previews
         new_link_previews = (
@@ -259,7 +271,7 @@ class ChatSSEProvider(SSEProvider):
                 created_at__gt=self._since - timedelta(seconds=5),
             )
             .exclude(uuid__in=self._seen_link_preview_ids)
-            .values_list('message__conversation_id', flat=True)
+            .values_list("message__conversation_id", flat=True)
             .distinct()[:50]
         )
         lp_conv_ids = set(new_link_previews)
@@ -268,15 +280,15 @@ class ChatSSEProvider(SSEProvider):
                 MessageLinkPreview.objects.filter(
                     message__conversation_id__in=lp_conv_ids,
                     created_at__gt=self._since - timedelta(seconds=5),
-                ).values_list('uuid', flat=True)
+                ).values_list("uuid", flat=True)
             )
             self._seen_link_preview_ids |= recent_lp_ids
             for conv_id in lp_conv_ids:
                 data = {
-                    'type': 'link_preview',
-                    'conversation_id': str(conv_id),
+                    "type": "link_preview",
+                    "conversation_id": str(conv_id),
                 }
-                events.append(('link_preview', data, None))
+                events.append(("link_preview", data, None))
 
         # Read receipts: detect members who read conversations since last poll
         recent_reads = (
@@ -286,7 +298,7 @@ class ChatSSEProvider(SSEProvider):
                 left_at__isnull=True,
             )
             .exclude(user_id=user_id)
-            .values_list('conversation_id', flat=True)
+            .values_list("conversation_id", flat=True)
             .distinct()
         )
         read_conv_ids = set(recent_reads)
@@ -294,9 +306,9 @@ class ChatSSEProvider(SSEProvider):
             self._last_read_check = timezone.now()
             for conv_id in read_conv_ids:
                 data = {
-                    'type': 'read',
-                    'conversation_id': str(conv_id),
+                    "type": "read",
+                    "conversation_id": str(conv_id),
                 }
-                events.append(('read', data, None))
+                events.append(("read", data, None))
 
         return events

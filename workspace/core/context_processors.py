@@ -17,20 +17,25 @@ def workspace_modules(request):
     changelog_unread = False
     if request.user.is_authenticated:
         onboarding_pending = not get_setting(
-            request.user, MODULE, ONBOARDING_COMPLETED, default=False,
+            request.user,
+            MODULE,
+            ONBOARDING_COMPLETED,
+            default=False,
         )
         if not onboarding_pending:
             latest = get_latest_version()
             if latest:
                 last_seen = get_setting(
-                    request.user, MODULE, CHANGELOG_LAST_SEEN_VERSION,
+                    request.user,
+                    MODULE,
+                    CHANGELOG_LAST_SEEN_VERSION,
                 )
                 changelog_unread = last_seen != latest
 
     return {
-        'workspace_active_modules': [asdict(m) for m in registry.get_active()],
-        'workspace_commands': [asdict(c) for c in registry.get_active_commands()],
-        'APP_VERSION': settings.APP_VERSION,
-        'CHANGELOG_UNREAD': changelog_unread,
-        'ONBOARDING_PENDING': onboarding_pending,
+        "workspace_active_modules": [asdict(m) for m in registry.get_active()],
+        "workspace_commands": [asdict(c) for c in registry.get_active_commands()],
+        "APP_VERSION": settings.APP_VERSION,
+        "CHANGELOG_UNREAD": changelog_unread,
+        "ONBOARDING_PENDING": onboarding_pending,
     }

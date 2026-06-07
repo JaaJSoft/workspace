@@ -6,6 +6,7 @@ both helpers work against the real app.
 
 Skipped unless ``E2E=1`` is set (see the base class docstring).
 """
+
 from __future__ import annotations
 
 from playwright.sync_api import expect
@@ -35,9 +36,7 @@ class LoginPageTests(PlaywrightTestCase):
         # `form.errors` is truthy. We match on the text, not the Tailwind
         # class, because the class may change without changing behavior.
         expect(
-            self.page.get_by_text(
-                "Invalid username or password", exact=False
-            )
+            self.page.get_by_text("Invalid username or password", exact=False)
         ).to_be_visible()
 
         # And we must still be on /login — the form didn't redirect.
@@ -55,9 +54,7 @@ class LoginPageTests(PlaywrightTestCase):
         self.page.goto(f"{self.live_server_url}/login?next=/calendar")
         self.page.locator('input[name="username"]').fill("carol")
         self.page.locator('input[name="password"]').fill("pass12345")
-        self.page.get_by_role(
-            "button", name=re.compile("Sign In", re.I)
-        ).click()
+        self.page.get_by_role("button", name=re.compile("Sign In", re.I)).click()
 
         # After submit we should land on /calendar, not the LOGIN_REDIRECT_URL.
         self.page.wait_for_url(lambda url: "/login" not in url)

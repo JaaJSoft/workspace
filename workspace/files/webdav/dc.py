@@ -13,6 +13,7 @@ _auth_lock = threading.Lock()
 _AUTH_TTL = 60  # seconds
 _CACHE_KEY_SECRET = os.urandom(32)
 
+
 # TODO find a better way !!!!!
 class DjangoBasicDomainController(BaseDomainController):
     """Authenticate WebDAV requests via Django's ``authenticate()``.

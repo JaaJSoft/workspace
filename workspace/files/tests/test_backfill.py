@@ -5,7 +5,12 @@ from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.test import TestCase
 
-from workspace.chat.models import Conversation, ConversationMember, Message, MessageAttachment
+from workspace.chat.models import (
+    Conversation,
+    ConversationMember,
+    Message,
+    MessageAttachment,
+)
 from workspace.files.models import File
 
 User = get_user_model()
@@ -101,9 +106,13 @@ class BackfillFileTypesTest(TestCase):
 class BackfillAttachmentTypesTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="testuser", password="pass")
-        conv = Conversation.objects.create(title="test", kind=Conversation.Kind.GROUP, created_by=self.user)
+        conv = Conversation.objects.create(
+            title="test", kind=Conversation.Kind.GROUP, created_by=self.user
+        )
         ConversationMember.objects.create(conversation=conv, user=self.user)
-        self.message = Message.objects.create(conversation=conv, author=self.user, body="hi")
+        self.message = Message.objects.create(
+            conversation=conv, author=self.user, body="hi"
+        )
 
     def _create_attachment(self, name, mime_type, content=None, **kwargs):
         att = MessageAttachment(
@@ -141,7 +150,9 @@ class BackfillAttachmentTypesTest(TestCase):
 
     def test_skips_already_labeled_attachment(self):
         """Attachments that already have type and category are skipped."""
-        att = self._create_attachment("song.mp3", "audio/mpeg", type="mp3", category="audio")
+        att = self._create_attachment(
+            "song.mp3", "audio/mpeg", type="mp3", category="audio"
+        )
 
         out = StringIO()
         call_command("backfill_file_types", stdout=out)

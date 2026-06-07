@@ -21,14 +21,14 @@ class CopyMixin:
             "The copy is placed in the specified parent folder (or root if not specified)."
         ),
         request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'parent': {
-                        'type': 'string',
-                        'format': 'uuid',
-                        'nullable': True,
-                        'description': 'Target parent folder UUID (null for root)',
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "parent": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": True,
+                        "description": "Target parent folder UUID (null for root)",
                     },
                 },
             },
@@ -41,11 +41,11 @@ class CopyMixin:
             400: OpenApiResponse(description="Invalid request."),
         },
     )
-    @action(detail=True, methods=['post'], url_path='copy')
+    @action(detail=True, methods=["post"], url_path="copy")
     def copy(self, request, uuid=None):
         """Copy a file or folder to a new location."""
         file_obj = self.get_object()
-        parent_uuid = request.data.get('parent')
+        parent_uuid = request.data.get("parent")
 
         # Resolve parent folder. Use the access-aware permission check rather
         # than ``owner=request.user``: group members must be able to copy into
@@ -56,8 +56,8 @@ class CopyMixin:
             parsed_parent_uuid = parse_uuid_or_none(parent_uuid)
             if parsed_parent_uuid is None:
                 return Response(
-                    {'detail': 'Parent folder not found.'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"detail": "Parent folder not found."},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
             parent = File.objects.filter(
                 uuid=parsed_parent_uuid,
@@ -70,8 +70,8 @@ class CopyMixin:
                 # Same generic 400 whether the folder is missing or the user
                 # has no write access - avoids leaking folder existence.
                 return Response(
-                    {'detail': 'Parent folder not found.'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"detail": "Parent folder not found."},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
         # Cannot copy into itself or its descendants. `path` is denormalized
@@ -82,12 +82,14 @@ class CopyMixin:
             parent_path = parent.path or parent.get_path()
             if parent.uuid == file_obj.uuid or parent_path.startswith(f"{file_path}/"):
                 return Response(
-                    {'detail': 'Cannot copy folder into itself or its descendants.'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"detail": "Cannot copy folder into itself or its descendants."},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
         # Perform the copy
-        copied = FileService.copy(file_obj, parent, request.user, acting_user=request.user)
+        copied = FileService.copy(
+            file_obj, parent, request.user, acting_user=request.user
+        )
         # Re-fetch through get_queryset() so the instance carries the
         # annotations FileSerializer now requires.
         annotated = self.get_queryset().filter(pk=copied.pk).first() or copied

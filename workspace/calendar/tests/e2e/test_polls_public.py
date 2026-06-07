@@ -8,6 +8,7 @@ open the guest URL, cast a vote, and verify the success banner.
 If this test passes the whole Playwright + Django live-server + static
 files pipeline is working end-to-end.
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -20,7 +21,6 @@ from workspace.common.tests.e2e.base import PlaywrightTestCase
 
 
 class SharedPollVotingTests(PlaywrightTestCase):
-
     def _make_open_poll(self, *, title: str = "Team lunch") -> Poll:
         """Create an open poll with two future slots, owned by a throwaway user."""
         owner = self.create_user(username="pollowner")

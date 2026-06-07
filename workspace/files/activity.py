@@ -5,19 +5,19 @@ from workspace.core.activity_registry import ActivityProvider
 
 
 class FilesActivityProvider(ActivityProvider):
-
     def _file_visibility_filter(self, user_id, viewer_id):
         """Return a Q filter on the File model restricting to files visible to viewer."""
         if viewer_id is None or viewer_id == user_id:
             return Q()
         from workspace.files.models import FileShare
+
         q = Q(owner_id=viewer_id)
-        share_filter = {'shared_with_id': viewer_id}
+        share_filter = {"shared_with_id": viewer_id}
         if user_id is not None:
-            share_filter['file__owner_id'] = user_id
+            share_filter["file__owner_id"] = user_id
         shared_file_ids = FileShare.objects.filter(
             **share_filter,
-        ).values_list('file_id', flat=True)
+        ).values_list("file_id", flat=True)
         return q | Q(pk__in=shared_file_ids)
 
     def _event_visibility_filter(self, user_id, viewer_id):
@@ -25,13 +25,14 @@ class FilesActivityProvider(ActivityProvider):
         if viewer_id is None or viewer_id == user_id:
             return Q()
         from workspace.files.models import FileShare
+
         q = Q(file__owner_id=viewer_id)
-        share_filter = {'shared_with_id': viewer_id}
+        share_filter = {"shared_with_id": viewer_id}
         if user_id is not None:
-            share_filter['file__owner_id'] = user_id
+            share_filter["file__owner_id"] = user_id
         shared_file_ids = FileShare.objects.filter(
             **share_filter,
-        ).values_list('file_id', flat=True)
+        ).values_list("file_id", flat=True)
         return q | Q(file_id__in=shared_file_ids)
 
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
@@ -51,11 +52,16 @@ class FilesActivityProvider(ActivityProvider):
             qs = qs.filter(file__owner_id=user_id)
         qs = qs.filter(self._event_visibility_filter(user_id, viewer_id))
 
-        rows = qs.annotate(day=TruncDate('created_at')).values('day').annotate(
-            count=Count('pk'),
-        ).order_by('day')
+        rows = (
+            qs.annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(
+                count=Count("pk"),
+            )
+            .order_by("day")
+        )
 
-        return {row['day']: row['count'] for row in rows}
+        return {row["day"]: row["count"] for row in rows}
 
     def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
         from workspace.files.models import File, FileEvent
@@ -68,9 +74,13 @@ class FilesActivityProvider(ActivityProvider):
         )
         if user_id is not None:
             qs = qs.filter(file__owner_id=user_id)
-        qs = qs.filter(
-            self._event_visibility_filter(user_id, viewer_id),
-        ).select_related('actor', 'file').order_by('-created_at')[offset:offset + limit]
+        qs = (
+            qs.filter(
+                self._event_visibility_filter(user_id, viewer_id),
+            )
+            .select_related("actor", "file")
+            .order_by("-created_at")[offset : offset + limit]
+        )
 
         events = []
         for ev in qs:
@@ -81,9 +91,9 @@ class FilesActivityProvider(ActivityProvider):
             # the actor block when it's missing.
             if ev.actor is not None:
                 actor_data = {
-                    'id': ev.actor.pk,
-                    'username': ev.actor.username,
-                    'full_name': ev.actor.get_full_name(),
+                    "id": ev.actor.pk,
+                    "username": ev.actor.username,
+                    "full_name": ev.actor.get_full_name(),
                 }
             else:
                 actor_data = None
@@ -92,17 +102,20 @@ class FilesActivityProvider(ActivityProvider):
             # falling back to the files root for top-level files.
             parent_id = ev.file.parent_id
             url = (
-                f'/files/{parent_id}?open={ev.file.pk}'
-                if parent_id else f'/files?open={ev.file.pk}'
+                f"/files/{parent_id}?open={ev.file.pk}"
+                if parent_id
+                else f"/files?open={ev.file.pk}"
             )
-            events.append({
-                'icon': ev.icon,
-                'label': ev.short_label,
-                'description': ev.file.name,
-                'timestamp': ev.created_at,
-                'url': url,
-                'actor': actor_data,
-            })
+            events.append(
+                {
+                    "icon": ev.icon,
+                    "label": ev.short_label,
+                    "description": ev.file.name,
+                    "timestamp": ev.created_at,
+                    "url": url,
+                    "actor": actor_data,
+                }
+            )
         return events
 
     def get_stats(self, user_id, *, viewer_id=None):
@@ -117,10 +130,10 @@ class FilesActivityProvider(ActivityProvider):
         qs = qs.filter(self._file_visibility_filter(user_id, viewer_id))
 
         agg = qs.aggregate(
-            total_files=Count('pk'),
-            total_size=Sum('size'),
+            total_files=Count("pk"),
+            total_size=Sum("size"),
         )
         return {
-            'total_files': agg['total_files'] or 0,
-            'total_size': agg['total_size'] or 0,
+            "total_files": agg["total_files"] or 0,
+            "total_size": agg["total_size"] or 0,
         }

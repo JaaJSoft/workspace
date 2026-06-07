@@ -11,6 +11,7 @@ so Alpine's first binding pass paints ``w-16`` directly with no transition.
 
 Skipped unless ``E2E=1`` is set.
 """
+
 from __future__ import annotations
 
 import re
@@ -18,7 +19,6 @@ import re
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-
 
 MOBILE_VIEWPORT = {"width": 375, "height": 667}
 
@@ -72,6 +72,5 @@ class ChatMobileSidebarTests(PlaywrightTestCase):
         expanded_snapshots = [c for c in history if "w-80" in c.split()]
         assert not expanded_snapshots, (
             "sidebar rendered expanded (w-80) on mobile during load — "
-            "flicker regression. Class history:\n  "
-            + "\n  ".join(history)
+            "flicker regression. Class history:\n  " + "\n  ".join(history)
         )

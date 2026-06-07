@@ -19,13 +19,13 @@ _USAGE_STATS_TTL = 60  # seconds
 def get_sources():
     """Return list of available activity sources with metadata."""
     return [
-        {'slug': info.slug, 'label': info.label, 'icon': info.icon, 'color': info.color}
+        {"slug": info.slug, "label": info.label, "icon": info.icon, "color": info.color}
         for info in activity_registry.get_all().values()
     ]
 
 
 @cached(
-    key=lambda user_id, viewer_id=None: f'activity:stats:{user_id}:{viewer_id}',
+    key=lambda user_id, viewer_id=None: f"activity:stats:{user_id}:{viewer_id}",
     ttl=_USAGE_STATS_TTL,
 )
 def get_usage_stats(user_id, viewer_id=None):
@@ -76,19 +76,27 @@ def get_recent_events(
     )
 
     if exclude_user_id is not None:
-        events = [e for e in events if (e.get('actor') or {}).get('id') != exclude_user_id]
+        events = [
+            e for e in events if (e.get("actor") or {}).get("id") != exclude_user_id
+        ]
 
     if search:
         q = search.lower()
         events = [
-            e for e in events
-            if q in e.get('description', '').lower()
-            or q in e.get('label', '').lower()
-            or q in (e.get('actor', {}).get('username', '') if isinstance(e.get('actor'), dict) else '').lower()
+            e
+            for e in events
+            if q in e.get("description", "").lower()
+            or q in e.get("label", "").lower()
+            or q
+            in (
+                e.get("actor", {}).get("username", "")
+                if isinstance(e.get("actor"), dict)
+                else ""
+            ).lower()
         ]
 
     if needs_post_filter:
-        events = events[offset:offset + limit]
+        events = events[offset : offset + limit]
     return events
 
 
@@ -96,27 +104,27 @@ def annotate_time_ago(events):
     """Add a human-readable 'time_ago' field to each event dict in place."""
     now = timezone.now()
     for event in events:
-        ts = event.get('timestamp')
+        ts = event.get("timestamp")
         if not ts:
-            event['time_ago'] = ''
+            event["time_ago"] = ""
             continue
         diff = (now - ts).total_seconds()
         if diff < 60:
-            event['time_ago'] = 'now'
+            event["time_ago"] = "now"
         elif diff < 3600:
-            event['time_ago'] = f'{int(diff // 60)}m'
+            event["time_ago"] = f"{int(diff // 60)}m"
         elif diff < 86400:
-            event['time_ago'] = f'{int(diff // 3600)}h'
+            event["time_ago"] = f"{int(diff // 3600)}h"
         elif diff < 604800:
-            event['time_ago'] = f'{int(diff // 86400)}d'
+            event["time_ago"] = f"{int(diff // 86400)}d"
         else:
-            event['time_ago'] = ts.strftime('%b %d')
+            event["time_ago"] = ts.strftime("%b %d")
     return events
 
 
 def serialize_timestamps(events):
     """Convert datetime timestamps to ISO strings for JSON API responses."""
     for event in events:
-        if hasattr(event.get('timestamp'), 'isoformat'):
-            event['timestamp'] = event['timestamp'].isoformat()
+        if hasattr(event.get("timestamp"), "isoformat"):
+            event["timestamp"] = event["timestamp"].isoformat()
     return events

@@ -15,7 +15,7 @@ from .services.notifications import notify_conversation_members
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class TypingIndicatorView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -24,23 +24,25 @@ class TypingIndicatorView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {'detail': 'Not a member.'},
+                {"detail": "Not a member."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         from .services.typing import set_typing
+
         set_typing(
             conversation_id,
             request.user.id,
             request.user.get_full_name() or request.user.username,
         )
         notify_conversation_members(
-            Conversation(pk=conversation_id), exclude_user=request.user,
+            Conversation(pk=conversation_id),
+            exclude_user=request.user,
         )
-        return Response({'status': 'ok'})
+        return Response({"status": "ok"})
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class UnreadCountsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -49,12 +51,13 @@ class UnreadCountsView(APIView):
         return Response(get_unread_counts(request.user))
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class ConversationClearView(APIView):
     """DELETE /api/v1/chat/conversations/<id>/messages - Clear all messages and attachments."""
+
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(tags=['Chat'], summary="Clear all messages in a conversation")
+    @extend_schema(tags=["Chat"], summary="Clear all messages in a conversation")
     def delete(self, request, conversation_id):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
@@ -66,8 +69,8 @@ class ConversationClearView(APIView):
         # remove them from storage AFTER the DB transaction commits. Otherwise
         # a rollback would leave attachment rows pointing at missing blobs.
         attachment_files = [
-            att.file for att
-            in MessageAttachment.objects.filter(message__in=messages).iterator()
+            att.file
+            for att in MessageAttachment.objects.filter(message__in=messages).iterator()
             if att.file
         ]
 
@@ -84,7 +87,7 @@ class ConversationClearView(APIView):
                     try:
                         f.delete(save=False)
                     except OSError:
-                        logger.warning('Could not delete file %s', scrub(f.name))
+                        logger.warning("Could not delete file %s", scrub(f.name))
 
             transaction.on_commit(_cleanup_files)
 
@@ -93,4 +96,4 @@ class ConversationClearView(APIView):
             exclude_user=request.user,
         )
 
-        return Response({'deleted': count}, status=status.HTTP_200_OK)
+        return Response({"deleted": count}, status=status.HTTP_200_OK)

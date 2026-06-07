@@ -30,16 +30,20 @@ class CommentsMixin:
             201: OpenApiResponse(response=FileCommentSerializer),
         },
     )
-    @action(detail=True, methods=['get', 'post'], url_path='comments')
+    @action(detail=True, methods=["get", "post"], url_path="comments")
     def comments(self, request, uuid=None):
         """List or create comments on a file/folder."""
         file_obj, perm = self._resolve_file_with_access(uuid)
 
-        if request.method == 'GET':
-            qs = FileComment.objects.filter(
-                file=file_obj,
-                deleted_at__isnull=True,
-            ).select_related('author').order_by('created_at')
+        if request.method == "GET":
+            qs = (
+                FileComment.objects.filter(
+                    file=file_obj,
+                    deleted_at__isnull=True,
+                )
+                .select_related("author")
+                .order_by("created_at")
+            )
             serializer = FileCommentSerializer(qs, many=True)
             return Response(serializer.data)
 
@@ -49,21 +53,27 @@ class CommentsMixin:
         comment = FileComment.objects.create(
             file=file_obj,
             author=request.user,
-            body=create_ser.validated_data['body'],
+            body=create_ser.validated_data["body"],
         )
         recipients = set()
         if file_obj.owner != request.user:
             recipients.add(file_obj.owner)
-        commenter_ids = FileComment.objects.filter(
-            file=file_obj, deleted_at__isnull=True,
-        ).exclude(author=request.user).values_list('author', flat=True).distinct()
+        commenter_ids = (
+            FileComment.objects.filter(
+                file=file_obj,
+                deleted_at__isnull=True,
+            )
+            .exclude(author=request.user)
+            .values_list("author", flat=True)
+            .distinct()
+        )
         recipients.update(User.objects.filter(pk__in=commenter_ids))
         if recipients:
             notify_many(
                 recipients=list(recipients),
-                origin='files',
+                origin="files",
                 title=f'{request.user.username} commented on "{file_obj.name}"',
-                url=f'/files/{file_obj.parent_id}' if file_obj.parent_id else '/files',
+                url=f"/files/{file_obj.parent_id}" if file_obj.parent_id else "/files",
                 actor=request.user,
             )
         serializer = FileCommentSerializer(comment)
@@ -82,34 +92,43 @@ class CommentsMixin:
     )
     @action(
         detail=True,
-        methods=['patch', 'delete'],
-        url_path=r'comments/(?P<comment_uuid>[0-9a-f-]+)',
+        methods=["patch", "delete"],
+        url_path=r"comments/(?P<comment_uuid>[0-9a-f-]+)",
     )
     def comment_detail(self, request, uuid=None, comment_uuid=None):
         """Edit or soft-delete a comment."""
         self._resolve_file_with_access(uuid)
 
-        comment = FileComment.objects.filter(
-            uuid=comment_uuid,
-            file_id=uuid,
-            deleted_at__isnull=True,
-        ).select_related('author').first()
+        comment = (
+            FileComment.objects.filter(
+                uuid=comment_uuid,
+                file_id=uuid,
+                deleted_at__isnull=True,
+            )
+            .select_related("author")
+            .first()
+        )
         if not comment:
-            return Response({'detail': 'Comment not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Comment not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         if comment.author_id != request.user.pk:
-            return Response({'detail': 'You can only modify your own comments.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "You can only modify your own comments."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-        if request.method == 'DELETE':
+        if request.method == "DELETE":
             comment.deleted_at = timezone.now()
-            comment.save(update_fields=['deleted_at'])
+            comment.save(update_fields=["deleted_at"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         # PATCH
         edit_ser = FileCommentEditSerializer(data=request.data)
         edit_ser.is_valid(raise_exception=True)
-        comment.body = edit_ser.validated_data['body']
+        comment.body = edit_ser.validated_data["body"]
         comment.edited_at = timezone.now()
-        comment.save(update_fields=['body', 'edited_at'])
+        comment.save(update_fields=["body", "edited_at"])
         serializer = FileCommentSerializer(comment)
         return Response(serializer.data)

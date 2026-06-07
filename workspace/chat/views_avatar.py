@@ -2,7 +2,7 @@ import logging
 
 from django.core.files.storage import default_storage
 from django.http import FileResponse, HttpResponse
-from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -22,7 +22,7 @@ AVATAR_MAX_SIZE = 10 * 1024 * 1024  # 10 MB
 AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class GroupAvatarUploadView(APIView):
     """Upload or delete a group conversation's avatar."""
 
@@ -57,14 +57,14 @@ class GroupAvatarUploadView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {'detail': 'Not a member of this conversation.'},
+                {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         conversation = Conversation.objects.get(pk=conversation_id)
         if conversation.kind != Conversation.Kind.GROUP:
             return Response(
-                {'detail': 'Avatars are only supported for group conversations.'},
+                {"detail": "Avatars are only supported for group conversations."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -92,7 +92,7 @@ class GroupAvatarUploadView(APIView):
             crop_y = float(request.data.get("crop_y", 0))
             crop_w = float(request.data.get("crop_w", 0))
             crop_h = float(request.data.get("crop_h", 0))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return Response(
                 {"errors": ["Invalid crop coordinates."]},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -106,9 +106,14 @@ class GroupAvatarUploadView(APIView):
 
         try:
             group_avatar_service.process_and_save_group_avatar(
-                conversation, image, crop_x, crop_y, crop_w, crop_h,
+                conversation,
+                image,
+                crop_x,
+                crop_y,
+                crop_w,
+                crop_h,
             )
-        except (ValueError, OSError):
+        except ValueError, OSError:
             # PIL raises UnidentifiedImageError (OSError) on unrecognised
             # bytes and OSError on truncated files; ValueError covers
             # crop coordinates that produce a zero-size region. Map them
@@ -138,14 +143,14 @@ class GroupAvatarUploadView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {'detail': 'Not a member of this conversation.'},
+                {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         conversation = Conversation.objects.get(pk=conversation_id)
         if conversation.kind != Conversation.Kind.GROUP:
             return Response(
-                {'detail': 'Avatars are only supported for group conversations.'},
+                {"detail": "Avatars are only supported for group conversations."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -153,7 +158,7 @@ class GroupAvatarUploadView(APIView):
         return Response({"message": "Group avatar removed."})
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class GroupAvatarRetrieveView(CacheControlMixin, APIView):
     """Serve a group conversation's avatar image (public).
 
@@ -190,7 +195,7 @@ class GroupAvatarRetrieveView(CacheControlMixin, APIView):
         # avoids a TOCTOU race between exists() and open().
         try:
             avatar_file = default_storage.open(path, "rb")
-        except (FileNotFoundError, OSError):
+        except FileNotFoundError, OSError:
             return HttpResponse(status=404)
         response = FileResponse(avatar_file, content_type="image/webp")
         if etag:

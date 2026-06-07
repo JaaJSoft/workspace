@@ -22,9 +22,11 @@ class PreCheckTests(TestCase):
 
     def test_rejects_non_sqlite_source(self):
         mock_conns = MagicMock()
-        mock_conns.__getitem__ = MagicMock(return_value=MagicMock(
-            settings_dict={"ENGINE": "django.db.backends.postgresql"},
-        ))
+        mock_conns.__getitem__ = MagicMock(
+            return_value=MagicMock(
+                settings_dict={"ENGINE": "django.db.backends.postgresql"},
+            )
+        )
         with patch(f"{MODULE}.connections", mock_conns):
             with self.assertRaises(CommandError) as ctx:
                 call_command("migrate_to_postgres", "postgres://u:p@host/db")
@@ -70,9 +72,7 @@ class CountDumpTests(TestCase):
 
     def test_counts_records(self):
         data = [{"model": "auth.user", "pk": 1}, {"model": "auth.user", "pk": 2}]
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(data, f)
             f.flush()
             path = Path(f.name)
@@ -84,9 +84,7 @@ class CountDumpTests(TestCase):
             path.unlink(missing_ok=True)
 
     def test_empty_dump(self):
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump([], f)
             f.flush()
             path = Path(f.name)
@@ -117,9 +115,11 @@ class DryRunTests(TestCase):
         cmd.stderr = StringIO()
 
         mock_conns = MagicMock()
-        mock_conns.__getitem__ = MagicMock(return_value=MagicMock(
-            settings_dict={"ENGINE": "django.db.backends.sqlite3"},
-        ))
+        mock_conns.__getitem__ = MagicMock(
+            return_value=MagicMock(
+                settings_dict={"ENGINE": "django.db.backends.sqlite3"},
+            )
+        )
         mock_conns.databases = {}
 
         mock_call.side_effect = _empty_dump
@@ -155,9 +155,11 @@ class FullMigrationTests(TestCase):
         cmd.stderr = StringIO()
 
         mock_conns = MagicMock()
-        mock_conns.__getitem__ = MagicMock(return_value=MagicMock(
-            settings_dict={"ENGINE": "django.db.backends.sqlite3"},
-        ))
+        mock_conns.__getitem__ = MagicMock(
+            return_value=MagicMock(
+                settings_dict={"ENGINE": "django.db.backends.sqlite3"},
+            )
+        )
         mock_conns.databases = {}
 
         mock_call.side_effect = _empty_dump
@@ -187,9 +189,11 @@ class FullMigrationTests(TestCase):
         cmd.stderr = StringIO()
 
         mock_conns = MagicMock()
-        mock_conns.__getitem__ = MagicMock(return_value=MagicMock(
-            settings_dict={"ENGINE": "django.db.backends.sqlite3"},
-        ))
+        mock_conns.__getitem__ = MagicMock(
+            return_value=MagicMock(
+                settings_dict={"ENGINE": "django.db.backends.sqlite3"},
+            )
+        )
         mock_conns.databases = {}
 
         mock_call.side_effect = _empty_dump
@@ -207,9 +211,9 @@ class FullMigrationTests(TestCase):
                 keep_dump=False,
             )
 
-        loaddata_call = [
-            c for c in mock_call.call_args_list if c[0][0] == "loaddata"
-        ][0]
+        loaddata_call = [c for c in mock_call.call_args_list if c[0][0] == "loaddata"][
+            0
+        ]
         self.assertEqual(loaddata_call[1]["database"], TARGET_ALIAS)
 
     @patch(f"{MODULE}.call_command")
@@ -219,9 +223,11 @@ class FullMigrationTests(TestCase):
         cmd.stderr = StringIO()
 
         mock_conns = MagicMock()
-        mock_conns.__getitem__ = MagicMock(return_value=MagicMock(
-            settings_dict={"ENGINE": "django.db.backends.sqlite3"},
-        ))
+        mock_conns.__getitem__ = MagicMock(
+            return_value=MagicMock(
+                settings_dict={"ENGINE": "django.db.backends.sqlite3"},
+            )
+        )
         mock_conns.databases = {}
 
         # Need to capture the dump file path - dumpdata writes via ``stdout``
@@ -278,9 +284,11 @@ class SourceMigrationsPrecheckTests(TestCase):
         cmd.stderr = StringIO()
 
         mock_conns = MagicMock()
-        mock_conns.__getitem__ = MagicMock(return_value=MagicMock(
-            settings_dict={"ENGINE": "django.db.backends.sqlite3"},
-        ))
+        mock_conns.__getitem__ = MagicMock(
+            return_value=MagicMock(
+                settings_dict={"ENGINE": "django.db.backends.sqlite3"},
+            )
+        )
         mock_conns.databases = {}
 
         with (
@@ -311,9 +319,11 @@ class SourceMigrationsPrecheckTests(TestCase):
         cmd.stderr = StringIO()
 
         mock_conns = MagicMock()
-        mock_conns.__getitem__ = MagicMock(return_value=MagicMock(
-            settings_dict={"ENGINE": "django.db.backends.sqlite3"},
-        ))
+        mock_conns.__getitem__ = MagicMock(
+            return_value=MagicMock(
+                settings_dict={"ENGINE": "django.db.backends.sqlite3"},
+            )
+        )
         mock_conns.databases = {}
 
         def fake_call_command(name, *args, **kwargs):
@@ -347,9 +357,11 @@ class TruncateAndSequenceResetTests(TestCase):
         cmd.stderr = StringIO()
 
         mock_conns = MagicMock()
-        mock_conns.__getitem__ = MagicMock(return_value=MagicMock(
-            settings_dict={"ENGINE": "django.db.backends.sqlite3"},
-        ))
+        mock_conns.__getitem__ = MagicMock(
+            return_value=MagicMock(
+                settings_dict={"ENGINE": "django.db.backends.sqlite3"},
+            )
+        )
         mock_conns.databases = {}
 
         ordering = []

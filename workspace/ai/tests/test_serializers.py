@@ -12,7 +12,7 @@ class AITaskResultHtmlEscapingTests(TestCase):
     (LLM-produced, attacker-influenced) result must be escaped, not executed."""
 
     def setUp(self):
-        self.user = User.objects.create_user(username='a', password='p')
+        self.user = User.objects.create_user(username="a", password="p")
 
     def _result_html(self, *, task_type, result, action=None):
         task = AITask.objects.create(
@@ -20,39 +20,39 @@ class AITaskResultHtmlEscapingTests(TestCase):
             task_type=task_type,
             status=AITask.Status.COMPLETED,
             result=result,
-            input_data={'action': action} if action else {},
+            input_data={"action": action} if action else {},
         )
-        return AITaskSerializer(task).data['result_html']
+        return AITaskSerializer(task).data["result_html"]
 
     def test_summarize_escapes_raw_html(self):
         html = self._result_html(
             task_type=AITask.TaskType.SUMMARIZE,
-            result='Hi <img src=x onerror=alert(1)> there',
+            result="Hi <img src=x onerror=alert(1)> there",
         )
-        self.assertNotIn('<img', html)
-        self.assertIn('&lt;img', html)
+        self.assertNotIn("<img", html)
+        self.assertIn("&lt;img", html)
 
     def test_editor_explain_escapes_raw_html(self):
         html = self._result_html(
             task_type=AITask.TaskType.EDITOR,
-            action='explain',
-            result='<script>alert(1)</script>',
+            action="explain",
+            result="<script>alert(1)</script>",
         )
-        self.assertNotIn('<script>', html)
-        self.assertIn('&lt;script&gt;', html)
+        self.assertNotIn("<script>", html)
+        self.assertIn("&lt;script&gt;", html)
 
     def test_editor_summarize_escapes_raw_html(self):
         html = self._result_html(
             task_type=AITask.TaskType.EDITOR,
-            action='summarize',
-            result='Hi <img src=x onerror=alert(1)> there',
+            action="summarize",
+            result="Hi <img src=x onerror=alert(1)> there",
         )
-        self.assertNotIn('<img', html)
-        self.assertIn('&lt;img', html)
+        self.assertNotIn("<img", html)
+        self.assertIn("&lt;img", html)
 
     def test_markdown_still_renders(self):
         html = self._result_html(
             task_type=AITask.TaskType.SUMMARIZE,
-            result='**bold** text',
+            result="**bold** text",
         )
-        self.assertIn('<strong>bold</strong>', html)
+        self.assertIn("<strong>bold</strong>", html)

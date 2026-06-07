@@ -14,6 +14,7 @@ it. It catches the regression introduced when a ``<dialog>`` is swapped
 for a custom ``<div>`` overlay (losing the native handler) and the dev
 forgets to wire an explicit ESC binding.
 """
+
 from __future__ import annotations
 
 from playwright.sync_api import expect

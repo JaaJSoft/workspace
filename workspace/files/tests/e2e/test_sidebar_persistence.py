@@ -13,6 +13,7 @@ forgets to read it back on init — F5 silently reverts the sidebar to
 its default expanded state. Same shape as the "F5 reverts my setting"
 class documented in CLAUDE.md, but for a browser-local store.
 """
+
 from __future__ import annotations
 
 import re
@@ -59,9 +60,7 @@ class FilesSidebarPersistenceTests(PlaywrightTestCase):
         # side. If this assertion ever fails, it means ``toggleCollapse``
         # was refactored away from ``localStorage`` and the rest of
         # the test would be measuring nothing.
-        stored = self.page.evaluate(
-            "() => localStorage.getItem('sidebarCollapsed')"
-        )
+        stored = self.page.evaluate("() => localStorage.getItem('sidebarCollapsed')")
         assert stored == "true", (
             f"expected localStorage['sidebarCollapsed'] = 'true' after click, "
             f"got {stored!r}"

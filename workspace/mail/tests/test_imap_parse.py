@@ -12,23 +12,25 @@ User = get_user_model()
 class ImapParseTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
-            username='parsertestuser', email='parser@test.com', password='pass123',
+            username="parsertestuser",
+            email="parser@test.com",
+            password="pass123",
         )
         self.account = MailAccount.objects.create(
             owner=self.user,
-            email='parser@example.com',
-            imap_host='imap.example.com',
+            email="parser@example.com",
+            imap_host="imap.example.com",
             imap_use_ssl=True,
-            smtp_host='smtp.example.com',
-            username='parser@example.com',
+            smtp_host="smtp.example.com",
+            username="parser@example.com",
         )
-        self.account.set_password('secret')
+        self.account.set_password("secret")
         self.account.save()
         self.folder = MailFolder.objects.create(
             account=self.account,
-            name='INBOX',
-            display_name='Inbox',
-            folder_type='inbox',
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
         )
 
     def test_in_reply_to_header_is_captured(self):
@@ -44,8 +46,8 @@ class ImapParseTests(TestCase):
             b"\r\n"
             b"Sure, 3pm works.\r\n"
         )
-        msg = _parse_message(raw, self.account, self.folder, uid=42, flags_str='')
-        self.assertEqual(msg.in_reply_to, '<parent@example.com>')
+        msg = _parse_message(raw, self.account, self.folder, uid=42, flags_str="")
+        self.assertEqual(msg.in_reply_to, "<parent@example.com>")
 
     def test_in_reply_to_absent_defaults_to_empty(self):
         raw = (
@@ -55,5 +57,5 @@ class ImapParseTests(TestCase):
             b"\r\n"
             b"Body\r\n"
         )
-        msg = _parse_message(raw, self.account, self.folder, uid=43, flags_str='')
-        self.assertEqual(msg.in_reply_to, '')
+        msg = _parse_message(raw, self.account, self.folder, uid=43, flags_str="")
+        self.assertEqual(msg.in_reply_to, "")

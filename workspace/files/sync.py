@@ -37,7 +37,9 @@ class FileSyncService:
     def sync_user_recursive(self, user) -> SyncResult:
         """Full recursive sync for a single user."""
         result = SyncResult()
-        user_dir = os.path.join(default_storage.location, 'files', 'users', user.username)
+        user_dir = os.path.join(
+            default_storage.location, "files", "users", user.username
+        )
 
         if not os.path.isdir(user_dir):
             return result
@@ -46,7 +48,7 @@ class FileSyncService:
             user=user,
             disk_path=user_dir,
             parent_db=None,
-            storage_prefix=f'files/users/{user.username}',
+            storage_prefix=f"files/users/{user.username}",
             result=result,
         )
         return result
@@ -56,14 +58,21 @@ class FileSyncService:
         result = SyncResult()
 
         if parent_db is None:
-            disk_path = os.path.join(default_storage.location, 'files', 'users', user.username)
-            storage_prefix = f'files/users/{user.username}'
+            disk_path = os.path.join(
+                default_storage.location, "files", "users", user.username
+            )
+            storage_prefix = f"files/users/{user.username}"
         else:
             disk_path = os.path.join(
-                default_storage.location, 'files', 'users', user.username,
-                *parent_db.path.split('/') if parent_db.path else [parent_db.name],
+                default_storage.location,
+                "files",
+                "users",
+                user.username,
+                *parent_db.path.split("/") if parent_db.path else [parent_db.name],
             )
-            storage_prefix = f'files/users/{user.username}/{parent_db.path or parent_db.name}'
+            storage_prefix = (
+                f"files/users/{user.username}/{parent_db.path or parent_db.name}"
+            )
 
         if not os.path.isdir(disk_path):
             return result
@@ -71,7 +80,9 @@ class FileSyncService:
         self._sync_one_level(user, disk_path, parent_db, storage_prefix, result)
         return result
 
-    def _sync_directory_recursive(self, user, disk_path, parent_db, storage_prefix, result):
+    def _sync_directory_recursive(
+        self, user, disk_path, parent_db, storage_prefix, result
+    ):
         """Sync one directory level, then recurse into subdirectories."""
         self._sync_one_level(user, disk_path, parent_db, storage_prefix, result)
 
@@ -95,18 +106,22 @@ class FileSyncService:
             ).exists():
                 continue
 
-            folder_db = FileService.user_files_qs(user).filter(
-                parent=parent_db,
-                name=entry.name,
-                node_type=File.NodeType.FOLDER,
-            ).first()
+            folder_db = (
+                FileService.user_files_qs(user)
+                .filter(
+                    parent=parent_db,
+                    name=entry.name,
+                    node_type=File.NodeType.FOLDER,
+                )
+                .first()
+            )
 
             if folder_db:
                 self._sync_directory_recursive(
                     user=user,
                     disk_path=entry.path,
                     parent_db=folder_db,
-                    storage_prefix=f'{storage_prefix}/{entry.name}',
+                    storage_prefix=f"{storage_prefix}/{entry.name}",
                     result=result,
                 )
 
@@ -139,7 +154,7 @@ class FileSyncService:
                 owner=user,
                 parent=parent_db,
                 deleted_at__isnull=False,
-            ).values_list('name', 'node_type')
+            ).values_list("name", "node_type")
         )
 
         # --- Phase 1: Disk -> DB (create missing) ---
@@ -168,11 +183,13 @@ class FileSyncService:
 
             try:
                 if is_dir:
-                    FileService.create_folder(user, entry_name, parent_db, acting_user=user)
+                    FileService.create_folder(
+                        user, entry_name, parent_db, acting_user=user
+                    )
                     result.folders_created += 1
                     self.log.info("Created folder: %s", entry_name)
                 else:
-                    content_path = f'{storage_prefix}/{entry_name}'
+                    content_path = f"{storage_prefix}/{entry_name}"
 
                     try:
                         size = entry.stat(follow_symlinks=False).st_size
@@ -180,8 +197,12 @@ class FileSyncService:
                         size = None
 
                     FileService.register_disk_file(
-                        user, entry_name, parent_db, content_path,
-                        size=size, acting_user=user,
+                        user,
+                        entry_name,
+                        parent_db,
+                        content_path,
+                        size=size,
+                        acting_user=user,
                     )
                     result.files_created += 1
                     self.log.info("Created file: %s (%s bytes)", entry_name, size)
@@ -215,12 +236,20 @@ class FileSyncService:
                 # directly + recording the event ourselves preserves both.
                 from workspace.files.models import FileEvent
                 from workspace.files.services.events import record_event
+
                 count = db_record.soft_delete(deleted_at=now)
-                record_event(db_record, user, FileEvent.Action.DELETED, {
-                    'cascade_count': count,
-                    'detected_by_sync': True,
-                })
-                self.log.info("Soft-deleted %s: %s (%d records)", node_type, name, count)
+                record_event(
+                    db_record,
+                    user,
+                    FileEvent.Action.DELETED,
+                    {
+                        "cascade_count": count,
+                        "detected_by_sync": True,
+                    },
+                )
+                self.log.info(
+                    "Soft-deleted %s: %s (%d records)", node_type, name, count
+                )
                 if node_type == File.NodeType.FOLDER:
                     result.folders_soft_deleted += 1
                 else:
@@ -228,4 +257,3 @@ class FileSyncService:
             except Exception as e:
                 result.errors.append(f"Error soft-deleting {name}: {e}")
                 self.log.warning("Error soft-deleting %s: %s", name, e)
-

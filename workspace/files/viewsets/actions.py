@@ -29,16 +29,16 @@ class ActionsMixin:
             "available actions for that item."
         ),
         request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'uuids': {
-                        'type': 'array',
-                        'items': {'type': 'string', 'format': 'uuid'},
-                        'description': 'List of file/folder UUIDs',
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "uuids": {
+                        "type": "array",
+                        "items": {"type": "string", "format": "uuid"},
+                        "description": "List of file/folder UUIDs",
                     },
                 },
-                'required': ['uuids'],
+                "required": ["uuids"],
             },
         },
         responses={
@@ -50,50 +50,52 @@ class ActionsMixin:
             404: OpenApiResponse(description="One or more UUIDs not found."),
         },
     )
-    @action(detail=False, methods=['post'], url_path='actions')
+    @action(detail=False, methods=["post"], url_path="actions")
     def files_actions(self, request):
         """Return available actions per file/folder for a set of UUIDs."""
         from workspace.files.actions import ActionRegistry
 
-        uuids = request.data.get('uuids', [])
+        uuids = request.data.get("uuids", [])
         if not isinstance(uuids, list) or len(uuids) == 0:
             return Response(
-                {'detail': 'uuids must be a non-empty list.'},
+                {"detail": "uuids must be a non-empty list."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if len(uuids) > 200:
             return Response(
-                {'detail': 'Too many UUIDs (max 200).'},
+                {"detail": "Too many UUIDs (max 200)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         favorite_subquery = FileFavorite.objects.filter(
             owner=request.user,
-            file_id=OuterRef('pk'),
+            file_id=OuterRef("pk"),
         )
         pinned_subquery = PinnedFolder.objects.filter(
             owner=request.user,
-            folder_id=OuterRef('pk'),
+            folder_id=OuterRef("pk"),
         )
         user_share_subquery = FileShare.objects.filter(
-            file_id=OuterRef('pk'),
+            file_id=OuterRef("pk"),
             shared_with=request.user,
-        ).values('permission')[:1]
+        ).values("permission")[:1]
 
         file_objects = list(
             File.objects.filter(
                 FileService.accessible_files_q(request.user),
                 uuid__in=uuids,
-            ).annotate(
+            )
+            .annotate(
                 is_favorite=Exists(favorite_subquery),
                 is_pinned=Exists(pinned_subquery),
                 user_share_permission=Subquery(user_share_subquery),
-            ).distinct()
+            )
+            .distinct()
         )
 
         if len(file_objects) != len(set(uuids)):
             return Response(
-                {'detail': 'One or more UUIDs not found.'},
+                {"detail": "One or more UUIDs not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -101,7 +103,9 @@ class ActionsMixin:
         for file_obj in file_objects:
             perm = FileService.get_permission(request.user, file_obj)
             result[str(file_obj.uuid)] = ActionRegistry.get_available_actions(
-                request.user, file_obj, permission=perm,
+                request.user,
+                file_obj,
+                permission=perm,
             )
         return Response(result)
 
@@ -115,39 +119,50 @@ class ActionsMixin:
             ),
         },
     )
-    @action(detail=False, methods=['get'], url_path='shared-with-me')
+    @action(detail=False, methods=["get"], url_path="shared-with-me")
     def shared_with_me(self, request):
         """List files shared with the current user."""
         shared_file_ids = FileShare.objects.filter(
             shared_with=request.user,
-        ).values_list('file_id', flat=True)
+        ).values_list("file_id", flat=True)
         queryset = File.objects.filter(
             pk__in=shared_file_ids,
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
         )
-        queryset = FileService.annotate_for_serializer(queryset, request.user).annotate(
-            user_share_permission=Subquery(
-                FileShare.objects.filter(
-                    file_id=OuterRef('pk'),
-                    shared_with=request.user,
-                ).values('permission')[:1]
-            ),
-        ).name_ordered()
+        queryset = (
+            FileService.annotate_for_serializer(queryset, request.user)
+            .annotate(
+                user_share_permission=Subquery(
+                    FileShare.objects.filter(
+                        file_id=OuterRef("pk"),
+                        shared_with=request.user,
+                    ).values("permission")[:1]
+                ),
+            )
+            .name_ordered()
+        )
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     @extend_schema(
         summary="AI-edit an image file",
         request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'prompt': {'type': 'string', 'description': 'Edit instruction'},
-                    'size': {'type': 'string', 'enum': ['1024x1024', '1792x1024', '1024x1792']},
-                    'source_image': {'type': 'string', 'nullable': True, 'description': 'Base64 source (null = use original file)'},
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "Edit instruction"},
+                    "size": {
+                        "type": "string",
+                        "enum": ["1024x1024", "1792x1024", "1024x1792"],
+                    },
+                    "source_image": {
+                        "type": "string",
+                        "nullable": True,
+                        "description": "Base64 source (null = use original file)",
+                    },
                 },
-                'required': ['prompt'],
+                "required": ["prompt"],
             }
         },
         responses={
@@ -157,57 +172,76 @@ class ActionsMixin:
             502: OpenApiResponse(description="AI backend error."),
         },
     )
-    @action(detail=True, methods=['post'], url_path='ai-edit')
+    @action(detail=True, methods=["post"], url_path="ai-edit")
     def ai_edit(self, request, uuid=None):
         """Edit an image file using AI based on a text prompt."""
         import base64
         import binascii
 
-        if not getattr(settings, 'AI_IMAGE_MODEL', ''):
+        if not getattr(settings, "AI_IMAGE_MODEL", ""):
             raise Http404
 
         file_obj = self.get_object()
 
-        if file_obj.node_type != File.NodeType.FILE or file_obj.category != 'image':
-            return Response({'error': 'file is not an image'}, status=status.HTTP_400_BAD_REQUEST)
+        if file_obj.node_type != File.NodeType.FILE or file_obj.category != "image":
+            return Response(
+                {"error": "file is not an image"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
-        prompt = request.data.get('prompt', '').strip()
+        prompt = request.data.get("prompt", "").strip()
         if not prompt:
-            return Response({'error': 'prompt is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "prompt is required"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
-        size = request.data.get('size', '1024x1024')
+        size = request.data.get("size", "1024x1024")
 
         # Use provided source_image (iterative edit) or read from storage
-        source_b64 = request.data.get('source_image', None)
+        source_b64 = request.data.get("source_image", None)
         if source_b64 is not None:
             # Treat an explicit empty string as a 400 instead of falling
             # through to the stored file - that path silently mutated the
             # wrong source on iterative-edit requests.
             if isinstance(source_b64, str) and not source_b64.strip():
-                return Response({'error': 'source_image cannot be empty'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "source_image cannot be empty"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             try:
                 # validate=True rejects characters outside the base64 alphabet
                 # and bad padding instead of silently producing garbage bytes
                 # that would otherwise be sent to the paid AI service.
                 source_data = base64.b64decode(source_b64, validate=True)
-            except (binascii.Error, ValueError, TypeError):
-                return Response({'error': 'invalid base64 in source_image'}, status=status.HTTP_400_BAD_REQUEST)
+            except binascii.Error, ValueError, TypeError:
+                return Response(
+                    {"error": "invalid base64 in source_image"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         else:
             try:
                 # Context manager guarantees the handle closes even when
                 # read() raises mid-stream.
-                with file_obj.content.open('rb') as fh:
+                with file_obj.content.open("rb") as fh:
                     source_data = fh.read()
             except Exception:
-                return Response({'error': 'could not read file content'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "could not read file content"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         from workspace.ai.services.image import ai_edit_image
+
         try:
             image_data = ai_edit_image(source_data, prompt, size)
         except ValueError:
-            return Response({'error': 'invalid request (check prompt and AI configuration)'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "invalid request (check prompt and AI configuration)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except RuntimeError:
-            logger.exception('AI image edit failed')
-            return Response({'error': 'image editing failed'}, status=status.HTTP_502_BAD_GATEWAY)
+            logger.exception("AI image edit failed")
+            return Response(
+                {"error": "image editing failed"}, status=status.HTTP_502_BAD_GATEWAY
+            )
 
-        return Response({'image': base64.b64encode(image_data).decode()})
+        return Response({"image": base64.b64encode(image_data).decode()})

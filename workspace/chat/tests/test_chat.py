@@ -19,29 +19,39 @@ class ChatTestMixin:
 
     def setUp(self):
         self.creator = User.objects.create_user(
-            username='creator', email='creator@test.com', password='pass123',
+            username="creator",
+            email="creator@test.com",
+            password="pass123",
         )
         self.member = User.objects.create_user(
-            username='member', email='member@test.com', password='pass123',
+            username="member",
+            email="member@test.com",
+            password="pass123",
         )
         self.outsider = User.objects.create_user(
-            username='outsider', email='outsider@test.com', password='pass123',
+            username="outsider",
+            email="outsider@test.com",
+            password="pass123",
         )
         self.extra_user = User.objects.create_user(
-            username='extra', email='extra@test.com', password='pass123',
+            username="extra",
+            email="extra@test.com",
+            password="pass123",
         )
 
         # Create a group conversation owned by creator, with member
         self.group = Conversation.objects.create(
             kind=Conversation.Kind.GROUP,
-            title='Test Group',
+            title="Test Group",
             created_by=self.creator,
         )
         ConversationMember.objects.create(
-            conversation=self.group, user=self.creator,
+            conversation=self.group,
+            user=self.creator,
         )
         ConversationMember.objects.create(
-            conversation=self.group, user=self.member,
+            conversation=self.group,
+            user=self.member,
         )
 
         # Create a DM between creator and member
@@ -50,8 +60,10 @@ class ChatTestMixin:
             created_by=self.creator,
         )
         ConversationMember.objects.create(
-            conversation=self.dm, user=self.creator,
+            conversation=self.dm,
+            user=self.creator,
         )
         ConversationMember.objects.create(
-            conversation=self.dm, user=self.member,
+            conversation=self.dm,
+            user=self.member,
         )

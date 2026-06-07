@@ -1,8 +1,8 @@
 from io import BytesIO
 
-from PIL import Image
 from django.core.files.storage import default_storage
 from django.test import TestCase
+from PIL import Image
 
 from workspace.common.services.image import (
     delete_image,
@@ -13,10 +13,9 @@ from workspace.common.services.image import (
 
 
 class ProcessImageToWebpTests(TestCase):
-
-    def _make_image(self, size=(200, 200), fmt='PNG'):
+    def _make_image(self, size=(200, 200), fmt="PNG"):
         buf = BytesIO()
-        img = Image.new('RGB', size, color='blue')
+        img = Image.new("RGB", size, color="blue")
         img.save(buf, format=fmt)
         buf.seek(0)
         return buf
@@ -27,7 +26,7 @@ class ProcessImageToWebpTests(TestCase):
         self.assertIsInstance(result, bytes)
         # Verify it's valid WebP
         img = Image.open(BytesIO(result))
-        self.assertEqual(img.format, 'WEBP')
+        self.assertEqual(img.format, "WEBP")
 
     def test_output_is_square_256(self):
         buf = self._make_image()
@@ -50,57 +49,54 @@ class ProcessImageToWebpTests(TestCase):
 
     def test_handles_rgba_image(self):
         buf = BytesIO()
-        img = Image.new('RGBA', (200, 200), color=(255, 0, 0, 128))
-        img.save(buf, format='PNG')
+        img = Image.new("RGBA", (200, 200), color=(255, 0, 0, 128))
+        img.save(buf, format="PNG")
         buf.seek(0)
         result = process_image_to_webp(buf, 0, 0, 100, 100)
         out = Image.open(BytesIO(result))
-        self.assertEqual(out.mode, 'RGB')
+        self.assertEqual(out.mode, "RGB")
 
 
 class SaveImageTests(TestCase):
-
     def test_saves_and_reads_back(self):
-        path = 'test_save_img.webp'
+        path = "test_save_img.webp"
         try:
-            save_image(path, b'fake-webp-data')
+            save_image(path, b"fake-webp-data")
             self.assertTrue(default_storage.exists(path))
-            with default_storage.open(path, 'rb') as f:
-                self.assertEqual(f.read(), b'fake-webp-data')
+            with default_storage.open(path, "rb") as f:
+                self.assertEqual(f.read(), b"fake-webp-data")
         finally:
             if default_storage.exists(path):
                 default_storage.delete(path)
 
     def test_replaces_existing_file(self):
-        path = 'test_replace_img.webp'
+        path = "test_replace_img.webp"
         try:
-            save_image(path, b'first')
-            save_image(path, b'second')
-            with default_storage.open(path, 'rb') as f:
-                self.assertEqual(f.read(), b'second')
+            save_image(path, b"first")
+            save_image(path, b"second")
+            with default_storage.open(path, "rb") as f:
+                self.assertEqual(f.read(), b"second")
         finally:
             if default_storage.exists(path):
                 default_storage.delete(path)
 
 
 class DeleteImageTests(TestCase):
-
     def test_deletes_existing_file(self):
-        path = 'test_del_img.webp'
-        save_image(path, b'data')
+        path = "test_del_img.webp"
+        save_image(path, b"data")
         delete_image(path)
         self.assertFalse(default_storage.exists(path))
 
     def test_no_error_for_nonexistent_file(self):
-        delete_image('nonexistent.webp')
+        delete_image("nonexistent.webp")
 
 
 class GetImageEtagTests(TestCase):
-
     def test_returns_etag_for_existing_file(self):
-        path = 'test_etag_img.webp'
+        path = "test_etag_img.webp"
         try:
-            save_image(path, b'data')
+            save_image(path, b"data")
             etag = get_image_etag(path)
             self.assertIsNotNone(etag)
             self.assertIsInstance(etag, str)
@@ -110,12 +106,12 @@ class GetImageEtagTests(TestCase):
                 default_storage.delete(path)
 
     def test_returns_none_for_nonexistent_file(self):
-        self.assertIsNone(get_image_etag('nonexistent.webp'))
+        self.assertIsNone(get_image_etag("nonexistent.webp"))
 
     def test_consistent_for_same_file(self):
-        path = 'test_etag_consistent.webp'
+        path = "test_etag_consistent.webp"
         try:
-            save_image(path, b'data')
+            save_image(path, b"data")
             e1 = get_image_etag(path)
             e2 = get_image_etag(path)
             self.assertEqual(e1, e2)

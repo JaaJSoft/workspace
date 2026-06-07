@@ -20,20 +20,22 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--days',
+            "--days",
             type=int,
             default=None,
-            help='Override TRASH_RETENTION_DAYS (default: %(default)s).',
+            help="Override TRASH_RETENTION_DAYS (default: %(default)s).",
         )
         parser.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Show what would be deleted without actually deleting.',
+            "--dry-run",
+            action="store_true",
+            help="Show what would be deleted without actually deleting.",
         )
 
     def handle(self, *args, **options):
-        retention_days = options['days'] or getattr(settings, 'TRASH_RETENTION_DAYS', 30)
-        dry_run = options['dry_run']
+        retention_days = options["days"] or getattr(
+            settings, "TRASH_RETENTION_DAYS", 30
+        )
+        dry_run = options["dry_run"]
         cutoff = timezone.now() - timedelta(days=retention_days)
 
         qs = File.objects.filter(deleted_at__lte=cutoff)
@@ -56,7 +58,9 @@ class Command(BaseCommand):
 
         # select_related('owner') avoids N+1 in the pre_delete signal,
         # which reads instance.owner.username for each File.
-        qs.select_related('owner').delete()
-        self.stdout.write(self.style.SUCCESS(
-            f"Purged {files_count} files and {folders_count} folders."
-        ))
+        qs.select_related("owner").delete()
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Purged {files_count} files and {folders_count} folders."
+            )
+        )

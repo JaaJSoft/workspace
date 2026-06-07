@@ -7,13 +7,13 @@ TYPING_STALE = 4  # entries older than this are filtered out
 
 
 def _cache_key(conversation_id):
-    return f'chat:typing:{conversation_id}'
+    return f"chat:typing:{conversation_id}"
 
 
 def set_typing(conversation_id, user_id, display_name):
     key = _cache_key(conversation_id)
     data = cache.get(key) or {}
-    data[str(user_id)] = {'display_name': display_name, 'ts': time.time()}
+    data[str(user_id)] = {"display_name": display_name, "ts": time.time()}
     cache.set(key, data, TYPING_TTL)
 
 
@@ -34,9 +34,9 @@ def get_typing_users(conversation_ids, exclude_user_id=None):
         for uid_str, info in entries.items():
             if uid_str == exclude_str:
                 continue
-            if now - info['ts'] > TYPING_STALE:
+            if now - info["ts"] > TYPING_STALE:
                 continue
-            users.append({'user_id': uid_str, 'display_name': info['display_name']})
+            users.append({"user_id": uid_str, "display_name": info["display_name"]})
         if users:
             result[str(cid)] = users
 

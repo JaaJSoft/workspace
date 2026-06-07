@@ -6,6 +6,7 @@ pointing at a hidden POST form. We submit that form directly from the
 test: it's the exact same side effect as clicking the button, but
 without the CSS/dropdown-opening ceremony — simpler and deterministic.
 """
+
 from __future__ import annotations
 
 import re

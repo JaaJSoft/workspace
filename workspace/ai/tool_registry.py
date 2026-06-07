@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)
 # @tool decorator
 # ---------------------------------------------------------------------------
 
+
 def tool(
     *,
-    badge_icon: str = '⚡',
+    badge_icon: str = "⚡",
     badge_label: str | None = None,
     detail_key: str | None = None,
     params: type[BaseModel] | None = None,
@@ -26,20 +27,23 @@ def tool(
     docstring.  Parameters are defined via *params* using a Pydantic
     ``BaseModel`` subclass.
     """
+
     def decorator(fn):
         fn._tool_meta = {
-            'badge_icon': badge_icon,
-            'badge_label': badge_label,
-            'detail_key': detail_key,
-            'params': params,
+            "badge_icon": badge_icon,
+            "badge_label": badge_label,
+            "detail_key": detail_key,
+            "params": params,
         }
         return fn
+
     return decorator
 
 
 # ---------------------------------------------------------------------------
 # ToolProvider base class
 # ---------------------------------------------------------------------------
+
 
 class ToolProvider:
     """Base class for AI tool providers.
@@ -61,6 +65,7 @@ class ToolProvider:
 # Internal data — ToolInfo (not part of the public API)
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class _ToolInfo:
     name: str
@@ -77,14 +82,15 @@ class _ToolInfo:
 # Registry
 # ---------------------------------------------------------------------------
 
+
 def _build_parameters(params_cls: type[BaseModel] | None) -> dict:
     """Convert a Pydantic model class into an OpenAI parameters schema."""
     if params_cls is None:
-        return {'type': 'object', 'properties': {}}
+        return {"type": "object", "properties": {}}
     schema = params_cls.model_json_schema()
     # Remove Pydantic metadata keys not needed by OpenAI
-    schema.pop('title', None)
-    schema.pop('$defs', None)
+    schema.pop("title", None)
+    schema.pop("$defs", None)
     return schema
 
 
@@ -100,24 +106,24 @@ class ToolRegistry:
     def register_provider(self, provider: ToolProvider):
         """Register all ``@tool``-decorated methods from *provider*."""
         for name, method in inspect.getmembers(provider, predicate=callable):
-            meta = getattr(method, '_tool_meta', None)
+            meta = getattr(method, "_tool_meta", None)
             if meta is None:
                 continue
-            docstring = (method.__doc__ or '').strip()
+            docstring = (method.__doc__ or "").strip()
             if not docstring:
                 raise ValueError(
                     f"Tool method '{name}' on {type(provider).__name__} "
                     f"must have a docstring (used as the tool description)"
                 )
-            params_cls = meta['params']
+            params_cls = meta["params"]
             info = _ToolInfo(
                 name=name,
                 description=docstring,
                 parameters=_build_parameters(params_cls),
                 handler=method,
-                badge_icon=meta['badge_icon'],
-                badge_label=meta['badge_label'] or name.replace('_', ' ').title(),
-                detail_key=meta['detail_key'],
+                badge_icon=meta["badge_icon"],
+                badge_label=meta["badge_label"] or name.replace("_", " ").title(),
+                detail_key=meta["detail_key"],
                 params_class=params_cls,
             )
             with self._lock:
@@ -134,11 +140,11 @@ class ToolRegistry:
         """Return OpenAI function-calling definitions for all tools."""
         return [
             {
-                'type': 'function',
-                'function': {
-                    'name': t.name,
-                    'description': t.description,
-                    'parameters': t.parameters,
+                "type": "function",
+                "function": {
+                    "name": t.name,
+                    "description": t.description,
+                    "parameters": t.parameters,
                 },
             }
             for t in self._tools.values()
@@ -152,15 +158,15 @@ class ToolRegistry:
         try:
             raw_args = json.loads(tool_call.function.arguments)
         except json.JSONDecodeError:
-            return 'Error: invalid JSON arguments'
+            return "Error: invalid JSON arguments"
         info = self._tools.get(name)
         if not info:
-            return f'Unknown tool: {name}'
+            return f"Unknown tool: {name}"
         if info.params_class is not None:
             try:
                 args = info.params_class.model_validate(raw_args)
             except ValidationError as e:
-                return f'Error: invalid arguments — {e}'
+                return f"Error: invalid arguments — {e}"
         else:
             args = raw_args
         if context is None:
@@ -173,15 +179,15 @@ class ToolRegistry:
         """Return ``{'icon': ..., 'label': ...}`` for a tool name."""
         info = self._tools.get(name)
         if not info:
-            return {'icon': '⚡', 'label': name}
-        return {'icon': info.badge_icon, 'label': info.badge_label}
+            return {"icon": "⚡", "label": name}
+        return {"icon": info.badge_icon, "label": info.badge_label}
 
     def get_detail(self, name: str, args: dict) -> str:
         """Extract the detail string shown next to the badge label."""
         info = self._tools.get(name)
         if not info or not info.detail_key:
-            return ''
-        return args.get(info.detail_key, '')
+            return ""
+        return args.get(info.detail_key, "")
 
 
 tool_registry = ToolRegistry()

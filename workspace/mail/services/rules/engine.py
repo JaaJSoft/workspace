@@ -8,8 +8,9 @@ Designed to be called from the sync pipeline once new messages have been
 persisted. Catches and logs all exceptions so a misbehaving rule never
 breaks the sync.
 """
+
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 from django.db.models import F
 from django.utils import timezone
@@ -29,9 +30,9 @@ logger = logging.getLogger(__name__)
 
 def _load_rules(account):
     return list(
-        MailRule.objects
-        .filter(account=account, is_enabled=True)
-        .order_by('position', 'created_at')
+        MailRule.objects.filter(account=account, is_enabled=True).order_by(
+            "position", "created_at"
+        )
     )
 
 
@@ -39,12 +40,14 @@ def _matches(rule, message) -> bool:
     try:
         node = parse_conditions(rule.conditions)
     except SchemaError:
-        logger.warning('rule %s has invalid conditions, skipping', rule.uuid)
+        logger.warning("rule %s has invalid conditions, skipping", rule.uuid)
         return False
     try:
         return evaluate_node(node, message)
     except Exception:
-        logger.exception('eval failed for rule %s on message %s', rule.uuid, message.uuid)
+        logger.exception(
+            "eval failed for rule %s on message %s", rule.uuid, message.uuid
+        )
         return False
 
 
@@ -63,7 +66,7 @@ def _apply(rule, message) -> tuple[list, bool, bool]:
     try:
         actions = parse_actions(rule.actions)
     except SchemaError:
-        logger.warning('rule %s has invalid actions, skipping', rule.uuid)
+        logger.warning("rule %s has invalid actions, skipping", rule.uuid)
         return [], False, False
 
     audit = []
@@ -71,7 +74,7 @@ def _apply(rule, message) -> tuple[list, bool, bool]:
     for action in actions:
         result = apply_action(action, message)
         audit.append(result)
-        if isinstance(action, DeleteAction) and result.get('ok'):
+        if isinstance(action, DeleteAction) and result.get("ok"):
             short_circuit = True
             break
     return audit, short_circuit, True
@@ -91,9 +94,9 @@ def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
         return {}
 
     messages = list(
-        MailMessage.objects
-        .filter(account=account, uuid__in=uuids, deleted_at__isnull=True)
-        .select_related('account', 'folder')
+        MailMessage.objects.filter(
+            account=account, uuid__in=uuids, deleted_at__isnull=True
+        ).select_related("account", "folder")
     )
 
     summary: dict = {}
@@ -112,11 +115,15 @@ def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
             matched_rules.append(rule)
             try:
                 MailRuleLog.objects.create(
-                    rule=rule, rule_name_snapshot=rule.name,
-                    message=message, actions_applied=audit,
+                    rule=rule,
+                    rule_name_snapshot=rule.name,
+                    message=message,
+                    actions_applied=audit,
                 )
             except Exception:
-                logger.exception('failed to write rule log for %s / %s', rule.uuid, message.uuid)
+                logger.exception(
+                    "failed to write rule log for %s / %s", rule.uuid, message.uuid
+                )
             if short_circuit:
                 break
             if rule.stop_processing:
@@ -124,7 +131,7 @@ def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
         if matched_rules:
             summary[str(message.uuid)] = [str(r.uuid) for r in matched_rules]
             MailRule.objects.filter(pk__in=[r.pk for r in matched_rules]).update(
-                match_count=F('match_count') + 1,
+                match_count=F("match_count") + 1,
                 last_matched_at=now,
             )
     return summary
@@ -138,7 +145,10 @@ def _count_imap_failures(audit: list) -> int:
     """
     failures = 0
     for entry in audit:
-        if entry.get('error') == 'imap_failed' or entry.get('imap_warning') == 'imap_failed':
+        if (
+            entry.get("error") == "imap_failed"
+            or entry.get("imap_warning") == "imap_failed"
+        ):
             failures += 1
     return failures
 
@@ -154,14 +164,17 @@ def apply_rule_to_folder(rule, folder, *, dry_run: bool, limit: int = 500) -> di
     Returns ``{scanned, total, matched, applied, imap_failed, capped}``.
     """
     base = MailMessage.objects.filter(
-        account=rule.account, folder=folder, deleted_at__isnull=True,
+        account=rule.account,
+        folder=folder,
+        deleted_at__isnull=True,
     )
     total = base.count()
     # nulls_last keeps the "most recent" cap deterministic across backends
     # (Postgres sorts NULLs first on DESC, SQLite sorts them last by default).
     messages = list(
-        base.select_related('account', 'folder')
-        .order_by(F('date').desc(nulls_last=True))[:limit]
+        base.select_related("account", "folder").order_by(
+            F("date").desc(nulls_last=True)
+        )[:limit]
     )
 
     matched = 0
@@ -182,23 +195,27 @@ def apply_rule_to_folder(rule, folder, *, dry_run: bool, limit: int = 500) -> di
         matched_pks.append(message.pk)
         try:
             MailRuleLog.objects.create(
-                rule=rule, rule_name_snapshot=rule.name,
-                message=message, actions_applied=audit,
+                rule=rule,
+                rule_name_snapshot=rule.name,
+                message=message,
+                actions_applied=audit,
             )
         except Exception:
-            logger.exception('failed to write rule log for %s / %s', rule.uuid, message.uuid)
+            logger.exception(
+                "failed to write rule log for %s / %s", rule.uuid, message.uuid
+            )
 
     if matched_pks:
         MailRule.objects.filter(pk=rule.pk).update(
-            match_count=F('match_count') + len(matched_pks),
+            match_count=F("match_count") + len(matched_pks),
             last_matched_at=timezone.now(),
         )
 
     return {
-        'scanned': len(messages),
-        'total': total,
-        'matched': matched,
-        'applied': applied,
-        'imap_failed': imap_failed,
-        'capped': total > limit,
+        "scanned": len(messages),
+        "total": total,
+        "matched": matched,
+        "applied": applied,
+        "imap_failed": imap_failed,
+        "capped": total > limit,
     }

@@ -6,7 +6,7 @@ from workspace.core.sse_registry import SSEProvider, notify_sse
 
 logger = logging.getLogger(__name__)
 
-PENDING_EVENTS_KEY = 'files:pending_events:{user_id}'
+PENDING_EVENTS_KEY = "files:pending_events:{user_id}"
 PENDING_EVENTS_TTL = 300  # 5 min
 
 
@@ -22,7 +22,7 @@ class FilesSSEProvider(SSEProvider):
         if not raw:
             return []
         cache.delete(key)
-        return [(ev['type'], ev, None) for ev in raw]
+        return [(ev["type"], ev, None) for ev in raw]
 
 
 def push_file_event(file_obj, event_type, actor_username, exclude_user_id=None):
@@ -32,16 +32,16 @@ def push_file_event(file_obj, event_type, actor_username, exclude_user_id=None):
     user_ids = {file_obj.owner_id}
     shared_ids = FileShare.objects.filter(
         file=file_obj,
-    ).values_list('shared_with_id', flat=True)
+    ).values_list("shared_with_id", flat=True)
     user_ids.update(shared_ids)
 
     if exclude_user_id:
         user_ids.discard(exclude_user_id)
 
     event = {
-        'type': event_type,
-        'file_uuid': str(file_obj.uuid),
-        'actor': actor_username,
+        "type": event_type,
+        "file_uuid": str(file_obj.uuid),
+        "actor": actor_username,
     }
 
     for uid in user_ids:
@@ -49,4 +49,4 @@ def push_file_event(file_obj, event_type, actor_username, exclude_user_id=None):
         existing = cache.get(key, [])
         existing.append(event)
         cache.set(key, existing, PENDING_EVENTS_TTL)
-        notify_sse('files', uid)
+        notify_sse("files", uid)

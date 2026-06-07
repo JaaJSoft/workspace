@@ -14,13 +14,14 @@ from workspace.mail.queries import user_account_ids
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=['Mail'])
+@extend_schema(tags=["Mail"])
 class ExtractionDetailView(APIView):
     """DELETE /api/v1/mail/extractions/<uuid> - dismiss an extraction.
 
     Sets status=DISMISSED and, for kind=event, deletes the produced Event
     in the same transaction. Idempotent: already-dismissed rows return 204.
     """
+
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Dismiss a mail extraction")
@@ -30,7 +31,7 @@ class ExtractionDetailView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         try:
-            ex = MailExtraction.objects.select_related('mail_message__account').get(
+            ex = MailExtraction.objects.select_related("mail_message__account").get(
                 uuid=ex_uuid,
                 mail_message__account_id__in=user_account_ids(request.user),
             )
@@ -40,7 +41,7 @@ class ExtractionDetailView(APIView):
         with transaction.atomic():
             if ex.status != MailExtraction.Status.DISMISSED:
                 ex.status = MailExtraction.Status.DISMISSED
-                ex.save(update_fields=['status'])
+                ex.save(update_fields=["status"])
 
             target = ex.target
             if ex.kind == MailExtraction.Kind.EVENT and target is not None:

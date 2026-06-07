@@ -1,14 +1,15 @@
 """Link preview: URL extraction and OpenGraph metadata fetching."""
+
 import re
 from urllib.parse import urlparse
 
 import httpx
 from trafilatura.metadata import extract_metadata
 
-from workspace.ai.services.web import _is_url_safe, _HEADERS
+from workspace.ai.services.web import _HEADERS, _is_url_safe
 
-_URL_RE = re.compile(r'https?://[^\s<>\"\')\]}]+', re.IGNORECASE)
-_TRAILING_PUNCT = re.compile(r'[.,;:!?)]+$')
+_URL_RE = re.compile(r"https?://[^\s<>\"\')\]}]+", re.IGNORECASE)
+_TRAILING_PUNCT = re.compile(r"[.,;:!?)]+$")
 
 
 def extract_urls(text: str, *, max_urls: int = 5) -> list[str]:
@@ -19,7 +20,7 @@ def extract_urls(text: str, *, max_urls: int = 5) -> list[str]:
     seen: set[str] = set()
     urls: list[str] = []
     for match in _URL_RE.finditer(text):
-        url = _TRAILING_PUNCT.sub('', match.group(0))
+        url = _TRAILING_PUNCT.sub("", match.group(0))
         if url not in seen:
             seen.add(url)
             urls.append(url)
@@ -34,7 +35,7 @@ def _fetch_html(url: str) -> str:
     Raises ``ValueError`` for unsafe URLs or HTTP errors.
     """
     if not _is_url_safe(url):
-        raise ValueError('URL points to a private or internal address')
+        raise ValueError("URL points to a private or internal address")
 
     with httpx.Client(
         timeout=10,
@@ -47,7 +48,7 @@ def _fetch_html(url: str) -> str:
 
     # Guard against huge responses
     if len(resp.content) > 2 * 1024 * 1024:
-        raise ValueError('Response too large (>2 MB)')
+        raise ValueError("Response too large (>2 MB)")
 
     return resp.text
 
@@ -63,25 +64,25 @@ def fetch_opengraph(url: str) -> dict[str, str]:
 
     doc = extract_metadata(html, default_url=url)
 
-    title = ''
-    description = ''
-    image = ''
-    site_name = ''
+    title = ""
+    description = ""
+    image = ""
+    site_name = ""
 
     if doc is not None:
-        title = doc.title or ''
-        description = doc.description or ''
-        image = doc.image or ''
-        site_name = doc.sitename or ''
+        title = doc.title or ""
+        description = doc.description or ""
+        image = doc.image or ""
+        site_name = doc.sitename or ""
 
     # Favicon fallback: use /favicon.ico at the domain root
     parsed = urlparse(url)
-    favicon = f'{parsed.scheme}://{parsed.netloc}/favicon.ico'
+    favicon = f"{parsed.scheme}://{parsed.netloc}/favicon.ico"
 
     return {
-        'title': title,
-        'description': description,
-        'image': image,
-        'site_name': site_name,
-        'favicon': favicon,
+        "title": title,
+        "description": description,
+        "image": image,
+        "site_name": site_name,
+        "favicon": favicon,
     }

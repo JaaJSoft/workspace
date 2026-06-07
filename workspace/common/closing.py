@@ -1,4 +1,5 @@
 """Helpers for releasing resources defensively."""
+
 import logging
 
 from workspace.common.logging import scrub

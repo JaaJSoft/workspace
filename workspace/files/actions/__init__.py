@@ -53,14 +53,14 @@ class ActionRegistry:
             return
         cls._loaded = True
         for module_name in (
-            'workspace.files.actions.open',
-            'workspace.files.actions.transfer',
-            'workspace.files.actions.organize',
-            'workspace.files.actions.edit',
-            'workspace.files.actions.extract',
-            'workspace.files.actions.info',
-            'workspace.files.actions.danger',
-            'workspace.files.actions.trash',
+            "workspace.files.actions.open",
+            "workspace.files.actions.transfer",
+            "workspace.files.actions.organize",
+            "workspace.files.actions.edit",
+            "workspace.files.actions.extract",
+            "workspace.files.actions.info",
+            "workspace.files.actions.danger",
+            "workspace.files.actions.trash",
         ):
             importlib.import_module(module_name)
 
@@ -72,4 +72,4 @@ class ActionRegistry:
         cls._loaded = False
 
 
-__all__ = ['ActionRegistry', 'ActionCategory', 'BaseAction']
+__all__ = ["ActionRegistry", "ActionCategory", "BaseAction"]

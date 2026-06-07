@@ -8,33 +8,33 @@ class UserPresence(models.Model):
     """Tracks the last activity timestamp for each user (presence system)."""
 
     MANUAL_STATUS_CHOICES = [
-        ('auto', 'Auto'),
-        ('online', 'Online'),
-        ('away', 'Away'),
-        ('busy', 'Busy'),
-        ('invisible', 'Invisible'),
+        ("auto", "Auto"),
+        ("online", "Online"),
+        ("away", "Away"),
+        ("busy", "Busy"),
+        ("invisible", "Invisible"),
     ]
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         primary_key=True,
-        related_name='presence',
+        related_name="presence",
     )
     last_seen = models.DateTimeField(db_index=True)
     last_activity = models.DateTimeField(db_index=True, null=True, blank=True)
     manual_status = models.CharField(
         max_length=16,
         choices=MANUAL_STATUS_CHOICES,
-        default='auto',
+        default="auto",
     )
 
     class Meta:
-        verbose_name = 'User presence'
-        verbose_name_plural = 'User presences'
+        verbose_name = "User presence"
+        verbose_name_plural = "User presences"
 
     def __str__(self):
-        return f'{self.user} — last seen {self.last_seen}'
+        return f"{self.user} — last seen {self.last_seen}"
 
 
 class UserSetting(models.Model):
@@ -48,7 +48,7 @@ class UserSetting(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='settings',
+        related_name="settings",
     )
     module = models.CharField(max_length=64)
     key = models.CharField(max_length=128)
@@ -59,14 +59,14 @@ class UserSetting(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['user', 'module', 'key'],
-                name='unique_user_module_key',
+                fields=["user", "module", "key"],
+                name="unique_user_module_key",
             ),
         ]
-        ordering = ['module', 'key']
+        ordering = ["module", "key"]
 
     def __str__(self):
-        return f'{self.user} / {self.module}.{self.key}'
+        return f"{self.user} / {self.module}.{self.key}"
 
 
 class APITokenLabel(models.Model):
@@ -74,14 +74,14 @@ class APITokenLabel(models.Model):
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     auth_token = models.OneToOneField(
-        'knox.AuthToken',
+        "knox.AuthToken",
         on_delete=models.CASCADE,
-        related_name='label',
+        related_name="label",
     )
-    name = models.CharField(max_length=128, blank=True, default='')
+    name = models.CharField(max_length=128, blank=True, default="")
 
     class Meta:
-        ordering = ['-auth_token__created']
+        ordering = ["-auth_token__created"]
 
     def __str__(self):
         return self.name or self.auth_token.token_key

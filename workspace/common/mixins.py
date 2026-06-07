@@ -32,18 +32,20 @@ class CacheControlMixin:
         response = super().finalize_response(request, response, *args, **kwargs)
 
         # Don't touch errors or responses that already have the header
-        if response.status_code >= 400 or response.get('Cache-Control'):
+        if response.status_code >= 400 or response.get("Cache-Control"):
             return response
 
-        visibility = 'private' if self.cache_private else 'public'
+        visibility = "private" if self.cache_private else "public"
         if self.cache_max_age > 0:
-            directive = f'{visibility}, max-age={self.cache_max_age}'
+            directive = f"{visibility}, max-age={self.cache_max_age}"
             if self.cache_stale_while_revalidate:
-                directive += f', stale-while-revalidate={self.cache_stale_while_revalidate}'
+                directive += (
+                    f", stale-while-revalidate={self.cache_stale_while_revalidate}"
+                )
         else:
             # max-age=0 + SWR doesn't make sense: SWR needs a positive
             # max-age window to enter the "stale" state. Ignore SWR here.
-            directive = f'{visibility}, max-age=0, must-revalidate'
+            directive = f"{visibility}, max-age=0, must-revalidate"
 
-        response['Cache-Control'] = directive
+        response["Cache-Control"] = directive
         return response

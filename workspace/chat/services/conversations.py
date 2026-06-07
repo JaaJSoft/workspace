@@ -6,8 +6,9 @@ def user_conversation_ids(user):
     from ..models import ConversationMember
 
     return ConversationMember.objects.filter(
-        user=user, left_at__isnull=True,
-    ).values_list('conversation_id', flat=True)
+        user=user,
+        left_at__isnull=True,
+    ).values_list("conversation_id", flat=True)
 
 
 def get_active_membership(user, conversation_id):
@@ -58,10 +59,12 @@ def get_or_create_dm(user, other_user):
         kind=Conversation.Kind.DM,
         created_by=user,
     )
-    ConversationMember.objects.bulk_create([
-        ConversationMember(conversation=conversation, user=user),
-        ConversationMember(conversation=conversation, user=other_user),
-    ])
+    ConversationMember.objects.bulk_create(
+        [
+            ConversationMember(conversation=conversation, user=user),
+            ConversationMember(conversation=conversation, user=other_user),
+        ]
+    )
     return conversation
 
 
@@ -73,7 +76,7 @@ def get_unread_counts(user):
         user=user,
         left_at__isnull=True,
         unread_count__gt=0,
-    ).values_list('conversation_id', 'unread_count')
+    ).values_list("conversation_id", "unread_count")
 
     conversations = {}
     total = 0
@@ -81,4 +84,4 @@ def get_unread_counts(user):
         conversations[str(conv_id)] = count
         total += count
 
-    return {'total': total, 'conversations': conversations}
+    return {"total": total, "conversations": conversations}

@@ -5,7 +5,7 @@ def truncate_text(text: str, max_chars: int = 8000) -> str:
     """Truncate text to fit within a character limit."""
     if len(text) <= max_chars:
         return text
-    return text[:max_chars] + '\n\n[... truncated ...]'
+    return text[:max_chars] + "\n\n[... truncated ...]"
 
 
 def build_context_block(user=None) -> str:
@@ -16,6 +16,7 @@ def build_context_block(user=None) -> str:
     """
     if user:
         from workspace.users.services.settings import get_user_timezone
+
         user_tz = get_user_timezone(user)
         now = timezone.now().astimezone(user_tz)
         tz_label = str(user_tz)

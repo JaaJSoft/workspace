@@ -17,41 +17,47 @@ User = get_user_model()
 
 class AttachmentDownloadTests(APITestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(username='owner', password='pass')
-        self.member = User.objects.create_user(username='member', password='pass')
-        self.outsider = User.objects.create_user(username='outsider', password='pass')
-        self.left_user = User.objects.create_user(username='left', password='pass')
+        self.owner = User.objects.create_user(username="owner", password="pass")
+        self.member = User.objects.create_user(username="member", password="pass")
+        self.outsider = User.objects.create_user(username="outsider", password="pass")
+        self.left_user = User.objects.create_user(username="left", password="pass")
 
         self.group = Conversation.objects.create(
             kind=Conversation.Kind.GROUP,
-            title='Group',
+            title="Group",
             created_by=self.owner,
         )
         ConversationMember.objects.create(conversation=self.group, user=self.owner)
         ConversationMember.objects.create(conversation=self.group, user=self.member)
         ConversationMember.objects.create(
-            conversation=self.group, user=self.left_user, left_at=timezone.now(),
+            conversation=self.group,
+            user=self.left_user,
+            left_at=timezone.now(),
         )
 
         self.message = Message.objects.create(
-            conversation=self.group, author=self.owner, body='hi',
+            conversation=self.group,
+            author=self.owner,
+            body="hi",
         )
         self.attachment = MessageAttachment.objects.create(
             message=self.message,
-            file=SimpleUploadedFile('doc.pdf', b'pdf-bytes', content_type='application/pdf'),
-            original_name='doc.pdf',
-            mime_type='application/pdf',
+            file=SimpleUploadedFile(
+                "doc.pdf", b"pdf-bytes", content_type="application/pdf"
+            ),
+            original_name="doc.pdf",
+            mime_type="application/pdf",
             size=9,
         )
 
     def url(self, uuid):
-        return f'/api/v1/chat/attachments/{uuid}'
+        return f"/api/v1/chat/attachments/{uuid}"
 
     def _consume(self, response):
         # FileResponse is a streaming response — consume it so the file handle
         # is released before the TestCase tears down the temporary storage.
         try:
-            b''.join(response.streaming_content)
+            b"".join(response.streaming_content)
         except AttributeError:
             # Non-streaming responses (e.g. JSON error bodies) have no
             # streaming_content attribute: nothing to consume.
@@ -65,33 +71,35 @@ class AttachmentDownloadTests(APITestCase):
         self.client.force_authenticate(self.owner)
         resp = self.client.get(self.url(self.attachment.uuid))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp['Content-Type'], 'application/pdf')
-        self.assertIn('filename="doc.pdf"', resp['Content-Disposition'])
-        self.assertEqual(resp['Cache-Control'], 'private, max-age=604800, immutable')
-        self.assertEqual(resp['Accept-Ranges'], 'bytes')
+        self.assertEqual(resp["Content-Type"], "application/pdf")
+        self.assertIn('filename="doc.pdf"', resp["Content-Disposition"])
+        self.assertEqual(resp["Cache-Control"], "private, max-age=604800, immutable")
+        self.assertEqual(resp["Accept-Ranges"], "bytes")
         self._consume(resp)
 
     def test_range_request_returns_206_partial(self):
         """Video attachments need 206 for seeking; pdf-bytes is enough to pin behavior."""
         self.client.force_authenticate(self.owner)
         resp = self.client.get(
-            self.url(self.attachment.uuid), HTTP_RANGE='bytes=2-5',
+            self.url(self.attachment.uuid),
+            HTTP_RANGE="bytes=2-5",
         )
         self.assertEqual(resp.status_code, status.HTTP_206_PARTIAL_CONTENT)
-        self.assertEqual(resp['Content-Range'], 'bytes 2-5/9')
-        self.assertEqual(resp['Content-Length'], '4')
-        self.assertEqual(resp['Accept-Ranges'], 'bytes')
-        body = b''.join(resp.streaming_content)
+        self.assertEqual(resp["Content-Range"], "bytes 2-5/9")
+        self.assertEqual(resp["Content-Length"], "4")
+        self.assertEqual(resp["Accept-Ranges"], "bytes")
+        body = b"".join(resp.streaming_content)
         # Payload is b'pdf-bytes' (9 bytes); bytes 2-5 inclusive = b'f-by'.
-        self.assertEqual(body, b'f-by')
+        self.assertEqual(body, b"f-by")
 
     def test_unsatisfiable_range_returns_416(self):
         self.client.force_authenticate(self.owner)
         resp = self.client.get(
-            self.url(self.attachment.uuid), HTTP_RANGE='bytes=100-200',
+            self.url(self.attachment.uuid),
+            HTTP_RANGE="bytes=100-200",
         )
         self.assertEqual(resp.status_code, 416)
-        self.assertEqual(resp['Content-Range'], 'bytes */9')
+        self.assertEqual(resp["Content-Range"], "bytes */9")
 
     def test_member_can_download(self):
         self.client.force_authenticate(self.member)
@@ -112,23 +120,23 @@ class AttachmentDownloadTests(APITestCase):
 
     def test_unknown_uuid_returns_404(self):
         self.client.force_authenticate(self.owner)
-        resp = self.client.get(self.url('00000000-0000-0000-0000-000000000000'))
+        resp = self.client.get(self.url("00000000-0000-0000-0000-000000000000"))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_filename_is_sanitized(self):
         evil = MessageAttachment.objects.create(
             message=self.message,
-            file=SimpleUploadedFile('x.pdf', b'x', content_type='application/pdf'),
+            file=SimpleUploadedFile("x.pdf", b"x", content_type="application/pdf"),
             original_name='na"me\nwith\rbad.pdf',
-            mime_type='application/pdf',
+            mime_type="application/pdf",
             size=1,
         )
         self.client.force_authenticate(self.owner)
         resp = self.client.get(self.url(evil.uuid))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        disposition = resp['Content-Disposition']
-        self.assertNotIn('\n', disposition)
-        self.assertNotIn('\r', disposition)
+        disposition = resp["Content-Disposition"]
+        self.assertNotIn("\n", disposition)
+        self.assertNotIn("\r", disposition)
         self.assertIn('na\\"mewithbad.pdf', disposition)
         self._consume(resp)
 
@@ -137,7 +145,7 @@ class AttachmentDownloadTests(APITestCase):
         tag so the next request re-exercises the view's DB path from a cold state."""
         self.client.force_authenticate(user)
         self._consume(self.client.get(self.url(self.attachment.uuid)))
-        invalidate_tags(f'att:{self.attachment.uuid}')
+        invalidate_tags(f"att:{self.attachment.uuid}")
 
     def test_cold_query_count_is_two(self):
         """First download: attachment+join-message (1) + membership (1)."""
@@ -182,10 +190,11 @@ class AttachmentDownloadTests(APITestCase):
         # Member leaves the conversation. The leave path doesn't invalidate
         # the attachment cache, so the cache is still warm for this user.
         cm = ConversationMember.objects.get(
-            conversation=self.group, user=self.member,
+            conversation=self.group,
+            user=self.member,
         )
         cm.left_at = timezone.now()
-        cm.save(update_fields=['left_at'])
+        cm.save(update_fields=["left_at"])
 
         resp = self.client.get(self.url(self.attachment.uuid))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
@@ -204,4 +213,5 @@ class AttachmentDownloadTests(APITestCase):
 
     def tearDown(self):
         from django.core.cache import cache
+
         cache.clear()

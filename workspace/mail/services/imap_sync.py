@@ -44,7 +44,7 @@ def sync_folders(account):
         _flags, delim, _name = remote_folders[0]
         if delim and delim != account.imap_delimiter:
             account.imap_delimiter = delim
-            account.save(update_fields=['imap_delimiter', 'updated_at'])
+            account.save(update_fields=["imap_delimiter", "updated_at"])
 
     existing = {f.name: f for f in MailFolder.objects.filter(account=account)}
     remote_names = set()
@@ -52,10 +52,10 @@ def sync_folders(account):
     with transaction.atomic():
         for flags, _delim, name in remote_folders:
             # Skip non-selectable containers (e.g. [Gmail])
-            if '\\noselect' in flags.lower():
+            if "\\noselect" in flags.lower():
                 continue
             # Skip \All folder (Gmail "All Mail") - duplicates every message
-            if '\\all' in flags.lower():
+            if "\\all" in flags.lower():
                 continue
             remote_names.add(name)
             folder_type = _detect_folder_type(name, flags)
@@ -71,7 +71,9 @@ def sync_folders(account):
                     folder.display_name = display
                     changed = True
                 if changed:
-                    folder.save(update_fields=['folder_type', 'display_name', 'updated_at'])
+                    folder.save(
+                        update_fields=["folder_type", "display_name", "updated_at"]
+                    )
             else:
                 MailFolder.objects.create(
                     account=account,
@@ -88,9 +90,11 @@ def sync_folders(account):
 
 def _get_uidvalidity(conn):
     """Extract UIDVALIDITY from the last SELECT/EXAMINE response."""
-    for resp in (conn.untagged_responses.get('OK') or []):
-        decoded = resp.decode('ascii', errors='replace') if isinstance(resp, bytes) else resp
-        m = re.search(r'\[UIDVALIDITY\s+(\d+)\]', decoded)
+    for resp in conn.untagged_responses.get("OK") or []:
+        decoded = (
+            resp.decode("ascii", errors="replace") if isinstance(resp, bytes) else resp
+        )
+        m = re.search(r"\[UIDVALIDITY\s+(\d+)\]", decoded)
         if m:
             return int(m.group(1))
     return None
@@ -103,8 +107,10 @@ def sync_folder_messages(account, folder):
     conn = connect_imap(account)
     try:
         status, data = conn.select(_quote_mailbox(folder.name), readonly=True)
-        if status != 'OK':
-            logger.warning("Could not SELECT folder %s: %s", scrub(folder.name), scrub(data))
+        if status != "OK":
+            logger.warning(
+                "Could not SELECT folder %s: %s", scrub(folder.name), scrub(data)
+            )
             return
 
         # Check UIDVALIDITY (parsed from untagged OK response, NOT from
@@ -118,23 +124,29 @@ def sync_folder_messages(account, folder):
 
         if uid_validity:
             folder.uid_validity = uid_validity
-        folder.save(update_fields=['uid_validity', 'updated_at'])
+        folder.save(update_fields=["uid_validity", "updated_at"])
 
         # Search for new UIDs (always use UID SEARCH to get real UIDs)
         uid_list = []
         if folder.last_sync_uid > 0:
-            status, search_data = conn.uid('SEARCH', None, f'UID {folder.last_sync_uid + 1}:*')
-            if status == 'OK':
+            status, search_data = conn.uid(
+                "SEARCH", None, f"UID {folder.last_sync_uid + 1}:*"
+            )
+            if status == "OK":
                 uid_list = search_data[0].split()
-                uid_list = [u.decode() if isinstance(u, bytes) else u for u in uid_list if u]
+                uid_list = [
+                    u.decode() if isinstance(u, bytes) else u for u in uid_list if u
+                ]
                 # Filter out the already-synced UID (server may include it)
                 uid_list = [u for u in uid_list if int(u) > folder.last_sync_uid]
         else:
             # Initial sync: get all UIDs then take last N
-            status, search_data = conn.uid('SEARCH', None, 'ALL')
-            if status == 'OK':
+            status, search_data = conn.uid("SEARCH", None, "ALL")
+            if status == "OK":
                 all_uids = search_data[0].split()
-                all_uids = [u.decode() if isinstance(u, bytes) else u for u in all_uids if u]
+                all_uids = [
+                    u.decode() if isinstance(u, bytes) else u for u in all_uids if u
+                ]
                 # Limit initial sync
                 if len(all_uids) > INITIAL_SYNC_LIMIT:
                     all_uids = all_uids[-INITIAL_SYNC_LIMIT:]
@@ -144,24 +156,24 @@ def sync_folder_messages(account, folder):
         new_message_uuids = []
         # Fetch in batches
         for i in range(0, len(uid_list), FETCH_BATCH_SIZE):
-            batch = uid_list[i:i + FETCH_BATCH_SIZE]
-            uid_set = ','.join(batch)
-            status, msg_data = conn.uid('FETCH', uid_set, '(UID FLAGS RFC822)')
-            if status != 'OK':
+            batch = uid_list[i : i + FETCH_BATCH_SIZE]
+            uid_set = ",".join(batch)
+            status, msg_data = conn.uid("FETCH", uid_set, "(UID FLAGS RFC822)")
+            if status != "OK":
                 continue
 
             for response_part in msg_data:
                 if not isinstance(response_part, tuple):
                     continue
                 # Parse UID from response
-                uid_match = re.search(rb'UID (\d+)', response_part[0])
+                uid_match = re.search(rb"UID (\d+)", response_part[0])
                 if not uid_match:
                     continue
                 uid = int(uid_match.group(1))
 
                 # Parse flags
-                flags_match = re.search(rb'FLAGS \(([^)]*)\)', response_part[0])
-                flags_str = flags_match.group(1).decode() if flags_match else ''
+                flags_match = re.search(rb"FLAGS \(([^)]*)\)", response_part[0])
+                flags_str = flags_match.group(1).decode() if flags_match else ""
 
                 raw_email = response_part[1]
                 try:
@@ -175,7 +187,9 @@ def sync_folder_messages(account, folder):
                     if msg:
                         new_message_uuids.append(str(msg.uuid))
                 except Exception:
-                    logger.exception("Failed to parse message UID %d in %s", uid, scrub(folder.name))
+                    logger.exception(
+                        "Failed to parse message UID %d in %s", uid, scrub(folder.name)
+                    )
 
         # Update sync position
         if max_uid > folder.last_sync_uid:
@@ -189,56 +203,68 @@ def sync_folder_messages(account, folder):
         # Run user-defined rules first - explicit user intent takes precedence
         # over AI classification. Wrapped in try/except so a misbehaving rule
         # never breaks the sync.
-        if new_message_uuids and folder.folder_type not in ('sent', 'drafts'):
+        if new_message_uuids and folder.folder_type not in ("sent", "drafts"):
             try:
                 from workspace.mail.services.rules.engine import run_rules_for_messages
+
                 run_rules_for_messages(account, new_message_uuids)
             except Exception:
-                logger.exception('rules engine failed for %s', scrub(folder.name))
+                logger.exception("rules engine failed for %s", scrub(folder.name))
 
         # Dispatch AI classification / extraction for new messages
         # (skip sent/drafts). Classify and extract are gated by independent
         # per-user toggles AND wrapped in independent try/except blocks so a
         # failure dispatching one never prevents the other.
-        if new_message_uuids and folder.folder_type not in ('sent', 'drafts'):
+        if new_message_uuids and folder.folder_type not in ("sent", "drafts"):
             try:
                 from workspace.ai.client import is_ai_enabled
-                from workspace.mail.services.ai_settings import is_mail_ai_feature_enabled
+                from workspace.mail.services.ai_settings import (
+                    is_mail_ai_feature_enabled,
+                )
+
                 if is_ai_enabled():
                     from workspace.ai.models import AITask
                     from workspace.ai.services.dispatch import dispatch
+
                     dispatched = []
-                    if is_mail_ai_feature_enabled(account.owner, 'classify'):
+                    if is_mail_ai_feature_enabled(account.owner, "classify"):
                         try:
                             dispatch(
                                 owner=account.owner,
                                 task_type=AITask.TaskType.CLASSIFY,
-                                input_data={'message_uuids': new_message_uuids},
+                                input_data={"message_uuids": new_message_uuids},
                             )
-                            dispatched.append('classify')
+                            dispatched.append("classify")
                         except Exception:
                             logger.exception(
-                                'Failed to dispatch classify task for %s', scrub(folder.name),
+                                "Failed to dispatch classify task for %s",
+                                scrub(folder.name),
                             )
-                    if is_mail_ai_feature_enabled(account.owner, 'extract'):
+                    if is_mail_ai_feature_enabled(account.owner, "extract"):
                         try:
                             dispatch(
                                 owner=account.owner,
                                 task_type=AITask.TaskType.EXTRACT,
-                                input_data={'message_uuids': new_message_uuids},
+                                input_data={"message_uuids": new_message_uuids},
                             )
-                            dispatched.append('extract')
+                            dispatched.append("extract")
                         except Exception:
                             logger.exception(
-                                'Failed to dispatch extract task for %s', scrub(folder.name),
+                                "Failed to dispatch extract task for %s",
+                                scrub(folder.name),
                             )
                     if dispatched:
                         logger.info(
-                            'Dispatched %s tasks for %d new messages in %s',
-                            '+'.join(dispatched), len(new_message_uuids), scrub(folder.name),
+                            "Dispatched %s tasks for %d new messages in %s",
+                            "+".join(dispatched),
+                            len(new_message_uuids),
+                            scrub(folder.name),
                         )
             except Exception:
-                logger.exception('Failed to dispatch classify/extract tasks for %s', scrub(folder.name))
+                logger.exception(
+                    "Failed to dispatch classify/extract tasks for %s",
+                    scrub(folder.name),
+                )
 
         # Process calendar invitations among messages just synced.
         # Scoping on new_message_uuids avoids re-parsing every old ICS
@@ -247,13 +273,17 @@ def sync_folder_messages(account, folder):
         # second pass).
         if new_message_uuids:
             from ..models import MailMessage as _MailMsg
+
             cal_messages = _MailMsg.objects.filter(
                 folder=folder,
                 has_calendar_event=True,
                 uuid__in=new_message_uuids,
             )
             if cal_messages.exists():
-                from workspace.calendar.services.ics_processor import process_calendar_emails
+                from workspace.calendar.services.ics_processor import (
+                    process_calendar_emails,
+                )
+
                 process_calendar_emails(cal_messages)
 
     finally:
@@ -273,15 +303,16 @@ def _reconcile_folder(conn, folder):
     from ..models import MailMessage
 
     local_msgs = MailMessage.objects.filter(
-        folder=folder, deleted_at__isnull=True,
-    ).values_list('imap_uid', flat=True)
+        folder=folder,
+        deleted_at__isnull=True,
+    ).values_list("imap_uid", flat=True)
     local_uids = set(local_msgs)
     if not local_uids:
         return
 
     # Ask the server for all UIDs currently in this folder
-    status, search_data = conn.uid('SEARCH', None, 'ALL')
-    if status != 'OK':
+    status, search_data = conn.uid("SEARCH", None, "ALL")
+    if status != "OK":
         return
     raw = search_data[0].split() if search_data[0] else []
     remote_uids = {int(u.decode() if isinstance(u, bytes) else u) for u in raw if u}
@@ -290,18 +321,24 @@ def _reconcile_folder(conn, folder):
     gone = local_uids - remote_uids
     if gone:
         count = MailMessage.objects.filter(
-            folder=folder, imap_uid__in=gone, deleted_at__isnull=True,
+            folder=folder,
+            imap_uid__in=gone,
+            deleted_at__isnull=True,
         ).update(deleted_at=dj_timezone.now())
         if count:
-            logger.info('Reconciled %s: soft-deleted %d messages no longer on server', scrub(folder.name), count)
+            logger.info(
+                "Reconciled %s: soft-deleted %d messages no longer on server",
+                scrub(folder.name),
+                count,
+            )
 
     # Update flags for remaining messages
     present = local_uids & remote_uids
     if not present:
         return
-    uid_set = ','.join(str(u) for u in sorted(present))
-    status, flags_data = conn.uid('FETCH', uid_set, '(UID FLAGS)')
-    if status != 'OK':
+    uid_set = ",".join(str(u) for u in sorted(present))
+    status, flags_data = conn.uid("FETCH", uid_set, "(UID FLAGS)")
+    if status != "OK":
         return
 
     remote_read = set()
@@ -309,24 +346,28 @@ def _reconcile_folder(conn, folder):
     for response_part in flags_data:
         if not isinstance(response_part, (tuple, bytes)):
             continue
-        raw_line = response_part[0] if isinstance(response_part, tuple) else response_part
+        raw_line = (
+            response_part[0] if isinstance(response_part, tuple) else response_part
+        )
         if not isinstance(raw_line, bytes):
             continue
-        uid_match = re.search(rb'UID (\d+)', raw_line)
-        flags_match = re.search(rb'FLAGS \(([^)]*)\)', raw_line)
+        uid_match = re.search(rb"UID (\d+)", raw_line)
+        flags_match = re.search(rb"FLAGS \(([^)]*)\)", raw_line)
         if not uid_match:
             continue
         uid = int(uid_match.group(1))
-        flags_str = flags_match.group(1).decode() if flags_match else ''
-        if r'\Seen' in flags_str:
+        flags_str = flags_match.group(1).decode() if flags_match else ""
+        if r"\Seen" in flags_str:
             remote_read.add(uid)
-        if r'\Flagged' in flags_str:
+        if r"\Flagged" in flags_str:
             remote_starred.add(uid)
 
     # Load current local state to diff against remote
     local_state = MailMessage.objects.filter(
-        folder=folder, imap_uid__in=present, deleted_at__isnull=True,
-    ).values_list('imap_uid', 'is_read', 'is_starred')
+        folder=folder,
+        imap_uid__in=present,
+        deleted_at__isnull=True,
+    ).values_list("imap_uid", "is_read", "is_starred")
 
     need_read = set()
     need_unread = set()
@@ -353,7 +394,7 @@ def _reconcile_folder(conn, folder):
     affected_message_ids = []
     if read_changed_uids:
         affected_message_ids = list(
-            base.filter(imap_uid__in=read_changed_uids).values_list('pk', flat=True)
+            base.filter(imap_uid__in=read_changed_uids).values_list("pk", flat=True)
         )
 
     if need_read:
@@ -367,23 +408,28 @@ def _reconcile_folder(conn, folder):
 
     if affected_message_ids:
         from .label_counts import refresh_labels_for_messages
+
         refresh_labels_for_messages(affected_message_ids)
 
 
 def _update_folder_counts(folder):
     """Update message_count and unread_count from database."""
     from django.db.models import Count, Q
+
     from ..models import MailMessage
 
     counts = MailMessage.objects.filter(
-        folder=folder, deleted_at__isnull=True,
+        folder=folder,
+        deleted_at__isnull=True,
     ).aggregate(
-        message_count=Count('pk'),
-        unread_count=Count('pk', filter=Q(is_read=False)),
+        message_count=Count("pk"),
+        unread_count=Count("pk", filter=Q(is_read=False)),
     )
-    folder.message_count = counts['message_count']
-    folder.unread_count = counts['unread_count']
-    folder.save(update_fields=['message_count', 'unread_count', 'last_sync_uid', 'updated_at'])
+    folder.message_count = counts["message_count"]
+    folder.unread_count = counts["unread_count"]
+    folder.save(
+        update_fields=["message_count", "unread_count", "last_sync_uid", "updated_at"]
+    )
 
 
 def sync_account(account):
@@ -396,9 +442,13 @@ def sync_account(account):
         try:
             sync_folder_messages(account, folder)
         except Exception:
-            logger.exception("Failed to sync folder %s for %s", scrub(folder.name), scrub(account.email))
+            logger.exception(
+                "Failed to sync folder %s for %s",
+                scrub(folder.name),
+                scrub(account.email),
+            )
             error_occurred = True
 
     account.last_sync_at = dj_timezone.now()
-    account.last_sync_error = 'Some folders failed to sync.' if error_occurred else ''
-    account.save(update_fields=['last_sync_at', 'last_sync_error', 'updated_at'])
+    account.last_sync_error = "Some folders failed to sync." if error_occurred else ""
+    account.save(update_fields=["last_sync_at", "last_sync_error", "updated_at"])

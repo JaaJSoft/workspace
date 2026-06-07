@@ -55,17 +55,17 @@ def ai_task_lifecycle(task_id, *, log_label):
 
     ai_task = AITask.objects.get(pk=task_id)
     ai_task.status = AITask.Status.PROCESSING
-    ai_task.save(update_fields=['status'])
+    ai_task.save(update_fields=["status"])
 
     try:
         yield ai_task
     except Exception as e:
-        logger.exception('%s failed: task=%s', log_label, scrub(task_id))
+        logger.exception("%s failed: task=%s", log_label, scrub(task_id))
         ai_task.status = AITask.Status.FAILED
         ai_task.error = str(e)
         ai_task.completed_at = timezone.now()
         ai_task.save()
-        notify_sse('ai', ai_task.owner_id)
+        notify_sse("ai", ai_task.owner_id)
         raise
     else:
         # If the body explicitly set FAILED for an in-band validation
@@ -75,4 +75,4 @@ def ai_task_lifecycle(task_id, *, log_label):
             ai_task.status = AITask.Status.COMPLETED
         ai_task.completed_at = timezone.now()
         ai_task.save()
-        notify_sse('ai', ai_task.owner_id)
+        notify_sse("ai", ai_task.owner_id)

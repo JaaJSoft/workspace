@@ -90,7 +90,16 @@ ignore = [
     # Line length is owned by the formatter; E501 would force manual edits of
     # long strings/comments the formatter cannot split.
     "E501",
+    # Fixing null=True on string-based fields requires schema migrations on
+    # existing models - out of scope for lint adoption. Revisit per field.
+    "DJ001",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# settings.py interleaves imports with the config sections they belong to.
+"workspace/settings.py" = ["E402"]
+# Tests assert generic mock failures (side_effect=Exception) on purpose.
+"workspace/*/tests/*" = ["B017"]
 
 [tool.coverage.run]
 source = ["workspace"]

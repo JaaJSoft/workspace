@@ -25,7 +25,7 @@ class _ChatRenderer(mistune.HTMLRenderer):
             lexer = TextLexer()
 
         highlighted = highlight(code, lexer, self._formatter)
-        lang_attr = f' data-lang="{mistune.escape(lang)}"' if lang else ''
+        lang_attr = f' data-lang="{mistune.escape(lang)}"' if lang else ""
         return f'<pre class="code-block"{lang_attr}><code>{highlighted}</code></pre>\n'
 
     def codespan(self, text):
@@ -33,18 +33,18 @@ class _ChatRenderer(mistune.HTMLRenderer):
 
     def image(self, alt, url, title=None):
         # Strip AI-generated <img> tags — real images come through attachments.
-        return f'({mistune.escape(alt)})' if alt else ''
+        return f"({mistune.escape(alt)})" if alt else ""
 
 
 # Markdown renderer configured for chat with syntax highlighting
 _markdown = mistune.create_markdown(
     renderer=_ChatRenderer(escape=True),
-    plugins=['strikethrough', 'url', 'table', 'task_lists'],
+    plugins=["strikethrough", "url", "table", "task_lists"],
 )
 
 
-_MENTION_PREFIX = 'MNTN__'
-_MENTION_SUFFIX = '__MNTN'
+_MENTION_PREFIX = "MNTN__"
+_MENTION_SUFFIX = "__MNTN"
 
 
 def render_message_body(body, mention_map=None):
@@ -60,14 +60,16 @@ def render_message_body(body, mention_map=None):
 
         def _placeholder(match):
             username = match.group(1)
-            if username in mention_map or username == 'everyone':
-                key = f'{_MENTION_PREFIX}{username}{_MENTION_SUFFIX}'
+            if username in mention_map or username == "everyone":
+                key = f"{_MENTION_PREFIX}{username}{_MENTION_SUFFIX}"
                 user_id = mention_map.get(username)
                 placeholders[key] = _mention_badge(username, user_id)
                 return key
             return match.group(0)
 
-        body = re.sub(r'(?:(?<=\s)|(?<=^))@(\w+)', _placeholder, body, flags=re.MULTILINE)
+        body = re.sub(
+            r"(?:(?<=\s)|(?<=^))@(\w+)", _placeholder, body, flags=re.MULTILINE
+        )
         html = _markdown(body)
         for key, badge in placeholders.items():
             html = html.replace(key, badge)
@@ -77,14 +79,14 @@ def render_message_body(body, mention_map=None):
 
 
 def _mention_badge(username, user_id=None):
-    if username == 'everyone':
+    if username == "everyone":
         return '<span class="mention-badge mention-everyone">@everyone</span>'
     if user_id:
         return (
             f'<span class="mention-badge" data-username="{username}" data-user-id="{user_id}"'
             f' onmouseenter="window._userCardShow(this,{user_id})"'
             f' onmouseleave="window._userCardScheduleHide(this)"'
-            f'>@{username}</span>'
+            f">@{username}</span>"
         )
     return f'<span class="mention-badge" data-username="{username}">@{username}</span>'
 
@@ -94,7 +96,7 @@ def extract_mentions(body):
 
     Returns a set of usernames (excluding 'everyone') and whether @everyone was used.
     """
-    tokens = set(re.findall(r'@(\w+)', body))
-    has_everyone = 'everyone' in tokens
-    tokens.discard('everyone')
+    tokens = set(re.findall(r"@(\w+)", body))
+    has_everyone = "everyone" in tokens
+    tokens.discard("everyone")
     return tokens, has_everyone

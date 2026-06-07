@@ -11,28 +11,34 @@ User = get_user_model()
 
 class FileAuthzMixin:
     def setUp(self):
-        self.alice = User.objects.create_user(username='alice', password='pass')
-        self.bob = User.objects.create_user(username='bob', password='pass')
-        self.group = Group.objects.create(name='Engineering')
+        self.alice = User.objects.create_user(username="alice", password="pass")
+        self.bob = User.objects.create_user(username="bob", password="pass")
+        self.group = Group.objects.create(name="Engineering")
         self.alice.groups.add(self.group)
 
-    def _make_file(self, owner, name='test.txt', parent=None, group=None):
+    def _make_file(self, owner, name="test.txt", parent=None, group=None):
         return File.objects.create(
-            owner=owner, name=name, node_type=File.NodeType.FILE,
-            parent=parent, group=group,
+            owner=owner,
+            name=name,
+            node_type=File.NodeType.FILE,
+            parent=parent,
+            group=group,
         )
 
-    def _make_folder(self, owner, name='folder', parent=None, group=None):
+    def _make_folder(self, owner, name="folder", parent=None, group=None):
         return File.objects.create(
-            owner=owner, name=name, node_type=File.NodeType.FOLDER,
-            parent=parent, group=group,
+            owner=owner,
+            name=name,
+            node_type=File.NodeType.FOLDER,
+            parent=parent,
+            group=group,
         )
 
 
 # ── accessible_files_q ─────────────────────────────────────────
 
-class AccessibleFilesQTests(FileAuthzMixin, TestCase):
 
+class AccessibleFilesQTests(FileAuthzMixin, TestCase):
     def test_includes_owned_files(self):
         f = self._make_file(self.alice)
         qs = File.objects.filter(FileService.accessible_files_q(self.alice))
@@ -58,7 +64,10 @@ class AccessibleFilesQTests(FileAuthzMixin, TestCase):
     def test_includes_shared_files(self):
         f = self._make_file(self.bob)
         FileShare.objects.create(
-            file=f, shared_by=self.bob, shared_with=self.alice, permission='ro',
+            file=f,
+            shared_by=self.bob,
+            shared_with=self.alice,
+            permission="ro",
         )
         qs = File.objects.filter(FileService.accessible_files_q(self.alice))
         self.assertIn(f, list(qs))
@@ -74,7 +83,10 @@ class AccessibleFilesQTests(FileAuthzMixin, TestCase):
     def test_no_duplicates_when_owned_and_shared(self):
         f = self._make_file(self.alice)
         FileShare.objects.create(
-            file=f, shared_by=self.alice, shared_with=self.alice, permission='rw',
+            file=f,
+            shared_by=self.alice,
+            shared_with=self.alice,
+            permission="rw",
         )
         qs = File.objects.filter(FileService.accessible_files_q(self.alice))
         self.assertEqual(qs.distinct().count(), 1)
@@ -82,8 +94,8 @@ class AccessibleFilesQTests(FileAuthzMixin, TestCase):
 
 # ── user_files_qs ──────────────────────────────────────────────
 
-class UserFilesQsTests(FileAuthzMixin, TestCase):
 
+class UserFilesQsTests(FileAuthzMixin, TestCase):
     def test_includes_owned_personal_files(self):
         f = self._make_file(self.alice)
         qs = FileService.user_files_qs(self.alice)
@@ -109,15 +121,15 @@ class UserFilesQsTests(FileAuthzMixin, TestCase):
 
 # ── user_group_files_qs ────────────────────────────────────────
 
-class UserGroupFilesQsTests(FileAuthzMixin, TestCase):
 
+class UserGroupFilesQsTests(FileAuthzMixin, TestCase):
     def test_includes_group_files_for_member(self):
         f = self._make_file(self.bob, group=self.group)
         qs = FileService.user_group_files_qs(self.alice)
         self.assertIn(f, list(qs))
 
     def test_excludes_files_from_non_member_groups(self):
-        other_group = Group.objects.create(name='Design')
+        other_group = Group.objects.create(name="Design")
         f = self._make_file(self.bob, group=other_group)
         qs = FileService.user_group_files_qs(self.alice)
         self.assertNotIn(f, list(qs))
@@ -137,11 +149,13 @@ class UserGroupFilesQsTests(FileAuthzMixin, TestCase):
 
 # ── get_permission ──────────────────────────────────────────────
 
-class GetPermissionTests(FileAuthzMixin, TestCase):
 
+class GetPermissionTests(FileAuthzMixin, TestCase):
     def test_owner_gets_manage(self):
         f = self._make_file(self.alice)
-        self.assertEqual(FileService.get_permission(self.alice, f), FilePermission.MANAGE)
+        self.assertEqual(
+            FileService.get_permission(self.alice, f), FilePermission.MANAGE
+        )
 
     def test_group_member_gets_edit(self):
         f = self._make_file(self.bob, group=self.group)
@@ -150,14 +164,22 @@ class GetPermissionTests(FileAuthzMixin, TestCase):
     def test_shared_rw_gets_write(self):
         f = self._make_file(self.bob)
         FileShare.objects.create(
-            file=f, shared_by=self.bob, shared_with=self.alice, permission='rw',
+            file=f,
+            shared_by=self.bob,
+            shared_with=self.alice,
+            permission="rw",
         )
-        self.assertEqual(FileService.get_permission(self.alice, f), FilePermission.WRITE)
+        self.assertEqual(
+            FileService.get_permission(self.alice, f), FilePermission.WRITE
+        )
 
     def test_shared_ro_gets_view(self):
         f = self._make_file(self.bob)
         FileShare.objects.create(
-            file=f, shared_by=self.bob, shared_with=self.alice, permission='ro',
+            file=f,
+            shared_by=self.bob,
+            shared_with=self.alice,
+            permission="ro",
         )
         self.assertEqual(FileService.get_permission(self.alice, f), FilePermission.VIEW)
 
@@ -175,7 +197,9 @@ class GetPermissionTests(FileAuthzMixin, TestCase):
         f = self._make_file(self.alice)
         f.deleted_at = timezone.now()
         f.save()
-        self.assertEqual(FileService.get_permission(self.alice, f), FilePermission.MANAGE)
+        self.assertEqual(
+            FileService.get_permission(self.alice, f), FilePermission.MANAGE
+        )
 
     def test_permission_ordering(self):
         """Permissions should be comparable: MANAGE > EDIT > WRITE > VIEW."""
@@ -186,8 +210,8 @@ class GetPermissionTests(FileAuthzMixin, TestCase):
 
 # ── can_access ──────────────────────────────────────────────────
 
-class CanAccessTests(FileAuthzMixin, TestCase):
 
+class CanAccessTests(FileAuthzMixin, TestCase):
     def test_owner_can_access(self):
         f = self._make_file(self.alice)
         self.assertTrue(FileService.can_access(self.alice, f))
@@ -199,7 +223,10 @@ class CanAccessTests(FileAuthzMixin, TestCase):
     def test_shared_user_can_access(self):
         f = self._make_file(self.bob)
         FileShare.objects.create(
-            file=f, shared_by=self.bob, shared_with=self.alice, permission='ro',
+            file=f,
+            shared_by=self.bob,
+            shared_with=self.alice,
+            permission="ro",
         )
         self.assertTrue(FileService.can_access(self.alice, f))
 

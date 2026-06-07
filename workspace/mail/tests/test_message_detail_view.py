@@ -17,36 +17,40 @@ User = get_user_model()
 
 class MessageDetailSoftDeletedTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='msguser', password='pass')
+        self.user = User.objects.create_user(username="msguser", password="pass")
         self.account = MailAccount.objects.create(
             owner=self.user,
-            email='user@example.com',
-            imap_host='imap.example.com',
-            smtp_host='smtp.example.com',
-            username='user@example.com',
+            email="user@example.com",
+            imap_host="imap.example.com",
+            smtp_host="smtp.example.com",
+            username="user@example.com",
         )
-        self.account.set_password('secret')
+        self.account.set_password("secret")
         self.account.save()
         self.inbox = MailFolder.objects.create(
-            account=self.account, name='INBOX',
-            display_name='Inbox', folder_type='inbox',
+            account=self.account,
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
         )
         self.deleted_msg = MailMessage.objects.create(
-            account=self.account, folder=self.inbox, imap_uid=42,
+            account=self.account,
+            folder=self.inbox,
+            imap_uid=42,
             deleted_at=timezone.now(),
         )
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
     def _url(self):
-        return f'/api/v1/mail/messages/{self.deleted_msg.uuid}'
+        return f"/api/v1/mail/messages/{self.deleted_msg.uuid}"
 
     def test_get_returns_404_for_soft_deleted(self):
         resp = self.client.get(self._url())
         self.assertEqual(resp.status_code, 404)
 
     def test_patch_returns_404_for_soft_deleted(self):
-        resp = self.client.patch(self._url(), {'is_starred': True}, format='json')
+        resp = self.client.patch(self._url(), {"is_starred": True}, format="json")
         self.assertEqual(resp.status_code, 404)
         # Defensive: a 404 must not have applied the patch.
         self.deleted_msg.refresh_from_db()

@@ -33,19 +33,28 @@ def changelog_partial(request):
     """
     raw_entries = changelog.get_changelog_entries()
     last_seen = get_setting(
-        request.user, MODULE, CHANGELOG_LAST_SEEN_VERSION,
+        request.user,
+        MODULE,
+        CHANGELOG_LAST_SEEN_VERSION,
     )
     entries = [
-        {**entry, 'read': _entry_was_seen(entry['version'], last_seen)}
+        {**entry, "read": _entry_was_seen(entry["version"], last_seen)}
         for entry in raw_entries
     ]
 
-    latest = raw_entries[0]['version'] if raw_entries else None
+    latest = raw_entries[0]["version"] if raw_entries else None
     if latest and last_seen != latest:
         set_setting(
-            request.user, MODULE, CHANGELOG_LAST_SEEN_VERSION, latest,
+            request.user,
+            MODULE,
+            CHANGELOG_LAST_SEEN_VERSION,
+            latest,
         )
 
-    return render(request, 'core/partials/changelog.html', {
-        'entries': entries,
-    })
+    return render(
+        request,
+        "core/partials/changelog.html",
+        {
+            "entries": entries,
+        },
+    )

@@ -1,11 +1,12 @@
 from django.urls import path
 
 from workspace.mail.views_oauth2 import oauth2_callback
+
 from . import views
 
-app_name = 'mail_ui'
+app_name = "mail_ui"
 
 urlpatterns = [
-    path('', views.index, name='index'),
-    path('/oauth2/callback', oauth2_callback, name='mail-oauth2-callback'),
+    path("", views.index, name="index"),
+    path("/oauth2/callback", oauth2_callback, name="mail-oauth2-callback"),
 ]

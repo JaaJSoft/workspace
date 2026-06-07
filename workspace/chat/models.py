@@ -6,30 +6,30 @@ from workspace.common.uuids import uuid_v7_or_v4
 
 class Conversation(models.Model):
     class Kind(models.TextChoices):
-        DM = 'dm', 'Direct Message'
-        GROUP = 'group', 'Group'
+        DM = "dm", "Direct Message"
+        GROUP = "group", "Group"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     kind = models.CharField(max_length=5, choices=Kind.choices)
-    title = models.CharField(max_length=255, blank=True, default='')
-    description = models.TextField(blank=True, default='')
+    title = models.CharField(max_length=255, blank=True, default="")
+    description = models.TextField(blank=True, default="")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='created_conversations',
+        related_name="created_conversations",
     )
     has_avatar = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-updated_at']
+        ordering = ["-updated_at"]
         indexes = [
-            models.Index(fields=['-updated_at']),
+            models.Index(fields=["-updated_at"]),
         ]
 
     def __str__(self):
-        return self.title or f'{self.kind} — {self.uuid}'
+        return self.title or f"{self.kind} — {self.uuid}"
 
 
 class ConversationMember(models.Model):
@@ -37,12 +37,12 @@ class ConversationMember(models.Model):
     conversation = models.ForeignKey(
         Conversation,
         on_delete=models.CASCADE,
-        related_name='members',
+        related_name="members",
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='chat_memberships',
+        related_name="chat_memberships",
     )
     last_read_at = models.DateTimeField(null=True, blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
@@ -52,16 +52,16 @@ class ConversationMember(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['conversation', 'user'],
-                name='unique_conversation_member',
+                fields=["conversation", "user"],
+                name="unique_conversation_member",
             ),
         ]
         indexes = [
-            models.Index(fields=['user', 'left_at']),
+            models.Index(fields=["user", "left_at"]),
         ]
 
     def __str__(self):
-        return f'{self.user} in {self.conversation}'
+        return f"{self.user} in {self.conversation}"
 
 
 class Message(models.Model):
@@ -69,38 +69,38 @@ class Message(models.Model):
     conversation = models.ForeignKey(
         Conversation,
         on_delete=models.CASCADE,
-        related_name='messages',
+        related_name="messages",
     )
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='chat_messages',
+        related_name="chat_messages",
     )
     reply_to = models.ForeignKey(
-        'self',
+        "self",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='replies',
+        related_name="replies",
     )
     body = models.TextField()
-    body_html = models.TextField(blank=True, default='')
+    body_html = models.TextField(blank=True, default="")
     tool_data = models.JSONField(null=True, blank=True)
     edited_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ['created_at']
+        ordering = ["created_at"]
         indexes = [
             # B-tree is bidirectional in PostgreSQL and SQLite: this single index
             # serves both ASC and DESC ordering on (conversation, created_at).
-            models.Index(fields=['conversation', 'created_at']),
-            models.Index(fields=['deleted_at'], name='msg_deleted_at'),
+            models.Index(fields=["conversation", "created_at"]),
+            models.Index(fields=["deleted_at"], name="msg_deleted_at"),
         ]
 
     def __str__(self):
-        return f'Message by {self.author} at {self.created_at}'
+        return f"Message by {self.author} at {self.created_at}"
 
 
 class Reaction(models.Model):
@@ -108,7 +108,7 @@ class Reaction(models.Model):
     message = models.ForeignKey(
         Message,
         on_delete=models.CASCADE,
-        related_name='reactions',
+        related_name="reactions",
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -120,48 +120,59 @@ class Reaction(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['message', 'user', 'emoji'],
-                name='unique_reaction',
+                fields=["message", "user", "emoji"],
+                name="unique_reaction",
             ),
         ]
         indexes = [
-            models.Index(fields=['message', 'emoji']),
+            models.Index(fields=["message", "emoji"]),
         ]
 
     def __str__(self):
-        return f'{self.user} reacted {self.emoji}'
+        return f"{self.user} reacted {self.emoji}"
 
 
 class PinnedMessage(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
-    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='pinned_messages')
-    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='pinned_in')
-    pinned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='+')
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name="pinned_messages"
+    )
+    message = models.ForeignKey(
+        Message, on_delete=models.CASCADE, related_name="pinned_in"
+    )
+    pinned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=['conversation', 'message'], name='unique_pinned_message'),
+            models.UniqueConstraint(
+                fields=["conversation", "message"], name="unique_pinned_message"
+            ),
         ]
-        ordering = ['-created_at']
-        indexes = [models.Index(fields=['conversation', '-created_at'])]
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["conversation", "-created_at"])]
 
     def __str__(self):
-        return f'Pin {self.message_id} in {self.conversation_id}'
+        return f"Pin {self.message_id} in {self.conversation_id}"
 
 
 class PinnedConversation(models.Model):
     """User-pinned conversations for quick sidebar access."""
-    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='pinned_conversations',
+        related_name="pinned_conversations",
     )
     conversation = models.ForeignKey(
         Conversation,
         on_delete=models.CASCADE,
-        related_name='pins',
+        related_name="pins",
     )
     position = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -169,67 +180,71 @@ class PinnedConversation(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['owner', 'conversation'],
-                name='unique_pinned_conversation',
+                fields=["owner", "conversation"],
+                name="unique_pinned_conversation",
             ),
         ]
-        ordering = ['position', 'created_at']
+        ordering = ["position", "created_at"]
         indexes = [
-            models.Index(fields=['owner', 'position']),
+            models.Index(fields=["owner", "position"]),
         ]
 
     def __str__(self):
-        return f'{self.owner} pinned {self.conversation}'
+        return f"{self.owner} pinned {self.conversation}"
 
 
 def attachment_upload_path(instance, filename):
     import os
+
     ext = os.path.splitext(filename)[1]
     return f"chat/{instance.message.conversation_id}/{instance.uuid}{ext}"
 
 
 class MessageAttachment(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
-    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='attachments')
+    message = models.ForeignKey(
+        Message, on_delete=models.CASCADE, related_name="attachments"
+    )
     file = models.FileField(upload_to=attachment_upload_path, max_length=500)
     original_name = models.CharField(max_length=255)
-    mime_type = models.CharField(max_length=255, default='application/octet-stream')
-    type = models.CharField(max_length=50, default='unknown', db_index=True)
-    category = models.CharField(max_length=20, default='unknown', db_index=True)
+    mime_type = models.CharField(max_length=255, default="application/octet-stream")
+    type = models.CharField(max_length=50, default="unknown", db_index=True)
+    category = models.CharField(max_length=20, default="unknown", db_index=True)
     size = models.PositiveBigIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['created_at']
+        ordering = ["created_at"]
         indexes = [
-            models.Index(fields=['message', 'created_at'], name='attach_msg_created'),
+            models.Index(fields=["message", "created_at"], name="attach_msg_created"),
         ]
+
+    def __str__(self):
+        return f"{self.original_name} ({self.message_id})"
 
     @property
     def is_image(self):
-        return self.category == 'image' or (
-            self.category == 'unknown' and self.mime_type.startswith('image/')
+        return self.category == "image" or (
+            self.category == "unknown" and self.mime_type.startswith("image/")
         )
 
     @property
     def is_video(self):
-        return self.category == 'video' or (
-            self.category == 'unknown' and self.mime_type.startswith('video/')
+        return self.category == "video" or (
+            self.category == "unknown" and self.mime_type.startswith("video/")
         )
-
-    def __str__(self):
-        return f'{self.original_name} ({self.message_id})'
 
 
 class LinkPreview(models.Model):
     """Cached OpenGraph metadata for a URL. Shared across messages."""
+
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     url = models.URLField(max_length=2048, unique=True)
-    title = models.CharField(max_length=500, blank=True, default='')
-    description = models.TextField(blank=True, default='')
-    image_url = models.URLField(max_length=2048, blank=True, default='')
-    favicon_url = models.URLField(max_length=500, blank=True, default='')
-    site_name = models.CharField(max_length=200, blank=True, default='')
+    title = models.CharField(max_length=500, blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    image_url = models.URLField(max_length=2048, blank=True, default="")
+    favicon_url = models.URLField(max_length=500, blank=True, default="")
+    site_name = models.CharField(max_length=200, blank=True, default="")
     fetched_at = models.DateTimeField(auto_now=True)
     fetch_failed = models.BooleanField(default=False)
 
@@ -239,23 +254,30 @@ class LinkPreview(models.Model):
 
 class MessageLinkPreview(models.Model):
     """Links a Message to its LinkPreview(s), preserving order."""
+
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
-    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='link_previews')
-    preview = models.ForeignKey(LinkPreview, on_delete=models.CASCADE, related_name='message_links')
+    message = models.ForeignKey(
+        Message, on_delete=models.CASCADE, related_name="link_previews"
+    )
+    preview = models.ForeignKey(
+        LinkPreview, on_delete=models.CASCADE, related_name="message_links"
+    )
     position = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=['message', 'preview'], name='unique_msg_link_preview'),
+            models.UniqueConstraint(
+                fields=["message", "preview"], name="unique_msg_link_preview"
+            ),
         ]
-        ordering = ['position']
+        ordering = ["position"]
         indexes = [
-            models.Index(fields=['message', 'position'], name='msglp_msg_pos'),
+            models.Index(fields=["message", "position"], name="msglp_msg_pos"),
         ]
 
     def __str__(self):
-        return f'Preview {self.preview_id} on {self.message_id}'
+        return f"Preview {self.preview_id} on {self.message_id}"
 
 
 class MessageInteraction(models.Model):
@@ -265,13 +287,13 @@ class MessageInteraction(models.Model):
     """
 
     class Kind(models.TextChoices):
-        QUESTION = 'question', 'Question'
+        QUESTION = "question", "Question"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     message = models.OneToOneField(
         Message,
         on_delete=models.CASCADE,
-        related_name='interaction',
+        related_name="interaction",
     )
     kind = models.CharField(max_length=16, choices=Kind.choices)
     payload = models.JSONField()
@@ -282,15 +304,15 @@ class MessageInteraction(models.Model):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='message_interactions',
+        related_name="message_interactions",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         indexes = [
-            models.Index(fields=['interacted_at']),
+            models.Index(fields=["interacted_at"]),
         ]
 
     def __str__(self):
-        state = 'pending' if self.interacted_at is None else 'answered'
-        return f'{self.kind} on {self.message_id} ({state})'
+        state = "pending" if self.interacted_at is None else "answered"
+        return f"{self.kind} on {self.message_id} ({state})"

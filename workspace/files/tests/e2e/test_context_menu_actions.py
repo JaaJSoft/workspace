@@ -19,6 +19,7 @@ The bug class this guards against:
   * a refactor that flips between Alpine ``x-for`` and a ``{% for %}``
     template loop and accidentally bakes in stale defaults.
 """
+
 from __future__ import annotations
 
 from playwright.sync_api import expect
@@ -58,16 +59,12 @@ class ContextMenuMatchesActionsEndpointTests(PlaywrightTestCase):
         # (``[x-data="fileBrowser()"]`` with the parens) and to whatever
         # name the component happens to use today.
         with self.page.expect_response(
-            lambda r: (
-                r.request.method == "POST"
-                and "/api/v1/files/actions" in r.url
-            )
+            lambda r: r.request.method == "POST" and "/api/v1/files/actions" in r.url
         ) as resp_info:
             self.page.goto(f"{self.live_server_url}/files")
         api_response = resp_info.value
         assert api_response.ok, (
-            f"actions endpoint returned {api_response.status} "
-            f"{api_response.url}"
+            f"actions endpoint returned {api_response.status} {api_response.url}"
         )
         api_payload = api_response.json()
         api_actions = api_payload.get(str(f.uuid), [])

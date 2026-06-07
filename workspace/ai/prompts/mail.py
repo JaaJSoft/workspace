@@ -50,23 +50,26 @@ def build_summarize_messages(subject: str, body: str) -> list[dict]:
     """Build messages for email summarization."""
     content = f"Subject: {subject}\n\n{truncate_text(body)}"
     return [
-        {'role': 'system', 'content': SUMMARIZE_SYSTEM},
-        {'role': 'user', 'content': (
-            f"Summarize this email:\n\n"
-            f"<untrusted-content>\n{content}\n</untrusted-content>\n\n"
-            f"{INJECTION_GUARD}"
-        )},
+        {"role": "system", "content": SUMMARIZE_SYSTEM},
+        {
+            "role": "user",
+            "content": (
+                f"Summarize this email:\n\n"
+                f"<untrusted-content>\n{content}\n</untrusted-content>\n\n"
+                f"{INJECTION_GUARD}"
+            ),
+        },
     ]
 
 
 def build_compose_messages(
     instructions: str,
-    context: str = '',
-    sender_name: str = '',
-    sender_email: str = '',
+    context: str = "",
+    sender_name: str = "",
+    sender_email: str = "",
 ) -> list[dict]:
     """Build messages for email composition."""
-    user_msg = ''
+    user_msg = ""
     if sender_email:
         user_msg += f"{_format_sender_info(sender_name, sender_email)}\n\n"
     user_msg += f"Instructions: {instructions}"
@@ -77,8 +80,8 @@ def build_compose_messages(
         )
     user_msg += f"\n\n{INJECTION_GUARD}"
     return [
-        {'role': 'system', 'content': COMPOSE_SYSTEM},
-        {'role': 'user', 'content': user_msg},
+        {"role": "system", "content": COMPOSE_SYSTEM},
+        {"role": "user", "content": user_msg},
     ]
 
 
@@ -86,27 +89,32 @@ def build_reply_messages(
     instructions: str,
     original_subject: str,
     original_body: str,
-    sender_name: str = '',
-    sender_email: str = '',
+    sender_name: str = "",
+    sender_email: str = "",
 ) -> list[dict]:
     """Build messages for email reply generation."""
     original = f"Subject: {original_subject}\n\n{truncate_text(original_body)}"
-    sender_line = ''
+    sender_line = ""
     if sender_email:
         sender_line = f"{_format_sender_info(sender_name, sender_email)}\n\n"
     return [
-        {'role': 'system', 'content': REPLY_SYSTEM},
-        {'role': 'user', 'content': (
-            f"{sender_line}"
-            f"<untrusted-content>\n{original}\n</untrusted-content>\n\n"
-            f"Reply instructions: {instructions}\n\n"
-            f"{INJECTION_GUARD}"
-        )},
+        {"role": "system", "content": REPLY_SYSTEM},
+        {
+            "role": "user",
+            "content": (
+                f"{sender_line}"
+                f"<untrusted-content>\n{original}\n</untrusted-content>\n\n"
+                f"Reply instructions: {instructions}\n\n"
+                f"{INJECTION_GUARD}"
+            ),
+        },
     ]
 
 
 def _build_classify_system(labels: list[str]) -> str:
-    label_list = '\n'.join(f'- {name}' for name in labels) if labels else '- (no labels defined)'
+    label_list = (
+        "\n".join(f"- {name}" for name in labels) if labels else "- (no labels defined)"
+    )
     return (
         "You are an email classification assistant. Assign 1-3 labels to each email "
         "from the list below.\n\n"
@@ -124,20 +132,23 @@ def build_classify_messages(emails: list[dict], labels: list[str]) -> list[dict]
     """
     lines = []
     for idx, e in enumerate(emails, 1):
-        name = e.get('from_name') or ''
-        email = e.get('from_email') or ''
+        name = e.get("from_name") or ""
+        email = e.get("from_email") or ""
         sender = f"{name} <{email}>" if name else email
         lines.append(
             f"[{idx}] From: {sender} | Subject: {e.get('subject', '')} "
             f"| Preview: {e.get('snippet', '')}"
         )
-    email_block = '\n'.join(lines)
+    email_block = "\n".join(lines)
 
     return [
-        {'role': 'system', 'content': _build_classify_system(labels)},
-        {'role': 'user', 'content': (
-            f"Classify these emails:\n\n"
-            f"<untrusted-content>\n{email_block}\n</untrusted-content>\n\n"
-            f"{INJECTION_GUARD}"
-        )},
+        {"role": "system", "content": _build_classify_system(labels)},
+        {
+            "role": "user",
+            "content": (
+                f"Classify these emails:\n\n"
+                f"<untrusted-content>\n{email_block}\n</untrusted-content>\n\n"
+                f"{INJECTION_GUARD}"
+            ),
+        },
     ]

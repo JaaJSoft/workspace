@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
@@ -16,53 +16,75 @@ class MailAiSummaryHtmlEscapingTests(TestCase):
     (LLM-produced, attacker-influenced) summary must be escaped, not executed."""
 
     def setUp(self):
-        self.user = User.objects.create_user(username='a', password='p')
+        self.user = User.objects.create_user(username="a", password="p")
         self.account = MailAccount.objects.create(
-            owner=self.user, email='a@x.com',
-            imap_host='x', imap_port=993, smtp_host='x', smtp_port=587,
+            owner=self.user,
+            email="a@x.com",
+            imap_host="x",
+            imap_port=993,
+            smtp_host="x",
+            smtp_port=587,
         )
         self.folder = MailFolder.objects.create(
-            account=self.account, name='INBOX', folder_type='inbox',
+            account=self.account,
+            name="INBOX",
+            folder_type="inbox",
         )
 
     def _summary_html(self, summary):
         message = MailMessage.objects.create(
-            account=self.account, folder=self.folder, imap_uid=1,
-            message_id='<m@x>', date=datetime.now(timezone.utc),
+            account=self.account,
+            folder=self.folder,
+            imap_uid=1,
+            message_id="<m@x>",
+            date=datetime.now(UTC),
             ai_summary=summary,
         )
-        return MailMessageDetailSerializer(message).data['ai_summary_html']
+        return MailMessageDetailSerializer(message).data["ai_summary_html"]
 
     def test_raw_html_is_escaped(self):
-        html = self._summary_html('Hi <img src=x onerror=alert(1)> there')
-        self.assertNotIn('<img', html)
-        self.assertIn('&lt;img', html)
+        html = self._summary_html("Hi <img src=x onerror=alert(1)> there")
+        self.assertNotIn("<img", html)
+        self.assertIn("&lt;img", html)
 
     def test_markdown_still_renders(self):
-        html = self._summary_html('**bold** text')
-        self.assertIn('<strong>bold</strong>', html)
+        html = self._summary_html("**bold** text")
+        self.assertIn("<strong>bold</strong>", html)
 
 
 class MailMessageDetailExtractionsTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='s', password='p')
+        self.user = User.objects.create_user(username="s", password="p")
         self.account = MailAccount.objects.create(
-            owner=self.user, email='s@x.com',
-            imap_host='x', imap_port=993, smtp_host='x', smtp_port=587,
+            owner=self.user,
+            email="s@x.com",
+            imap_host="x",
+            imap_port=993,
+            smtp_host="x",
+            smtp_port=587,
         )
         self.folder = MailFolder.objects.create(
-            account=self.account, name='INBOX', folder_type='inbox',
+            account=self.account,
+            name="INBOX",
+            folder_type="inbox",
         )
         self.message = MailMessage.objects.create(
-            account=self.account, folder=self.folder, imap_uid=1,
-            message_id='<m@x>', date=datetime.now(timezone.utc),
+            account=self.account,
+            folder=self.folder,
+            imap_uid=1,
+            message_id="<m@x>",
+            date=datetime.now(UTC),
         )
         self.calendar = Calendar.objects.create(
-            owner=self.user, name='C', color='primary',
+            owner=self.user,
+            name="C",
+            color="primary",
         )
         self.event = Event.objects.create(
-            calendar=self.calendar, owner=self.user, title='X',
-            start=datetime(2026, 6, 1, 12, tzinfo=timezone.utc),
+            calendar=self.calendar,
+            owner=self.user,
+            title="X",
+            start=datetime(2026, 6, 1, 12, tzinfo=UTC),
         )
 
     def test_detail_includes_extractions(self):
@@ -74,9 +96,9 @@ class MailMessageDetailExtractionsTests(TestCase):
         )
 
         data = MailMessageDetailSerializer(self.message).data
-        self.assertEqual(len(data['extractions']), 1)
-        self.assertEqual(data['extractions'][0]['kind'], 'event')
-        self.assertEqual(data['extractions'][0]['target']['title'], 'X')
+        self.assertEqual(len(data["extractions"]), 1)
+        self.assertEqual(data["extractions"][0]["kind"], "event")
+        self.assertEqual(data["extractions"][0]["target"]["title"], "X")
 
     def test_dismissed_extractions_excluded_from_detail(self):
         MailExtraction.objects.create(
@@ -87,4 +109,4 @@ class MailMessageDetailExtractionsTests(TestCase):
             target_object_id=self.event.uuid,
         )
         data = MailMessageDetailSerializer(self.message).data
-        self.assertEqual(data['extractions'], [])
+        self.assertEqual(data["extractions"], [])

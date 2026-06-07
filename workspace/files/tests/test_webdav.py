@@ -17,9 +17,9 @@ from workspace.files.webdav.resources import (
     FileResource,
     FolderResource,
     RootCollection,
-    _StreamingWriteBuffer,
     _copy_as,
     _resolve_parent,
+    _StreamingWriteBuffer,
 )
 
 User = get_user_model()
@@ -124,7 +124,9 @@ class ProviderTests(TestCase):
 
     def test_nested_path_resolved(self):
         folder = FileService.create_folder(self.user, "A")
-        FileService.create_file(self.user, "b.txt", parent=folder, mime_type="text/plain")
+        FileService.create_file(
+            self.user, "b.txt", parent=folder, mime_type="text/plain"
+        )
         res = self.provider.get_resource_inst("/A/b.txt", self.environ)
         self.assertIsInstance(res, FileResource)
 
@@ -158,12 +160,17 @@ class ProviderTests(TestCase):
         FileService.create_file(self.user, "dup.txt", mime_type="text/plain")
         # Force-create a second record with the same path
         File.objects.create(
-            owner=self.user, name="dup.txt", node_type=File.NodeType.FILE,
-            path="dup.txt", mime_type="text/plain",
+            owner=self.user,
+            name="dup.txt",
+            node_type=File.NodeType.FILE,
+            path="dup.txt",
+            mime_type="text/plain",
         )
         self.assertEqual(
             File.objects.filter(
-                owner=self.user, path="dup.txt", deleted_at__isnull=True,
+                owner=self.user,
+                path="dup.txt",
+                deleted_at__isnull=True,
             ).count(),
             2,
         )
@@ -204,7 +211,9 @@ class RootCollectionTests(TestCase):
 
     def test_member_names_excludes_nested(self):
         folder = FileService.create_folder(self.user, "Dir")
-        FileService.create_file(self.user, "child.txt", parent=folder, mime_type="text/plain")
+        FileService.create_file(
+            self.user, "child.txt", parent=folder, mime_type="text/plain"
+        )
         names = self.root.get_member_names()
         self.assertEqual(names, ["Dir"])
 
@@ -233,7 +242,9 @@ class RootCollectionTests(TestCase):
         self.assertIsInstance(res, FileResource)
         self.assertEqual(
             File.objects.filter(
-                owner=self.user, name="dup.txt", deleted_at__isnull=True,
+                owner=self.user,
+                name="dup.txt",
+                deleted_at__isnull=True,
             ).count(),
             1,
         )
@@ -275,7 +286,9 @@ class FolderResourceTests(TestCase):
         )
 
     def test_member_names(self):
-        FileService.create_file(self.user, "a.txt", parent=self.folder, mime_type="text/plain")
+        FileService.create_file(
+            self.user, "a.txt", parent=self.folder, mime_type="text/plain"
+        )
         FileService.create_folder(self.user, "Sub", parent=self.folder)
         names = self.res.get_member_names()
         self.assertCountEqual(names, ["a.txt", "Sub"])
@@ -288,7 +301,9 @@ class FolderResourceTests(TestCase):
         self.assertEqual(self.res.get_member_names(), [])
 
     def test_get_member_returns_correct_type(self):
-        FileService.create_file(self.user, "f.txt", parent=self.folder, mime_type="text/plain")
+        FileService.create_file(
+            self.user, "f.txt", parent=self.folder, mime_type="text/plain"
+        )
         FileService.create_folder(self.user, "D", parent=self.folder)
         self.assertIsInstance(self.res.get_member("f.txt"), FileResource)
         self.assertIsInstance(self.res.get_member("D"), FolderResource)
@@ -305,13 +320,13 @@ class FolderResourceTests(TestCase):
 
     def test_create_empty_resource_reuses_existing(self):
         """Concurrent PUT retry must reuse the existing file in the folder."""
-        existing = FileService.create_file(
-            self.user, "dup.txt", parent=self.folder
-        )
+        existing = FileService.create_file(self.user, "dup.txt", parent=self.folder)
         res = self.res.create_empty_resource("dup.txt")
         self.assertEqual(
             File.objects.filter(
-                name="dup.txt", parent=self.folder, deleted_at__isnull=True,
+                name="dup.txt",
+                parent=self.folder,
+                deleted_at__isnull=True,
             ).count(),
             1,
         )
@@ -327,10 +342,16 @@ class FolderResourceTests(TestCase):
         other.groups.add(group)
 
         group_folder = FileService.create_folder(
-            self.user, "Shared", parent=self.folder, group=group,
+            self.user,
+            "Shared",
+            parent=self.folder,
+            group=group,
         )
         existing = FileService.create_file(
-            other, "report.txt", parent=group_folder, group=group,
+            other,
+            "report.txt",
+            parent=group_folder,
+            group=group,
         )
 
         group_res = FolderResource("/Docs/Shared", self.environ, group_folder)
@@ -338,7 +359,9 @@ class FolderResourceTests(TestCase):
         self.assertEqual(res._file.pk, existing.pk)
         self.assertEqual(
             File.objects.filter(
-                name="report.txt", parent=group_folder, deleted_at__isnull=True,
+                name="report.txt",
+                parent=group_folder,
+                deleted_at__isnull=True,
             ).count(),
             1,
         )
@@ -347,7 +370,9 @@ class FolderResourceTests(TestCase):
         self.res.create_collection("Sub")
         self.assertTrue(
             File.objects.filter(
-                owner=self.user, name="Sub", parent=self.folder,
+                owner=self.user,
+                name="Sub",
+                parent=self.folder,
                 node_type=File.NodeType.FOLDER,
             ).exists()
         )
@@ -384,8 +409,11 @@ class FolderResourceTests(TestCase):
         self.res.copy_move_single("/Dest/DocsCopy", is_move=False)
         self.assertTrue(
             File.objects.filter(
-                owner=self.user, name="DocsCopy", parent=target,
-                node_type=File.NodeType.FOLDER, deleted_at__isnull=True,
+                owner=self.user,
+                name="DocsCopy",
+                parent=target,
+                node_type=File.NodeType.FOLDER,
+                deleted_at__isnull=True,
             ).exists()
         )
         # Original still exists
@@ -403,17 +431,21 @@ class FolderResourceMoveStorageTests(TestCase):
 
     def setUp(self):
         import tempfile
+
         self._tmpdir = tempfile.mkdtemp()
         self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
         self._media_override.enable()
 
         self.user = User.objects.create_user(
-            username="davmove", email="dmv@test.com", password="pass",
+            username="davmove",
+            email="dmv@test.com",
+            password="pass",
         )
         self.environ = _make_environ(user=self.user)
 
     def tearDown(self):
         import shutil
+
         self._media_override.disable()
         shutil.rmtree(self._tmpdir, ignore_errors=True)
 
@@ -422,7 +454,9 @@ class FolderResourceMoveStorageTests(TestCase):
         src = FileService.create_folder(self.user, "Src")
         FileService.create_folder(self.user, "Dest")
         note = FileService.create_file(
-            self.user, "note.txt", parent=src,
+            self.user,
+            "note.txt",
+            parent=src,
             content=ContentFile(b"hello", name="note.txt"),
         )
         old_full_path = os.path.join(self._tmpdir, note.content.name)
@@ -432,10 +466,10 @@ class FolderResourceMoveStorageTests(TestCase):
         res.move_recursive("/Dest/Src")
 
         note.refresh_from_db()
-        new_content_name = note.content.name.replace('\\', '/')
+        new_content_name = note.content.name.replace("\\", "/")
         self.assertTrue(
-            new_content_name.startswith('files/users/davmove/Dest/Src/'),
-            f'Expected new path under Dest/Src/, got {new_content_name}',
+            new_content_name.startswith("files/users/davmove/Dest/Src/"),
+            f"Expected new path under Dest/Src/, got {new_content_name}",
         )
         new_full_path = os.path.join(self._tmpdir, note.content.name)
         self.assertTrue(os.path.isfile(new_full_path))
@@ -455,6 +489,7 @@ class FileResourceTests(TestCase):
 
     def setUp(self):
         import tempfile
+
         self._tmpdir = tempfile.mkdtemp()
         self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
         self._media_override.enable()
@@ -471,6 +506,7 @@ class FileResourceTests(TestCase):
 
     def tearDown(self):
         import shutil
+
         self._media_override.disable()
         shutil.rmtree(self._tmpdir, ignore_errors=True)
 
@@ -481,12 +517,8 @@ class FileResourceTests(TestCase):
         self.assertEqual(self.res.get_content_type(), "text/plain")
 
     def test_timestamps(self):
-        self.assertEqual(
-            self.res.get_creation_date(), self.file.created_at.timestamp()
-        )
-        self.assertEqual(
-            self.res.get_last_modified(), self.file.updated_at.timestamp()
-        )
+        self.assertEqual(self.res.get_creation_date(), self.file.created_at.timestamp())
+        self.assertEqual(self.res.get_last_modified(), self.file.updated_at.timestamp())
 
     def test_get_content(self):
         stream = self.res.get_content()
@@ -628,8 +660,8 @@ class FileResourceTests(TestCase):
         self.file.refresh_from_db()
 
         # New content.name must reflect the new parent.
-        new_content_name = self.file.content.name.replace('\\', '/')
-        self.assertIn('Target/', new_content_name)
+        new_content_name = self.file.content.name.replace("\\", "/")
+        self.assertIn("Target/", new_content_name)
         # And the bytes must actually live there.
         new_full_path = os.path.join(self._tmpdir, self.file.content.name)
         self.assertTrue(os.path.isfile(new_full_path))
@@ -639,7 +671,9 @@ class FileResourceTests(TestCase):
         folder = FileService.create_folder(self.user, "CopyDest")
         self.res.copy_move_single("/CopyDest/copy.txt", is_move=False)
         copy = File.objects.get(
-            owner=self.user, name="copy.txt", parent=folder,
+            owner=self.user,
+            name="copy.txt",
+            parent=folder,
             deleted_at__isnull=True,
         )
         self.assertEqual(copy.node_type, File.NodeType.FILE)
@@ -730,8 +764,11 @@ class CopyAsTests(TestCase):
         )
         sub = FileService.create_folder(self.user, "Sub", parent=folder)
         FileService.create_file(
-            self.user, "deep.txt", parent=sub,
-            content=ContentFile(b"deep", name="deep.txt"), mime_type="text/plain",
+            self.user,
+            "deep.txt",
+            parent=sub,
+            content=ContentFile(b"deep", name="deep.txt"),
+            mime_type="text/plain",
         )
 
         copy = _copy_as(folder, None, self.user, "Dst")
@@ -763,12 +800,14 @@ class StreamingWriteBufferTests(TestCase):
 
     def _make_buf(self, name="test.bin", flush_size=1024):
         import tempfile
+
         self._tmpdir = tempfile.mkdtemp()
         path = os.path.join(self._tmpdir, name)
         return _StreamingWriteBuffer(path, flush_size), path
 
     def tearDown(self):
         import shutil
+
         if hasattr(self, "_tmpdir"):
             shutil.rmtree(self._tmpdir, ignore_errors=True)
 
@@ -827,17 +866,20 @@ class LockStorageBuilderTests(TestCase):
 
     def _build(self):
         from workspace.files.webdav.app import _build_lock_storage
+
         return _build_lock_storage()
 
     @override_settings(WEBDAV_LOCK_STORAGE_URL=None)
     def test_dev_fallback_is_in_memory(self):
         from wsgidav.lock_man.lock_storage import LockStorageDict
+
         storage = self._build()
         self.assertIsInstance(storage, LockStorageDict)
 
     @override_settings(WEBDAV_LOCK_STORAGE_URL="redis://localhost:6379/3")
     def test_redis_basic_url(self):
         from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
+
         storage = self._build()
         self.assertIsInstance(storage, LockStorageRedis)
         self.assertEqual(storage._redis_host, "localhost")
@@ -845,11 +887,10 @@ class LockStorageBuilderTests(TestCase):
         self.assertEqual(storage._redis_db, 3)
         self.assertIsNone(storage._redis_password)
 
-    @override_settings(
-        WEBDAV_LOCK_STORAGE_URL="redis://:s3cret@redis.internal:6380/3"
-    )
+    @override_settings(WEBDAV_LOCK_STORAGE_URL="redis://:s3cret@redis.internal:6380/3")
     def test_redis_with_password_and_custom_port(self):
         from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
+
         storage = self._build()
         self.assertIsInstance(storage, LockStorageRedis)
         self.assertEqual(storage._redis_host, "redis.internal")
@@ -860,6 +901,7 @@ class LockStorageBuilderTests(TestCase):
     @override_settings(WEBDAV_LOCK_STORAGE_URL="redis://example.com/0")
     def test_redis_defaults_when_port_omitted(self):
         from wsgidav.lock_man.lock_storage_redis import LockStorageRedis
+
         storage = self._build()
         self.assertIsInstance(storage, LockStorageRedis)
         self.assertEqual(storage._redis_host, "example.com")
@@ -874,6 +916,7 @@ class CreateWebdavAppTests(TestCase):
     def test_factory_returns_app_with_lock_manager(self):
         """Dev fallback: app is built and locking is enabled (DAV level 2)."""
         from workspace.files.webdav.app import create_webdav_app
+
         app = create_webdav_app()
         # With a LockStorageDict the lock manager must be present so that
         # OPTIONS advertises ``DAV: 1,2``.
@@ -1023,21 +1066,22 @@ class WebDAVIntegrationTests(TestCase):
         body = (
             b'<?xml version="1.0" encoding="utf-8"?>'
             b'<lockinfo xmlns="DAV:">'
-            b'<lockscope><exclusive/></lockscope>'
-            b'<locktype><write/></locktype>'
-            b'<owner><href>test</href></owner>'
-            b'</lockinfo>'
+            b"<lockscope><exclusive/></lockscope>"
+            b"<locktype><write/></locktype>"
+            b"<owner><href>test</href></owner>"
+            b"</lockinfo>"
         )
         code, headers, _ = self._request(
-            "LOCK", "/locked.txt", body=body,
+            "LOCK",
+            "/locked.txt",
+            body=body,
             headers={"Content-Type": "application/xml", "Timeout": "Second-180"},
         )
         self.assertIn(code, (200, 201))
         ct = headers.get("Content-Type") or headers.get("content-type")
         self.assertIsNotNone(ct, f"no Content-Type in {headers!r}")
         # Must have a valid type/subtype
-        self.assertIn("/", ct.split(";")[0],
-                      f"Content-Type missing subtype: {ct!r}")
+        self.assertIn("/", ct.split(";")[0], f"Content-Type missing subtype: {ct!r}")
 
     def test_etag_header_is_quoted(self):
         """The HTTP ``ETag:`` response header must be a quoted-string.
@@ -1068,7 +1112,9 @@ class WebDAVIntegrationTests(TestCase):
         self.assertEqual(code, 201)
         self.assertTrue(
             File.objects.filter(
-                owner=self.user, name="NewFolder", node_type=File.NodeType.FOLDER,
+                owner=self.user,
+                name="NewFolder",
+                node_type=File.NodeType.FOLDER,
             ).exists()
         )
 
@@ -1079,7 +1125,9 @@ class WebDAVIntegrationTests(TestCase):
         parent = File.objects.get(owner=self.user, name="Parent")
         self.assertTrue(
             File.objects.filter(
-                owner=self.user, name="Child", parent=parent,
+                owner=self.user,
+                name="Child",
+                parent=parent,
             ).exists()
         )
 
@@ -1087,7 +1135,9 @@ class WebDAVIntegrationTests(TestCase):
 
     def test_put_creates_file(self):
         code, _, _ = self._request(
-            "PUT", "/hello.txt", body=b"Hello!",
+            "PUT",
+            "/hello.txt",
+            body=b"Hello!",
             headers={"Content-Type": "text/plain"},
         )
         self.assertEqual(code, 201)
@@ -1120,7 +1170,9 @@ class WebDAVIntegrationTests(TestCase):
         parent = File.objects.get(owner=self.user, name="Sub")
         self.assertTrue(
             File.objects.filter(
-                owner=self.user, name="note.txt", parent=parent,
+                owner=self.user,
+                name="note.txt",
+                parent=parent,
             ).exists()
         )
 
@@ -1157,7 +1209,8 @@ class WebDAVIntegrationTests(TestCase):
         FileService.create_folder(self.user, "Dest")
 
         code, _, _ = self._request(
-            "MOVE", "/src.txt",
+            "MOVE",
+            "/src.txt",
             headers={"Destination": "http://testserver/dav/Dest/src.txt"},
         )
         self.assertIn(code, (201, 204))
@@ -1165,37 +1218,50 @@ class WebDAVIntegrationTests(TestCase):
         # Old location gone
         self.assertFalse(
             File.objects.filter(
-                owner=self.user, name="src.txt", parent__isnull=True,
+                owner=self.user,
+                name="src.txt",
+                parent__isnull=True,
                 deleted_at__isnull=True,
             ).exists()
         )
         # New location exists
         dest = File.objects.get(owner=self.user, name="Dest")
         moved = File.objects.get(
-            owner=self.user, name="src.txt", parent=dest, deleted_at__isnull=True,
+            owner=self.user,
+            name="src.txt",
+            parent=dest,
+            deleted_at__isnull=True,
         )
         self.assertEqual(moved.size, 7)
 
     def test_move_folder(self):
         folder = FileService.create_folder(self.user, "ToMove")
         FileService.create_file(
-            self.user, "child.txt", parent=folder,
+            self.user,
+            "child.txt",
+            parent=folder,
             content=ContentFile(b"c", name="child.txt"),
         )
         FileService.create_folder(self.user, "Into")
 
         code, _, _ = self._request(
-            "MOVE", "/ToMove/",
+            "MOVE",
+            "/ToMove/",
             headers={"Destination": "http://testserver/dav/Into/ToMove/"},
         )
         self.assertIn(code, (201, 204))
         into = File.objects.get(owner=self.user, name="Into")
         moved = File.objects.get(
-            owner=self.user, name="ToMove", parent=into, deleted_at__isnull=True,
+            owner=self.user,
+            name="ToMove",
+            parent=into,
+            deleted_at__isnull=True,
         )
         # Child should follow
         self.assertTrue(
-            File.objects.filter(parent=moved, name="child.txt", deleted_at__isnull=True).exists()
+            File.objects.filter(
+                parent=moved, name="child.txt", deleted_at__isnull=True
+            ).exists()
         )
 
     def test_move_file_rename_in_place(self):
@@ -1205,17 +1271,22 @@ class WebDAVIntegrationTests(TestCase):
             self.user, "old.txt", content=content, mime_type="text/plain"
         )
         code, _, _ = self._request(
-            "MOVE", "/old.txt",
+            "MOVE",
+            "/old.txt",
             headers={"Destination": "http://testserver/dav/new.txt"},
         )
         self.assertIn(code, (201, 204))
         self.assertFalse(
             File.objects.filter(
-                owner=self.user, name="old.txt", deleted_at__isnull=True,
+                owner=self.user,
+                name="old.txt",
+                deleted_at__isnull=True,
             ).exists()
         )
         renamed = File.objects.get(
-            owner=self.user, name="new.txt", deleted_at__isnull=True,
+            owner=self.user,
+            name="new.txt",
+            deleted_at__isnull=True,
         )
         self.assertIsNone(renamed.parent)
 
@@ -1223,19 +1294,24 @@ class WebDAVIntegrationTests(TestCase):
         """MOVE on a folder with same parent and new name = rename."""
         FileService.create_folder(self.user, "Old")
         code, _, _ = self._request(
-            "MOVE", "/Old/",
+            "MOVE",
+            "/Old/",
             headers={"Destination": "http://testserver/dav/New/"},
         )
         self.assertIn(code, (201, 204))
         self.assertFalse(
             File.objects.filter(
-                owner=self.user, name="Old", deleted_at__isnull=True,
+                owner=self.user,
+                name="Old",
+                deleted_at__isnull=True,
             ).exists()
         )
         self.assertTrue(
             File.objects.filter(
-                owner=self.user, name="New",
-                node_type=File.NodeType.FOLDER, deleted_at__isnull=True,
+                owner=self.user,
+                name="New",
+                node_type=File.NodeType.FOLDER,
+                deleted_at__isnull=True,
             ).exists()
         )
 
@@ -1243,21 +1319,29 @@ class WebDAVIntegrationTests(TestCase):
         """MOVE a file from a subfolder back to the root collection."""
         sub = FileService.create_folder(self.user, "Sub")
         FileService.create_file(
-            self.user, "x.txt", parent=sub,
-            content=ContentFile(b"x", name="x.txt"), mime_type="text/plain",
+            self.user,
+            "x.txt",
+            parent=sub,
+            content=ContentFile(b"x", name="x.txt"),
+            mime_type="text/plain",
         )
         code, _, _ = self._request(
-            "MOVE", "/Sub/x.txt",
+            "MOVE",
+            "/Sub/x.txt",
             headers={"Destination": "http://testserver/dav/x.txt"},
         )
         self.assertIn(code, (201, 204))
         moved = File.objects.get(
-            owner=self.user, name="x.txt", deleted_at__isnull=True,
+            owner=self.user,
+            name="x.txt",
+            deleted_at__isnull=True,
         )
         self.assertIsNone(moved.parent)
         self.assertFalse(
             File.objects.filter(
-                owner=self.user, name="x.txt", parent=sub,
+                owner=self.user,
+                name="x.txt",
+                parent=sub,
                 deleted_at__isnull=True,
             ).exists()
         )
@@ -1267,21 +1351,29 @@ class WebDAVIntegrationTests(TestCase):
         a = FileService.create_folder(self.user, "A")
         b = FileService.create_folder(self.user, "B")
         FileService.create_file(
-            self.user, "doc.txt", parent=a,
-            content=ContentFile(b"d", name="doc.txt"), mime_type="text/plain",
+            self.user,
+            "doc.txt",
+            parent=a,
+            content=ContentFile(b"d", name="doc.txt"),
+            mime_type="text/plain",
         )
         code, _, _ = self._request(
-            "MOVE", "/A/doc.txt",
+            "MOVE",
+            "/A/doc.txt",
             headers={"Destination": "http://testserver/dav/B/doc.txt"},
         )
         self.assertIn(code, (201, 204))
         moved = File.objects.get(
-            owner=self.user, name="doc.txt", deleted_at__isnull=True,
+            owner=self.user,
+            name="doc.txt",
+            deleted_at__isnull=True,
         )
         self.assertEqual(moved.parent, b)
         self.assertFalse(
             File.objects.filter(
-                owner=self.user, name="doc.txt", parent=a,
+                owner=self.user,
+                name="doc.txt",
+                parent=a,
                 deleted_at__isnull=True,
             ).exists()
         )
@@ -1291,22 +1383,30 @@ class WebDAVIntegrationTests(TestCase):
         a = FileService.create_folder(self.user, "A")
         b = FileService.create_folder(self.user, "B")
         FileService.create_file(
-            self.user, "old.txt", parent=a,
-            content=ContentFile(b"x", name="old.txt"), mime_type="text/plain",
+            self.user,
+            "old.txt",
+            parent=a,
+            content=ContentFile(b"x", name="old.txt"),
+            mime_type="text/plain",
         )
         code, _, _ = self._request(
-            "MOVE", "/A/old.txt",
+            "MOVE",
+            "/A/old.txt",
             headers={"Destination": "http://testserver/dav/B/new.txt"},
         )
         self.assertIn(code, (201, 204))
         moved = File.objects.get(
-            owner=self.user, name="new.txt", parent=b,
+            owner=self.user,
+            name="new.txt",
+            parent=b,
             deleted_at__isnull=True,
         )
         self.assertEqual(moved.size, 1)
         self.assertFalse(
             File.objects.filter(
-                owner=self.user, name="old.txt", parent=a,
+                owner=self.user,
+                name="old.txt",
+                parent=a,
                 deleted_at__isnull=True,
             ).exists()
         )
@@ -1314,41 +1414,55 @@ class WebDAVIntegrationTests(TestCase):
     def test_move_overwrite_default_replaces_destination(self):
         """MOVE without ``Overwrite`` header defaults to overwrite (RFC 4918 §10.6)."""
         FileService.create_file(
-            self.user, "src.txt",
-            content=ContentFile(b"new", name="src.txt"), mime_type="text/plain",
+            self.user,
+            "src.txt",
+            content=ContentFile(b"new", name="src.txt"),
+            mime_type="text/plain",
         )
         FileService.create_file(
-            self.user, "dest.txt",
-            content=ContentFile(b"old", name="dest.txt"), mime_type="text/plain",
+            self.user,
+            "dest.txt",
+            content=ContentFile(b"old", name="dest.txt"),
+            mime_type="text/plain",
         )
         code, _, _ = self._request(
-            "MOVE", "/src.txt",
+            "MOVE",
+            "/src.txt",
             headers={"Destination": "http://testserver/dav/dest.txt"},
         )
         self.assertIn(code, (201, 204))
         # Source is gone, only one dest.txt remains and it has the new bytes.
         self.assertFalse(
             File.objects.filter(
-                owner=self.user, name="src.txt", deleted_at__isnull=True,
+                owner=self.user,
+                name="src.txt",
+                deleted_at__isnull=True,
             ).exists()
         )
         live = File.objects.filter(
-            owner=self.user, name="dest.txt", deleted_at__isnull=True,
+            owner=self.user,
+            name="dest.txt",
+            deleted_at__isnull=True,
         )
         self.assertEqual(live.count(), 1)
 
     def test_move_overwrite_false_with_existing_destination_returns_412(self):
         """MOVE with ``Overwrite: F`` to an existing target must return 412 (RFC 4918 §10.6)."""
         FileService.create_file(
-            self.user, "src.txt",
-            content=ContentFile(b"a", name="src.txt"), mime_type="text/plain",
+            self.user,
+            "src.txt",
+            content=ContentFile(b"a", name="src.txt"),
+            mime_type="text/plain",
         )
         FileService.create_file(
-            self.user, "dest.txt",
-            content=ContentFile(b"b", name="dest.txt"), mime_type="text/plain",
+            self.user,
+            "dest.txt",
+            content=ContentFile(b"b", name="dest.txt"),
+            mime_type="text/plain",
         )
         code, _, _ = self._request(
-            "MOVE", "/src.txt",
+            "MOVE",
+            "/src.txt",
             headers={
                 "Destination": "http://testserver/dav/dest.txt",
                 "Overwrite": "F",
@@ -1358,12 +1472,16 @@ class WebDAVIntegrationTests(TestCase):
         # Both files must still exist, untouched.
         self.assertTrue(
             File.objects.filter(
-                owner=self.user, name="src.txt", deleted_at__isnull=True,
+                owner=self.user,
+                name="src.txt",
+                deleted_at__isnull=True,
             ).exists()
         )
         self.assertTrue(
             File.objects.filter(
-                owner=self.user, name="dest.txt", deleted_at__isnull=True,
+                owner=self.user,
+                name="dest.txt",
+                deleted_at__isnull=True,
             ).exists()
         )
 
@@ -1375,18 +1493,23 @@ class WebDAVIntegrationTests(TestCase):
             self.user, "orig.txt", content=content, mime_type="text/plain"
         )
         code, _, _ = self._request(
-            "COPY", "/orig.txt",
+            "COPY",
+            "/orig.txt",
             headers={"Destination": "http://testserver/dav/dup.txt"},
         )
         self.assertIn(code, (201, 204))
         # Both should exist
         self.assertTrue(
             File.objects.filter(
-                owner=self.user, name="orig.txt", deleted_at__isnull=True,
+                owner=self.user,
+                name="orig.txt",
+                deleted_at__isnull=True,
             ).exists()
         )
         dup = File.objects.get(
-            owner=self.user, name="dup.txt", deleted_at__isnull=True,
+            owner=self.user,
+            name="dup.txt",
+            deleted_at__isnull=True,
         )
         dup.content.open("rb")
         self.assertEqual(dup.content.read(), b"copy me")

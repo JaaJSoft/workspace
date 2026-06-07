@@ -15,10 +15,11 @@ def refresh_labels_for_messages(message_ids):
     if not message_ids:
         return
     from ..models import MailLabel, MailMessageLabel
+
     label_ids = set(
-        MailMessageLabel.objects
-        .filter(message_id__in=message_ids)
-        .values_list('label_id', flat=True)
+        MailMessageLabel.objects.filter(message_id__in=message_ids).values_list(
+            "label_id", flat=True
+        )
     )
     if not label_ids:
         return
@@ -27,4 +28,5 @@ def refresh_labels_for_messages(message_ids):
     # itself moved into services (follow-up), this can become a top-level
     # import.
     from ..views import _refresh_label_counts
+
     _refresh_label_counts(MailLabel.objects.filter(pk__in=label_ids))

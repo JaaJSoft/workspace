@@ -8,48 +8,48 @@ register = template.Library()
 def date_label(value):
     """Return 'Today', 'Yesterday', or a short date like 'Feb 5'."""
     if not value:
-        return ''
+        return ""
     today = timezone.localdate()
     if value == today:
-        return 'Today'
+        return "Today"
     diff = (today - value).days
     if diff == 1:
-        return 'Yesterday'
+        return "Yesterday"
     # Use %#d on Windows, %-d on Unix for day without leading zero
     try:
-        return value.strftime('%b %-d')
+        return value.strftime("%b %-d")
     except ValueError:
-        return value.strftime('%b %#d')
+        return value.strftime("%b %#d")
 
 
 @register.filter
 def format_time(value):
     """Format a datetime as 'HH:MM' (24h)."""
     if not value:
-        return ''
+        return ""
     local = timezone.localtime(value)
-    return local.strftime('%H:%M')
+    return local.strftime("%H:%M")
 
 
-@register.inclusion_tag('chat/ui/partials/_read_receipt.html')
+@register.inclusion_tag("chat/ui/partials/_read_receipt.html")
 def render_read_receipt(message, conversation_kind):
     """Render read receipt indicator for own messages."""
-    read_count = getattr(message, 'read_count', None)
+    read_count = getattr(message, "read_count", None)
     if read_count is None:
-        return {'show': False}
+        return {"show": False}
 
     return {
-        'show': True,
-        'read_count': read_count,
-        'total_recipients': message.total_recipients,
-        'all_read': message.all_read,
-        'is_dm': conversation_kind == 'dm',
-        'message_uuid': message.uuid,
-        'conversation_uuid': message.conversation_id,
+        "show": True,
+        "read_count": read_count,
+        "total_recipients": message.total_recipients,
+        "all_read": message.all_read,
+        "is_dm": conversation_kind == "dm",
+        "message_uuid": message.uuid,
+        "conversation_uuid": message.conversation_id,
     }
 
 
-@register.inclusion_tag('chat/ui/partials/_reactions.html')
+@register.inclusion_tag("chat/ui/partials/_reactions.html")
 def render_reactions(message, current_user):
     """Group reactions by emoji and check if current user reacted.
 
@@ -60,18 +60,23 @@ def render_reactions(message, current_user):
     """
     reactions = list(message.reactions.all())
     if not reactions:
-        return {'groups': [], 'message_uuid': message.uuid}
+        return {"groups": [], "message_uuid": message.uuid}
 
     emoji_map = {}
     for r in reactions:
         if r.emoji not in emoji_map:
-            emoji_map[r.emoji] = {'emoji': r.emoji, 'count': 0, 'users': [], 'has_mine': False}
-        emoji_map[r.emoji]['count'] += 1
-        emoji_map[r.emoji]['users'].append(r.user.username)
+            emoji_map[r.emoji] = {
+                "emoji": r.emoji,
+                "count": 0,
+                "users": [],
+                "has_mine": False,
+            }
+        emoji_map[r.emoji]["count"] += 1
+        emoji_map[r.emoji]["users"].append(r.user.username)
         if r.user_id == current_user.id:
-            emoji_map[r.emoji]['has_mine'] = True
+            emoji_map[r.emoji]["has_mine"] = True
 
     return {
-        'groups': list(emoji_map.values()),
-        'message_uuid': message.uuid,
+        "groups": list(emoji_map.values()),
+        "message_uuid": message.uuid,
     }

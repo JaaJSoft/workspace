@@ -11,24 +11,26 @@ User = get_user_model()
 
 class DispatchTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='dispatch_user', password='pass123')
+        self.user = User.objects.create_user(
+            username="dispatch_user", password="pass123"
+        )
 
-    @patch('workspace.ai.tasks.mail.summarize.delay')
+    @patch("workspace.ai.tasks.mail.summarize.delay")
     def test_dispatch_creates_task_and_enqueues_worker(self, mock_delay):
         ai_task = dispatch(
             owner=self.user,
             task_type=AITask.TaskType.SUMMARIZE,
-            input_data={'message_id': 'abc'},
+            input_data={"message_id": "abc"},
         )
 
         self.assertIsInstance(ai_task, AITask)
         self.assertEqual(ai_task.owner, self.user)
         self.assertEqual(ai_task.task_type, AITask.TaskType.SUMMARIZE)
-        self.assertEqual(ai_task.input_data, {'message_id': 'abc'})
+        self.assertEqual(ai_task.input_data, {"message_id": "abc"})
         self.assertEqual(ai_task.status, AITask.Status.PENDING)
         mock_delay.assert_called_once_with(str(ai_task.uuid))
 
-    @patch('workspace.ai.tasks.mail.summarize.delay')
+    @patch("workspace.ai.tasks.mail.summarize.delay")
     def test_dispatch_defaults_input_data_to_empty_dict(self, mock_delay):
         ai_task = dispatch(
             owner=self.user,
@@ -37,38 +39,38 @@ class DispatchTests(TestCase):
         self.assertEqual(ai_task.input_data, {})
         mock_delay.assert_called_once_with(str(ai_task.uuid))
 
-    @patch('workspace.ai.tasks.mail.compose_email.delay')
+    @patch("workspace.ai.tasks.mail.compose_email.delay")
     def test_reply_and_compose_share_compose_email_worker(self, mock_delay):
         compose_task = dispatch(
             owner=self.user,
             task_type=AITask.TaskType.COMPOSE,
-            input_data={'instructions': 'x'},
+            input_data={"instructions": "x"},
         )
         reply_task = dispatch(
             owner=self.user,
             task_type=AITask.TaskType.REPLY,
-            input_data={'message_id': 'y', 'instructions': 'z'},
+            input_data={"message_id": "y", "instructions": "z"},
         )
 
         self.assertEqual(mock_delay.call_count, 2)
         mock_delay.assert_any_call(str(compose_task.uuid))
         mock_delay.assert_any_call(str(reply_task.uuid))
 
-    @patch('workspace.ai.tasks.mail.classify_mail_messages.delay')
+    @patch("workspace.ai.tasks.mail.classify_mail_messages.delay")
     def test_classify_dispatch(self, mock_delay):
         ai_task = dispatch(
             owner=self.user,
             task_type=AITask.TaskType.CLASSIFY,
-            input_data={'message_uuids': ['u1', 'u2']},
+            input_data={"message_uuids": ["u1", "u2"]},
         )
         mock_delay.assert_called_once_with(str(ai_task.uuid))
 
-    @patch('workspace.ai.tasks.editor.editor_action.delay')
+    @patch("workspace.ai.tasks.editor.editor_action.delay")
     def test_editor_dispatch(self, mock_delay):
         ai_task = dispatch(
             owner=self.user,
             task_type=AITask.TaskType.EDITOR,
-            input_data={'action': 'rewrite', 'content': 'hello'},
+            input_data={"action": "rewrite", "content": "hello"},
         )
         mock_delay.assert_called_once_with(str(ai_task.uuid))
 
@@ -79,19 +81,19 @@ class DispatchTests(TestCase):
         with self.assertRaises(ValueError) as cm:
             ai_task = AITask(
                 owner=self.user,
-                task_type='not-a-real-type',
+                task_type="not-a-real-type",
                 input_data={},
             )
             _enqueue_worker(ai_task)
 
-        self.assertIn('not-a-real-type', str(cm.exception))
+        self.assertIn("not-a-real-type", str(cm.exception))
 
-    @patch('workspace.ai.tasks.calendar.extract_from_mail_messages.delay')
+    @patch("workspace.ai.tasks.calendar.extract_from_mail_messages.delay")
     def test_extract_dispatch(self, mock_delay):
         ai_task = dispatch(
             owner=self.user,
             task_type=AITask.TaskType.EXTRACT,
-            input_data={'message_uuids': ['u1']},
+            input_data={"message_uuids": ["u1"]},
         )
         mock_delay.assert_called_once_with(str(ai_task.uuid))
 
@@ -103,11 +105,11 @@ class DispatchTests(TestCase):
         # generate_chat_response).
         non_dispatched = {AITask.TaskType.CHAT}
         with (
-            patch('workspace.ai.tasks.mail.summarize.delay'),
-            patch('workspace.ai.tasks.mail.compose_email.delay'),
-            patch('workspace.ai.tasks.mail.classify_mail_messages.delay'),
-            patch('workspace.ai.tasks.editor.editor_action.delay'),
-            patch('workspace.ai.tasks.calendar.extract_from_mail_messages.delay'),
+            patch("workspace.ai.tasks.mail.summarize.delay"),
+            patch("workspace.ai.tasks.mail.compose_email.delay"),
+            patch("workspace.ai.tasks.mail.classify_mail_messages.delay"),
+            patch("workspace.ai.tasks.editor.editor_action.delay"),
+            patch("workspace.ai.tasks.calendar.extract_from_mail_messages.delay"),
         ):
             for task_type in AITask.TaskType.values:
                 if task_type in non_dispatched:
@@ -120,4 +122,4 @@ class DispatchTests(TestCase):
                 try:
                     _enqueue_worker(ai_task)
                 except ValueError as e:
-                    self.fail(f'TaskType {task_type!r} has no worker mapping: {e}')
+                    self.fail(f"TaskType {task_type!r} has no worker mapping: {e}")

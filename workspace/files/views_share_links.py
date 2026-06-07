@@ -14,27 +14,27 @@ from rest_framework.views import APIView
 from workspace.common.http_ranges import serve_with_ranges
 from workspace.files.models import FileShareLink
 
-SIGNER = signing.TimestampSigner(salt='file-share-link')
+SIGNER = signing.TimestampSigner(salt="file-share-link")
 ACCESS_TOKEN_MAX_AGE = 3600  # 1 hour
 
 
 class ShareLinkVerifyThrottle(AnonRateThrottle):
     """5 attempts per minute per token for share link password verification."""
-    rate = '5/min'
+
+    rate = "5/min"
 
     def get_cache_key(self, request, view):
-        token = view.kwargs.get('token', '')
+        token = view.kwargs.get("token", "")
         return self.cache_format % {
-            'scope': self.scope,
-            'ident': token,
+            "scope": self.scope,
+            "ident": token,
         }
 
 
 def _resolve_link(token):
     """Resolve a share link by token. Returns (link, error_response) tuple."""
     link = (
-        FileShareLink.objects
-        .select_related('file', 'created_by')
+        FileShareLink.objects.select_related("file", "created_by")
         .filter(token=token, file__deleted_at__isnull=True)
         .first()
     )
@@ -42,7 +42,7 @@ def _resolve_link(token):
         return None, Response(status=status.HTTP_404_NOT_FOUND)
     if link.is_expired:
         return None, Response(
-            {'detail': 'This share link has expired.'},
+            {"detail": "This share link has expired."},
             status=status.HTTP_410_GONE,
         )
     return link, None
@@ -52,19 +52,19 @@ def _check_password_access(link, request):
     """Check password access for a link. Returns error Response or None if OK."""
     if not link.has_password:
         return None
-    access_token = request.query_params.get('access_token', '')
+    access_token = request.query_params.get("access_token", "")
     if not access_token:
         return Response(
-            {'detail': 'Password required.', 'has_password': True},
+            {"detail": "Password required.", "has_password": True},
             status=status.HTTP_403_FORBIDDEN,
         )
     try:
         value = SIGNER.unsign(access_token, max_age=ACCESS_TOKEN_MAX_AGE)
         if value != link.token:
             raise signing.BadSignature
-    except (signing.BadSignature, signing.SignatureExpired):
+    except signing.BadSignature, signing.SignatureExpired:
         return Response(
-            {'detail': 'Invalid or expired access token.'},
+            {"detail": "Invalid or expired access token."},
             status=status.HTTP_403_FORBIDDEN,
         )
     return None
@@ -73,15 +73,17 @@ def _check_password_access(link, request):
 def _record_access(link):
     """Increment view count and update last accessed time."""
     from django.db.models import F
+
     FileShareLink.objects.filter(pk=link.pk).update(
-        view_count=F('view_count') + 1,
+        view_count=F("view_count") + 1,
         last_accessed_at=timezone.now(),
     )
 
 
-@extend_schema(tags=['Files - Shared Links'])
+@extend_schema(tags=["Files - Shared Links"])
 class SharedFileMetaView(APIView):
     """GET /api/v1/files/shared/{token} — public file metadata."""
+
     permission_classes = [AllowAny]
     authentication_classes = []
 
@@ -92,20 +94,27 @@ class SharedFileMetaView(APIView):
 
         f = link.file
         from workspace.files.ui.viewers import ViewerRegistry
-        return Response({
-            'name': f.name,
-            'mime_type': f.mime_type,
-            'size': f.size,
-            'category': f.category,
-            'is_viewable': ViewerRegistry.is_supported(f.type, f.name) if f.type else False,
-            'has_password': link.has_password,
-            'created_by_name': link.created_by.get_full_name() or link.created_by.username,
-        })
+
+        return Response(
+            {
+                "name": f.name,
+                "mime_type": f.mime_type,
+                "size": f.size,
+                "category": f.category,
+                "is_viewable": ViewerRegistry.is_supported(f.type, f.name)
+                if f.type
+                else False,
+                "has_password": link.has_password,
+                "created_by_name": link.created_by.get_full_name()
+                or link.created_by.username,
+            }
+        )
 
 
-@extend_schema(tags=['Files - Shared Links'])
+@extend_schema(tags=["Files - Shared Links"])
 class SharedFileVerifyView(APIView):
     """POST /api/v1/files/shared/{token}/verify — verify password."""
+
     permission_classes = [AllowAny]
     authentication_classes = []
     throttle_classes = [ShareLinkVerifyThrottle]
@@ -117,24 +126,25 @@ class SharedFileVerifyView(APIView):
 
         if not link.has_password:
             return Response(
-                {'detail': 'This link has no password.'},
+                {"detail": "This link has no password."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        raw_password = request.data.get('password', '')
+        raw_password = request.data.get("password", "")
         if not check_password(raw_password, link.password):
             return Response(
-                {'detail': 'Invalid password.'},
+                {"detail": "Invalid password."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         access_token = SIGNER.sign(link.token)
-        return Response({'access_token': access_token})
+        return Response({"access_token": access_token})
 
 
-@extend_schema(tags=['Files - Shared Links'])
+@extend_schema(tags=["Files - Shared Links"])
 class SharedFileContentView(APIView):
     """GET /api/v1/files/shared/{token}/content — serve file inline."""
+
     permission_classes = [AllowAny]
     authentication_classes = []
 
@@ -151,17 +161,17 @@ class SharedFileContentView(APIView):
         f = link.file
         if not f.content:
             return Response(
-                {'detail': 'File has no content.'},
+                {"detail": "File has no content."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        if f.category in ('code', 'text'):
+        if f.category in ("code", "text"):
             try:
-                handle = f.content.open('rb')
-                content = handle.read().decode('utf-8')
+                handle = f.content.open("rb")
+                content = handle.read().decode("utf-8")
                 handle.close()
                 resp = HttpResponse(content, content_type=f.mime_type)
-                resp['Content-Disposition'] = f'inline; filename="{f.name}"'
+                resp["Content-Disposition"] = f'inline; filename="{f.name}"'
                 return resp
             except UnicodeDecodeError:
                 pass  # fall through to binary streaming
@@ -170,21 +180,22 @@ class SharedFileContentView(APIView):
 
         # Binary files: stream with Range support so shared videos can seek.
         try:
-            fh = f.content.open('rb')
+            fh = f.content.open("rb")
         except FileNotFoundError:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return serve_with_ranges(
             request,
             file_handle=fh,
             file_size=f.size or 0,
-            content_type=f.mime_type or 'application/octet-stream',
+            content_type=f.mime_type or "application/octet-stream",
             inline_filename=f.name,
         )
 
 
-@extend_schema(tags=['Files - Shared Links'])
+@extend_schema(tags=["Files - Shared Links"])
 class SharedFileDownloadView(APIView):
     """GET /api/v1/files/shared/{token}/download — download file."""
+
     permission_classes = [AllowAny]
     authentication_classes = []
 
@@ -201,12 +212,12 @@ class SharedFileDownloadView(APIView):
         f = link.file
         if not f.content:
             return Response(
-                {'detail': 'File has no content.'},
+                {"detail": "File has no content."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         try:
-            fh = f.content.open('rb')
+            fh = f.content.open("rb")
         except FileNotFoundError:
             return Response(status=status.HTTP_404_NOT_FOUND)
         # Range support lets the user resume an interrupted download.
@@ -214,6 +225,6 @@ class SharedFileDownloadView(APIView):
             request,
             file_handle=fh,
             file_size=f.size or 0,
-            content_type=f.mime_type or 'application/octet-stream',
+            content_type=f.mime_type or "application/octet-stream",
             attachment_filename=f.name,
         )

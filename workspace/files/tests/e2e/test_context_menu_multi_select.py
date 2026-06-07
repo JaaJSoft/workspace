@@ -17,6 +17,7 @@ This test pins both halves of the behavior:
   only on that single file (the selection is replaced, per the issue's
   spec of standard OS behavior).
 """
+
 from __future__ import annotations
 
 from playwright.sync_api import expect
@@ -26,13 +27,12 @@ from workspace.files.models import File
 
 
 class ContextMenuMultiSelectTests(PlaywrightTestCase):
-
     def _make_file(self, owner, name):
         return File.objects.create(
             owner=owner,
             name=name,
             node_type=File.NodeType.FILE,
-            mime_type='text/plain',
+            mime_type="text/plain",
         )
 
     def _select_checkbox(self, uuid):
@@ -69,22 +69,20 @@ class ContextMenuMultiSelectTests(PlaywrightTestCase):
         # so its full ``innerText`` is "Delete\nDel" - we'd need to use
         # the inner span to match the bare label and avoid colliding
         # with the Purge action ("Delete permanently").
-        return menu.locator(
-            'button:has(span:text-is("Delete"))'
-        ).first
+        return menu.locator('button:has(span:text-is("Delete"))').first
 
     def test_right_click_on_selected_file_acts_on_whole_selection(self):
-        user = self.create_user(username='alice')
-        f1 = self._make_file(user, 'one.txt')
-        f2 = self._make_file(user, 'two.txt')
-        f3 = self._make_file(user, 'three.txt')
+        user = self.create_user(username="alice")
+        f1 = self._make_file(user, "one.txt")
+        f2 = self._make_file(user, "two.txt")
+        f3 = self._make_file(user, "three.txt")
 
         self.login_as(user)
 
         # Capture the actions response so we know the row-level action
         # cache is populated before we open the context menu - same trick
         # ``test_context_menu_actions.py`` uses.
-        self.page.goto(f'{self.live_server_url}/files')
+        self.page.goto(f"{self.live_server_url}/files")
 
         # Visible sanity check - the rows render in list view.
         expect(self.page.locator(f'tr[data-uuid="{f1.uuid}"]')).to_be_visible()
@@ -109,7 +107,7 @@ class ContextMenuMultiSelectTests(PlaywrightTestCase):
 
         # Right-click f1 (it is part of the selection). The context menu
         # should target both f1 and f2.
-        self.page.locator(f'tr[data-uuid="{f1.uuid}"]').click(button='right')
+        self.page.locator(f'tr[data-uuid="{f1.uuid}"]').click(button="right")
 
         menu = self.page.locator('[x-data*="contextMenu"]')
         expect(menu).to_be_visible()
@@ -147,14 +145,14 @@ class ContextMenuMultiSelectTests(PlaywrightTestCase):
         )
 
     def test_right_click_outside_selection_acts_only_on_that_file(self):
-        user = self.create_user(username='bob')
-        f1 = self._make_file(user, 'one.txt')
-        f2 = self._make_file(user, 'two.txt')
-        f3 = self._make_file(user, 'three.txt')
+        user = self.create_user(username="bob")
+        f1 = self._make_file(user, "one.txt")
+        f2 = self._make_file(user, "two.txt")
+        f3 = self._make_file(user, "three.txt")
 
         self.login_as(user)
 
-        self.page.goto(f'{self.live_server_url}/files')
+        self.page.goto(f"{self.live_server_url}/files")
 
         expect(self.page.locator(f'tr[data-uuid="{f3.uuid}"]')).to_be_visible()
         self._wait_for_actions_loaded(str(f1.uuid), str(f2.uuid), str(f3.uuid))
@@ -172,7 +170,7 @@ class ContextMenuMultiSelectTests(PlaywrightTestCase):
         self._select_checkbox(f1.uuid)
         self._select_checkbox(f2.uuid)
 
-        self.page.locator(f'tr[data-uuid="{f3.uuid}"]').click(button='right')
+        self.page.locator(f'tr[data-uuid="{f3.uuid}"]').click(button="right")
 
         menu = self.page.locator('[x-data*="contextMenu"]')
         expect(menu).to_be_visible()
@@ -198,6 +196,5 @@ class ContextMenuMultiSelectTests(PlaywrightTestCase):
         self.assertIsNone(f2.deleted_at)
         self.assertIsNotNone(
             f3.deleted_at,
-            "f3 was the right-click target and should be the only file "
-            "moved to trash",
+            "f3 was the right-click target and should be the only file moved to trash",
         )

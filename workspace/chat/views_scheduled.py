@@ -12,7 +12,7 @@ from .services.conversations import get_active_membership
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class ScheduledMessageListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -23,7 +23,7 @@ class ScheduledMessageListView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {'detail': 'Not a member of this conversation.'},
+                {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -32,20 +32,24 @@ class ScheduledMessageListView(APIView):
                 conversation_id=conversation_id,
                 is_active=True,
             )
-            .select_related('bot')
-            .order_by('next_run_at')
+            .select_related("bot")
+            .order_by("next_run_at")
         )
         serializer = ScheduledMessageSerializer(schedules, many=True)
         return Response(serializer.data)
 
 
-@extend_schema(tags=['Chat'])
+@extend_schema(tags=["Chat"])
 class ScheduledMessageDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     TIMING_FIELDS = {
-        'scheduled_at', 'recurrence_unit', 'recurrence_interval',
-        'recurrence_time', 'recurrence_day', 'kind',
+        "scheduled_at",
+        "recurrence_unit",
+        "recurrence_interval",
+        "recurrence_time",
+        "recurrence_day",
+        "kind",
     }
 
     @extend_schema(summary="Update a scheduled message")
@@ -55,7 +59,7 @@ class ScheduledMessageDetailView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {'detail': 'Not a member of this conversation.'},
+                {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -65,16 +69,18 @@ class ScheduledMessageDetailView(APIView):
                 conversation_id=conversation_id,
                 is_active=True,
             )
-            .select_related('bot')
+            .select_related("bot")
             .first()
         )
         if not schedule:
             return Response(
-                {'detail': 'Scheduled message not found.'},
+                {"detail": "Scheduled message not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        serializer = ScheduledMessageSerializer(schedule, data=request.data, partial=True)
+        serializer = ScheduledMessageSerializer(
+            schedule, data=request.data, partial=True
+        )
         serializer.is_valid(raise_exception=True)
         updated = serializer.save()
 
@@ -84,11 +90,12 @@ class ScheduledMessageDetailView(APIView):
         if self.TIMING_FIELDS & set(request.data.keys()):
             if updated.kind == ScheduledMessage.Kind.ONCE:
                 updated.next_run_at = updated.scheduled_at
-                updated.save(update_fields=['next_run_at'])
+                updated.save(update_fields=["next_run_at"])
             else:
                 from workspace.users.services.settings import get_user_timezone
+
                 updated.compute_next_run(user_tz=get_user_timezone(request.user))
-                updated.save(update_fields=['next_run_at', 'is_active'])
+                updated.save(update_fields=["next_run_at", "is_active"])
 
         return Response(ScheduledMessageSerializer(updated).data)
 
@@ -99,7 +106,7 @@ class ScheduledMessageDetailView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(
-                {'detail': 'Not a member of this conversation.'},
+                {"detail": "Not a member of this conversation."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -110,10 +117,10 @@ class ScheduledMessageDetailView(APIView):
         ).first()
         if not schedule:
             return Response(
-                {'detail': 'Scheduled message not found.'},
+                {"detail": "Scheduled message not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         schedule.is_active = False
-        schedule.save(update_fields=['is_active'])
+        schedule.save(update_fields=["is_active"])
         return Response(status=status.HTTP_204_NO_CONTENT)

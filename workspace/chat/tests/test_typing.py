@@ -45,32 +45,34 @@ class TypingServiceTests(SimpleTestCase):
     # ------------------------------------------------------------------
 
     def test_set_typing_stores_entry(self):
-        with mock.patch.object(typing_service, 'time', _fake_time(1000.0)):
-            set_typing(self.conv1, user_id=42, display_name='Alice')
+        with mock.patch.object(typing_service, "time", _fake_time(1000.0)):
+            set_typing(self.conv1, user_id=42, display_name="Alice")
 
         raw = cache.get(_cache_key(self.conv1))
-        self.assertIn('42', raw)
-        self.assertEqual(raw['42']['display_name'], 'Alice')
-        self.assertEqual(raw['42']['ts'], 1000.0)
+        self.assertIn("42", raw)
+        self.assertEqual(raw["42"]["display_name"], "Alice")
+        self.assertEqual(raw["42"]["ts"], 1000.0)
 
     def test_set_typing_merges_multiple_users(self):
-        with mock.patch.object(typing_service, 'time', _fake_time(1000.0)):
-            set_typing(self.conv1, user_id=1, display_name='Alice')
-            set_typing(self.conv1, user_id=2, display_name='Bob')
+        with mock.patch.object(typing_service, "time", _fake_time(1000.0)):
+            set_typing(self.conv1, user_id=1, display_name="Alice")
+            set_typing(self.conv1, user_id=2, display_name="Bob")
 
         raw = cache.get(_cache_key(self.conv1))
-        self.assertEqual(set(raw.keys()), {'1', '2'})
+        self.assertEqual(set(raw.keys()), {"1", "2"})
 
     def test_set_typing_overwrites_same_user(self):
         with mock.patch.object(
-            typing_service, 'time', _fake_time([1000.0, 1005.0]),
+            typing_service,
+            "time",
+            _fake_time([1000.0, 1005.0]),
         ):
-            set_typing(self.conv1, user_id=1, display_name='Alice')
-            set_typing(self.conv1, user_id=1, display_name='Alice (renamed)')
+            set_typing(self.conv1, user_id=1, display_name="Alice")
+            set_typing(self.conv1, user_id=1, display_name="Alice (renamed)")
 
         raw = cache.get(_cache_key(self.conv1))
-        self.assertEqual(raw['1']['display_name'], 'Alice (renamed)')
-        self.assertEqual(raw['1']['ts'], 1005.0)
+        self.assertEqual(raw["1"]["display_name"], "Alice (renamed)")
+        self.assertEqual(raw["1"]["ts"], 1005.0)
 
     # ------------------------------------------------------------------
     # get_typing_users
@@ -80,48 +82,56 @@ class TypingServiceTests(SimpleTestCase):
         self.assertEqual(get_typing_users([]), {})
 
     def test_returns_fresh_entries(self):
-        with mock.patch.object(typing_service, 'time', _fake_time(1000.0)):
-            set_typing(self.conv1, user_id=1, display_name='Alice')
+        with mock.patch.object(typing_service, "time", _fake_time(1000.0)):
+            set_typing(self.conv1, user_id=1, display_name="Alice")
             result = get_typing_users([self.conv1])
 
         self.assertEqual(list(result.keys()), [str(self.conv1)])
-        self.assertEqual(result[str(self.conv1)], [
-            {'user_id': '1', 'display_name': 'Alice'},
-        ])
+        self.assertEqual(
+            result[str(self.conv1)],
+            [
+                {"user_id": "1", "display_name": "Alice"},
+            ],
+        )
 
     def test_filters_stale_entries(self):
-        with mock.patch.object(typing_service, 'time', _fake_time(1000.0)):
-            set_typing(self.conv1, user_id=1, display_name='Alice')
+        with mock.patch.object(typing_service, "time", _fake_time(1000.0)):
+            set_typing(self.conv1, user_id=1, display_name="Alice")
 
         # Advance the clock past TYPING_STALE.
         with mock.patch.object(
-            typing_service, 'time', _fake_time(1000.0 + TYPING_STALE + 1),
+            typing_service,
+            "time",
+            _fake_time(1000.0 + TYPING_STALE + 1),
         ):
             result = get_typing_users([self.conv1])
 
         self.assertEqual(result, {})
 
     def test_excludes_given_user(self):
-        with mock.patch.object(typing_service, 'time', _fake_time(1000.0)):
-            set_typing(self.conv1, user_id=1, display_name='Alice')
-            set_typing(self.conv1, user_id=2, display_name='Bob')
+        with mock.patch.object(typing_service, "time", _fake_time(1000.0)):
+            set_typing(self.conv1, user_id=1, display_name="Alice")
+            set_typing(self.conv1, user_id=2, display_name="Bob")
             result = get_typing_users([self.conv1], exclude_user_id=1)
 
-        self.assertEqual(result[str(self.conv1)], [
-            {'user_id': '2', 'display_name': 'Bob'},
-        ])
+        self.assertEqual(
+            result[str(self.conv1)],
+            [
+                {"user_id": "2", "display_name": "Bob"},
+            ],
+        )
 
     def test_spans_multiple_conversations(self):
-        with mock.patch.object(typing_service, 'time', _fake_time(1000.0)):
-            set_typing(self.conv1, user_id=1, display_name='Alice')
-            set_typing(self.conv2, user_id=2, display_name='Bob')
+        with mock.patch.object(typing_service, "time", _fake_time(1000.0)):
+            set_typing(self.conv1, user_id=1, display_name="Alice")
+            set_typing(self.conv2, user_id=2, display_name="Bob")
             result = get_typing_users([self.conv1, self.conv2])
 
         self.assertEqual(set(result.keys()), {str(self.conv1), str(self.conv2)})
 
     def test_conversation_with_only_excluded_user_is_omitted(self):
-        with mock.patch.object(typing_service, 'time', _fake_time(1000.0)):
-            set_typing(self.conv1, user_id=1, display_name='Alice')
+        with mock.patch.object(typing_service, "time", _fake_time(1000.0)):
+            set_typing(self.conv1, user_id=1, display_name="Alice")
             result = get_typing_users([self.conv1], exclude_user_id=1)
 
         self.assertEqual(result, {})
@@ -131,28 +141,28 @@ class TypingServiceTests(SimpleTestCase):
     # ------------------------------------------------------------------
 
     def test_clear_typing_removes_only_that_user(self):
-        with mock.patch.object(typing_service, 'time', _fake_time(1000.0)):
-            set_typing(self.conv1, user_id=1, display_name='Alice')
-            set_typing(self.conv1, user_id=2, display_name='Bob')
+        with mock.patch.object(typing_service, "time", _fake_time(1000.0)):
+            set_typing(self.conv1, user_id=1, display_name="Alice")
+            set_typing(self.conv1, user_id=2, display_name="Bob")
 
         clear_typing(self.conv1, user_id=1)
         raw = cache.get(_cache_key(self.conv1))
-        self.assertEqual(list(raw.keys()), ['2'])
+        self.assertEqual(list(raw.keys()), ["2"])
 
     def test_clear_typing_deletes_key_when_empty(self):
-        with mock.patch.object(typing_service, 'time', _fake_time(1000.0)):
-            set_typing(self.conv1, user_id=1, display_name='Alice')
+        with mock.patch.object(typing_service, "time", _fake_time(1000.0)):
+            set_typing(self.conv1, user_id=1, display_name="Alice")
 
         clear_typing(self.conv1, user_id=1)
         self.assertIsNone(cache.get(_cache_key(self.conv1)))
 
     def test_clear_typing_noop_when_user_not_present(self):
-        with mock.patch.object(typing_service, 'time', _fake_time(1000.0)):
-            set_typing(self.conv1, user_id=1, display_name='Alice')
+        with mock.patch.object(typing_service, "time", _fake_time(1000.0)):
+            set_typing(self.conv1, user_id=1, display_name="Alice")
 
         clear_typing(self.conv1, user_id=999)
         raw = cache.get(_cache_key(self.conv1))
-        self.assertIn('1', raw)
+        self.assertIn("1", raw)
 
     def test_clear_typing_noop_on_empty_cache(self):
         # Must not raise when no key exists for the conversation.

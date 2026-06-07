@@ -3,10 +3,10 @@
 from io import BytesIO
 from unittest import mock
 
-from PIL import Image
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -27,18 +27,18 @@ User = get_user_model()
 class AvatarPathTests(TestCase):
     def test_get_group_avatar_path(self):
         self.assertEqual(
-            get_group_avatar_path('abc-123'),
-            'avatars/groups/abc-123.webp',
+            get_group_avatar_path("abc-123"),
+            "avatars/groups/abc-123.webp",
         )
 
 
 class GroupAvatarServiceTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.owner = User.objects.create_user(username='owner', password='pass')
+        cls.owner = User.objects.create_user(username="owner", password="pass")
         cls.conversation = Conversation.objects.create(
             kind=Conversation.Kind.GROUP,
-            title='Team',
+            title="Team",
             created_by=cls.owner,
         )
 
@@ -48,22 +48,30 @@ class GroupAvatarServiceTests(TestCase):
         self.assertTrue(has_group_avatar(self.conversation))
 
     def test_process_and_save_group_avatar(self):
-        dummy_bytes = b'webp-bytes'
+        dummy_bytes = b"webp-bytes"
 
-        with mock.patch(
-            'workspace.chat.services.avatar.process_image_to_webp',
-            return_value=dummy_bytes,
-        ) as process, mock.patch(
-            'workspace.chat.services.avatar.save_image'
-        ) as save:
+        with (
+            mock.patch(
+                "workspace.chat.services.avatar.process_image_to_webp",
+                return_value=dummy_bytes,
+            ) as process,
+            mock.patch("workspace.chat.services.avatar.save_image") as save,
+        ):
             process_and_save_group_avatar(
                 self.conversation,
-                image_file='<file-obj>',
-                crop_x=10.0, crop_y=20.0, crop_w=100.0, crop_h=100.0,
+                image_file="<file-obj>",
+                crop_x=10.0,
+                crop_y=20.0,
+                crop_w=100.0,
+                crop_h=100.0,
             )
 
         process.assert_called_once_with(
-            '<file-obj>', 10.0, 20.0, 100.0, 100.0,
+            "<file-obj>",
+            10.0,
+            20.0,
+            100.0,
+            100.0,
         )
         save.assert_called_once_with(
             get_group_avatar_path(self.conversation.uuid),
@@ -74,11 +82,9 @@ class GroupAvatarServiceTests(TestCase):
 
     def test_delete_group_avatar(self):
         self.conversation.has_avatar = True
-        self.conversation.save(update_fields=['has_avatar'])
+        self.conversation.save(update_fields=["has_avatar"])
 
-        with mock.patch(
-            'workspace.chat.services.avatar.delete_image'
-        ) as delete:
+        with mock.patch("workspace.chat.services.avatar.delete_image") as delete:
             delete_group_avatar(self.conversation)
 
         delete.assert_called_once_with(
@@ -89,7 +95,7 @@ class GroupAvatarServiceTests(TestCase):
 
     def test_get_group_avatar_etag_delegates_to_image_service(self):
         with mock.patch(
-            'workspace.chat.services.avatar.get_image_etag',
+            "workspace.chat.services.avatar.get_image_etag",
             return_value='"abc"',
         ) as etag:
             result = get_group_avatar_etag(self.conversation.uuid)
@@ -101,7 +107,7 @@ class GroupAvatarServiceTests(TestCase):
 
     def test_get_group_avatar_etag_returns_none_when_missing(self):
         with mock.patch(
-            'workspace.chat.services.avatar.get_image_etag',
+            "workspace.chat.services.avatar.get_image_etag",
             return_value=None,
         ):
             self.assertIsNone(get_group_avatar_etag(self.conversation.uuid))
@@ -110,10 +116,10 @@ class GroupAvatarServiceTests(TestCase):
 def _make_test_image():
     """Create a minimal in-memory PNG for upload tests."""
     buf = BytesIO()
-    img = Image.new('RGB', (100, 100), color='red')
-    img.save(buf, format='PNG')
+    img = Image.new("RGB", (100, 100), color="red")
+    img.save(buf, format="PNG")
     buf.seek(0)
-    buf.name = 'test.png'
+    buf.name = "test.png"
     return buf
 
 
@@ -121,29 +127,53 @@ class GroupAvatarUploadTests(ChatTestMixin, APITestCase):
     """Tests for POST /api/v1/chat/conversations/<id>/avatar"""
 
     def url(self, conv_id):
-        return f'/api/v1/chat/conversations/{conv_id}/avatar'
+        return f"/api/v1/chat/conversations/{conv_id}/avatar"
 
     def test_unauthenticated_rejected(self):
         image = _make_test_image()
-        resp = self.client.post(self.url(self.group.uuid), {
-            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
-        }, format='multipart')
+        resp = self.client.post(
+            self.url(self.group.uuid),
+            {
+                "image": image,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 100,
+                "crop_h": 100,
+            },
+            format="multipart",
+        )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_outsider_cannot_upload(self):
         self.client.force_authenticate(self.outsider)
         image = _make_test_image()
-        resp = self.client.post(self.url(self.group.uuid), {
-            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
-        }, format='multipart')
+        resp = self.client.post(
+            self.url(self.group.uuid),
+            {
+                "image": image,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 100,
+                "crop_h": 100,
+            },
+            format="multipart",
+        )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_member_can_upload(self):
         self.client.force_authenticate(self.member)
         image = _make_test_image()
-        resp = self.client.post(self.url(self.group.uuid), {
-            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
-        }, format='multipart')
+        resp = self.client.post(
+            self.url(self.group.uuid),
+            {
+                "image": image,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 100,
+                "crop_h": 100,
+            },
+            format="multipart",
+        )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.group.refresh_from_db()
         self.assertTrue(self.group.has_avatar)
@@ -151,9 +181,17 @@ class GroupAvatarUploadTests(ChatTestMixin, APITestCase):
     def test_dm_returns_400(self):
         self.client.force_authenticate(self.creator)
         image = _make_test_image()
-        resp = self.client.post(self.url(self.dm.uuid), {
-            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
-        }, format='multipart')
+        resp = self.client.post(
+            self.url(self.dm.uuid),
+            {
+                "image": image,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 100,
+                "crop_h": 100,
+            },
+            format="multipart",
+        )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_malformed_image_returns_400(self):
@@ -162,12 +200,21 @@ class GroupAvatarUploadTests(ChatTestMixin, APITestCase):
         # the try/except in the view this propagates as a 500.
         self.client.force_authenticate(self.member)
         bad = SimpleUploadedFile(
-            'avatar.png', b'not-actually-a-png', content_type='image/png',
+            "avatar.png",
+            b"not-actually-a-png",
+            content_type="image/png",
         )
-        resp = self.client.post(self.url(self.group.uuid), {
-            'image': bad,
-            'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
-        }, format='multipart')
+        resp = self.client.post(
+            self.url(self.group.uuid),
+            {
+                "image": bad,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 100,
+                "crop_h": 100,
+            },
+            format="multipart",
+        )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
 
@@ -175,15 +222,23 @@ class GroupAvatarDeleteTests(ChatTestMixin, APITestCase):
     """Tests for DELETE /api/v1/chat/conversations/<id>/avatar"""
 
     def url(self, conv_id):
-        return f'/api/v1/chat/conversations/{conv_id}/avatar'
+        return f"/api/v1/chat/conversations/{conv_id}/avatar"
 
     def _upload_avatar(self):
         """Helper to upload an avatar as creator first."""
         self.client.force_authenticate(self.creator)
         image = _make_test_image()
-        self.client.post(self.url(self.group.uuid), {
-            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
-        }, format='multipart')
+        self.client.post(
+            self.url(self.group.uuid),
+            {
+                "image": image,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 100,
+                "crop_h": 100,
+            },
+            format="multipart",
+        )
 
     def test_member_can_delete(self):
         self._upload_avatar()
@@ -204,10 +259,10 @@ class GroupAvatarRetrieveTests(ChatTestMixin, APITestCase):
     """Tests for GET /api/v1/chat/conversations/<id>/avatar/image"""
 
     def upload_url(self, conv_id):
-        return f'/api/v1/chat/conversations/{conv_id}/avatar'
+        return f"/api/v1/chat/conversations/{conv_id}/avatar"
 
     def retrieve_url(self, conv_id):
-        return f'/api/v1/chat/conversations/{conv_id}/avatar/image'
+        return f"/api/v1/chat/conversations/{conv_id}/avatar/image"
 
     def test_404_when_no_avatar(self):
         resp = self.client.get(self.retrieve_url(self.group.uuid))
@@ -216,26 +271,42 @@ class GroupAvatarRetrieveTests(ChatTestMixin, APITestCase):
     def test_retrieve_after_upload(self):
         self.client.force_authenticate(self.creator)
         image = _make_test_image()
-        self.client.post(self.upload_url(self.group.uuid), {
-            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
-        }, format='multipart')
+        self.client.post(
+            self.upload_url(self.group.uuid),
+            {
+                "image": image,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 100,
+                "crop_h": 100,
+            },
+            format="multipart",
+        )
         self.client.logout()
         resp = self.client.get(self.retrieve_url(self.group.uuid))
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp['Content-Type'], 'image/webp')
+        self.assertEqual(resp["Content-Type"], "image/webp")
 
     def test_cache_control_uses_swr(self):
         """Avatar response opts into stale-while-revalidate with a private cache."""
         self.client.force_authenticate(self.creator)
         image = _make_test_image()
-        self.client.post(self.upload_url(self.group.uuid), {
-            'image': image, 'crop_x': 0, 'crop_y': 0, 'crop_w': 100, 'crop_h': 100,
-        }, format='multipart')
+        self.client.post(
+            self.upload_url(self.group.uuid),
+            {
+                "image": image,
+                "crop_x": 0,
+                "crop_y": 0,
+                "crop_w": 100,
+                "crop_h": 100,
+            },
+            format="multipart",
+        )
         self.client.logout()
         resp = self.client.get(self.retrieve_url(self.group.uuid))
         self.assertEqual(resp.status_code, 200)
-        cc = resp['Cache-Control']
-        self.assertIn('private', cc)
-        self.assertIn('max-age=300', cc)
-        self.assertIn('stale-while-revalidate=86400', cc)
-        self.assertIn('ETag', resp)
+        cc = resp["Cache-Control"]
+        self.assertIn("private", cc)
+        self.assertIn("max-age=300", cc)
+        self.assertIn("stale-while-revalidate=86400", cc)
+        self.assertIn("ETag", resp)

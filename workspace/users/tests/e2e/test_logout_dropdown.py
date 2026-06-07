@@ -17,6 +17,7 @@ This test exercises the real click path. It catches the bug class:
     bubbles, e.g. when migrating from the focus-driven daisyUI
     dropdown to a JS-driven one without preserving the click target.
 """
+
 from __future__ import annotations
 
 import re

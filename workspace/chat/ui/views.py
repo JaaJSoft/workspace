@@ -7,10 +7,20 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.chat.models import Conversation, ConversationMember, Message, MessageAttachment, PinnedConversation, \
-    PinnedMessage
+from workspace.chat.models import (
+    Conversation,
+    ConversationMember,
+    Message,
+    MessageAttachment,
+    PinnedConversation,
+    PinnedMessage,
+)
 from workspace.chat.serializers import ConversationListSerializer
-from workspace.chat.services.conversations import get_active_membership, get_unread_counts, user_conversation_ids
+from workspace.chat.services.conversations import (
+    get_active_membership,
+    get_unread_counts,
+    user_conversation_ids,
+)
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.ui.viewers import ViewerRegistry
 
@@ -23,19 +33,22 @@ def _build_conversation_context(user):
         Conversation.objects.filter(uuid__in=member_convos)
         .prefetch_related(
             Prefetch(
-                'members',
+                "members",
                 queryset=ConversationMember.objects.filter(
                     left_at__isnull=True,
-                ).select_related('user', 'user__bot_profile'),
+                ).select_related("user", "user__bot_profile"),
             ),
         )
-        .order_by('-updated_at')
+        .order_by("-updated_at")
     )
 
     last_msg_subquery = (
         Message.objects.filter(
-            conversation=OuterRef('pk'), deleted_at__isnull=True,
-        ).order_by('-created_at').values('uuid')[:1]
+            conversation=OuterRef("pk"),
+            deleted_at__isnull=True,
+        )
+        .order_by("-created_at")
+        .values("uuid")[:1]
     )
     conversations = conversations.annotate(_last_msg_id=Subquery(last_msg_subquery))
     conv_list = list(conversations)
@@ -43,11 +56,13 @@ def _build_conversation_context(user):
     last_msg_ids = [c._last_msg_id for c in conv_list if c._last_msg_id]
     last_msgs = {
         m.uuid: m
-        for m in Message.objects.filter(uuid__in=last_msg_ids).select_related('author').prefetch_related('attachments')
+        for m in Message.objects.filter(uuid__in=last_msg_ids)
+        .select_related("author")
+        .prefetch_related("attachments")
     }
 
     unread_data = get_unread_counts(user)
-    unread_map = unread_data.get('conversations', {})
+    unread_map = unread_data.get("conversations", {})
 
     # Build pin map: {conversation_uuid: position}
     pin_map = {
@@ -78,7 +93,7 @@ def _build_conversation_context(user):
             c.display_name = _display(other_members[0].user)
         else:
             names = [_display(m.user) for m in other_members[:3]]
-            c.display_name = ', '.join(names) if names else 'Group'
+            c.display_name = ", ".join(names) if names else "Group"
 
         # Avatar
         if c.kind == Conversation.Kind.DM and other_members:
@@ -86,7 +101,7 @@ def _build_conversation_context(user):
             c.other_user = other_members[0].user
         else:
             initials = [_display(m.user)[0].upper() for m in other_members[:2]]
-            c.avatar_initial = ''.join(initials) or 'G'
+            c.avatar_initial = "".join(initials) or "G"
             c.other_user = None
 
         # Last message preview & time ago
@@ -94,29 +109,29 @@ def _build_conversation_context(user):
             body = c._last_message.body
             if body:
                 if len(body) > 30:
-                    body = body[:30] + '\u2026'
-                c.last_message_preview = f'{_display(c._last_message.author)}: {body}'
-            elif (att := list(c._last_message.attachments.all())):
-                label = 'sent a file' if len(att) == 1 else f'sent {len(att)} files'
-                c.last_message_preview = f'{_display(c._last_message.author)}: {label}'
+                    body = body[:30] + "\u2026"
+                c.last_message_preview = f"{_display(c._last_message.author)}: {body}"
+            elif att := list(c._last_message.attachments.all()):
+                label = "sent a file" if len(att) == 1 else f"sent {len(att)} files"
+                c.last_message_preview = f"{_display(c._last_message.author)}: {label}"
             else:
-                c.last_message_preview = f'{_display(c._last_message.author)}: '
+                c.last_message_preview = f"{_display(c._last_message.author)}: "
             diff = (now - c._last_message.created_at).total_seconds()
             if diff < 60:
-                c.time_ago = 'now'
+                c.time_ago = "now"
             elif diff < 3600:
-                c.time_ago = f'{int(diff // 60)}m'
+                c.time_ago = f"{int(diff // 60)}m"
             elif diff < 86400:
-                c.time_ago = f'{int(diff // 3600)}h'
+                c.time_ago = f"{int(diff // 3600)}h"
             elif diff < 604800:
-                c.time_ago = f'{int(diff // 86400)}d'
+                c.time_ago = f"{int(diff // 86400)}d"
             elif diff < 31536000:
-                c.time_ago = c._last_message.created_at.strftime('%b %d')
+                c.time_ago = c._last_message.created_at.strftime("%b %d")
             else:
                 c.time_ago = c._last_message.created_at.strftime("%b '%y")
         else:
-            c.last_message_preview = 'No messages yet'
-            c.time_ago = ''
+            c.last_message_preview = "No messages yet"
+            c.time_ago = ""
 
     return conv_list
 
@@ -134,12 +149,20 @@ def chat_view(request, conversation_uuid=None):
     )
     pinned_uuids = {str(c.uuid) for c in pinned}
 
-    return render(request, 'chat/ui/index.html', {
-        'pinned_conversations': pinned,
-        'other_conversations': [c for c in conv_list if str(c.uuid) not in pinned_uuids],
-        'conversations': serializer.data,
-        'initial_conversation_uuid': str(conversation_uuid) if conversation_uuid else '',
-    })
+    return render(
+        request,
+        "chat/ui/index.html",
+        {
+            "pinned_conversations": pinned,
+            "other_conversations": [
+                c for c in conv_list if str(c.uuid) not in pinned_uuids
+            ],
+            "conversations": serializer.data,
+            "initial_conversation_uuid": str(conversation_uuid)
+            if conversation_uuid
+            else "",
+        },
+    )
 
 
 @login_required
@@ -147,7 +170,7 @@ def conversation_list_view(request):
     """Partial: conversation list HTML for alpine-ajax refresh."""
     conv_list = _build_conversation_context(request.user)
 
-    search = (request.GET.get('q') or '').strip().lower()
+    search = (request.GET.get("q") or "").strip().lower()
     if search:
         conv_list = [c for c in conv_list if search in c.display_name.lower()]
 
@@ -157,11 +180,17 @@ def conversation_list_view(request):
     )
     pinned_uuids = {str(c.uuid) for c in pinned}
 
-    return render(request, 'chat/ui/partials/conversation_list.html', {
-        'pinned_conversations': pinned,
-        'other_conversations': [c for c in conv_list if str(c.uuid) not in pinned_uuids],
-        'search_query': request.GET.get('q', ''),
-    })
+    return render(
+        request,
+        "chat/ui/partials/conversation_list.html",
+        {
+            "pinned_conversations": pinned,
+            "other_conversations": [
+                c for c in conv_list if str(c.uuid) not in pinned_uuids
+            ],
+            "search_query": request.GET.get("q", ""),
+        },
+    )
 
 
 def group_messages(messages, current_user):
@@ -183,29 +212,32 @@ def group_messages(messages, current_user):
             if current_group:
                 groups.append(current_group)
                 current_group = None
-            groups.append({'type': 'date', 'date': msg_date, 'datetime': msg.created_at})
+            groups.append(
+                {"type": "date", "date": msg_date, "datetime": msg.created_at}
+            )
             current_date = msg_date
 
         # Check if this message continues the current group
         can_group = (
             current_group
-            and current_group['author'].id == msg.author_id
+            and current_group["author"].id == msg.author_id
             and not msg.deleted_at
-            and not (current_group['messages'][-1].deleted_at)
-            and (msg.created_at - current_group['messages'][-1].created_at) < timedelta(minutes=5)
+            and not (current_group["messages"][-1].deleted_at)
+            and (msg.created_at - current_group["messages"][-1].created_at)
+            < timedelta(minutes=5)
         )
 
         if can_group:
-            current_group['messages'].append(msg)
+            current_group["messages"].append(msg)
         else:
             if current_group:
                 groups.append(current_group)
             current_group = {
-                'type': 'messages',
-                'author': msg.author,
-                'is_own': msg.author_id == current_user.id,
-                'is_bot': hasattr(msg.author, 'bot_profile'),
-                'messages': [msg],
+                "type": "messages",
+                "author": msg.author,
+                "is_own": msg.author_id == current_user.id,
+                "is_bot": hasattr(msg.author, "bot_profile"),
+                "messages": [msg],
             }
 
     if current_group:
@@ -222,19 +254,21 @@ def conversation_messages_view(request, conversation_uuid):
         return HttpResponseForbidden()
 
     qs = (
-        Message.objects
-        .filter(conversation_id=conversation_uuid)
+        Message.objects.filter(conversation_id=conversation_uuid)
         .select_related(
-            'author', 'author__bot_profile',
-            'reply_to', 'reply_to__author',
-            'conversation',
-            'interaction', 'interaction__interacted_by',
+            "author",
+            "author__bot_profile",
+            "reply_to",
+            "reply_to__author",
+            "conversation",
+            "interaction",
+            "interaction__interacted_by",
         )
-        .prefetch_related('reactions__user', 'attachments', 'link_previews__preview')
-        .order_by('-created_at')
+        .prefetch_related("reactions__user", "attachments", "link_previews__preview")
+        .order_by("-created_at")
     )
 
-    before = request.GET.get('before')
+    before = request.GET.get("before")
     if before:
         before_uuid = parse_uuid_or_none(before)
         if before_uuid is not None:
@@ -243,24 +277,24 @@ def conversation_messages_view(request, conversation_uuid):
             # another conversation as a cursor and read its created_at via the
             # resulting page boundary (cross-conversation timing oracle).
             cursor_msg = (
-                Message.objects
-                .filter(conversation_id=conversation_uuid, uuid=before_uuid)
-                .only('created_at')
+                Message.objects.filter(
+                    conversation_id=conversation_uuid, uuid=before_uuid
+                )
+                .only("created_at")
                 .first()
             )
             if cursor_msg is not None:
                 qs = qs.filter(created_at__lt=cursor_msg.created_at)
 
     limit = 50
-    messages_page = list(qs[:limit + 1])
+    messages_page = list(qs[: limit + 1])
     has_more = len(messages_page) > limit
     messages_page = messages_page[:limit]
     messages_page.reverse()  # Back to chronological order
 
     # Read receipt data: for own messages, compute read counts in bulk
     own_msgs = [
-        m for m in messages_page
-        if m.author_id == request.user.id and not m.deleted_at
+        m for m in messages_page if m.author_id == request.user.id and not m.deleted_at
     ]
     if own_msgs:
         active_members = ConversationMember.objects.filter(
@@ -268,48 +302,55 @@ def conversation_messages_view(request, conversation_uuid):
             left_at__isnull=True,
         ).exclude(user=request.user)
         total_recipients = active_members.count()
-        member_read_ats = list(
-            active_members.values_list('last_read_at', flat=True)
-        )
+        member_read_ats = list(active_members.values_list("last_read_at", flat=True))
         for msg in own_msgs:
-            read_count = sum(
-                1 for ra in member_read_ats
-                if ra and ra >= msg.created_at
-            )
+            read_count = sum(1 for ra in member_read_ats if ra and ra >= msg.created_at)
             msg.read_count = read_count
             msg.total_recipients = total_recipients
             msg.all_read = read_count == total_recipients and total_recipients > 0
 
-    conversation_kind = Conversation.objects.filter(
-        pk=conversation_uuid,
-    ).values_list('kind', flat=True).first() or 'dm'
+    conversation_kind = (
+        Conversation.objects.filter(
+            pk=conversation_uuid,
+        )
+        .values_list("kind", flat=True)
+        .first()
+        or "dm"
+    )
 
     groups = group_messages(messages_page, request.user)
 
-    first_uuid = str(messages_page[0].uuid) if messages_page else ''
+    first_uuid = str(messages_page[0].uuid) if messages_page else ""
 
     pinned_message_ids = set(
-        PinnedMessage.objects.filter(conversation_id=conversation_uuid).values_list('message_id', flat=True)
+        PinnedMessage.objects.filter(conversation_id=conversation_uuid).values_list(
+            "message_id", flat=True
+        )
     )
 
     # Check if there's an active AI task for this conversation
     from workspace.ai.models import AITask
+
     bot_processing = AITask.objects.filter(
         task_type=AITask.TaskType.CHAT,
         status__in=[AITask.Status.PENDING, AITask.Status.PROCESSING],
         input_data__conversation_id=str(conversation_uuid),
     ).exists()
 
-    return render(request, 'chat/ui/partials/message_list.html', {
-        'groups': groups,
-        'has_more': has_more,
-        'first_uuid': first_uuid,
-        'current_user': request.user,
-        'pinned_message_ids': pinned_message_ids,
-        'conversation_kind': conversation_kind,
-        'conversation_uuid': str(conversation_uuid),
-        'bot_processing': bot_processing,
-    })
+    return render(
+        request,
+        "chat/ui/partials/message_list.html",
+        {
+            "groups": groups,
+            "has_more": has_more,
+            "first_uuid": first_uuid,
+            "current_user": request.user,
+            "pinned_message_ids": pinned_message_ids,
+            "conversation_kind": conversation_kind,
+            "conversation_uuid": str(conversation_uuid),
+            "bot_processing": bot_processing,
+        },
+    )
 
 
 @login_required
@@ -328,40 +369,54 @@ def message_readers_view(request, conversation_uuid, message_uuid):
     except Message.DoesNotExist:
         return HttpResponseForbidden()
 
-    members = ConversationMember.objects.filter(
-        conversation_id=conversation_uuid,
-        left_at__isnull=True,
-    ).exclude(user=message.author).select_related('user')
+    members = (
+        ConversationMember.objects.filter(
+            conversation_id=conversation_uuid,
+            left_at__isnull=True,
+        )
+        .exclude(user=message.author)
+        .select_related("user")
+    )
 
     readers = []
     not_read = []
     for m in members:
         if m.last_read_at and m.last_read_at >= message.created_at:
-            readers.append({'user': m.user, 'read_at': m.last_read_at})
+            readers.append({"user": m.user, "read_at": m.last_read_at})
         else:
-            not_read.append({'user': m.user})
+            not_read.append({"user": m.user})
 
-    return render(request, 'chat/ui/partials/_read_receipt_popover.html', {
-        'readers': readers,
-        'not_read': not_read,
-        'message_uuid': message_uuid,
-    })
+    return render(
+        request,
+        "chat/ui/partials/_read_receipt_popover.html",
+        {
+            "readers": readers,
+            "not_read": not_read,
+            "message_uuid": message_uuid,
+        },
+    )
 
 
 @login_required
 def view_attachment(request, attachment_uuid):
     """Render viewer HTML for a chat attachment (read-only)."""
-    attachment = MessageAttachment.objects.select_related('message__conversation').filter(
-        uuid=attachment_uuid,
-    ).first()
+    attachment = (
+        MessageAttachment.objects.select_related("message__conversation")
+        .filter(
+            uuid=attachment_uuid,
+        )
+        .first()
+    )
 
     if not attachment:
         from django.http import Http404
+
         raise Http404
 
     # Check user is member of the conversation
     if not get_active_membership(request.user, attachment.message.conversation_id):
         from django.http import Http404
+
         raise Http404
 
     ViewerClass = ViewerRegistry.get_viewer(attachment.type, attachment.original_name)
@@ -386,7 +441,7 @@ def view_attachment(request, attachment_uuid):
     adapter = AttachmentAdapter(attachment)
     viewer = ViewerClass(adapter)
     viewer._user_can_edit = False
-    viewer._content_url = f'/api/v1/chat/attachments/{attachment.uuid}'
+    viewer._content_url = f"/api/v1/chat/attachments/{attachment.uuid}"
     html = viewer.render(request)
 
     return HttpResponse(html)

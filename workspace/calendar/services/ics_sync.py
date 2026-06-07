@@ -1,6 +1,7 @@
 """Fetch and sync external ICS calendar feeds."""
+
 import logging
-from datetime import datetime, timedelta, timezone as dt_tz
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import icalendar
@@ -13,10 +14,10 @@ logger = logging.getLogger(__name__)
 
 # Map ICS FREQ values to our RecurrenceFrequency choices
 _FREQ_MAP = {
-    'DAILY': 'daily',
-    'WEEKLY': 'weekly',
-    'MONTHLY': 'monthly',
-    'YEARLY': 'yearly',
+    "DAILY": "daily",
+    "WEEKLY": "weekly",
+    "MONTHLY": "monthly",
+    "YEARLY": "yearly",
 }
 
 
@@ -33,7 +34,7 @@ def sync_external_calendar(external_calendar):
     if ics_text is None:
         # 304 Not Modified — just update timestamp
         external_calendar.last_synced_at = timezone.now()
-        external_calendar.save(update_fields=['last_synced_at'])
+        external_calendar.save(update_fields=["last_synced_at"])
         return
 
     cal = icalendar.Calendar.from_ical(ics_text)
@@ -49,17 +50,18 @@ def sync_external_calendar(external_calendar):
     existing_by_uid = {
         e.ical_uid: e
         for e in Event.objects.filter(
-            calendar=calendar, ical_uid__isnull=False,
-        ).exclude(ical_uid='')
+            calendar=calendar,
+            ical_uid__isnull=False,
+        ).exclude(ical_uid="")
     }
 
     seen_uids = set()
 
     for component in cal.walk():
-        if component.name != 'VEVENT':
+        if component.name != "VEVENT":
             continue
 
-        uid = str(component.get('UID', ''))
+        uid = str(component.get("UID", ""))
         if not uid:
             continue
         seen_uids.add(uid)
@@ -74,7 +76,9 @@ def sync_external_calendar(external_calendar):
         # INSERT race transparently falls back to UPDATE instead of
         # raising IntegrityError or creating a duplicate row.
         Event.objects.update_or_create(
-            calendar=calendar, ical_uid=uid, defaults=defaults,
+            calendar=calendar,
+            ical_uid=uid,
+            defaults=defaults,
         )
 
     # Remove events that disappeared from the feed
@@ -84,19 +88,19 @@ def sync_external_calendar(external_calendar):
     ).exclude(
         ical_uid__in=seen_uids,
     ).exclude(
-        ical_uid='',
+        ical_uid="",
     ).delete()
 
     external_calendar.last_synced_at = timezone.now()
-    external_calendar.last_error = ''
-    external_calendar.save(update_fields=['last_synced_at', 'last_etag', 'last_error'])
+    external_calendar.last_error = ""
+    external_calendar.save(update_fields=["last_synced_at", "last_etag", "last_error"])
 
 
 def _fetch_feed(external_calendar):
     """Fetch the ICS feed, returning the text or None on 304."""
     headers = {}
     if external_calendar.last_etag:
-        headers['If-None-Match'] = external_calendar.last_etag
+        headers["If-None-Match"] = external_calendar.last_etag
 
     with httpx.Client(timeout=30, follow_redirects=True) as client:
         resp = client.get(external_calendar.url, headers=headers)
@@ -105,7 +109,7 @@ def _fetch_feed(external_calendar):
         return None
 
     resp.raise_for_status()
-    external_calendar.last_etag = resp.headers.get('ETag', '')
+    external_calendar.last_etag = resp.headers.get("ETag", "")
     return resp.text
 
 
@@ -116,7 +120,7 @@ def _matches_defaults(existing, defaults):
     against ``existing.owner_id`` so we don't trigger a lazy FK lookup.
     """
     for key, value in defaults.items():
-        if key == 'owner':
+        if key == "owner":
             if existing.owner_id != value.pk:
                 return False
         elif getattr(existing, key) != value:
@@ -126,58 +130,61 @@ def _matches_defaults(existing, defaults):
 
 def _vevent_to_defaults(vevent, owner):
     """Convert a VEVENT component to a dict of Event field defaults."""
-    dtstart_prop = vevent.get('DTSTART')
-    dtend_prop = vevent.get('DTEND')
+    dtstart_prop = vevent.get("DTSTART")
+    dtend_prop = vevent.get("DTEND")
 
     return {
-        'title': str(vevent.get('SUMMARY', '')),
-        'description': str(vevent.get('DESCRIPTION', '')),
-        'location': str(vevent.get('LOCATION', '')),
-        'start': _to_datetime(dtstart_prop),
-        'end': _to_datetime(dtend_prop),
-        'all_day': _is_all_day(dtstart_prop),
-        'ical_sequence': int(vevent.get('SEQUENCE', 0)),
-        'owner': owner,
-        'external_organizer': _extract_email(vevent.get('ORGANIZER')),
+        "title": str(vevent.get("SUMMARY", "")),
+        "description": str(vevent.get("DESCRIPTION", "")),
+        "location": str(vevent.get("LOCATION", "")),
+        "start": _to_datetime(dtstart_prop),
+        "end": _to_datetime(dtend_prop),
+        "all_day": _is_all_day(dtstart_prop),
+        "ical_sequence": int(vevent.get("SEQUENCE", 0)),
+        "owner": owner,
+        "external_organizer": _extract_email(vevent.get("ORGANIZER")),
         **_parse_rrule(vevent),
     }
 
 
 def _parse_rrule(vevent):
     """Extract recurrence fields from a VEVENT's RRULE property."""
-    rrule = vevent.get('RRULE')
+    rrule = vevent.get("RRULE")
     if not rrule:
         return {
-            'recurrence_frequency': None,
-            'recurrence_interval': 1,
-            'recurrence_end': None,
+            "recurrence_frequency": None,
+            "recurrence_interval": 1,
+            "recurrence_end": None,
         }
 
-    freq_list = rrule.get('FREQ', [])
-    freq_str = freq_list[0] if freq_list else ''
+    freq_list = rrule.get("FREQ", [])
+    freq_str = freq_list[0] if freq_list else ""
     frequency = _FREQ_MAP.get(freq_str.upper())
 
-    interval_list = rrule.get('INTERVAL', [1])
+    interval_list = rrule.get("INTERVAL", [1])
     interval = int(interval_list[0]) if interval_list else 1
 
     # UNTIL takes priority, then COUNT is converted to a concrete end date
-    until_list = rrule.get('UNTIL', [])
+    until_list = rrule.get("UNTIL", [])
     recurrence_end = None
     if until_list:
         until = until_list[0]
-        if hasattr(until, 'hour'):
-            recurrence_end = until if until.tzinfo else until.replace(tzinfo=dt_tz.utc)
+        if hasattr(until, "hour"):
+            recurrence_end = until if until.tzinfo else until.replace(tzinfo=UTC)
         else:
-            recurrence_end = datetime(until.year, until.month, until.day, tzinfo=dt_tz.utc)
-    elif rrule.get('COUNT') and frequency:
+            recurrence_end = datetime(until.year, until.month, until.day, tzinfo=UTC)
+    elif rrule.get("COUNT") and frequency:
         recurrence_end = _count_to_end(
-            vevent.get('DTSTART'), frequency, interval, int(rrule['COUNT'][0]),
+            vevent.get("DTSTART"),
+            frequency,
+            interval,
+            int(rrule["COUNT"][0]),
         )
 
     return {
-        'recurrence_frequency': frequency,
-        'recurrence_interval': interval,
-        'recurrence_end': recurrence_end,
+        "recurrence_frequency": frequency,
+        "recurrence_interval": interval,
+        "recurrence_end": recurrence_end,
     }
 
 
@@ -190,10 +197,10 @@ def _count_to_end(dtstart_prop, frequency, interval, count):
         return None
 
     delta_map = {
-        'daily': timedelta(days=interval),
-        'weekly': timedelta(weeks=interval),
-        'monthly': None,
-        'yearly': None,
+        "daily": timedelta(days=interval),
+        "weekly": timedelta(weeks=interval),
+        "monthly": None,
+        "yearly": None,
     }
     delta = delta_map.get(frequency)
     if delta:
@@ -201,9 +208,10 @@ def _count_to_end(dtstart_prop, frequency, interval, count):
 
     # For monthly/yearly, approximate with dateutil
     from dateutil.relativedelta import relativedelta
-    if frequency == 'monthly':
+
+    if frequency == "monthly":
         return start + relativedelta(months=interval * (count - 1))
-    if frequency == 'yearly':
+    if frequency == "yearly":
         return start + relativedelta(years=interval * (count - 1))
     return None
 
@@ -213,18 +221,18 @@ def _to_datetime(dt_prop):
     if dt_prop is None:
         return None
     dt = dt_prop.dt
-    if hasattr(dt, 'hour'):
+    if hasattr(dt, "hour"):
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=dt_tz.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt
-    return datetime(dt.year, dt.month, dt.day, tzinfo=dt_tz.utc)
+    return datetime(dt.year, dt.month, dt.day, tzinfo=UTC)
 
 
 def _is_all_day(dt_prop):
     """Return True if the DTSTART property represents an all-day event."""
     if dt_prop is None:
         return False
-    return not hasattr(dt_prop.dt, 'hour')
+    return not hasattr(dt_prop.dt, "hour")
 
 
 def _extract_email(organizer_prop):
@@ -234,8 +242,8 @@ def _extract_email(organizer_prop):
     its own parsing, and the RFC 5545 form is stable.
     """
     if not organizer_prop:
-        return ''
+        return ""
     value = str(organizer_prop)
-    if value.lower().startswith('mailto:'):
+    if value.lower().startswith("mailto:"):
         return value[7:]
     return value

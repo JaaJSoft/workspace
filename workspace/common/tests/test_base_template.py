@@ -1,4 +1,5 @@
 """Regression tests for ``base.html`` / ``base_with_navbar.html``."""
+
 import re
 
 from django.template import Context, Template
@@ -29,7 +30,7 @@ class NavbarLayoutScrollLockTests(TestCase):
         # The locking selector must declare overflow:hidden, not auto/visible.
         # Pull a slice around the selector and verify the declaration is present.
         idx = html.index("html:has(> body.overflow-hidden.h-dvh)")
-        block = html[idx:idx + 200]
+        block = html[idx : idx + 200]
         self.assertIn("overflow: hidden", block)
 
     def test_body_carries_classes_the_lock_selector_matches(self):

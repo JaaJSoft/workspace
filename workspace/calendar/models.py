@@ -9,27 +9,27 @@ from workspace.common.uuids import uuid_v7_or_v4
 class Calendar(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     name = models.CharField(max_length=255)
-    color = models.CharField(max_length=30, default='primary')
+    color = models.CharField(max_length=30, default="primary")
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='calendars',
+        related_name="calendars",
     )
     mail_account = models.ForeignKey(
-        'mail.MailAccount',
+        "mail.MailAccount",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         default=None,
-        related_name='invitation_calendars',
+        related_name="invitation_calendars",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['name']
+        ordering = ["name"]
         indexes = [
-            models.Index(fields=['owner', 'name'], name='cal_owner_name'),
+            models.Index(fields=["owner", "name"], name="cal_owner_name"),
         ]
 
     def __str__(self):
@@ -38,74 +38,81 @@ class Calendar(models.Model):
 
 class CalendarSubscription(models.Model):
     """A user subscribing to another user's calendar."""
+
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='calendar_subscriptions',
+        related_name="calendar_subscriptions",
     )
     calendar = models.ForeignKey(
         Calendar,
         on_delete=models.CASCADE,
-        related_name='subscriptions',
+        related_name="subscriptions",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['user', 'calendar'],
-                name='unique_calendar_subscription',
+                fields=["user", "calendar"],
+                name="unique_calendar_subscription",
             ),
         ]
 
     def __str__(self):
-        return f'{self.user} → {self.calendar}'
+        return f"{self.user} → {self.calendar}"
 
 
 class Event(models.Model):
     class RecurrenceFrequency(models.TextChoices):
-        DAILY = 'daily', 'Daily'
-        WEEKLY = 'weekly', 'Weekly'
-        MONTHLY = 'monthly', 'Monthly'
-        YEARLY = 'yearly', 'Yearly'
+        DAILY = "daily", "Daily"
+        WEEKLY = "weekly", "Weekly"
+        MONTHLY = "monthly", "Monthly"
+        YEARLY = "yearly", "Yearly"
 
     class Source(models.TextChoices):
-        MANUAL = 'manual', 'Manual'
-        ICS = 'ics', 'ICS invitation'
-        LLM = 'llm', 'Extracted by AI'
+        MANUAL = "manual", "Manual"
+        ICS = "ics", "ICS invitation"
+        LLM = "llm", "Extracted by AI"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     calendar = models.ForeignKey(
         Calendar,
         on_delete=models.CASCADE,
-        related_name='events',
+        related_name="events",
     )
     title = models.CharField(max_length=255)
-    description = models.TextField(blank=True, default='')
+    description = models.TextField(blank=True, default="")
     start = models.DateTimeField()
     end = models.DateTimeField(null=True, blank=True)
     all_day = models.BooleanField(default=False)
-    location = models.CharField(max_length=255, blank=True, default='')
+    location = models.CharField(max_length=255, blank=True, default="")
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='calendar_events',
+        related_name="calendar_events",
     )
 
     # Recurrence fields
     recurrence_frequency = models.CharField(
-        max_length=7, choices=RecurrenceFrequency.choices,
-        null=True, blank=True, default=None,
+        max_length=7,
+        choices=RecurrenceFrequency.choices,
+        null=True,
+        blank=True,
+        default=None,
     )
     recurrence_interval = models.PositiveSmallIntegerField(default=1)
     recurrence_end = models.DateTimeField(null=True, blank=True, default=None)
 
     # Exception fields (for modified/cancelled occurrences)
     recurrence_parent = models.ForeignKey(
-        'self', on_delete=models.CASCADE,
-        null=True, blank=True, default=None,
-        related_name='exceptions',
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        default=None,
+        related_name="exceptions",
     )
     original_start = models.DateTimeField(null=True, blank=True, default=None)
     is_cancelled = models.BooleanField(default=False)
@@ -115,30 +122,35 @@ class Event(models.Model):
     ical_sequence = models.IntegerField(default=0)
     external_organizer = models.EmailField(null=True, blank=True, default=None)
     source_message = models.ForeignKey(
-        'mail.MailMessage',
+        "mail.MailMessage",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         default=None,
-        related_name='+',
+        related_name="+",
     )
     source = models.CharField(
-        max_length=16, choices=Source.choices, default=Source.MANUAL,
+        max_length=16,
+        choices=Source.choices,
+        default=Source.MANUAL,
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['start']
+        ordering = ["start"]
         indexes = [
-            models.Index(fields=['start', 'end']),
-            models.Index(fields=['owner', 'start']),
+            models.Index(fields=["start", "end"]),
+            models.Index(fields=["owner", "start"]),
             # (calendar, start) covered by (calendar, is_cancelled, start) below.
             # (recurrence_frequency, start) had no caller filtering on it.
-            models.Index(fields=['recurrence_parent', 'original_start']),
-            models.Index(fields=['ical_uid'], name='event_ical_uid'),
-            models.Index(fields=['calendar', 'is_cancelled', 'start'], name='event_cal_cancel_start'),
+            models.Index(fields=["recurrence_parent", "original_start"]),
+            models.Index(fields=["ical_uid"], name="event_ical_uid"),
+            models.Index(
+                fields=["calendar", "is_cancelled", "start"],
+                name="event_cal_cancel_start",
+            ),
         ]
         constraints = [
             # One row per VEVENT UID per calendar — closes the duplicate
@@ -146,11 +158,14 @@ class Event(models.Model):
             # Native events (no ical_uid) and legacy '' values are excluded
             # via the partial condition.
             models.UniqueConstraint(
-                fields=['calendar', 'ical_uid'],
-                condition=models.Q(ical_uid__isnull=False) & ~models.Q(ical_uid=''),
-                name='unique_event_ical_uid_per_calendar',
+                fields=["calendar", "ical_uid"],
+                condition=models.Q(ical_uid__isnull=False) & ~models.Q(ical_uid=""),
+                name="unique_event_ical_uid_per_calendar",
             ),
         ]
+
+    def __str__(self):
+        return self.title
 
     @property
     def is_recurring(self):
@@ -160,26 +175,23 @@ class Event(models.Model):
     def is_exception(self):
         return self.recurrence_parent_id is not None
 
-    def __str__(self):
-        return self.title
-
 
 class EventMember(models.Model):
     class Status(models.TextChoices):
-        PENDING = 'pending', 'Pending'
-        ACCEPTED = 'accepted', 'Accepted'
-        DECLINED = 'declined', 'Declined'
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        DECLINED = "declined", "Declined"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     event = models.ForeignKey(
         Event,
         on_delete=models.CASCADE,
-        related_name='members',
+        related_name="members",
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='calendar_invitations',
+        related_name="calendar_invitations",
     )
     status = models.CharField(
         max_length=8,
@@ -191,17 +203,17 @@ class EventMember(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['event', 'user'],
-                name='unique_event_member',
+                fields=["event", "user"],
+                name="unique_event_member",
             ),
         ]
         indexes = [
-            models.Index(fields=['status'], name='evtmember_status'),
-            models.Index(fields=['user', 'status'], name='evtmember_user_status'),
+            models.Index(fields=["status"], name="evtmember_status"),
+            models.Index(fields=["user", "status"], name="evtmember_user_status"),
         ]
 
     def __str__(self):
-        return f'{self.user} — {self.event} ({self.status})'
+        return f"{self.user} — {self.event} ({self.status})"
 
 
 def _generate_share_token():
@@ -210,16 +222,16 @@ def _generate_share_token():
 
 class Poll(models.Model):
     class Status(models.TextChoices):
-        OPEN = 'open', 'Open'
-        CLOSED = 'closed', 'Closed'
+        OPEN = "open", "Open"
+        CLOSED = "closed", "Closed"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     title = models.CharField(max_length=255)
-    description = models.TextField(blank=True, default='')
+    description = models.TextField(blank=True, default="")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='polls',
+        related_name="polls",
     )
     status = models.CharField(
         max_length=10,
@@ -232,28 +244,28 @@ class Poll(models.Model):
         default=_generate_share_token,
     )
     chosen_slot = models.ForeignKey(
-        'PollSlot',
+        "PollSlot",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='+',
+        related_name="+",
     )
     event = models.ForeignKey(
         Event,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='+',
+        related_name="+",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['created_by', 'status']),
-            models.Index(fields=['share_token']),
-            models.Index(fields=['status']),
+            models.Index(fields=["created_by", "status"]),
+            models.Index(fields=["share_token"]),
+            models.Index(fields=["status"]),
         ]
 
     def __str__(self):
@@ -265,91 +277,93 @@ class PollSlot(models.Model):
     poll = models.ForeignKey(
         Poll,
         on_delete=models.CASCADE,
-        related_name='slots',
+        related_name="slots",
     )
     start = models.DateTimeField()
     end = models.DateTimeField(null=True, blank=True)
     position = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
-        ordering = ['position', 'start']
+        ordering = ["position", "start"]
         indexes = [
-            models.Index(fields=['poll', 'position']),
+            models.Index(fields=["poll", "position"]),
         ]
 
     def __str__(self):
-        return f'{self.poll.title} — {self.start}'
+        return f"{self.poll.title} — {self.start}"
 
 
 class PollVote(models.Model):
     class Choice(models.TextChoices):
-        YES = 'yes', 'Yes'
-        NO = 'no', 'No'
-        MAYBE = 'maybe', 'Maybe'
+        YES = "yes", "Yes"
+        NO = "no", "No"
+        MAYBE = "maybe", "Maybe"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     slot = models.ForeignKey(
         PollSlot,
         on_delete=models.CASCADE,
-        related_name='votes',
+        related_name="votes",
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name='poll_votes',
+        related_name="poll_votes",
     )
-    guest_name = models.CharField(max_length=100, blank=True, default='')
-    guest_email = models.EmailField(blank=True, default='')
-    voter_token = models.CharField(max_length=36, blank=True, default='')
+    guest_name = models.CharField(max_length=100, blank=True, default="")
+    guest_email = models.EmailField(blank=True, default="")
+    voter_token = models.CharField(max_length=36, blank=True, default="")
     choice = models.CharField(max_length=5, choices=Choice.choices)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['slot', 'user'],
+                fields=["slot", "user"],
                 condition=models.Q(user__isnull=False),
-                name='unique_vote_per_user',
+                name="unique_vote_per_user",
             ),
             models.UniqueConstraint(
-                fields=['slot', 'voter_token'],
-                condition=models.Q(user__isnull=True) & ~models.Q(voter_token=''),
-                name='unique_vote_per_guest_token',
+                fields=["slot", "voter_token"],
+                condition=models.Q(user__isnull=True) & ~models.Q(voter_token=""),
+                name="unique_vote_per_guest_token",
             ),
         ]
         indexes = [
             # voter_token alone covered by (slot, voter_token); all callers scope by slot.
-            models.Index(fields=['slot', 'choice']),
-            models.Index(fields=['slot', 'voter_token']),
+            models.Index(fields=["slot", "choice"]),
+            models.Index(fields=["slot", "voter_token"]),
         ]
 
     def __str__(self):
         who = self.user.username if self.user else self.guest_name
-        return f'{who} — {self.choice} — {self.slot}'
+        return f"{who} — {self.choice} — {self.slot}"
 
 
 class PollInvitee(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
-    poll = models.ForeignKey(Poll, on_delete=models.CASCADE, related_name='invitees')
+    poll = models.ForeignKey(Poll, on_delete=models.CASCADE, related_name="invitees")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='poll_invitations',
+        related_name="poll_invitations",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=['poll', 'user'], name='unique_poll_invitee'),
+            models.UniqueConstraint(
+                fields=["poll", "user"], name="unique_poll_invitee"
+            ),
         ]
         indexes = [
-            models.Index(fields=['user', 'poll']),
+            models.Index(fields=["user", "poll"]),
         ]
 
     def __str__(self):
-        return f'{self.user} — {self.poll}'
+        return f"{self.user} — {self.poll}"
 
 
 # Import models from sub-modules so Django's migration framework discovers them.

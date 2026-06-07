@@ -15,7 +15,7 @@ from workspace.files.models import File, FileShare
 from workspace.files.serializers import FileSerializer
 from workspace.files.services import FileService
 
-TRASH_RETENTION_DAYS = getattr(settings, 'TRASH_RETENTION_DAYS', 30)
+TRASH_RETENTION_DAYS = getattr(settings, "TRASH_RETENTION_DAYS", 30)
 
 
 class TrashMixin:
@@ -29,14 +29,16 @@ class TrashMixin:
             400: OpenApiResponse(description="Item is not in trash."),
         },
     )
-    @action(detail=True, methods=['post'], url_path='restore')
+    @action(detail=True, methods=["post"], url_path="restore")
     def restore(self, request, uuid=None):
         """Restore a file or folder from trash."""
         file_obj = self.get_object()
         if file_obj.deleted_at is None:
-            return Response({'detail': 'Item is not in trash.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Item is not in trash."}, status=status.HTTP_400_BAD_REQUEST
+            )
         restored = FileService.restore(file_obj, acting_user=request.user)
-        return Response({'restored': restored}, status=status.HTTP_200_OK)
+        return Response({"restored": restored}, status=status.HTTP_200_OK)
 
     @extend_schema(
         summary="Permanently delete",
@@ -46,12 +48,14 @@ class TrashMixin:
             400: OpenApiResponse(description="Item is not in trash."),
         },
     )
-    @action(detail=True, methods=['delete'], url_path='purge')
+    @action(detail=True, methods=["delete"], url_path="purge")
     def purge(self, request, uuid=None):
         """Permanently delete a file or folder."""
         file_obj = self.get_object()
         if file_obj.deleted_at is None:
-            return Response({'detail': 'Item is not in trash.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Item is not in trash."}, status=status.HTTP_400_BAD_REQUEST
+            )
         FileService.hard_delete(file_obj, acting_user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -99,16 +103,16 @@ class TrashMixin:
             ),
         },
     )
-    @action(detail=False, methods=['get'], url_path='trash')
+    @action(detail=False, methods=["get"], url_path="trash")
     def trash(self, request):
         """List trashed files and folders."""
         queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
         queryset = FileService.annotate_for_serializer(queryset, request.user).annotate(
             user_share_permission=Subquery(
                 FileShare.objects.filter(
-                    file_id=OuterRef('pk'),
+                    file_id=OuterRef("pk"),
                     shared_with=request.user,
-                ).values('permission')[:1]
+                ).values("permission")[:1]
             ),
         )
         queryset = self.filter_queryset(queryset)
@@ -135,11 +139,15 @@ class TrashMixin:
             ),
         },
     )
-    @action(detail=False, methods=['delete'], url_path='trash/clean')
+    @action(detail=False, methods=["delete"], url_path="trash/clean")
     def clean_trash(self, request):
         """Permanently delete trashed items past retention (or force all)."""
-        force_value = self.request.query_params.get('force')
-        force = str(force_value).lower() in {'1', 'true', 'yes'} if force_value is not None else False
+        force_value = self.request.query_params.get("force")
+        force = (
+            str(force_value).lower() in {"1", "true", "yes"}
+            if force_value is not None
+            else False
+        )
         retention_days = TRASH_RETENTION_DAYS
         cutoff = timezone.now() - timedelta(days=retention_days)
         queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
@@ -151,9 +159,12 @@ class TrashMixin:
         file_count = queryset.count()
         # select_related('owner') avoids N+1 in the pre_delete signal,
         # which reads instance.owner.username for each File.
-        queryset.select_related('owner').delete()
-        return Response({
-            'deleted': file_count,
-            'retention_days': retention_days,
-            'force': force,
-        }, status=status.HTTP_200_OK)
+        queryset.select_related("owner").delete()
+        return Response(
+            {
+                "deleted": file_count,
+                "retention_days": retention_days,
+                "force": force,
+            },
+            status=status.HTTP_200_OK,
+        )

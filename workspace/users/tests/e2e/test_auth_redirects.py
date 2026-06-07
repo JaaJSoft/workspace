@@ -5,6 +5,7 @@ behavior, Django's ``@login_required`` decorator on the target view,
 and the ``?next=<quoted-path>`` query-string that carries the original
 destination so post-login redirect works.
 """
+
 from __future__ import annotations
 
 import re

@@ -15,8 +15,9 @@ import json
 import subprocess
 from pathlib import Path
 
-
-OUTPUT_DIR = Path(__file__).resolve().parent.parent / "workspace" / "common" / "static" / "icons"
+OUTPUT_DIR = (
+    Path(__file__).resolve().parent.parent / "workspace" / "common" / "static" / "icons"
+)
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 # Lucide "users" icon paths (from lucide-static)
@@ -76,10 +77,9 @@ for (const { svg, output, size } of icons) {
     fs.writeFileSync(output, png);
 }
 """
-    payload = json.dumps([
-        {"svg": svg, "output": str(out), "size": size}
-        for svg, out, size in icons
-    ])
+    payload = json.dumps(
+        [{"svg": svg, "output": str(out), "size": size} for svg, out, size in icons]
+    )
     result = subprocess.run(
         ["node", "-e", node_script, payload],
         capture_output=True,

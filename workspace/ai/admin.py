@@ -7,68 +7,97 @@ from workspace.users.services.avatar import (
     get_avatar_path,
     has_avatar,
 )
+
 from .models import AITask, BotProfile, ConversationSummary
 
 
 class BotProfileForm(forms.ModelForm):
     avatar = forms.ImageField(
         required=False,
-        help_text='Upload a new avatar image. Will be cropped to a centered square and saved as 256×256 WebP.',
+        help_text="Upload a new avatar image. Will be cropped to a centered square and saved as 256×256 WebP.",
     )
     delete_avatar = forms.BooleanField(
         required=False,
-        help_text='Check to remove the current avatar.',
+        help_text="Check to remove the current avatar.",
     )
 
     class Meta:
         model = BotProfile
-        fields = '__all__'
+        # Admin-only form: __all__ is fine, mass-assignment is not a concern.
+        fields = "__all__"  # noqa: DJ007
 
 
 @admin.register(BotProfile)
 class BotProfileAdmin(admin.ModelAdmin):
     form = BotProfileForm
-    list_display = ['user', 'model', 'is_public', 'supports_tools', 'supports_vision', 'created_by', 'created_at']
-    list_filter = ['model', 'is_public', 'supports_tools', 'supports_vision']
-    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'description']
-    raw_id_fields = ['user', 'created_by']
-    readonly_fields = ['created_at', 'avatar_preview']
-    filter_horizontal = ['allowed_users', 'allowed_groups']
+    list_display = [
+        "user",
+        "model",
+        "is_public",
+        "supports_tools",
+        "supports_vision",
+        "created_by",
+        "created_at",
+    ]
+    list_filter = ["model", "is_public", "supports_tools", "supports_vision"]
+    search_fields = [
+        "user__username",
+        "user__first_name",
+        "user__last_name",
+        "description",
+    ]
+    raw_id_fields = ["user", "created_by"]
+    readonly_fields = ["created_at", "avatar_preview"]
+    filter_horizontal = ["allowed_users", "allowed_groups"]
 
     def avatar_preview(self, obj):
         if not obj.pk or not has_avatar(obj.user):
-            return 'No avatar'
+            return "No avatar"
         path = get_avatar_path(obj.user.id)
         from django.core.files.storage import default_storage
+
         url = default_storage.url(path)
         return format_html(
             '<img src="{}" style="width:96px;height:96px;border-radius:50%;object-fit:cover;" />',
             url,
         )
-    avatar_preview.short_description = 'Current avatar'
+
+    avatar_preview.short_description = "Current avatar"
 
     def get_fieldsets(self, request, obj=None):
         return [
-            (None, {'fields': ['user', 'system_prompt', 'model', 'description']}),
-            ('Avatar', {'fields': ['avatar_preview', 'avatar', 'delete_avatar']}),
-            ('Capabilities', {'fields': ['supports_tools', 'supports_vision']}),
-            ('Access control', {'fields': ['is_public', 'created_by', 'allowed_users', 'allowed_groups']}),
-            ('Info', {'fields': ['created_at']}),
+            (None, {"fields": ["user", "system_prompt", "model", "description"]}),
+            ("Avatar", {"fields": ["avatar_preview", "avatar", "delete_avatar"]}),
+            ("Capabilities", {"fields": ["supports_tools", "supports_vision"]}),
+            (
+                "Access control",
+                {
+                    "fields": [
+                        "is_public",
+                        "created_by",
+                        "allowed_users",
+                        "allowed_groups",
+                    ]
+                },
+            ),
+            ("Info", {"fields": ["created_at"]}),
         ]
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
-        if form.cleaned_data.get('delete_avatar'):
+        if form.cleaned_data.get("delete_avatar"):
             delete_avatar(obj.user)
-        elif form.cleaned_data.get('avatar'):
-            self._save_avatar(obj.user, form.cleaned_data['avatar'])
+        elif form.cleaned_data.get("avatar"):
+            self._save_avatar(obj.user, form.cleaned_data["avatar"])
 
     @staticmethod
     def _save_avatar(user, image_file):
+        from io import BytesIO
+
         from PIL import Image, ImageOps
+
         from workspace.common.services.image import save_image
         from workspace.users.services.settings import set_setting
-        from io import BytesIO
 
         img = Image.open(image_file)
         img = ImageOps.exif_transpose(img)
@@ -80,36 +109,46 @@ class BotProfileAdmin(admin.ModelAdmin):
         top = (h - side) // 2
         img = img.crop((left, top, left + side, top + side))
 
-        img = img.convert('RGB')
+        img = img.convert("RGB")
         img = img.resize((256, 256), Image.LANCZOS)
 
         buf = BytesIO()
-        img.save(buf, format='WEBP', quality=85)
+        img.save(buf, format="WEBP", quality=85)
 
         path = get_avatar_path(user.id)
         save_image(path, buf.getvalue())
-        set_setting(user, 'profile', 'has_avatar', True)
+        set_setting(user, "profile", "has_avatar", True)
 
 
 @admin.register(ConversationSummary)
 class ConversationSummaryAdmin(admin.ModelAdmin):
-    list_display = ('conversation', 'up_to', 'content_preview', 'updated_at')
-    search_fields = ('conversation__title', 'content')
-    readonly_fields = ('conversation', 'up_to', 'content', 'updated_at')
+    list_display = ("conversation", "up_to", "content_preview", "updated_at")
+    search_fields = ("conversation__title", "content")
+    readonly_fields = ("conversation", "up_to", "content", "updated_at")
     raw_id_fields = ()
 
-    @admin.display(description='Summary')
+    @admin.display(description="Summary")
     def content_preview(self, obj):
         if not obj.content:
-            return '—'
-        return obj.content[:120] + '…' if len(obj.content) > 120 else obj.content
+            return "—"
+        return obj.content[:120] + "…" if len(obj.content) > 120 else obj.content
 
 
 @admin.register(AITask)
 class AITaskAdmin(admin.ModelAdmin):
-    list_display = ['uuid', 'task_type', 'status', 'owner', 'model_used', 'prompt_tokens', 'completion_tokens', 'created_at', 'completed_at']
-    list_filter = ['task_type', 'status', 'model_used']
-    search_fields = ['uuid', 'owner__username', 'result', 'error']
-    raw_id_fields = ['owner', 'chat_message']
-    readonly_fields = ['uuid', 'created_at', 'raw_messages']
-    date_hierarchy = 'created_at'
+    list_display = [
+        "uuid",
+        "task_type",
+        "status",
+        "owner",
+        "model_used",
+        "prompt_tokens",
+        "completion_tokens",
+        "created_at",
+        "completed_at",
+    ]
+    list_filter = ["task_type", "status", "model_used"]
+    search_fields = ["uuid", "owner__username", "result", "error"]
+    raw_id_fields = ["owner", "chat_message"]
+    readonly_fields = ["uuid", "created_at", "raw_messages"]
+    date_hierarchy = "created_at"

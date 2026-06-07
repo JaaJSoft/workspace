@@ -5,7 +5,7 @@ from django.utils.safestring import mark_safe
 
 register = template.Library()
 
-_ITEM_SEP = re.compile(r'^\s*---\s*$', re.MULTILINE)
+_ITEM_SEP = re.compile(r"^\s*---\s*$", re.MULTILINE)
 
 
 class HelpItemsNode(template.Node):
@@ -49,24 +49,31 @@ class HelpItemsNode(template.Node):
                     break
             if header_line is None:
                 continue
-            parts = [p.strip() for p in header_line.split('|')]
+            parts = [p.strip() for p in header_line.split("|")]
             icon = parts[0]
-            title = parts[1] if len(parts) > 1 else ''
-            checked = len(parts) > 2 and parts[2].lower() in ('checked', 'true', '1', 'yes')
-            content = mark_safe('\n'.join(lines[header_idx + 1:]).strip())
-            items.append({'icon': icon, 'title': title, 'checked': checked, 'content': content})
+            title = parts[1] if len(parts) > 1 else ""
+            checked = len(parts) > 2 and parts[2].lower() in (
+                "checked",
+                "true",
+                "1",
+                "yes",
+            )
+            content = mark_safe("\n".join(lines[header_idx + 1 :]).strip())
+            items.append(
+                {"icon": icon, "title": title, "checked": checked, "content": content}
+            )
         context[self.var_name] = items
-        return ''
+        return ""
 
 
-@register.tag('help_items')
+@register.tag("help_items")
 def do_help_items(parser, token):
     bits = token.split_contents()
-    if len(bits) != 3 or bits[1] != 'as':
+    if len(bits) != 3 or bits[1] != "as":
         raise template.TemplateSyntaxError(
             "'help_items' tag requires: {% help_items as variable_name %}"
         )
     var_name = bits[2]
-    nodelist = parser.parse(('endhelp_items',))
+    nodelist = parser.parse(("endhelp_items",))
     parser.delete_first_token()
     return HelpItemsNode(nodelist, var_name)

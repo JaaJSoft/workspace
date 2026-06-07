@@ -5,7 +5,6 @@ from workspace.core.activity_registry import ActivityProvider
 
 
 class MailActivityProvider(ActivityProvider):
-
     def _base_filter(self, user_id):
         """Return Q filter for mail queries.
 
@@ -15,14 +14,15 @@ class MailActivityProvider(ActivityProvider):
         show **received** (inbox) mail — things that happened to people.
         """
         if user_id is not None:
-            return Q(account__owner_id=user_id, folder__folder_type='sent')
-        return Q(folder__folder_type='inbox')
+            return Q(account__owner_id=user_id, folder__folder_type="sent")
+        return Q(folder__folder_type="inbox")
 
     def _viewer_filter(self, user_id, viewer_id):
         """Restrict results to mail accounts the viewer owns."""
         if viewer_id is None or viewer_id == user_id:
             return Q()
         from workspace.mail.queries import user_account_ids
+
         return Q(account_id__in=user_account_ids(viewer_id))
 
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
@@ -37,48 +37,62 @@ class MailActivityProvider(ActivityProvider):
             self._viewer_filter(user_id, viewer_id),
         )
 
-        rows = qs.annotate(day=TruncDate('date')).values('day').annotate(
-            count=Count('pk'),
-        ).order_by('day')
+        rows = (
+            qs.annotate(day=TruncDate("date"))
+            .values("day")
+            .annotate(
+                count=Count("pk"),
+            )
+            .order_by("day")
+        )
 
-        return {row['day']: row['count'] for row in rows}
+        return {row["day"]: row["count"] for row in rows}
 
     def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
         from workspace.mail.models import MailMessage
 
         is_sent = user_id is not None
 
-        qs = MailMessage.objects.filter(
-            deleted_at__isnull=True,
-        ).filter(
-            self._base_filter(user_id),
-            self._viewer_filter(user_id, viewer_id),
-        ).select_related(
-            'account__owner',
-        ).order_by('-date')[offset:offset + limit]
+        qs = (
+            MailMessage.objects.filter(
+                deleted_at__isnull=True,
+            )
+            .filter(
+                self._base_filter(user_id),
+                self._viewer_filter(user_id, viewer_id),
+            )
+            .select_related(
+                "account__owner",
+            )
+            .order_by("-date")[offset : offset + limit]
+        )
 
         events = []
         for msg in qs:
             if is_sent:
                 actor_name = msg.account.owner.get_full_name()
             else:
-                actor_name = ''
+                actor_name = ""
                 if msg.from_address:
-                    actor_name = msg.from_address.get('name') or msg.from_address.get('email', '')
+                    actor_name = msg.from_address.get("name") or msg.from_address.get(
+                        "email", ""
+                    )
                 actor_name = actor_name or msg.account.owner.get_full_name()
 
-            events.append({
-                'icon': 'mail',
-                'label': 'Email sent' if is_sent else 'Email received',
-                'description': msg.subject or '(no subject)',
-                'timestamp': msg.date or msg.created_at,
-                'url': f'/mail/{msg.account_id}/messages/{msg.pk}',
-                'actor': {
-                    'id': msg.account.owner_id,
-                    'username': msg.account.owner.username,
-                    'full_name': actor_name,
-                },
-            })
+            events.append(
+                {
+                    "icon": "mail",
+                    "label": "Email sent" if is_sent else "Email received",
+                    "description": msg.subject or "(no subject)",
+                    "timestamp": msg.date or msg.created_at,
+                    "url": f"/mail/{msg.account_id}/messages/{msg.pk}",
+                    "actor": {
+                        "id": msg.account.owner_id,
+                        "username": msg.account.owner.username,
+                        "full_name": actor_name,
+                    },
+                }
+            )
         return events
 
     def get_stats(self, user_id, *, viewer_id=None):
@@ -100,7 +114,7 @@ class MailActivityProvider(ActivityProvider):
         total_accounts = acct_qs.count()
 
         return {
-            'total_messages': total_messages,
-            'unread_messages': unread_messages,
-            'total_accounts': total_accounts,
+            "total_messages": total_messages,
+            "unread_messages": unread_messages,
+            "total_accounts": total_accounts,
         }

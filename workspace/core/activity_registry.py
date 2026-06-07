@@ -28,7 +28,12 @@ class ActivityProvider(ABC):
 
     @abstractmethod
     def get_daily_counts(
-        self, user_id: int | None, date_from: date, date_to: date, *, viewer_id: int | None = None,
+        self,
+        user_id: int | None,
+        date_from: date,
+        date_to: date,
+        *,
+        viewer_id: int | None = None,
     ) -> dict[date, int]:
         """Return a mapping of date -> activity count for the activity grid.
 
@@ -37,7 +42,12 @@ class ActivityProvider(ABC):
 
     @abstractmethod
     def get_recent_events(
-        self, user_id: int | None, limit: int = 10, offset: int = 0, *, viewer_id: int | None = None,
+        self,
+        user_id: int | None,
+        limit: int = 10,
+        offset: int = 0,
+        *,
+        viewer_id: int | None = None,
     ) -> list[dict]:
         """Return recent activity events for the activity feed.
 
@@ -81,18 +91,28 @@ class ActivityRegistry:
         return info.provider_cls()
 
     def get_daily_counts(
-        self, user_id: int | None, date_from: date, date_to: date, *, viewer_id: int | None = None,
+        self,
+        user_id: int | None,
+        date_from: date,
+        date_to: date,
+        *,
+        viewer_id: int | None = None,
     ) -> dict[date, int]:
         merged: dict[date, int] = defaultdict(int)
         for info in self._providers.values():
             try:
                 provider = info.provider_cls()
                 for day, count in provider.get_daily_counts(
-                    user_id, date_from, date_to, viewer_id=viewer_id,
+                    user_id,
+                    date_from,
+                    date_to,
+                    viewer_id=viewer_id,
                 ).items():
                     merged[day] += count
             except Exception:
-                logger.exception("Activity provider '%s' failed in get_daily_counts", info.slug)
+                logger.exception(
+                    "Activity provider '%s' failed in get_daily_counts", info.slug
+                )
         return dict(merged)
 
     def get_recent_events(
@@ -112,14 +132,19 @@ class ActivityRegistry:
             try:
                 provider = info.provider_cls()
                 events = provider.get_recent_events(
-                    user_id, limit=limit, offset=offset, viewer_id=viewer_id,
+                    user_id,
+                    limit=limit,
+                    offset=offset,
+                    viewer_id=viewer_id,
                 )
                 for event in events:
                     event.setdefault("source", info.slug)
                     event.setdefault("source_color", info.color)
                 return events
             except Exception:
-                logger.exception("Activity provider '%s' failed in get_recent_events", scrub(source))
+                logger.exception(
+                    "Activity provider '%s' failed in get_recent_events", scrub(source)
+                )
                 return []
 
         fetch_count = limit + offset
@@ -128,31 +153,41 @@ class ActivityRegistry:
             try:
                 provider = info.provider_cls()
                 events = provider.get_recent_events(
-                    user_id, limit=fetch_count, offset=0, viewer_id=viewer_id,
+                    user_id,
+                    limit=fetch_count,
+                    offset=0,
+                    viewer_id=viewer_id,
                 )
                 for event in events:
                     event.setdefault("source", info.slug)
                     event.setdefault("source_color", info.color)
                 if exclude_actor_id is not None:
                     events = [
-                        e for e in events
+                        e
+                        for e in events
                         if (e.get("actor") or {}).get("id") != exclude_actor_id
                     ]
                 all_events.extend(events)
             except Exception:
-                logger.exception("Activity provider '%s' failed in get_recent_events", info.slug)
+                logger.exception(
+                    "Activity provider '%s' failed in get_recent_events", info.slug
+                )
 
         all_events.sort(key=lambda e: e["timestamp"], reverse=True)
-        return all_events[offset:offset + limit]
+        return all_events[offset : offset + limit]
 
-    def get_stats(self, user_id: int | None, *, viewer_id: int | None = None) -> dict[str, dict]:
+    def get_stats(
+        self, user_id: int | None, *, viewer_id: int | None = None
+    ) -> dict[str, dict]:
         stats: dict[str, dict] = {}
         for info in self._providers.values():
             try:
                 provider = info.provider_cls()
                 stats[info.slug] = provider.get_stats(user_id, viewer_id=viewer_id)
             except Exception:
-                logger.exception("Activity provider '%s' failed in get_stats", info.slug)
+                logger.exception(
+                    "Activity provider '%s' failed in get_stats", info.slug
+                )
                 stats[info.slug] = {}
         return stats
 

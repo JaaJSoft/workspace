@@ -31,11 +31,7 @@ class HelpItemsTagParsingTests(TestCase):
         self.assertIn("<p>content</p>", items[0]["content"])
 
     def test_multiple_items_separated_by_dashes(self):
-        body = (
-            "keyboard | Shortcuts\n<p>A</p>\n"
-            "---\n"
-            "mail | Mail\n<p>B</p>"
-        )
+        body = "keyboard | Shortcuts\n<p>A</p>\n---\nmail | Mail\n<p>B</p>"
         items = _parse_items(body)
         self.assertEqual(len(items), 2)
         self.assertEqual(items[0]["icon"], "keyboard")
@@ -99,24 +95,33 @@ class HelpItemsTagParsingTests(TestCase):
         self.assertNotIn("{% if", items[0]["content"])
 
     def test_tag_produces_no_output(self):
-        output = _render("{% help_items as items %}keyboard | Title\n<p>x</p>{% endhelp_items %}")
+        output = _render(
+            "{% help_items as items %}keyboard | Title\n<p>x</p>{% endhelp_items %}"
+        )
         self.assertEqual(output.strip(), "")
 
     def test_invalid_syntax_raises_error(self):
         with self.assertRaises(TemplateSyntaxError):
-            Template("{% load ui_tags %}{% help_items %}keyboard | Title{% endhelp_items %}")
+            Template(
+                "{% load ui_tags %}{% help_items %}keyboard | Title{% endhelp_items %}"
+            )
 
     def test_invalid_syntax_missing_as_raises_error(self):
         with self.assertRaises(TemplateSyntaxError):
-            Template("{% load ui_tags %}{% help_items items %}keyboard | Title{% endhelp_items %}")
+            Template(
+                "{% load ui_tags %}{% help_items items %}keyboard | Title{% endhelp_items %}"
+            )
 
 
 class HelpDialogItemTemplateTests(TestCase):
     def _render_item(self, icon, title, checked, content, accent_color="primary"):
-        item = {"icon": icon, "title": title, "checked": checked, "content": mark_safe(content)}
-        tpl = Template(
-            '{% include "ui/partials/help_dialog_item.html" %}'
-        )
+        item = {
+            "icon": icon,
+            "title": title,
+            "checked": checked,
+            "content": mark_safe(content),
+        }
+        tpl = Template('{% include "ui/partials/help_dialog_item.html" %}')
         return tpl.render(Context({"item": item, "accent_color": accent_color}))
 
     def test_renders_icon(self):
@@ -140,18 +145,24 @@ class HelpDialogItemTemplateTests(TestCase):
         self.assertNotIn('checked="checked"', html)
 
     def test_accent_color_applied(self):
-        html = self._render_item("keyboard", "Shortcuts", False, "<p>x</p>", accent_color="success")
+        html = self._render_item(
+            "keyboard", "Shortcuts", False, "<p>x</p>", accent_color="success"
+        )
         self.assertIn("text-success", html)
 
 
 class HelpDialogTemplateTests(TestCase):
     def _render_dialog(self, dialog_id, accent_color, items):
         tpl = Template('{% include "ui/partials/help_dialog.html" %}')
-        return tpl.render(Context({
-            "dialog_id": dialog_id,
-            "accent_color": accent_color,
-            "items": items,
-        }))
+        return tpl.render(
+            Context(
+                {
+                    "dialog_id": dialog_id,
+                    "accent_color": accent_color,
+                    "items": items,
+                }
+            )
+        )
 
     def test_renders_dialog_id(self):
         html = self._render_dialog("my-dialog", "primary", [])
@@ -163,8 +174,18 @@ class HelpDialogTemplateTests(TestCase):
 
     def test_renders_all_items(self):
         items = [
-            {"icon": "keyboard", "title": "Shortcuts", "checked": True, "content": mark_safe("<p>A</p>")},
-            {"icon": "mail", "title": "Mail", "checked": False, "content": mark_safe("<p>B</p>")},
+            {
+                "icon": "keyboard",
+                "title": "Shortcuts",
+                "checked": True,
+                "content": mark_safe("<p>A</p>"),
+            },
+            {
+                "icon": "mail",
+                "title": "Mail",
+                "checked": False,
+                "content": mark_safe("<p>B</p>"),
+            },
         ]
         html = self._render_dialog("my-dialog", "primary", items)
         self.assertIn("Shortcuts", html)

@@ -2,14 +2,16 @@ from abc import ABC, abstractmethod
 from enum import Enum
 
 
-class ActionCategory(str, Enum):
-    OPEN = 'open'
-    TRANSFER = 'transfer'
-    ORGANIZE = 'organize'
-    EDIT = 'edit'
-    INFO = 'info'
-    DANGER = 'danger'
-    TRASH = 'trash'
+# Not StrEnum: switching would change str(member) from "ActionCategory.OPEN"
+# to "open", a behavior change out of scope for lint adoption.
+class ActionCategory(str, Enum):  # noqa: UP042
+    OPEN = "open"
+    TRANSFER = "transfer"
+    ORGANIZE = "organize"
+    EDIT = "edit"
+    INFO = "info"
+    DANGER = "danger"
+    TRASH = "trash"
 
 
 class BaseAction(ABC):
@@ -20,7 +22,7 @@ class BaseAction(ABC):
     node_types: tuple[str, ...]  # ('file',), ('folder',), ('file', 'folder')
 
     keyboard_shortcut: str | None = None
-    css_class: str = ''
+    css_class: str = ""
     supports_bulk: bool = False
 
     @abstractmethod
@@ -42,11 +44,11 @@ class BaseAction(ABC):
 
     def serialize(self, file_obj):
         return {
-            'id': self.id,
-            'label': self.get_label(file_obj),
-            'icon': self.get_icon(file_obj),
-            'category': self.category.value,
-            'shortcut': self.keyboard_shortcut,
-            'css_class': self.get_css_class(file_obj),
-            'bulk': self.supports_bulk,
+            "id": self.id,
+            "label": self.get_label(file_obj),
+            "icon": self.get_icon(file_obj),
+            "category": self.category.value,
+            "shortcut": self.keyboard_shortcut,
+            "css_class": self.get_css_class(file_obj),
+            "bulk": self.supports_bulk,
         }

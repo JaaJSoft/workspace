@@ -1,7 +1,7 @@
 import logging
 import threading
-from dataclasses import dataclass, asdict
-from typing import Callable
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class ModuleInfo:
 @dataclass(frozen=True)
 class SearchTag:
     label: str
-    color: str = 'ghost'
+    color: str = "ghost"
 
 
 @dataclass(frozen=True)
@@ -58,7 +58,7 @@ class CommandInfo:
     icon: str
     color: str
     url: str
-    kind: str            # "navigate" | "action"
+    kind: str  # "navigate" | "action"
     module_slug: str
     order: int = 0
 
@@ -74,7 +74,9 @@ class ModuleRegistry:
     def register(self, module: ModuleInfo):
         with self._lock:
             if module.slug in self._modules:
-                raise ValueError(f"Module with slug '{module.slug}' is already registered")
+                raise ValueError(
+                    f"Module with slug '{module.slug}' is already registered"
+                )
             self._modules[module.slug] = module
 
     def register_search_provider(self, provider: SearchProviderInfo):
@@ -84,7 +86,9 @@ class ModuleRegistry:
                     f"Module '{provider.module_slug}' must be registered before its search provider"
                 )
             if provider.slug in self._search_providers:
-                raise ValueError(f"Search provider '{provider.slug}' is already registered")
+                raise ValueError(
+                    f"Search provider '{provider.slug}' is already registered"
+                )
             self._search_providers[provider.slug] = provider
 
     def search(self, query: str, user, limit: int = 10) -> list[dict]:
@@ -136,8 +140,11 @@ class ModuleRegistry:
 
     def get_active_commands(self) -> list[CommandInfo]:
         return sorted(
-            (cmd for cmd in self._commands
-             if (m := self._modules.get(cmd.module_slug)) and m.active),
+            (
+                cmd
+                for cmd in self._commands
+                if (m := self._modules.get(cmd.module_slug)) and m.active
+            ),
             key=lambda c: c.order,
         )
 

@@ -51,13 +51,15 @@ def _format_metadata(language: str, filename: str) -> str:
         parts.append(f"File: {filename}")
     if language:
         parts.append(f"Language: {language}")
-    return '\n'.join(parts)
+    return "\n".join(parts)
 
 
-def build_improve_messages(content: str, language: str = '', filename: str = '') -> list[dict]:
+def build_improve_messages(
+    content: str, language: str = "", filename: str = ""
+) -> list[dict]:
     """Build messages for code improvement."""
     metadata = _format_metadata(language, filename)
-    user_msg = ''
+    user_msg = ""
     if metadata:
         user_msg += f"{metadata}\n\n"
     user_msg += (
@@ -66,15 +68,17 @@ def build_improve_messages(content: str, language: str = '', filename: str = '')
         f"{INJECTION_GUARD}"
     )
     return [
-        {'role': 'system', 'content': IMPROVE_SYSTEM},
-        {'role': 'user', 'content': user_msg},
+        {"role": "system", "content": IMPROVE_SYSTEM},
+        {"role": "user", "content": user_msg},
     ]
 
 
-def build_explain_messages(content: str, language: str = '', filename: str = '') -> list[dict]:
+def build_explain_messages(
+    content: str, language: str = "", filename: str = ""
+) -> list[dict]:
     """Build messages for code explanation."""
     metadata = _format_metadata(language, filename)
-    user_msg = ''
+    user_msg = ""
     if metadata:
         user_msg += f"{metadata}\n\n"
     user_msg += (
@@ -83,15 +87,17 @@ def build_explain_messages(content: str, language: str = '', filename: str = '')
         f"{INJECTION_GUARD}"
     )
     return [
-        {'role': 'system', 'content': EXPLAIN_SYSTEM},
-        {'role': 'user', 'content': user_msg},
+        {"role": "system", "content": EXPLAIN_SYSTEM},
+        {"role": "user", "content": user_msg},
     ]
 
 
-def build_summarize_messages(content: str, language: str = '', filename: str = '') -> list[dict]:
+def build_summarize_messages(
+    content: str, language: str = "", filename: str = ""
+) -> list[dict]:
     """Build messages for code summarization."""
     metadata = _format_metadata(language, filename)
-    user_msg = ''
+    user_msg = ""
     if metadata:
         user_msg += f"{metadata}\n\n"
     user_msg += (
@@ -100,20 +106,20 @@ def build_summarize_messages(content: str, language: str = '', filename: str = '
         f"{INJECTION_GUARD}"
     )
     return [
-        {'role': 'system', 'content': SUMMARIZE_SYSTEM},
-        {'role': 'user', 'content': user_msg},
+        {"role": "system", "content": SUMMARIZE_SYSTEM},
+        {"role": "user", "content": user_msg},
     ]
 
 
 def build_custom_messages(
     content: str,
     instructions: str,
-    language: str = '',
-    filename: str = '',
+    language: str = "",
+    filename: str = "",
 ) -> list[dict]:
     """Build messages for custom AI action on code."""
     metadata = _format_metadata(language, filename)
-    user_msg = ''
+    user_msg = ""
     if metadata:
         user_msg += f"{metadata}\n\n"
     user_msg += (
@@ -122,6 +128,6 @@ def build_custom_messages(
         f"{INJECTION_GUARD}"
     )
     return [
-        {'role': 'system', 'content': CUSTOM_SYSTEM},
-        {'role': 'user', 'content': user_msg},
+        {"role": "system", "content": CUSTOM_SYSTEM},
+        {"role": "user", "content": user_msg},
     ]

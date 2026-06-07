@@ -18,10 +18,10 @@ from workspace.calendar.recurrence import (
 class VirtualOccurrence:
     """Lightweight event-like object for recurring occurrences in templates."""
 
-    __slots__ = ('uuid', 'title', 'all_day', 'start', 'calendar')
+    __slots__ = ("uuid", "title", "all_day", "start", "calendar")
 
     def __init__(self, master, occ_start):
-        self.uuid = f'{master.uuid}:{occ_start.isoformat()}'
+        self.uuid = f"{master.uuid}:{occ_start.isoformat()}"
         self.title = master.title
         self.all_day = master.all_day
         self.start = occ_start
@@ -58,7 +58,7 @@ def get_upcoming_for_user(user, now, end_of_today):
             recurrence_frequency__isnull=True,
         )
         .exclude(declined_q)
-        .select_related('calendar')
+        .select_related("calendar")
         .distinct()
     )
 
@@ -73,7 +73,7 @@ def get_upcoming_for_user(user, now, end_of_today):
         )
         .exclude(declined_q)
         .filter(Q(recurrence_end__isnull=True) | Q(recurrence_end__gte=now))
-        .select_related('calendar')
+        .select_related("calendar")
         .distinct()
     )
 
@@ -85,12 +85,10 @@ def get_upcoming_for_user(user, now, end_of_today):
     # cancelled or already materialized (those are in one_off above).
     master_ids = [m.uuid for m in masters]
     exception_keys = set()
-    for parent_id, orig_start in (
-        Event.objects.filter(
-            recurrence_parent_id__in=master_ids,
-            original_start__isnull=False,
-        ).values_list('recurrence_parent_id', 'original_start')
-    ):
+    for parent_id, orig_start in Event.objects.filter(
+        recurrence_parent_id__in=master_ids,
+        original_start__isnull=False,
+    ).values_list("recurrence_parent_id", "original_start"):
         exception_keys.add((str(parent_id), orig_start.isoformat()))
 
     # Expand virtual occurrences
@@ -125,8 +123,8 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
             is_cancelled=False,
             recurrence_frequency__isnull=True,
         )
-        .select_related('owner', 'calendar', 'recurrence_parent')
-        .prefetch_related('members__user')
+        .select_related("owner", "calendar", "recurrence_parent")
+        .prefetch_related("members__user")
         .distinct()
     )
     if calendar_ids is not None:
@@ -135,7 +133,7 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
         one_off_qs = one_off_qs.exclude(declined_q)
 
     # +1 sentinel so we can tell if there are more events after this page.
-    one_off = list(one_off_qs.order_by('start')[:limit + 1])
+    one_off = list(one_off_qs.order_by("start")[: limit + 1])
     one_off_data = EventSerializer(one_off, many=True).data
 
     # ---- Recurring masters ----
@@ -148,8 +146,8 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
         )
         # Master can still produce occurrences at or after `after`
         .filter(Q(recurrence_end__isnull=True) | Q(recurrence_end__gte=after))
-        .select_related('owner', 'calendar')
-        .prefetch_related('members__user')
+        .select_related("owner", "calendar")
+        .prefetch_related("members__user")
         .distinct()
     )
     if calendar_ids is not None:
@@ -164,12 +162,10 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
     master_ids = [m.uuid for m in masters]
     exception_keys = set()
     if master_ids:
-        for parent_id, orig_start in (
-            Event.objects.filter(
-                recurrence_parent_id__in=master_ids,
-                original_start__isnull=False,
-            ).values_list('recurrence_parent_id', 'original_start')
-        ):
+        for parent_id, orig_start in Event.objects.filter(
+            recurrence_parent_id__in=master_ids,
+            original_start__isnull=False,
+        ).values_list("recurrence_parent_id", "original_start"):
             exception_keys.add((str(parent_id), orig_start.isoformat()))
 
     recurring_data = []
@@ -202,8 +198,8 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
     from dateutil.parser import parse as _parse_dt
 
     merged = one_off_data + recurring_data
-    merged.sort(key=lambda e: (_parse_dt(e['start']), e['uuid']))
+    merged.sort(key=lambda e: (_parse_dt(e["start"]), e["uuid"]))
 
     page = merged[:limit]
-    next_after = merged[limit]['start'] if len(merged) > limit else None
+    next_after = merged[limit]["start"] if len(merged) > limit else None
     return page, next_after

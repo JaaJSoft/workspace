@@ -10,6 +10,7 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 from workspace.common.uuids import uuid_v7_or_v4
+
 from .storage import OverwriteStorage
 
 User = get_user_model()
@@ -24,12 +25,12 @@ def file_upload_path(instance, filename):
     Personal files are stored under ``files/users/<username>/...``.
     """
     if instance.group_id:
-        root = 'files/groups'
+        root = "files/groups"
     else:
-        root = 'files/users/' + instance.owner.username
+        root = "files/users/" + instance.owner.username
 
     if instance.path:
-        parent_parts = instance.path.split('/')[:-1]
+        parent_parts = instance.path.split("/")[:-1]
         return posixpath.join(root, *parent_parts, filename)
     return posixpath.join(root, filename)
 
@@ -43,25 +44,23 @@ class FileQuerySet(models.QuerySet):
             qs.name_ordered('-node_type')         # ORDER BY node_type DESC, LOWER(name)
             qs.name_ordered('-deleted_at')        # ORDER BY deleted_at DESC, LOWER(name)
         """
-        return self.order_by(*prefix_fields, Lower('name'))
+        return self.order_by(*prefix_fields, Lower("name"))
 
 
 class File(models.Model):
     """Model representing a file or folder in a tree structure."""
 
     class NodeType(models.TextChoices):
-        FILE = 'file', 'File'
-        FOLDER = 'folder', 'Folder'
+        FILE = "file", "File"
+        FOLDER = "folder", "Folder"
 
-    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
     name = models.CharField(max_length=255)
     node_type = models.CharField(max_length=10, choices=NodeType.choices)
     parent = models.ForeignKey(
-        'self',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='children'
+        "self", on_delete=models.CASCADE, null=True, blank=True, related_name="children"
     )
 
     # File-specific fields
@@ -70,12 +69,12 @@ class File(models.Model):
         storage=OverwriteStorage(),
         null=True,
         blank=True,
-        max_length=1024
+        max_length=1024,
     )
     size = models.BigIntegerField(null=True, blank=True, help_text="File size in bytes")
     mime_type = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    type = models.CharField(max_length=50, default='unknown', db_index=True)
-    category = models.CharField(max_length=20, default='unknown', db_index=True)
+    type = models.CharField(max_length=50, default="unknown", db_index=True)
+    category = models.CharField(max_length=20, default="unknown", db_index=True)
 
     has_thumbnail = models.BooleanField(default=False)
 
@@ -84,29 +83,27 @@ class File(models.Model):
         max_length=50,
         null=True,
         blank=True,
-        help_text="Custom Lucide icon name for folders (e.g., 'briefcase', 'heart')"
+        help_text="Custom Lucide icon name for folders (e.g., 'briefcase', 'heart')",
     )
     color = models.CharField(
         max_length=30,
         null=True,
         blank=True,
-        help_text="Custom color class for folder icon (e.g., 'text-error', 'text-success')"
+        help_text="Custom color class for folder icon (e.g., 'text-error', 'text-success')",
     )
 
     path = models.TextField(
-        blank=True,
-        editable=False,
-        help_text="Full path from root to this node."
+        blank=True, editable=False, help_text="Full path from root to this node."
     )
 
     # Metadata
-    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='files')
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="files")
     group = models.ForeignKey(
-        'auth.Group',
+        "auth.Group",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='group_files',
+        related_name="group_files",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -118,7 +115,7 @@ class File(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='locked_files',
+        related_name="locked_files",
     )
     locked_at = models.DateTimeField(null=True, blank=True)
     lock_expires_at = models.DateTimeField(null=True, blank=True)
@@ -126,92 +123,78 @@ class File(models.Model):
     objects = FileQuerySet.as_manager()
 
     class Meta:
-        ordering = ['node_type', Lower('name')]
+        ordering = ["node_type", Lower("name")]
         indexes = [
-            models.Index(fields=['parent', 'node_type']),
-            models.Index(fields=['owner', 'created_at']),
-            models.Index(fields=['owner', 'deleted_at'], name='file_owner_del_idx'),
-            models.Index(fields=['group', 'deleted_at'], name='file_group_del_idx'),
-            models.Index(fields=['locked_by', 'lock_expires_at'], name='file_lock_idx'),
+            models.Index(fields=["parent", "node_type"]),
+            models.Index(fields=["owner", "created_at"]),
+            models.Index(fields=["owner", "deleted_at"], name="file_owner_del_idx"),
+            models.Index(fields=["group", "deleted_at"], name="file_group_del_idx"),
+            models.Index(fields=["locked_by", "lock_expires_at"], name="file_lock_idx"),
             models.Index(
-                fields=['owner', 'deleted_at', 'node_type'],
-                include=['size'],
-                name='file_owner_del_type_size',
+                fields=["owner", "deleted_at", "node_type"],
+                include=["size"],
+                name="file_owner_del_type_size",
             ),
-            models.Index(fields=['parent', 'deleted_at', 'name'], name='file_parent_del_name'),
+            models.Index(
+                fields=["parent", "deleted_at", "name"], name="file_parent_del_name"
+            ),
             # `text_pattern_ops` makes this index usable for `path__startswith`
             # under non-C UTF-8 collations (PostgreSQL). Silently ignored on SQLite,
             # which falls back to a regular B-tree (also usable for prefix LIKE).
             models.Index(
-                fields=['path'],
-                name='file_path_idx',
-                opclasses=['text_pattern_ops'],
+                fields=["path"],
+                name="file_path_idx",
+                opclasses=["text_pattern_ops"],
             ),
         ]
         constraints = [
             models.CheckConstraint(
                 condition=(
                     (
-                        models.Q(node_type='folder') &
-                        (models.Q(content__isnull=True) | models.Q(content=''))
-                    ) |
-                    models.Q(node_type='file')
+                        models.Q(node_type="folder")
+                        & (models.Q(content__isnull=True) | models.Q(content=""))
+                    )
+                    | models.Q(node_type="file")
                 ),
-                name='folder_has_no_content'
+                name="folder_has_no_content",
             ),
             models.UniqueConstraint(
-                fields=['group'],
+                fields=["group"],
                 condition=models.Q(
                     group__isnull=False,
                     parent__isnull=True,
                     deleted_at__isnull=True,
                 ),
-                name='unique_group_root_folder',
+                name="unique_group_root_folder",
             ),
         ]
 
     def __str__(self):
         return f"{self.get_node_type_display()}: {self.name}"
 
-    @classmethod
-    def _update_descendant_paths(cls, old_path, new_path):
-        prefix = f"{old_path}/"
-        start_pos = len(old_path) + 2
-        cls.objects.filter(path__startswith=prefix).update(
-            path=Concat(Value(f"{new_path}/"), Substr('path', start_pos))
-        )
-
-    @classmethod
-    def _build_path_for(cls, name, parent_id):
-        if parent_id:
-            parent = cls.objects.only('path', 'name', 'parent_id').get(pk=parent_id)
-            parent_path = parent.path or parent.get_path()
-            return f"{parent_path}/{name}"
-        return name
-
     def save(self, *args, **kwargs):
-        if '/' in self.name:
+        if "/" in self.name:
             raise ValueError("File and folder names must not contain '/'.")
 
         old_data = None
         if self.pk:
-            old_data = File.objects.filter(pk=self.pk).values(
-                'name', 'parent_id', 'path'
-            ).first()
+            old_data = (
+                File.objects.filter(pk=self.pk)
+                .values("name", "parent_id", "path")
+                .first()
+            )
 
         new_path = self._build_path_for(self.name, self.parent_id)
         self.path = new_path
 
-        update_fields = kwargs.get('update_fields')
+        update_fields = kwargs.get("update_fields")
         if update_fields is not None:
-            kwargs['update_fields'] = set(update_fields) | {'path'}
+            kwargs["update_fields"] = set(update_fields) | {"path"}
 
         if old_data:
-            old_path = old_data.get('path')
+            old_path = old_data.get("path")
             if not old_path:
-                old_path = self._build_path_for(
-                    old_data['name'], old_data['parent_id']
-                )
+                old_path = self._build_path_for(old_data["name"], old_data["parent_id"])
             if old_path and old_path != new_path:
                 with transaction.atomic():
                     super().save(*args, **kwargs)
@@ -219,6 +202,22 @@ class File(models.Model):
                 return
 
         super().save(*args, **kwargs)
+
+    @classmethod
+    def _update_descendant_paths(cls, old_path, new_path):
+        prefix = f"{old_path}/"
+        start_pos = len(old_path) + 2
+        cls.objects.filter(path__startswith=prefix).update(
+            path=Concat(Value(f"{new_path}/"), Substr("path", start_pos))
+        )
+
+    @classmethod
+    def _build_path_for(cls, name, parent_id):
+        if parent_id:
+            parent = cls.objects.only("path", "name", "parent_id").get(pk=parent_id)
+            parent_path = parent.path or parent.get_path()
+            return f"{parent_path}/{name}"
+        return name
 
     def get_path(self):
         """Return the full path from root to this node."""
@@ -236,10 +235,15 @@ class File(models.Model):
 
     def is_viewable(self):
         from workspace.files.services.filetype import is_viewable, label_from_mime
+
         if self.node_type != self.NodeType.FILE:
             return False
-        label = self.type if self.type and self.type != 'unknown' else label_from_mime(self.mime_type or '')
-        return is_viewable(label, self.name or '')
+        label = (
+            self.type
+            if self.type and self.type != "unknown"
+            else label_from_mime(self.mime_type or "")
+        )
+        return is_viewable(label, self.name or "")
 
     def is_deleted(self):
         return self.deleted_at is not None
@@ -277,11 +281,15 @@ class File(models.Model):
         parent_id = self.parent_id
         restored_ids = []
         while parent_id:
-            parent = File.objects.filter(pk=parent_id).values('pk', 'parent_id', 'deleted_at').first()
-            if not parent or parent['deleted_at'] is None:
+            parent = (
+                File.objects.filter(pk=parent_id)
+                .values("pk", "parent_id", "deleted_at")
+                .first()
+            )
+            if not parent or parent["deleted_at"] is None:
                 break
-            restored_ids.append(parent['pk'])
-            parent_id = parent['parent_id']
+            restored_ids.append(parent["pk"])
+            parent_id = parent["parent_id"]
         if restored_ids:
             File.objects.filter(pk__in=restored_ids).update(deleted_at=None)
         return len(restored_ids)
@@ -289,20 +297,22 @@ class File(models.Model):
     @transaction.atomic
     def restore(self):
         if self.node_type == self.NodeType.FOLDER:
-            updated = File.objects.filter(self._descendant_filter()).update(deleted_at=None)
+            updated = File.objects.filter(self._descendant_filter()).update(
+                deleted_at=None
+            )
         else:
             if self.deleted_at is None:
                 updated = 0
             else:
                 self.deleted_at = None
-                self.save(update_fields=['deleted_at'])
+                self.save(update_fields=["deleted_at"])
                 updated = 1
         self._restore_parents()
         return updated
 
     def delete(self, *args, **kwargs):
         """Soft-delete by default; pass hard=True to permanently delete."""
-        hard = kwargs.pop('hard', False)
+        hard = kwargs.pop("hard", False)
         if hard:
             return super().delete(*args, **kwargs)
         return self.soft_delete()
@@ -310,28 +320,31 @@ class File(models.Model):
 
 class FileFavorite(models.Model):
     """User favorites for files or folders."""
-    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
     owner = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='file_favorites',
+        related_name="file_favorites",
     )
     file = models.ForeignKey(
         File,
         on_delete=models.CASCADE,
-        related_name='favorites',
+        related_name="favorites",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['owner', 'file'],
-                name='unique_file_favorite',
+                fields=["owner", "file"],
+                name="unique_file_favorite",
             ),
         ]
         indexes = [
-            models.Index(fields=['owner', 'created_at'], name='file_fav_owner_created'),
+            models.Index(fields=["owner", "created_at"], name="file_fav_owner_created"),
         ]
 
     def __str__(self):
@@ -342,24 +355,26 @@ class FileShare(models.Model):
     """Share a file or folder with another user."""
 
     class Permission(models.TextChoices):
-        READ_ONLY = 'ro', 'Read only'
-        READ_WRITE = 'rw', 'Read & write'
+        READ_ONLY = "ro", "Read only"
+        READ_WRITE = "rw", "Read & write"
 
-    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
     file = models.ForeignKey(
         File,
         on_delete=models.CASCADE,
-        related_name='shares',
+        related_name="shares",
     )
     shared_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='shared_files',
+        related_name="shared_files",
     )
     shared_with = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='received_shares',
+        related_name="received_shares",
     )
     permission = models.CharField(
         max_length=2,
@@ -371,13 +386,17 @@ class FileShare(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['file', 'shared_with'],
-                name='unique_file_share',
+                fields=["file", "shared_with"],
+                name="unique_file_share",
             ),
         ]
         indexes = [
-            models.Index(fields=['shared_with', 'created_at'], name='file_share_recv_idx'),
-            models.Index(fields=['shared_by', 'created_at'], name='file_share_sent_idx'),
+            models.Index(
+                fields=["shared_with", "created_at"], name="file_share_recv_idx"
+            ),
+            models.Index(
+                fields=["shared_by", "created_at"], name="file_share_sent_idx"
+            ),
         ]
 
     def __str__(self):
@@ -386,16 +405,19 @@ class FileShare(models.Model):
 
 class FileComment(models.Model):
     """User comment on a file or folder."""
-    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
     file = models.ForeignKey(
         File,
         on_delete=models.CASCADE,
-        related_name='comments',
+        related_name="comments",
     )
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='file_comments',
+        related_name="file_comments",
     )
     body = models.TextField()
     edited_at = models.DateTimeField(null=True, blank=True)
@@ -403,10 +425,12 @@ class FileComment(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ['created_at']
+        ordering = ["created_at"]
         indexes = [
-            models.Index(fields=['file', 'created_at'], name='file_comment_file_created'),
-            models.Index(fields=['deleted_at'], name='file_comment_deleted_at'),
+            models.Index(
+                fields=["file", "created_at"], name="file_comment_file_created"
+            ),
+            models.Index(fields=["deleted_at"], name="file_comment_deleted_at"),
         ]
 
     def __str__(self):
@@ -415,17 +439,20 @@ class FileComment(models.Model):
 
 class PinnedFolder(models.Model):
     """User-pinned folders for quick sidebar access."""
-    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
     owner = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='pinned_folders',
+        related_name="pinned_folders",
     )
     folder = models.ForeignKey(
         File,
         on_delete=models.CASCADE,
-        related_name='pins',
-        limit_choices_to={'node_type': 'folder'},
+        related_name="pins",
+        limit_choices_to={"node_type": "folder"},
     )
     position = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -433,13 +460,13 @@ class PinnedFolder(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['owner', 'folder'],
-                name='unique_pinned_folder',
+                fields=["owner", "folder"],
+                name="unique_pinned_folder",
             ),
         ]
-        ordering = ['position', 'created_at']
+        ordering = ["position", "created_at"]
         indexes = [
-            models.Index(fields=['owner', 'position'], name='pinned_owner_pos'),
+            models.Index(fields=["owner", "position"], name="pinned_owner_pos"),
         ]
 
     def __str__(self):
@@ -454,15 +481,17 @@ def delete_file_on_delete(sender, instance, **kwargs):
     This signal ensures files are deleted even in bulk operations.
     For folders, attempts to remove the physical directory if it exists.
     """
-    from django.core.files.storage import default_storage
     import logging
     import os
     import shutil
+
+    from django.core.files.storage import default_storage
 
     logger = logging.getLogger(__name__)
 
     if instance.node_type == File.NodeType.FILE and instance.has_thumbnail:
         from workspace.files.services.thumbnails import delete_thumbnail
+
         delete_thumbnail(instance.uuid)
 
     if instance.node_type == File.NodeType.FILE and instance.content:
@@ -476,22 +505,28 @@ def delete_file_on_delete(sender, instance, **kwargs):
                 # Try to remove empty parent directories
                 try:
                     dir_path = os.path.dirname(file_path)
-                    while dir_path and dir_path != 'files':
+                    while dir_path and dir_path != "files":
                         full_path = os.path.join(default_storage.location, dir_path)
                         if os.path.exists(full_path) and os.path.isdir(full_path):
                             if not os.listdir(full_path):  # Directory is empty
                                 os.rmdir(full_path)
-                                logger.info(f"Signal: Deleted empty directory: {dir_path}")
+                                logger.info(
+                                    f"Signal: Deleted empty directory: {dir_path}"
+                                )
                                 dir_path = os.path.dirname(dir_path)
                             else:
                                 break  # Directory not empty, stop
                         else:
                             break
                 except Exception as e:
-                    logger.warning(f"Signal: Could not remove empty directory for {file_path}: {e}")
+                    logger.warning(
+                        f"Signal: Could not remove empty directory for {file_path}: {e}"
+                    )
 
         except Exception as e:
-            logger.error(f"Signal: Error deleting physical file {instance.content.name}: {e}")
+            logger.error(
+                f"Signal: Error deleting physical file {instance.content.name}: {e}"
+            )
 
     elif instance.node_type == File.NodeType.FOLDER:
         # Handle folder deletion - remove the physical directory if it exists
@@ -500,7 +535,12 @@ def delete_file_on_delete(sender, instance, **kwargs):
             folder_path = instance.path or instance.get_path()
             if folder_path:
                 # Convert path to file system path
-                full_path = os.path.join(default_storage.location, 'files', instance.owner.username, folder_path.split('/', 1)[1] if '/' in folder_path else folder_path)
+                full_path = os.path.join(
+                    default_storage.location,
+                    "files",
+                    instance.owner.username,
+                    folder_path.split("/", 1)[1] if "/" in folder_path else folder_path,
+                )
 
                 if os.path.exists(full_path) and os.path.isdir(full_path):
                     # Remove directory and all its contents (in case there are orphaned files)
@@ -510,7 +550,7 @@ def delete_file_on_delete(sender, instance, **kwargs):
             logger.warning(f"Signal: Could not delete folder {instance.name}: {e}")
 
 
-@receiver(pre_delete, sender='auth.Group')
+@receiver(pre_delete, sender="auth.Group")
 def soft_delete_group_files(sender, instance, **kwargs):
     """Soft-delete all files belonging to this group before it is deleted."""
     File.objects.filter(
@@ -526,20 +566,22 @@ def _generate_share_link_token():
 class FileShareLink(models.Model):
     """A public share link for a file, allowing unauthenticated access."""
 
-    uuid = models.UUIDField(primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4)
-    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name='share_links')
-    created_by = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='+'
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
     )
-    token = models.CharField(max_length=44, unique=True, default=_generate_share_link_token)
-    password = models.CharField(max_length=128, blank=True, default='')
+    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name="share_links")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="+")
+    token = models.CharField(
+        max_length=44, unique=True, default=_generate_share_link_token
+    )
+    password = models.CharField(max_length=128, blank=True, default="")
     expires_at = models.DateTimeField(null=True, blank=True)
     view_count = models.PositiveIntegerField(default=0)
     last_accessed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"ShareLink({self.token[:8]}... -> {self.file.name})"
@@ -549,6 +591,7 @@ class FileShareLink(models.Model):
         if self.expires_at is None:
             return False
         from django.utils import timezone
+
         return self.expires_at <= timezone.now()
 
     @property
@@ -558,19 +601,21 @@ class FileShareLink(models.Model):
 
 class Tag(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
-    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tags')
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="tags")
     name = models.CharField(max_length=100)
-    icon = models.CharField(max_length=50, blank=True, default='')
-    color = models.CharField(max_length=20, default='ghost')
+    icon = models.CharField(max_length=50, blank=True, default="")
+    color = models.CharField(max_length=20, default="ghost")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = [Lower('name')]
+        ordering = [Lower("name")]
         constraints = [
-            models.UniqueConstraint(fields=['owner', 'name'], name='unique_tag_per_user'),
+            models.UniqueConstraint(
+                fields=["owner", "name"], name="unique_tag_per_user"
+            ),
         ]
         indexes = [
-            models.Index(fields=['owner', 'name']),
+            models.Index(fields=["owner", "name"]),
         ]
 
     def __str__(self):
@@ -579,37 +624,37 @@ class Tag(models.Model):
 
 class FileTag(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
-    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name='file_tags')
-    tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name='file_tags')
+    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name="file_tags")
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name="file_tags")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=['file', 'tag'], name='unique_file_tag'),
+            models.UniqueConstraint(fields=["file", "tag"], name="unique_file_tag"),
         ]
         indexes = [
-            models.Index(fields=['file', 'tag']),
+            models.Index(fields=["file", "tag"]),
         ]
 
     def __str__(self):
-        return f'{self.file.name} — {self.tag.name}'
+        return f"{self.file.name} — {self.tag.name}"
 
 
 class FileEvent(models.Model):
     """Audit log entry for non-read operations performed on a file or folder."""
 
     class Action(models.TextChoices):
-        CREATED = 'created', 'Created'
-        RENAMED = 'renamed', 'Renamed'
-        MOVED = 'moved', 'Moved'
-        CONTENT_REPLACED = 'content_replaced', 'Updated'
-        DELETED = 'deleted', 'Trashed'
-        RESTORED = 'restored', 'Restored'
-        SHARED = 'shared', 'Shared'
-        SHARE_PERMISSION_CHANGED = 'share_permission_changed', 'Permission changed'
-        UNSHARED = 'unshared', 'Unshared'
-        LINK_CREATED = 'link_created', 'Link created'
-        LINK_REVOKED = 'link_revoked', 'Link revoked'
+        CREATED = "created", "Created"
+        RENAMED = "renamed", "Renamed"
+        MOVED = "moved", "Moved"
+        CONTENT_REPLACED = "content_replaced", "Updated"
+        DELETED = "deleted", "Trashed"
+        RESTORED = "restored", "Restored"
+        SHARED = "shared", "Shared"
+        SHARE_PERMISSION_CHANGED = "share_permission_changed", "Permission changed"
+        UNSHARED = "unshared", "Unshared"
+        LINK_CREATED = "link_created", "Link created"
+        LINK_REVOKED = "link_revoked", "Link revoked"
 
     # Single source of truth for the per-action presentation metadata
     # (Lucide icon + category used for grouping in the filter dropdown).
@@ -617,49 +662,53 @@ class FileEvent(models.Model):
     # this table in services/events.py, activity.py and the template — they
     # now all read from here.
     _ACTION_METADATA = {
-        Action.CREATED: ('plus-circle', 'Lifecycle'),
-        Action.DELETED: ('trash-2', 'Lifecycle'),
-        Action.RESTORED: ('rotate-ccw', 'Lifecycle'),
-        Action.RENAMED: ('pencil', 'Edits'),
-        Action.MOVED: ('move', 'Edits'),
-        Action.CONTENT_REPLACED: ('upload', 'Edits'),
-        Action.SHARED: ('user-plus', 'Sharing'),
-        Action.SHARE_PERMISSION_CHANGED: ('shield', 'Sharing'),
-        Action.UNSHARED: ('user-minus', 'Sharing'),
-        Action.LINK_CREATED: ('link', 'Sharing'),
-        Action.LINK_REVOKED: ('unlink', 'Sharing'),
+        Action.CREATED: ("plus-circle", "Lifecycle"),
+        Action.DELETED: ("trash-2", "Lifecycle"),
+        Action.RESTORED: ("rotate-ccw", "Lifecycle"),
+        Action.RENAMED: ("pencil", "Edits"),
+        Action.MOVED: ("move", "Edits"),
+        Action.CONTENT_REPLACED: ("upload", "Edits"),
+        Action.SHARED: ("user-plus", "Sharing"),
+        Action.SHARE_PERMISSION_CHANGED: ("shield", "Sharing"),
+        Action.UNSHARED: ("user-minus", "Sharing"),
+        Action.LINK_CREATED: ("link", "Sharing"),
+        Action.LINK_REVOKED: ("unlink", "Sharing"),
     }
 
     # Display order for the action-filter dropdown's optgroups.
-    _CATEGORY_ORDER = ['Lifecycle', 'Edits', 'Sharing']
+    _CATEGORY_ORDER = ["Lifecycle", "Edits", "Sharing"]
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
-    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name='events')
+    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name="events")
     actor = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='file_events',
-        help_text='User who performed the action. Null for system actions.',
+        related_name="file_events",
+        help_text="User who performed the action. Null for system actions.",
     )
     action = models.CharField(max_length=32, choices=Action.choices, db_index=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['file', '-created_at'], name='file_event_file_created'),
+            models.Index(
+                fields=["file", "-created_at"], name="file_event_file_created"
+            ),
         ]
 
     def __str__(self):
-        return f'{self.action} on {self.file_id} by {self.actor_id} at {self.created_at}'
+        return (
+            f"{self.action} on {self.file_id} by {self.actor_id} at {self.created_at}"
+        )
 
     @property
     def icon(self):
         """Lucide icon name for this event's action."""
-        return self._ACTION_METADATA.get(self.action, ('activity', 'Other'))[0]
+        return self._ACTION_METADATA.get(self.action, ("activity", "Other"))[0]
 
     @property
     def short_label(self):
@@ -679,6 +728,6 @@ class FileEvent(models.Model):
         for value, label in cls.Action.choices:
             if only_set is not None and value not in only_set:
                 continue
-            _icon, category = cls._ACTION_METADATA.get(value, ('activity', 'Other'))
+            _icon, category = cls._ACTION_METADATA.get(value, ("activity", "Other"))
             groups.setdefault(category, []).append((value, label))
         return [(cat, groups[cat]) for cat in cls._CATEGORY_ORDER if cat in groups]

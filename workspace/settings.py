@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
+
 import mimetypes
 import os
 from pathlib import Path
@@ -29,92 +30,117 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-(apvd+h#1t_@zz504ks3ek2q_4*wm!p+#!(vte70q*xru47-zj')
+SECRET_KEY = os.getenv(
+    "SECRET_KEY", "django-insecure-(apvd+h#1t_@zz504ks3ek2q_4*wm!p+#!(vte70q*xru47-zj"
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Accept "1", "true", "yes" (case-insensitive) to enable; default is True for local dev
-_DEBUG_ENV = os.getenv('DEBUG')
+_DEBUG_ENV = os.getenv("DEBUG")
 if _DEBUG_ENV is None:
     DEBUG = True
 else:
     DEBUG = str(_DEBUG_ENV).lower() in {"1", "true", "yes", "on"}
 
 # ALLOWED_HOSTS configurable via comma-separated env; default allows all in container use
-_ALLOWED = os.getenv('ALLOWED_HOSTS')
+_ALLOWED = os.getenv("ALLOWED_HOSTS")
 if _ALLOWED:
-    ALLOWED_HOSTS = [h.strip() for h in _ALLOWED.split(',') if h.strip()]
+    ALLOWED_HOSTS = [h.strip() for h in _ALLOWED.split(",") if h.strip()]
 else:
     ALLOWED_HOSTS = ["*"] if not DEBUG else []
 
 # CSRF Configuration for production
 # Allow CSRF_TRUSTED_ORIGINS to be set via env (comma-separated list)
-_CSRF_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS')
+_CSRF_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS")
 if _CSRF_ORIGINS:
-    CSRF_TRUSTED_ORIGINS = [o.strip() for o in _CSRF_ORIGINS.split(',') if o.strip()]
+    CSRF_TRUSTED_ORIGINS = [o.strip() for o in _CSRF_ORIGINS.split(",") if o.strip()]
 else:
     CSRF_TRUSTED_ORIGINS = []
 
 # In production behind a proxy, ensure CSRF cookies work correctly
 if not DEBUG:
-    CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'true').lower() in {'1', 'true', 'yes', 'on'}
+    CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     CSRF_COOKIE_HTTPONLY = False  # Must be False for JavaScript to read it if needed
-    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'true').lower() in {'1', 'true', 'yes', 'on'}
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Trust X-Forwarded-Proto from proxy
+    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    SECURE_PROXY_SSL_HEADER = (
+        "HTTP_X_FORWARDED_PROTO",
+        "https",
+    )  # Trust X-Forwarded-Proto from proxy
     # Trust X-Forwarded-Host/Port — only enable when the proxy rewrites them (Cloudflare, cloud LBs)
-    USE_X_FORWARDED_HOST = os.getenv('USE_X_FORWARDED_HOST', '').lower() in {'1', 'true', 'yes', 'on'}
-    USE_X_FORWARDED_PORT = os.getenv('USE_X_FORWARDED_PORT', '').lower() in {'1', 'true', 'yes', 'on'}
+    USE_X_FORWARDED_HOST = os.getenv("USE_X_FORWARDED_HOST", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    USE_X_FORWARDED_PORT = os.getenv("USE_X_FORWARDED_PORT", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 # Application version (from env, defaults to 'dev')
-APP_VERSION = os.getenv('APP_VERSION') or 'dev'
+APP_VERSION = os.getenv("APP_VERSION") or "dev"
 # Recent files listing limits
-RECENT_FILES_LIMIT = int(os.getenv('RECENT_FILES_LIMIT', '25'))
-RECENT_FILES_MAX_LIMIT = int(os.getenv('RECENT_FILES_MAX_LIMIT', '200'))
-TRASH_RETENTION_DAYS = int(os.getenv('TRASH_RETENTION_DAYS', '30'))
+RECENT_FILES_LIMIT = int(os.getenv("RECENT_FILES_LIMIT", "25"))
+RECENT_FILES_MAX_LIMIT = int(os.getenv("RECENT_FILES_MAX_LIMIT", "200"))
+TRASH_RETENTION_DAYS = int(os.getenv("TRASH_RETENTION_DAYS", "30"))
 # Application definition
 
 INSTALLED_APPS = [
-    'django_daisy',
-    'django.contrib.admin',
-    'django.contrib.humanize',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'rest_framework',
-    'drf_spectacular',
-    'knox',
-    'django_filters',
-    'simple_history',
-    'django_prometheus',
-    'django_http_compression',
+    "django_daisy",
+    "django.contrib.admin",
+    "django.contrib.humanize",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "rest_framework",
+    "drf_spectacular",
+    "knox",
+    "django_filters",
+    "simple_history",
+    "django_prometheus",
+    "django_http_compression",
     # Workspace apps
-    'workspace.core',
-    'workspace.common',
-    'workspace.files',
-    'workspace.files.ui',
-    'workspace.notes',
-    'workspace.notes.ui',
-    'workspace.dashboard',
-    'workspace.users',
-    'workspace.users.ui',
-    'workspace.chat',
-    'workspace.chat.ui',
-    'workspace.calendar',
-    'workspace.calendar.ui',
-    'workspace.mail',
-    'workspace.mail.ui',
-    'workspace.notifications',
-    'workspace.ai',
+    "workspace.core",
+    "workspace.common",
+    "workspace.files",
+    "workspace.files.ui",
+    "workspace.notes",
+    "workspace.notes.ui",
+    "workspace.dashboard",
+    "workspace.users",
+    "workspace.users.ui",
+    "workspace.chat",
+    "workspace.chat.ui",
+    "workspace.calendar",
+    "workspace.calendar.ui",
+    "workspace.mail",
+    "workspace.mail.ui",
+    "workspace.notifications",
+    "workspace.ai",
 ]
 
 # Add Debug Toolbar only in DEBUG mode and not during tests
 import sys
-TESTING = 'test' in sys.argv
+
+TESTING = "test" in sys.argv
 if DEBUG and not TESTING:
     INSTALLED_APPS.insert(
-        INSTALLED_APPS.index('django.contrib.staticfiles') + 1,
-        'debug_toolbar'
+        INSTALLED_APPS.index("django.contrib.staticfiles") + 1, "debug_toolbar"
     )
 
 # Cache configuration
@@ -124,14 +150,15 @@ if DEBUG and not TESTING:
 #   DB 1 — sessions (must not be evicted)
 #   DB 2 — Celery broker + results
 #   DB 3 — WebDAV lock storage (shared across gunicorn workers)
-_REDIS_URL = os.getenv('REDIS_URL') or os.getenv('DJANGO_REDIS_URL')
+_REDIS_URL = os.getenv("REDIS_URL") or os.getenv("DJANGO_REDIS_URL")
 
 
 def _redis_db_url(base_url, db_number):
     """Derive a Redis URL pointing to a specific DB number."""
     from urllib.parse import urlparse, urlunparse
+
     parsed = urlparse(base_url)
-    return urlunparse(parsed._replace(path=f'/{db_number}'))
+    return urlunparse(parsed._replace(path=f"/{db_number}"))
 
 
 if _REDIS_URL:
@@ -141,218 +168,227 @@ if _REDIS_URL:
     _REDIS_WEBDAV_URL = _redis_db_url(_REDIS_URL, 3)
 
     CACHES = {
-        'default': {
-            'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': _REDIS_CACHE_URL,
-            'OPTIONS': {
-                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": _REDIS_CACHE_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
             },
-            'TIMEOUT': None,  # Infinite by default; specific features manage their own TTL
+            "TIMEOUT": None,  # Infinite by default; specific features manage their own TTL
         },
-        'sessions': {
-            'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': _REDIS_SESSION_URL,
-            'OPTIONS': {
-                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        "sessions": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": _REDIS_SESSION_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
             },
-            'TIMEOUT': None,
+            "TIMEOUT": None,
         },
     }
     # Use dedicated Redis DB for sessions (isolated from cache evictions)
-    SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-    SESSION_CACHE_ALIAS = 'sessions'
+    SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+    SESSION_CACHE_ALIAS = "sessions"
 else:
     CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'Workspace-service-locmem',
-            'TIMEOUT': None,
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "Workspace-service-locmem",
+            "TIMEOUT": None,
         }
     }
     # Fall back to DB sessions when Redis is not available
-    SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+    SESSION_ENGINE = "django.contrib.sessions.backends.db"
 
 
 MIDDLEWARE = [
-    'django_prometheus.middleware.PrometheusBeforeMiddleware',
-    'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     # HTTP conditional GET support (ETags & Last-Modified headers for browser caching)
-    'django.middleware.http.ConditionalGetMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'workspace.users.middleware.AjaxLoginRedirectMiddleware',
-    'workspace.users.middleware.PresenceMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django_http_compression.middleware.HttpCompressionMiddleware',
+    "django.middleware.http.ConditionalGetMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "workspace.users.middleware.AjaxLoginRedirectMiddleware",
+    "workspace.users.middleware.PresenceMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_http_compression.middleware.HttpCompressionMiddleware",
     # django-simple-history middleware to track user in history
-    'simple_history.middleware.HistoryRequestMiddleware',
+    "simple_history.middleware.HistoryRequestMiddleware",
     # Mesure du temps de traitement pour affichage dans le footer UI et header HTTP
     # 'Workspace.common.middleware.RequestTimingMiddleware',
-    'django_prometheus.middleware.PrometheusAfterMiddleware',
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
 # Add Debug Toolbar middleware only in DEBUG mode and not during tests
 if DEBUG and not TESTING:
     compression_idx = MIDDLEWARE.index(
-        'django_http_compression.middleware.HttpCompressionMiddleware'
+        "django_http_compression.middleware.HttpCompressionMiddleware"
     )
-    MIDDLEWARE.insert(compression_idx + 1, 'debug_toolbar.middleware.DebugToolbarMiddleware')
+    MIDDLEWARE.insert(
+        compression_idx + 1, "debug_toolbar.middleware.DebugToolbarMiddleware"
+    )
 
-ROOT_URLCONF = 'workspace.urls'
+ROOT_URLCONF = "workspace.urls"
 
 # Disable automatic slash appending to URLs
 APPEND_SLASH = False
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-                'workspace.core.context_processors.workspace_modules',
-                'workspace.ai.context_processors.ai_context',
-                'workspace.users.context_processors.user_preferences',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+                "workspace.core.context_processors.workspace_modules",
+                "workspace.ai.context_processors.ai_context",
+                "workspace.users.context_processors.user_preferences",
                 # Expose `request_processing_ms` au template
                 # 'workspace.ui.context_processors.request_timing',
             ],
             # Cache compiled templates for better performance (disabled in DEBUG mode)
-            'loaders': [
-                ('django.template.loaders.cached.Loader', [
-                    'django.template.loaders.filesystem.Loader',
-                    'django.template.loaders.app_directories.Loader',
-                ]),
-            ] if not DEBUG else [
-                'django.template.loaders.filesystem.Loader',
-                'django.template.loaders.app_directories.Loader',
+            "loaders": [
+                (
+                    "django.template.loaders.cached.Loader",
+                    [
+                        "django.template.loaders.filesystem.Loader",
+                        "django.template.loaders.app_directories.Loader",
+                    ],
+                ),
+            ]
+            if not DEBUG
+            else [
+                "django.template.loaders.filesystem.Loader",
+                "django.template.loaders.app_directories.Loader",
             ],
         },
     },
 ]
 
 REST_FRAMEWORK = {
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 50,
-    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
-        'knox.auth.TokenAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 50,
+    "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+        "knox.auth.TokenAuthentication",
+        "rest_framework.authentication.BasicAuthentication",
     ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
     ],
     # Disable BrowsableAPI renderer in production for better performance
-    'DEFAULT_RENDERER_CLASSES': [
-        'drf_orjson_renderer.renderers.ORJSONRenderer',
-    ] if not DEBUG else [
-        'drf_orjson_renderer.renderers.ORJSONRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer',
+    "DEFAULT_RENDERER_CLASSES": [
+        "drf_orjson_renderer.renderers.ORJSONRenderer",
+    ]
+    if not DEBUG
+    else [
+        "drf_orjson_renderer.renderers.ORJSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
     ],
-    'DEFAULT_PARSER_CLASSES': [
-        'drf_orjson_renderer.parsers.ORJSONParser',
-        'rest_framework.parsers.FormParser',
-        'rest_framework.parsers.MultiPartParser',
+    "DEFAULT_PARSER_CLASSES": [
+        "drf_orjson_renderer.parsers.ORJSONParser",
+        "rest_framework.parsers.FormParser",
+        "rest_framework.parsers.MultiPartParser",
     ],
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Workspace API',
-    'DESCRIPTION': (
+    "TITLE": "Workspace API",
+    "DESCRIPTION": (
         "Workspace productivity suite for organizing and managing daily work."
     ),
-    'VERSION': APP_VERSION,
+    "VERSION": APP_VERSION,
     # Ensure file uploads are correctly rendered as multipart/form-data in Swagger UI
-    'COMPONENT_SPLIT_REQUEST': True,
-    'SCHEMA_PATH_PREFIX': r'/v[1-9]',
-    'TAGS': [
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SCHEMA_PATH_PREFIX": r"/v[1-9]",
+    "TAGS": [
         {
-            'name': 'Auth',
-            'description': 'API token management for programmatic access.',
+            "name": "Auth",
+            "description": "API token management for programmatic access.",
         },
         {
-            'name': 'AI',
-            'description': 'AI-powered tasks: summarize, compose, reply, and editor actions.',
+            "name": "AI",
+            "description": "AI-powered tasks: summarize, compose, reply, and editor actions.",
         },
         {
-            'name': 'Calendar',
-            'description': 'Calendars and events.',
+            "name": "Calendar",
+            "description": "Calendars and events.",
         },
         {
-            'name': 'Calendar - Polls',
-            'description': 'Scheduling polls for finding the best meeting time.',
+            "name": "Calendar - Polls",
+            "description": "Scheduling polls for finding the best meeting time.",
         },
         {
-            'name': 'Calendar - Polls (Public)',
-            'description': 'Public endpoints for guest poll participation.',
+            "name": "Calendar - Polls (Public)",
+            "description": "Public endpoints for guest poll participation.",
         },
         {
-            'name': 'Chat',
-            'description': 'Real-time messaging with direct and group conversations.',
+            "name": "Chat",
+            "description": "Real-time messaging with direct and group conversations.",
         },
         {
-            'name': 'Files',
-            'description': 'Browse and manage files and folders.',
+            "name": "Files",
+            "description": "Browse and manage files and folders.",
         },
         {
-            'name': 'Thumbnails',
-            'description': 'File thumbnail generation.',
+            "name": "Thumbnails",
+            "description": "File thumbnail generation.",
         },
         {
-            'name': 'Mail',
-            'description': 'Read and send emails from external mail accounts.',
+            "name": "Mail",
+            "description": "Read and send emails from external mail accounts.",
         },
         {
-            'name': 'Modules',
-            'description': 'Workspace module registry.',
+            "name": "Modules",
+            "description": "Workspace module registry.",
         },
         {
-            'name': 'Notifications',
-            'description': 'User notifications and push subscriptions.',
+            "name": "Notifications",
+            "description": "User notifications and push subscriptions.",
         },
         {
-            'name': 'Search',
-            'description': 'Unified search across workspace modules.',
+            "name": "Search",
+            "description": "Unified search across workspace modules.",
         },
         {
-            'name': 'Settings',
-            'description': 'Per-user, per-module key-value settings.',
+            "name": "Settings",
+            "description": "Per-user, per-module key-value settings.",
         },
         {
-            'name': 'Users',
-            'description': 'User profiles, avatars, passwords, and presence status.',
+            "name": "Users",
+            "description": "User profiles, avatars, passwords, and presence status.",
         },
     ],
-    'SWAGGER_UI_SETTINGS': {
-        'persistAuthorization': True,
+    "SWAGGER_UI_SETTINGS": {
+        "persistAuthorization": True,
     },
-    'SERVE_AUTHENTICATION': [
-        'rest_framework.authentication.SessionAuthentication',
-        'knox.auth.TokenAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
+    "SERVE_AUTHENTICATION": [
+        "rest_framework.authentication.SessionAuthentication",
+        "knox.auth.TokenAuthentication",
+        "rest_framework.authentication.BasicAuthentication",
     ],
 }
 
 # Knox (API token authentication)
 REST_KNOX = {
-    'TOKEN_TTL': None,  # No default expiry; per-token expiry set at creation
-    'AUTO_REFRESH': False,
-    'AUTH_HEADER_PREFIX': 'Token',
+    "TOKEN_TTL": None,  # No default expiry; per-token expiry set at creation
+    "AUTO_REFRESH": False,
+    "AUTH_HEADER_PREFIX": "Token",
 }
-KNOX_TOKEN_MODEL = 'knox.AuthToken'
+KNOX_TOKEN_MODEL = "knox.AuthToken"
 
 # Login/Logout URLs
-LOGIN_URL = '/login'
-LOGIN_REDIRECT_URL = '/'
-LOGOUT_REDIRECT_URL = '/login'
+LOGIN_URL = "/login"
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/login"
 
 # --------------------------------------------------
 # Logging
@@ -364,58 +400,57 @@ import sys
 DJANGO_LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO").upper()
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'simple': {
-            'format': '%(asctime)s %(levelname)s [%(name)s] %(message)s',
-            'datefmt': '%Y-%m-%dT%H:%M:%SZ',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {
+            "format": "%(asctime)s %(levelname)s [%(name)s] %(message)s",
+            "datefmt": "%Y-%m-%dT%H:%M:%SZ",
         },
     },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'level': 'DEBUG' if DEBUG else DJANGO_LOG_LEVEL,
-            'stream': sys.stdout,
-            'formatter': 'simple',
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "level": "DEBUG" if DEBUG else DJANGO_LOG_LEVEL,
+            "stream": sys.stdout,
+            "formatter": "simple",
         },
     },
-    'loggers': {
-        'django': {
-            'handlers': ['console'],
-            'level': DJANGO_LOG_LEVEL,
-            'propagate': True,
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": DJANGO_LOG_LEVEL,
+            "propagate": True,
         },
         # Log des erreurs de requêtes Django (500, etc.)
-        'django.request': {
-            'handlers': ['console'],
-            'level': 'ERROR',
-            'propagate': False,
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
         },
         # Log des requêtes SQL (DEBUG only)
-        'django.db.backends': {
-            'handlers': ['console'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
-            'propagate': False,
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": "DEBUG" if DEBUG else "INFO",
+            "propagate": False,
         },
         # REST framework
-        'rest_framework': {
-            'handlers': ['console'],
-            'level': DJANGO_LOG_LEVEL,
-            'propagate': False,
+        "rest_framework": {
+            "handlers": ["console"],
+            "level": DJANGO_LOG_LEVEL,
+            "propagate": False,
         },
         # Logger applicatif (utiliser logging.getLogger("workspace"))
-        'workspace': {
-            'handlers': ['console'],
-            'level': DJANGO_LOG_LEVEL,
-            'propagate': False,
+        "workspace": {
+            "handlers": ["console"],
+            "level": DJANGO_LOG_LEVEL,
+            "propagate": False,
         },
     },
 }
 
 
-
-WSGI_APPLICATION = 'workspace.wsgi.application'
+WSGI_APPLICATION = "workspace.wsgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
@@ -424,34 +459,36 @@ WSGI_APPLICATION = 'workspace.wsgi.application'
 #   sqlite:////absolute/path/db.sqlite3
 #   postgres://user:pass@host:5432/dbname
 DATABASES = {
-    'default': dj_database_url.config(default=f'sqlite:///{BASE_DIR / "db.sqlite3"}', conn_max_age=60),
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}", conn_max_age=60
+    ),
 }
 
 # PostgreSQL: connection pooling + Prometheus DB metrics
-if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
-    DATABASES['default']['ENGINE'] = 'django_prometheus.db.backends.postgresql'
+if DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql":
+    DATABASES["default"]["ENGINE"] = "django_prometheus.db.backends.postgresql"
     # Django 6.0 rejects pool=True combined with CONN_MAX_AGE>0
     # ("Pooling doesn't support persistent connections"). The pool itself
     # already keeps connections alive, so persistent-connection caching is
     # both redundant and incompatible.
-    DATABASES['default']['CONN_MAX_AGE'] = 0
-    DATABASES['default']['CONN_HEALTH_CHECKS'] = False
-    DATABASES['default']['OPTIONS'] = {
-        **DATABASES['default'].get('OPTIONS', {}),
-        'pool': True,
+    DATABASES["default"]["CONN_MAX_AGE"] = 0
+    DATABASES["default"]["CONN_HEALTH_CHECKS"] = False
+    DATABASES["default"]["OPTIONS"] = {
+        **DATABASES["default"].get("OPTIONS", {}),
+        "pool": True,
     }
 
 # SQLite-specific optimizations (WAL mode, PRAGMAs)
-if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     try:
-        Path(DATABASES['default']['NAME']).parent.mkdir(parents=True, exist_ok=True)
+        Path(DATABASES["default"]["NAME"]).parent.mkdir(parents=True, exist_ok=True)
     except Exception:
         # Best effort: if the directory cannot be created (read-only fs,
         # exotic path), sqlite will raise a clearer error at connect time.
         pass
 
-    DATABASES['default'].setdefault('OPTIONS', {})
-    DATABASES['default']['OPTIONS']['timeout'] = 60.0
+    DATABASES["default"].setdefault("OPTIONS", {})
+    DATABASES["default"]["OPTIONS"]["timeout"] = 60.0
     # Force BEGIN IMMEDIATE for every transaction. Django's default
     # (BEGIN DEFERRED) starts each transaction as a reader and tries to
     # upgrade to a writer on the first INSERT/UPDATE/DELETE. When two
@@ -461,8 +498,8 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
     # IMMEDIATE acquires the writer-lock at BEGIN time, so busy_timeout
     # works as intended and concurrent writers serialize cleanly instead
     # of failing with "database is locked".
-    DATABASES['default']['OPTIONS']['transaction_mode'] = 'IMMEDIATE'
-    DATABASES['default']['OPTIONS']['init_command'] = (
+    DATABASES["default"]["OPTIONS"]["transaction_mode"] = "IMMEDIATE"
+    DATABASES["default"]["OPTIONS"]["init_command"] = (
         "PRAGMA journal_mode=WAL; "
         "PRAGMA foreign_keys=ON; "
         "PRAGMA busy_timeout=60000; "
@@ -475,41 +512,45 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
 # Test optimizations
 if TESTING:
     PASSWORD_HASHERS = [
-        'django.contrib.auth.hashers.MD5PasswordHasher',
+        "django.contrib.auth.hashers.MD5PasswordHasher",
     ]
-    DEFAULT_FILE_STORAGE = 'django.core.files.storage.InMemoryStorage'
+    DEFAULT_FILE_STORAGE = "django.core.files.storage.InMemoryStorage"
 
-    if (
-        DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3'
-        and os.environ.get('E2E', '').lower() in {'1', 'true', 'yes', 'on'}
-    ):
-        DATABASES['default'].setdefault('TEST', {})
-        DATABASES['default']['TEST']['NAME'] = str(BASE_DIR / 'test_db.sqlite3')
+    if DATABASES["default"][
+        "ENGINE"
+    ] == "django.db.backends.sqlite3" and os.environ.get("E2E", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        DATABASES["default"].setdefault("TEST", {})
+        DATABASES["default"]["TEST"]["NAME"] = str(BASE_DIR / "test_db.sqlite3")
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -518,24 +559,24 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = '/static/'
+STATIC_URL = "/static/"
 
 # Define STATIC_ROOT to avoid ImproperlyConfigured errors when using the
 # staticfiles app or running collectstatic. Allow override via env var
 # STATIC_ROOT; if a relative path is provided, resolve it from BASE_DIR.
-_STATIC_ROOT_ENV = os.getenv('STATIC_ROOT')
+_STATIC_ROOT_ENV = os.getenv("STATIC_ROOT")
 if _STATIC_ROOT_ENV:
     _static_root = Path(_STATIC_ROOT_ENV)
     if not _static_root.is_absolute():
         _static_root = (BASE_DIR / _static_root).resolve()
 else:
-    _static_root = BASE_DIR / 'staticfiles'
+    _static_root = BASE_DIR / "staticfiles"
 
 STATIC_ROOT = _static_root
 
 # Media files (user uploads)
-MEDIA_ROOT = os.getenv('MEDIA_ROOT', BASE_DIR)
-MEDIA_URL = '/media/'
+MEDIA_ROOT = os.getenv("MEDIA_ROOT", BASE_DIR)
+MEDIA_URL = "/media/"
 
 # Restrict uploaded-file permissions to the owning process (owner-only).
 # Uploads are served back through Django's FileResponse, never read directly
@@ -563,7 +604,7 @@ if not DEBUG:
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # django-simple-history configuration
 # Keep history records indefinitely (no automatic deletion)
@@ -576,44 +617,48 @@ if DEBUG:
 
     # Get local IP for Docker/VM compatibility
     hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
-    INTERNAL_IPS = [
-        "127.0.0.1",
-        "::1",  # IPv6 localhost (when accessing via http://localhost)
-        "0.0.0.0",
-    ] + [ip[: ip.rfind(".")] + ".1" for ip in ips]
+    INTERNAL_IPS = (
+        [
+            "127.0.0.1",
+            "::1",  # IPv6 localhost (when accessing via http://localhost)
+            "0.0.0.0",
+        ]
+        + [ip[: ip.rfind(".")] + ".1" for ip in ips]
+    )
 
     # Configuration panels to show
     DEBUG_TOOLBAR_PANELS = [
-        'debug_toolbar.panels.history.HistoryPanel',
-        'debug_toolbar.panels.versions.VersionsPanel',
-        'debug_toolbar.panels.timer.TimerPanel',
-        'debug_toolbar.panels.settings.SettingsPanel',
-        'debug_toolbar.panels.headers.HeadersPanel',
-        'debug_toolbar.panels.request.RequestPanel',
-        'debug_toolbar.panels.sql.SQLPanel',  # Most important for viewing queries
-        'debug_toolbar.panels.staticfiles.StaticFilesPanel',
-        'debug_toolbar.panels.templates.TemplatesPanel',
-        'debug_toolbar.panels.cache.CachePanel',
-        'debug_toolbar.panels.signals.SignalsPanel',
-        'debug_toolbar.panels.redirects.RedirectsPanel',
+        "debug_toolbar.panels.history.HistoryPanel",
+        "debug_toolbar.panels.versions.VersionsPanel",
+        "debug_toolbar.panels.timer.TimerPanel",
+        "debug_toolbar.panels.settings.SettingsPanel",
+        "debug_toolbar.panels.headers.HeadersPanel",
+        "debug_toolbar.panels.request.RequestPanel",
+        "debug_toolbar.panels.sql.SQLPanel",  # Most important for viewing queries
+        "debug_toolbar.panels.staticfiles.StaticFilesPanel",
+        "debug_toolbar.panels.templates.TemplatesPanel",
+        "debug_toolbar.panels.cache.CachePanel",
+        "debug_toolbar.panels.signals.SignalsPanel",
+        "debug_toolbar.panels.redirects.RedirectsPanel",
         # Disabled: causes "Another profiling tool is already active" errors with concurrent requests
         # 'debug_toolbar.panels.profiling.ProfilingPanel',
     ]
 
     DEBUG_TOOLBAR_CONFIG = {
-        'SHOW_TOOLBAR_CALLBACK': lambda request: DEBUG,
-        'SHOW_COLLAPSED': False,  # Toolbar expanded by default to be more visible
+        "SHOW_TOOLBAR_CALLBACK": lambda request: DEBUG,
+        "SHOW_COLLAPSED": False,  # Toolbar expanded by default to be more visible
     }
 
 # Celery Configuration
 # Use dedicated Redis DB as broker if available, otherwise fall back to in-memory
-CELERY_BROKER_URL = _REDIS_CELERY_URL if _REDIS_URL else 'memory://'
+CELERY_BROKER_URL = _REDIS_CELERY_URL if _REDIS_URL else "memory://"
 import kombu
-CELERY_TASK_QUEUES = [kombu.Queue('celery')]
-CELERY_RESULT_BACKEND = _REDIS_CELERY_URL if _REDIS_URL else 'cache+memory://'
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
+
+CELERY_TASK_QUEUES = [kombu.Queue("celery")]
+CELERY_RESULT_BACKEND = _REDIS_CELERY_URL if _REDIS_URL else "cache+memory://"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
@@ -633,50 +678,50 @@ if DEBUG:
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
-    'sync-all-user-files': {
-        'task': 'files.sync_all_users',
-        'schedule': 600.0,  # Every 10 minutes
+    "sync-all-user-files": {
+        "task": "files.sync_all_users",
+        "schedule": 600.0,  # Every 10 minutes
     },
-    'generate-thumbnails': {
-        'task': 'files.generate_thumbnails',
-        'schedule': 300.0,  # Every 5 minutes
+    "generate-thumbnails": {
+        "task": "files.generate_thumbnails",
+        "schedule": 300.0,  # Every 5 minutes
     },
-    'purge-trash': {
-        'task': 'files.purge_trash',
-        'schedule': crontab(hour=2, minute=30),  # Every day at 2:30 AM
+    "purge-trash": {
+        "task": "files.purge_trash",
+        "schedule": crontab(hour=2, minute=30),  # Every day at 2:30 AM
     },
-    'db-maintenance': {
-        'task': 'core.db_maintenance',
-        'schedule': crontab(hour=3, minute=0),  # Every day at 3:00 AM
+    "db-maintenance": {
+        "task": "core.db_maintenance",
+        "schedule": crontab(hour=3, minute=0),  # Every day at 3:00 AM
     },
-    'sync-all-mail-accounts': {
-        'task': 'mail.sync_all_accounts',
-        'schedule': 300.0,  # Every 5 minutes
+    "sync-all-mail-accounts": {
+        "task": "mail.sync_all_accounts",
+        "schedule": 300.0,  # Every 5 minutes
     },
-    'dispatch-scheduled-messages': {
-        'task': 'ai.dispatch_scheduled_messages',
-        'schedule': 60.0,  # Every minute
+    "dispatch-scheduled-messages": {
+        "task": "ai.dispatch_scheduled_messages",
+        "schedule": 60.0,  # Every minute
     },
-    'purge-ai-tasks': {
-        'task': 'ai.purge_ai_tasks',
-        'schedule': crontab(hour=3, minute=30),  # Every day at 3:30 AM
+    "purge-ai-tasks": {
+        "task": "ai.purge_ai_tasks",
+        "schedule": crontab(hour=3, minute=30),  # Every day at 3:30 AM
     },
-    'purge-orphan-attachments': {
-        'task': 'chat.purge_orphan_attachments',
-        'schedule': crontab(hour=4, minute=0),  # Every day at 4:00 AM
+    "purge-orphan-attachments": {
+        "task": "chat.purge_orphan_attachments",
+        "schedule": crontab(hour=4, minute=0),  # Every day at 4:00 AM
     },
-    'sync-external-calendars': {
-        'task': 'calendar.sync_all_external_calendars',
-        'schedule': 900.0,  # Every 15 minutes
+    "sync-external-calendars": {
+        "task": "calendar.sync_all_external_calendars",
+        "schedule": 900.0,  # Every 15 minutes
     },
 }
 
 # --------------------------------------------------
 # Web Push (VAPID)
 # --------------------------------------------------
-WEBPUSH_VAPID_PRIVATE_KEY = os.getenv('WEBPUSH_VAPID_PRIVATE_KEY', '')
-WEBPUSH_VAPID_PUBLIC_KEY = os.getenv('WEBPUSH_VAPID_PUBLIC_KEY', '')
-WEBPUSH_VAPID_CLAIMS = {'sub': os.getenv('WEBPUSH_VAPID_MAILTO', '')}
+WEBPUSH_VAPID_PRIVATE_KEY = os.getenv("WEBPUSH_VAPID_PRIVATE_KEY", "")
+WEBPUSH_VAPID_PUBLIC_KEY = os.getenv("WEBPUSH_VAPID_PUBLIC_KEY", "")
+WEBPUSH_VAPID_CLAIMS = {"sub": os.getenv("WEBPUSH_VAPID_MAILTO", "")}
 
 # --------------------------------------------------
 # OAuth2 Mail Providers
@@ -685,47 +730,61 @@ WEBPUSH_VAPID_CLAIMS = {'sub': os.getenv('WEBPUSH_VAPID_MAILTO', '')}
 # Only providers with a configured CLIENT_ID will appear in the UI.
 
 # Google (Gmail / Google Workspace)
-OAUTH_GOOGLE_CLIENT_ID = os.getenv('OAUTH_GOOGLE_CLIENT_ID', '')
-OAUTH_GOOGLE_CLIENT_SECRET = os.getenv('OAUTH_GOOGLE_CLIENT_SECRET', '')
+OAUTH_GOOGLE_CLIENT_ID = os.getenv("OAUTH_GOOGLE_CLIENT_ID", "")
+OAUTH_GOOGLE_CLIENT_SECRET = os.getenv("OAUTH_GOOGLE_CLIENT_SECRET", "")
 
 # Microsoft (Outlook / Office 365 / Hotmail)
-OAUTH_MICROSOFT_CLIENT_ID = os.getenv('OAUTH_MICROSOFT_CLIENT_ID', '')
-OAUTH_MICROSOFT_CLIENT_SECRET = os.getenv('OAUTH_MICROSOFT_CLIENT_SECRET', '')
+OAUTH_MICROSOFT_CLIENT_ID = os.getenv("OAUTH_MICROSOFT_CLIENT_ID", "")
+OAUTH_MICROSOFT_CLIENT_SECRET = os.getenv("OAUTH_MICROSOFT_CLIENT_SECRET", "")
 
 # Generic OAuth2 provider (single custom provider, fully configurable)
-OAUTH_GENERIC_CLIENT_ID = os.getenv('OAUTH_GENERIC_CLIENT_ID', '')
-OAUTH_GENERIC_CLIENT_SECRET = os.getenv('OAUTH_GENERIC_CLIENT_SECRET', '')
-OAUTH_GENERIC_NAME = os.getenv('OAUTH_GENERIC_NAME', '')
-OAUTH_GENERIC_AUTH_URL = os.getenv('OAUTH_GENERIC_AUTH_URL', '')
-OAUTH_GENERIC_TOKEN_URL = os.getenv('OAUTH_GENERIC_TOKEN_URL', '')
-OAUTH_GENERIC_SCOPES = os.getenv('OAUTH_GENERIC_SCOPES', '')
-OAUTH_GENERIC_IMAP_HOST = os.getenv('OAUTH_GENERIC_IMAP_HOST', '')
-OAUTH_GENERIC_SMTP_HOST = os.getenv('OAUTH_GENERIC_SMTP_HOST', '')
+OAUTH_GENERIC_CLIENT_ID = os.getenv("OAUTH_GENERIC_CLIENT_ID", "")
+OAUTH_GENERIC_CLIENT_SECRET = os.getenv("OAUTH_GENERIC_CLIENT_SECRET", "")
+OAUTH_GENERIC_NAME = os.getenv("OAUTH_GENERIC_NAME", "")
+OAUTH_GENERIC_AUTH_URL = os.getenv("OAUTH_GENERIC_AUTH_URL", "")
+OAUTH_GENERIC_TOKEN_URL = os.getenv("OAUTH_GENERIC_TOKEN_URL", "")
+OAUTH_GENERIC_SCOPES = os.getenv("OAUTH_GENERIC_SCOPES", "")
+OAUTH_GENERIC_IMAP_HOST = os.getenv("OAUTH_GENERIC_IMAP_HOST", "")
+OAUTH_GENERIC_SMTP_HOST = os.getenv("OAUTH_GENERIC_SMTP_HOST", "")
 
 # --------------------------------------------------
 # Storage
 # --------------------------------------------------
-STORAGE_QUOTA_BYTES = int(os.getenv('STORAGE_QUOTA_BYTES', str(1 * 1024 * 1024 * 1024)))  # 1 GB
+STORAGE_QUOTA_BYTES = int(
+    os.getenv("STORAGE_QUOTA_BYTES", str(1 * 1024 * 1024 * 1024))
+)  # 1 GB
 
 # Max total uncompressed bytes allowed when extracting an archive (zip bomb defence).
-FILES_EXTRACT_MAX_BYTES = int(os.getenv('FILES_EXTRACT_MAX_BYTES', str(2 * 1024 * 1024 * 1024)))  # 2 GiB
+FILES_EXTRACT_MAX_BYTES = int(
+    os.getenv("FILES_EXTRACT_MAX_BYTES", str(2 * 1024 * 1024 * 1024))
+)  # 2 GiB
 # Max number of entries allowed when extracting an archive.
-FILES_EXTRACT_MAX_ENTRIES = int(os.getenv('FILES_EXTRACT_MAX_ENTRIES', '10000'))
+FILES_EXTRACT_MAX_ENTRIES = int(os.getenv("FILES_EXTRACT_MAX_ENTRIES", "10000"))
 
 # --------------------------------------------------
 # AI Configuration
 # --------------------------------------------------
-AI_API_KEY = os.getenv('AI_API_KEY', '')
-AI_BASE_URL = os.getenv('AI_BASE_URL') or None  # For Ollama, LM Studio, etc.
-AI_MODEL = os.getenv('AI_MODEL', 'gpt-5')
-AI_SMALL_MODEL = os.getenv('AI_SMALL_MODEL', '') or None  # Fast model for summaries, titles, etc.
-AI_EXTRACT_MODEL = os.getenv('AI_EXTRACT_MODEL', '')  # Event extraction. Empty = fall back to AI_MODEL.
-AI_MAX_TOKENS = int(os.getenv('AI_MAX_TOKENS', '2048'))
-AI_CHAT_CONTEXT_SIZE = int(os.getenv('AI_CHAT_CONTEXT_SIZE', '30'))  # recent messages kept in full; older ones are summarized
-AI_TIMEOUT = int(os.getenv('AI_TIMEOUT', '300'))  # seconds per request
-AI_MAX_RETRIES = int(os.getenv('AI_MAX_RETRIES', '2'))  # retries on transient errors (timeout, 5xx)
-AI_TASK_RETENTION_DAYS = int(os.getenv('AI_TASK_RETENTION_DAYS', '90'))
-AI_IMAGE_MODEL = os.getenv('AI_IMAGE_MODEL', '')
-AI_IMAGE_BASE_URL = os.getenv('AI_IMAGE_BASE_URL') or None
-SEARXNG_URL = os.getenv('SEARXNG_URL', '')  # e.g. http://searxng:8080
-SEARXNG_BLOCKED_DOMAINS = os.getenv('SEARXNG_BLOCKED_DOMAINS', '')  # comma-separated, e.g. "evil.com,spam.org"
+AI_API_KEY = os.getenv("AI_API_KEY", "")
+AI_BASE_URL = os.getenv("AI_BASE_URL") or None  # For Ollama, LM Studio, etc.
+AI_MODEL = os.getenv("AI_MODEL", "gpt-5")
+AI_SMALL_MODEL = (
+    os.getenv("AI_SMALL_MODEL", "") or None
+)  # Fast model for summaries, titles, etc.
+AI_EXTRACT_MODEL = os.getenv(
+    "AI_EXTRACT_MODEL", ""
+)  # Event extraction. Empty = fall back to AI_MODEL.
+AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "2048"))
+AI_CHAT_CONTEXT_SIZE = int(
+    os.getenv("AI_CHAT_CONTEXT_SIZE", "30")
+)  # recent messages kept in full; older ones are summarized
+AI_TIMEOUT = int(os.getenv("AI_TIMEOUT", "300"))  # seconds per request
+AI_MAX_RETRIES = int(
+    os.getenv("AI_MAX_RETRIES", "2")
+)  # retries on transient errors (timeout, 5xx)
+AI_TASK_RETENTION_DAYS = int(os.getenv("AI_TASK_RETENTION_DAYS", "90"))
+AI_IMAGE_MODEL = os.getenv("AI_IMAGE_MODEL", "")
+AI_IMAGE_BASE_URL = os.getenv("AI_IMAGE_BASE_URL") or None
+SEARXNG_URL = os.getenv("SEARXNG_URL", "")  # e.g. http://searxng:8080
+SEARXNG_BLOCKED_DOMAINS = os.getenv(
+    "SEARXNG_BLOCKED_DOMAINS", ""
+)  # comma-separated, e.g. "evil.com,spam.org"

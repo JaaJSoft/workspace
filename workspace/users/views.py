@@ -24,13 +24,18 @@ from rest_framework.views import APIView
 from workspace.common.mixins import CacheControlMixin
 from workspace.files.models import File
 from workspace.users.models import APITokenLabel, UserSetting
-from workspace.users.services import avatar as avatar_service, presence as presence_service
-from workspace.users.services.settings import delete_setting, get_module_settings, set_setting
+from workspace.users.services import avatar as avatar_service
+from workspace.users.services import presence as presence_service
+from workspace.users.services.settings import (
+    delete_setting,
+    get_module_settings,
+    set_setting,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@extend_schema(tags=['Users'])
+@extend_schema(tags=["Users"])
 class UserSearchView(CacheControlMixin, APIView):
     permission_classes = [IsAuthenticated]
     cache_max_age = 60
@@ -39,21 +44,31 @@ class UserSearchView(CacheControlMixin, APIView):
         summary="Search users",
         description="Search for users by username, first name, or last name. Excludes the current user and inactive users.",
         parameters=[
-            OpenApiParameter(name='q', type=str, required=True, description='Search query (min 2 chars)'),
-            OpenApiParameter(name='limit', type=int, required=False, description='Max results (default 10)'),
+            OpenApiParameter(
+                name="q",
+                type=str,
+                required=True,
+                description="Search query (min 2 chars)",
+            ),
+            OpenApiParameter(
+                name="limit",
+                type=int,
+                required=False,
+                description="Max results (default 10)",
+            ),
         ],
         responses={
             200: inline_serializer(
-                name='UserSearchResponse',
+                name="UserSearchResponse",
                 fields={
-                    'results': serializers.ListField(
+                    "results": serializers.ListField(
                         child=inline_serializer(
-                            name='UserSearchItem',
+                            name="UserSearchItem",
                             fields={
-                                'id': serializers.IntegerField(),
-                                'username': serializers.CharField(),
-                                'first_name': serializers.CharField(),
-                                'last_name': serializers.CharField(),
+                                "id": serializers.IntegerField(),
+                                "username": serializers.CharField(),
+                                "first_name": serializers.CharField(),
+                                "last_name": serializers.CharField(),
                             },
                         ),
                     ),
@@ -62,38 +77,38 @@ class UserSearchView(CacheControlMixin, APIView):
         },
     )
     def get(self, request):
-        query = request.query_params.get('q', '').strip()
+        query = request.query_params.get("q", "").strip()
         if len(query) < 2:
-            return Response({'results': []})
+            return Response({"results": []})
 
         try:
-            limit = int(request.query_params.get('limit', 10))
-        except (TypeError, ValueError):
+            limit = int(request.query_params.get("limit", 10))
+        except TypeError, ValueError:
             limit = 10
         limit = min(max(limit, 1), 50)
 
         users = User.objects.filter(
-            Q(username__icontains=query) |
-            Q(first_name__icontains=query) |
-            Q(last_name__icontains=query),
+            Q(username__icontains=query)
+            | Q(first_name__icontains=query)
+            | Q(last_name__icontains=query),
             is_active=True,
             bot_profile__isnull=True,
         ).exclude(pk=request.user.pk)[:limit]
 
         results = [
             {
-                'id': u.id,
-                'username': u.username,
-                'first_name': u.first_name,
-                'last_name': u.last_name,
+                "id": u.id,
+                "username": u.username,
+                "first_name": u.first_name,
+                "last_name": u.last_name,
             }
             for u in users
         ]
 
-        return Response({'results': results})
+        return Response({"results": results})
 
 
-@extend_schema(tags=['Users'])
+@extend_schema(tags=["Users"])
 class UserMeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -102,31 +117,33 @@ class UserMeView(APIView):
         description="Return profile information for the authenticated user.",
         responses={
             200: inline_serializer(
-                name='UserMe',
+                name="UserMe",
                 fields={
-                    'username': serializers.CharField(),
-                    'email': serializers.EmailField(),
-                    'first_name': serializers.CharField(),
-                    'last_name': serializers.CharField(),
-                    'date_joined': serializers.DateTimeField(),
-                    'last_login': serializers.DateTimeField(allow_null=True),
+                    "username": serializers.CharField(),
+                    "email": serializers.EmailField(),
+                    "first_name": serializers.CharField(),
+                    "last_name": serializers.CharField(),
+                    "date_joined": serializers.DateTimeField(),
+                    "last_login": serializers.DateTimeField(allow_null=True),
                 },
             ),
         },
     )
     def get(self, request):
         user = request.user
-        return Response({
-            'username': user.username,
-            'email': user.email,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'date_joined': user.date_joined,
-            'last_login': user.last_login,
-        })
+        return Response(
+            {
+                "username": user.username,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "date_joined": user.date_joined,
+                "last_login": user.last_login,
+            }
+        )
 
 
-@extend_schema(tags=['Users'])
+@extend_schema(tags=["Users"])
 class PasswordRulesView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -135,15 +152,15 @@ class PasswordRulesView(APIView):
         description="Return the list of password validation rules configured on the server.",
         responses={
             200: inline_serializer(
-                name='PasswordRules',
+                name="PasswordRules",
                 fields={
-                    'rules': serializers.ListField(
+                    "rules": serializers.ListField(
                         child=inline_serializer(
-                            name='PasswordRule',
+                            name="PasswordRule",
                             fields={
-                                'text': serializers.CharField(),
-                                'code': serializers.CharField(),
-                                'value': serializers.IntegerField(required=False),
+                                "text": serializers.CharField(),
+                                "code": serializers.CharField(),
+                                "value": serializers.IntegerField(required=False),
                             },
                         )
                     ),
@@ -156,25 +173,25 @@ class PasswordRulesView(APIView):
             django_settings.AUTH_PASSWORD_VALIDATORS
         )
         code_map = {
-            'MinimumLengthValidator': 'min_length',
-            'NumericPasswordValidator': 'numeric',
-            'CommonPasswordValidator': 'common',
-            'UserAttributeSimilarityValidator': 'similarity',
+            "MinimumLengthValidator": "min_length",
+            "NumericPasswordValidator": "numeric",
+            "CommonPasswordValidator": "common",
+            "UserAttributeSimilarityValidator": "similarity",
         }
         rules = []
         for v in validators:
             class_name = v.__class__.__name__
             rule = {
-                'text': v.get_help_text(),
-                'code': code_map.get(class_name, 'custom'),
+                "text": v.get_help_text(),
+                "code": code_map.get(class_name, "custom"),
             }
-            if class_name == 'MinimumLengthValidator':
-                rule['value'] = v.min_length
+            if class_name == "MinimumLengthValidator":
+                rule["value"] = v.min_length
             rules.append(rule)
-        return Response({'rules': rules})
+        return Response({"rules": rules})
 
 
-@extend_schema(tags=['Users'])
+@extend_schema(tags=["Users"])
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -186,43 +203,43 @@ class ChangePasswordView(APIView):
             "The session is preserved after a successful change."
         ),
         request=inline_serializer(
-            name='ChangePasswordRequest',
+            name="ChangePasswordRequest",
             fields={
-                'current_password': serializers.CharField(),
-                'new_password': serializers.CharField(),
+                "current_password": serializers.CharField(),
+                "new_password": serializers.CharField(),
             },
         ),
         responses={
             200: inline_serializer(
-                name='ChangePasswordSuccess',
+                name="ChangePasswordSuccess",
                 fields={
-                    'message': serializers.CharField(),
+                    "message": serializers.CharField(),
                 },
             ),
             400: OpenApiResponse(
                 description="Validation error.",
                 response=inline_serializer(
-                    name='ChangePasswordError',
+                    name="ChangePasswordError",
                     fields={
-                        'errors': serializers.ListField(child=serializers.CharField()),
+                        "errors": serializers.ListField(child=serializers.CharField()),
                     },
                 ),
             ),
         },
     )
     def post(self, request):
-        current_password = request.data.get('current_password', '')
-        new_password = request.data.get('new_password', '')
+        current_password = request.data.get("current_password", "")
+        new_password = request.data.get("new_password", "")
 
         if not current_password or not new_password:
             return Response(
-                {'errors': ['Current password and new password are required.']},
+                {"errors": ["Current password and new password are required."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not request.user.check_password(current_password):
             return Response(
-                {'errors': ['Current password is incorrect.']},
+                {"errors": ["Current password is incorrect."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -230,7 +247,7 @@ class ChangePasswordView(APIView):
             password_validation.validate_password(new_password, request.user)
         except Exception as e:
             return Response(
-                {'errors': list(e.messages)},
+                {"errors": list(e.messages)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -238,14 +255,14 @@ class ChangePasswordView(APIView):
         request.user.save()
         update_session_auth_hash(request, request.user)
 
-        return Response({'message': 'Password updated successfully.'})
+        return Response({"message": "Password updated successfully."})
 
 
 AVATAR_MAX_SIZE = 10 * 1024 * 1024  # 10 MB
 AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
-@extend_schema(tags=['Users'])
+@extend_schema(tags=["Users"])
 class UserAvatarRetrieveView(CacheControlMixin, APIView):
     """Serve a user's avatar image (public).
 
@@ -290,7 +307,7 @@ class UserAvatarRetrieveView(CacheControlMixin, APIView):
         return response
 
 
-@extend_schema(tags=['Users'])
+@extend_schema(tags=["Users"])
 class UserAvatarUploadView(APIView):
     """Upload or delete the authenticated user's avatar."""
 
@@ -346,7 +363,7 @@ class UserAvatarUploadView(APIView):
             crop_y = float(request.data.get("crop_y", 0))
             crop_w = float(request.data.get("crop_w", 0))
             crop_h = float(request.data.get("crop_h", 0))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return Response(
                 {"errors": ["Invalid crop coordinates."]},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -360,9 +377,14 @@ class UserAvatarUploadView(APIView):
 
         try:
             avatar_service.process_and_save_avatar(
-                request.user, image, crop_x, crop_y, crop_w, crop_h,
+                request.user,
+                image,
+                crop_x,
+                crop_y,
+                crop_w,
+                crop_h,
             )
-        except (ValueError, OSError):
+        except ValueError, OSError:
             # PIL raises UnidentifiedImageError (OSError) on unrecognised
             # bytes and OSError on truncated files; ValueError covers
             # crop coordinates that produce a zero-size region. Map them
@@ -381,18 +403,19 @@ class UserAvatarUploadView(APIView):
     @extend_schema(
         summary="Delete avatar",
         description="Remove the authenticated user's profile picture.",
-        responses={200: inline_serializer(
-            name="AvatarDeleteResponse",
-            fields={"message": serializers.CharField()},
-        )},
+        responses={
+            200: inline_serializer(
+                name="AvatarDeleteResponse",
+                fields={"message": serializers.CharField()},
+            )
+        },
     )
     def delete(self, request):
         avatar_service.delete_avatar(request.user)
         return Response({"message": "Avatar removed."})
 
 
-
-@extend_schema(tags=['Users'])
+@extend_schema(tags=["Users"])
 class UserStatusView(APIView):
     """Get or set the authenticated user's manual presence status."""
 
@@ -403,50 +426,58 @@ class UserStatusView(APIView):
         description="Return the user's current manual presence status.",
         responses={
             200: inline_serializer(
-                name='UserStatusGetResponse',
-                fields={'status': serializers.CharField()},
+                name="UserStatusGetResponse",
+                fields={"status": serializers.CharField()},
             ),
         },
     )
     def get(self, request):
         current = presence_service.get_manual_status(request.user.pk)
-        return Response({'status': current})
+        return Response({"status": current})
 
     @extend_schema(
         summary="Set manual status",
         description="Set the user's manual presence status (auto, online, away, busy, invisible).",
         request=inline_serializer(
-            name='UserStatusRequest',
-            fields={'status': serializers.ChoiceField(choices=['auto', 'online', 'away', 'busy', 'invisible'])},
+            name="UserStatusRequest",
+            fields={
+                "status": serializers.ChoiceField(
+                    choices=["auto", "online", "away", "busy", "invisible"]
+                )
+            },
         ),
         responses={
             200: inline_serializer(
-                name='UserStatusResponse',
-                fields={'status': serializers.CharField()},
+                name="UserStatusResponse",
+                fields={"status": serializers.CharField()},
             ),
         },
     )
     def put(self, request):
-        new_status = request.data.get('status', '')
+        new_status = request.data.get("status", "")
         if new_status not in presence_service.VALID_MANUAL_STATUSES:
             return Response(
-                {'errors': [f'Invalid status. Choose from: {", ".join(sorted(presence_service.VALID_MANUAL_STATUSES))}']},
+                {
+                    "errors": [
+                        f"Invalid status. Choose from: {', '.join(sorted(presence_service.VALID_MANUAL_STATUSES))}"
+                    ]
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         presence_service.set_manual_status(request.user.pk, new_status)
-        return Response({'status': new_status})
+        return Response({"status": new_status})
 
 
 # ── Settings API ──────────────────────────────────────────────
 
 _setting_fields = {
-    'module': serializers.CharField(),
-    'key': serializers.CharField(),
-    'value': serializers.JSONField(allow_null=True),
+    "module": serializers.CharField(),
+    "key": serializers.CharField(),
+    "value": serializers.JSONField(allow_null=True),
 }
 
 
-@extend_schema(tags=['Settings'])
+@extend_schema(tags=["Settings"])
 class SettingsListView(APIView):
     """List all settings for the authenticated user, optionally filtered by module."""
 
@@ -455,15 +486,15 @@ class SettingsListView(APIView):
     @extend_schema(
         summary="List user settings",
         parameters=[
-            OpenApiParameter(name='module', type=str, required=False),
+            OpenApiParameter(name="module", type=str, required=False),
         ],
         responses={
             200: inline_serializer(
-                name='SettingsListResponse',
+                name="SettingsListResponse",
                 fields={
-                    'results': serializers.ListField(
+                    "results": serializers.ListField(
                         child=inline_serializer(
-                            name='SettingItem',
+                            name="SettingItem",
                             fields=_setting_fields,
                         ),
                     ),
@@ -472,15 +503,15 @@ class SettingsListView(APIView):
         },
     )
     def get(self, request):
-        module = request.query_params.get('module')
+        module = request.query_params.get("module")
         qs = UserSetting.objects.filter(user=request.user)
         if module:
             qs = qs.filter(module=module)
-        results = list(qs.values('module', 'key', 'value'))
-        return Response({'results': results})
+        results = list(qs.values("module", "key", "value"))
+        return Response({"results": results})
 
 
-@extend_schema(tags=['Settings'])
+@extend_schema(tags=["Settings"])
 class SettingDetailView(APIView):
     """Read, write or delete a single setting identified by module + key."""
 
@@ -489,17 +520,23 @@ class SettingDetailView(APIView):
     @extend_schema(
         summary="Get a setting",
         responses={
-            200: inline_serializer(name='SettingDetail', fields=_setting_fields),
+            200: inline_serializer(name="SettingDetail", fields=_setting_fields),
             404: OpenApiResponse(description="Setting not found."),
         },
     )
     def get(self, request, module, key):
-        row = UserSetting.objects.filter(
-            user=request.user, module=module, key=key,
-        ).values('module', 'key', 'value').first()
+        row = (
+            UserSetting.objects.filter(
+                user=request.user,
+                module=module,
+                key=key,
+            )
+            .values("module", "key", "value")
+            .first()
+        )
         if not row:
             return Response(
-                {'detail': 'Setting not found.'},
+                {"detail": "Setting not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(row)
@@ -507,17 +544,17 @@ class SettingDetailView(APIView):
     @extend_schema(
         summary="Create or update a setting",
         request=inline_serializer(
-            name='SettingWriteRequest',
-            fields={'value': serializers.JSONField(allow_null=True)},
+            name="SettingWriteRequest",
+            fields={"value": serializers.JSONField(allow_null=True)},
         ),
         responses={
-            200: inline_serializer(name='SettingWriteResponse', fields=_setting_fields),
+            200: inline_serializer(name="SettingWriteResponse", fields=_setting_fields),
         },
     )
     def put(self, request, module, key):
-        value = request.data.get('value')
+        value = request.data.get("value")
         obj = set_setting(request.user, module, key, value)
-        return Response({'module': obj.module, 'key': obj.key, 'value': obj.value})
+        return Response({"module": obj.module, "key": obj.key, "value": obj.value})
 
     @extend_schema(
         summary="Delete a setting",
@@ -526,13 +563,13 @@ class SettingDetailView(APIView):
     def delete(self, request, module, key):
         if not delete_setting(request.user, module, key):
             return Response(
-                {'detail': 'Setting not found.'},
+                {"detail": "Setting not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=['Settings'])
+@extend_schema(tags=["Settings"])
 class SettingsModuleView(APIView):
     """Bulk read or write every setting within a single module.
 
@@ -570,8 +607,8 @@ class SettingsModuleView(APIView):
             "with the full state of the module after the update."
         ),
         request=inline_serializer(
-            name='SettingsBulkWriteRequest',
-            fields={'__any_key__': serializers.JSONField(allow_null=True)},
+            name="SettingsBulkWriteRequest",
+            fields={"__any_key__": serializers.JSONField(allow_null=True)},
         ),
         responses={
             200: OpenApiResponse(
@@ -584,7 +621,7 @@ class SettingsModuleView(APIView):
         data = request.data
         if not isinstance(data, dict):
             return Response(
-                {'detail': 'Body must be a JSON object of {key: value} pairs.'},
+                {"detail": "Body must be a JSON object of {key: value} pairs."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         with transaction.atomic():
@@ -595,7 +632,8 @@ class SettingsModuleView(APIView):
 
 # ── API Tokens ───────────────────────────────────────────────
 
-@extend_schema(tags=['Auth'])
+
+@extend_schema(tags=["Auth"])
 class APITokenListCreateView(APIView):
     """List and create API tokens for the authenticated user."""
 
@@ -608,14 +646,14 @@ class APITokenListCreateView(APIView):
         description="Return all active (non-expired) API tokens for the current user.",
         responses={
             200: inline_serializer(
-                name='APITokenItem',
+                name="APITokenItem",
                 many=True,
                 fields={
-                    'id': serializers.CharField(),
-                    'name': serializers.CharField(),
-                    'token_key': serializers.CharField(),
-                    'created': serializers.DateTimeField(),
-                    'expiry': serializers.DateTimeField(allow_null=True),
+                    "id": serializers.CharField(),
+                    "name": serializers.CharField(),
+                    "token_key": serializers.CharField(),
+                    "created": serializers.DateTimeField(),
+                    "expiry": serializers.DateTimeField(allow_null=True),
                 },
             ),
         },
@@ -623,21 +661,23 @@ class APITokenListCreateView(APIView):
     def get(self, request):
         from django.utils.timezone import now
 
-        tokens = AuthToken.objects.filter(user=request.user).select_related('label')
+        tokens = AuthToken.objects.filter(user=request.user).select_related("label")
         # Exclude expired tokens
         tokens = tokens.filter(
             Q(expiry__isnull=True) | Q(expiry__gt=now()),
         )
         results = []
         for t in tokens:
-            label = getattr(t, 'label', None)
-            results.append({
-                'id': t.pk,
-                'name': label.name if label else '',
-                'token_key': t.token_key,
-                'created': t.created,
-                'expiry': t.expiry,
-            })
+            label = getattr(t, "label", None)
+            results.append(
+                {
+                    "id": t.pk,
+                    "name": label.name if label else "",
+                    "token_key": t.token_key,
+                    "created": t.created,
+                    "expiry": t.expiry,
+                }
+            )
         return Response(results)
 
     @extend_schema(
@@ -647,10 +687,12 @@ class APITokenListCreateView(APIView):
             "Use `Authorization: Token <value>` to authenticate."
         ),
         request=inline_serializer(
-            name='APITokenCreateRequest',
+            name="APITokenCreateRequest",
             fields={
-                'name': serializers.CharField(required=False, help_text="Label for the token"),
-                'expiry_days': serializers.IntegerField(
+                "name": serializers.CharField(
+                    required=False, help_text="Label for the token"
+                ),
+                "expiry_days": serializers.IntegerField(
                     required=False,
                     help_text="Token lifetime in days. Omit for no expiration.",
                 ),
@@ -658,20 +700,20 @@ class APITokenListCreateView(APIView):
         ),
         responses={
             201: inline_serializer(
-                name='APITokenCreateResponse',
+                name="APITokenCreateResponse",
                 fields={
-                    'id': serializers.CharField(),
-                    'name': serializers.CharField(),
-                    'token': serializers.CharField(help_text="Full token (shown once)"),
-                    'token_key': serializers.CharField(),
-                    'expiry': serializers.DateTimeField(allow_null=True),
+                    "id": serializers.CharField(),
+                    "name": serializers.CharField(),
+                    "token": serializers.CharField(help_text="Full token (shown once)"),
+                    "token_key": serializers.CharField(),
+                    "expiry": serializers.DateTimeField(allow_null=True),
                 },
             ),
         },
     )
     def post(self, request):
-        name = request.data.get('name', '')
-        expiry_days = request.data.get('expiry_days')
+        name = request.data.get("name", "")
+        expiry_days = request.data.get("expiry_days")
 
         expiry = None
         if expiry_days is not None:
@@ -679,9 +721,9 @@ class APITokenListCreateView(APIView):
                 expiry_days = int(expiry_days)
                 if expiry_days < 1:
                     raise ValueError
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return Response(
-                    {'errors': ['expiry_days must be a positive integer.']},
+                    {"errors": ["expiry_days must be a positive integer."]},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             expiry = timedelta(days=expiry_days)
@@ -692,17 +734,17 @@ class APITokenListCreateView(APIView):
 
         return Response(
             {
-                'id': instance.pk,
-                'name': name,
-                'token': token,
-                'token_key': instance.token_key,
-                'expiry': instance.expiry,
+                "id": instance.pk,
+                "name": name,
+                "token": token,
+                "token_key": instance.token_key,
+                "expiry": instance.expiry,
             },
             status=status.HTTP_201_CREATED,
         )
 
 
-@extend_schema(tags=['Auth'])
+@extend_schema(tags=["Auth"])
 class APITokenDetailView(APIView):
     """Revoke (delete) a single API token."""
 
@@ -716,7 +758,7 @@ class APITokenDetailView(APIView):
         deleted, _ = AuthToken.objects.filter(user=request.user, pk=pk).delete()
         if not deleted:
             return Response(
-                {'detail': 'Token not found.'},
+                {"detail": "Token not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -724,25 +766,26 @@ class APITokenDetailView(APIView):
 
 class UserGroupsView(APIView):
     """List the current user's Django groups with folder status."""
+
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         summary="List current user's groups",
-        tags=['Users'],
+        tags=["Users"],
     )
     def get(self, request):
         groups = request.user.groups.all()
         folder_subquery = File.objects.filter(
-            group_id=OuterRef('pk'),
+            group_id=OuterRef("pk"),
             parent__isnull=True,
             deleted_at__isnull=True,
         )
         groups = groups.annotate(has_folder=Exists(folder_subquery))
         data = [
             {
-                'id': g.id,
-                'name': g.name,
-                'has_folder': g.has_folder,
+                "id": g.id,
+                "name": g.name,
+                "has_folder": g.has_folder,
             }
             for g in groups
         ]

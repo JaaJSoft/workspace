@@ -77,7 +77,9 @@ class Command(BaseCommand):
             raise CommandError(f"Cannot connect to target database: {exc}") from exc
 
         self.stdout.write(self.style.SUCCESS("  Source: SQLite OK"))
-        self.stdout.write(self.style.SUCCESS(f"  Target: {self._safe_url(database_url)} OK"))
+        self.stdout.write(
+            self.style.SUCCESS(f"  Target: {self._safe_url(database_url)} OK")
+        )
 
         pending = self._pending_migrations("default")
         if pending:
@@ -98,7 +100,9 @@ class Command(BaseCommand):
         self.stdout.write("Exporting data from SQLite...")
 
         dump_handle = tempfile.NamedTemporaryFile(
-            suffix=".json", prefix="workspace_dump_", delete=False,
+            suffix=".json",
+            prefix="workspace_dump_",
+            delete=False,
         )
         dump_file = Path(dump_handle.name)
         dump_handle.close()
@@ -117,20 +121,23 @@ class Command(BaseCommand):
                 "dumpdata",
                 "--natural-foreign",
                 *exclude_args,
-                "--indent", "2",
+                "--indent",
+                "2",
                 stdout=dump_stream,
                 verbosity=0,
             )
 
         record_count = self._count_records_in_dump(dump_file)
-        self.stdout.write(self.style.SUCCESS(
-            f"  Exported {record_count} records to {dump_file}"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(f"  Exported {record_count} records to {dump_file}")
+        )
 
         if dry_run:
-            self.stdout.write(self.style.WARNING(
-                "Dry run - skipping target migrate, import and verification."
-            ))
+            self.stdout.write(
+                self.style.WARNING(
+                    "Dry run - skipping target migrate, import and verification."
+                )
+            )
             if keep_dump:
                 self.stdout.write(f"  Dump kept at: {dump_file}")
             else:
@@ -182,9 +189,11 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR("  Count mismatches found:"))
             for table, src, tgt in mismatches:
                 self.stderr.write(f"    {table}: SQLite={src}, PostgreSQL={tgt}")
-            self.stderr.write(self.style.ERROR(
-                "Migration completed with warnings - review mismatches above."
-            ))
+            self.stderr.write(
+                self.style.ERROR(
+                    "Migration completed with warnings - review mismatches above."
+                )
+            )
         else:
             self.stdout.write(self.style.SUCCESS("  All table counts match OK"))
 
@@ -253,9 +262,7 @@ class Command(BaseCommand):
             for model in apps.get_models():
                 if model._meta.proxy or model._meta.swapped:
                     continue
-                sql_statements = target_conn.ops.sequence_reset_sql(
-                    self.style, [model]
-                )
+                sql_statements = target_conn.ops.sequence_reset_sql(self.style, [model])
                 for stmt in sql_statements:
                     cursor.execute(stmt)
 
@@ -268,7 +275,7 @@ class Command(BaseCommand):
 
     def _count_records_in_dump(self, dump_file):
         """Count total records in a dumpdata JSON file."""
-        with open(dump_file, "r", encoding="utf-8") as f:
+        with open(dump_file, encoding="utf-8") as f:
             data = json.load(f)
         return len(data)
 

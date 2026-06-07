@@ -55,7 +55,12 @@ User = get_user_model()
 # Prerequisite detection
 # --------------------------------------------------------------------------- #
 
-ENABLED = os.environ.get("WORKSPACE_DAVFS2_TESTS", "").lower() in {"1", "true", "yes", "on"}
+ENABLED = os.environ.get("WORKSPACE_DAVFS2_TESTS", "").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 def _mount_davfs_path() -> str | None:
@@ -93,7 +98,9 @@ def _has_passwordless_sudo() -> bool:
         return False
     try:
         r = subprocess.run(
-            ["sudo", "-n", "true"], capture_output=True, timeout=5,
+            ["sudo", "-n", "true"],
+            capture_output=True,
+            timeout=5,
         )
         return r.returncode == 0
     except Exception:
@@ -280,19 +287,25 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         #                      test in this suite.
         #   uid/gid          — remap ownership so the unprivileged test user
         #                      can read/write files even when mount runs as root
-        opts = ",".join([
-            f"username={self.username}",
-            f"uid={os.geteuid()}",
-            f"gid={os.getegid()}",
-            "dir_mode=755",
-            "file_mode=644",
-            "delay_upload=0",
-            "cache_size=50",
-            "gui_optimize=0",
-            "use_locks=0",
-        ])
+        opts = ",".join(
+            [
+                f"username={self.username}",
+                f"uid={os.geteuid()}",
+                f"gid={os.getegid()}",
+                "dir_mode=755",
+                "file_mode=644",
+                "delay_upload=0",
+                "cache_size=50",
+                "gui_optimize=0",
+                "use_locks=0",
+            ]
+        )
         cmd = _sudo_prefix() + [
-            _mount_davfs_path(), url, str(self.mp), "-o", opts,
+            _mount_davfs_path(),
+            url,
+            str(self.mp),
+            "-o",
+            opts,
         ]
         proc = subprocess.run(
             cmd,
@@ -311,7 +324,9 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         # Wait until the kernel reports the mount as live before any
         # filesystem call lands on it.
         if not self._wait_until(self.mp.is_mount, timeout=10):
-            raise RuntimeError(f"mount.davfs returned 0 but {self.mp} is not a mountpoint")
+            raise RuntimeError(
+                f"mount.davfs returned 0 but {self.mp} is not a mountpoint"
+            )
 
     def _umount(self):
         if not self._mounted:
@@ -321,7 +336,9 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         for args in (["umount"], ["umount", "-l"]):
             r = subprocess.run(
                 _sudo_prefix() + args + [str(self.mp)],
-                capture_output=True, text=True, timeout=20,
+                capture_output=True,
+                text=True,
+                timeout=20,
             )
             if r.returncode == 0:
                 self._mounted = False
@@ -424,7 +441,10 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         target.touch()
         self._fsync_close(target)
         f = self._wait_for_file(
-            owner=self.user, name="empty.txt", size=0, deleted_at__isnull=True,
+            owner=self.user,
+            name="empty.txt",
+            size=0,
+            deleted_at__isnull=True,
         )
         self.assertEqual(f.node_type, File.NodeType.FILE)
 
@@ -433,7 +453,8 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         target = self.mp / "hello.txt"
         target.write_bytes(b"hello davfs\n")
         self._wait_for_file(
-            owner=self.user, name="hello.txt",
+            owner=self.user,
+            name="hello.txt",
             size=len(b"hello davfs\n"),
             deleted_at__isnull=True,
         )
@@ -449,7 +470,10 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
         target.write_bytes(b"version-two")
         f = self._wait_for_file(
-            owner=self.user, name="rewrite.txt", deleted_at__isnull=True, size=11,
+            owner=self.user,
+            name="rewrite.txt",
+            deleted_at__isnull=True,
+            size=11,
         )
         f.content.open("rb")
         try:
@@ -481,7 +505,9 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         # 15 s budget, so wait on the size landing in DB explicitly.
         ok = self._wait_until(
             lambda: File.objects.filter(
-                owner=self.user, name="big.bin", size=size,
+                owner=self.user,
+                name="big.bin",
+                size=size,
                 deleted_at__isnull=True,
             ).exists(),
             timeout=60.0,
@@ -489,7 +515,9 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         self.assertTrue(ok, "16 MiB upload never reached the DB with full size")
 
         f = File.objects.get(
-            owner=self.user, name="big.bin", deleted_at__isnull=True,
+            owner=self.user,
+            name="big.bin",
+            deleted_at__isnull=True,
         )
         h = hashlib.sha256()
         f.content.open("rb")
@@ -499,7 +527,8 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         finally:
             f.content.close()
         self.assertEqual(
-            h.hexdigest(), expected_sha,
+            h.hexdigest(),
+            expected_sha,
             "server-side bytes differ from what the client uploaded",
         )
 
@@ -509,7 +538,9 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         """``mkdir foo`` → MKCOL → folder row in DB."""
         (self.mp / "newdir").mkdir()
         f = self._wait_for_file(
-            owner=self.user, name="newdir", node_type=File.NodeType.FOLDER,
+            owner=self.user,
+            name="newdir",
+            node_type=File.NodeType.FOLDER,
             deleted_at__isnull=True,
         )
         self.assertIsNone(f.parent)
@@ -523,7 +554,10 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         (sub / "inside.txt").write_bytes(b"x" * 32)
         parent = File.objects.get(owner=self.user, name="sub", deleted_at__isnull=True)
         self._wait_for_file(
-            owner=self.user, name="inside.txt", parent=parent, size=32,
+            owner=self.user,
+            name="inside.txt",
+            parent=parent,
+            size=32,
         )
 
     def test_stat_reflects_server_state(self):
@@ -537,7 +571,8 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         FileService.create_file(self.user, "fileA.txt", mime_type="text/plain")
         for name, kind in (("DirA", "is_dir"), ("fileA.txt", "is_file")):
             ok = self._wait_until(
-                lambda n=name: (self.mp / n).exists(), timeout=10,
+                lambda n=name: (self.mp / n).exists(),
+                timeout=10,
             )
             self.assertTrue(ok, f"server-side {name!r} not visible via stat")
             self.assertTrue(
@@ -552,16 +587,18 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         FileService.create_file(self.user, "to_remove.txt", mime_type="text/plain")
         self.assertTrue(
             self._wait_until(
-                lambda: (self.mp / "to_remove.txt").exists(), timeout=10,
+                lambda: (self.mp / "to_remove.txt").exists(),
+                timeout=10,
             ),
             "server-side file never became visible via stat()",
         )
         (self.mp / "to_remove.txt").unlink()
         self.assertTrue(
             self._wait_until(
-                lambda: File.objects.get(
-                    owner=self.user, name="to_remove.txt"
-                ).deleted_at is not None,
+                lambda: (
+                    File.objects.get(owner=self.user, name="to_remove.txt").deleted_at
+                    is not None
+                ),
                 timeout=self.DB_POLL_TIMEOUT,
             ),
             "file row was not soft-deleted after unlink()",
@@ -571,16 +608,18 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         FileService.create_folder(self.user, "tobedel")
         self.assertTrue(
             self._wait_until(
-                lambda: (self.mp / "tobedel").exists(), timeout=10,
+                lambda: (self.mp / "tobedel").exists(),
+                timeout=10,
             ),
             "server-side folder never became visible via stat()",
         )
         (self.mp / "tobedel").rmdir()
         self.assertTrue(
             self._wait_until(
-                lambda: File.objects.get(
-                    owner=self.user, name="tobedel"
-                ).deleted_at is not None,
+                lambda: (
+                    File.objects.get(owner=self.user, name="tobedel").deleted_at
+                    is not None
+                ),
                 timeout=self.DB_POLL_TIMEOUT,
             ),
             "folder row was not soft-deleted after rmdir()",
@@ -598,10 +637,15 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
         src.rename(self.mp / "dst.txt")
         self._wait_for_file(
-            owner=self.user, name="dst.txt", deleted_at__isnull=True, size=7,
+            owner=self.user,
+            name="dst.txt",
+            deleted_at__isnull=True,
+            size=7,
         )
         self._wait_for_no_file(
-            owner=self.user, name="src.txt", parent__isnull=True,
+            owner=self.user,
+            name="src.txt",
+            parent__isnull=True,
             deleted_at__isnull=True,
         )
 
@@ -613,7 +657,8 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         self._wait_for_file(owner=self.user, name="letter.txt", size=2)
         self.assertTrue(
             self._wait_until(
-                lambda: (self.mp / "Inbox").exists(), timeout=10,
+                lambda: (self.mp / "Inbox").exists(),
+                timeout=10,
             ),
             "Inbox folder never became visible via stat()",
         )
@@ -621,38 +666,54 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         src.rename(self.mp / "Inbox" / "letter.txt")
 
         inbox = File.objects.get(
-            owner=self.user, name="Inbox", deleted_at__isnull=True,
+            owner=self.user,
+            name="Inbox",
+            deleted_at__isnull=True,
         )
         self._wait_for_file(
-            owner=self.user, name="letter.txt", parent=inbox,
-            size=2, deleted_at__isnull=True,
+            owner=self.user,
+            name="letter.txt",
+            parent=inbox,
+            size=2,
+            deleted_at__isnull=True,
         )
 
     def test_mv_from_subfolder_to_root(self):
         """``mv folder/file .`` → MOVE → file ends up parentless."""
         FileService.create_folder(self.user, "Outbox")
         outbox = File.objects.get(
-            owner=self.user, name="Outbox", deleted_at__isnull=True,
+            owner=self.user,
+            name="Outbox",
+            deleted_at__isnull=True,
         )
         self.assertTrue(
             self._wait_until(
-                lambda: (self.mp / "Outbox").exists(), timeout=10,
+                lambda: (self.mp / "Outbox").exists(),
+                timeout=10,
             ),
             "Outbox folder never became visible via stat()",
         )
         nested = self.mp / "Outbox" / "note.txt"
         nested.write_bytes(b"hi")
         self._wait_for_file(
-            owner=self.user, name="note.txt", parent=outbox, size=2,
+            owner=self.user,
+            name="note.txt",
+            parent=outbox,
+            size=2,
         )
 
         nested.rename(self.mp / "note.txt")
         self._wait_for_file(
-            owner=self.user, name="note.txt", parent__isnull=True,
-            size=2, deleted_at__isnull=True,
+            owner=self.user,
+            name="note.txt",
+            parent__isnull=True,
+            size=2,
+            deleted_at__isnull=True,
         )
         self._wait_for_no_file(
-            owner=self.user, name="note.txt", parent=outbox,
+            owner=self.user,
+            name="note.txt",
+            parent=outbox,
             deleted_at__isnull=True,
         )
 
@@ -665,7 +726,8 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         for name in ("A", "B"):
             self.assertTrue(
                 self._wait_until(
-                    lambda n=name: (self.mp / n).exists(), timeout=10,
+                    lambda n=name: (self.mp / n).exists(),
+                    timeout=10,
                 ),
                 f"{name} folder never became visible via stat()",
             )
@@ -676,11 +738,16 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
         src.rename(self.mp / "B" / "doc.txt")
         self._wait_for_file(
-            owner=self.user, name="doc.txt", parent=b,
-            size=1, deleted_at__isnull=True,
+            owner=self.user,
+            name="doc.txt",
+            parent=b,
+            size=1,
+            deleted_at__isnull=True,
         )
         self._wait_for_no_file(
-            owner=self.user, name="doc.txt", parent=a,
+            owner=self.user,
+            name="doc.txt",
+            parent=a,
             deleted_at__isnull=True,
         )
 
@@ -693,7 +760,8 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         for name in ("A", "B"):
             self.assertTrue(
                 self._wait_until(
-                    lambda n=name: (self.mp / n).exists(), timeout=10,
+                    lambda n=name: (self.mp / n).exists(),
+                    timeout=10,
                 ),
                 f"{name} folder never became visible via stat()",
             )
@@ -704,11 +772,16 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
         src.rename(self.mp / "B" / "new.txt")
         self._wait_for_file(
-            owner=self.user, name="new.txt", parent=b,
-            size=1, deleted_at__isnull=True,
+            owner=self.user,
+            name="new.txt",
+            parent=b,
+            size=1,
+            deleted_at__isnull=True,
         )
         self._wait_for_no_file(
-            owner=self.user, name="old.txt", parent=a,
+            owner=self.user,
+            name="old.txt",
+            parent=a,
             deleted_at__isnull=True,
         )
 
@@ -717,18 +790,23 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         FileService.create_folder(self.user, "OldName")
         self.assertTrue(
             self._wait_until(
-                lambda: (self.mp / "OldName").exists(), timeout=10,
+                lambda: (self.mp / "OldName").exists(),
+                timeout=10,
             ),
             "OldName folder never became visible via stat()",
         )
         (self.mp / "OldName").rename(self.mp / "NewName")
         self._wait_for_file(
-            owner=self.user, name="NewName",
+            owner=self.user,
+            name="NewName",
             node_type=File.NodeType.FOLDER,
-            parent__isnull=True, deleted_at__isnull=True,
+            parent__isnull=True,
+            deleted_at__isnull=True,
         )
         self._wait_for_no_file(
-            owner=self.user, name="OldName", parent__isnull=True,
+            owner=self.user,
+            name="OldName",
+            parent__isnull=True,
             deleted_at__isnull=True,
         )
 
@@ -737,15 +815,20 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         FileService.create_folder(self.user, "Movable")
         FileService.create_folder(self.user, "Parent")
         movable = File.objects.get(
-            owner=self.user, name="Movable", deleted_at__isnull=True,
+            owner=self.user,
+            name="Movable",
+            deleted_at__isnull=True,
         )
         parent = File.objects.get(
-            owner=self.user, name="Parent", deleted_at__isnull=True,
+            owner=self.user,
+            name="Parent",
+            deleted_at__isnull=True,
         )
         for name in ("Movable", "Parent"):
             self.assertTrue(
                 self._wait_until(
-                    lambda n=name: (self.mp / n).exists(), timeout=10,
+                    lambda n=name: (self.mp / n).exists(),
+                    timeout=10,
                 ),
                 f"{name} folder never became visible via stat()",
             )
@@ -753,19 +836,27 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         # Place a file inside Movable so we can confirm descendants follow.
         (self.mp / "Movable" / "child.txt").write_bytes(b"c")
         self._wait_for_file(
-            owner=self.user, name="child.txt", parent=movable, size=1,
+            owner=self.user,
+            name="child.txt",
+            parent=movable,
+            size=1,
         )
 
         (self.mp / "Movable").rename(self.mp / "Parent" / "Movable")
         moved = self._wait_for_file(
-            owner=self.user, name="Movable",
-            node_type=File.NodeType.FOLDER, parent=parent,
+            owner=self.user,
+            name="Movable",
+            node_type=File.NodeType.FOLDER,
+            parent=parent,
             deleted_at__isnull=True,
         )
         # Child must still live under the moved folder.
         self._wait_for_file(
-            owner=self.user, name="child.txt", parent=moved,
-            size=1, deleted_at__isnull=True,
+            owner=self.user,
+            name="child.txt",
+            parent=moved,
+            size=1,
+            deleted_at__isnull=True,
         )
 
     def test_cp_duplicates_file(self):
@@ -783,16 +874,23 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
 
         r = subprocess.run(
             ["cp", str(src), str(self.mp / "dup.txt")],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         self.assertEqual(r.returncode, 0, r.stderr)
 
         dup = self._wait_for_file(
-            owner=self.user, name="dup.txt", size=7, deleted_at__isnull=True,
+            owner=self.user,
+            name="dup.txt",
+            size=7,
+            deleted_at__isnull=True,
         )
         self.assertTrue(
             File.objects.filter(
-                owner=self.user, name="orig.txt", size=7,
+                owner=self.user,
+                name="orig.txt",
+                size=7,
                 deleted_at__isnull=True,
             ).exists()
         )
@@ -809,7 +907,9 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         target = self.mp / "with space.txt"
         target.write_bytes(b"spaced")
         self._wait_for_file(
-            owner=self.user, name="with space.txt", size=6,
+            owner=self.user,
+            name="with space.txt",
+            size=6,
         )
 
     def test_filename_with_utf8(self):
@@ -832,9 +932,7 @@ class PrereqSelfCheck(unittest.TestCase):
         # When the env var is set, prerequisites must be in place — fail
         # loudly so a CI image regression is impossible to miss.
         if ENABLED and _PREREQ_REASON is not None:
-            self.fail(
-                f"WORKSPACE_DAVFS2_TESTS=1 but: {_PREREQ_REASON}"
-            )
+            self.fail(f"WORKSPACE_DAVFS2_TESTS=1 but: {_PREREQ_REASON}")
         # Otherwise just print the reason in -v output for visibility.
         if not ENABLED:
             sys.stderr.write(
@@ -842,5 +940,3 @@ class PrereqSelfCheck(unittest.TestCase):
             )
         elif _PREREQ_REASON:
             sys.stderr.write(f"[davfs2] {_PREREQ_REASON}\n")
-
-

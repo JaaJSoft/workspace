@@ -9,7 +9,7 @@ from workspace.common.logging import scrub
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name='calendar.send_ics_reply', ignore_result=True, soft_time_limit=30)
+@shared_task(name="calendar.send_ics_reply", ignore_result=True, soft_time_limit=30)
 def send_ics_reply(event_id, user_id, response_status):
     """Send an iCalendar REPLY email to the event organizer."""
     from email.mime.multipart import MIMEMultipart
@@ -25,7 +25,7 @@ def send_ics_reply(event_id, user_id, response_status):
     User = get_user_model()
 
     try:
-        event = Event.objects.select_related('calendar__mail_account').get(pk=event_id)
+        event = Event.objects.select_related("calendar__mail_account").get(pk=event_id)
     except Event.DoesNotExist:
         return
 
@@ -39,23 +39,24 @@ def send_ics_reply(event_id, user_id, response_status):
         return
 
     ics_data = build_reply(event, user, response_status)
-    status_label = 'Accepted' if response_status == 'accepted' else 'Declined'
+    status_label = "Accepted" if response_status == "accepted" else "Declined"
 
-    msg = MIMEMultipart('mixed')
-    msg['From'] = f'{user.get_full_name() or user.username} <{account.email}>'
-    msg['To'] = event.external_organizer
-    msg['Subject'] = f'{status_label}: {event.title}'
-    msg['Date'] = formatdate(localtime=True)
-    msg['Message-ID'] = make_msgid(domain=account.email.split('@')[-1])
+    msg = MIMEMultipart("mixed")
+    msg["From"] = f"{user.get_full_name() or user.username} <{account.email}>"
+    msg["To"] = event.external_organizer
+    msg["Subject"] = f"{status_label}: {event.title}"
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=account.email.split("@")[-1])
 
     body = MIMEText(
         f'{user.get_full_name() or user.username} has {response_status} "{event.title}".',
-        'plain', 'utf-8',
+        "plain",
+        "utf-8",
     )
     msg.attach(body)
 
-    cal_part = MIMEText(ics_data.decode('utf-8'), 'calendar', 'utf-8')
-    cal_part.set_param('method', 'REPLY')
+    cal_part = MIMEText(ics_data.decode("utf-8"), "calendar", "utf-8")
+    cal_part.set_param("method", "REPLY")
     msg.attach(cal_part)
 
     server = connect_smtp(account)
@@ -65,7 +66,9 @@ def send_ics_reply(event_id, user_id, response_status):
         server.quit()
 
 
-@shared_task(name='calendar.sync_external_calendar', ignore_result=True, soft_time_limit=120)
+@shared_task(
+    name="calendar.sync_external_calendar", ignore_result=True, soft_time_limit=120
+)
 def sync_external_calendar_task(external_calendar_uuid, claim_token=None):
     """Sync a single external ICS calendar feed.
 
@@ -83,35 +86,37 @@ def sync_external_calendar_task(external_calendar_uuid, claim_token=None):
     from workspace.calendar.services.ics_sync import sync_external_calendar
 
     try:
-        ext = ExternalCalendar.objects.select_related('calendar').get(
+        ext = ExternalCalendar.objects.select_related("calendar").get(
             uuid=external_calendar_uuid,
         )
     except ExternalCalendar.DoesNotExist:
         return
 
     if claim_token and not cas_finalize(
-        ExternalCalendar, ext.pk,
-        claim_field='last_synced_at', claim_token=claim_token,
-        updates={'last_synced_at': timezone.now()},
-        extra_where={'is_active': True},
+        ExternalCalendar,
+        ext.pk,
+        claim_field="last_synced_at",
+        claim_token=claim_token,
+        updates={"last_synced_at": timezone.now()},
+        extra_where={"is_active": True},
     ):
         logger.info(
-            'External calendar sync skipped (claimed by another worker): ext=%s',
+            "External calendar sync skipped (claimed by another worker): ext=%s",
             scrub(str(ext.pk)),
         )
         return
     if claim_token:
-        ext.refresh_from_db(fields=['last_synced_at'])
+        ext.refresh_from_db(fields=["last_synced_at"])
 
     try:
         sync_external_calendar(ext)
     except Exception as exc:
         ext.last_error = str(exc)
-        ext.save(update_fields=['last_error'])
+        ext.save(update_fields=["last_error"])
         raise
 
 
-@shared_task(name='calendar.sync_all_external_calendars', ignore_result=True)
+@shared_task(name="calendar.sync_all_external_calendars", ignore_result=True)
 def sync_all_external_calendars():
     """Dispatch sync tasks for active external calendars due for sync.
 
@@ -134,20 +139,18 @@ def sync_all_external_calendars():
     from workspace.calendar.models_external import ExternalCalendar
 
     threshold = timezone.now() - timedelta(seconds=900)
-    due = (
-        ExternalCalendar.objects
-        .filter(
-            Q(last_synced_at__lt=threshold) | Q(last_synced_at__isnull=True),
-            is_active=True,
-        )
-        .only('pk', 'uuid', 'last_synced_at')
-    )
+    due = ExternalCalendar.objects.filter(
+        Q(last_synced_at__lt=threshold) | Q(last_synced_at__isnull=True),
+        is_active=True,
+    ).only("pk", "uuid", "last_synced_at")
     for ext in due:
         original = ext.last_synced_at
         token = cas_claim(
-            ExternalCalendar, ext.pk,
-            claim_field='last_synced_at', observed_value=original,
-            extra_where={'is_active': True},
+            ExternalCalendar,
+            ext.pk,
+            claim_field="last_synced_at",
+            observed_value=original,
+            extra_where={"is_active": True},
         )
         if token is None:
             continue
@@ -158,9 +161,9 @@ def sync_all_external_calendars():
             # due and re-fires on the next dispatcher pass instead of
             # being parked at the token for the lock horizon. Keep
             # looping so other due rows still get a chance.
-            cas_rollback(ExternalCalendar, ext.pk, 'last_synced_at', original)
+            cas_rollback(ExternalCalendar, ext.pk, "last_synced_at", original)
             logger.exception(
-                'Failed to enqueue external calendar sync: ext=%s',
+                "Failed to enqueue external calendar sync: ext=%s",
                 scrub(str(ext.pk)),
             )
             continue

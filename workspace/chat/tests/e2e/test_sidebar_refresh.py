@@ -8,6 +8,7 @@ Two bug classes:
 
 Skipped unless ``E2E=1`` is set.
 """
+
 from __future__ import annotations
 
 import re
@@ -39,10 +40,12 @@ class ChatSidebarRefreshTests(PlaywrightTestCase):
         # Two DM conversations, each with the viewer + one peer as active
         # members.
         self.conv_a = Conversation.objects.create(
-            kind=Conversation.Kind.DM, created_by=self.user,
+            kind=Conversation.Kind.DM,
+            created_by=self.user,
         )
         self.conv_b = Conversation.objects.create(
-            kind=Conversation.Kind.DM, created_by=self.user,
+            kind=Conversation.Kind.DM,
+            created_by=self.user,
         )
         for conv, peer in [(self.conv_a, self.peer_a), (self.conv_b, self.peer_b)]:
             ConversationMember.objects.create(conversation=conv, user=self.user)

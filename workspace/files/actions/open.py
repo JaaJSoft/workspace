@@ -1,16 +1,17 @@
 from workspace.files.services import FilePermission
+
 from . import ActionRegistry
 from .base import ActionCategory, BaseAction
 
 
 @ActionRegistry.register
 class ViewAction(BaseAction):
-    id = 'view'
-    label = 'Open'
-    icon = 'eye'
+    id = "view"
+    label = "Open"
+    icon = "eye"
     category = ActionCategory.OPEN
-    node_types = ('file',)
-    keyboard_shortcut = 'Enter / Space'
+    node_types = ("file",)
+    keyboard_shortcut = "Enter / Space"
 
     def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:
@@ -22,12 +23,12 @@ class ViewAction(BaseAction):
 
 @ActionRegistry.register
 class OpenFolderAction(BaseAction):
-    id = 'open'
-    label = 'Open'
-    icon = 'folder-open'
+    id = "open"
+    label = "Open"
+    icon = "folder-open"
     category = ActionCategory.OPEN
-    node_types = ('folder',)
-    keyboard_shortcut = 'Enter'
+    node_types = ("folder",)
+    keyboard_shortcut = "Enter"
 
     def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:
@@ -37,11 +38,11 @@ class OpenFolderAction(BaseAction):
 
 @ActionRegistry.register
 class OpenNewTabAction(BaseAction):
-    id = 'open_new_tab'
-    label = 'Open in new tab'
-    icon = 'external-link'
+    id = "open_new_tab"
+    label = "Open in new tab"
+    icon = "external-link"
     category = ActionCategory.OPEN
-    node_types = ('file',)
+    node_types = ("file",)
 
     def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:

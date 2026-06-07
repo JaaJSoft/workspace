@@ -53,6 +53,6 @@ def _enqueue_worker(ai_task: AITask) -> None:
     worker = mapping.get(ai_task.task_type)
     if worker is None:
         raise ValueError(
-            f'No Celery worker mapped for AITask.task_type={ai_task.task_type!r}'
+            f"No Celery worker mapped for AITask.task_type={ai_task.task_type!r}"
         )
     worker.delay(str(ai_task.uuid))

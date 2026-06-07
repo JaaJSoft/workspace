@@ -8,8 +8,8 @@ from django.conf import settings
 
 from workspace.common.cache import cached
 
-_CHANGELOG_PATH = Path(settings.BASE_DIR) / 'CHANGELOG.md'
-_TITLE_SEPARATORS = (' \u2014 ', ' \u2013 ', ' - ', ': ')
+_CHANGELOG_PATH = Path(settings.BASE_DIR) / "CHANGELOG.md"
+_TITLE_SEPARATORS = (" \u2014 ", " \u2013 ", " - ", ": ")
 
 
 def parse_version(version):
@@ -21,7 +21,7 @@ def parse_version(version):
     if not version or not isinstance(version, str):
         return ()
     parts = []
-    for chunk in version.split('.'):
+    for chunk in version.split("."):
         if not chunk.isdigit():
             return ()
         parts.append(int(chunk))
@@ -38,29 +38,29 @@ def _split_version_and_title(heading):
         if sep in heading:
             version, _, title = heading.partition(sep)
             return version.strip(), title.strip()
-    return heading.strip(), ''
+    return heading.strip(), ""
 
 
 def _parse_changelog():
     """Parse CHANGELOG.md into a list of ``{version, title, html}`` dicts."""
     try:
-        raw = _CHANGELOG_PATH.read_text(encoding='utf-8')
+        raw = _CHANGELOG_PATH.read_text(encoding="utf-8")
     except FileNotFoundError:
         return []
 
     entries = []
-    parts = re.split(r'^## +(.+)$', raw, flags=re.MULTILINE)
+    parts = re.split(r"^## +(.+)$", raw, flags=re.MULTILINE)
     md = mistune.create_markdown()
     for i in range(1, len(parts), 2):
         version, title = _split_version_and_title(parts[i])
-        body = parts[i + 1] if i + 1 < len(parts) else ''
+        body = parts[i + 1] if i + 1 < len(parts) else ""
         html = md(body.strip())
-        entries.append({'version': version, 'title': title, 'html': html})
+        entries.append({"version": version, "title": title, "html": html})
 
     return entries
 
 
-@cached(key=lambda: f'changelog:{settings.APP_VERSION}', ttl=None)
+@cached(key=lambda: f"changelog:{settings.APP_VERSION}", ttl=None)
 def get_changelog_entries():
     """Return parsed changelog entries, cached for the lifetime of the deploy.
 
@@ -78,4 +78,4 @@ def get_latest_version():
     read" comparisons, decoupled from the runtime ``APP_VERSION`` env var.
     """
     entries = get_changelog_entries()
-    return entries[0]['version'] if entries else None
+    return entries[0]["version"] if entries else None

@@ -20,37 +20,39 @@ User = get_user_model()
 
 class MailAttachmentSaveToFilesTests(APITestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='u', password='p')
+        self.user = User.objects.create_user(username="u", password="p")
         self.account = MailAccount.objects.create(
             owner=self.user,
-            email='user@example.com',
-            imap_host='imap.example.com',
+            email="user@example.com",
+            imap_host="imap.example.com",
             imap_use_ssl=True,
-            smtp_host='smtp.example.com',
-            username='user@example.com',
+            smtp_host="smtp.example.com",
+            username="user@example.com",
         )
         self.folder = MailFolder.objects.create(
             account=self.account,
-            name='INBOX',
-            display_name='Inbox',
-            folder_type='inbox',
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
         )
         self.message = MailMessage.objects.create(
             account=self.account,
             folder=self.folder,
             imap_uid=1,
-            subject='hi',
+            subject="hi",
         )
         self.attachment = MailAttachment.objects.create(
             message=self.message,
-            filename='doc.pdf',
-            content_type='application/pdf',
+            filename="doc.pdf",
+            content_type="application/pdf",
             size=3,
             content=SimpleUploadedFile(
-                'doc.pdf', b'pdf', content_type='application/pdf',
+                "doc.pdf",
+                b"pdf",
+                content_type="application/pdf",
             ),
         )
-        self.url = f'/api/v1/mail/attachments/{self.attachment.uuid}/save-to-files'
+        self.url = f"/api/v1/mail/attachments/{self.attachment.uuid}/save-to-files"
 
     def test_malformed_folder_id_returns_400(self):
         """Regression: folder_id was passed straight to File.objects.get(uuid=...)
@@ -60,16 +62,18 @@ class MailAttachmentSaveToFilesTests(APITestCase):
         """
         self.client.force_authenticate(self.user)
         resp = self.client.post(
-            self.url, data={'folder_id': 'not-a-uuid'}, format='json',
+            self.url,
+            data={"folder_id": "not-a-uuid"},
+            format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_save_to_root_succeeds(self):
         """Sanity: omitting folder_id saves the attachment at the root."""
         self.client.force_authenticate(self.user)
-        resp = self.client.post(self.url, data={}, format='json')
+        resp = self.client.post(self.url, data={}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertIn('file_uuid', resp.data)
+        self.assertIn("file_uuid", resp.data)
 
     def test_save_creates_independent_copy(self):
         """The saved file must be a real copy of the attachment blob, not a
@@ -79,13 +83,13 @@ class MailAttachmentSaveToFilesTests(APITestCase):
         File _committed pitfall.
         """
         self.client.force_authenticate(self.user)
-        resp = self.client.post(self.url, data={}, format='json')
+        resp = self.client.post(self.url, data={}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
 
-        saved = File.objects.get(uuid=resp.data['file_uuid'])
+        saved = File.objects.get(uuid=resp.data["file_uuid"])
         self.assertNotEqual(saved.content.name, self.attachment.content.name)
-        with saved.content.open('rb') as f:
-            self.assertEqual(f.read(), b'pdf')
+        with saved.content.open("rb") as f:
+            self.assertEqual(f.read(), b"pdf")
 
     def test_missing_blob_returns_404(self):
         """Regression: if the underlying attachment blob has gone missing,
@@ -95,9 +99,11 @@ class MailAttachmentSaveToFilesTests(APITestCase):
         """
         self.client.force_authenticate(self.user)
         with patch.object(
-            default_storage, 'open', side_effect=FileNotFoundError('gone'),
+            default_storage,
+            "open",
+            side_effect=FileNotFoundError("gone"),
         ):
-            resp = self.client.post(self.url, data={}, format='json')
+            resp = self.client.post(self.url, data={}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_destination_save_failure_is_not_404(self):
@@ -120,12 +126,14 @@ class MailAttachmentSaveToFilesTests(APITestCase):
         from workspace.mail.views_attachments import MailAttachmentSaveToFilesView
 
         factory = APIRequestFactory()
-        request = factory.post(self.url, data={}, format='json')
+        request = factory.post(self.url, data={}, format="json")
         force_authenticate(request, user=self.user)
         view = MailAttachmentSaveToFilesView.as_view()
 
         with patch.object(
-            OverwriteStorage, '_save', side_effect=OSError('disk full'),
+            OverwriteStorage,
+            "_save",
+            side_effect=OSError("disk full"),
         ):
             try:
                 resp = view(request, uuid=self.attachment.uuid)

@@ -9,51 +9,55 @@ User = get_user_model()
 
 class BotProfileTests(TestCase):
     def setUp(self):
-        self.admin = User.objects.create_user(username='admin', password='pass123')
+        self.admin = User.objects.create_user(username="admin", password="pass123")
         self.bot_user = User.objects.create_user(
-            username='test-bot', first_name='Test', last_name='Bot',
+            username="test-bot",
+            first_name="Test",
+            last_name="Bot",
         )
         self.bot = BotProfile.objects.create(
             user=self.bot_user,
-            system_prompt='You are a test bot.',
-            model='gpt-4o',
-            description='A test bot',
+            system_prompt="You are a test bot.",
+            model="gpt-4o",
+            description="A test bot",
             created_by=self.admin,
         )
 
     def test_str(self):
-        self.assertEqual(str(self.bot), 'Bot: Test Bot')
+        self.assertEqual(str(self.bot), "Bot: Test Bot")
 
     def test_get_model_with_override(self):
-        self.assertEqual(self.bot.get_model(), 'gpt-4o')
+        self.assertEqual(self.bot.get_model(), "gpt-4o")
 
-    @override_settings(AI_MODEL='gpt-4o-mini')
+    @override_settings(AI_MODEL="gpt-4o-mini")
     def test_get_model_falls_back_to_setting(self):
-        self.bot.model = ''
+        self.bot.model = ""
         self.bot.save()
-        self.assertEqual(self.bot.get_model(), 'gpt-4o-mini')
+        self.assertEqual(self.bot.get_model(), "gpt-4o-mini")
 
 
 class AITaskTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='user', password='pass123')
+        self.user = User.objects.create_user(username="user", password="pass123")
 
     def test_create_task(self):
         task = AITask.objects.create(
             owner=self.user,
             task_type=AITask.TaskType.SUMMARIZE,
-            input_data={'message_id': 'test-uuid'},
+            input_data={"message_id": "test-uuid"},
         )
         self.assertEqual(task.status, AITask.Status.PENDING)
-        self.assertEqual(task.task_type, 'summarize')
+        self.assertEqual(task.task_type, "summarize")
 
 
 class BotPermissionTests(TestCase):
     def setUp(self):
-        self.creator = User.objects.create_user(username='creator', password='pass123')
-        self.user = User.objects.create_user(username='user', password='pass123')
-        self.superuser = User.objects.create_superuser(username='super', password='pass123')
-        self.bot_user = User.objects.create_user(username='bot', password='pass123')
+        self.creator = User.objects.create_user(username="creator", password="pass123")
+        self.user = User.objects.create_user(username="user", password="pass123")
+        self.superuser = User.objects.create_superuser(
+            username="super", password="pass123"
+        )
+        self.bot_user = User.objects.create_user(username="bot", password="pass123")
         self.bot = BotProfile.objects.create(
             user=self.bot_user,
             created_by=self.creator,
@@ -79,13 +83,13 @@ class BotPermissionTests(TestCase):
         self.assertTrue(self.bot.is_accessible_by(self.user))
 
     def test_allowed_group_has_access(self):
-        group = Group.objects.create(name='testers')
+        group = Group.objects.create(name="testers")
         self.user.groups.add(group)
         self.bot.allowed_groups.add(group)
         self.assertTrue(self.bot.is_accessible_by(self.user))
 
     def test_accessible_by_queryset_filters_correctly(self):
-        public_bot_user = User.objects.create_user(username='pub-bot')
+        public_bot_user = User.objects.create_user(username="pub-bot")
         BotProfile.objects.create(user=public_bot_user, is_public=True)
 
         accessible = BotProfile.accessible_by(self.user)
@@ -100,51 +104,61 @@ class BotPermissionTests(TestCase):
 
 class UserMemoryTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='user', password='pass123')
-        self.bot_user = User.objects.create_user(username='bot', password='pass123')
-        BotProfile.objects.create(user=self.bot_user, system_prompt='Test bot')
+        self.user = User.objects.create_user(username="user", password="pass123")
+        self.bot_user = User.objects.create_user(username="bot", password="pass123")
+        BotProfile.objects.create(user=self.bot_user, system_prompt="Test bot")
 
     def test_create_memory(self):
         mem = UserMemory.objects.create(
-            user=self.user, bot=self.bot_user,
-            key='name', content='Pierre',
+            user=self.user,
+            bot=self.bot_user,
+            key="name",
+            content="Pierre",
         )
-        self.assertEqual(str(mem), 'Memory: user/bot — name')
-        self.assertEqual(mem.content, 'Pierre')
+        self.assertEqual(str(mem), "Memory: user/bot — name")
+        self.assertEqual(mem.content, "Pierre")
 
     def test_unique_constraint(self):
         UserMemory.objects.create(
-            user=self.user, bot=self.bot_user,
-            key='name', content='Pierre',
+            user=self.user,
+            bot=self.bot_user,
+            key="name",
+            content="Pierre",
         )
         with self.assertRaises(Exception):
             UserMemory.objects.create(
-                user=self.user, bot=self.bot_user,
-                key='name', content='Paul',
+                user=self.user,
+                bot=self.bot_user,
+                key="name",
+                content="Paul",
             )
 
     def test_update_or_create(self):
         UserMemory.objects.create(
-            user=self.user, bot=self.bot_user,
-            key='name', content='Pierre',
+            user=self.user,
+            bot=self.bot_user,
+            key="name",
+            content="Pierre",
         )
         UserMemory.objects.update_or_create(
-            user=self.user, bot=self.bot_user, key='name',
-            defaults={'content': 'Paul'},
+            user=self.user,
+            bot=self.bot_user,
+            key="name",
+            defaults={"content": "Paul"},
         )
-        mem = UserMemory.objects.get(user=self.user, bot=self.bot_user, key='name')
-        self.assertEqual(mem.content, 'Paul')
+        mem = UserMemory.objects.get(user=self.user, bot=self.bot_user, key="name")
+        self.assertEqual(mem.content, "Paul")
 
 
 class AITaskTypeClassifyTests(TestCase):
     def test_classify_task_type_exists(self):
         """CLASSIFY should be a valid TaskType choice."""
-        self.assertIn('classify', [c[0] for c in AITask.TaskType.choices])
+        self.assertIn("classify", [c[0] for c in AITask.TaskType.choices])
 
     def test_create_classify_task(self):
-        user = User.objects.create_user(username='cls_user', password='pass123')
+        user = User.objects.create_user(username="cls_user", password="pass123")
         task = AITask.objects.create(
             owner=user,
             task_type=AITask.TaskType.CLASSIFY,
         )
-        self.assertEqual(task.task_type, 'classify')
+        self.assertEqual(task.task_type, "classify")

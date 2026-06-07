@@ -17,11 +17,11 @@ def _make_zip(entries):
     """Build an in-memory ZIP. ``entries`` is a list of (name, bytes_or_None) tuples;
     None means create a directory entry."""
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for name, data in entries:
             if data is None:
-                zi = zipfile.ZipInfo(name if name.endswith('/') else name + '/')
-                zf.writestr(zi, b'')
+                zi = zipfile.ZipInfo(name if name.endswith("/") else name + "/")
+                zf.writestr(zi, b"")
             else:
                 zf.writestr(name, data)
     buf.seek(0)
@@ -30,7 +30,7 @@ def _make_zip(entries):
 
 def _make_symlink_zip(name, target):
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         zi = zipfile.ZipInfo(name)
         # Symlink bit in external_attr (high 16 bits = unix mode, 0o120000 = symlink)
         zi.external_attr = (0o120777 & 0xFFFF) << 16
@@ -42,110 +42,122 @@ def _make_symlink_zip(name, target):
 class ExtractZipServiceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
-            username='alice', email='alice@example.com', password='pw'
+            username="alice", email="alice@example.com", password="pw"
         )
-        self.dest = FileService.create_folder(self.user, 'dest')
+        self.dest = FileService.create_folder(self.user, "dest")
 
-    def _make_archive_file(self, payload, name='archive.zip', mime='application/zip',
-                           type_label=None):
+    def _make_archive_file(
+        self, payload, name="archive.zip", mime="application/zip", type_label=None
+    ):
         f = FileService.create_file(
-            self.user, name, parent=None,
+            self.user,
+            name,
+            parent=None,
             content=ContentFile(payload, name=name),
             mime_type=mime,
         )
         if type_label is not None:
             f.type = type_label
-            f.save(update_fields=['type'])
+            f.save(update_fields=["type"])
         return f
 
     def test_extract_creates_files_and_subfolders(self):
-        payload = _make_zip([
-            ('hello.txt', b'hello world'),
-            ('sub/', None),
-            ('sub/nested.txt', b'nested content'),
-        ])
+        payload = _make_zip(
+            [
+                ("hello.txt", b"hello world"),
+                ("sub/", None),
+                ("sub/nested.txt", b"nested content"),
+            ]
+        )
         archive = self._make_archive_file(payload)
 
         result = extract_zip(archive, self.dest, acting_user=self.user)
 
-        self.assertEqual(result['destination_uuid'], str(self.dest.uuid))
-        self.assertEqual(result['files_created'], 2)
+        self.assertEqual(result["destination_uuid"], str(self.dest.uuid))
+        self.assertEqual(result["files_created"], 2)
 
-        hello = File.objects.get(parent=self.dest, name='hello.txt')
-        self.assertEqual(hello.content.read(), b'hello world')
+        hello = File.objects.get(parent=self.dest, name="hello.txt")
+        self.assertEqual(hello.content.read(), b"hello world")
 
-        sub = File.objects.get(parent=self.dest, name='sub', node_type='folder')
+        sub = File.objects.get(parent=self.dest, name="sub", node_type="folder")
 
-        nested = File.objects.get(parent=sub, name='nested.txt')
-        self.assertEqual(nested.content.read(), b'nested content')
+        nested = File.objects.get(parent=sub, name="nested.txt")
+        self.assertEqual(nested.content.read(), b"nested content")
 
     def test_extract_rejects_zip_slip(self):
-        payload = _make_zip([('../evil.txt', b'bad')])
+        payload = _make_zip([("../evil.txt", b"bad")])
         archive = self._make_archive_file(payload)
 
         with self.assertRaises(ValueError) as ctx:
             extract_zip(archive, self.dest, acting_user=self.user)
-        self.assertIn('unsafe', str(ctx.exception).lower())
+        self.assertIn("unsafe", str(ctx.exception).lower())
         self.assertEqual(File.objects.filter(parent=self.dest).count(), 0)
 
     def test_extract_rejects_absolute_path(self):
-        payload = _make_zip([('/etc/passwd', b'bad')])
+        payload = _make_zip([("/etc/passwd", b"bad")])
         archive = self._make_archive_file(payload)
         with self.assertRaises(ValueError):
             extract_zip(archive, self.dest, acting_user=self.user)
 
     def test_extract_rejects_windows_drive(self):
-        payload = _make_zip([('C:/Windows/evil.dll', b'bad')])
+        payload = _make_zip([("C:/Windows/evil.dll", b"bad")])
         archive = self._make_archive_file(payload)
         with self.assertRaises(ValueError):
             extract_zip(archive, self.dest, acting_user=self.user)
 
     def test_extract_ignores_symlinks(self):
-        payload = _make_symlink_zip('link', '/etc/passwd')
+        payload = _make_symlink_zip("link", "/etc/passwd")
         archive = self._make_archive_file(payload)
 
         result = extract_zip(archive, self.dest, acting_user=self.user)
-        self.assertEqual(result['files_created'], 0)
-        self.assertFalse(File.objects.filter(parent=self.dest, name='link').exists())
+        self.assertEqual(result["files_created"], 0)
+        self.assertFalse(File.objects.filter(parent=self.dest, name="link").exists())
 
     @override_settings(FILES_EXTRACT_MAX_BYTES=10)
     def test_extract_size_limit(self):
-        payload = _make_zip([('big.txt', b'X' * 1000)])
+        payload = _make_zip([("big.txt", b"X" * 1000)])
         archive = self._make_archive_file(payload)
         with self.assertRaises(ValueError) as ctx:
             extract_zip(archive, self.dest, acting_user=self.user)
-        self.assertIn('too large', str(ctx.exception).lower())
+        self.assertIn("too large", str(ctx.exception).lower())
 
     @override_settings(FILES_EXTRACT_MAX_ENTRIES=2)
     def test_extract_entry_limit(self):
-        payload = _make_zip([
-            ('a.txt', b'a'),
-            ('b.txt', b'b'),
-            ('c.txt', b'c'),
-        ])
+        payload = _make_zip(
+            [
+                ("a.txt", b"a"),
+                ("b.txt", b"b"),
+                ("c.txt", b"c"),
+            ]
+        )
         archive = self._make_archive_file(payload)
         with self.assertRaises(ValueError) as ctx:
             extract_zip(archive, self.dest, acting_user=self.user)
-        self.assertIn('too many', str(ctx.exception).lower())
+        self.assertIn("too many", str(ctx.exception).lower())
 
     def test_extract_rejects_non_zip_mime(self):
-        archive = self._make_archive_file(b'not a zip', mime='text/plain', name='note.txt')
+        archive = self._make_archive_file(
+            b"not a zip", mime="text/plain", name="note.txt"
+        )
         with self.assertRaises(ValueError) as ctx:
             extract_zip(archive, self.dest, acting_user=self.user)
-        self.assertIn('zip', str(ctx.exception).lower())
+        self.assertIn("zip", str(ctx.exception).lower())
 
     def test_extract_rejects_corrupted_archive(self):
-        archive = self._make_archive_file(b'PK\x03\x04 garbage', mime='application/zip',
-                                          type_label='zip')
+        archive = self._make_archive_file(
+            b"PK\x03\x04 garbage", mime="application/zip", type_label="zip"
+        )
         with self.assertRaises(ValueError) as ctx:
             extract_zip(archive, self.dest, acting_user=self.user)
-        self.assertIn('corrupt', str(ctx.exception).lower())
+        self.assertIn("corrupt", str(ctx.exception).lower())
 
     def test_extract_is_atomic_on_failure(self):
-        payload = _make_zip([
-            ('ok.txt', b'ok'),
-            ('../evil.txt', b'bad'),
-        ])
+        payload = _make_zip(
+            [
+                ("ok.txt", b"ok"),
+                ("../evil.txt", b"bad"),
+            ]
+        )
         archive = self._make_archive_file(payload)
         with self.assertRaises(ValueError):
             extract_zip(archive, self.dest, acting_user=self.user)
@@ -159,15 +171,17 @@ class ExtractZipServiceTests(TestCase):
         not on the untrusted header. We simulate the bypass by making the entry
         claim ``file_size = 1`` while the underlying decompressor streams 3 KiB.
         With the cap at 1 KiB, the extractor must raise ``Archive too large``."""
-        payload = _make_zip([('big.txt', b'X' * 3000)])
+        payload = _make_zip([("big.txt", b"X" * 3000)])
         archive = self._make_archive_file(payload)
 
         # Stream that yields way more bytes than the header claims.
         class FakeStream(io.RawIOBase):
             def __init__(self):
-                self._chunks = [b'X' * 1024, b'Y' * 1024, b'Z' * 1024]
+                self._chunks = [b"X" * 1024, b"Y" * 1024, b"Z" * 1024]
+
             def read(self, n=-1):
-                return self._chunks.pop(0) if self._chunks else b''
+                return self._chunks.pop(0) if self._chunks else b""
+
             def readable(self):
                 return True
 
@@ -175,8 +189,12 @@ class ExtractZipServiceTests(TestCase):
 
         def lying_open(self, name_or_info, *args, **kwargs):
             # Honour the original `open` for everything except our target.
-            target = name_or_info.filename if hasattr(name_or_info, 'filename') else name_or_info
-            if target == 'big.txt':
+            target = (
+                name_or_info.filename
+                if hasattr(name_or_info, "filename")
+                else name_or_info
+            )
+            if target == "big.txt":
                 return FakeStream()
             return orig_open(self, name_or_info, *args, **kwargs)
 
@@ -189,43 +207,55 @@ class ExtractZipServiceTests(TestCase):
                 e.file_size = 1
             return entries
 
-        with patch.object(zipfile.ZipFile, 'open', lying_open), \
-             patch.object(zipfile.ZipFile, 'infolist', lying_infolist):
+        with (
+            patch.object(zipfile.ZipFile, "open", lying_open),
+            patch.object(zipfile.ZipFile, "infolist", lying_infolist),
+        ):
             with self.assertRaises(ValueError) as ctx:
                 extract_zip(archive, self.dest, acting_user=self.user)
-        self.assertIn('too large', str(ctx.exception).lower())
+        self.assertIn("too large", str(ctx.exception).lower())
 
     def test_extract_to_root_when_dest_is_none(self):
-        payload = _make_zip([
-            ('hello.txt', b'hi'),
-            ('sub/nested.txt', b'nested'),
-        ])
+        payload = _make_zip(
+            [
+                ("hello.txt", b"hi"),
+                ("sub/nested.txt", b"nested"),
+            ]
+        )
         archive = self._make_archive_file(payload)
 
         result = extract_zip(archive, None, acting_user=self.user)
 
-        self.assertIsNone(result['destination_uuid'])
-        self.assertEqual(result['files_created'], 2)
+        self.assertIsNone(result["destination_uuid"])
+        self.assertEqual(result["files_created"], 2)
 
         hello = File.objects.get(
-            owner=self.user, parent=None, name='hello.txt', node_type='file',
+            owner=self.user,
+            parent=None,
+            name="hello.txt",
+            node_type="file",
         )
-        self.assertEqual(hello.content.read(), b'hi')
+        self.assertEqual(hello.content.read(), b"hi")
 
         sub = File.objects.get(
-            owner=self.user, parent=None, name='sub', node_type='folder',
+            owner=self.user,
+            parent=None,
+            name="sub",
+            node_type="folder",
         )
-        nested = File.objects.get(parent=sub, name='nested.txt')
-        self.assertEqual(nested.content.read(), b'nested')
+        nested = File.objects.get(parent=sub, name="nested.txt")
+        self.assertEqual(nested.content.read(), b"nested")
 
     def test_extract_accepts_x_zip_compressed_mime(self):
-        payload = _make_zip([('hello.txt', b'hi')])
-        archive = self._make_archive_file(payload, mime='application/x-zip-compressed')
+        payload = _make_zip([("hello.txt", b"hi")])
+        archive = self._make_archive_file(payload, mime="application/x-zip-compressed")
 
         result = extract_zip(archive, self.dest, acting_user=self.user)
 
-        self.assertGreater(result['files_created'], 0)
-        self.assertTrue(File.objects.filter(parent=self.dest, name='hello.txt').exists())
+        self.assertGreater(result["files_created"], 0)
+        self.assertTrue(
+            File.objects.filter(parent=self.dest, name="hello.txt").exists()
+        )
 
     def test_extract_cleans_up_blobs_on_rollback(self):
         """When extraction fails partway through, blobs already written to
@@ -234,13 +264,15 @@ class ExtractZipServiceTests(TestCase):
         """
         from unittest.mock import patch
 
-        payload = _make_zip([
-            ('ok.txt', b'first entry, will succeed'),
-            ('../evil.txt', b'second entry, triggers zip-slip rejection'),
-        ])
+        payload = _make_zip(
+            [
+                ("ok.txt", b"first entry, will succeed"),
+                ("../evil.txt", b"second entry, triggers zip-slip rejection"),
+            ]
+        )
         archive = self._make_archive_file(payload)
 
-        storage = File._meta.get_field('content').storage
+        storage = File._meta.get_field("content").storage
         delete_calls = []
         orig_delete = storage.delete
 
@@ -248,7 +280,7 @@ class ExtractZipServiceTests(TestCase):
             delete_calls.append(name)
             return orig_delete(name)
 
-        with patch.object(storage, 'delete', side_effect=tracking_delete):
+        with patch.object(storage, "delete", side_effect=tracking_delete):
             with self.assertRaises(ValueError):
                 extract_zip(archive, self.dest, acting_user=self.user)
 
@@ -258,7 +290,7 @@ class ExtractZipServiceTests(TestCase):
         # Storage: the blob for 'ok.txt' that was created before the rejection
         # must have been deleted (storage.delete called for it).
         self.assertTrue(
-            any('ok.txt' in c for c in delete_calls),
+            any("ok.txt" in c for c in delete_calls),
             f"Expected a cleanup delete for the 'ok.txt' blob, got: {delete_calls}",
         )
 
@@ -268,18 +300,20 @@ class ExtractZipServiceTests(TestCase):
         pattern in ``ContentMixin._build_zip_stream`` (constant-RAM downloads)."""
         from workspace.files.services import extract as extract_mod
 
-        payload = _make_zip([('hello.txt', b'hello world')])
+        payload = _make_zip([("hello.txt", b"hello world")])
         archive = self._make_archive_file(payload)
 
         with patch.object(
-            extract_mod, 'TemporaryUploadedFile',
+            extract_mod,
+            "TemporaryUploadedFile",
             wraps=extract_mod.TemporaryUploadedFile,
         ) as spy:
             result = extract_zip(archive, self.dest, acting_user=self.user)
 
-        self.assertEqual(result['files_created'], 1)
+        self.assertEqual(result["files_created"], 1)
         self.assertGreaterEqual(
-            spy.call_count, 1,
+            spy.call_count,
+            1,
             "TemporaryUploadedFile must be instantiated for each extracted entry "
             "to keep RAM bounded (see ContentMixin._build_zip_stream for the "
             "outbound streaming pattern this mirrors).",
@@ -291,28 +325,32 @@ class ExtractZipServiceTests(TestCase):
         (not recomputed after writes), so streaming chunks into a
         ``TemporaryUploadedFile(size=0)`` left every extracted file recorded
         as 0 bytes in the DB while the blob on storage was fine."""
-        payload = _make_zip([
-            ('hello.txt', b'hello world'),
-            ('sub/', None),
-            ('sub/nested.txt', b'nested content'),
-        ])
+        payload = _make_zip(
+            [
+                ("hello.txt", b"hello world"),
+                ("sub/", None),
+                ("sub/nested.txt", b"nested content"),
+            ]
+        )
         archive = self._make_archive_file(payload)
 
         extract_zip(archive, self.dest, acting_user=self.user)
 
-        hello = File.objects.get(parent=self.dest, name='hello.txt')
-        self.assertEqual(hello.size, len(b'hello world'))
-        sub = File.objects.get(parent=self.dest, name='sub', node_type='folder')
-        nested = File.objects.get(parent=sub, name='nested.txt')
-        self.assertEqual(nested.size, len(b'nested content'))
+        hello = File.objects.get(parent=self.dest, name="hello.txt")
+        self.assertEqual(hello.size, len(b"hello world"))
+        sub = File.objects.get(parent=self.dest, name="sub", node_type="folder")
+        nested = File.objects.get(parent=sub, name="nested.txt")
+        self.assertEqual(nested.size, len(b"nested content"))
 
     def test_extract_reuses_existing_intermediate_folder(self):
-        payload = _make_zip([
-            ('sub/a.txt', b'a'),
-            ('sub/b.txt', b'b'),
-        ])
+        payload = _make_zip(
+            [
+                ("sub/a.txt", b"a"),
+                ("sub/b.txt", b"b"),
+            ]
+        )
         archive = self._make_archive_file(payload)
         extract_zip(archive, self.dest, acting_user=self.user)
-        subs = File.objects.filter(parent=self.dest, name='sub', node_type='folder')
+        subs = File.objects.filter(parent=self.dest, name="sub", node_type="folder")
         self.assertEqual(subs.count(), 1)
         self.assertEqual(File.objects.filter(parent=subs.first()).count(), 2)

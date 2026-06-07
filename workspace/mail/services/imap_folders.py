@@ -11,7 +11,7 @@ from workspace.mail.services.imap_mailbox import _display_name, _quote_mailbox
 logger = logging.getLogger(__name__)
 
 
-def create_folder(account, folder_name, parent_name=''):
+def create_folder(account, folder_name, parent_name=""):
     """Create an IMAP folder. Returns the created MailFolder.
 
     If parent_name is provided, the folder is created as a subfolder:
@@ -20,15 +20,15 @@ def create_folder(account, folder_name, parent_name=''):
     from ..models import MailFolder
 
     if parent_name:
-        full_name = f'{parent_name}{account.imap_delimiter}{folder_name}'
+        full_name = f"{parent_name}{account.imap_delimiter}{folder_name}"
     else:
         full_name = folder_name
 
     conn = connect_imap(account)
     try:
         status, data = conn.create(_quote_mailbox(full_name))
-        if status != 'OK':
-            raise Exception(f'IMAP CREATE failed: {data}')
+        if status != "OK":
+            raise Exception(f"IMAP CREATE failed: {data}")
     finally:
         try:
             conn.logout()
@@ -41,7 +41,7 @@ def create_folder(account, folder_name, parent_name=''):
         account=account,
         name=full_name,
         display_name=_display_name(full_name),
-        folder_type='other',
+        folder_type="other",
     )
     return folder
 
@@ -52,8 +52,8 @@ def delete_folder(account, folder):
     try:
         # Close the folder first if selected, then delete
         status, data = conn.delete(_quote_mailbox(folder.name))
-        if status != 'OK':
-            raise Exception(f'IMAP DELETE failed: {data}')
+        if status != "OK":
+            raise Exception(f"IMAP DELETE failed: {data}")
     finally:
         try:
             conn.logout()
@@ -69,9 +69,11 @@ def rename_folder(account, folder, new_name):
     """Rename an IMAP folder."""
     conn = connect_imap(account)
     try:
-        status, data = conn.rename(_quote_mailbox(folder.name), _quote_mailbox(new_name))
-        if status != 'OK':
-            raise Exception(f'IMAP RENAME failed: {data}')
+        status, data = conn.rename(
+            _quote_mailbox(folder.name), _quote_mailbox(new_name)
+        )
+        if status != "OK":
+            raise Exception(f"IMAP RENAME failed: {data}")
     finally:
         try:
             conn.logout()
@@ -82,7 +84,7 @@ def rename_folder(account, folder, new_name):
 
     folder.name = new_name
     folder.display_name = _display_name(new_name)
-    folder.save(update_fields=['name', 'display_name', 'updated_at'])
+    folder.save(update_fields=["name", "display_name", "updated_at"])
     return folder
 
 
@@ -94,7 +96,7 @@ def move_folder(account, folder, new_parent_name):
     """
     from ..models import MailFolder
 
-    delimiter = account.imap_delimiter or '/'
+    delimiter = account.imap_delimiter or "/"
     old_name = folder.name
 
     # Use the wire-encoded leaf from folder.name, not folder.display_name:
@@ -102,7 +104,7 @@ def move_folder(account, folder, new_parent_name):
     # IMAP RENAME must receive the original mUTF-7 wire form.
     leaf = old_name.rsplit(delimiter, 1)[-1]
     if new_parent_name:
-        new_name = f'{new_parent_name}{delimiter}{leaf}'
+        new_name = f"{new_parent_name}{delimiter}{leaf}"
     else:
         new_name = leaf
 
@@ -112,8 +114,8 @@ def move_folder(account, folder, new_parent_name):
     conn = connect_imap(account)
     try:
         st, data = conn.rename(_quote_mailbox(old_name), _quote_mailbox(new_name))
-        if st != 'OK':
-            raise Exception(f'IMAP RENAME failed: {data}')
+        if st != "OK":
+            raise Exception(f"IMAP RENAME failed: {data}")
     finally:
         try:
             conn.logout()
@@ -126,7 +128,7 @@ def move_folder(account, folder, new_parent_name):
     with transaction.atomic():
         folder.name = new_name
         folder.display_name = _display_name(new_name)
-        folder.save(update_fields=['name', 'display_name', 'updated_at'])
+        folder.save(update_fields=["name", "display_name", "updated_at"])
 
         # Update child folders: any folder whose name starts with old_name + delimiter.
         # One UPDATE via bulk_update instead of N saves. Since each child gets a
@@ -139,11 +141,12 @@ def move_folder(account, folder, new_parent_name):
         if children:
             now = dj_timezone.now()
             for child in children:
-                child.name = new_name + delimiter + child.name[len(old_prefix):]
+                child.name = new_name + delimiter + child.name[len(old_prefix) :]
                 child.display_name = _display_name(child.name)
                 child.updated_at = now  # bulk_update bypasses auto_now
             MailFolder.objects.bulk_update(
-                children, ['name', 'display_name', 'updated_at'],
+                children,
+                ["name", "display_name", "updated_at"],
             )
 
     return folder

@@ -2,72 +2,86 @@ from django.apps import AppConfig
 
 
 class DashboardConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'workspace.dashboard'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "workspace.dashboard"
 
     def ready(self):
         from workspace.core.module_registry import CommandInfo, ModuleInfo, registry
 
-        registry.register(ModuleInfo(
-            name='Dashboard',
-            slug='dashboard',
-            description='Overview of your workspace.',
-            icon='home',
-            color='secondary',
-            url='/',
-            order=0,
-        ))
+        registry.register(
+            ModuleInfo(
+                name="Dashboard",
+                slug="dashboard",
+                description="Overview of your workspace.",
+                icon="home",
+                color="secondary",
+                url="/",
+                order=0,
+            )
+        )
 
-        registry.register_commands([
-            CommandInfo(
-                name='Settings', keywords=['settings', 'preferences', 'configuration'],
-                icon='settings', color='secondary', url='/users/settings',
-                kind='navigate', module_slug='dashboard', order=1,
-            ),
-            CommandInfo(
-                name='My profile', keywords=['profile', 'account', 'avatar'],
-                icon='user', color='secondary', url='/users/profile',
-                kind='navigate', module_slug='dashboard', order=2,
-            ),
-        ])
+        registry.register_commands(
+            [
+                CommandInfo(
+                    name="Settings",
+                    keywords=["settings", "preferences", "configuration"],
+                    icon="settings",
+                    color="secondary",
+                    url="/users/settings",
+                    kind="navigate",
+                    module_slug="dashboard",
+                    order=1,
+                ),
+                CommandInfo(
+                    name="My profile",
+                    keywords=["profile", "account", "avatar"],
+                    icon="user",
+                    color="secondary",
+                    url="/users/profile",
+                    kind="navigate",
+                    module_slug="dashboard",
+                    order=2,
+                ),
+            ]
+        )
 
         planned_modules = [
             ModuleInfo(
-                name='Tasks',
-                slug='tasks',
-                description='Track projects and to-dos.',
-                icon='check-square',
-                color='warning',
+                name="Tasks",
+                slug="tasks",
+                description="Track projects and to-dos.",
+                icon="check-square",
+                color="warning",
                 url=None,
                 active=False,
                 order=50,
             ),
             ModuleInfo(
-                name='Contacts',
-                slug='contacts',
-                description='Manage contacts and interactions.',
-                icon='contact',
-                color='info',
+                name="Contacts",
+                slug="contacts",
+                description="Manage contacts and interactions.",
+                icon="contact",
+                color="info",
                 url=None,
                 active=False,
                 order=60,
             ),
             ModuleInfo(
-                name='Bookmarks',
-                slug='bookmarks',
-                description='Save and organize links.',
-                icon='bookmark',
-                color='primary',
+                name="Bookmarks",
+                slug="bookmarks",
+                description="Save and organize links.",
+                icon="bookmark",
+                color="primary",
                 url=None,
                 active=False,
                 order=70,
             ),
             ModuleInfo(
-                name='Passwords',
-                slug='passwords',
-                description='Encrypted password vault.',
-                icon='lock',
-                color='error',
+                name="Passwords",
+                slug="passwords",
+                description="Encrypted password vault.",
+                icon="lock",
+                color="error",
                 url=None,
                 active=False,
                 order=80,

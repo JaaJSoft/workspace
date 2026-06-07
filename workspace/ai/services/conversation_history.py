@@ -25,17 +25,19 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
     from workspace.users.services.settings import get_user_timezone
 
     recent_window = settings.AI_CHAT_CONTEXT_SIZE
-    conv_summary = ConversationSummary.objects.filter(conversation_id=conversation_id).first()
-    summary_text = conv_summary.content if conv_summary else ''
+    conv_summary = ConversationSummary.objects.filter(
+        conversation_id=conversation_id
+    ).first()
+    summary_text = conv_summary.content if conv_summary else ""
 
     all_msgs = list(
         Message.objects.filter(
             conversation_id=conversation_id,
             deleted_at__isnull=True,
         )
-        .select_related('author', 'author__bot_profile')
-        .prefetch_related('attachments')
-        .order_by('-created_at')[:recent_window]
+        .select_related("author", "author__bot_profile")
+        .prefetch_related("attachments")
+        .order_by("-created_at")[:recent_window]
     )
 
     if summary_text and conv_summary.up_to:
@@ -48,7 +50,7 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
     last_visual_msg_uuid = None
     if bot_profile.supports_vision:
         for msg in msgs_to_use:  # newest first
-            is_bot = hasattr(msg.author, 'bot_profile')
+            is_bot = hasattr(msg.author, "bot_profile")
             if not is_bot:
                 atts = list(msg.attachments.all())
                 _att_cache[msg.uuid] = atts
@@ -60,31 +62,35 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
 
     history = []
     for msg in reversed(msgs_to_use):
-        is_bot = hasattr(msg.author, 'bot_profile')
-        role = 'assistant' if is_bot else 'user'
+        is_bot = hasattr(msg.author, "bot_profile")
+        role = "assistant" if is_bot else "user"
         body = msg.body
 
         # Inject a system message with the timestamp before each message
         # so the LLM has temporal context without polluting message content.
         local_dt = msg.created_at.astimezone(_user_tz) if _user_tz else msg.created_at
-        history.append({'role': 'system', 'content': f'[{local_dt.strftime("%Y-%m-%d %H:%M")}]'})
+        history.append(
+            {"role": "system", "content": f"[{local_dt.strftime('%Y-%m-%d %H:%M')}]"}
+        )
 
         # Reconstruct tool call history for bot messages
         if is_bot and msg.tool_data:
             for td_round in msg.tool_data:
                 assistant_msg = {
-                    'role': 'assistant',
-                    'content': td_round.get('assistant_content', ''),
-                    'tool_calls': td_round['tool_calls'],
+                    "role": "assistant",
+                    "content": td_round.get("assistant_content", ""),
+                    "tool_calls": td_round["tool_calls"],
                 }
                 history.append(assistant_msg)
-                for tr in td_round.get('results', []):
-                    history.append({
-                        'role': 'tool',
-                        'tool_call_id': tr['tool_call_id'],
-                        'content': tr['content'],
-                    })
-            history.append({'role': 'assistant', 'content': body})
+                for tr in td_round.get("results", []):
+                    history.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tr["tool_call_id"],
+                            "content": tr["content"],
+                        }
+                    )
+            history.append({"role": "assistant", "content": body})
             continue
 
         # Include visual media only from the most recent message that has them
@@ -96,14 +102,16 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
                     try:
                         data = att.file.read()
                         b64 = base64.b64encode(data).decode()
-                        media_parts.append({
-                            'type': 'image_url',
-                            'image_url': {
-                                'url': f'data:{att.mime_type};base64,{b64}',
-                            },
-                        })
+                        media_parts.append(
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{att.mime_type};base64,{b64}",
+                                },
+                            }
+                        )
                     except Exception:
-                        logger.warning('Could not read attachment %s', scrub(att.uuid))
+                        logger.warning("Could not read attachment %s", scrub(att.uuid))
                 elif att.is_video:
                     frames, desc = extract_video_frames(att)
                     if desc:
@@ -114,15 +122,15 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
             # Attach the video metadata as a `user` message (not `system`):
             # `desc` includes attachment-derived text like att.original_name,
             # so giving it system-level priority is a prompt-injection vector.
-            history.append({'role': 'user', 'content': '\n'.join(video_descriptions)})
+            history.append({"role": "user", "content": "\n".join(video_descriptions)})
 
         if media_parts:
             content = []
             if body:
-                content.append({'type': 'text', 'text': body})
+                content.append({"type": "text", "text": body})
             content.extend(media_parts)
-            history.append({'role': role, 'content': content})
+            history.append({"role": role, "content": content})
         else:
-            history.append({'role': role, 'content': body})
+            history.append({"role": role, "content": body})
 
     return history, summary_text

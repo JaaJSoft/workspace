@@ -81,8 +81,8 @@ def notify_sse(provider_slug: str, user_id: int):
     if redis is not None:
         try:
             redis.publish(
-                f'sse:user:{user_id}',
-                orjson.dumps({'provider': provider_slug}),
+                f"sse:user:{user_id}",
+                orjson.dumps({"provider": provider_slug}),
             )
             return
         except Exception:
@@ -96,7 +96,7 @@ def notify_sse(provider_slug: str, user_id: int):
 
     # Fallback: cache dirty flag (local dev or Redis failure)
     cache.set(
-        f'sse:{provider_slug}:last_event:{user_id}',
+        f"sse:{provider_slug}:last_event:{user_id}",
         timezone.now().isoformat(),
         120,
     )

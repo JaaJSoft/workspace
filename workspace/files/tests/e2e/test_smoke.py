@@ -1,4 +1,5 @@
 """E2E smoke test: the authenticated files index renders."""
+
 from __future__ import annotations
 
 import re

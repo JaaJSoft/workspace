@@ -14,6 +14,7 @@ Only a real browser can prove the rendered ``<select>.value`` matches the
 stored rule: the binding race is a DOM/Alpine timing effect that a pure-JS
 or Django view test cannot observe (the component data is right either way).
 """
+
 from __future__ import annotations
 
 from playwright.sync_api import expect
@@ -80,9 +81,7 @@ class RulesEditFormPreselectTests(PlaywrightTestCase):
         field_select = self.page.locator(
             'select[x-model="rulesForm.simpleCondition.field"]'
         )
-        op_select = self.page.locator(
-            'select[x-model="rulesForm.simpleCondition.op"]'
-        )
+        op_select = self.page.locator('select[x-model="rulesForm.simpleCondition.op"]')
         expect(field_select).to_be_visible()
         expect(field_select).to_have_value("subject")
         expect(op_select).to_have_value("equals")

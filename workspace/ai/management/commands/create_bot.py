@@ -7,31 +7,43 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = 'Create an AI bot user with a BotProfile.'
+    help = "Create an AI bot user with a BotProfile."
 
     def add_arguments(self, parser):
-        parser.add_argument('username', type=str, help='Bot username')
-        parser.add_argument('--name', type=str, default='', help='Display name')
-        parser.add_argument('--prompt', type=str, default='', help='System prompt')
-        parser.add_argument('--model', type=str, default='', help='Model override')
-        parser.add_argument('--description', type=str, default='', help='Bot description')
-        parser.add_argument('--public', action='store_true', help='Make bot accessible to all users')
-        parser.add_argument('--no-tools', action='store_true', help='Disable tool calling (for models that do not support it)')
-        parser.add_argument('--no-vision', action='store_true', help='Disable vision/images (for models that do not support it)')
+        parser.add_argument("username", type=str, help="Bot username")
+        parser.add_argument("--name", type=str, default="", help="Display name")
+        parser.add_argument("--prompt", type=str, default="", help="System prompt")
+        parser.add_argument("--model", type=str, default="", help="Model override")
+        parser.add_argument(
+            "--description", type=str, default="", help="Bot description"
+        )
+        parser.add_argument(
+            "--public", action="store_true", help="Make bot accessible to all users"
+        )
+        parser.add_argument(
+            "--no-tools",
+            action="store_true",
+            help="Disable tool calling (for models that do not support it)",
+        )
+        parser.add_argument(
+            "--no-vision",
+            action="store_true",
+            help="Disable vision/images (for models that do not support it)",
+        )
 
     def handle(self, *args, **options):
-        username = options['username']
-        name = options['name'] or username.replace('-', ' ').title()
+        username = options["username"]
+        name = options["name"] or username.replace("-", " ").title()
 
         if User.objects.filter(username=username).exists():
             user = User.objects.get(username=username)
             self.stdout.write(f'User "{username}" already exists.')
         else:
-            name_parts = name.split(' ', 1)
+            name_parts = name.split(" ", 1)
             user = User.objects.create_user(
                 username=username,
                 first_name=name_parts[0],
-                last_name=name_parts[1] if len(name_parts) > 1 else '',
+                last_name=name_parts[1] if len(name_parts) > 1 else "",
                 is_active=True,
             )
             user.set_unusable_password()
@@ -41,16 +53,20 @@ class Command(BaseCommand):
         profile, created = BotProfile.objects.update_or_create(
             user=user,
             defaults={
-                'system_prompt': options['prompt'],
-                'model': options['model'],
-                'description': options['description'],
-                'is_public': options['public'],
-                'supports_tools': not options['no_tools'],
-                'supports_vision': not options['no_vision'],
+                "system_prompt": options["prompt"],
+                "model": options["model"],
+                "description": options["description"],
+                "is_public": options["public"],
+                "supports_tools": not options["no_tools"],
+                "supports_vision": not options["no_vision"],
             },
         )
 
         if created:
-            self.stdout.write(self.style.SUCCESS(f'Created BotProfile for "{username}".'))
+            self.stdout.write(
+                self.style.SUCCESS(f'Created BotProfile for "{username}".')
+            )
         else:
-            self.stdout.write(self.style.SUCCESS(f'Updated BotProfile for "{username}".'))
+            self.stdout.write(
+                self.style.SUCCESS(f'Updated BotProfile for "{username}".')
+            )

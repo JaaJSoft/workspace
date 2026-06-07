@@ -80,8 +80,13 @@ DISPATCH_LOCK_HORIZON = timedelta(hours=1)
 
 
 def cas_claim(
-    model, pk, claim_field, observed_value,
-    *, extra_where=None, lock_horizon=DISPATCH_LOCK_HORIZON,
+    model,
+    pk,
+    claim_field,
+    observed_value,
+    *,
+    extra_where=None,
+    lock_horizon=DISPATCH_LOCK_HORIZON,
 ):
     """CAS-claim a row by parking ``claim_field`` at a future token.
 
@@ -92,7 +97,7 @@ def cas_claim(
     """
     token = timezone.now() + lock_horizon
     where = (
-        {f'{claim_field}__isnull': True}
+        {f"{claim_field}__isnull": True}
         if observed_value is None
         else {claim_field: observed_value}
     )
@@ -116,8 +121,13 @@ def cas_rollback(model, pk, claim_field, original_value):
 
 
 def cas_finalize(
-    model, pk, claim_field, claim_token, updates,
-    *, extra_where=None,
+    model,
+    pk,
+    claim_field,
+    claim_token,
+    updates,
+    *,
+    extra_where=None,
 ):
     """CAS-update a row keyed on the dispatcher's claim token.
 

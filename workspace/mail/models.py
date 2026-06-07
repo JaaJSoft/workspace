@@ -9,17 +9,17 @@ class MailAccount(models.Model):
     """IMAP/SMTP mail account linked to a user."""
 
     class AuthMethod(models.TextChoices):
-        PASSWORD = 'password', 'Password'
-        OAUTH2 = 'oauth2', 'OAuth2'
+        PASSWORD = "password", "Password"
+        OAUTH2 = "oauth2", "OAuth2"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='mail_accounts',
+        related_name="mail_accounts",
     )
     email = models.EmailField()
-    display_name = models.CharField(max_length=255, blank=True, default='')
+    display_name = models.CharField(max_length=255, blank=True, default="")
     auth_method = models.CharField(
         max_length=10,
         choices=AuthMethod.choices,
@@ -41,44 +41,50 @@ class MailAccount(models.Model):
     password_encrypted = models.BinaryField(null=True, blank=True)
 
     # OAuth2 (prepared for future use)
-    oauth2_provider = models.CharField(max_length=50, blank=True, default='')
+    oauth2_provider = models.CharField(max_length=50, blank=True, default="")
     oauth2_data_encrypted = models.BinaryField(null=True, blank=True)
 
     # IMAP folder hierarchy
-    imap_delimiter = models.CharField(max_length=5, default='/')
+    imap_delimiter = models.CharField(max_length=5, default="/")
 
     # Sync state
     is_active = models.BooleanField(default=True)
     last_sync_at = models.DateTimeField(null=True, blank=True)
-    last_sync_error = models.TextField(blank=True, default='')
+    last_sync_error = models.TextField(blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['email']
+        ordering = ["email"]
 
     def __str__(self):
         return self.email
 
     def set_password(self, plaintext):
         from workspace.core.encryption import encrypt
+
         self.password_encrypted = encrypt(plaintext)
 
     def get_password(self):
         from workspace.core.encryption import decrypt
+
         if not self.password_encrypted:
-            return ''
+            return ""
         return decrypt(bytes(self.password_encrypted))
 
     def set_oauth2_data(self, data):
         import orjson
+
         from workspace.core.encryption import encrypt
+
         self.oauth2_data_encrypted = encrypt(orjson.dumps(data).decode())
 
     def get_oauth2_data(self):
         import orjson
+
         from workspace.core.encryption import decrypt
+
         if not self.oauth2_data_encrypted:
             return None
         return orjson.loads(decrypt(bytes(self.oauth2_data_encrypted)))
@@ -88,19 +94,19 @@ class MailFolder(models.Model):
     """IMAP folder synced from a mail account."""
 
     class FolderType(models.TextChoices):
-        INBOX = 'inbox', 'Inbox'
-        SENT = 'sent', 'Sent'
-        DRAFTS = 'drafts', 'Drafts'
-        TRASH = 'trash', 'Trash'
-        SPAM = 'spam', 'Spam'
-        ARCHIVE = 'archive', 'Archive'
-        OTHER = 'other', 'Other'
+        INBOX = "inbox", "Inbox"
+        SENT = "sent", "Sent"
+        DRAFTS = "drafts", "Drafts"
+        TRASH = "trash", "Trash"
+        SPAM = "spam", "Spam"
+        ARCHIVE = "archive", "Archive"
+        OTHER = "other", "Other"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     account = models.ForeignKey(
         MailAccount,
         on_delete=models.CASCADE,
-        related_name='folders',
+        related_name="folders",
     )
     name = models.CharField(max_length=255)
     display_name = models.CharField(max_length=255)
@@ -123,19 +129,19 @@ class MailFolder(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['account', 'name']
+        ordering = ["account", "name"]
         constraints = [
             models.UniqueConstraint(
-                fields=['account', 'name'],
-                name='unique_mail_folder',
+                fields=["account", "name"],
+                name="unique_mail_folder",
             ),
         ]
         indexes = [
-            models.Index(fields=['account', 'folder_type']),
+            models.Index(fields=["account", "folder_type"]),
         ]
 
     def __str__(self):
-        return f'{self.account.email} / {self.display_name}'
+        return f"{self.account.email} / {self.display_name}"
 
 
 class MailLabel(models.Model):
@@ -145,11 +151,11 @@ class MailLabel(models.Model):
     account = models.ForeignKey(
         MailAccount,
         on_delete=models.CASCADE,
-        related_name='labels',
+        related_name="labels",
     )
     name = models.CharField(max_length=100)
-    color = models.CharField(max_length=30, blank=True, default='')
-    icon = models.CharField(max_length=50, blank=True, default='')
+    color = models.CharField(max_length=30, blank=True, default="")
+    icon = models.CharField(max_length=50, blank=True, default="")
     position = models.PositiveIntegerField(default=0)
     unread_count = models.IntegerField(default=0)
 
@@ -157,16 +163,16 @@ class MailLabel(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['position', 'name']
+        ordering = ["position", "name"]
         constraints = [
             models.UniqueConstraint(
-                fields=['account', 'name'],
-                name='unique_mail_label_per_account',
+                fields=["account", "name"],
+                name="unique_mail_label_per_account",
             ),
         ]
 
     def __str__(self):
-        return f'{self.account.email} / {self.name}'
+        return f"{self.account.email} / {self.name}"
 
 
 class MailMessage(models.Model):
@@ -176,35 +182,35 @@ class MailMessage(models.Model):
     account = models.ForeignKey(
         MailAccount,
         on_delete=models.CASCADE,
-        related_name='messages',
+        related_name="messages",
     )
     folder = models.ForeignKey(
         MailFolder,
         on_delete=models.CASCADE,
-        related_name='messages',
+        related_name="messages",
     )
-    message_id = models.CharField(max_length=512, blank=True, default='')
-    in_reply_to = models.CharField(max_length=512, blank=True, default='')
+    message_id = models.CharField(max_length=512, blank=True, default="")
+    in_reply_to = models.CharField(max_length=512, blank=True, default="")
     imap_uid = models.BigIntegerField()
-    subject = models.CharField(max_length=1000, blank=True, default='')
+    subject = models.CharField(max_length=1000, blank=True, default="")
 
     from_address = models.JSONField(default=dict)
     to_addresses = models.JSONField(default=list)
     cc_addresses = models.JSONField(default=list)
     bcc_addresses = models.JSONField(default=list)
-    reply_to = models.CharField(max_length=255, blank=True, default='')
+    reply_to = models.CharField(max_length=255, blank=True, default="")
 
     date = models.DateTimeField(null=True, blank=True)
-    snippet = models.CharField(max_length=300, blank=True, default='')
-    body_text = models.TextField(blank=True, default='')
-    body_html = models.TextField(blank=True, default='')
+    snippet = models.CharField(max_length=300, blank=True, default="")
+    body_text = models.TextField(blank=True, default="")
+    body_html = models.TextField(blank=True, default="")
 
     is_read = models.BooleanField(default=False)
     is_starred = models.BooleanField(default=False)
     is_draft = models.BooleanField(default=False)
     has_attachments = models.BooleanField(default=False)
     has_calendar_event = models.BooleanField(default=False)
-    ai_summary = models.TextField(blank=True, default='')
+    ai_summary = models.TextField(blank=True, default="")
 
     deleted_at = models.DateTimeField(null=True, blank=True)
 
@@ -212,24 +218,26 @@ class MailMessage(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-date']
+        ordering = ["-date"]
         constraints = [
             models.UniqueConstraint(
-                fields=['folder', 'imap_uid'],
-                name='unique_mail_message_uid',
+                fields=["folder", "imap_uid"],
+                name="unique_mail_message_uid",
             ),
         ]
         indexes = [
-            models.Index(fields=['folder', 'deleted_at', '-date']),
-            models.Index(fields=['account', 'deleted_at', '-date']),
-            models.Index(fields=['account', 'is_starred', '-date']),
-            models.Index(fields=['account', 'message_id']),
+            models.Index(fields=["folder", "deleted_at", "-date"]),
+            models.Index(fields=["account", "deleted_at", "-date"]),
+            models.Index(fields=["account", "is_starred", "-date"]),
+            models.Index(fields=["account", "message_id"]),
             # (folder, imap_uid) already covered by UniqueConstraint above.
-            models.Index(fields=['account', 'is_read', 'deleted_at'], name='mail_acct_read_del'),
+            models.Index(
+                fields=["account", "is_read", "deleted_at"], name="mail_acct_read_del"
+            ),
         ]
 
     def __str__(self):
-        return self.subject or '(no subject)'
+        return self.subject or "(no subject)"
 
 
 class MailMessageLabel(models.Model):
@@ -238,33 +246,33 @@ class MailMessageLabel(models.Model):
     message = models.ForeignKey(
         MailMessage,
         on_delete=models.CASCADE,
-        related_name='message_labels',
+        related_name="message_labels",
     )
     label = models.ForeignKey(
         MailLabel,
         on_delete=models.CASCADE,
-        related_name='label_links',
+        related_name="label_links",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['message', 'label'],
-                name='unique_mail_message_label',
+                fields=["message", "label"],
+                name="unique_mail_message_label",
             ),
         ]
         indexes = [
-            models.Index(fields=['label'], name='mail_msglabel_label'),
+            models.Index(fields=["label"], name="mail_msglabel_label"),
         ]
 
     def __str__(self):
-        return f'{self.message} / {self.label.name}'
+        return f"{self.message} / {self.label.name}"
 
 
 def mail_attachment_path(instance, filename):
     account = instance.message.account
-    return f'mail/attachments/{account.owner_id}/{account.pk}/{filename}'
+    return f"mail/attachments/{account.owner_id}/{account.pk}/{filename}"
 
 
 class MailAttachment(models.Model):
@@ -274,19 +282,19 @@ class MailAttachment(models.Model):
     message = models.ForeignKey(
         MailMessage,
         on_delete=models.CASCADE,
-        related_name='attachments',
+        related_name="attachments",
     )
     filename = models.CharField(max_length=255)
-    content_type = models.CharField(max_length=255, default='application/octet-stream')
+    content_type = models.CharField(max_length=255, default="application/octet-stream")
     size = models.BigIntegerField(default=0)
     content = models.FileField(upload_to=mail_attachment_path)
-    content_id = models.CharField(max_length=255, blank=True, default='')
+    content_id = models.CharField(max_length=255, blank=True, default="")
     is_inline = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['filename']
+        ordering = ["filename"]
 
     def __str__(self):
         return self.filename
@@ -308,42 +316,48 @@ class MailExtraction(models.Model):
     """
 
     class Kind(models.TextChoices):
-        EVENT = 'event', 'Event'
+        EVENT = "event", "Event"
 
     class Status(models.TextChoices):
-        DETECTED = 'detected', 'Detected'
-        DISMISSED = 'dismissed', 'Dismissed'
+        DETECTED = "detected", "Detected"
+        DISMISSED = "dismissed", "Dismissed"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     mail_message = models.ForeignKey(
-        MailMessage, on_delete=models.CASCADE, related_name='extractions',
+        MailMessage,
+        on_delete=models.CASCADE,
+        related_name="extractions",
     )
     kind = models.CharField(max_length=32, choices=Kind.choices)
     status = models.CharField(
-        max_length=16, choices=Status.choices, default=Status.DETECTED,
+        max_length=16,
+        choices=Status.choices,
+        default=Status.DETECTED,
     )
 
     target_content_type = models.ForeignKey(
-        'contenttypes.ContentType',
-        on_delete=models.SET_NULL, null=True, blank=True,
+        "contenttypes.ContentType",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
     )
     target_object_id = models.UUIDField(null=True, blank=True)
-    target = GenericForeignKey('target_content_type', 'target_object_id')
+    target = GenericForeignKey("target_content_type", "target_object_id")
 
-    confidence = models.CharField(max_length=8, blank=True, default='')
-    model_used = models.CharField(max_length=64, blank=True, default='')
+    confidence = models.CharField(max_length=8, blank=True, default="")
+    model_used = models.CharField(max_length=64, blank=True, default="")
     raw_output = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         indexes = [
-            models.Index(fields=['mail_message', 'kind']),
-            models.Index(fields=['target_content_type', 'target_object_id']),
+            models.Index(fields=["mail_message", "kind"]),
+            models.Index(fields=["target_content_type", "target_object_id"]),
         ]
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
 
     def __str__(self):
-        return f'{self.kind} extraction from {self.mail_message_id}'
+        return f"{self.kind} extraction from {self.mail_message_id}"
 
 
 class MailRule(models.Model):
@@ -351,7 +365,9 @@ class MailRule(models.Model):
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     account = models.ForeignKey(
-        MailAccount, on_delete=models.CASCADE, related_name='rules',
+        MailAccount,
+        on_delete=models.CASCADE,
+        related_name="rules",
     )
     name = models.CharField(max_length=120)
     is_enabled = models.BooleanField(default=True)
@@ -368,13 +384,13 @@ class MailRule(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['account', 'position', 'created_at']
+        ordering = ["account", "position", "created_at"]
         indexes = [
-            models.Index(fields=['account', 'is_enabled', 'position']),
+            models.Index(fields=["account", "is_enabled", "position"]),
         ]
 
     def __str__(self):
-        return f'{self.account.email} / {self.name}'
+        return f"{self.account.email} / {self.name}"
 
 
 class MailRuleLog(models.Model):
@@ -382,22 +398,27 @@ class MailRuleLog(models.Model):
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     rule = models.ForeignKey(
-        MailRule, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='logs',
+        MailRule,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="logs",
     )
-    rule_name_snapshot = models.CharField(max_length=120, blank=True, default='')
+    rule_name_snapshot = models.CharField(max_length=120, blank=True, default="")
     message = models.ForeignKey(
-        MailMessage, on_delete=models.CASCADE, related_name='rule_logs',
+        MailMessage,
+        on_delete=models.CASCADE,
+        related_name="rule_logs",
     )
     actions_applied = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['message', '-created_at']),
-            models.Index(fields=['rule', '-created_at']),
+            models.Index(fields=["message", "-created_at"]),
+            models.Index(fields=["rule", "-created_at"]),
         ]
 
     def __str__(self):
-        return f'log {self.uuid} (rule={self.rule_name_snapshot or "deleted"})'
+        return f"log {self.uuid} (rule={self.rule_name_snapshot or 'deleted'})"

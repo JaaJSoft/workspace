@@ -1,16 +1,17 @@
 from workspace.files.services import FilePermission
 from workspace.files.services.extract import ZIP_LABELS
+
 from . import ActionRegistry
 from .base import ActionCategory, BaseAction
 
 
 @ActionRegistry.register
 class ExtractAction(BaseAction):
-    id = 'extract'
-    label = 'Extract archive'
-    icon = 'archive-restore'
+    id = "extract"
+    label = "Extract archive"
+    icon = "archive-restore"
     category = ActionCategory.EDIT
-    node_types = ('file',)
+    node_types = ("file",)
 
     def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:

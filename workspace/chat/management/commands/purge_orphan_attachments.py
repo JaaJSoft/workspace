@@ -30,20 +30,20 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Show what would be deleted without actually deleting.',
+            "--dry-run",
+            action="store_true",
+            help="Show what would be deleted without actually deleting.",
         )
 
     def handle(self, *args, **options):
-        dry_run = options['dry_run']
+        dry_run = options["dry_run"]
 
         stats = {
-            'abandoned_convs': 0,
-            'abandoned_messages': 0,
-            'abandoned_files': 0,
-            'orphan_files': 0,
-            'empty_dirs': 0,
+            "abandoned_convs": 0,
+            "abandoned_messages": 0,
+            "abandoned_files": 0,
+            "orphan_files": 0,
+            "empty_dirs": 0,
         }
 
         self._purge_abandoned_conversations(dry_run, stats)
@@ -52,13 +52,15 @@ class Command(BaseCommand):
         if not any(stats.values()):
             self.stdout.write("Nothing to purge.")
         else:
-            self.stdout.write(self.style.SUCCESS(
-                f"Done: {stats['abandoned_convs']} abandoned conversation(s), "
-                f"{stats['abandoned_messages']} message(s), "
-                f"{stats['abandoned_files']} attachment file(s), "
-                f"{stats['orphan_files']} orphan file(s), "
-                f"{stats['empty_dirs']} empty dir(s)."
-            ))
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Done: {stats['abandoned_convs']} abandoned conversation(s), "
+                    f"{stats['abandoned_messages']} message(s), "
+                    f"{stats['abandoned_files']} attachment file(s), "
+                    f"{stats['orphan_files']} orphan file(s), "
+                    f"{stats['empty_dirs']} empty dir(s)."
+                )
+            )
 
     # ------------------------------------------------------------------
     # Phase 1: abandoned conversations
@@ -69,11 +71,15 @@ class Command(BaseCommand):
 
         # A "human" member is one whose user has no BotProfile.
         # Find conversations that have zero active human members.
-        convs_with_active_humans = ConversationMember.objects.filter(
-            left_at__isnull=True,
-        ).exclude(
-            user__bot_profile__isnull=False,
-        ).values_list('conversation_id', flat=True)
+        convs_with_active_humans = (
+            ConversationMember.objects.filter(
+                left_at__isnull=True,
+            )
+            .exclude(
+                user__bot_profile__isnull=False,
+            )
+            .values_list("conversation_id", flat=True)
+        )
 
         abandoned = Conversation.objects.exclude(
             pk__in=convs_with_active_humans,
@@ -105,16 +111,14 @@ class Command(BaseCommand):
                         try:
                             att.file.delete(save=False)
                         except OSError:
-                            logger.warning(
-                                "Could not delete file %s", att.file.name
-                            )
+                            logger.warning("Could not delete file %s", att.file.name)
 
                 # Cascade deletes messages, attachments, members, pins, etc.
                 conv.delete()
 
-            stats['abandoned_convs'] += 1
-            stats['abandoned_messages'] += msg_count
-            stats['abandoned_files'] += att_count
+            stats["abandoned_convs"] += 1
+            stats["abandoned_messages"] += msg_count
+            stats["abandoned_files"] += att_count
 
     # ------------------------------------------------------------------
     # Phase 2: orphan files on disk
@@ -122,14 +126,12 @@ class Command(BaseCommand):
 
     def _purge_orphan_files(self, dry_run, stats):
         """Delete files in chat/ that have no matching DB row."""
-        chat_root = os.path.join(settings.MEDIA_ROOT, 'chat')
+        chat_root = os.path.join(settings.MEDIA_ROOT, "chat")
 
         if not os.path.isdir(chat_root):
             return
 
-        known_paths = set(
-            MessageAttachment.objects.values_list('file', flat=True)
-        )
+        known_paths = set(MessageAttachment.objects.values_list("file", flat=True))
 
         orphan_files = []
         orphan_dirs = []
@@ -144,9 +146,9 @@ class Command(BaseCommand):
                 if not entry.is_file():
                     continue
 
-                rel_path = os.path.join('chat', conv_dir.name, entry.name)
+                rel_path = os.path.join("chat", conv_dir.name, entry.name)
                 # Normalize to forward slashes (Django stores paths this way)
-                rel_path = rel_path.replace('\\', '/')
+                rel_path = rel_path.replace("\\", "/")
 
                 if rel_path in known_paths:
                     dir_has_live_files = True
@@ -175,13 +177,13 @@ class Command(BaseCommand):
         for filepath in orphan_files:
             try:
                 os.remove(filepath)
-                stats['orphan_files'] += 1
+                stats["orphan_files"] += 1
             except OSError:
                 logger.warning("Could not delete file %s", filepath)
 
         for dirpath in orphan_dirs:
             try:
                 os.rmdir(dirpath)
-                stats['empty_dirs'] += 1
+                stats["empty_dirs"] += 1
             except OSError:
                 logger.warning("Could not remove dir %s", dirpath)

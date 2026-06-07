@@ -44,7 +44,7 @@ def test_smtp_connection(account):
 
 def build_draft_message(account, to=None, subject='', body_html='',
                         body_text='', cc=None, bcc=None, reply_to=None,
-                        attachments=None):
+                        attachments=None, include_bcc=False):
     """Build a MIME message and return the raw bytes.
 
     Parameters
@@ -58,6 +58,12 @@ def build_draft_message(account, to=None, subject='', body_html='',
     bcc : list[str] | None
     reply_to : str | None
     attachments : list[UploadedFile] | None
+    include_bcc : bool
+        Write the Bcc header into the message. Only for drafts: the draft
+        is APPENDed to IMAP and re-parsed on open, so the header is the
+        only place the Bcc list survives. Never set it on the send path,
+        where Bcc must stay in the SMTP envelope to avoid leaking the
+        hidden recipients to everyone else.
     """
     to = to or []
     cc = cc or []
@@ -72,6 +78,8 @@ def build_draft_message(account, to=None, subject='', body_html='',
     msg['Message-ID'] = make_msgid(domain=account.email.split('@')[-1])
     if cc:
         msg['Cc'] = ', '.join(cc)
+    if include_bcc and bcc:
+        msg['Bcc'] = ', '.join(bcc)
     if reply_to:
         msg['Reply-To'] = reply_to
 

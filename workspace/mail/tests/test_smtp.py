@@ -83,6 +83,30 @@ class BuildDraftMessageTests(TestCase):
         msg = message_from_string(raw.decode('utf-8'))
         self.assertEqual(msg['Reply-To'], 'noreply@example.com')
 
+    def test_bcc_header_included_when_requested(self):
+        """Drafts must persist Bcc in the header: the draft is APPENDed to
+        IMAP and re-parsed on open, so the header is the only place the
+        Bcc list can survive a save/reopen round-trip."""
+        acct = self._make_account()
+        raw = build_draft_message(
+            acct, to=['bob@example.com'], subject='Draft',
+            bcc=['dave@example.com', 'eve@example.com'],
+            include_bcc=True,
+        )
+        msg = message_from_string(raw.decode('utf-8'))
+        self.assertEqual(msg['Bcc'], 'dave@example.com, eve@example.com')
+
+    def test_bcc_header_omitted_by_default(self):
+        """The send path must never write a Bcc header - recipients would
+        leak to everyone. Bcc travels in the SMTP envelope only."""
+        acct = self._make_account()
+        raw = build_draft_message(
+            acct, to=['bob@example.com'], subject='Send',
+            bcc=['dave@example.com'],
+        )
+        msg = message_from_string(raw.decode('utf-8'))
+        self.assertIsNone(msg['Bcc'])
+
     def test_message_id_uses_domain(self):
         acct = self._make_account()
         raw = build_draft_message(acct, to=['bob@example.com'], subject='Test')

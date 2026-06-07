@@ -149,6 +149,7 @@ class MailDraftView(APIView):
             cc=d.get('cc'),
             bcc=d.get('bcc'),
             reply_to=d.get('reply_to'),
+            include_bcc=True,
         )
 
         # If updating an existing draft, find the old IMAP UID

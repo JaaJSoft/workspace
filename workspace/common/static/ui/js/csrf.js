@@ -1,3 +1,3 @@
 function getCSRFToken() {
-    return document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+    return document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1] || '';
 }

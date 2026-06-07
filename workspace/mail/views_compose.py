@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.closing import close_all
 from workspace.common.logging import scrub
 
 from .models import MailAccount, MailFolder, MailMessage
@@ -67,8 +68,7 @@ class MailSendView(APIView):
                     ws_file_handles.append(handle)
                     attachments.append(handle)
                 except (FileNotFoundError, OSError):
-                    for h in ws_file_handles:
-                        h.close()
+                    close_all(ws_file_handles)
                     return Response(
                         {'detail': f'File "{ws_file.name}" content is unavailable.'},
                         status=status.HTTP_400_BAD_REQUEST,
@@ -116,8 +116,7 @@ class MailSendView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         finally:
-            for h in ws_file_handles:
-                h.close()
+            close_all(ws_file_handles)
 
 
 @extend_schema(tags=['Mail'])
@@ -207,7 +206,7 @@ class MailDraftView(APIView):
         try:
             delete_draft(msg.account, msg)
         except Exception as e:
-            logger.warning("Failed to delete draft on IMAP for %s: %s", msg.uuid, scrub(e))
+            logger.warning("Failed to delete draft on IMAP for %s: %s", msg.uuid, scrub(str(e)))
             # Fall back to a local soft-delete so the user gets immediate
             # feedback. delete_draft would have set deleted_at after the IMAP
             # call but never reached that line due to the exception, leaving

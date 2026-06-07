@@ -19,7 +19,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: jaaj-ubuntu
     services:
       # Postgres is only used by the migration smoke step further down,
       # but services on a job spin up unconditionally - that is fine here

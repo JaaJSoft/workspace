@@ -42,8 +42,8 @@ test('returns empty string for an empty csrftoken value', () => {
 });
 
 test('does not match a cookie whose name merely ends with csrftoken', () => {
-  // A substring match is acceptable here (Django uses the same cookie name),
-  // but the captured value must belong to the matched "csrftoken=" segment.
+  // The name must match on a boundary (start of string or after "; "), so a
+  // differently-named cookie like "mycsrftoken" cannot shadow the real token.
   document.cookie = 'mycsrftoken=wrong; csrftoken=right';
-  assert.equal(getCSRFToken(), 'wrong');
+  assert.equal(getCSRFToken(), 'right');
 });

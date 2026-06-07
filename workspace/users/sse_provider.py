@@ -11,28 +11,26 @@ from workspace.users.services import presence as presence_service
 logger = logging.getLogger(__name__)
 
 # Process-level cache for presence snapshots shared across all SSE connections.
+# Mutated in place so no `global` rebinding is needed.
 _snapshot_lock = threading.Lock()
-_cached_snapshot = None
-_cached_snapshot_ts = 0
+_snapshot_cache = {'value': None, 'ts': 0}
 _SNAPSHOT_TTL = 5  # seconds
 
 
 def _build_global_snapshot():
     """Build presence snapshot, cached across all connections for _SNAPSHOT_TTL seconds."""
-    global _cached_snapshot, _cached_snapshot_ts
-
     now = time.monotonic()
-    if _cached_snapshot is not None and now - _cached_snapshot_ts < _SNAPSHOT_TTL:
-        return _cached_snapshot
+    if _snapshot_cache['value'] is not None and now - _snapshot_cache['ts'] < _SNAPSHOT_TTL:
+        return _snapshot_cache['value']
 
     with _snapshot_lock:
         # Double-check after acquiring lock
-        if _cached_snapshot is not None and time.monotonic() - _cached_snapshot_ts < _SNAPSHOT_TTL:
-            return _cached_snapshot
+        if _snapshot_cache['value'] is not None and time.monotonic() - _snapshot_cache['ts'] < _SNAPSHOT_TTL:
+            return _snapshot_cache['value']
 
         snapshot = _query_presence_snapshot()
-        _cached_snapshot = snapshot
-        _cached_snapshot_ts = time.monotonic()
+        _snapshot_cache['value'] = snapshot
+        _snapshot_cache['ts'] = time.monotonic()
         return snapshot
 
 

@@ -36,7 +36,7 @@ test('returns a single entry when there is no separator', () => {
 });
 
 test('passes arrays through, dropping falsy entries', () => {
-  assert.deepEqual(parseEmails(['a@b.com', '', null, 'c@d.com']), ['a@b.com', 'c@d.com']);
+  assert.deepEqual(parseEmails(['a@b.com', '', null, undefined, 'c@d.com']), ['a@b.com', 'c@d.com']);
 });
 
 test('returns an empty array for empty or non-string input', () => {

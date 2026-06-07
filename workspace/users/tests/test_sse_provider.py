@@ -27,8 +27,8 @@ User = get_user_model()
 class _SnapshotResetMixin:
     def setUp(self):
         # Process-level cache — reset so each test starts fresh.
-        sse_provider._cached_snapshot = None
-        sse_provider._cached_snapshot_ts = 0
+        sse_provider._snapshot_cache['value'] = None
+        sse_provider._snapshot_cache['ts'] = 0
         cache.delete('presence:bot_user_ids')
 
 
@@ -108,7 +108,7 @@ class BuildGlobalSnapshotTests(_SnapshotResetMixin, TestCase):
             _build_global_snapshot()
 
         # Expire the cache manually.
-        sse_provider._cached_snapshot_ts = 0
+        sse_provider._snapshot_cache['ts'] = 0
 
         with mock.patch(
             'workspace.users.sse_provider._query_presence_snapshot',

@@ -539,6 +539,8 @@ class EventDetailView(APIView):
                 new_master.calendar = cal
                 new_master.save(update_fields=['calendar_id'])
             except Calendar.DoesNotExist:
+                # Unknown calendar_id or calendar owned by someone else:
+                # keep the master's calendar instead of failing the split.
                 pass
 
         # Copy members

@@ -54,6 +54,7 @@ def fetch_link_previews(message_uuid: str, urls: list[str]):
             created_any = True
             continue
         except LinkPreview.DoesNotExist:
+            # No cached preview for this URL yet: fall through and fetch one.
             pass
 
         # Fetch new preview

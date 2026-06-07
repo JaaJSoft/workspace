@@ -32,7 +32,7 @@ class FileShareLinkModelTests(TestCase):
         )
         self.assertEqual(link.file, self.file)
         self.assertEqual(link.created_by, self.user)
-        self.assertTrue(len(link.token) > 0)
+        self.assertGreater(len(link.token), 0)
         self.assertEqual(link.password, '')
         self.assertIsNone(link.expires_at)
         self.assertEqual(link.view_count, 0)
@@ -283,7 +283,7 @@ class PublicShareLinkAPITests(APITestCase):
         from django.contrib.auth.hashers import make_password
         self.link.password = make_password('secret123')
         self.link.save()
-        for i in range(5):
+        for _ in range(5):
             self.client.post(
                 f'/api/v1/files/shared/{self.link.token}/verify',
                 {'password': 'wrong'}, format='json',

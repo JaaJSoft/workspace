@@ -589,7 +589,7 @@ class FileResourceTests(TestCase):
 
     def test_delete_noop_after_move(self):
         """After copy_move_single(is_move=True), delete() is a no-op."""
-        folder = FileService.create_folder(self.user, "Dest")
+        FileService.create_folder(self.user, "Dest")
         self.res.copy_move_single("/Dest/test.txt", is_move=True)
         self.res.delete()  # should be a no-op
         self.file.refresh_from_db()

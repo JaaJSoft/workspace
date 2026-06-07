@@ -211,14 +211,10 @@ class NextOccurrencesAfterTests(TestCase):
 # ---------- Recurrence (split from test_calendar.py) ----------
 
 
-from datetime import timedelta
-
-from django.test import TestCase
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.calendar.models import Event, EventMember
+from workspace.calendar.models import EventMember
 from workspace.calendar.recurrence import expand_recurring_events
 
 from .test_calendar import CalendarTestMixin

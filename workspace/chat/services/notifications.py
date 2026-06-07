@@ -24,7 +24,6 @@ def notify_new_message(conversation, author, body, mentioned_user_ids=None, ment
     - Subsequent messages within 60s: updates the existing notification body/title
       (no duplicate push)
     """
-    from django.contrib.auth import get_user_model
     from django.utils import timezone
     from workspace.notifications.models import Notification
     from workspace.notifications.services.notifications import _resolve_module_defaults
@@ -34,7 +33,6 @@ def notify_new_message(conversation, author, body, mentioned_user_ids=None, ment
 
     mentioned_user_ids = mentioned_user_ids or set()
 
-    User = get_user_model()
     member_ids = list(
         ConversationMember.objects.filter(
             conversation=conversation,

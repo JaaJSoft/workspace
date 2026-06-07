@@ -123,6 +123,8 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
                 parsed = parsed.replace(tzinfo=timezone.utc)
             date = parsed
         except Exception:
+            # Malformed Date header: leave date as None and fall back
+            # to the current time below.
             pass
     if date is None:
         date = datetime.now(timezone.utc)

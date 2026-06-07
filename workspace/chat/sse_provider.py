@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 class ChatSSEProvider(SSEProvider):
     def __init__(self, user, last_event_id):
         super().__init__(user, last_event_id)
-        user_id = user.id
 
         # Get conversations user is a member of
         self._member_conv_ids = set(user_conversation_ids(user))

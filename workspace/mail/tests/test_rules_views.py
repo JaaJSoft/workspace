@@ -234,7 +234,7 @@ class MailRuleLogsEndpointTests(_Base):
 
     def test_logs_paginated(self):
         from workspace.mail.models import MailRuleLog
-        for i in range(75):
+        for _ in range(75):
             MailRuleLog.objects.create(
                 rule=self.rule, rule_name_snapshot='r',
                 message=self.msg, actions_applied=[{'type': 'mark_read', 'ok': True}],

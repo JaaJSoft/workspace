@@ -249,6 +249,9 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         case 'change_icon':
           this.showFolderIconPicker(folder);
           break;
+        case 'toggle_classify':
+          await this._toggleFolderClassify(folder);
+          break;
         case 'create':
           await this._createFolder(folder.account_id, folder);
           break;
@@ -511,6 +514,26 @@ window.mailFoldersMixin = function mailFoldersMixin() {
       } else {
         const data = await res.json().catch(() => ({}));
         await AppDialog.error({ message: data.detail || 'Failed to hide folder' });
+      }
+    },
+
+    async _toggleFolderClassify(folder) {
+      const next = !folder.ai_classify_disabled;
+      const res = await this._fetch(`/api/v1/mail/folders/${folder.uuid}`, {
+        method: 'PATCH',
+        body: { ai_classify_disabled: next },
+      });
+
+      if (res.ok) {
+        // Mutate the reactive folder object so the context-menu label
+        // ("Disable/Enable auto-labeling") reflects the new state next open.
+        folder.ai_classify_disabled = next;
+        if (this.selectedFolder?.uuid === folder.uuid) {
+          this.selectedFolder.ai_classify_disabled = next;
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await AppDialog.error({ message: data.detail || 'Failed to update folder' });
       }
     },
 

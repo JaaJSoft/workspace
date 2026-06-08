@@ -27,6 +27,12 @@
         <span>Change icon</span>
       </button>
     </li>
+    <li>
+      <button type="button" class="gap-3 rounded" @click="folderCtxAction('toggle_classify')">
+        <i data-lucide="tags" class="w-4 h-4"></i>
+        <span x-text="folderCtx.folder?.ai_classify_disabled ? 'Enable auto-labeling' : 'Disable auto-labeling'"></span>
+      </button>
+    </li>
     <hr class="my-1 border-base-300" />
     <li>
       <button type="button" class="gap-3 rounded" @click="folderCtxAction('create')">

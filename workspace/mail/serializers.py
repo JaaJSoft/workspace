@@ -120,6 +120,7 @@ class MailFolderSerializer(serializers.ModelSerializer):
             "icon",
             "color",
             "is_hidden",
+            "ai_classify_disabled",
             "message_count",
             "unread_count",
         ]
@@ -145,6 +146,7 @@ class MailFolderUpdateSerializer(serializers.Serializer):
         max_length=255, required=False, allow_blank=True, allow_null=True
     )
     is_hidden = serializers.BooleanField(required=False)
+    ai_classify_disabled = serializers.BooleanField(required=False)
 
 
 class MailAttachmentSerializer(serializers.ModelSerializer):

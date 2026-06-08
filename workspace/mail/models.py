@@ -119,6 +119,10 @@ class MailFolder(models.Model):
     icon = models.CharField(max_length=50, null=True, blank=True)
     color = models.CharField(max_length=30, null=True, blank=True)
     is_hidden = models.BooleanField(default=False)
+    # When True, the AI auto-classification (labels) task is not dispatched for
+    # this folder during sync. Purely local - no IMAP side effect. Does NOT
+    # affect AI event extraction or user-defined rules.
+    ai_classify_disabled = models.BooleanField(default=False)
 
     uid_validity = models.BigIntegerField(default=0)
     message_count = models.IntegerField(default=0)

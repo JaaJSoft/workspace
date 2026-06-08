@@ -752,9 +752,7 @@ class MailFolderAiClassifyTests(MailTestMixin, APITestCase):
 
     def test_default_is_false(self):
         self.client.force_authenticate(self.user)
-        resp = self.client.get(
-            f"/api/v1/mail/folders?account={self.account.uuid}"
-        )
+        resp = self.client.get(f"/api/v1/mail/folders?account={self.account.uuid}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         inbox = next(f for f in resp.data if f["uuid"] == str(self.inbox.uuid))
         self.assertFalse(inbox["ai_classify_disabled"])

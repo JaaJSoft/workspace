@@ -227,7 +227,10 @@ def sync_folder_messages(account, folder):
                     from workspace.ai.services.dispatch import dispatch
 
                     dispatched = []
-                    if is_mail_ai_feature_enabled(account.owner, "classify"):
+                    if (
+                        is_mail_ai_feature_enabled(account.owner, "classify")
+                        and not folder.ai_classify_disabled
+                    ):
                         try:
                             dispatch(
                                 owner=account.owner,

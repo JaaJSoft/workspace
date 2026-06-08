@@ -177,9 +177,9 @@ class MailFolderUpdateView(APIView):
                         status=status.HTTP_502_BAD_GATEWAY,
                     )
 
-        # Update icon/color/is_hidden locally
+        # Update icon/color/is_hidden/ai_classify_disabled locally
         update_fields = ["updated_at"]
-        for field in ("icon", "color", "is_hidden"):
+        for field in ("icon", "color", "is_hidden", "ai_classify_disabled"):
             if field in ser.validated_data:
                 setattr(folder, field, ser.validated_data[field])
                 update_fields.append(field)

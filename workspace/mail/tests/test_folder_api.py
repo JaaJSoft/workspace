@@ -742,3 +742,57 @@ class MailFolderMarkReadTests(MailTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         label.refresh_from_db()
         self.assertEqual(label.unread_count, 0)
+
+
+class MailFolderAiClassifyTests(MailTestMixin, APITestCase):
+    """Tests for PATCH /api/v1/mail/folders/<uuid> (ai_classify_disabled)."""
+
+    def _url(self, folder):
+        return f"/api/v1/mail/folders/{folder.uuid}"
+
+    def test_default_is_false(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.get(
+            f"/api/v1/mail/folders?account={self.account.uuid}"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        inbox = next(f for f in resp.data if f["uuid"] == str(self.inbox.uuid))
+        self.assertFalse(inbox["ai_classify_disabled"])
+
+    def test_disable_classification(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            self._url(self.inbox),
+            {"ai_classify_disabled": True},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["ai_classify_disabled"])
+        self.inbox.refresh_from_db()
+        self.assertTrue(self.inbox.ai_classify_disabled)
+
+    def test_re_enable_classification(self):
+        self.inbox.ai_classify_disabled = True
+        self.inbox.save(update_fields=["ai_classify_disabled"])
+
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            self._url(self.inbox),
+            {"ai_classify_disabled": False},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.inbox.refresh_from_db()
+        self.assertFalse(self.inbox.ai_classify_disabled)
+
+    def test_allowed_on_special_folder(self):
+        # Unlike is_hidden, the flag has no folder_type restriction.
+        self.client.force_authenticate(self.user)
+        resp = self.client.patch(
+            self._url(self.sent),
+            {"ai_classify_disabled": True},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.sent.refresh_from_db()
+        self.assertTrue(self.sent.ai_classify_disabled)

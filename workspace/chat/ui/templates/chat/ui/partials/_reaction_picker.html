@@ -1,5 +1,7 @@
 {% for r in quick_reactions %}
-  <button class="btn btn-ghost btn-xs btn-square text-base leading-none{% if r.has_mine %} bg-info/20 text-info hover:bg-info/30{% endif %}"
-          @click="toggleReaction('{{ message_uuid }}', '{{ r.emoji }}')"
-          {% if r.has_mine %}title="You reacted with {{ r.emoji }}"{% endif %}>{{ r.emoji }}</button>
+  <button
+    class="btn btn-ghost btn-xs btn-square text-base leading-none{% if r.has_mine %} bg-info/20 text-info hover:bg-info/30{% endif %}"
+    @click="toggleReaction('{{ message_uuid }}', '{{ r.emoji }}')"
+    {% if r.has_mine %}title="You reacted with {{ r.emoji }}"{% endif %}
+  >{{ r.emoji }}</button>
 {% endfor %}

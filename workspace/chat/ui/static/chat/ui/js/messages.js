@@ -10,7 +10,6 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     hasMoreMessages: false,
     editingMessageUuid: null,
     replyingTo: null,
-    quickEmojis: ['👍', '❤️', '😂', '😮', '😢', '🎉'],
     pinnedMessages: [],
 
     // ── Server-rendered HTML helpers ─────────────────────────

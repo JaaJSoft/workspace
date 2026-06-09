@@ -49,6 +49,30 @@ def render_read_receipt(message, conversation_kind):
     }
 
 
+# Emojis offered as one-click reactions in the message hover toolbar. Single
+# source of truth: the picker partial renders these server-side, so it stays in
+# sync with the reaction bubbles without duplicating the list in JS.
+QUICK_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉"]
+
+
+@register.inclusion_tag("chat/ui/partials/_reaction_picker.html")
+def render_reaction_picker(message, current_user):
+    """Quick-reaction emojis for the hover toolbar, each flagged with whether
+    the current user already reacted with it so the picker shows it as selected.
+
+    Reuses the reactions prefetched for `render_reactions`
+    (`prefetch_related('reactions__user')`), so it adds no query when both tags
+    render the same message.
+    """
+    mine = {r.emoji for r in message.reactions.all() if r.user_id == current_user.id}
+    return {
+        "message_uuid": message.uuid,
+        "quick_reactions": [
+            {"emoji": e, "has_mine": e in mine} for e in QUICK_REACTION_EMOJIS
+        ],
+    }
+
+
 @register.inclusion_tag("chat/ui/partials/_reactions.html")
 def render_reactions(message, current_user):
     """Group reactions by emoji and check if current user reacted.

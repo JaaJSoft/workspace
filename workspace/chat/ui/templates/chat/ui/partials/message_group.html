@@ -204,12 +204,8 @@
           {# Hover toolbar — floats below the bubble #}
           <div class="absolute top-full mt-0 pt-1 {% if is_own %}right-0{% else %}left-0{% endif %} opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto transition-opacity delay-150 group-hover/msg:delay-0 z-50">
             <div class="flex items-center gap-0.5 bg-base-100 border border-base-300 rounded-lg shadow-sm px-0.5 py-0.5">
-              {# Quick reactions #}
-              <template x-for="emoji in quickEmojis" :key="emoji">
-                <button class="btn btn-ghost btn-xs btn-square text-base leading-none"
-                        @click="toggleReaction('{{ msg.uuid }}', emoji)"
-                        x-text="emoji"></button>
-              </template>
+              {# Quick reactions - server-rendered so already-applied ones show as selected #}
+              {% render_reaction_picker msg current_user %}
               <div class="w-px self-stretch my-0.5 bg-base-300"></div>
               {# Full emoji picker #}
               <button class="btn btn-ghost btn-xs btn-square"

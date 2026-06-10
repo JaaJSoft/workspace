@@ -12,6 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.chat.services.reactions import invalidate_quick_reactions
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
 
@@ -535,6 +536,8 @@ class ReactionToggleView(APIView):
                 emoji=emoji,
             )
             action = "added"
+
+        invalidate_quick_reactions(request.user.id)
 
         notify_conversation_members(
             message.conversation,

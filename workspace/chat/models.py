@@ -126,6 +126,7 @@ class Reaction(models.Model):
         ]
         indexes = [
             models.Index(fields=["message", "emoji"]),
+            models.Index(fields=["user", "created_at"]),
         ]
 
     def __str__(self):

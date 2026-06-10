@@ -21,6 +21,7 @@ from workspace.chat.services.conversations import (
     get_unread_counts,
     user_conversation_ids,
 )
+from workspace.chat.services.reactions import quick_reactions_for
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.ui.viewers import ViewerRegistry
 
@@ -345,6 +346,7 @@ def conversation_messages_view(request, conversation_uuid):
             "has_more": has_more,
             "first_uuid": first_uuid,
             "current_user": request.user,
+            "quick_emojis": quick_reactions_for(request.user),
             "pinned_message_ids": pinned_message_ids,
             "conversation_kind": conversation_kind,
             "conversation_uuid": str(conversation_uuid),

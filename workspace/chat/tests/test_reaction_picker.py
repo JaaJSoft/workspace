@@ -7,10 +7,8 @@ from workspace.chat.models import (
     Message,
     Reaction,
 )
-from workspace.chat.ui.templatetags.chat_tags import (
-    QUICK_REACTION_EMOJIS,
-    render_reaction_picker,
-)
+from workspace.chat.services.reactions import DEFAULT_QUICK_REACTIONS
+from workspace.chat.ui.templatetags.chat_tags import render_reaction_picker
 
 User = get_user_model()
 
@@ -40,20 +38,20 @@ class ReactionPickerTagTests(TestCase):
         )
 
     def _picker(self, message, user):
-        ctx = render_reaction_picker(message, user)
+        ctx = render_reaction_picker(message, user, DEFAULT_QUICK_REACTIONS)
         return {r["emoji"]: r["has_mine"] for r in ctx["quick_reactions"]}
 
     def test_emoji_reacted_by_current_user_is_marked_mine(self):
-        emoji = QUICK_REACTION_EMOJIS[0]
+        emoji = DEFAULT_QUICK_REACTIONS[0]
         Reaction.objects.create(message=self.message, user=self.alice, emoji=emoji)
         flags = self._picker(self.message, self.alice)
         self.assertTrue(flags[emoji])
         # Every other quick emoji stays unselected.
-        for other in QUICK_REACTION_EMOJIS[1:]:
+        for other in DEFAULT_QUICK_REACTIONS[1:]:
             self.assertFalse(flags[other])
 
     def test_reaction_by_another_user_is_not_marked_mine(self):
-        emoji = QUICK_REACTION_EMOJIS[0]
+        emoji = DEFAULT_QUICK_REACTIONS[0]
         Reaction.objects.create(message=self.message, user=self.bob, emoji=emoji)
         flags = self._picker(self.message, self.alice)
         self.assertFalse(flags[emoji])
@@ -61,4 +59,4 @@ class ReactionPickerTagTests(TestCase):
     def test_no_reactions_marks_nothing(self):
         flags = self._picker(self.message, self.alice)
         self.assertTrue(all(v is False for v in flags.values()))
-        self.assertEqual(set(flags), set(QUICK_REACTION_EMOJIS))
+        self.assertEqual(set(flags), set(DEFAULT_QUICK_REACTIONS))

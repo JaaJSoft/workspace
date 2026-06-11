@@ -157,6 +157,31 @@ class FilesActivityProviderTests(TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["description"], "alice_doc.txt")
 
+    def test_recent_events_viewer_sees_group_shared_file(self):
+        """A file Alice owns in a group Bob belongs to is accessible to Bob, so
+        Bob must see its events even without a direct FileShare - event access
+        follows file access, which includes group membership."""
+        from django.contrib.auth.models import Group
+
+        team = Group.objects.create(name="team")
+        self.bob.groups.add(team)
+        group_file = File.objects.create(
+            owner=self.alice,
+            name="group_doc.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            size=10,
+            group=team,
+        )
+        record_event(group_file, self.alice, FileEvent.Action.CONTENT_REPLACED)
+
+        events = self.provider.get_recent_events(
+            self.alice.id,
+            viewer_id=self.bob.id,
+        )
+
+        self.assertIn("group_doc.txt", {e["description"] for e in events})
+
     def test_recent_events_limit_offset(self):
         """Pagination: limit and offset restrict returned events."""
         events = self.provider.get_recent_events(

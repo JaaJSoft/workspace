@@ -129,6 +129,30 @@ class NotesActivityProviderTests(TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["description"], "Alice Note 1")
 
+    def test_recent_events_viewer_sees_group_shared_note(self):
+        """A note Alice owns in a group Bob belongs to is accessible to Bob, so
+        Bob must see its events even without a direct FileShare - event access
+        follows file access, which includes group membership."""
+        from django.contrib.auth.models import Group
+
+        team = Group.objects.create(name="team")
+        self.bob.groups.add(team)
+        group_note = File.objects.create(
+            owner=self.alice,
+            name="Group Note",
+            node_type=File.NodeType.FILE,
+            mime_type="text/markdown",
+            group=team,
+        )
+        record_event(group_note, self.alice, FileEvent.Action.CONTENT_REPLACED)
+
+        events = self.provider.get_recent_events(
+            self.alice.id,
+            viewer_id=self.bob.id,
+        )
+
+        self.assertIn("Group Note", {e["description"] for e in events})
+
     def test_recent_events_url_opens_note(self):
         """The activity link opens the note in the notes app."""
         events = self.provider.get_recent_events(self.alice.id)

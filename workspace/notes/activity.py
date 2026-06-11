@@ -23,35 +23,35 @@ class NotesActivityProvider(ActivityProvider):
             qs = qs.filter(owner_id=user_id)
         return qs
 
+    def _viewer_accessible_file_ids(self, viewer_id):
+        """IDs of files the viewer can access (owned + group + shared).
+
+        Event access follows file access, so visibility is derived from the
+        centralized ``FileService.accessible_files_q`` rather than a local
+        reimplementation. That helper does not filter ``deleted_at``, so
+        events on trashed notes stay reachable for users who can see them.
+        """
+        from django.contrib.auth import get_user_model
+
+        from workspace.files.models import File
+        from workspace.files.services import FileService
+
+        viewer = get_user_model().objects.get(pk=viewer_id)
+        return File.objects.filter(
+            FileService.accessible_files_q(viewer),
+        ).values_list("pk", flat=True)
+
     def _stats_visibility_filter(self, user_id, viewer_id):
         """Restrict the File-level stats queryset to notes visible to viewer."""
         if viewer_id is None or viewer_id == user_id:
             return Q()
-        from workspace.files.models import FileShare
-
-        q = Q(owner_id=viewer_id)
-        share_filter = {"shared_with_id": viewer_id}
-        if user_id is not None:
-            share_filter["file__owner_id"] = user_id
-        shared_file_ids = FileShare.objects.filter(
-            **share_filter,
-        ).values_list("file_id", flat=True)
-        return q | Q(pk__in=shared_file_ids)
+        return Q(pk__in=self._viewer_accessible_file_ids(viewer_id))
 
     def _event_visibility_filter(self, user_id, viewer_id):
         """Restrict a FileEvent queryset to events on notes visible to viewer."""
         if viewer_id is None or viewer_id == user_id:
             return Q()
-        from workspace.files.models import FileShare
-
-        q = Q(file__owner_id=viewer_id)
-        share_filter = {"shared_with_id": viewer_id}
-        if user_id is not None:
-            share_filter["file__owner_id"] = user_id
-        shared_file_ids = FileShare.objects.filter(
-            **share_filter,
-        ).values_list("file_id", flat=True)
-        return q | Q(file_id__in=shared_file_ids)
+        return Q(file_id__in=self._viewer_accessible_file_ids(viewer_id))
 
     def _events_qs(self, user_id, viewer_id):
         from workspace.files.models import File, FileEvent

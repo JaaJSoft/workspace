@@ -269,3 +269,50 @@ class FilesActivityProviderTests(TestCase):
         # excluded from the file count.
         stats = self.provider.get_stats(self.alice.id)
         self.assertEqual(stats["total_files"], 2)
+
+    # ── markdown notes belong to the notes provider, not files ──
+
+    def test_markdown_notes_excluded_from_feed(self):
+        """Notes (markdown files) are surfaced by the notes provider, so the
+        files provider must not also list them - otherwise a single note edit
+        shows up twice in the combined activity feed."""
+        note = File.objects.create(
+            owner=self.alice,
+            name="My Note",
+            node_type=File.NodeType.FILE,
+            mime_type="text/markdown",
+        )
+        record_event(note, self.alice, FileEvent.Action.CONTENT_REPLACED)
+
+        events = self.provider.get_recent_events(self.alice.id)
+
+        self.assertNotIn("My Note", {e["description"] for e in events})
+
+    def test_markdown_notes_excluded_from_daily_counts(self):
+        """A note event must not inflate the files activity grid."""
+        note = File.objects.create(
+            owner=self.alice,
+            name="My Note",
+            node_type=File.NodeType.FILE,
+            mime_type="text/markdown",
+        )
+        record_event(note, self.alice, FileEvent.Action.CONTENT_REPLACED)
+
+        today = date.today()
+        counts = self.provider.get_daily_counts(self.alice.id, today, today)
+
+        # Only the 2 CREATED events from setUp - the note event is excluded.
+        self.assertEqual(counts.get(today, 0), 2)
+
+    def test_markdown_notes_excluded_from_stats(self):
+        """Notes are counted by the notes provider, not as generic files."""
+        File.objects.create(
+            owner=self.alice,
+            name="My Note",
+            node_type=File.NodeType.FILE,
+            mime_type="text/markdown",
+        )
+
+        stats = self.provider.get_stats(self.alice.id)
+
+        self.assertEqual(stats["total_files"], 2)

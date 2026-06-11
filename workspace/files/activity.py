@@ -43,11 +43,13 @@ class FilesActivityProvider(ActivityProvider):
         # by the time that event lands), and aligns this provider with the
         # per-file panel (events_for_file) and the REST endpoint, neither
         # of which filter on file__deleted_at.
+        # Markdown notes are surfaced by the notes provider; excluding them
+        # here keeps the two feeds disjoint so a note edit isn't counted twice.
         qs = FileEvent.objects.filter(
             file__node_type=File.NodeType.FILE,
             created_at__date__gte=date_from,
             created_at__date__lte=date_to,
-        )
+        ).exclude(file__mime_type="text/markdown")
         if user_id is not None:
             qs = qs.filter(file__owner_id=user_id)
         qs = qs.filter(self._event_visibility_filter(user_id, viewer_id))
@@ -71,7 +73,7 @@ class FilesActivityProvider(ActivityProvider):
         # provider stays consistent with the per-file timeline.
         qs = FileEvent.objects.filter(
             file__node_type=File.NodeType.FILE,
-        )
+        ).exclude(file__mime_type="text/markdown")
         if user_id is not None:
             qs = qs.filter(file__owner_id=user_id)
         qs = (
@@ -121,10 +123,12 @@ class FilesActivityProvider(ActivityProvider):
     def get_stats(self, user_id, *, viewer_id=None):
         from workspace.files.models import File
 
+        # Notes are counted by the notes provider's total_notes stat; keep
+        # them out of total_files so a note isn't tallied in both cards.
         qs = File.objects.filter(
             deleted_at__isnull=True,
             node_type=File.NodeType.FILE,
-        )
+        ).exclude(mime_type="text/markdown")
         if user_id is not None:
             qs = qs.filter(owner_id=user_id)
         qs = qs.filter(self._file_visibility_filter(user_id, viewer_id))

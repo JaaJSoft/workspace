@@ -7,6 +7,7 @@ from workspace.core.models import ModuleAccessRule
 from workspace.core.services.module_access import (
     can_access_module,
     enabled_module_slugs,
+    filter_visible,
 )
 
 User = get_user_model()
@@ -97,3 +98,36 @@ class ModuleAccessServiceTests(TestCase):
         # leaving it must restore access immediately
         self.user.groups.remove(group)
         self.assertTrue(can_access_module(self.user, "mail"))
+
+
+class FilterVisibleTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="carol", password="x")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_keeps_non_restrictable_items(self):
+        items = [{"module_slug": "dashboard"}, {"module_slug": "core"}]
+        kept = filter_visible(self.user, items, lambda i: i["module_slug"])
+        self.assertEqual(kept, items)
+
+    def test_drops_disabled_restrictable_item(self):
+        ModuleAccessRule.objects.create(module_slug="mail", is_enabled=False)
+        cache.clear()
+        items = [{"module_slug": "mail"}, {"module_slug": "chat"}]
+        kept = filter_visible(self.user, items, lambda i: i["module_slug"])
+        slugs = [i["module_slug"] for i in kept]
+        self.assertNotIn("mail", slugs)
+        self.assertIn("chat", slugs)
+
+    def test_works_with_attribute_getter(self):
+        from types import SimpleNamespace
+
+        ModuleAccessRule.objects.create(module_slug="mail", is_enabled=False)
+        cache.clear()
+        items = [SimpleNamespace(slug="mail"), SimpleNamespace(slug="files")]
+        kept = filter_visible(self.user, items, lambda i: i.slug)
+        slugs = [i.slug for i in kept]
+        self.assertNotIn("mail", slugs)
+        self.assertIn("files", slugs)

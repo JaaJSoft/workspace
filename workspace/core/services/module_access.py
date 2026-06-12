@@ -70,6 +70,25 @@ def can_access_module(user, slug) -> bool:
     return slug in enabled_module_slugs(user)
 
 
+def filter_visible(user, items, slug_getter):
+    """Return *items* with modules the user may not access removed.
+
+    *slug_getter* maps an item to its module slug, so this works for both
+    ``ModuleInfo``/``CommandInfo`` dataclasses (attribute access) and the
+    plain dicts returned by search providers. Non-restrictable modules and
+    modules in the user's enabled set are kept.
+    """
+    restrictable = restrictable_module_slugs()
+    if not restrictable:
+        return list(items)
+    enabled = enabled_module_slugs(user)
+    return [
+        item
+        for item in items
+        if slug_getter(item) not in restrictable or slug_getter(item) in enabled
+    ]
+
+
 def invalidate_module_access_cache() -> None:
     """Drop every cached enabled-set (call from rule write paths)."""
     invalidate_tags(_CACHE_TAG)

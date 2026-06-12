@@ -6,6 +6,7 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
+from workspace.core.module_registry import ModuleInfo
 from workspace.dashboard.views import (
     ACTIVITY_LIMIT,
     _build_dashboard_context,
@@ -15,6 +16,19 @@ from workspace.dashboard.views import (
 from workspace.users.services.settings import set_setting
 
 User = get_user_model()
+
+
+def _mod(slug, active=True, preview=False):
+    return ModuleInfo(
+        name=slug.title(),
+        slug=slug,
+        description="",
+        icon="i",
+        color="c",
+        url=f"/{slug}",
+        active=active,
+        preview=preview,
+    )
 
 
 # ── _build_dashboard_context ────────────────────────────────────
@@ -29,12 +43,11 @@ class BuildDashboardContextTests(TestCase):
         )
 
     @patch("workspace.dashboard.views.registry")
-    def test_context_includes_pending_action_counts_on_modules(self, mock_registry):
-        mock_registry.get_for_template.return_value = [
-            {"slug": "chat", "name": "Chat", "active": True},
-            {"slug": "calendar", "name": "Calendar", "active": True},
-            {"slug": "dashboard", "name": "Dashboard", "active": True},
-        ]
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_context_includes_pending_action_counts_on_modules(
+        self, mock_visible, mock_registry
+    ):
+        mock_visible.return_value = [_mod("chat"), _mod("calendar"), _mod("dashboard")]
         mock_registry.get_pending_action_counts.return_value = {
             "chat": 5,
             "calendar": 2,
@@ -50,10 +63,11 @@ class BuildDashboardContextTests(TestCase):
         self.assertEqual(cal_mod["pending_action_count"], 2)
 
     @patch("workspace.dashboard.views.registry")
-    def test_context_defaults_pending_action_count_to_zero(self, mock_registry):
-        mock_registry.get_for_template.return_value = [
-            {"slug": "files", "name": "Files", "active": True},
-        ]
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_context_defaults_pending_action_count_to_zero(
+        self, mock_visible, mock_registry
+    ):
+        mock_visible.return_value = [_mod("files")]
         mock_registry.get_pending_action_counts.return_value = {}
 
         context = _build_dashboard_context(self.user)
@@ -62,11 +76,9 @@ class BuildDashboardContextTests(TestCase):
         self.assertEqual(files_mod["pending_action_count"], 0)
 
     @patch("workspace.dashboard.views.registry")
-    def test_excludes_dashboard_from_modules(self, mock_registry):
-        mock_registry.get_for_template.return_value = [
-            {"slug": "dashboard", "name": "Dashboard", "active": True},
-            {"slug": "mail", "name": "Mail", "active": True},
-        ]
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_excludes_dashboard_from_modules(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("dashboard"), _mod("mail")]
         mock_registry.get_pending_action_counts.return_value = {}
 
         context = _build_dashboard_context(self.user)
@@ -74,27 +86,32 @@ class BuildDashboardContextTests(TestCase):
         self.assertNotIn("dashboard", slugs)
         self.assertIn("mail", slugs)
 
+    @patch("workspace.dashboard.views.visible_modules")
     @patch("workspace.dashboard.views.registry")
-    def test_context_does_not_include_upcoming_events(self, mock_registry):
-        """Upcoming events load async via /dashboard/upcoming — not via the
+    def test_context_does_not_include_upcoming_events(
+        self, mock_registry, mock_visible
+    ):
+        """Upcoming events load async via /dashboard/upcoming - not via the
         main context."""
-        mock_registry.get_for_template.return_value = []
+        mock_visible.return_value = []
         mock_registry.get_pending_action_counts.return_value = {}
 
         context = _build_dashboard_context(self.user)
         self.assertNotIn("upcoming_events", context)
 
+    @patch("workspace.dashboard.views.visible_modules")
     @patch("workspace.dashboard.views.registry")
-    def test_context_includes_usage_stats(self, mock_registry):
-        mock_registry.get_for_template.return_value = []
+    def test_context_includes_usage_stats(self, mock_registry, mock_visible):
+        mock_visible.return_value = []
         mock_registry.get_pending_action_counts.return_value = {}
 
         context = _build_dashboard_context(self.user)
         self.assertIn("usage_stats", context)
 
+    @patch("workspace.dashboard.views.visible_modules")
     @patch("workspace.dashboard.views.registry")
-    def test_context_includes_storage_quota(self, mock_registry):
-        mock_registry.get_for_template.return_value = []
+    def test_context_includes_storage_quota(self, mock_registry, mock_visible):
+        mock_visible.return_value = []
         mock_registry.get_pending_action_counts.return_value = {}
 
         context = _build_dashboard_context(self.user)
@@ -102,8 +119,11 @@ class BuildDashboardContextTests(TestCase):
 
     @patch("workspace.dashboard.views._get_activity_context")
     @patch("workspace.dashboard.views.registry")
-    def test_includes_activity_when_requested(self, mock_registry, mock_activity):
-        mock_registry.get_for_template.return_value = []
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_includes_activity_when_requested(
+        self, mock_visible, mock_registry, mock_activity
+    ):
+        mock_visible.return_value = []
         mock_registry.get_pending_action_counts.return_value = {}
         mock_activity.return_value = {"activity_events": []}
 
@@ -113,8 +133,11 @@ class BuildDashboardContextTests(TestCase):
 
     @patch("workspace.dashboard.views._get_activity_context")
     @patch("workspace.dashboard.views.registry")
-    def test_excludes_activity_when_not_requested(self, mock_registry, mock_activity):
-        mock_registry.get_for_template.return_value = []
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_excludes_activity_when_not_requested(
+        self, mock_visible, mock_registry, mock_activity
+    ):
+        mock_visible.return_value = []
         mock_registry.get_pending_action_counts.return_value = {}
 
         context = _build_dashboard_context(self.user, include_activity=False)
@@ -123,13 +146,23 @@ class BuildDashboardContextTests(TestCase):
 
     @patch("workspace.dashboard.views._get_activity_context")
     @patch("workspace.dashboard.views.registry")
-    def test_forwards_activity_source(self, mock_registry, mock_activity):
-        mock_registry.get_for_template.return_value = []
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_forwards_activity_source(self, mock_visible, mock_registry, mock_activity):
+        mock_visible.return_value = []
         mock_registry.get_pending_action_counts.return_value = {}
         mock_activity.return_value = {}
 
         _build_dashboard_context(self.user, activity_source="chat")
         mock_activity.assert_called_once_with(self.user, source="chat")
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_grid_uses_visible_modules_only(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("files")]
+        mock_registry.get_pending_action_counts.return_value = {}
+
+        context = _build_dashboard_context(self.user)
+        self.assertEqual([m["slug"] for m in context["modules"]], ["files"])
 
 
 # ── _get_activity_context ───────────────────────────────────────

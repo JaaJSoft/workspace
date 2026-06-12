@@ -5,6 +5,7 @@ class MailConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "workspace.mail"
     label = "mail"
+    restrictable = True
 
     def ready(self):
         from workspace.core.module_registry import (

@@ -16,6 +16,24 @@ class ModuleInfo:
     url: str | None
     active: bool = True
     order: int = 0
+    preview: bool = False
+
+
+class ModuleVisibility:
+    """Audience levels for module visibility (most open to most restrictive)."""
+
+    ALL = "all"
+    STAFF = "staff"
+    ADMIN = "admin"
+    NONE = "none"
+
+    CHOICES = (ALL, STAFF, ADMIN, NONE)
+
+    @classmethod
+    def normalize(cls, value, default="staff"):
+        """Lowercase and validate a level string; fall back to `default`."""
+        value = (value or "").lower()
+        return value if value in cls.CHOICES else default
 
 
 @dataclass(frozen=True)

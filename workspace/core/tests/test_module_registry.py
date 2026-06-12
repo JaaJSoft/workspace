@@ -4,6 +4,7 @@ from workspace.core.module_registry import (
     CommandInfo,
     ModuleInfo,
     ModuleRegistry,
+    ModuleVisibility,
     PendingActionProviderInfo,
     SearchProviderInfo,
     SearchResult,
@@ -254,3 +255,35 @@ class CommandTests(TestCase):
         reg.register(_make_module("chat"))
         reg.register_commands([self._make_cmd()])
         self.assertEqual(reg.search_commands("zzzzz"), [])
+
+
+class ModulePreviewAndVisibilityTests(TestCase):
+    def test_module_info_preview_defaults_false(self):
+        m = ModuleInfo(
+            name="X", slug="x", description="", icon="i", color="c", url="/x"
+        )
+        self.assertFalse(m.preview)
+
+    def test_module_info_accepts_preview_true(self):
+        m = ModuleInfo(
+            name="X",
+            slug="x",
+            description="",
+            icon="i",
+            color="c",
+            url="/x",
+            preview=True,
+        )
+        self.assertTrue(m.preview)
+
+    def test_visibility_choices(self):
+        self.assertEqual(ModuleVisibility.CHOICES, ("all", "staff", "admin", "none"))
+
+    def test_normalize_accepts_known_values(self):
+        self.assertEqual(ModuleVisibility.normalize("admin"), "admin")
+        self.assertEqual(ModuleVisibility.normalize("ALL"), "all")
+
+    def test_normalize_falls_back_to_staff(self):
+        self.assertEqual(ModuleVisibility.normalize("bogus"), "staff")
+        self.assertEqual(ModuleVisibility.normalize(None), "staff")
+        self.assertEqual(ModuleVisibility.normalize(""), "staff")

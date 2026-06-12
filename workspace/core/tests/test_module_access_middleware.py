@@ -38,3 +38,35 @@ class ModuleAccessMiddlewareTests(TestCase):
         cache.clear()
         resp = self.client.get("/api/v1/modules")
         self.assertNotEqual(resp.status_code, 403)
+
+    def test_superuser_bypasses_block(self):
+        admin = User.objects.create_superuser(username="root", password="x")
+        self.client.force_login(admin)
+        ModuleAccessRule.objects.create(module_slug="mail", is_enabled=False)
+        cache.clear()
+        resp = self.client.get("/api/v1/mail/accounts")
+        self.assertNotEqual(resp.status_code, 403)
+
+    def test_anonymous_request_not_blocked_by_middleware(self):
+        self.client.logout()
+        ModuleAccessRule.objects.create(module_slug="mail", is_enabled=False)
+        cache.clear()
+        resp = self.client.get("/mail")
+        # Anonymous users are not blocked by THIS middleware; they hit the
+        # normal auth flow (login redirect / 401), never a module 403 page.
+        self.assertNotEqual(resp.status_code, 403)
+
+    def test_ui_block_renders_403_page_not_500(self):
+        ModuleAccessRule.objects.create(module_slug="mail", is_enabled=False)
+        cache.clear()
+        resp = self.client.get("/mail")
+        self.assertEqual(resp.status_code, 403)
+        # the full UI page is rendered (not a 500 from a template error)
+        self.assertIn(b"403", resp.content)
+
+    def test_ajax_fragment_block_returns_minimal_body(self):
+        ModuleAccessRule.objects.create(module_slug="mail", is_enabled=False)
+        cache.clear()
+        resp = self.client.get("/mail", headers={"X-Alpine-Request": "true"})
+        self.assertEqual(resp.status_code, 403)
+        self.assertNotIn(b"<html", resp.content.lower())

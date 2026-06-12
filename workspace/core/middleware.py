@@ -38,8 +38,17 @@ class ModuleAccessMiddleware:
         return self._forbidden(request)
 
     @staticmethod
-    def _forbidden(request):
+    def _is_ajax(request):
+        return bool(
+            request.headers.get("X-Alpine-Request")
+            or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        )
+
+    @classmethod
+    def _forbidden(cls, request):
         if request.path.startswith("/api/"):
             return JsonResponse({"detail": "Module not available."}, status=403)
+        if cls._is_ajax(request):
+            return HttpResponseForbidden("Module not available.")
         html = render_to_string("403.html", request=request)
         return HttpResponseForbidden(html)

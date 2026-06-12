@@ -212,6 +212,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "workspace.users.middleware.AjaxLoginRedirectMiddleware",
     "workspace.users.middleware.PresenceMiddleware",
+    "workspace.core.middleware.ModuleAccessMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_http_compression.middleware.HttpCompressionMiddleware",

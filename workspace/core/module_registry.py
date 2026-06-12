@@ -191,8 +191,5 @@ class ModuleRegistry:
     def get_active(self) -> list[ModuleInfo]:
         return [m for m in self.get_all() if m.active]
 
-    def get_for_template(self) -> list[dict]:
-        return [asdict(m) for m in self.get_all()]
-
 
 registry = ModuleRegistry()

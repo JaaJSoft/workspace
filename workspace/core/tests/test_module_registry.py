@@ -54,13 +54,6 @@ class RegisterTests(TestCase):
         reg.register(_make_module("b", active=False))
         self.assertEqual([m.slug for m in reg.get_active()], ["a"])
 
-    def test_get_for_template_returns_dicts(self):
-        reg = ModuleRegistry()
-        reg.register(_make_module("chat"))
-        result = reg.get_for_template()
-        self.assertIsInstance(result[0], dict)
-        self.assertEqual(result[0]["slug"], "chat")
-
 
 class SearchProviderTests(TestCase):
     def test_register_search_provider(self):

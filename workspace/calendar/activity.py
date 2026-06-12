@@ -1,6 +1,6 @@
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
-from django.utils import timezone
+from django.utils import formats, timezone
 
 from workspace.core.activity_registry import ActivityProvider
 
@@ -78,6 +78,17 @@ class CalendarActivityProvider(ActivityProvider):
                     "full_name": evt.owner.get_full_name(),
                 }
 
+            # Surface when the event actually takes place (evt.start), distinct
+            # from the activity timestamp (evt.updated_at, used for time_ago).
+            # All-day events show the date only; timed events add the hour.
+            local_start = timezone.localtime(evt.start)
+            if evt.all_day:
+                meta_icon = "calendar"
+                meta_text = formats.date_format(local_start, "D j M")
+            else:
+                meta_icon = "calendar-clock"
+                meta_text = formats.date_format(local_start, "D j M H:i")
+
             events.append(
                 {
                     "icon": "calendar",
@@ -86,6 +97,8 @@ class CalendarActivityProvider(ActivityProvider):
                     "timestamp": evt.updated_at,
                     "url": f"/calendar?event={evt.pk}",
                     "actor": actor,
+                    "meta_icon": meta_icon,
+                    "meta_text": meta_text,
                 }
             )
         return events

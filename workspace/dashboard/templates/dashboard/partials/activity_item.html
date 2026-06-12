@@ -8,6 +8,13 @@
       <span class="badge badge-ghost badge-xs whitespace-nowrap flex-shrink-0">{{ event.label }}</span>
     </div>
     <div class="text-xs text-base-content/60 truncate flex items-center gap-1">
+      {% if event.meta_text %}
+        <span class="inline-flex items-center gap-1 flex-shrink-0">
+          <i data-lucide="{{ event.meta_icon|default:'calendar' }}" class="w-3 h-3"></i>
+          {{ event.meta_text }}
+        </span>
+        &middot;
+      {% endif %}
       {% if event.actor %}
         {% include "ui/partials/user_identity.html" with user=event.actor %} &middot;
       {% endif %}

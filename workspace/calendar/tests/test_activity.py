@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -158,6 +158,49 @@ class CalendarActivityProviderTests(TestCase):
         self.assertEqual(len(events), 3)
         titles = {e["description"] for e in events}
         self.assertIn("Alice Private Event", titles)
+
+    # -- event date exposed on feed items --------------------------------
+
+    def test_recent_events_expose_timed_event_date(self):
+        """A timed event exposes its start date AND time in the meta fields."""
+        start = timezone.make_aware(datetime(2026, 6, 15, 14, 0))
+        Event.objects.create(
+            calendar=self.alice_cal,
+            title="Timed Event",
+            start=start,
+            end=start + timedelta(hours=1),
+            owner=self.alice,
+            all_day=False,
+        )
+        events = self.provider.get_recent_events(self.alice.id, viewer_id=None)
+        item = next(e for e in events if e["description"] == "Timed Event")
+        self.assertEqual(item["meta_icon"], "calendar-clock")
+        self.assertIn("14:00", item["meta_text"])
+        self.assertIn("15", item["meta_text"])
+
+    def test_recent_events_expose_all_day_event_date_without_time(self):
+        """An all-day event exposes only the date, no clock time."""
+        start = timezone.make_aware(datetime(2026, 6, 15, 0, 0))
+        Event.objects.create(
+            calendar=self.alice_cal,
+            title="All Day Event",
+            start=start,
+            end=start + timedelta(days=1),
+            owner=self.alice,
+            all_day=True,
+        )
+        events = self.provider.get_recent_events(self.alice.id, viewer_id=None)
+        item = next(e for e in events if e["description"] == "All Day Event")
+        self.assertEqual(item["meta_icon"], "calendar")
+        self.assertNotIn(":", item["meta_text"])
+        self.assertIn("15", item["meta_text"])
+
+    def test_recent_events_external_event_exposes_date(self):
+        """Synced (external) events also expose their start date."""
+        self._make_external_event_for_alice(title="Synced With Date")
+        events = self.provider.get_recent_events(user_id=None, viewer_id=self.alice.id)
+        item = next(e for e in events if e["description"] == "Synced With Date")
+        self.assertTrue(item["meta_text"])
 
     # -- get_stats -------------------------------------------------------
 

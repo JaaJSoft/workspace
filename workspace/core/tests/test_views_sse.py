@@ -9,10 +9,12 @@ Prometheus gauge decrement).
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import RequestFactory, TestCase
 from prometheus_client import REGISTRY
 
 from workspace.core import views_sse
+from workspace.core.models import ModuleAccessRule
 
 User = get_user_model()
 
@@ -162,6 +164,31 @@ class MetricsTests(TestCase):
 
         after = _sample("sse_pubsub_messages_total")
         self.assertEqual(after - before, 1)
+
+
+class SseProviderModuleAccessTests(TestCase):
+    """The global SSE aggregator must not instantiate providers for modules
+    the user is not allowed to access (otherwise a user with chat disabled
+    still receives chat events through /api/v1/stream)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="sse-access", password="x")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_disabled_module_provider_excluded(self):
+        # "chat" is a restrictable module that registers an SSE provider.
+        ModuleAccessRule.objects.create(module_slug="chat", is_enabled=False)
+        cache.clear()
+        providers = views_sse._init_providers(self.user, None)
+        self.assertNotIn("chat", providers)
+
+    def test_enabled_module_provider_included(self):
+        # Default-open: with no rule, the restrictable chat provider is present.
+        cache.clear()
+        providers = views_sse._init_providers(self.user, None)
+        self.assertIn("chat", providers)
 
 
 class StreamConstantTests(TestCase):

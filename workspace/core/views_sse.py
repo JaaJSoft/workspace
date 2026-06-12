@@ -5,6 +5,7 @@ import orjson
 from django.http import StreamingHttpResponse
 
 from workspace.common.metrics import safe_counter, safe_gauge, safe_histogram
+from workspace.core.services.module_access import can_access_module
 
 from .sse_registry import sse_registry
 
@@ -84,10 +85,12 @@ def global_stream(request):
 
 
 def _init_providers(user, last_event_id):
-    """Instantiate one provider per registered app."""
+    """Instantiate one provider per registered app the user may access."""
     providers_info = sse_registry.get_all()
     providers = {}
     for slug, info in providers_info.items():
+        if not can_access_module(user, slug):
+            continue
         try:
             providers[slug] = info.provider_cls(user, last_event_id)
         except Exception:

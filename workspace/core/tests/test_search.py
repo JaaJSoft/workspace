@@ -1,6 +1,9 @@
 """Tests for search functions across all modules."""
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
@@ -340,3 +343,49 @@ class MailSearchTests(TestCase):
         self.msg.save()
         results = search_mail("Invoice", self.alice, 10)
         self.assertEqual(len(results), 0)
+
+
+# -- Unified search visibility -------------------------------------------
+
+
+class UnifiedSearchVisibilityTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="se", password="x")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        # UnifiedSearchView is wrapped in @cached_response; LocMemCache is
+        # process-global across TestCase runs, so clear it between tests.
+        cache.clear()
+
+    @patch("workspace.core.views.is_module_slug_visible")
+    @patch("workspace.core.views.registry")
+    def test_hidden_module_results_and_commands_filtered(
+        self, mock_registry, mock_visible
+    ):
+        mock_registry.search.return_value = [
+            {"module_slug": "files", "name": "doc"},
+            {"module_slug": "lab", "name": "secret"},
+        ]
+        from workspace.core.module_registry import CommandInfo
+
+        mock_registry.search_commands.return_value = [
+            CommandInfo(
+                name="Lab",
+                keywords=[],
+                icon="i",
+                color="c",
+                url="/lab",
+                kind="navigate",
+                module_slug="lab",
+            ),
+        ]
+        mock_visible.side_effect = lambda user, slug: slug != "lab"
+
+        resp = self.client.get("/api/v1/search?q=do")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        result_slugs = {r["module_slug"] for r in body["results"]}
+        self.assertEqual(result_slugs, {"files"})
+        self.assertEqual(body["commands"], [])
+        self.assertEqual(body["count"], 1)

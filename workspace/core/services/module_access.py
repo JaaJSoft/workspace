@@ -89,6 +89,17 @@ def filter_visible(user, items, slug_getter):
     ]
 
 
+def module_slug_from_dotted_path(dotted_path: str) -> str | None:
+    """Return the workspace module slug for a dotted module path, or None.
+
+    ``"workspace.mail.views"`` -> ``"mail"``; non-workspace paths -> None.
+    """
+    parts = (dotted_path or "").split(".")
+    if len(parts) < 2 or parts[0] != "workspace":
+        return None
+    return parts[1]
+
+
 def invalidate_module_access_cache() -> None:
     """Drop every cached enabled-set (call from rule write paths)."""
     invalidate_tags(_CACHE_TAG)

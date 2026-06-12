@@ -3,6 +3,7 @@ from django.template.loader import render_to_string
 
 from workspace.core.services.module_access import (
     can_access_module,
+    module_slug_from_dotted_path,
     restrictable_module_slugs,
 )
 
@@ -26,12 +27,8 @@ class ModuleAccessMiddleware:
         user = getattr(request, "user", None)
         if user is None or not user.is_authenticated:
             return None
-        module = getattr(view_func, "__module__", "") or ""
-        parts = module.split(".")
-        if len(parts) < 2 or parts[0] != "workspace":
-            return None
-        slug = parts[1]
-        if slug not in restrictable_module_slugs():
+        slug = module_slug_from_dotted_path(getattr(view_func, "__module__", ""))
+        if slug is None or slug not in restrictable_module_slugs():
             return None
         if can_access_module(user, slug):
             return None

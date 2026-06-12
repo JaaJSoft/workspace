@@ -82,3 +82,18 @@ class ModuleAccessServiceTests(TestCase):
         self.assertTrue(can_access_module(self.user, "mail"))
         ModuleAccessRule.objects.create(module_slug="mail", is_enabled=False)
         self.assertFalse(can_access_module(self.user, "mail"))
+
+    def test_cache_invalidated_on_group_membership_change(self):
+        group = Group.objects.create(name="Blocked")
+        ModuleAccessRule.objects.create(
+            module_slug="mail", group=group, is_enabled=False
+        )
+        cache.clear()
+        # user not in the denied group yet -> allowed (warms the cache)
+        self.assertTrue(can_access_module(self.user, "mail"))
+        # joining the denied group must take effect immediately
+        self.user.groups.add(group)
+        self.assertFalse(can_access_module(self.user, "mail"))
+        # leaving it must restore access immediately
+        self.user.groups.remove(group)
+        self.assertTrue(can_access_module(self.user, "mail"))

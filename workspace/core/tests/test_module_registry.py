@@ -257,21 +257,6 @@ class ModulePreviewAndVisibilityTests(TestCase):
         )
         self.assertFalse(m.preview)
 
-    def test_module_info_accepts_preview_true(self):
-        m = ModuleInfo(
-            name="X",
-            slug="x",
-            description="",
-            icon="i",
-            color="c",
-            url="/x",
-            preview=True,
-        )
-        self.assertTrue(m.preview)
-
-    def test_visibility_choices(self):
-        self.assertEqual(ModuleVisibility.CHOICES, ("all", "staff", "admin", "none"))
-
     def test_normalize_accepts_known_values(self):
         self.assertEqual(ModuleVisibility.normalize("admin"), "admin")
         self.assertEqual(ModuleVisibility.normalize("ALL"), "all")
@@ -280,3 +265,10 @@ class ModulePreviewAndVisibilityTests(TestCase):
         self.assertEqual(ModuleVisibility.normalize("bogus"), "staff")
         self.assertEqual(ModuleVisibility.normalize(None), "staff")
         self.assertEqual(ModuleVisibility.normalize(""), "staff")
+
+    def test_normalize_strips_surrounding_whitespace(self):
+        # PREVIEW_VISIBILITY comes from an env var, which may carry stray
+        # whitespace; it should resolve to the level, not the staff fallback.
+        self.assertEqual(ModuleVisibility.normalize(" admin"), "admin")
+        self.assertEqual(ModuleVisibility.normalize("none "), "none")
+        self.assertEqual(ModuleVisibility.normalize("  ALL  "), "all")

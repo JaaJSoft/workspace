@@ -164,6 +164,20 @@ class BuildDashboardContextTests(TestCase):
         context = _build_dashboard_context(self.user)
         self.assertEqual([m["slug"] for m in context["modules"]], ["files"])
 
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_preview_flag_carried_into_module_context(
+        self, mock_visible, mock_registry
+    ):
+        # The home grid template renders the Preview badge off this flag, so the
+        # view must carry preview through to each module dict.
+        mock_visible.return_value = [_mod("files", preview=True)]
+        mock_registry.get_pending_action_counts.return_value = {}
+
+        context = _build_dashboard_context(self.user)
+        files_mod = context["modules"][0]
+        self.assertTrue(files_mod["preview"])
+
 
 # ── _get_activity_context ───────────────────────────────────────
 

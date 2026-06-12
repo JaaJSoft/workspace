@@ -7,7 +7,7 @@ hiding only - it is not request-level enforcement.
 
 from django.conf import settings
 
-from workspace.core.module_registry import ModuleVisibility, registry
+from ..module_registry import ModuleVisibility, registry
 
 
 def user_can_see_module(user, module) -> bool:

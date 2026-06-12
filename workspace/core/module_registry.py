@@ -32,7 +32,7 @@ class ModuleVisibility:
     @classmethod
     def normalize(cls, value, default="staff"):
         """Lowercase and validate a level string; fall back to `default`."""
-        value = (value or "").lower()
+        value = (value or "").strip().lower()
         return value if value in cls.CHOICES else default
 
 

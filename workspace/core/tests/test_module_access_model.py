@@ -1,12 +1,9 @@
-from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from workspace.core.models import ModuleAccessRule
-
-User = get_user_model()
 
 
 class ModuleAccessRuleModelTests(TestCase):

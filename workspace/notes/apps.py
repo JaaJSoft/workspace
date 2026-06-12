@@ -28,7 +28,7 @@ class NotesConfig(AppConfig):
                 color="success",
                 url="/notes",
                 order=30,
-                preview=True,
+                # preview=True,
             )
         )
 

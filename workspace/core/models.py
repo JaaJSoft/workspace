@@ -1,6 +1,8 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
+from django.db.models.signals import post_delete, post_save
+from django.dispatch import receiver
 
 from workspace.common.uuids import uuid_v7_or_v4
 
@@ -52,3 +54,11 @@ class ModuleAccessRule(models.Model):
             raise ValidationError(
                 {"module_slug": "Unknown or non-restrictable module."}
             )
+
+
+@receiver(post_save, sender=ModuleAccessRule)
+@receiver(post_delete, sender=ModuleAccessRule)
+def _invalidate_module_access_cache(sender, **kwargs):
+    from workspace.core.services.module_access import invalidate_module_access_cache
+
+    invalidate_module_access_cache()

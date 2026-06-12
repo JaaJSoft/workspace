@@ -90,6 +90,26 @@ class ActivityRegistry:
             return None
         return info.provider_cls()
 
+    def _accessible_providers(self, viewer_id):
+        """Yield provider infos the viewer may access.
+
+        When viewer_id is None (system/unfiltered context) no filtering is
+        applied. Otherwise providers for modules the viewer cannot access are
+        skipped.
+        """
+        if viewer_id is None:
+            yield from self._providers.values()
+            return
+        from django.contrib.auth import get_user_model
+
+        from workspace.core.services.module_access import can_access_module
+
+        viewer = get_user_model().objects.filter(pk=viewer_id).first()
+        for info in self._providers.values():
+            if viewer is not None and not can_access_module(viewer, info.slug):
+                continue
+            yield info
+
     def get_daily_counts(
         self,
         user_id: int | None,
@@ -99,7 +119,7 @@ class ActivityRegistry:
         viewer_id: int | None = None,
     ) -> dict[date, int]:
         merged: dict[date, int] = defaultdict(int)
-        for info in self._providers.values():
+        for info in self._accessible_providers(viewer_id):
             try:
                 provider = info.provider_cls()
                 for day, count in provider.get_daily_counts(
@@ -129,6 +149,14 @@ class ActivityRegistry:
             info = self._providers.get(source)
             if info is None:
                 return []
+            if viewer_id is not None:
+                from django.contrib.auth import get_user_model
+
+                from workspace.core.services.module_access import can_access_module
+
+                viewer = get_user_model().objects.filter(pk=viewer_id).first()
+                if viewer is not None and not can_access_module(viewer, source):
+                    return []
             try:
                 provider = info.provider_cls()
                 events = provider.get_recent_events(
@@ -149,7 +177,7 @@ class ActivityRegistry:
 
         fetch_count = limit + offset
         all_events: list[dict] = []
-        for info in self._providers.values():
+        for info in self._accessible_providers(viewer_id):
             try:
                 provider = info.provider_cls()
                 events = provider.get_recent_events(
@@ -180,7 +208,7 @@ class ActivityRegistry:
         self, user_id: int | None, *, viewer_id: int | None = None
     ) -> dict[str, dict]:
         stats: dict[str, dict] = {}
-        for info in self._providers.values():
+        for info in self._accessible_providers(viewer_id):
             try:
                 provider = info.provider_cls()
                 stats[info.slug] = provider.get_stats(user_id, viewer_id=viewer_id)

@@ -2,8 +2,9 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 
+from workspace.core.context_processors import workspace_modules
 from workspace.core.module_registry import CommandInfo, ModuleInfo
 from workspace.core.services.module_visibility import (
     filter_visible_commands,
@@ -131,3 +132,48 @@ class VisibleModulesTests(TestCase):
         ]
         result = filter_visible_commands(self.normal, cmds)
         self.assertEqual([c.module_slug for c in result], ["files"])
+
+
+class ContextProcessorVisibilityTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.normal = User.objects.create_user(username="cn", password="x")
+        self.staff = User.objects.create_user(
+            username="cs", password="x", is_staff=True
+        )
+
+    def _ctx(self, user):
+        request = self.factory.get("/")
+        request.user = user
+        return workspace_modules(request)
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    @patch("workspace.core.context_processors.registry")
+    @patch("workspace.core.services.module_visibility.registry")
+    def test_preview_module_hidden_from_normal_user(self, svc_registry, cp_registry):
+        mods = [_module("files"), _module("lab", preview=True)]
+        cmds = [
+            CommandInfo(
+                name="Lab",
+                keywords=[],
+                icon="i",
+                color="c",
+                url="/lab",
+                kind="navigate",
+                module_slug="lab",
+            ),
+        ]
+        cp_registry.get_active.return_value = mods
+        cp_registry.get_active_commands.return_value = cmds
+        svc_registry.get_active.return_value = mods
+        svc_registry.get.side_effect = lambda s: {m.slug: m for m in mods}.get(s)
+
+        normal_ctx = self._ctx(self.normal)
+        staff_ctx = self._ctx(self.staff)
+
+        normal_slugs = {m["slug"] for m in normal_ctx["workspace_active_modules"]}
+        staff_slugs = {m["slug"] for m in staff_ctx["workspace_active_modules"]}
+        self.assertNotIn("lab", normal_slugs)
+        self.assertIn("lab", staff_slugs)
+        normal_cmd_mods = {c["module_slug"] for c in normal_ctx["workspace_commands"]}
+        self.assertNotIn("lab", normal_cmd_mods)

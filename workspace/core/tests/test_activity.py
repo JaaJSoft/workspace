@@ -1,13 +1,16 @@
 from datetime import date
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.core.activity_registry import (
     ActivityProvider,
     ActivityProviderInfo,
     ActivityRegistry,
+    activity_registry,
 )
+from workspace.core.models import ModuleAccessRule
 
 User = get_user_model()
 
@@ -436,6 +439,87 @@ class ActivityRegistryTests(TestCase):
         self.assertEqual(events, [])
         stats = self.registry.get_stats(1)
         self.assertEqual(stats, {"fail": {}})
+
+
+class ActivityModuleAccessTests(TestCase):
+    """The global registry must hide modules the viewer cannot access.
+
+    Restrictable modules (chat, calendar, mail, notes) register activity
+    providers. A viewer with one of those modules disabled via a
+    ``ModuleAccessRule`` must not see its stats, recent events, or daily
+    counts leak through the aggregating registry methods.
+    """
+
+    def setUp(self):
+        self.viewer = User.objects.create_user(username="viewer", password="x")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_disabled_module_excluded_from_stats(self):
+        ModuleAccessRule.objects.create(module_slug="chat", is_enabled=False)
+        cache.clear()
+        stats = activity_registry.get_stats(self.viewer.id, viewer_id=self.viewer.id)
+        self.assertNotIn("chat", stats)
+
+    def test_enabled_module_present_in_stats(self):
+        cache.clear()
+        stats = activity_registry.get_stats(self.viewer.id, viewer_id=self.viewer.id)
+        self.assertIn("chat", stats)
+
+    def test_recent_events_excludes_disabled_source(self):
+        from datetime import datetime
+        from unittest.mock import patch
+
+        from django.utils import timezone
+
+        ts = timezone.make_aware(datetime(2026, 3, 1, 10, 0))
+        fake_events = [{"label": "chat-event", "timestamp": ts}]
+
+        ModuleAccessRule.objects.create(module_slug="chat", is_enabled=False)
+        cache.clear()
+
+        # The chat provider would happily return events; the registry must
+        # short-circuit on access before ever calling it for a disabled module.
+        info = activity_registry.get_all()["chat"]
+        with patch.object(
+            info.provider_cls,
+            "get_recent_events",
+            return_value=list(fake_events),
+        ):
+            events = activity_registry.get_recent_events(
+                self.viewer.id, viewer_id=self.viewer.id, source="chat"
+            )
+        self.assertEqual(events, [])
+
+    def test_recent_events_returns_enabled_source(self):
+        from datetime import datetime
+        from unittest.mock import patch
+
+        from django.utils import timezone
+
+        ts = timezone.make_aware(datetime(2026, 3, 1, 10, 0))
+        fake_events = [{"label": "chat-event", "timestamp": ts}]
+
+        cache.clear()
+        info = activity_registry.get_all()["chat"]
+        with patch.object(
+            info.provider_cls,
+            "get_recent_events",
+            return_value=list(fake_events),
+        ):
+            events = activity_registry.get_recent_events(
+                self.viewer.id, viewer_id=self.viewer.id, source="chat"
+            )
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["label"], "chat-event")
+
+    def test_unfiltered_context_keeps_disabled_module(self):
+        """viewer_id=None means a system context: no access filtering."""
+        ModuleAccessRule.objects.create(module_slug="chat", is_enabled=False)
+        cache.clear()
+        stats = activity_registry.get_stats(self.viewer.id, viewer_id=None)
+        self.assertIn("chat", stats)
 
 
 class ActivityServiceTests(TestCase):

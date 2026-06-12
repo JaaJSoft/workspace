@@ -212,6 +212,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "workspace.users.middleware.AjaxLoginRedirectMiddleware",
     "workspace.users.middleware.PresenceMiddleware",
+    "workspace.core.middleware.ModuleAccessMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_http_compression.middleware.HttpCompressionMiddleware",
@@ -277,9 +278,9 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-        "knox.auth.TokenAuthentication",
-        "rest_framework.authentication.BasicAuthentication",
+        "workspace.core.authentication.ModuleAccessSessionAuthentication",
+        "workspace.core.authentication.ModuleAccessTokenAuthentication",
+        "workspace.core.authentication.ModuleAccessBasicAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",

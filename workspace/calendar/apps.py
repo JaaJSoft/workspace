@@ -5,6 +5,7 @@ class CalendarConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "workspace.calendar"
     label = "calendar"
+    restrictable = True
 
     def ready(self):
         from workspace.calendar.search import search_events

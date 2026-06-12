@@ -4,6 +4,7 @@ from django.apps import AppConfig
 class ChatConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "workspace.chat"
+    restrictable = True
 
     def ready(self):
         from workspace.chat.search import search_conversations

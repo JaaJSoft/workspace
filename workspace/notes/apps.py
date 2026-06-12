@@ -4,6 +4,7 @@ from django.apps import AppConfig
 class NotesConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "workspace.notes"
+    restrictable = True
 
     def ready(self):
         from workspace.core.activity_registry import (

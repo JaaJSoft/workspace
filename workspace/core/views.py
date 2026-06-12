@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from workspace.common.cache import cached_response
 from workspace.common.mixins import CacheControlMixin
 from workspace.core.module_registry import registry
+from workspace.core.services.module_access import filter_visible
 
 
 class ModulesView(CacheControlMixin, APIView):
@@ -59,6 +60,9 @@ class UnifiedSearchView(CacheControlMixin, APIView):
 
         results = registry.search(query, request.user, limit)
         commands = [asdict(c) for c in registry.search_commands(query)]
+
+        results = filter_visible(request.user, results, lambda r: r["module_slug"])
+        commands = filter_visible(request.user, commands, lambda c: c["module_slug"])
         return Response(
             {
                 "query": query,

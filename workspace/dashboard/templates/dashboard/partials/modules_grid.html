@@ -16,7 +16,12 @@
       </div>
       <span class="text-xs font-medium text-base-content text-center leading-tight">{{ module.name }}</span>
       {% if module.preview %}
-        <span class="badge badge-warning badge-xs">Preview</span>
+        <span
+          class="tooltip tooltip-bottom cursor-help"
+          data-tip="Under active development: may have bugs, and its data may not be migrated or stay backward-compatible across updates."
+        >
+          <span class="badge badge-warning badge-xs">Preview</span>
+        </span>
       {% endif %}
     </a>
   {% endfor %}

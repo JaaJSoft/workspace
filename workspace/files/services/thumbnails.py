@@ -81,6 +81,14 @@ def generate_thumbnail(file_obj):
             else:
                 img = Image.open(file_obj.content)
 
+                # Hint the decoder to load at a reduced scale near the target
+                # size, before any pixels are read. For JPEG this makes libjpeg
+                # decode at 1/2, 1/4 or 1/8 scale - a large CPU and memory win
+                # on big photos - and is a no-op for formats without draft
+                # support. Kept before exif_transpose (which forces a full
+                # load) so the reduced-scale decode actually takes effect.
+                img.draft(None, THUMBNAIL_MAX_SIZE)
+
                 # Auto-rotate based on EXIF orientation. A malformed EXIF
                 # block must not abort thumbnail generation; we log at debug
                 # level for diagnosability and continue with the un-rotated image.

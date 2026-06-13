@@ -33,7 +33,9 @@ class ThumbnailEventHandlerTests(TestCase):
         try:
             if default_storage.exists(path):
                 default_storage.delete(path)
-        except PermissionError, OSError:
+        except (PermissionError, OSError):
+            # Best-effort cleanup: a blocked or unavailable delete
+            # (e.g. Windows file lock) must not fail the test run.
             pass
 
     def test_image_create_generates_thumbnail_and_sets_flag(self):

@@ -390,14 +390,14 @@
             <!-- Favorite button (top-right) -->
             {% if not is_trash_view %}
             <div class="absolute top-2 right-2 z-10" @click.stop>
-              <span x-show="isActionLoading('{{ node.uuid }}')" class="btn btn-ghost btn-xs btn-circle bg-base-100/80 backdrop-blur-sm pointer-events-none">
+              <span x-show="isActionLoading('{{ node.uuid }}')" class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm pointer-events-none">
                 <span class="loading loading-spinner loading-xs"></span>
               </span>
               {% if node.is_favorite %}
               <button
                 x-show="!isActionLoading('{{ node.uuid }}')"
                 type="button"
-                class="btn btn-ghost btn-xs btn-circle bg-base-100/80 backdrop-blur-sm"
+                class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm"
                 aria-label="Remove from favorites"
                 @click="toggleFavorite('{{ node.uuid }}', true)"
               >
@@ -407,7 +407,7 @@
               <button
                 x-show="!isActionLoading('{{ node.uuid }}')"
                 type="button"
-                class="btn btn-ghost btn-xs btn-circle bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100"
+                class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100"
                 aria-label="Add to favorites"
                 @click="toggleFavorite('{{ node.uuid }}', false)"
               >

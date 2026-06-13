@@ -151,7 +151,13 @@ class File(models.Model):
             # whole table.
             models.Index(
                 fields=["type"],
-                condition=Q(has_thumbnail=False, deleted_at__isnull=True),
+                # node_type matches the backfill query (files only, never
+                # folders, which would otherwise bloat the partial index).
+                condition=Q(
+                    has_thumbnail=False,
+                    deleted_at__isnull=True,
+                    node_type="file",  # File.NodeType.FILE
+                ),
                 name="file_thumb_pending_idx",
             ),
         ]

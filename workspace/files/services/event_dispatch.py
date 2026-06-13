@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 
+from django.core.exceptions import ValidationError
+
 logger = logging.getLogger(__name__)
 
 # action value (str) -> list of handler callables taking a FileEvent
@@ -38,11 +40,12 @@ def run_handlers(event_uuid) -> None:
     Handlers are best-effort side effects: one raising is logged and does not
     stop the others or propagate.
     """
-    from workspace.files.models import FileEvent
+    from ..models import FileEvent
 
     try:
         event = FileEvent.objects.select_related("file", "actor").get(uuid=event_uuid)
-    except FileEvent.DoesNotExist:
+    except FileEvent.DoesNotExist, ValidationError, ValueError, TypeError:
+        # Unknown or malformed event id (e.g. a non-UUID string): nothing to run.
         return
 
     for handler in _HANDLERS.get(str(event.action), []):

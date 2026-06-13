@@ -57,6 +57,25 @@ class ThumbnailEventHandlerTests(TestCase):
         self.assertTrue(f.has_thumbnail)
         self.assertTrue(default_storage.exists(get_thumbnail_path(f.uuid)))
 
+    def test_content_replaced_generates_thumbnail_and_sets_flag(self):
+        f = FileService.create_file(
+            owner=self.user,
+            name="pic3.png",
+            content=ContentFile(_png_bytes(), name="pic3.png"),
+            mime_type="image/png",
+        )
+        f.type = "png"
+        f.save(update_fields=["type"])
+        f.has_thumbnail = False
+        f.save(update_fields=["has_thumbnail"])
+        self.addCleanup(self._cleanup, f.uuid)
+
+        generate_thumbnail_for_event(self._event(f, FileEvent.Action.CONTENT_REPLACED))
+
+        f.refresh_from_db()
+        self.assertTrue(f.has_thumbnail)
+        self.assertTrue(default_storage.exists(get_thumbnail_path(f.uuid)))
+
     def test_non_image_is_skipped(self):
         f = FileService.create_file(
             owner=self.user,

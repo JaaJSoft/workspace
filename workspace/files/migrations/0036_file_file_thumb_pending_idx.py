@@ -15,6 +15,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddIndex(
             model_name='file',
-            index=models.Index(condition=models.Q(('deleted_at__isnull', True), ('has_thumbnail', False)), fields=['type'], name='file_thumb_pending_idx'),
+            index=models.Index(condition=models.Q(('deleted_at__isnull', True), ('has_thumbnail', False), ('node_type', 'file')), fields=['type'], name='file_thumb_pending_idx'),
         ),
     ]

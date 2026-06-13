@@ -17,8 +17,10 @@ User = get_user_model()
 
 class DispatchRegistryTests(TestCase):
     def setUp(self):
-        # Each test gets a clean registry so handlers don't leak between tests.
+        # Save the real (app-registered) handlers, then start from an empty
+        # registry so each test is isolated; tearDown restores the saved copy.
         self._saved = {k: list(v) for k, v in event_dispatch._HANDLERS.items()}
+        event_dispatch._HANDLERS.clear()
 
     def tearDown(self):
         event_dispatch._HANDLERS.clear()
@@ -79,10 +81,16 @@ class DispatchRegistryTests(TestCase):
         # CASCADE means a hard-deleted file's events vanish before the task runs.
         run_handlers("00000000-0000-0000-0000-000000000000")  # must not raise
 
+    def test_malformed_event_uuid_is_silently_ignored(self):
+        # A non-UUID id makes UUIDField.to_python raise ValidationError, which
+        # must not crash the dispatch task.
+        run_handlers("not-a-valid-uuid")  # must not raise
+
 
 class DispatchSchedulingTests(TestCase):
     def setUp(self):
         self._saved = {k: list(v) for k, v in event_dispatch._HANDLERS.items()}
+        event_dispatch._HANDLERS.clear()
         self.user = User.objects.create_user(username="sched", password="p")
         self.file = File.objects.create(
             owner=self.user, name="a.txt", node_type=File.NodeType.FILE

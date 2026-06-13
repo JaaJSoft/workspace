@@ -59,7 +59,17 @@ def _schedule_dispatch(event):
             return
         from workspace.files.tasks import run_file_event_handlers
 
-        transaction.on_commit(lambda: run_file_event_handlers.delay(str(event.uuid)))
+        event_uuid = str(event.uuid)
+
+        def _enqueue_dispatch():
+            try:
+                run_file_event_handlers.delay(event_uuid)
+            except Exception:
+                logger.exception(
+                    "Failed to enqueue file-event dispatch for %s", event_uuid
+                )
+
+        transaction.on_commit(_enqueue_dispatch)
     except Exception:
         logger.exception("Failed to schedule dispatch for file event %s", event.uuid)
 

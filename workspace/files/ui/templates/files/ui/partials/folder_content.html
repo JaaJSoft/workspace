@@ -183,7 +183,7 @@
     <!-- Table container with overflow -->
     <div class="overflow-auto flex-1 min-h-0"{% if not is_trash_view %} @contextmenu="openBackgroundContextMenu($event)"{% endif %}>
       {% if nodes %}
-      <table class="table table-fixed [&_td]:align-middle [&_th]:align-middle" :class="compactList ? 'table-xs [&_svg]:h-4 [&_svg]:w-4 [&_.checkbox]:h-4 [&_.checkbox]:w-4 [&_.btn-circle]:h-5 [&_.btn-circle]:w-5 [&_.btn-circle]:min-h-0' : ''" x-show="viewMode === 'list'" x-cloak>
+      <table class="table table-fixed [&_td]:align-middle [&_th]:align-middle" :class="compactList ? 'table-xs [&_svg]:h-4 [&_svg]:w-4 [&_.checkbox]:h-4 [&_.checkbox]:w-4 [&_.btn-square]:h-5 [&_.btn-square]:w-5 [&_.btn-square]:min-h-0' : ''" x-show="viewMode === 'list'" x-cloak>
         <thead class="sticky top-0 z-10">
           <tr class="bg-base-200">
             <th class="w-10" data-col="select">
@@ -280,7 +280,7 @@
                 <button
                   x-show="!isActionLoading('{{ node.uuid }}')"
                   type="button"
-                  class="btn btn-ghost btn-xs btn-circle"
+                  class="btn btn-ghost btn-xs btn-square"
                   aria-label="Remove from favorites"
                   @click="toggleFavorite('{{ node.uuid }}', true)"
                 >
@@ -290,7 +290,7 @@
                 <button
                   x-show="!isActionLoading('{{ node.uuid }}')"
                   type="button"
-                  class="btn btn-ghost btn-xs btn-circle"
+                  class="btn btn-ghost btn-xs btn-square"
                   aria-label="Add to favorites"
                   @click="toggleFavorite('{{ node.uuid }}', false)"
                 >
@@ -322,7 +322,7 @@
               <button
                 x-show="!isActionLoading('{{ node.uuid }}')"
                 type="button"
-                class="btn btn-ghost btn-xs btn-circle opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
                 @click="openContextMenu($event, {
                   uuid: '{{ node.uuid }}',
                   name: '{{ node.name|escapejs }}',
@@ -390,14 +390,14 @@
             <!-- Favorite button (top-right) -->
             {% if not is_trash_view %}
             <div class="absolute top-2 right-2 z-10" @click.stop>
-              <span x-show="isActionLoading('{{ node.uuid }}')" class="btn btn-ghost btn-xs btn-circle bg-base-100/80 backdrop-blur-sm pointer-events-none">
+              <span x-show="isActionLoading('{{ node.uuid }}')" class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm pointer-events-none">
                 <span class="loading loading-spinner loading-xs"></span>
               </span>
               {% if node.is_favorite %}
               <button
                 x-show="!isActionLoading('{{ node.uuid }}')"
                 type="button"
-                class="btn btn-ghost btn-xs btn-circle bg-base-100/80 backdrop-blur-sm"
+                class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm"
                 aria-label="Remove from favorites"
                 @click="toggleFavorite('{{ node.uuid }}', true)"
               >
@@ -407,7 +407,7 @@
               <button
                 x-show="!isActionLoading('{{ node.uuid }}')"
                 type="button"
-                class="btn btn-ghost btn-xs btn-circle bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100"
+                class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100"
                 aria-label="Add to favorites"
                 @click="toggleFavorite('{{ node.uuid }}', false)"
               >
@@ -457,7 +457,7 @@
                 {% if show_actions != False %}
                 <button
                   type="button"
-                  class="btn btn-ghost btn-xs btn-circle flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  class="btn btn-ghost btn-xs btn-square flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
                   @click.stop="openContextMenu($event, {
                     uuid: '{{ node.uuid }}',
                     name: '{{ node.name|escapejs }}',

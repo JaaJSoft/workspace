@@ -709,7 +709,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     "generate-thumbnails": {
         "task": "files.generate_thumbnails",
-        "schedule": 300.0,  # Every 5 minutes
+        "schedule": 3600.0,  # Hourly backfill; primary path is event-driven
     },
     "purge-trash": {
         "task": "files.purge_trash",

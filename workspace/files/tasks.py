@@ -116,3 +116,11 @@ def sync_folder(self, user_id, folder_uuid=None):
         "folders_soft_deleted": result.folders_soft_deleted,
         "errors": result.errors,
     }
+
+
+@shared_task(name="files.run_file_event_handlers", bind=True, max_retries=0)
+def run_file_event_handlers(self, event_uuid):
+    """Run the registered handlers for a recorded FileEvent (off-request)."""
+    from workspace.files.services.event_dispatch import run_handlers
+
+    run_handlers(event_uuid)

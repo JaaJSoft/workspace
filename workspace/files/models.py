@@ -3,7 +3,7 @@ import secrets
 
 from django.contrib.auth import get_user_model
 from django.db import models, transaction
-from django.db.models import Value
+from django.db.models import Q, Value
 from django.db.models.functions import Concat, Lower, Substr
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
@@ -145,6 +145,20 @@ class File(models.Model):
                 fields=["path"],
                 name="file_path_idx",
                 opclasses=["text_pattern_ops"],
+            ),
+            # Partial index for the thumbnail backfill scan: only the few
+            # un-thumbnailed live files, so the periodic query never scans the
+            # whole table.
+            models.Index(
+                fields=["type"],
+                # node_type matches the backfill query (files only, never
+                # folders, which would otherwise bloat the partial index).
+                condition=Q(
+                    has_thumbnail=False,
+                    deleted_at__isnull=True,
+                    node_type="file",  # File.NodeType.FILE
+                ),
+                name="file_thumb_pending_idx",
             ),
         ]
         constraints = [

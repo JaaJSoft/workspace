@@ -167,12 +167,31 @@ if _REDIS_URL:
     _REDIS_CELERY_URL = _redis_db_url(_REDIS_URL, 2)
     _REDIS_WEBDAV_URL = _redis_db_url(_REDIS_URL, 3)
 
+    # Cache/session value compression. Defaults to zlib (stdlib, always
+    # available); set REDIS_CACHE_COMPRESSION to gzip/lzma/lz4/zstd to override
+    # (lz4 and zstd need the lz4 / pyzstd package installed on the host). Any
+    # other value, e.g. "off" or "none", disables compression.
+    _REDIS_COMPRESSORS = {
+        "zlib": "django_redis.compressors.zlib.ZlibCompressor",
+        "gzip": "django_redis.compressors.gzip.GzipCompressor",
+        "lzma": "django_redis.compressors.lzma.LzmaCompressor",
+        "lz4": "django_redis.compressors.lz4.Lz4Compressor",
+        "zstd": "django_redis.compressors.zstd.ZStdCompressor",
+    }
+    _REDIS_COMPRESSOR = _REDIS_COMPRESSORS.get(
+        os.getenv("REDIS_CACHE_COMPRESSION", "zlib").strip().lower()
+    )
+    _REDIS_COMPRESSOR_OPTION = (
+        {"COMPRESSOR": _REDIS_COMPRESSOR} if _REDIS_COMPRESSOR else {}
+    )
+
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
             "LOCATION": _REDIS_CACHE_URL,
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                **_REDIS_COMPRESSOR_OPTION,
             },
             "TIMEOUT": None,  # Infinite by default; specific features manage their own TTL
         },
@@ -181,10 +200,12 @@ if _REDIS_URL:
             "LOCATION": _REDIS_SESSION_URL,
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                **_REDIS_COMPRESSOR_OPTION,
             },
             "TIMEOUT": None,
         },
     }
+
     # Use dedicated Redis DB for sessions (isolated from cache evictions)
     SESSION_ENGINE = "django.contrib.sessions.backends.cache"
     SESSION_CACHE_ALIAS = "sessions"

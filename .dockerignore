@@ -46,7 +46,7 @@ htmlcov/
 .pytest_cache/
 .tox/
 
-workspace/*/tests
+workspace/**/tests
 
 # Documentation
 *.md

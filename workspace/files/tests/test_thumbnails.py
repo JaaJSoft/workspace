@@ -6,6 +6,7 @@ made with a safety net - the optimization must not change any of these.
 """
 
 import io
+import logging
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -21,6 +22,7 @@ from workspace.files.services.thumbnails import (
 )
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 def _image_bytes(mode, size, fmt, color):
@@ -53,7 +55,9 @@ class GenerateThumbnailOutputTests(TestCase):
             if default_storage.exists(path):
                 default_storage.delete(path)
         except PermissionError, OSError:
-            pass
+            # Thumbnail cleanup is best-effort: a blocked or unavailable
+            # delete (e.g. Windows file lock) must not fail the test run.
+            logger.debug("could not delete test thumbnail %s", uuid)
 
     def _open_thumb(self, uuid):
         path = get_thumbnail_path(uuid)

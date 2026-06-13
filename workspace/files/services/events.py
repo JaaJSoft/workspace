@@ -8,6 +8,8 @@ raw events into UI-ready timeline rows.
 
 import logging
 
+from django.db import transaction
+
 from ..models import FileEvent
 
 logger = logging.getLogger(__name__)
@@ -17,7 +19,8 @@ def record_event(file, actor, action, metadata=None):
     """Persist a single audit row for an action performed on a file.
 
     Failures are logged and swallowed - audit logging must never bring
-    down the user's primary action (rename, share, ...).
+    down the user's primary action (rename, share, ...). On success, the
+    event's handlers are scheduled to run after the transaction commits.
     """
     if file is None:
         return None
@@ -29,7 +32,7 @@ def record_event(file, actor, action, metadata=None):
     if state is not None and state.adding:
         return None
     try:
-        return FileEvent.objects.create(
+        event = FileEvent.objects.create(
             file=file,
             actor=actor if (actor is not None and actor.is_authenticated) else None,
             action=action,
@@ -38,6 +41,27 @@ def record_event(file, actor, action, metadata=None):
     except Exception:
         logger.exception("Failed to record file event %s for file %s", action, file.pk)
         return None
+    _schedule_dispatch(event)
+    return event
+
+
+def _schedule_dispatch(event):
+    """Run the event's handlers after the surrounding transaction commits.
+
+    on_commit guarantees the worker sees committed data and that rolled-back
+    mutations dispatch nothing. No-op when no handler is registered. Never
+    raises - dispatch must not break the user's action.
+    """
+    try:
+        from workspace.files.services.event_dispatch import has_handlers
+
+        if not has_handlers(event.action):
+            return
+        from workspace.files.tasks import run_file_event_handlers
+
+        transaction.on_commit(lambda: run_file_event_handlers.delay(str(event.uuid)))
+    except Exception:
+        logger.exception("Failed to schedule dispatch for file event %s", event.uuid)
 
 
 def events_for_file(file):

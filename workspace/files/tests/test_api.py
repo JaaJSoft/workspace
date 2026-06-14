@@ -737,9 +737,13 @@ class ExcludeDescendantsOfFilterTests(APITestCase):
             },
         )
 
-    def test_malformed_param_is_noop(self):
-        # Not a UUID -> filter ignored, nothing excluded.
-        self.assertIn(str(self.daily.uuid), self._list("&exclude_descendants_of=nope"))
+    def test_malformed_param_returns_400(self):
+        # A malformed UUID is a client error, not a silent no-op.
+        resp = self.client.get(
+            f"/api/v1/files?type=markdown&parent={self.notes.uuid}"
+            "&descendants=1&exclude_descendants_of=nope"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_unknown_uuid_is_noop(self):
         # Valid UUID that resolves to no file -> nothing excluded.

@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Q, Subquery
 from django.db.models.functions import Lower
 from django.http import Http404
 from django.utils import timezone
@@ -17,6 +17,7 @@ from drf_spectacular.utils import (
     extend_schema_view,
 )
 from rest_framework import status, viewsets
+from rest_framework.exceptions import ValidationError
 from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
@@ -276,29 +277,35 @@ class FileViewSet(
         return self._apply_exclude_subtree(queryset)
 
     def _apply_exclude_subtree(self, queryset):
-        """Exclude a folder's entire subtree from a list response.
+        """Exclude a folder's entire subtree (the folder itself and all its
+        descendants) from a list response.
 
         Driven by ``?exclude_descendants_of=<uuid>``: resolves the folder's
-        denormalized ``path`` and drops everything beneath it via a path prefix,
-        reusing the mechanism descendants mode uses. The trailing slash keeps a
-        sibling whose name merely prefixes the target (e.g. ``JournalArchive``
-        vs ``Journal``) from being dropped. No-op when the param is absent,
-        malformed, or unresolved.
+        denormalized ``path`` within the caller's accessible files and drops the
+        folder plus everything beneath it via a path prefix, reusing the
+        mechanism descendants mode uses. The trailing slash keeps a sibling
+        whose name merely prefixes the target (e.g. ``JournalArchive`` vs
+        ``Journal``) from being dropped. A malformed UUID is a client error
+        (400); an absent or unresolved value is a no-op.
         """
         raw = self.request.query_params.get("exclude_descendants_of")
         if not raw:
             return queryset
         excluded_uuid = parse_uuid_or_none(raw)
         if excluded_uuid is None:
-            return queryset
+            raise ValidationError({"exclude_descendants_of": "Must be a valid UUID."})
         path = (
-            File.objects.filter(uuid=excluded_uuid, deleted_at__isnull=True)
+            File.objects.filter(
+                FileService.accessible_files_q(self.request.user),
+                uuid=excluded_uuid,
+                deleted_at__isnull=True,
+            )
             .values_list("path", flat=True)
             .first()
         )
         if not path:
             return queryset
-        return queryset.exclude(path__startswith=path + "/")
+        return queryset.exclude(Q(path=path) | Q(path__startswith=path + "/"))
 
     def _is_favorites_query(self):
         value = self.request.query_params.get("favorites")

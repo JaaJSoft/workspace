@@ -175,6 +175,14 @@ function _drawNode(n, ctx) {
   ctx.restore();
 }
 
+// A link is highlighted when not hovering, or when BOTH its endpoints are in the
+// hovered node's neighbourhood (the hovered node + its direct neighbours). AND
+// (not OR) means a link from a neighbour to an unrelated node is dimmed, staying
+// consistent with that unrelated node being dimmed too.
+function linkActive(hoverId, neighbors, sId, tId) {
+  return !hoverId || (neighbors.has(sId) && neighbors.has(tId));
+}
+
 function _applyColors() {
   if (!_fg) return;
   _palette = themePalette();
@@ -184,8 +192,9 @@ function _applyColors() {
   _fg.linkColor((l) => {
     const sId = (l.source && l.source.uuid) || l.source;
     const tId = (l.target && l.target.uuid) || l.target;
-    const active = !_state.hoverId || _state.neighbors.has(sId) || _state.neighbors.has(tId);
-    return active ? 'rgba(150,150,150,0.35)' : 'rgba(150,150,150,0.08)';
+    return linkActive(_state.hoverId, _state.neighbors, sId, tId)
+      ? 'rgba(150,150,150,0.35)'
+      : 'rgba(150,150,150,0.08)';
   });
 }
 
@@ -215,22 +224,28 @@ async function _load() {
   if (under) params.push('under=' + encodeURIComponent(under));
   if (_state.search) params.push('search=' + encodeURIComponent(_state.search));
   const url = '/api/v1/files/graph?' + params.join('&');
-  const resp = await fetch(url, { credentials: 'same-origin' });
-  if (gen !== _openGen || !resp.ok || !_fg) return;
-  const data = await resp.json();
-  if (gen !== _openGen || !_fg) return;
-  // Size nodes by degree: count incident edges so hubs render larger.
-  const deg = {};
-  (data.edges || []).forEach((e) => {
-    deg[e.source] = (deg[e.source] || 0) + 1;
-    deg[e.target] = (deg[e.target] || 0) + 1;
-  });
-  (data.nodes || []).forEach((n) => {
-    n.val = 1 + (deg[n.uuid] || 0);
-  });
-  _fitPending = true; // frame the new layout once it settles (onEngineStop)
-  _fg.graphData({ nodes: data.nodes, links: data.edges });
-  _applyColors();
+  try {
+    const resp = await fetch(url, { credentials: 'same-origin' });
+    if (gen !== _openGen || !resp.ok || !_fg) return;
+    const data = await resp.json();
+    if (gen !== _openGen || !_fg) return;
+    // Size nodes by degree: count incident edges so hubs render larger.
+    const deg = {};
+    (data.edges || []).forEach((e) => {
+      deg[e.source] = (deg[e.source] || 0) + 1;
+      deg[e.target] = (deg[e.target] || 0) + 1;
+    });
+    (data.nodes || []).forEach((n) => {
+      n.val = 1 + (deg[n.uuid] || 0);
+    });
+    _fitPending = true; // frame the new layout once it settles (onEngineStop)
+    _fg.graphData({ nodes: data.nodes, links: data.edges });
+    _applyColors();
+  } catch (e) {
+    // Transient network/parse failure. setScope/setKind/setSearch call _load()
+    // without awaiting, so a thrown error would be an unhandled rejection; keep
+    // the last good render instead of crashing.
+  }
 }
 
 async function open(container, opts) {
@@ -355,4 +370,4 @@ function destroy() {
   };
 }
 
-window.notesGraph = { nodeColorKey, fitZoom, open, setScope, setKind, setSearch, fitView, destroy };
+window.notesGraph = { nodeColorKey, fitZoom, linkActive, open, setScope, setKind, setSearch, fitView, destroy };

@@ -5,6 +5,7 @@ const { loadScript } = require('../../../common/tests/js/loader');
 const ctx = loadScript('workspace/notes/ui/static/notes/ui/js/notes_graph.js');
 const nodeColorKey = ctx.notesGraph.nodeColorKey;
 const fitZoom = ctx.notesGraph.fitZoom;
+const linkActive = ctx.notesGraph.linkActive;
 
 test('favorite takes precedence over journal and regular', () => {
   assert.equal(nodeColorKey({ is_favorite: true, parent: 'J' }, 'J'), 'favorite');
@@ -35,4 +36,16 @@ test('fitZoom zooms out to fit a graph larger than the viewport', () => {
 
 test('fitZoom floors at 0.05 for an enormous graph', () => {
   assert.equal(fitZoom(1e9, 1e9, 800, 600, 40), 0.05);
+});
+
+test('linkActive: every link is active when nothing is hovered', () => {
+  assert.equal(linkActive(null, new Set(), 'a', 'b'), true);
+});
+
+test('linkActive: active only when BOTH endpoints are in the neighbourhood', () => {
+  const nb = new Set(['h', 'n1', 'n2']);
+  assert.equal(linkActive('h', nb, 'h', 'n1'), true); // hovered <-> neighbour
+  assert.equal(linkActive('h', nb, 'n1', 'n2'), true); // neighbour <-> neighbour
+  assert.equal(linkActive('h', nb, 'n1', 'x'), false); // neighbour -> unrelated: dimmed
+  assert.equal(linkActive('h', nb, 'x', 'y'), false); // unrelated link: dimmed
 });

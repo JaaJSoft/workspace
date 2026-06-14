@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.27.0 - Note Graph & Compact Views
+
+### Highlights
+
+Your notes now have a graph view: each note appears as a node and each link between them as a line, Obsidian-style, with search and color coding. Both the notes list and the files list gain a compact mode that fits more rows on screen, and image thumbnails now appear right after upload instead of after a wait. The rest of the release rounds things out with calendar, chat, and mail improvements plus a handful of fixes.
+
+### Notes
+
+- New Graph view in the notes sidebar. It shows your notes as a network: each note is a node, each Markdown link from one note to another is a connection, and notes with no links still appear so nothing is hidden. You can switch between just your notes and everything you can see, search to highlight matching notes, and tell favorites, journal entries, and regular notes apart by color. Click a node to open the note.
+- The sidebar's "All notes" shortcut is now "My Notes" and lists only the notes inside your Notes folder and its subfolders, leaving out your daily journal entries. Notes kept elsewhere are still reachable by browsing to their folder.
+- New "Compact note list" toggle in the notes preferences: each row collapses to a single line (title and favorite star), roughly halving its height so more notes fit on screen. It applies instantly and is remembered across sessions.
+- Editing a note no longer shows up twice in the activity feed, and notes are counted once again in the dashboard and profile stats.
+
+### Files
+
+- The file browser footer now adapts to what you are doing: it shows the combined size while you have files selected, switches to "N of M items" while a search or type filter is active, and otherwise shows the usual counts and total size. A new info button next to it opens the current folder's properties panel (click it again to close).
+- New "Compact file list" toggle in the files preferences: the list view uses denser rows so more files fit on screen. It applies instantly, persists across sessions, and leaves the mosaic view unchanged.
+- Image thumbnails now appear right after a file is uploaded or replaced, instead of waiting up to a few minutes for the periodic scan, and they are generated faster for large photos.
+- Squared the remaining round buttons (the favorite star and the "more" menu) in both the list and mosaic folder views, so they match the square controls already beside them.
+- Files extracted from a ZIP archive now show their real size. They were previously listed as 0 bytes (the file still opened fine, only the displayed size was wrong).
+
+### Chat
+
+- Quick reactions are now personal: the emoji bar in the message hover toolbar shows the reactions you have used most over the last month, topped up with the defaults so it always offers six. It updates as soon as you react.
+- An emoji you have already reacted with now shows as selected in the hover toolbar, matching the reaction bubbles under the message.
+
+### Mail
+
+- You can now turn off AI auto-labeling for a specific folder from its right-click menu, while keeping event detection and your own rules running. Handy for folders where automatic labels are just noise.
+- Fixed bcc recipients being dropped when saving a draft. They are now kept, so reopening the draft still shows everyone you addressed.
+
+### Calendar
+
+- The activity feed now shows when an event actually takes place, not just when it was added. All-day events show the date; timed events show the date and time.
+
+### Modules
+
+- Deactivated modules no longer appear as greyed-out tiles on the home page; they are simply left out.
+- Modules under active development can now be marked as "preview" and shown only to a chosen audience (for example staff only), so a self-hosted instance can try new modules out without exposing them to everyone.
+
+### Performance
+
+- The app feels a bit snappier and uses less memory, a noticeable win on small self-hosted machines.
+
 ## 0.26.0 - Mail Rules & UI Polish
 
 ### Highlights

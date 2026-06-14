@@ -174,8 +174,17 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
     </div>
   </div>
 </div>
-<div class="h-full w-full" x-show="activeView === 'graph'" x-cloak>
-  {% include "notes/ui/partials/graph.html" %}
+<div class="h-full w-full flex flex-col min-h-0" x-show="activeView === 'graph'" x-cloak>
+  <!-- Mobile header: the only drawer toggle lives in the note-list header, which
+       is hidden in graph view, so mirror it here. Hidden on desktop, where the
+       sidebar stays open via lg:drawer-open. -->
+  <div class="flex items-center gap-2 p-3 border-b border-base-300 lg:hidden">
+    {% include "ui/partials/drawer_toggle.html" with drawer_id="notes-drawer" %}
+    <h3 class="text-sm font-semibold text-base-content/60 truncate flex-1" x-text="viewTitle"></h3>
+  </div>
+  <div class="flex-1 min-h-0 min-w-0">
+    {% include "notes/ui/partials/graph.html" %}
+  </div>
 </div>
 </div>
 {% include "files/ui/partials/tag_dialog.html" %}

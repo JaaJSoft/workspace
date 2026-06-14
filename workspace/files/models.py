@@ -745,3 +745,37 @@ class FileEvent(models.Model):
             _icon, category = cls._ACTION_METADATA.get(value, ("activity", "Other"))
             groups.setdefault(category, []).append((value, label))
         return [(cat, groups[cat]) for cat in cls._CATEGORY_ORDER if cat in groups]
+
+
+class FileLink(models.Model):
+    """A content reference (link) from one file to another - a graph edge.
+
+    Generic: any file may reference any file. Today only the markdown extractor
+    (services/links.py) populates it, from resolved ``[[`` wikilinks of the form
+    ``[Title](/notes?file=UUID)``. Distinct from FileShare / FileShareLink,
+    which model sharing rather than content references.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    source = models.ForeignKey(
+        File, on_delete=models.CASCADE, related_name="outgoing_links"
+    )
+    target = models.ForeignKey(
+        File, on_delete=models.CASCADE, related_name="incoming_links"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "target"], name="unique_file_link"
+            ),
+        ]
+        indexes = [
+            # The unique constraint already serves (source, target) lookups
+            # (outgoing edges); this index serves the reverse query (backlinks).
+            models.Index(fields=["target"], name="file_link_target_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.source_id} -> {self.target_id}"

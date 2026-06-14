@@ -29,9 +29,7 @@
        :class="showPanel && isMobile() ? 'hidden' : ''">
     <!-- Mobile top bar (hamburger + nav + title + view switcher) -->
     <div class="lg:hidden flex items-center gap-2 p-3 border-b border-base-300 bg-base-100 flex-shrink-0">
-      <label for="calendar-drawer" class="btn btn-ghost btn-sm btn-square cursor-pointer" aria-label="Open sidebar">
-        <i data-lucide="menu" class="w-5 h-5"></i>
-      </label>
+      {% include "ui/partials/drawer_toggle.html" with drawer_id="calendar-drawer" label="Open sidebar" %}
       <button type="button" class="btn btn-ghost btn-sm btn-circle" @click="calendarPrev()" aria-label="Previous">
         <i data-lucide="chevron-left" class="w-4 h-4"></i>
       </button>

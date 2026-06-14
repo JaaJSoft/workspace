@@ -1,0 +1,13 @@
+{% comment %}
+Hamburger button that opens a daisyUI drawer (a sidebar). Reused wherever a view
+needs to reveal the drawer. Params:
+- drawer_id: id of the drawer's checkbox input (required)
+- class: extra classes, e.g. "lg:hidden" to hide it on desktop where the drawer
+         is pinned open (`lg:drawer-open`)
+- label: accessible label (default "Open menu")
+{% endcomment %}
+<label for="{{ drawer_id }}"
+       class="btn btn-ghost btn-sm btn-square cursor-pointer {{ class }}"
+       aria-label="{{ label|default:'Open menu' }}">
+  <i data-lucide="menu" class="w-5 h-5"></i>
+</label>

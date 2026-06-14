@@ -515,6 +515,7 @@ window.notesApp = function notesApp(config) {
             if (!window.NotesGraph || !this.$refs.graphCanvas) return;
             window.NotesGraph.open(this.$refs.graphCanvas, {
                 journalUuid: this.notePrefs.journalFolderUuid || null,
+                notesRoot: this.notePrefs.defaultFolderUuid || null,
                 scope: this.graphScope,
                 onNodeClick: (uuid) => this.openNoteFromGraph(uuid),
             });

@@ -114,6 +114,31 @@ class BuildFileGraphTests(TestCase):
             {"source": str(self.a.uuid), "target": str(d.uuid)}, g["edges"]
         )
 
+    def test_under_scopes_to_folder_subtree(self):
+        # "My notes" = the Notes folder subtree, not every owned note.
+        folder = File.objects.create(
+            owner=self.user, name="NotesRoot", node_type=File.NodeType.FOLDER
+        )
+        sub = File.objects.create(
+            owner=self.user, name="Sub", node_type=File.NodeType.FOLDER, parent=folder
+        )
+        inside = _note(self.user, "inside.md", parent=folder)
+        nested = _note(self.user, "nested.md", parent=sub)
+        g = build_file_graph(
+            self.user, scope="mine", file_type="markdown", under=folder.uuid
+        )
+        ids = {n["id"] for n in g["nodes"]}
+        self.assertEqual(ids, {str(inside.uuid), str(nested.uuid)})
+        self.assertNotIn(str(self.a.uuid), ids)  # root-level note, outside the folder
+
+    def test_under_unresolvable_returns_empty(self):
+        import uuid as uuidlib
+
+        g = build_file_graph(
+            self.user, scope="mine", file_type="markdown", under=uuidlib.uuid4()
+        )
+        self.assertEqual(g["nodes"], [])
+
 
 class FileGraphEndpointTests(APITestCase):
     def setUp(self):
@@ -145,3 +170,17 @@ class FileGraphEndpointTests(APITestCase):
         self.client.force_authenticate(user=None)
         resp = self.client.get("/api/v1/files/graph")
         self.assertIn(resp.status_code, (401, 403))
+
+    def test_under_param_scopes_subtree(self):
+        folder = File.objects.create(
+            owner=self.user, name="F", node_type=File.NodeType.FOLDER
+        )
+        inside = _note(self.user, "inside.md", parent=folder)
+        resp = self.client.get(f"/api/v1/files/graph?type=markdown&under={folder.uuid}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ids = {n["id"] for n in resp.data["nodes"]}
+        self.assertEqual(ids, {str(inside.uuid)})
+
+    def test_invalid_under_400(self):
+        resp = self.client.get("/api/v1/files/graph?under=bogus")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

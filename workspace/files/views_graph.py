@@ -7,6 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.uuids import parse_uuid_or_none
+
 from .services.graph import build_file_graph
 
 _VALID_SCOPES = {"mine", "all"}
@@ -30,6 +32,11 @@ _VALID_SCOPES = {"mine", "all"}
             type=OpenApiTypes.STR,
             description="Restrict nodes to this file type.",
         ),
+        OpenApiParameter(
+            name="under",
+            type=OpenApiTypes.UUID,
+            description="Restrict nodes to the subtree of this folder UUID.",
+        ),
     ],
 )
 class FileGraphView(APIView):
@@ -40,5 +47,13 @@ class FileGraphView(APIView):
         if scope not in _VALID_SCOPES:
             raise ValidationError({"scope": "Must be 'mine' or 'all'."})
         file_type = request.query_params.get("type") or None
-        data = build_file_graph(request.user, scope=scope, file_type=file_type)
+        under_raw = request.query_params.get("under")
+        under = None
+        if under_raw:
+            under = parse_uuid_or_none(under_raw)
+            if under is None:
+                raise ValidationError({"under": "Must be a valid UUID."})
+        data = build_file_graph(
+            request.user, scope=scope, file_type=file_type, under=under
+        )
         return Response(data)

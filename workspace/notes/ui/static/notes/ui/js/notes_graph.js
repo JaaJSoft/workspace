@@ -52,7 +52,7 @@ let _fg = null;
 let _container = null;
 let _resizeObserver = null;
 let _openGen = 0;
-let _state = { journalUuid: null, search: '', onNodeClick: null, hoverId: null, neighbors: new Set() };
+let _state = { journalUuid: null, notesRoot: null, search: '', onNodeClick: null, hoverId: null, neighbors: new Set() };
 
 function _matches(node, q) {
   if (!q) return true;
@@ -86,6 +86,7 @@ function _applyColors() {
 async function open(container, opts) {
   const gen = ++_openGen;
   _state.journalUuid = (opts && opts.journalUuid) || null;
+  _state.notesRoot = (opts && opts.notesRoot) || null;
   _state.onNodeClick = (opts && opts.onNodeClick) || null;
   _container = container;
   const scope = (opts && opts.scope) || 'mine';
@@ -133,7 +134,13 @@ async function open(container, opts) {
 
 async function setScope(scope, gen) {
   if (gen === undefined) gen = _openGen;
-  const url = '/api/v1/files/graph?type=markdown&scope=' + encodeURIComponent(scope);
+  // "mine" = the user's Notes folder subtree (under=); "all" = all accessible.
+  let url = '/api/v1/files/graph?type=markdown';
+  if (scope === 'all') {
+    url += '&scope=all';
+  } else if (_state.notesRoot) {
+    url += '&under=' + encodeURIComponent(_state.notesRoot);
+  }
   const resp = await fetch(url, { credentials: 'same-origin' });
   if (gen !== _openGen || !resp.ok || !_fg) return;
   const data = await resp.json();
@@ -162,7 +169,7 @@ function destroy() {
     _container.replaceChildren();
     _container = null;
   }
-  _state = { journalUuid: null, search: '', onNodeClick: null, hoverId: null, neighbors: new Set() };
+  _state = { journalUuid: null, notesRoot: null, search: '', onNodeClick: null, hoverId: null, neighbors: new Set() };
 }
 
 window.NotesGraph = { nodeColorKey, escapeHtml, open, setScope, setSearch, destroy };

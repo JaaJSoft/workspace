@@ -12,12 +12,18 @@ from ..models import File, FileLink
 from . import FileService
 
 
-def build_file_graph(user, *, scope="mine", file_type=None) -> dict:
+def build_file_graph(user, *, scope="mine", file_type=None, under=None) -> dict:
     """Return ``{"nodes": [...], "edges": [...]}`` for *user* in *scope*.
 
     scope="mine": the user's own personal (non-deleted) files.
     scope="all":  every non-deleted file the user can access (owned/group/shared).
     Unknown scopes fall back to "mine" (the view validates and 400s first).
+
+    ``under`` (a folder UUID) restricts the nodes to that folder's subtree (its
+    descendants, by path prefix), intersected with the scope set. The notes
+    "My notes" graph passes the user's Notes folder here so it shows that
+    folder's notes rather than every note the user owns. An ``under`` folder the
+    user cannot see yields an empty graph.
     """
     if scope == "all":
         # accessible_files_q ORs owner with a join to shares, so an owned file
@@ -32,6 +38,21 @@ def build_file_graph(user, *, scope="mine", file_type=None) -> dict:
     base = base.filter(node_type=File.NodeType.FILE)
     if file_type:
         base = base.filter(type=file_type)
+    if under is not None:
+        folder_path = (
+            File.objects.filter(
+                FileService.accessible_files_q(user),
+                uuid=under,
+                deleted_at__isnull=True,
+            )
+            .values_list("path", flat=True)
+            .first()
+        )
+        base = (
+            base.filter(path__startswith=folder_path + "/")
+            if folder_path
+            else base.none()
+        )
     base = FileService.annotate_for_serializer(base, user)
 
     rows = list(

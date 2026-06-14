@@ -15,6 +15,7 @@
     {% include "ui/partials/drawer_item.html" with icon="notebook-pen" label="My Notes" color="success" active_binding="activeView === 'all'" onclick="setView('all')" tooltip="My Notes" %}
     {% include "ui/partials/drawer_item.html" with icon="star" label="Favorites" color="warning" active_binding="activeView === 'favorites'" onclick="setView('favorites')" tooltip="Favorites" %}
     {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" color="success" active_binding="activeView === 'recent'" onclick="setView('recent')" tooltip="Recent" %}
+    {% include "ui/partials/drawer_item.html" with icon="waypoints" label="Graph" color="success" active_binding="activeView === 'graph'" onclick="setView('graph')" tooltip="Graph" %}
     <template x-if="notePrefs.showJournal">
       {% include "ui/partials/drawer_item.html" with icon="book-open" label="Journal" color="success" active_binding="activeView === 'journal'" onclick="openJournal()" tooltip="Journal" %}
     </template>

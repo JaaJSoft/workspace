@@ -143,7 +143,7 @@ window.notesApp = function notesApp(config) {
     // `let`: init() reassigns this once the prefs fetch resolves (the
     // component is created before _notesPrefsReady settles).
     let initialView = config.view || prefs.defaultView || 'all';
-    const titleMap = { all: 'My Notes', favorites: 'Favorites', recent: 'Recent', journal: 'Journal' };
+    const titleMap = { all: 'My Notes', favorites: 'Favorites', recent: 'Recent', journal: 'Journal', graph: 'Graph' };
 
     return {
         // Sidebar
@@ -151,6 +151,9 @@ window.notesApp = function notesApp(config) {
         activeView: initialView,
         activeId: config.id || null,
         viewTitle: titleMap[initialView] || 'My Notes',
+        graphScope: 'mine',
+        graphKind: 'all',
+        graphSearch: '',
 
         // Folder arrays (flat lists, lazy-loaded children)
         sidebarFolders: [],
@@ -461,7 +464,9 @@ window.notesApp = function notesApp(config) {
             this._descendants = !!descendants;
             this._closeDrawerOnMobile();
 
-            if (view === 'all') {
+            if (view === 'graph') {
+                this.viewTitle = 'Graph';
+            } else if (view === 'all') {
                 this.viewTitle = 'My Notes';
             } else if (view === 'favorites') {
                 this.viewTitle = 'Favorites';
@@ -484,7 +489,12 @@ window.notesApp = function notesApp(config) {
                 this._resetFilters();
             }
 
-            await this.loadNotes(this._buildNotesUrl());
+            if (view === 'graph') {
+                this.$nextTick(() => this._openGraph());
+            } else {
+                this._disposeGraph();
+                await this.loadNotes(this._buildNotesUrl());
+            }
 
             if (!skipUrl) {
                 this.selectedNote = null;
@@ -500,6 +510,47 @@ window.notesApp = function notesApp(config) {
                 this.notes = await resp.json();
             }
             this.loadingNotes = false;
+        },
+
+        _openGraph() {
+            if (!window.notesGraph || !this.$refs.graphCanvas) return;
+            window.notesGraph.open(this.$refs.graphCanvas, {
+                journalUuid: this.notePrefs.journalFolderUuid || null,
+                notesRoot: this.notePrefs.defaultFolderUuid || null,
+                scope: this.graphScope,
+                onNodeClick: (uuid) => this.openNoteFromGraph(uuid),
+            });
+        },
+
+        _disposeGraph() {
+            if (window.notesGraph && window.notesGraph.destroy) window.notesGraph.destroy();
+            this.graphKind = 'all';
+            this.graphSearch = '';
+        },
+
+        setGraphScope(scope) {
+            this.graphScope = scope;
+            if (window.notesGraph) window.notesGraph.setScope(scope);
+        },
+
+        setGraphKind(kind) {
+            this.graphKind = kind;
+            if (window.notesGraph) window.notesGraph.setKind(kind);
+        },
+
+        resetGraphView() {
+            if (window.notesGraph) window.notesGraph.fitView();
+        },
+
+        onGraphSearch() {
+            if (window.notesGraph) window.notesGraph.setSearch(this.graphSearch);
+        },
+
+        openNoteFromGraph(uuid) {
+            // Leave the graph and open the note. A navigation keeps this robust
+            // (the index view opens ?file= on load); the graph disposes first.
+            this._disposeGraph();
+            window.location.href = '/notes?file=' + encodeURIComponent(uuid);
         },
 
         // ── Journal ─────────────────────────────────────────
@@ -1306,7 +1357,7 @@ window.notesApp = function notesApp(config) {
 
         highlightSearch(text) {
             if (!text) return '';
-            const escaped = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const escaped = escapeHtml(text);
             const q = this.filters.search.trim();
             if (!q) return escaped;
             const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');

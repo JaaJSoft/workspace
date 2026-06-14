@@ -99,7 +99,8 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
 {% endblock %}
 
 {% block content %}
-<div class="h-full flex min-w-0 bg-base-100">
+<div class="h-full min-w-0 bg-base-100">
+<div class="h-full flex min-w-0" x-show="activeView !== 'graph'">
 
   <!-- Note List (middle panel) -->
   <div class="w-full lg:w-80 border-r border-base-300 flex flex-col min-h-0"
@@ -172,6 +173,10 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
       </div>
     </div>
   </div>
+</div>
+<div class="h-full w-full" x-show="activeView === 'graph'" x-cloak>
+  {% include "notes/ui/partials/graph.html" %}
+</div>
 </div>
 {% include "files/ui/partials/tag_dialog.html" %}
 {% include "files/ui/partials/folder_dialog.html" %}
@@ -247,4 +252,5 @@ x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{
 <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
 <script src="{% static 'files/ui/js/tags.js' %}"></script>
 <script src="{% static 'notes/ui/js/notes.js' %}"></script>
+<script src="{% static 'notes/ui/js/notes_graph.js' %}"></script>
 {% endblock %}

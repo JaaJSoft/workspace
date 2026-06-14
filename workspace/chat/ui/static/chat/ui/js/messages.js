@@ -270,12 +270,6 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       return this.activeConversation.members.find(m => m.user.id === this.currentUserId)?.user;
     },
 
-    _escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    },
-
     _injectOptimisticMessage(tempId, body, replyInfo, files) {
       const container = document.getElementById('messages-container');
       if (!container) return;
@@ -286,7 +280,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         : '';
 
       // Build body HTML with basic line breaks
-      const bodyHtml = body ? this._escapeHtml(body).replace(/\n/g, '<br>') : '';
+      const bodyHtml = body ? escapeHtml(body).replace(/\n/g, '<br>') : '';
 
       // Build reply context HTML
       let replyHtml = '';
@@ -295,8 +289,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           <div class="flex gap-2 mb-1.5 rounded-lg px-2 py-1 bg-info/15">
             <div class="w-0.5 flex-shrink-0 rounded-full bg-info"></div>
             <div class="min-w-0 flex-1">
-              <span class="text-xs font-semibold text-info">${this._escapeHtml(replyInfo.author)}</span>
-              <p class="text-xs text-base-content/70 truncate">${this._escapeHtml(replyInfo.body || '')}</p>
+              <span class="text-xs font-semibold text-info">${escapeHtml(replyInfo.author)}</span>
+              <p class="text-xs text-base-content/70 truncate">${escapeHtml(replyInfo.body || '')}</p>
             </div>
           </div>`;
       }
@@ -305,7 +299,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       let filesHtml = '';
       if (files && files.length > 0) {
         const items = files.map(f => {
-          const name = this._escapeHtml(f.name);
+          const name = escapeHtml(f.name);
           if (f.type && f.type.startsWith('image/') && f._preview) {
             return `<img src="${f._preview}" alt="${name}" class="max-h-64 max-w-full rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity opacity-60" />`;
           }

@@ -154,6 +154,7 @@ window.notesApp = function notesApp(config) {
         graphScope: 'mine',
         graphKind: 'all',
         graphSearch: '',
+        graphLoading: false,
 
         // Folder arrays (flat lists, lazy-loaded children)
         sidebarFolders: [],
@@ -519,6 +520,7 @@ window.notesApp = function notesApp(config) {
                 notesRoot: this.notePrefs.defaultFolderUuid || null,
                 scope: this.graphScope,
                 onNodeClick: (uuid) => this.openNoteFromGraph(uuid),
+                onLoading: (loading) => { this.graphLoading = loading; },
             });
         },
 
@@ -526,6 +528,7 @@ window.notesApp = function notesApp(config) {
             if (window.notesGraph && window.notesGraph.destroy) window.notesGraph.destroy();
             this.graphKind = 'all';
             this.graphSearch = '';
+            this.graphLoading = false;
         },
 
         setGraphScope(scope) {

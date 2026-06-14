@@ -143,7 +143,7 @@ window.notesApp = function notesApp(config) {
     // `let`: init() reassigns this once the prefs fetch resolves (the
     // component is created before _notesPrefsReady settles).
     let initialView = config.view || prefs.defaultView || 'all';
-    const titleMap = { all: 'My Notes', favorites: 'Favorites', recent: 'Recent', journal: 'Journal' };
+    const titleMap = { all: 'My Notes', favorites: 'Favorites', recent: 'Recent', journal: 'Journal', graph: 'Graph' };
 
     return {
         // Sidebar

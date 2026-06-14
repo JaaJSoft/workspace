@@ -158,6 +158,7 @@ def index(request):
         "folder",
         "tag",
         "group_folder",
+        "graph",
     ):
         view = "all"
     context["initial_view"] = view

@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Q, Subquery
 from django.db.models.functions import Lower
 from django.http import Http404
 from django.utils import timezone
@@ -17,11 +17,13 @@ from drf_spectacular.utils import (
     extend_schema_view,
 )
 from rest_framework import status, viewsets
+from rest_framework.exceptions import ValidationError
 from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
 from workspace.common.filters import CaseInsensitiveOrderingFilter
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FilePermission, FileService
 from workspace.notifications.services.notifications import notify, notify_many
 
@@ -93,6 +95,15 @@ RECENT_FILES_MAX_LIMIT = getattr(settings, "RECENT_FILES_MAX_LIMIT", 200)
                 description=(
                     "Filter by parent folder UUID. When omitted, only root "
                     "nodes are returned."
+                ),
+            ),
+            OpenApiParameter(
+                name="exclude_descendants_of",
+                type=OpenApiTypes.UUID,
+                description=(
+                    "Exclude the entire subtree of this folder UUID from the "
+                    "results (matched by path prefix). Used by the notes 'My "
+                    "Notes' view to omit the Journal folder."
                 ),
             ),
             OpenApiParameter(
@@ -248,7 +259,8 @@ class FileViewSet(
     # ── Query helpers ─────────────────────────────────────────
 
     def filter_queryset(self, queryset):
-        """Override to skip the parent filter when descendants mode is active."""
+        """Apply DjangoFilterBackend, skipping parent=exact in descendants mode,
+        then apply the optional exclude_descendants_of subtree exclusion."""
         if self._is_descendants_query() and "parent" in self.request.query_params:
             # Temporarily hide 'parent' from query_params so DjangoFilterBackend
             # doesn't apply parent=exact (we handle it via path prefix in get_queryset)
@@ -257,10 +269,43 @@ class FileViewSet(
             mutable.pop("parent")
             self.request._request.GET = mutable
             try:
-                return super().filter_queryset(queryset)
+                queryset = super().filter_queryset(queryset)
             finally:
                 self.request._request.GET = original
-        return super().filter_queryset(queryset)
+        else:
+            queryset = super().filter_queryset(queryset)
+        return self._apply_exclude_subtree(queryset)
+
+    def _apply_exclude_subtree(self, queryset):
+        """Exclude a folder's entire subtree (the folder itself and all its
+        descendants) from a list response.
+
+        Driven by ``?exclude_descendants_of=<uuid>``: resolves the folder's
+        denormalized ``path`` within the caller's accessible files and drops the
+        folder plus everything beneath it via a path prefix, reusing the
+        mechanism descendants mode uses. The trailing slash keeps a sibling
+        whose name merely prefixes the target (e.g. ``JournalArchive`` vs
+        ``Journal``) from being dropped. A malformed UUID is a client error
+        (400); an absent or unresolved value is a no-op.
+        """
+        raw = self.request.query_params.get("exclude_descendants_of")
+        if not raw:
+            return queryset
+        excluded_uuid = parse_uuid_or_none(raw)
+        if excluded_uuid is None:
+            raise ValidationError({"exclude_descendants_of": "Must be a valid UUID."})
+        path = (
+            File.objects.filter(
+                FileService.accessible_files_q(self.request.user),
+                uuid=excluded_uuid,
+                deleted_at__isnull=True,
+            )
+            .values_list("path", flat=True)
+            .first()
+        )
+        if not path:
+            return queryset
+        return queryset.exclude(Q(path=path) | Q(path__startswith=path + "/"))
 
     def _is_favorites_query(self):
         value = self.request.query_params.get("favorites")

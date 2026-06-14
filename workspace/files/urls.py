@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
 from .views import FileViewSet
+from .views_graph import FileGraphView
 from .views_share_links import (
     SharedFileContentView,
     SharedFileDownloadView,
@@ -44,6 +45,7 @@ urlpatterns = [
         FileTagView.as_view(),
         name="file-tag-remove",
     ),
+    path("api/v1/files/graph", FileGraphView.as_view(), name="file-graph"),
     path("api/v1/", include(router.urls)),
     path(
         "api/v1/thumbnails/generate",

@@ -1,0 +1,23 @@
+<div class="relative h-full w-full bg-base-100">
+  <!-- Canvas mount (force-graph draws here) -->
+  <div x-ref="graphCanvas" class="absolute inset-0"></div>
+
+  <!-- Overlay controls (Obsidian-style) -->
+  <div class="absolute top-3 left-3 z-10 w-60 bg-base-200/90 backdrop-blur rounded-box shadow-lg ring-1 ring-base-300 p-3 space-y-3">
+    <div class="join w-full">
+      <button class="btn btn-xs join-item flex-1"
+              :class="graphScope === 'mine' ? 'btn-success' : 'btn-ghost'"
+              @click="setGraphScope('mine')">My notes</button>
+      <button class="btn btn-xs join-item flex-1"
+              :class="graphScope === 'all' ? 'btn-success' : 'btn-ghost'"
+              @click="setGraphScope('all')">All</button>
+    </div>
+    <input type="text" class="input input-sm input-bordered w-full" placeholder="Search notes..."
+           x-model="graphSearch" @input.debounce.200ms="onGraphSearch()">
+    <div class="text-xs space-y-1">
+      <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-warning"></span> Favorite</div>
+      <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-success"></span> Journal</div>
+      <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-base-content/50"></span> Note</div>
+    </div>
+  </div>
+</div>

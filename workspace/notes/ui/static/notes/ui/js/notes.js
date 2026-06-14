@@ -151,6 +151,8 @@ window.notesApp = function notesApp(config) {
         activeView: initialView,
         activeId: config.id || null,
         viewTitle: titleMap[initialView] || 'My Notes',
+        graphScope: 'mine',
+        graphSearch: '',
 
         // Folder arrays (flat lists, lazy-loaded children)
         sidebarFolders: [],
@@ -461,7 +463,9 @@ window.notesApp = function notesApp(config) {
             this._descendants = !!descendants;
             this._closeDrawerOnMobile();
 
-            if (view === 'all') {
+            if (view === 'graph') {
+                this.viewTitle = 'Graph';
+            } else if (view === 'all') {
                 this.viewTitle = 'My Notes';
             } else if (view === 'favorites') {
                 this.viewTitle = 'Favorites';
@@ -484,7 +488,12 @@ window.notesApp = function notesApp(config) {
                 this._resetFilters();
             }
 
-            await this.loadNotes(this._buildNotesUrl());
+            if (view === 'graph') {
+                this.$nextTick(() => this._openGraph());
+            } else {
+                this._disposeGraph();
+                await this.loadNotes(this._buildNotesUrl());
+            }
 
             if (!skipUrl) {
                 this.selectedNote = null;
@@ -500,6 +509,36 @@ window.notesApp = function notesApp(config) {
                 this.notes = await resp.json();
             }
             this.loadingNotes = false;
+        },
+
+        _openGraph() {
+            if (!window.NotesGraph || !this.$refs.graphCanvas) return;
+            window.NotesGraph.open(this.$refs.graphCanvas, {
+                journalUuid: this.notePrefs.journalFolderUuid || null,
+                scope: this.graphScope,
+                onNodeClick: (uuid) => this.openNoteFromGraph(uuid),
+            });
+        },
+
+        _disposeGraph() {
+            if (window.NotesGraph && window.NotesGraph.destroy) window.NotesGraph.destroy();
+            this.graphSearch = '';
+        },
+
+        setGraphScope(scope) {
+            this.graphScope = scope;
+            if (window.NotesGraph) window.NotesGraph.setScope(scope);
+        },
+
+        onGraphSearch() {
+            if (window.NotesGraph) window.NotesGraph.setSearch(this.graphSearch);
+        },
+
+        openNoteFromGraph(uuid) {
+            // Leave the graph and open the note. A navigation keeps this robust
+            // (the index view opens ?file= on load); the graph disposes first.
+            this._disposeGraph();
+            window.location.href = '/notes?file=' + encodeURIComponent(uuid);
         },
 
         // ── Journal ─────────────────────────────────────────

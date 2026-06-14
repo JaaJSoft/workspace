@@ -172,4 +172,4 @@ function destroy() {
   _state = { journalUuid: null, notesRoot: null, search: '', onNodeClick: null, hoverId: null, neighbors: new Set() };
 }
 
-window.NotesGraph = { nodeColorKey, escapeHtml, open, setScope, setSearch, destroy };
+window.notesGraph = { nodeColorKey, escapeHtml, open, setScope, setSearch, destroy };

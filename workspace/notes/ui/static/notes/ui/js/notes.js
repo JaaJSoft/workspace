@@ -512,8 +512,8 @@ window.notesApp = function notesApp(config) {
         },
 
         _openGraph() {
-            if (!window.NotesGraph || !this.$refs.graphCanvas) return;
-            window.NotesGraph.open(this.$refs.graphCanvas, {
+            if (!window.notesGraph || !this.$refs.graphCanvas) return;
+            window.notesGraph.open(this.$refs.graphCanvas, {
                 journalUuid: this.notePrefs.journalFolderUuid || null,
                 notesRoot: this.notePrefs.defaultFolderUuid || null,
                 scope: this.graphScope,
@@ -522,17 +522,17 @@ window.notesApp = function notesApp(config) {
         },
 
         _disposeGraph() {
-            if (window.NotesGraph && window.NotesGraph.destroy) window.NotesGraph.destroy();
+            if (window.notesGraph && window.notesGraph.destroy) window.notesGraph.destroy();
             this.graphSearch = '';
         },
 
         setGraphScope(scope) {
             this.graphScope = scope;
-            if (window.NotesGraph) window.NotesGraph.setScope(scope);
+            if (window.notesGraph) window.notesGraph.setScope(scope);
         },
 
         onGraphSearch() {
-            if (window.NotesGraph) window.NotesGraph.setSearch(this.graphSearch);
+            if (window.notesGraph) window.notesGraph.setSearch(this.graphSearch);
         },
 
         openNoteFromGraph(uuid) {

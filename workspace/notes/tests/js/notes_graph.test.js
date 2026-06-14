@@ -3,8 +3,8 @@ const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
 
 const ctx = loadScript('workspace/notes/ui/static/notes/ui/js/notes_graph.js');
-const nodeColorKey = ctx.NotesGraph.nodeColorKey;
-const escapeHtml = ctx.NotesGraph.escapeHtml;
+const nodeColorKey = ctx.notesGraph.nodeColorKey;
+const escapeHtml = ctx.notesGraph.escapeHtml;
 
 test('favorite takes precedence over journal and regular', () => {
   assert.equal(nodeColorKey({ is_favorite: true, parent: 'J' }, 'J'), 'favorite');

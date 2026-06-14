@@ -52,38 +52,20 @@ let _fg = null;
 let _container = null;
 let _resizeObserver = null;
 let _openGen = 0;
-let _state = { journalUuid: null, notesRoot: null, search: '', onNodeClick: null, hoverId: null, neighbors: new Set() };
-
-function _matches(node, q) {
-  if (!q) return true;
-  return (node.name || '').toLowerCase().includes(q.toLowerCase());
-}
-
-function _withAlpha(color, a) {
-  const s = String(color == null ? '' : color).trim();
-  // Legacy comma rgb(r, g, b) -> rgba.
-  const rgb = s.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
-  if (rgb) return `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${a})`;
-  // Functional space-separated colors (oklch/oklab/lch/lab/hsl/hwb/rgb/color)
-  // take a "<components> / <alpha>" suffix. daisyUI themes resolve to oklch(),
-  // which the old rgb-only path returned unchanged -> search dimming was a no-op.
-  const fn = s.match(/^(oklch|oklab|lch|lab|hsl|hwb|rgb|color)\(([^)]*)\)$/i);
-  if (fn) {
-    const comps = fn[2].split('/')[0].trim();
-    return `${fn[1]}(${comps} / ${a})`;
-  }
-  return s;
-}
+let _state = {
+  scope: 'mine',
+  search: '',
+  journalUuid: null,
+  notesRoot: null,
+  onNodeClick: null,
+  hoverId: null,
+  neighbors: new Set(),
+};
 
 function _applyColors() {
   if (!_fg) return;
   const pal = themePalette();
-  // Re-assigning the accessors triggers a repaint even after the sim settles.
-  _fg.nodeColor((n) => {
-    const base = pal[nodeColorKey(n, _state.journalUuid)] || pal.regular;
-    const dim = _state.search && !_matches(n, _state.search);
-    return dim ? _withAlpha(base, 0.15) : base;
-  });
+  _fg.nodeColor((n) => pal[nodeColorKey(n, _state.journalUuid)] || pal.regular);
   _fg.linkColor((l) => {
     const sId = (l.source && l.source.id) || l.source;
     const tId = (l.target && l.target.id) || l.target;
@@ -92,13 +74,38 @@ function _applyColors() {
   });
 }
 
+// Fetch the (scope + search)-filtered graph from the API and render it. Both
+// scope and search are applied server-side, so non-matching notes are simply
+// not returned (rather than dimmed client-side).
+async function _load(gen) {
+  if (gen === undefined) gen = _openGen;
+  if (!_fg) return;
+  // "mine" = the user's Notes folder subtree (under=); "all" = all accessible.
+  let url = '/api/v1/files/graph?type=markdown';
+  if (_state.scope === 'all') {
+    url += '&scope=all';
+  } else if (_state.notesRoot) {
+    url += '&under=' + encodeURIComponent(_state.notesRoot);
+  }
+  if (_state.search) {
+    url += '&search=' + encodeURIComponent(_state.search);
+  }
+  const resp = await fetch(url, { credentials: 'same-origin' });
+  if (gen !== _openGen || !resp.ok || !_fg) return;
+  const data = await resp.json();
+  if (gen !== _openGen || !_fg) return;
+  _fg.graphData({ nodes: data.nodes, links: data.edges });
+  _applyColors();
+}
+
 async function open(container, opts) {
   const gen = ++_openGen;
+  _state.scope = (opts && opts.scope) || 'mine';
+  _state.search = '';
   _state.journalUuid = (opts && opts.journalUuid) || null;
   _state.notesRoot = (opts && opts.notesRoot) || null;
   _state.onNodeClick = (opts && opts.onNodeClick) || null;
   _container = container;
-  const scope = (opts && opts.scope) || 'mine';
 
   const mod = await import('https://esm.sh/force-graph@1');
   if (gen !== _openGen) return; // view was left / re-opened during the import
@@ -138,33 +145,21 @@ async function open(container, opts) {
     _resizeObserver.observe(container);
   }
   _fg.width(container.clientWidth).height(container.clientHeight);
-  await setScope(scope, gen);
+  await _load(gen);
 }
 
-async function setScope(scope, gen) {
-  if (gen === undefined) gen = _openGen;
-  // "mine" = the user's Notes folder subtree (under=); "all" = all accessible.
-  let url = '/api/v1/files/graph?type=markdown';
-  if (scope === 'all') {
-    url += '&scope=all';
-  } else if (_state.notesRoot) {
-    url += '&under=' + encodeURIComponent(_state.notesRoot);
-  }
-  const resp = await fetch(url, { credentials: 'same-origin' });
-  if (gen !== _openGen || !resp.ok || !_fg) return;
-  const data = await resp.json();
-  if (gen !== _openGen || !_fg) return;
-  _fg.graphData({ nodes: data.nodes, links: data.edges });
-  _applyColors();
+function setScope(scope) {
+  _state.scope = scope;
+  _load();
 }
 
 function setSearch(q) {
   _state.search = q || '';
-  _applyColors();
+  _load();
 }
 
 function destroy() {
-  _openGen++; // invalidate any in-flight open() / setScope()
+  _openGen++; // invalidate any in-flight open() / _load()
   if (_resizeObserver) {
     _resizeObserver.disconnect();
     _resizeObserver = null;
@@ -178,7 +173,15 @@ function destroy() {
     _container.replaceChildren();
     _container = null;
   }
-  _state = { journalUuid: null, notesRoot: null, search: '', onNodeClick: null, hoverId: null, neighbors: new Set() };
+  _state = {
+    scope: 'mine',
+    search: '',
+    journalUuid: null,
+    notesRoot: null,
+    onNodeClick: null,
+    hoverId: null,
+    neighbors: new Set(),
+  };
 }
 
 window.notesGraph = { nodeColorKey, escapeHtml, open, setScope, setSearch, destroy };

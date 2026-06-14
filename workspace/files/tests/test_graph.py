@@ -139,6 +139,13 @@ class BuildFileGraphTests(TestCase):
         )
         self.assertEqual(g["nodes"], [])
 
+    def test_search_filters_nodes_by_name(self):
+        # search keeps only name-matching nodes; edges drop to the surviving set.
+        g = build_file_graph(self.user, scope="mine", file_type="markdown", search="b")
+        ids = {n["id"] for n in g["nodes"]}
+        self.assertEqual(ids, {str(self.b.uuid)})  # only b.md matches "b"
+        self.assertEqual(g["edges"], [])  # a->b dropped: a filtered out
+
 
 class FileGraphEndpointTests(APITestCase):
     def setUp(self):
@@ -184,3 +191,9 @@ class FileGraphEndpointTests(APITestCase):
     def test_invalid_under_400(self):
         resp = self.client.get("/api/v1/files/graph?under=bogus")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_search_param_filters(self):
+        resp = self.client.get("/api/v1/files/graph?type=markdown&search=b")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ids = {n["id"] for n in resp.data["nodes"]}
+        self.assertEqual(ids, {str(self.b.uuid)})

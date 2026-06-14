@@ -12,7 +12,9 @@ from ..models import File, FileLink
 from . import FileService
 
 
-def build_file_graph(user, *, scope="mine", file_type=None, under=None) -> dict:
+def build_file_graph(
+    user, *, scope="mine", file_type=None, under=None, search=None
+) -> dict:
     """Return ``{"nodes": [...], "edges": [...]}`` for *user* in *scope*.
 
     scope="mine": the user's own personal (non-deleted) files.
@@ -24,6 +26,10 @@ def build_file_graph(user, *, scope="mine", file_type=None, under=None) -> dict:
     "My notes" graph passes the user's Notes folder here so it shows that
     folder's notes rather than every note the user owns. An ``under`` folder the
     user cannot see yields an empty graph.
+
+    ``search`` keeps only nodes whose name matches (case-insensitive substring);
+    edges are then restricted to the surviving nodes, so a match linked only to
+    filtered-out notes appears isolated.
     """
     if scope == "all":
         # accessible_files_q ORs owner with a join to shares, so an owned file
@@ -53,6 +59,8 @@ def build_file_graph(user, *, scope="mine", file_type=None, under=None) -> dict:
             if folder_path
             else base.none()
         )
+    if search:
+        base = base.filter(name__icontains=search)
     base = FileService.annotate_for_serializer(base, user)
 
     rows = list(

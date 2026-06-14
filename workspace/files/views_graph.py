@@ -37,6 +37,11 @@ _VALID_SCOPES = {"mine", "all"}
             type=OpenApiTypes.UUID,
             description="Restrict nodes to the subtree of this folder UUID.",
         ),
+        OpenApiParameter(
+            name="search",
+            type=OpenApiTypes.STR,
+            description="Keep only nodes whose name matches (case-insensitive substring).",
+        ),
     ],
 )
 class FileGraphView(APIView):
@@ -53,7 +58,12 @@ class FileGraphView(APIView):
             under = parse_uuid_or_none(under_raw)
             if under is None:
                 raise ValidationError({"under": "Must be a valid UUID."})
+        search = request.query_params.get("search") or None
         data = build_file_graph(
-            request.user, scope=scope, file_type=file_type, under=under
+            request.user,
+            scope=scope,
+            file_type=file_type,
+            under=under,
+            search=search,
         )
         return Response(data)

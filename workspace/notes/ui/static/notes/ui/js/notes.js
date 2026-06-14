@@ -538,6 +538,10 @@ window.notesApp = function notesApp(config) {
             if (window.notesGraph) window.notesGraph.setKind(kind);
         },
 
+        resetGraphView() {
+            if (window.notesGraph) window.notesGraph.fitView();
+        },
+
         onGraphSearch() {
             if (window.notesGraph) window.notesGraph.setSearch(this.graphSearch);
         },

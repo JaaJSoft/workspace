@@ -17,18 +17,22 @@
     </div>
     <!-- Row 2: search + kind + legend popover -->
     <div class="flex items-center gap-2 px-3 pb-3">
-      <div class="relative flex-1 min-w-0">
-        <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-base-content/40"></i>
-        <input type="text" class="input input-sm input-bordered w-full pl-8" placeholder="Search notes..."
-               x-model="graphSearch" @input.debounce.200ms="onGraphSearch()">
+      <!-- search + kind grouped on the left; the group grows so the legend
+           popover sits at the far right of the toolbar -->
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <div class="relative flex-1 min-w-0 max-w-xs">
+          <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-base-content/40"></i>
+          <input type="text" class="input input-sm input-bordered w-full pl-8" placeholder="Search notes..."
+                 x-model="graphSearch" @input.debounce.200ms="onGraphSearch()">
+        </div>
+        <select class="select select-sm select-bordered flex-shrink-0"
+                x-model="graphKind" @change="setGraphKind($event.target.value)">
+          <option value="all">All notes</option>
+          <option value="favorite">Favorites</option>
+          <option value="journal">Journal</option>
+          <option value="regular">Regular notes</option>
+        </select>
       </div>
-      <select class="select select-sm select-bordered flex-shrink-0"
-              x-model="graphKind" @change="setGraphKind($event.target.value)">
-        <option value="all">All notes</option>
-        <option value="favorite">Favorites</option>
-        <option value="journal">Journal</option>
-        <option value="regular">Regular notes</option>
-      </select>
       <div class="dropdown dropdown-end flex-shrink-0">
         <button tabindex="0" class="btn btn-ghost btn-sm btn-square" aria-label="Legend" title="Legend">
           <i data-lucide="info" class="w-4 h-4"></i>

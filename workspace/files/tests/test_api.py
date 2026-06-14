@@ -643,3 +643,107 @@ class EdgeCaseTests(APITestCase):
         self.assertIsNone(child.deleted_at)
         # Parent should also be restored
         self.assertIsNone(parent.deleted_at)
+
+
+class ExcludeDescendantsOfFilterTests(APITestCase):
+    """The ?exclude_descendants_of=<uuid> list filter drops a folder's subtree.
+
+    Tree built under a root "Notes" folder:
+        Notes/note1.md
+        Notes/Sub/note2.md
+        Notes/Journal/daily.md          <- excluded subtree
+        Notes/JournalArchive/arch.md    <- sibling prefix, must NOT be excluded
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="excl", email="excl@example.com", password="testpass123"
+        )
+        self.client.force_authenticate(user=self.user)
+        self.notes = File.objects.create(
+            owner=self.user, name="Notes", node_type=File.NodeType.FOLDER
+        )
+        self.journal = File.objects.create(
+            owner=self.user,
+            name="Journal",
+            node_type=File.NodeType.FOLDER,
+            parent=self.notes,
+        )
+        sub = File.objects.create(
+            owner=self.user,
+            name="Sub",
+            node_type=File.NodeType.FOLDER,
+            parent=self.notes,
+        )
+        archive = File.objects.create(
+            owner=self.user,
+            name="JournalArchive",
+            node_type=File.NodeType.FOLDER,
+            parent=self.notes,
+        )
+        self.note1 = File.objects.create(
+            owner=self.user,
+            name="note1.md",
+            node_type=File.NodeType.FILE,
+            parent=self.notes,
+            type="markdown",
+        )
+        self.note2 = File.objects.create(
+            owner=self.user,
+            name="note2.md",
+            node_type=File.NodeType.FILE,
+            parent=sub,
+            type="markdown",
+        )
+        self.daily = File.objects.create(
+            owner=self.user,
+            name="daily.md",
+            node_type=File.NodeType.FILE,
+            parent=self.journal,
+            type="markdown",
+        )
+        self.arch = File.objects.create(
+            owner=self.user,
+            name="arch.md",
+            node_type=File.NodeType.FILE,
+            parent=archive,
+            type="markdown",
+        )
+
+    def _list(self, extra=""):
+        url = (
+            f"/api/v1/files?type=markdown&parent={self.notes.uuid}&descendants=1"
+            + extra
+        )
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        return {row["uuid"] for row in resp.data}
+
+    def test_excludes_journal_subtree(self):
+        uuids = self._list(f"&exclude_descendants_of={self.journal.uuid}")
+        self.assertIn(str(self.note1.uuid), uuids)  # direct child kept
+        self.assertIn(str(self.note2.uuid), uuids)  # nested child kept
+        self.assertIn(str(self.arch.uuid), uuids)  # sibling-prefix kept
+        self.assertNotIn(str(self.daily.uuid), uuids)  # journal note dropped
+
+    def test_absent_param_returns_full_subtree(self):
+        self.assertEqual(
+            self._list(),
+            {
+                str(self.note1.uuid),
+                str(self.note2.uuid),
+                str(self.daily.uuid),
+                str(self.arch.uuid),
+            },
+        )
+
+    def test_malformed_param_is_noop(self):
+        # Not a UUID -> filter ignored, nothing excluded.
+        self.assertIn(str(self.daily.uuid), self._list("&exclude_descendants_of=nope"))
+
+    def test_unknown_uuid_is_noop(self):
+        # Valid UUID that resolves to no file -> nothing excluded.
+        ghost = "00000000-0000-0000-0000-000000000000"
+        self.assertIn(
+            str(self.daily.uuid), self._list(f"&exclude_descendants_of={ghost}")
+        )

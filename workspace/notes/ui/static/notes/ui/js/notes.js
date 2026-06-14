@@ -143,14 +143,14 @@ window.notesApp = function notesApp(config) {
     // `let`: init() reassigns this once the prefs fetch resolves (the
     // component is created before _notesPrefsReady settles).
     let initialView = config.view || prefs.defaultView || 'all';
-    const titleMap = { all: 'All notes', favorites: 'Favorites', recent: 'Recent', journal: 'Journal' };
+    const titleMap = { all: 'My Notes', favorites: 'Favorites', recent: 'Recent', journal: 'Journal' };
 
     return {
         // Sidebar
         collapsed: false,
         activeView: initialView,
         activeId: config.id || null,
-        viewTitle: titleMap[initialView] || 'All notes',
+        viewTitle: titleMap[initialView] || 'My Notes',
 
         // Folder arrays (flat lists, lazy-loaded children)
         sidebarFolders: [],
@@ -207,7 +207,7 @@ window.notesApp = function notesApp(config) {
             if (!config.view && savedPrefs.defaultView && savedPrefs.defaultView !== 'all') {
                 initialView = savedPrefs.defaultView;
                 this.activeView = initialView;
-                this.viewTitle = titleMap[initialView] || 'All notes';
+                this.viewTitle = titleMap[initialView] || 'My Notes';
             }
 
             // Listen for sidebar refresh events
@@ -316,7 +316,7 @@ window.notesApp = function notesApp(config) {
             if (this._gPending) {
                 const key = e.key.toLowerCase();
                 this._gPending = false;
-                if (key === 'a') { e.preventDefault(); this.setView('all', null, 'All notes'); return; }
+                if (key === 'a') { e.preventDefault(); this.setView('all', null, 'My Notes'); return; }
                 if (key === 'f') { e.preventDefault(); this.setView('favorites', null, 'Favorites'); return; }
                 if (key === 'r') { e.preventDefault(); this.setView('recent', null, 'Recent'); return; }
                 if (key === 'j') { e.preventDefault(); this.openJournal(); return; }
@@ -462,7 +462,7 @@ window.notesApp = function notesApp(config) {
             this._closeDrawerOnMobile();
 
             if (view === 'all') {
-                this.viewTitle = 'All notes';
+                this.viewTitle = 'My Notes';
             } else if (view === 'favorites') {
                 this.viewTitle = 'Favorites';
             } else if (view === 'recent') {
@@ -476,7 +476,7 @@ window.notesApp = function notesApp(config) {
             } else if (view === 'folder' || view === 'group_folder') {
                 this.viewTitle = name || 'Folder';
             } else {
-                this.viewTitle = 'All notes';
+                this.viewTitle = 'My Notes';
                 this.activeView = 'all';
             }
 
@@ -1214,7 +1214,18 @@ window.notesApp = function notesApp(config) {
             const hasSearch = this.filters.search.trim();
 
             if (this.activeView === 'all') {
-                if (!hasSearch) base += '&recent=1&recent_limit=200';
+                const notesRoot = this.notePrefs.defaultFolderUuid;
+                if (notesRoot) {
+                    // "My Notes": everything under the Notes folder, recursively,
+                    // minus the Journal subtree. Search (added later) stays scoped.
+                    base += '&parent=' + notesRoot + '&descendants=1';
+                    if (this.notePrefs.journalFolderUuid) {
+                        base += '&exclude_descendants_of=' + this.notePrefs.journalFolderUuid;
+                    }
+                } else if (!hasSearch) {
+                    // Prefs not ready: fall back to the legacy "all markdown" list.
+                    base += '&recent=1&recent_limit=200';
+                }
                 base += sort;
             } else if (this.activeView === 'favorites') {
                 base += '&favorites=1' + sort;

@@ -12,8 +12,28 @@ from ..models import File, FileLink
 from . import FileService
 
 
+def _folder_path(user, folder_uuid):
+    """Return the denormalized path of a folder within the user's accessible files."""
+    return (
+        File.objects.filter(
+            FileService.accessible_files_q(user),
+            uuid=folder_uuid,
+            deleted_at__isnull=True,
+        )
+        .values_list("path", flat=True)
+        .first()
+    )
+
+
 def build_file_graph(
-    user, *, scope="mine", file_type=None, under=None, search=None
+    user,
+    *,
+    scope="mine",
+    file_type=None,
+    under=None,
+    exclude_descendants_of=None,
+    favorites=None,
+    search=None,
 ) -> dict:
     """Return ``{"nodes": [...], "edges": [...]}`` for *user* in *scope*.
 
@@ -21,15 +41,18 @@ def build_file_graph(
     scope="all":  every non-deleted file the user can access (owned/group/shared).
     Unknown scopes fall back to "mine" (the view validates and 400s first).
 
-    ``under`` (a folder UUID) restricts the nodes to that folder's subtree (its
-    descendants, by path prefix), intersected with the scope set. The notes
-    "My notes" graph passes the user's Notes folder here so it shows that
-    folder's notes rather than every note the user owns. An ``under`` folder the
-    user cannot see yields an empty graph.
+    Generic filters, all intersected with the scope set:
+    - ``under`` (folder UUID): keep only that folder's subtree (path prefix). An
+      ``under`` folder the user cannot see yields an empty graph.
+    - ``exclude_descendants_of`` (folder UUID): drop that folder's subtree.
+    - ``favorites``: True -> only the user's favorites; False -> only non-favorites;
+      None -> no favorite filter.
+    - ``search``: keep only nodes whose name matches (case-insensitive substring).
 
-    ``search`` keeps only nodes whose name matches (case-insensitive substring);
-    edges are then restricted to the surviving nodes, so a match linked only to
-    filtered-out notes appears isolated.
+    Edges are restricted to the surviving nodes, so a node linked only to
+    filtered-out nodes appears isolated. The notes kind filters map onto these
+    generic params (journal = ``under=<Journal folder>``; regular = non-favorite
+    + ``exclude_descendants_of=<Journal folder>``).
     """
     if scope == "all":
         # accessible_files_q ORs owner with a join to shares, so an owned file
@@ -45,40 +68,36 @@ def build_file_graph(
     if file_type:
         base = base.filter(type=file_type)
     if under is not None:
-        folder_path = (
-            File.objects.filter(
-                FileService.accessible_files_q(user),
-                uuid=under,
-                deleted_at__isnull=True,
-            )
-            .values_list("path", flat=True)
-            .first()
-        )
+        folder_path = _folder_path(user, under)
         base = (
             base.filter(path__startswith=folder_path + "/")
             if folder_path
             else base.none()
         )
+    if exclude_descendants_of is not None:
+        excl_path = _folder_path(user, exclude_descendants_of)
+        if excl_path:
+            base = base.exclude(path__startswith=excl_path + "/")
+    if favorites is True:
+        base = base.filter(favorites__owner=user)
+    elif favorites is False:
+        base = base.exclude(favorites__owner=user)
     if search:
         base = base.filter(name__icontains=search)
     base = FileService.annotate_for_serializer(base, user)
 
-    rows = list(
-        base.values("uuid", "name", "type", "category", "is_favorite", "parent")
-    )
-    nodes = [
-        {
-            "id": str(r["uuid"]),
-            "name": r["name"],
-            "type": r["type"],
-            "category": r["category"],
-            "is_favorite": r["is_favorite"],
-            "parent": str(r["parent"]) if r["parent"] else None,
-        }
-        for r in rows
-    ]
+    # Serialize nodes with the canonical FileSerializer so a graph node is the
+    # exact same DTO the rest of the API returns for a file (uuid, type, icon,
+    # is_favorite, parent, ...). annotate_for_serializer already supplied the
+    # annotations the serializer requires, so this stays N+1-free. Imported
+    # lazily: serializers imports FileService, so a module-level import here
+    # would be circular.
+    from ..serializers import FileSerializer
 
-    node_uuids = [r["uuid"] for r in rows]
+    files = list(base)
+    nodes = FileSerializer(files, many=True).data
+
+    node_uuids = [f.uuid for f in files]
     edges = [
         {"source": str(s), "target": str(t)}
         for s, t in FileLink.objects.filter(

@@ -35,10 +35,12 @@ function themePalette() {
     const c = getComputedStyle(probe).color;
     return c || fallback;
   };
+  const baseContent = read('text-base-content', '#9ca3af');
   const pal = {
     favorite: read('text-warning', '#f59e0b'),
     journal: read('text-success', '#22c55e'),
-    regular: read('text-base-content', '#9ca3af'),
+    regular: baseContent,
+    text: baseContent, // node labels drawn on the canvas
   };
   probe.remove();
   return pal;
@@ -51,9 +53,11 @@ function themePalette() {
 let _fg = null;
 let _container = null;
 let _resizeObserver = null;
+let _palette = null;
 let _openGen = 0;
 let _state = {
   scope: 'mine',
+  kind: 'all',
   search: '',
   journalUuid: null,
   notesRoot: null,
@@ -64,11 +68,11 @@ let _state = {
 
 function _applyColors() {
   if (!_fg) return;
-  const pal = themePalette();
-  _fg.nodeColor((n) => pal[nodeColorKey(n, _state.journalUuid)] || pal.regular);
+  _palette = themePalette();
+  _fg.nodeColor((n) => _palette[nodeColorKey(n, _state.journalUuid)] || _palette.regular);
   _fg.linkColor((l) => {
-    const sId = (l.source && l.source.id) || l.source;
-    const tId = (l.target && l.target.id) || l.target;
+    const sId = (l.source && l.source.uuid) || l.source;
+    const tId = (l.target && l.target.uuid) || l.target;
     const active = !_state.hoverId || _state.neighbors.has(sId) || _state.neighbors.has(tId);
     return active ? 'rgba(150,150,150,0.35)' : 'rgba(150,150,150,0.08)';
   });
@@ -80,16 +84,25 @@ function _applyColors() {
 async function _load(gen) {
   if (gen === undefined) gen = _openGen;
   if (!_fg) return;
-  // "mine" = the user's Notes folder subtree (under=); "all" = all accessible.
-  let url = '/api/v1/files/graph?type=markdown';
-  if (_state.scope === 'all') {
-    url += '&scope=all';
-  } else if (_state.notesRoot) {
-    url += '&under=' + encodeURIComponent(_state.notesRoot);
+  const params = ['type=markdown'];
+  if (_state.scope === 'all') params.push('scope=all');
+  // "mine" scope = the Notes folder subtree (under=); the "journal" kind narrows
+  // it to the Journal subtree instead. Other kinds map to generic favorite /
+  // exclude filters - journal stays a notes concept, resolved here client-side.
+  let under = _state.scope === 'mine' ? _state.notesRoot : null;
+  if (_state.kind === 'favorite') {
+    params.push('favorites=1');
+  } else if (_state.kind === 'journal') {
+    under = _state.journalUuid || under;
+  } else if (_state.kind === 'regular') {
+    params.push('favorites=0');
+    if (_state.journalUuid) {
+      params.push('exclude_descendants_of=' + encodeURIComponent(_state.journalUuid));
+    }
   }
-  if (_state.search) {
-    url += '&search=' + encodeURIComponent(_state.search);
-  }
+  if (under) params.push('under=' + encodeURIComponent(under));
+  if (_state.search) params.push('search=' + encodeURIComponent(_state.search));
+  const url = '/api/v1/files/graph?' + params.join('&');
   const resp = await fetch(url, { credentials: 'same-origin' });
   if (gen !== _openGen || !resp.ok || !_fg) return;
   const data = await resp.json();
@@ -101,6 +114,7 @@ async function _load(gen) {
 async function open(container, opts) {
   const gen = ++_openGen;
   _state.scope = (opts && opts.scope) || 'mine';
+  _state.kind = 'all';
   _state.search = '';
   _state.journalUuid = (opts && opts.journalUuid) || null;
   _state.notesRoot = (opts && opts.notesRoot) || null;
@@ -119,21 +133,34 @@ async function open(container, opts) {
 
   if (!_fg) {
     _fg = construct(container)
-      .nodeId('id')
+      .nodeId('uuid')
       .nodeLabel((n) => escapeHtml(n.name))
       .nodeRelSize(5)
+      // Draw the note name centred just below the node. Mode 'after' keeps the
+      // default coloured circle (and its hover/click hit-area) and paints the
+      // label on top. Font size is in graph units (the ctx is already
+      // zoom-scaled), so labels grow when zoomed in and fade when zoomed out.
+      .nodeCanvasObjectMode(() => 'after')
+      .nodeCanvasObject((n, ctx) => {
+        if (!n.name) return;
+        ctx.font = '4px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = (_palette && _palette.text) || 'rgba(150,150,150,0.9)';
+        ctx.fillText(n.name, n.x, n.y + 7);
+      })
       .onNodeClick((n) => {
-        if (_state.onNodeClick) _state.onNodeClick(n.id);
+        if (_state.onNodeClick) _state.onNodeClick(n.uuid);
       })
       .onNodeHover((n) => {
-        _state.hoverId = n ? n.id : null;
-        _state.neighbors = new Set(n ? [n.id] : []);
+        _state.hoverId = n ? n.uuid : null;
+        _state.neighbors = new Set(n ? [n.uuid] : []);
         if (n && _fg) {
           _fg.graphData().links.forEach((l) => {
-            const sId = (l.source && l.source.id) || l.source;
-            const tId = (l.target && l.target.id) || l.target;
-            if (sId === n.id) _state.neighbors.add(tId);
-            if (tId === n.id) _state.neighbors.add(sId);
+            const sId = (l.source && l.source.uuid) || l.source;
+            const tId = (l.target && l.target.uuid) || l.target;
+            if (sId === n.uuid) _state.neighbors.add(tId);
+            if (tId === n.uuid) _state.neighbors.add(sId);
           });
         }
         _applyColors();
@@ -158,6 +185,11 @@ function setSearch(q) {
   _load();
 }
 
+function setKind(kind) {
+  _state.kind = kind || 'all';
+  _load();
+}
+
 function destroy() {
   _openGen++; // invalidate any in-flight open() / _load()
   if (_resizeObserver) {
@@ -175,6 +207,7 @@ function destroy() {
   }
   _state = {
     scope: 'mine',
+    kind: 'all',
     search: '',
     journalUuid: null,
     notesRoot: null,
@@ -184,4 +217,4 @@ function destroy() {
   };
 }
 
-window.notesGraph = { nodeColorKey, escapeHtml, open, setScope, setSearch, destroy };
+window.notesGraph = { nodeColorKey, escapeHtml, open, setScope, setKind, setSearch, destroy };

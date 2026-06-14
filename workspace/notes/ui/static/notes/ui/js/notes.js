@@ -152,6 +152,7 @@ window.notesApp = function notesApp(config) {
         activeId: config.id || null,
         viewTitle: titleMap[initialView] || 'My Notes',
         graphScope: 'mine',
+        graphKind: 'all',
         graphSearch: '',
 
         // Folder arrays (flat lists, lazy-loaded children)
@@ -523,12 +524,18 @@ window.notesApp = function notesApp(config) {
 
         _disposeGraph() {
             if (window.notesGraph && window.notesGraph.destroy) window.notesGraph.destroy();
+            this.graphKind = 'all';
             this.graphSearch = '';
         },
 
         setGraphScope(scope) {
             this.graphScope = scope;
             if (window.notesGraph) window.notesGraph.setScope(scope);
+        },
+
+        setGraphKind(kind) {
+            this.graphKind = kind;
+            if (window.notesGraph) window.notesGraph.setKind(kind);
         },
 
         onGraphSearch() {

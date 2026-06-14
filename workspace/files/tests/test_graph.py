@@ -42,7 +42,7 @@ class BuildFileGraphTests(TestCase):
 
     def test_mine_scope_nodes_and_edges(self):
         g = build_file_graph(self.user, scope="mine", file_type="markdown")
-        ids = {n["id"] for n in g["nodes"]}
+        ids = {n["uuid"] for n in g["nodes"]}
         self.assertEqual(ids, {str(self.a.uuid), str(self.b.uuid), str(self.c.uuid)})
         # Orphan c is included; non-markdown n.txt excluded.
         self.assertEqual(
@@ -52,14 +52,14 @@ class BuildFileGraphTests(TestCase):
 
     def test_favorite_and_parent_flags(self):
         g = build_file_graph(self.user, scope="mine", file_type="markdown")
-        by_id = {n["id"]: n for n in g["nodes"]}
+        by_id = {n["uuid"]: n for n in g["nodes"]}
         self.assertTrue(by_id[str(self.b.uuid)]["is_favorite"])
         self.assertFalse(by_id[str(self.a.uuid)]["is_favorite"])
         self.assertIsNone(by_id[str(self.a.uuid)]["parent"])
 
     def test_type_filter_optional(self):
         g = build_file_graph(self.user, scope="mine", file_type=None)
-        ids = {n["id"] for n in g["nodes"]}
+        ids = {n["uuid"] for n in g["nodes"]}
         self.assertIn(str(self.t.uuid), ids)  # no type filter -> txt included
 
     def test_all_scope_includes_shared(self):
@@ -73,7 +73,7 @@ class BuildFileGraphTests(TestCase):
             permission=FileShare.Permission.READ_ONLY,
         )
         g = build_file_graph(self.user, scope="all", file_type="markdown")
-        ids = {n["id"] for n in g["nodes"]}
+        ids = {n["uuid"] for n in g["nodes"]}
         self.assertIn(str(self.x.uuid), ids)
         self.assertIn(
             {"source": str(self.a.uuid), "target": str(self.x.uuid)}, g["edges"]
@@ -99,7 +99,7 @@ class BuildFileGraphTests(TestCase):
             permission=FileShare.Permission.READ_ONLY,
         )
         g = build_file_graph(self.user, scope="all", file_type="markdown")
-        ids = [n["id"] for n in g["nodes"]]
+        ids = [n["uuid"] for n in g["nodes"]]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(ids.count(str(self.a.uuid)), 1)
 
@@ -107,7 +107,7 @@ class BuildFileGraphTests(TestCase):
         d = _note(self.user, "d.md", deleted=True)
         FileLink.objects.create(source=self.a, target=d)
         g = build_file_graph(self.user, scope="mine", file_type="markdown")
-        ids = {n["id"] for n in g["nodes"]}
+        ids = {n["uuid"] for n in g["nodes"]}
         self.assertNotIn(str(d.uuid), ids)
         # No edge to the deleted node.
         self.assertNotIn(
@@ -127,7 +127,7 @@ class BuildFileGraphTests(TestCase):
         g = build_file_graph(
             self.user, scope="mine", file_type="markdown", under=folder.uuid
         )
-        ids = {n["id"] for n in g["nodes"]}
+        ids = {n["uuid"] for n in g["nodes"]}
         self.assertEqual(ids, {str(inside.uuid), str(nested.uuid)})
         self.assertNotIn(str(self.a.uuid), ids)  # root-level note, outside the folder
 
@@ -142,9 +142,69 @@ class BuildFileGraphTests(TestCase):
     def test_search_filters_nodes_by_name(self):
         # search keeps only name-matching nodes; edges drop to the surviving set.
         g = build_file_graph(self.user, scope="mine", file_type="markdown", search="b")
-        ids = {n["id"] for n in g["nodes"]}
+        ids = {n["uuid"] for n in g["nodes"]}
         self.assertEqual(ids, {str(self.b.uuid)})  # only b.md matches "b"
         self.assertEqual(g["edges"], [])  # a->b dropped: a filtered out
+
+    def test_favorites_true_keeps_only_favorites(self):
+        g = build_file_graph(
+            self.user, scope="mine", file_type="markdown", favorites=True
+        )
+        ids = {n["uuid"] for n in g["nodes"]}
+        self.assertEqual(ids, {str(self.b.uuid)})  # only b is favorited
+
+    def test_favorites_false_excludes_favorites(self):
+        g = build_file_graph(
+            self.user, scope="mine", file_type="markdown", favorites=False
+        )
+        ids = {n["uuid"] for n in g["nodes"]}
+        self.assertEqual(ids, {str(self.a.uuid), str(self.c.uuid)})  # b dropped
+
+    def test_exclude_descendants_of_drops_subtree(self):
+        folder = File.objects.create(
+            owner=self.user, name="Excl", node_type=File.NodeType.FOLDER
+        )
+        inside = _note(self.user, "inside.md", parent=folder)
+        g = build_file_graph(
+            self.user,
+            scope="mine",
+            file_type="markdown",
+            exclude_descendants_of=folder.uuid,
+        )
+        ids = {n["uuid"] for n in g["nodes"]}
+        self.assertNotIn(str(inside.uuid), ids)  # subtree dropped
+        self.assertIn(str(self.a.uuid), ids)  # root-level note kept
+
+    def test_nodes_are_file_serializer_dto(self):
+        # A node is the canonical FileSerializer DTO, not a hand-rolled subset:
+        # keyed by "uuid" (no synthetic "id") and carrying the full surface.
+        g = build_file_graph(self.user, scope="mine", file_type="markdown")
+        node = next(n for n in g["nodes"] if n["uuid"] == str(self.a.uuid))
+        self.assertNotIn("id", node)
+        expected = {
+            "uuid",
+            "name",
+            "node_type",
+            "parent",
+            "type",
+            "icon",
+            "color",
+            "owner",
+            "size",
+            "mime_type",
+            "path",
+            "category",
+            "is_favorite",
+            "is_file",
+            "is_folder",
+            "is_viewable",
+            "content_url",
+            "is_pinned",
+            "is_shared",
+            "tags",
+            "has_children",
+        }
+        self.assertTrue(expected.issubset(node.keys()))
 
 
 class FileGraphEndpointTests(APITestCase):
@@ -158,7 +218,7 @@ class FileGraphEndpointTests(APITestCase):
     def test_graph_returns_nodes_and_edges(self):
         resp = self.client.get("/api/v1/files/graph?scope=mine&type=markdown")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        ids = {n["id"] for n in resp.data["nodes"]}
+        ids = {n["uuid"] for n in resp.data["nodes"]}
         self.assertEqual(ids, {str(self.a.uuid), str(self.b.uuid)})
         self.assertEqual(
             resp.data["edges"],
@@ -185,7 +245,7 @@ class FileGraphEndpointTests(APITestCase):
         inside = _note(self.user, "inside.md", parent=folder)
         resp = self.client.get(f"/api/v1/files/graph?type=markdown&under={folder.uuid}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        ids = {n["id"] for n in resp.data["nodes"]}
+        ids = {n["uuid"] for n in resp.data["nodes"]}
         self.assertEqual(ids, {str(inside.uuid)})
 
     def test_invalid_under_400(self):
@@ -195,5 +255,16 @@ class FileGraphEndpointTests(APITestCase):
     def test_search_param_filters(self):
         resp = self.client.get("/api/v1/files/graph?type=markdown&search=b")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        ids = {n["id"] for n in resp.data["nodes"]}
+        ids = {n["uuid"] for n in resp.data["nodes"]}
         self.assertEqual(ids, {str(self.b.uuid)})
+
+    def test_favorites_param(self):
+        FileFavorite.objects.create(owner=self.user, file=self.a)
+        resp = self.client.get("/api/v1/files/graph?type=markdown&favorites=1")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ids = {n["uuid"] for n in resp.data["nodes"]}
+        self.assertEqual(ids, {str(self.a.uuid)})
+
+    def test_invalid_exclude_descendants_of_400(self):
+        resp = self.client.get("/api/v1/files/graph?exclude_descendants_of=bogus")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

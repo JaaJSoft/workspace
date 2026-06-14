@@ -12,6 +12,13 @@
               :class="graphScope === 'all' ? 'btn-success' : 'btn-ghost'"
               @click="setGraphScope('all')">All</button>
     </div>
+    <select class="select select-sm select-bordered w-full"
+            x-model="graphKind" @change="setGraphKind($event.target.value)">
+      <option value="all">All notes</option>
+      <option value="favorite">Favorites</option>
+      <option value="journal">Journal</option>
+      <option value="regular">Regular notes</option>
+    </select>
     <input type="text" class="input input-sm input-bordered w-full" placeholder="Search notes..."
            x-model="graphSearch" @input.debounce.200ms="onGraphSearch()">
     <div class="text-xs space-y-1">

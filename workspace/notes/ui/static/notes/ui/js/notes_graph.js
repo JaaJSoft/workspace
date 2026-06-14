@@ -12,18 +12,6 @@ function nodeColorKey(node, journalUuid) {
   return 'regular';
 }
 
-// Escape a string for safe use as HTML. force-graph's nodeLabel renders its
-// return value as HTML in the hover tooltip, and node names are user-controlled
-// (in scope=all they are authored by OTHER users), so they MUST be escaped to
-// avoid stored XSS.
-function escapeHtml(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 // Resolve a colorKey to an actual CSS color from the active daisyUI theme, so
 // the graph follows light/dark. Reads computed colors off a detached probe.
 function themePalette() {
@@ -81,9 +69,12 @@ function _applyColors() {
 // Fetch the (scope + search)-filtered graph from the API and render it. Both
 // scope and search are applied server-side, so non-matching notes are simply
 // not returned (rather than dimmed client-side).
-async function _load(gen) {
-  if (gen === undefined) gen = _openGen;
+async function _load() {
   if (!_fg) return;
+  // Last-request-wins: each load claims a fresh generation up front, so if a
+  // newer load (filter/search/scope change) or a view switch starts before this
+  // fetch resolves, the gen checks below discard this now-stale response.
+  const gen = ++_openGen;
   const params = ['type=markdown'];
   if (_state.scope === 'all') params.push('scope=all');
   // "mine" scope = the Notes folder subtree (under=); the "journal" kind narrows
@@ -134,6 +125,9 @@ async function open(container, opts) {
   if (!_fg) {
     _fg = construct(container)
       .nodeId('uuid')
+      // nodeLabel renders as HTML in the hover tooltip and names are user-
+      // controlled (other users' files in scope=all), so escape via the shared
+      // global escapeHtml (common/static/ui/js/html.js) to avoid stored XSS.
       .nodeLabel((n) => escapeHtml(n.name))
       .nodeRelSize(5)
       // Draw the note name centred just below the node. Mode 'after' keeps the
@@ -172,7 +166,7 @@ async function open(container, opts) {
     _resizeObserver.observe(container);
   }
   _fg.width(container.clientWidth).height(container.clientHeight);
-  await _load(gen);
+  await _load();
 }
 
 function setScope(scope) {
@@ -217,4 +211,4 @@ function destroy() {
   };
 }
 
-window.notesGraph = { nodeColorKey, escapeHtml, open, setScope, setKind, setSearch, destroy };
+window.notesGraph = { nodeColorKey, open, setScope, setKind, setSearch, destroy };

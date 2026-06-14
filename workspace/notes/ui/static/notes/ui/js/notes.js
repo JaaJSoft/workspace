@@ -1353,7 +1353,7 @@ window.notesApp = function notesApp(config) {
 
         highlightSearch(text) {
             if (!text) return '';
-            const escaped = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const escaped = escapeHtml(text);
             const q = this.filters.search.trim();
             if (!q) return escaped;
             const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');

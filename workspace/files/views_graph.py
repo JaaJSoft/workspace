@@ -79,7 +79,7 @@ class FileGraphView(APIView):
             file_type=request.query_params.get("type") or None,
             under=self._uuid_param(request, "under"),
             exclude_descendants_of=self._uuid_param(request, "exclude_descendants_of"),
-            favorites=is_truthy(fav_raw) if fav_raw is not None else None,
+            favorites=is_truthy(fav_raw) if fav_raw else None,
             search=request.query_params.get("search") or None,
         )
         return Response(data)

@@ -151,7 +151,7 @@ window.commandPaletteDropdown = function () {
     highlightMatch(text, query) {
       // Escape first: the result is injected via x-html, and matched_value
       // carries user-controlled text (file names, subjects, contact names, …).
-      const escaped = String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const escaped = escapeHtml(text);
       if (!query) return escaped;
       const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
       return escaped.replace(re, '<mark class="bg-primary/20">$1</mark>');

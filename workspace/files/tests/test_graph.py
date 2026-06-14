@@ -265,6 +265,15 @@ class FileGraphEndpointTests(APITestCase):
         ids = {n["uuid"] for n in resp.data["nodes"]}
         self.assertEqual(ids, {str(self.a.uuid)})
 
+    def test_empty_favorites_is_unset_not_false(self):
+        # `?favorites=` (empty) must mean "no filter", not "non-favorites only":
+        # the favorited node must still be returned alongside the rest.
+        FileFavorite.objects.create(owner=self.user, file=self.a)
+        resp = self.client.get("/api/v1/files/graph?type=markdown&favorites=")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ids = {n["uuid"] for n in resp.data["nodes"]}
+        self.assertEqual(ids, {str(self.a.uuid), str(self.b.uuid)})
+
     def test_invalid_exclude_descendants_of_400(self):
         resp = self.client.get("/api/v1/files/graph?exclude_descendants_of=bogus")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

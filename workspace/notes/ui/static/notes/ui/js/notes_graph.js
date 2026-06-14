@@ -60,10 +60,19 @@ function _matches(node, q) {
 }
 
 function _withAlpha(color, a) {
-  // color is an rgb(...) string from getComputedStyle; degrade to rgba.
-  const m = color.match(/(\d+),\s*(\d+),\s*(\d+)/);
-  if (!m) return color;
-  return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${a})`;
+  const s = String(color == null ? '' : color).trim();
+  // Legacy comma rgb(r, g, b) -> rgba.
+  const rgb = s.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+  if (rgb) return `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${a})`;
+  // Functional space-separated colors (oklch/oklab/lch/lab/hsl/hwb/rgb/color)
+  // take a "<components> / <alpha>" suffix. daisyUI themes resolve to oklch(),
+  // which the old rgb-only path returned unchanged -> search dimming was a no-op.
+  const fn = s.match(/^(oklch|oklab|lch|lab|hsl|hwb|rgb|color)\(([^)]*)\)$/i);
+  if (fn) {
+    const comps = fn[2].split('/')[0].trim();
+    return `${fn[1]}(${comps} / ${a})`;
+  }
+  return s;
 }
 
 function _applyColors() {

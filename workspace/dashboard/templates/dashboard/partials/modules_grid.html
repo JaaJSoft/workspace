@@ -1,29 +1,29 @@
 <div class="flex flex-wrap justify-center gap-3">
   {% for module in modules %}
-    {% if module.active %}
-      <a
-        href="{{ module.url }}"
-        class="group relative flex flex-col items-center gap-1.5 p-3 rounded-xl hover:bg-base-200 transition-colors w-20"
-      >
-        <div class="relative">
-          <div class="w-12 h-12 rounded-xl bg-{{ module.color }}/10 flex items-center justify-center text-{{ module.color }} group-hover:bg-{{ module.color }}/20 transition-colors">
-            <i data-lucide="{{ module.icon }}" class="w-6 h-6"></i>
-          </div>
-          {% if module.pending_action_count %}
-            <span class="absolute -top-1.5 -right-1.5 min-w-5 h-5 flex items-center justify-center rounded-full bg-{{ module.color }} text-{{ module.color }}-content text-xs font-bold px-1">
-              {{ module.pending_action_count }}
-            </span>
-          {% endif %}
-        </div>
-        <span class="text-xs font-medium text-base-content text-center leading-tight">{{ module.name }}</span>
-      </a>
-    {% else %}
-      <div class="relative flex flex-col items-center gap-1.5 p-3 rounded-xl opacity-50 w-20">
-        <div class="w-12 h-12 rounded-xl bg-base-200 flex items-center justify-center text-base-content/40 border border-dashed border-base-300">
+    <a
+      href="{{ module.url }}"
+      class="group relative flex flex-col items-center gap-1.5 p-3 rounded-xl hover:bg-base-200 transition-colors w-20"
+    >
+      <div class="relative">
+        <div class="w-12 h-12 rounded-xl bg-{{ module.color }}/10 flex items-center justify-center text-{{ module.color }} group-hover:bg-{{ module.color }}/20 transition-colors">
           <i data-lucide="{{ module.icon }}" class="w-6 h-6"></i>
         </div>
-        <span class="text-xs font-medium text-base-content/50 text-center leading-tight">{{ module.name }}</span>
+        {% if module.pending_action_count %}
+          <span class="absolute -top-1.5 -right-1.5 min-w-5 h-5 flex items-center justify-center rounded-full bg-{{ module.color }} text-{{ module.color }}-content text-xs font-bold px-1">
+            {{ module.pending_action_count }}
+          </span>
+        {% endif %}
       </div>
-    {% endif %}
+      <span class="text-xs font-medium text-base-content text-center leading-tight">{{ module.name }}</span>
+      {% if module.preview %}
+        <span
+          class="tooltip tooltip-bottom cursor-help"
+          data-tip="Under active development: may have bugs, and its data may not be migrated or stay backward-compatible across updates."
+        >
+          <span class="badge badge-warning badge-xs">Preview</span>
+          <span class="sr-only">Under active development: may have bugs, and its data may not be migrated or stay backward-compatible across updates.</span>
+        </span>
+      {% endif %}
+    </a>
   {% endfor %}
 </div>

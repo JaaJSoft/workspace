@@ -92,6 +92,10 @@ if not DEBUG:
 
 # Application version (from env, defaults to 'dev')
 APP_VERSION = os.getenv("APP_VERSION") or "dev"
+# Audience that may see modules flagged preview=True on the home page, nav,
+# command palette and search. One of: all, staff, admin, none (default staff).
+# Validated/normalized at read time in workspace.core.services.module_visibility.
+PREVIEW_VISIBILITY = os.getenv("PREVIEW_VISIBILITY", "staff")
 # Recent files listing limits
 RECENT_FILES_LIMIT = int(os.getenv("RECENT_FILES_LIMIT", "25"))
 RECENT_FILES_MAX_LIMIT = int(os.getenv("RECENT_FILES_MAX_LIMIT", "200"))

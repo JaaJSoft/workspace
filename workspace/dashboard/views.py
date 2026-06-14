@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from datetime import datetime, time
 
 from django.conf import settings as django_settings
@@ -14,6 +15,7 @@ from workspace.core.services.activity import (
     get_sources,
     get_usage_stats,
 )
+from workspace.core.services.module_visibility import visible_modules
 from workspace.users.services.settings import get_setting
 
 ACTIVITY_LIMIT = 10
@@ -76,10 +78,12 @@ def _activity_shell_context(source=None):
 def _build_dashboard_context(user, include_activity=True, activity_source=None):
     pending_action_counts = registry.get_pending_action_counts(user)
     modules = []
-    for m in registry.get_for_template():
-        if m["slug"] != "dashboard":
-            m["pending_action_count"] = pending_action_counts.get(m["slug"], 0)
-            modules.append(m)
+    for m in visible_modules(user):
+        if m.slug == "dashboard":
+            continue
+        data = asdict(m)
+        data["pending_action_count"] = pending_action_counts.get(m.slug, 0)
+        modules.append(data)
 
     context = {
         "modules": modules,

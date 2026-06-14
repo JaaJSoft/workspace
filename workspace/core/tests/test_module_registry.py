@@ -4,6 +4,7 @@ from workspace.core.module_registry import (
     CommandInfo,
     ModuleInfo,
     ModuleRegistry,
+    ModuleVisibility,
     PendingActionProviderInfo,
     SearchProviderInfo,
     SearchResult,
@@ -52,13 +53,6 @@ class RegisterTests(TestCase):
         reg.register(_make_module("a", active=True))
         reg.register(_make_module("b", active=False))
         self.assertEqual([m.slug for m in reg.get_active()], ["a"])
-
-    def test_get_for_template_returns_dicts(self):
-        reg = ModuleRegistry()
-        reg.register(_make_module("chat"))
-        result = reg.get_for_template()
-        self.assertIsInstance(result[0], dict)
-        self.assertEqual(result[0]["slug"], "chat")
 
 
 class SearchProviderTests(TestCase):
@@ -254,3 +248,27 @@ class CommandTests(TestCase):
         reg.register(_make_module("chat"))
         reg.register_commands([self._make_cmd()])
         self.assertEqual(reg.search_commands("zzzzz"), [])
+
+
+class ModulePreviewAndVisibilityTests(TestCase):
+    def test_module_info_preview_defaults_false(self):
+        m = ModuleInfo(
+            name="X", slug="x", description="", icon="i", color="c", url="/x"
+        )
+        self.assertFalse(m.preview)
+
+    def test_normalize_accepts_known_values(self):
+        self.assertEqual(ModuleVisibility.normalize("admin"), "admin")
+        self.assertEqual(ModuleVisibility.normalize("ALL"), "all")
+
+    def test_normalize_falls_back_to_staff(self):
+        self.assertEqual(ModuleVisibility.normalize("bogus"), "staff")
+        self.assertEqual(ModuleVisibility.normalize(None), "staff")
+        self.assertEqual(ModuleVisibility.normalize(""), "staff")
+
+    def test_normalize_strips_surrounding_whitespace(self):
+        # PREVIEW_VISIBILITY comes from an env var, which may carry stray
+        # whitespace; it should resolve to the level, not the staff fallback.
+        self.assertEqual(ModuleVisibility.normalize(" admin"), "admin")
+        self.assertEqual(ModuleVisibility.normalize("none "), "none")
+        self.assertEqual(ModuleVisibility.normalize("  ALL  "), "all")

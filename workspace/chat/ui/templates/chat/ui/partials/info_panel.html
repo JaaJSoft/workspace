@@ -43,7 +43,7 @@
       <h3 class="font-bold text-base" x-text="conversationName(activeConversation)"></h3>
       <button
         x-show="activeConversation.kind === 'group'"
-        class="btn btn-ghost btn-xs btn-circle opacity-50 hover:opacity-100"
+        class="btn btn-ghost btn-xs btn-square opacity-50 hover:opacity-100"
         @click="renameConversation()"
         title="Rename group"
       >
@@ -72,7 +72,7 @@
       <i data-lucide="align-left" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
       <span x-text="activeConversation.description" class="whitespace-pre-line break-words flex-1"></span>
       <button
-        class="btn btn-ghost btn-xs btn-circle opacity-50 hover:opacity-100 flex-shrink-0"
+        class="btn btn-ghost btn-xs btn-square opacity-50 hover:opacity-100 flex-shrink-0"
         @click="editDescription()"
         title="Edit description"
       >
@@ -163,7 +163,7 @@
         <!-- Remove button (visible to creator, not on self) -->
         <button
           x-show="activeConversation.kind === 'group' && activeConversation.created_by_id === currentUserId && member.user.id !== currentUserId"
-          class="btn btn-ghost btn-xs btn-circle opacity-0 group-hover:opacity-100 text-error transition-opacity"
+          class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 text-error transition-opacity"
           @click="removeMember(member.user.id)"
           title="Remove from group"
         >
@@ -193,7 +193,7 @@
             <p class="text-[0.65rem] text-base-content/40" x-text="'Pinned by ' + (((pin.pinned_by?.first_name || '') + ' ' + (pin.pinned_by?.last_name || '')).trim() || pin.pinned_by?.username || 'Unknown')"></p>
           </div>
           <button
-            class="btn btn-ghost btn-xs btn-circle opacity-0 group-hover:opacity-100 text-base-content/50 hover:text-error transition-opacity flex-shrink-0"
+            class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 text-base-content/50 hover:text-error transition-opacity flex-shrink-0"
             @click.stop="unpinMessage(pin.message_uuid)"
             title="Unpin"
           >
@@ -395,7 +395,7 @@
           placeholder="Search memories..."
           x-model.debounce.200ms="memorySearch"
         />
-        <button x-show="memorySearch" @click="memorySearch = ''" class="btn btn-ghost btn-xs btn-circle absolute right-0.5 top-1/2 -translate-y-1/2">
+        <button x-show="memorySearch" @click="memorySearch = ''" class="btn btn-ghost btn-xs btn-square absolute right-0.5 top-1/2 -translate-y-1/2">
           <i data-lucide="x" class="w-3 h-3"></i>
         </button>
       </div>
@@ -427,10 +427,10 @@
               </div>
               <!-- Actions -->
               <div class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                <button class="btn btn-ghost btn-xs btn-circle" @click="editMemory(mem)" title="Edit">
+                <button class="btn btn-ghost btn-xs btn-square" @click="editMemory(mem)" title="Edit">
                   <i data-lucide="pencil" class="w-3 h-3"></i>
                 </button>
-                <button class="btn btn-ghost btn-xs btn-circle text-error" @click="deleteMemory(mem)" title="Delete">
+                <button class="btn btn-ghost btn-xs btn-square text-error" @click="deleteMemory(mem)" title="Delete">
                   <i data-lucide="trash-2" class="w-3 h-3"></i>
                 </button>
               </div>
@@ -476,10 +476,10 @@
               </div>
               <!-- Actions -->
               <div class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                <button class="btn btn-ghost btn-xs btn-circle" @click="editSchedule(sched)" title="Edit">
+                <button class="btn btn-ghost btn-xs btn-square" @click="editSchedule(sched)" title="Edit">
                   <i data-lucide="pencil" class="w-3 h-3"></i>
                 </button>
-                <button class="btn btn-ghost btn-xs btn-circle text-error" @click="deleteSchedule(sched)" title="Delete">
+                <button class="btn btn-ghost btn-xs btn-square text-error" @click="deleteSchedule(sched)" title="Delete">
                   <i data-lucide="trash-2" class="w-3 h-3"></i>
                 </button>
               </div>

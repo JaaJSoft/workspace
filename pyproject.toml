@@ -24,7 +24,7 @@ dependencies = [
     "pillow>=11.0",
     "cairosvg>=2.9.0",
     # mail
-    "cryptography>=48.0.1",
+    "cryptography>=49.0.0",
     "nh3>=0.3.5",
     "myl-discovery>=0.6.4",
     "icalendar>=7.1.2",

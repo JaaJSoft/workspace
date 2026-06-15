@@ -3,7 +3,9 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
+from django.db import connection
 from django.test import RequestFactory, TestCase
+from django.test.utils import CaptureQueriesContext
 
 from workspace.core import changelog as changelog_module
 from workspace.core.context_processors import workspace_modules
@@ -108,3 +110,24 @@ class OnboardingContextProcessorTests(TestCase):
         ctx = workspace_modules(self._request(self.user))
         self.assertFalse(ctx["ONBOARDING_PENDING"])
         self.assertFalse(ctx["CHANGELOG_UNREAD"])
+
+    def test_reads_core_settings_in_a_single_query(self):
+        # Onboarding completed so the changelog branch also reads a core
+        # setting: both keys must come from one query, not two.
+        set_setting(self.user, MODULE, ONBOARDING_COMPLETED, True)
+        set_setting(self.user, MODULE, CHANGELOG_LAST_SEEN_VERSION, "0.19.0")
+        # Cold the cache so reads hit the database.
+        cache.clear()
+
+        with CaptureQueriesContext(connection) as ctx:
+            workspace_modules(self._request(self.user))
+
+        setting_queries = [
+            q["sql"] for q in ctx.captured_queries if "users_usersetting" in q["sql"]
+        ]
+        self.assertEqual(
+            len(setting_queries),
+            1,
+            f"expected a single users_usersetting query, got "
+            f"{len(setting_queries)}:\n" + "\n".join(setting_queries),
+        )

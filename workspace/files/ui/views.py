@@ -8,7 +8,7 @@ from django.utils.html import escape
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.files.services import FilePermission, FileService
-from workspace.users.services.settings import get_setting
+from workspace.users.services.settings import get_module_settings
 
 from ..models import File, FileFavorite, FileShare, FileShareLink, PinnedFolder
 from .viewers import ViewerRegistry
@@ -329,11 +329,14 @@ def _build_context(request, folder=None, is_trash_view=False):
     else:
         sidebar_active = "root"
 
-    file_prefs = get_setting(request.user, "files", "preferences", default={}) or {}
+    # Both keys live in the files module, so fetch them in a single query
+    # instead of one round-trip per get_setting call.
+    files_settings = get_module_settings(request.user, "files")
+    file_prefs = files_settings.get("preferences") or {}
     if not isinstance(file_prefs, dict):
         file_prefs = {}
     breadcrumb_collapse = file_prefs.get("breadcrumbCollapse", 4)
-    viewer_prefs = get_setting(request.user, "files", "viewer", default={}) or {}
+    viewer_prefs = files_settings.get("viewer") or {}
     if not isinstance(viewer_prefs, dict):
         viewer_prefs = {}
 

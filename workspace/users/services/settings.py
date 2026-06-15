@@ -19,11 +19,6 @@ from workspace.users.models import UserSetting
 UTC = ZoneInfo("UTC")
 
 _CACHE_TTL = 300  # 5 minutes
-_DB_MISS = "__SETTING_NOT_FOUND__"
-
-
-def _key_tag(user_id: int, module: str, key: str) -> str:
-    return f"usetting:{user_id}:{module}:{key}"
 
 
 def _module_tag(user_id: int, module: str) -> str:
@@ -41,23 +36,17 @@ def get_user_timezone(user) -> ZoneInfo:
         return UTC
 
 
-@cached(
-    key=lambda user, module, key: f"usetting:{user.pk}:{module}:{key}",
-    ttl=_CACHE_TTL,
-    tags=lambda user, module, key: [_key_tag(user.pk, module, key)],
-)
-def _get_setting_raw(user, module: str, key: str) -> Any:
-    """Return the raw stored value, or ``_DB_MISS`` if the setting doesn't exist."""
-    try:
-        return UserSetting.objects.get(user=user, module=module, key=key).value
-    except UserSetting.DoesNotExist:
-        return _DB_MISS
-
-
 def get_setting(user, module: str, key: str, *, default: Any = None) -> Any:
-    """Return the value of a single setting, or *default* if it does not exist."""
-    value = _get_setting_raw(user, module, key)
-    return default if value == _DB_MISS else value
+    """Return the value of a single setting, or *default* if it does not exist.
+
+    Reads through :func:`get_module_settings` so every key in a module shares a
+    single cache entry: the first read of any key warms the whole module, and
+    subsequent reads of any other key - present or absent - are served from that
+    cached dict without touching the database. A key stored with the value
+    ``None`` is distinguished from an absent key (``dict.get`` only falls back
+    to *default* when the key is missing), preserving the previous semantics.
+    """
+    return get_module_settings(user, module).get(key, default)
 
 
 def set_setting(user, module: str, key: str, value: Any) -> UserSetting:
@@ -69,7 +58,7 @@ def set_setting(user, module: str, key: str, value: Any) -> UserSetting:
     forms, click-spam, ...), which on SQLite means one less acquisition of
     the writer-lock per redundant call.
 
-    The pre-check goes through the cached ``_get_setting_raw`` helper so
+    The pre-check goes through the cached ``get_module_settings`` helper so
     a cache hit costs zero DB hits in the value lookup. If the cache says
     we're already at the target value we re-fetch the model instance and
     **re-verify the value from the DB** before treating as a no-op: this
@@ -81,8 +70,8 @@ def set_setting(user, module: str, key: str, value: Any) -> UserSetting:
     we fall through to ``update_or_create`` and honour the caller's
     intent.
     """
-    cached_value = _get_setting_raw(user, module, key)
-    if cached_value != _DB_MISS and cached_value == value:
+    module_settings = get_module_settings(user, module)
+    if key in module_settings and module_settings[key] == value:
         try:
             existing = UserSetting.objects.get(user=user, module=module, key=key)
         except UserSetting.DoesNotExist:
@@ -98,10 +87,7 @@ def set_setting(user, module: str, key: str, value: Any) -> UserSetting:
         key=key,
         defaults={"value": value},
     )
-    invalidate_tags(
-        _key_tag(user.pk, module, key),
-        _module_tag(user.pk, module),
-    )
+    invalidate_tags(_module_tag(user.pk, module))
     return obj
 
 
@@ -112,10 +98,7 @@ def delete_setting(user, module: str, key: str) -> bool:
         module=module,
         key=key,
     ).delete()
-    invalidate_tags(
-        _key_tag(user.pk, module, key),
-        _module_tag(user.pk, module),
-    )
+    invalidate_tags(_module_tag(user.pk, module))
     return deleted > 0
 
 

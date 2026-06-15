@@ -124,7 +124,7 @@ class SetSettingTests(TestCase):
         # the SQLite row already has the target value (e.g. user clicks
         # their currently-active theme on a freshly-started worker).
         # The fast path must still kick in based on the *DB* value
-        # populated into the cache by _get_setting_raw, not require a
+        # populated into the cache by get_module_settings, not require a
         # pre-warmed cache.
         from unittest.mock import patch
 
@@ -325,6 +325,25 @@ class SettingCacheTests(TestCase):
         with self.assertNumQueries(0):
             result = get_setting(self.user, "core", "key", default="fallback")
             self.assertIsNone(result)
+
+    def test_reading_one_key_warms_the_whole_module(self):
+        # get_setting reads through get_module_settings, so the first read of
+        # any key warms every other key in that module - a different present
+        # key AND an absent key are both served without touching the DB.
+        set_setting(self.user, "core", "theme", "dark")
+        set_setting(self.user, "core", "timezone", "Europe/Paris")
+        cache.clear()
+
+        # Cold read of one key issues a single query for the whole module.
+        with self.assertNumQueries(1):
+            self.assertEqual(get_setting(self.user, "core", "theme"), "dark")
+
+        # Every other read in the same module is now free.
+        with self.assertNumQueries(0):
+            self.assertEqual(get_setting(self.user, "core", "timezone"), "Europe/Paris")
+            self.assertEqual(
+                get_setting(self.user, "core", "missing", default="x"), "x"
+            )
 
     def test_set_setting_invalidates_cache(self):
         set_setting(self.user, "core", "theme", "light")

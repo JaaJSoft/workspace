@@ -53,5 +53,12 @@
   <!-- Canvas mount (force-graph draws here, sized to this area by notes.js) -->
   <div class="relative flex-1 min-h-0">
     <div x-ref="graphCanvas" class="absolute inset-0"></div>
+    <!-- Loading overlay: shown while the graph module imports force-graph and
+         fetches the (scope + filters)-filtered data. Driven by graphLoading,
+         toggled through the onLoading callback wired in _openGraph(). -->
+    <div x-show="graphLoading" x-cloak x-transition.opacity
+         class="absolute inset-0 z-10 flex items-center justify-center bg-base-100/60 pointer-events-none">
+      <span class="loading loading-spinner loading-lg text-base-content/50"></span>
+    </div>
   </div>
 </div>

@@ -75,14 +75,11 @@ let _state = {
 };
 
 // Notify the host (notes.js) of the loading state so it can show/hide a spinner
-// overlay. Guarded: a missing callback (or a throwing one) must never break a load.
+// overlay. The callback is optional (null until a host wires it); if present it's
+// an internal contract, so let any error surface rather than masking host bugs.
 function _setLoading(flag) {
   if (typeof _state.onLoading !== 'function') return;
-  try {
-    _state.onLoading(!!flag);
-  } catch (e) {
-    /* host callback errors are not our concern */
-  }
+  _state.onLoading(!!flag);
 }
 
 // Radius for a node, derived from its degree (stored in node.val by _load).
@@ -280,7 +277,16 @@ async function open(container, opts) {
   // Show the spinner straight away: the dynamic import below is a network fetch
   // on first open and can take a beat. _load()'s finally clears it once data is in.
   _setLoading(true);
-  const mod = await import('https://esm.sh/force-graph@1');
+  let mod;
+  try {
+    mod = await import('https://esm.sh/force-graph@1');
+  } catch (e) {
+    // CDN/network failure loading force-graph. Clear the spinner (unless a newer
+    // open/destroy already moved on) and bail, instead of leaving it stuck and
+    // raising an unhandled rejection in the non-awaiting caller (notes.js).
+    if (gen === _openGen) _setLoading(false);
+    return;
+  }
   if (gen !== _openGen) return; // view was left / re-opened during the import
 
   // force-graph >= 1.44 is a class (new ForceGraph(el)); older releases use the

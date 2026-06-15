@@ -1,8 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
-from django.db import connection
 from django.urls import reverse
 
 from workspace.users.services.settings import set_setting

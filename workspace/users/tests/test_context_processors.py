@@ -1,7 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
+from django.db import connection
 from django.test import RequestFactory, TestCase
+from django.test.utils import CaptureQueriesContext
 
 from workspace.users.context_processors import user_preferences
 from workspace.users.services.settings import set_setting
@@ -70,3 +72,24 @@ class UserPreferencesContextProcessorTests(TestCase):
         self.assertEqual(ctx["user_theme"], "dracula")
         self.assertEqual(ctx["user_light_theme"], "cupcake")
         self.assertEqual(ctx["user_dark_theme"], "dracula")
+
+    def test_reads_all_core_settings_in_a_single_query(self):
+        set_setting(self.user, "core", "theme", "dracula")
+        set_setting(self.user, "core", "light_theme", "nord")
+        set_setting(self.user, "core", "dark_theme", "dracula")
+        set_setting(self.user, "core", "timezone", "Europe/Paris")
+        # Cold the cache so reads hit the database.
+        cache.clear()
+
+        with CaptureQueriesContext(connection) as ctx:
+            user_preferences(self._request(self.user))
+
+        setting_queries = [
+            q["sql"] for q in ctx.captured_queries if "users_usersetting" in q["sql"]
+        ]
+        self.assertEqual(
+            len(setting_queries),
+            1,
+            f"expected a single users_usersetting query, got "
+            f"{len(setting_queries)}:\n" + "\n".join(setting_queries),
+        )

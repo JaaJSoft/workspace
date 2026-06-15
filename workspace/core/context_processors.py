@@ -13,27 +13,21 @@ from workspace.core.setting_keys import (
     MODULE,
     ONBOARDING_COMPLETED,
 )
-from workspace.users.services.settings import get_setting
+from workspace.users.services.settings import get_module_settings
 
 
 def workspace_modules(request):
     onboarding_pending = False
     changelog_unread = False
     if request.user.is_authenticated:
-        onboarding_pending = not get_setting(
-            request.user,
-            MODULE,
-            ONBOARDING_COMPLETED,
-            default=False,
-        )
+        # Both keys live in the core module; fetch them in a single query
+        # (shared with the user_preferences context processor via the cache).
+        core_settings = get_module_settings(request.user, MODULE)
+        onboarding_pending = not core_settings.get(ONBOARDING_COMPLETED, False)
         if not onboarding_pending:
             latest = get_latest_version()
             if latest:
-                last_seen = get_setting(
-                    request.user,
-                    MODULE,
-                    CHANGELOG_LAST_SEEN_VERSION,
-                )
+                last_seen = core_settings.get(CHANGELOG_LAST_SEEN_VERSION)
                 changelog_unread = last_seen != latest
 
     return {

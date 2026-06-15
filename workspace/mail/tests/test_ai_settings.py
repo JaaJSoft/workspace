@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from workspace.mail.services.ai_settings import (
     MAIL_AI_FEATURES,
@@ -46,3 +48,25 @@ class IsMailAIFeatureEnabledTests(TestCase):
     def test_unknown_feature_raises(self):
         with self.assertRaises(ValueError):
             is_mail_ai_feature_enabled(self.user, "summarize")
+
+    def test_back_to_back_feature_checks_hit_db_once(self):
+        # imap_sync probes classify then extract for the same user in a row.
+        # Both checks (plus the legacy ai_enabled fallback) must come from a
+        # single mail-module query, not one per key.
+        set_setting(self.user, "mail", "ai_classify", False)
+        # Cold the cache so reads hit the database.
+        cache.clear()
+
+        with CaptureQueriesContext(connection) as ctx:
+            is_mail_ai_feature_enabled(self.user, "classify")
+            is_mail_ai_feature_enabled(self.user, "extract")
+
+        setting_queries = [
+            q["sql"] for q in ctx.captured_queries if "users_usersetting" in q["sql"]
+        ]
+        self.assertEqual(
+            len(setting_queries),
+            1,
+            f"expected a single users_usersetting query, got "
+            f"{len(setting_queries)}:\n" + "\n".join(setting_queries),
+        )

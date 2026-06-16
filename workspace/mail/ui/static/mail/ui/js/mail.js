@@ -119,6 +119,12 @@ function mailApp() {
     rulesApplyResult: null,
     rulesApplyBusy: false,
 
+    // Move-messages-to-a-folder dialog (right-click / bulk toolbar)
+    moveTargets: [],
+    moveSelectedId: '',
+    moveMsgUuids: [],
+    moveCount: 0,
+
     // AI features
     aiSummarizing: false,
     aiSummary: null,

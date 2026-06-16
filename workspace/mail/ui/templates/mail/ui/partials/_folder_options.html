@@ -1,0 +1,25 @@
+{% comment %}
+Selectable folder rows (sidebar icon + color, depth indent, active highlight),
+shared by the folder dropdown (_folder_select.html) and the message move dialog.
+Renders <li> items, so the caller must wrap them in a <ul class="menu ...">.
+
+Params:
+  model            (required) - Alpine expression holding the selected uuid
+  folders          (optional) - expression for the option list,
+                                default "rulesAccountFolders()"
+  on_change        (optional) - Alpine expression run after a row is picked
+  close_on_select  (optional) - if set, blur to close the surrounding dropdown
+{% endcomment %}
+<template x-for="f in {{ folders|default:'rulesAccountFolders()' }}" :key="f.uuid">
+  <li>
+    <a class="flex items-center gap-2"
+       :class="{{ model }} === f.uuid ? 'active' : ''"
+       :style="f._depth ? `padding-left:${0.5 + f._depth * 0.75}rem` : ''"
+       @click="{{ model }} = f.uuid;{% if on_change %} {{ on_change }};{% endif %}{% if close_on_select %} document.activeElement.blur();{% endif %}">
+      <span class="flex-shrink-0" :class="f.color || ''">
+        <i :data-lucide="f.icon || folderIcon(f.folder_type)" class="w-4 h-4"></i>
+      </span>
+      <span class="truncate" x-text="f.display_name"></span>
+    </a>
+  </li>
+</template>

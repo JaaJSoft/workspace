@@ -1,0 +1,27 @@
+{% comment %}
+Move-messages-to-a-folder dialog (right-click a message -> Move to, or the
+bulk "Move to" toolbar button). State lives on mailApp: moveTargets (the
+destination folders, from getMoveTargetFolders), moveSelectedId, moveMsgUuids,
+moveCount. The folder rows are the same _folder_options.html partial used by the
+rules folder dropdown, so the picker looks identical everywhere.
+{% endcomment %}
+<dialog id="mail-move-dialog" class="modal">
+  <div class="modal-box max-w-sm">
+    <div class="flex items-center gap-2 mb-4">
+      <span class="w-8 h-8 rounded-full bg-warning/10 text-warning flex items-center justify-center flex-shrink-0">
+        <i data-lucide="folder-input" class="w-4 h-4"></i>
+      </span>
+      <h3 class="font-bold text-lg">Move to</h3>
+    </div>
+    <p class="text-sm text-base-content/60 mb-3"
+       x-text="moveCount === 1 ? 'Select a destination folder.' : `Move ${moveCount} messages to:`"></p>
+    <ul class="menu menu-sm w-full max-h-72 flex-nowrap overflow-y-auto rounded-box border border-base-300 bg-base-100 p-1">
+      {% include "mail/ui/partials/_folder_options.html" with model="moveSelectedId" folders="moveTargets" %}
+    </ul>
+    <div class="modal-action">
+      <button class="btn btn-ghost btn-sm" @click="moveCancel()">Cancel</button>
+      <button class="btn btn-warning btn-sm" :disabled="!moveSelectedId" @click="moveConfirm()">Move</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>

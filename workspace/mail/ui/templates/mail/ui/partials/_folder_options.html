@@ -11,7 +11,7 @@ Params:
 {% endcomment %}
 <template x-for="f in {{ folders|default:'rulesAccountFolders()' }}" :key="f.uuid">
   <li>
-    <a class="flex items-center gap-2"
+    <button type="button" class="flex items-center gap-2"
        :class="{{ model }} === f.uuid ? 'active' : ''"
        :style="f._depth ? `padding-left:${0.5 + f._depth * 0.75}rem` : ''"
        @click="{{ model }} = f.uuid;{% if on_change %} {{ on_change }};{% endif %}">
@@ -19,6 +19,6 @@ Params:
         <i :data-lucide="f.icon || folderIcon(f.folder_type)" class="w-4 h-4"></i>
       </span>
       <span class="truncate" x-text="f.display_name"></span>
-    </a>
+    </button>
   </li>
 </template>

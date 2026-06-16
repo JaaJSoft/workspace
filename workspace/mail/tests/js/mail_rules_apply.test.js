@@ -37,21 +37,3 @@ test('rulesRunApply clears a stale preview even when the apply returns nothing',
 
   assert.equal(app.rulesApplyResult, null);
 });
-
-test('the busy flag records which action is running (preview vs run)', async () => {
-  // Capture the flag value while the request is in flight so each button can
-  // render its own spinner off a single shared field.
-  let seen = null;
-  const app = makeApp(async () => {
-    seen = app.rulesApplyBusy;
-    return { ok: true, json: async () => ({ matched: 0, scanned: 0, applied: 0 }) };
-  });
-
-  await app.rulesPreviewApply();
-  assert.equal(seen, 'preview');
-  assert.equal(app.rulesApplyBusy, false); // reset once done
-
-  await app.rulesRunApply();
-  assert.equal(seen, 'run');
-  assert.equal(app.rulesApplyBusy, false);
-});

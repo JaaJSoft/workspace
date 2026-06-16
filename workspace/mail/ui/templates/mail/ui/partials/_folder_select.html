@@ -1,28 +1,49 @@
 {% comment %}
 Folder picker for the mail rules dialog.
 
-Renders the rules account's folders as a <select>, in the same order as the
-sidebar (rulesAccountFolders -> flatFolderOptions) with a per-depth indent.
-Centralized so the folder option rendering (and a future rework to show folder
-icons) lives in one place instead of being duplicated across the "apply to
-folder" sub-view and the "move to folder" rule action.
-
-Note: a native <option> cannot render an icon, and only fakes indentation with
-leading non-breaking spaces. Real icons / tree indentation mean turning this
-into a custom dropdown - which is exactly why the whole widget is extracted
-here, so that swap touches a single file.
+A custom daisyUI dropdown (not a native <select>) so each folder shows its
+sidebar icon and color, indented by depth and ordered exactly like the sidebar
+(rulesAccountFolders -> flatFolderOptions). Shared by the "apply to folder"
+sub-view and the "move to folder" rule action. The selected uuid stays in
+Alpine state (the {{ model }} expression), so the apply/submit logic that reads
+it is unchanged - this only swaps the widget, not the data binding.
 
 Params:
-  model      (required) - Alpine x-model expression, e.g. "rulesApplyFolderId"
-  class      (optional) - extra classes on the <select>, default "w-full"
-  on_change  (optional) - Alpine @change expression
-  x_show     (optional) - Alpine x-show expression
+  model      (required) - Alpine expression holding the selected folder uuid,
+                          e.g. "rulesApplyFolderId" or "rulesForm.simpleAction.folder_id"
+  class      (optional) - extra classes on the dropdown wrapper, default "w-full"
+  on_change  (optional) - Alpine expression run after a folder is picked
+  x_show     (optional) - Alpine x-show expression on the wrapper
+  direction  (optional) - daisyUI direction class, e.g. "dropdown-top" / "dropdown-end"
 {% endcomment %}
-<select class="select select-bordered select-sm {{ class|default:'w-full' }}"
-        x-model="{{ model }}"
-        {% if x_show %}x-show="{{ x_show }}"{% endif %}
-        {% if on_change %}@change="{{ on_change }}"{% endif %}>
-  <template x-for="f in rulesAccountFolders()" :key="f.uuid">
-    <option :value="f.uuid" x-text="'  '.repeat(f._depth || 0) + f.display_name"></option>
-  </template>
-</select>
+<div class="dropdown {{ direction }} {{ class|default:'w-full' }}"{% if x_show %} x-show="{{ x_show }}"{% endif %}>
+  <div tabindex="0" role="button"
+       class="select select-bordered select-sm w-full flex items-center gap-2 font-normal cursor-pointer">
+    {# Selected folder (0 or 1 match) rendered like a sidebar row; placeholder otherwise. #}
+    <template x-for="sel in rulesAccountFolders().filter(f => f.uuid === {{ model }})" :key="sel.uuid">
+      <span class="flex items-center gap-2 min-w-0">
+        <span class="flex-shrink-0" :class="sel.color || ''">
+          <i :data-lucide="sel.icon || folderIcon(sel.folder_type)" class="w-4 h-4"></i>
+        </span>
+        <span class="truncate" x-text="sel.display_name"></span>
+      </span>
+    </template>
+    <span x-show="!{{ model }}" class="text-base-content/50">Select a folder</span>
+  </div>
+  <ul tabindex="0"
+      class="dropdown-content menu menu-sm z-50 mt-1 w-full max-h-72 flex-nowrap overflow-y-auto rounded-box border border-base-300 bg-base-100 p-1 shadow-lg">
+    <template x-for="f in rulesAccountFolders()" :key="f.uuid">
+      <li>
+        <a class="flex items-center gap-2"
+           :class="{{ model }} === f.uuid ? 'active' : ''"
+           :style="f._depth ? `padding-left:${0.5 + f._depth * 0.75}rem` : ''"
+           @click="{{ model }} = f.uuid;{% if on_change %} {{ on_change }};{% endif %} document.activeElement.blur()">
+          <span class="flex-shrink-0" :class="f.color || ''">
+            <i :data-lucide="f.icon || folderIcon(f.folder_type)" class="w-4 h-4"></i>
+          </span>
+          <span class="truncate" x-text="f.display_name"></span>
+        </a>
+      </li>
+    </template>
+  </ul>
+</div>

@@ -1,0 +1,28 @@
+{% comment %}
+Folder picker for the mail rules dialog.
+
+Renders the rules account's folders as a <select>, in the same order as the
+sidebar (rulesAccountFolders -> flatFolderOptions) with a per-depth indent.
+Centralized so the folder option rendering (and a future rework to show folder
+icons) lives in one place instead of being duplicated across the "apply to
+folder" sub-view and the "move to folder" rule action.
+
+Note: a native <option> cannot render an icon, and only fakes indentation with
+leading non-breaking spaces. Real icons / tree indentation mean turning this
+into a custom dropdown - which is exactly why the whole widget is extracted
+here, so that swap touches a single file.
+
+Params:
+  model      (required) - Alpine x-model expression, e.g. "rulesApplyFolderId"
+  class      (optional) - extra classes on the <select>, default "w-full"
+  on_change  (optional) - Alpine @change expression
+  x_show     (optional) - Alpine x-show expression
+{% endcomment %}
+<select class="select select-bordered select-sm {{ class|default:'w-full' }}"
+        x-model="{{ model }}"
+        {% if x_show %}x-show="{{ x_show }}"{% endif %}
+        {% if on_change %}@change="{{ on_change }}"{% endif %}>
+  <template x-for="f in rulesAccountFolders()" :key="f.uuid">
+    <option :value="f.uuid" x-text="'  '.repeat(f._depth || 0) + f.display_name"></option>
+  </template>
+</select>

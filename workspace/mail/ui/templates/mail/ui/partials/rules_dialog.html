@@ -96,12 +96,7 @@
 
         <div class="space-y-2">
           <div class="text-sm font-semibold">Folder</div>
-          <select class="select select-bordered select-sm w-full" x-model="rulesApplyFolderId"
-                  @change="rulesApplyResult = null">
-            <template x-for="f in rulesAccountFolders()" :key="f.uuid">
-              <option :value="f.uuid" x-text="f.display_name"></option>
-            </template>
-          </select>
+          {% include "mail/ui/partials/_folder_list.html" with model="rulesApplyFolderId" on_change="rulesApplyResult = null" %}
           <p class="text-xs text-base-content/60">Scans the 500 most recent messages of the folder.</p>
         </div>
 
@@ -196,13 +191,7 @@
                 <option :value="lbl.uuid" x-text="lbl.name"></option>
               </template>
             </select>
-            <select x-show="rulesForm.simpleAction.type === 'move_to_folder'"
-                    class="select select-bordered select-sm w-full sm:flex-1 sm:w-auto sm:min-w-0"
-                    x-model="rulesForm.simpleAction.folder_id">
-              <template x-for="f in rulesAccountFolders()" :key="f.uuid">
-                <option :value="f.uuid" x-text="f.display_name"></option>
-              </template>
-            </select>
+            {% include "mail/ui/partials/_folder_list.html" with model="rulesForm.simpleAction.folder_id" x_show="rulesForm.simpleAction.type === 'move_to_folder'" class="basis-full" %}
           </div>
         </div>
 

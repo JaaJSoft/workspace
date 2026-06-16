@@ -1,0 +1,16 @@
+{% comment %}
+Selectable folder list: a bordered, scrollable <ul> of the shared
+_folder_options.html rows. This is the in-flow alternative to a dropdown - used
+everywhere a dropdown would be clipped by a modal's overflow (rules dialog,
+message move dialog). Same icons / colors / depth indent as the sidebar.
+
+Params:
+  model      (required) - Alpine expression holding the selected folder uuid
+  folders    (optional) - expression for the option list, default "rulesAccountFolders()"
+  on_change  (optional) - Alpine expression run after a row is picked
+  x_show     (optional) - Alpine x-show expression on the <ul>
+  class      (optional) - extra classes on the <ul>
+{% endcomment %}
+<ul {% if x_show %}x-show="{{ x_show }}" {% endif %}class="menu menu-sm w-full max-h-72 flex-nowrap overflow-y-auto rounded-xl border border-base-300 bg-base-100 p-1 {{ class }}">
+  {% include "mail/ui/partials/_folder_options.html" %}
+</ul>

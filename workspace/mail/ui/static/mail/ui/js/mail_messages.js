@@ -482,32 +482,28 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       }
     },
 
-    async _showMoveDialog(msgUuids) {
+    _showMoveDialog(msgUuids) {
       if (!msgUuids || !msgUuids.length) return;
       const refMsg = this.messages.find(m => msgUuids.includes(m.uuid)) || msgUuids[0];
       const targets = this.getMoveTargetFolders(refMsg);
       if (!targets.length) return;
 
-      const options = targets.map(f => ({
-        label: '\u00A0\u00A0'.repeat(f._depth || 0) + f.display_name,
-        value: f.uuid,
-      }));
+      this.moveTargets = targets;
+      this.moveMsgUuids = [...msgUuids];
+      this.moveCount = msgUuids.length;
+      this.moveSelectedId = '';
+      document.getElementById('mail-move-dialog').showModal();
+    },
 
-      const count = msgUuids.length;
-      const selected = await AppDialog.select({
-        title: 'Move to',
-        message: count === 1 ? 'Select a destination folder.' : `Move ${count} messages to:`,
-        options,
-        okLabel: 'Move',
-        okClass: 'btn-warning',
-        icon: 'folder-input',
-        iconClass: 'bg-warning/10 text-warning',
-      });
-      if (!selected) return;
+    moveCancel() {
+      document.getElementById('mail-move-dialog').close();
+    },
 
-      const targetFolder = targets.find(f => f.uuid === selected);
+    async moveConfirm() {
+      const targetFolder = this.moveTargets.find(f => f.uuid === this.moveSelectedId);
+      document.getElementById('mail-move-dialog').close();
       if (targetFolder) {
-        await this.moveMessages(msgUuids, targetFolder);
+        await this.moveMessages(this.moveMsgUuids, targetFolder);
       }
     },
 

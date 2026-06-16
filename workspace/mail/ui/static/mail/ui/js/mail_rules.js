@@ -67,7 +67,9 @@ window.mailRulesMixin = function mailRulesMixin() {
     },
 
     rulesAccountFolders() {
-      return (this.folders[this.rulesAccount?.uuid] || []);
+      // Same order as the sidebar (and `_depth` for indentation) so the apply
+      // and move-to-folder dropdowns match the folder tree the user knows.
+      return this.flatFolderOptions(this.rulesAccount?.uuid);
     },
 
     rulesDescribe(rule) {

@@ -120,6 +120,22 @@ window.mailFoldersMixin = function mailFoldersMixin() {
       return this._flattenTree(this.getFolderTree(accountUuid));
     },
 
+    // Flat list of an account's folders in sidebar tree order (special types
+    // first, then nested "other" folders by IMAP path), each tagged with
+    // `_depth` for indentation. Unlike getFlatFolderTree this ignores the
+    // expand/collapse state, so folder pickers always list every folder.
+    flatFolderOptions(accountUuid) {
+      const result = [];
+      const flatten = (nodes) => {
+        for (const node of nodes) {
+          result.push({ ...node.folder, _depth: node.depth });
+          flatten(node.children);
+        }
+      };
+      flatten(this.getFolderTree(accountUuid));
+      return result;
+    },
+
     toggleFolderExpanded(folderName) {
       // Default is expanded (true), so toggling undefined -> false
       const current = this.expandedFolders[folderName] === undefined ? true : this.expandedFolders[folderName];

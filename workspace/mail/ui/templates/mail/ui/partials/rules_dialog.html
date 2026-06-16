@@ -132,11 +132,14 @@
           <button class="btn btn-ghost btn-sm" @click="rulesCancelApply()" :disabled="rulesApplyBusy">Back</button>
           <button class="btn btn-sm" @click="rulesPreviewApply()"
                   :disabled="!rulesApplyFolderId || rulesApplyBusy">
-            <span x-show="!rulesApplyBusy">Preview</span>
-            <span x-show="rulesApplyBusy" class="loading loading-spinner loading-xs"></span>
+            <span x-show="rulesApplyBusy !== 'preview'">Preview</span>
+            <span x-show="rulesApplyBusy === 'preview'" class="loading loading-spinner loading-xs"></span>
           </button>
           <button class="btn btn-warning btn-sm" @click="rulesRunApply()"
-                  :disabled="!rulesApplyFolderId || rulesApplyBusy">Apply now</button>
+                  :disabled="!rulesApplyFolderId || rulesApplyBusy">
+            <span x-show="rulesApplyBusy !== 'run'">Apply now</span>
+            <span x-show="rulesApplyBusy === 'run'" class="loading loading-spinner loading-xs"></span>
+          </button>
         </div>
       </div>
     </template>

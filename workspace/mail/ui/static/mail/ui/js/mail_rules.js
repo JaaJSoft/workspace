@@ -140,7 +140,11 @@ window.mailRulesMixin = function mailRulesMixin() {
 
     async _rulesApplyRequest(dryRun) {
       if (!this.rulesApplying || !this.rulesApplyFolderId) return null;
-      this.rulesApplyBusy = true;
+      // Track *which* action is running so each button renders its own
+      // spinner: 'preview' for the dry run, 'run' for the real apply.
+      // Truthy in both cases, so the shared :disabled bindings still work;
+      // reset to false (falsy) when done.
+      this.rulesApplyBusy = dryRun ? 'preview' : 'run';
       try {
         const resp = await fetch(`/api/v1/mail/rules/${this.rulesApplying.uuid}/apply`, {
           method: 'POST',
@@ -167,6 +171,10 @@ window.mailRulesMixin = function mailRulesMixin() {
         okClass: 'btn-warning',
       });
       if (!ok) return;
+      // Drop any stale dry-run preview the user may have requested earlier so
+      // the panel doesn't show old "X of Y match" numbers while the real
+      // apply runs (and in case the apply itself returns null).
+      this.rulesApplyResult = null;
       const result = await this._rulesApplyRequest(false);
       if (!result) return;
       this.rulesApplyResult = { ...result, applied_run: true };

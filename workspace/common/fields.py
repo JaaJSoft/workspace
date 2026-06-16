@@ -19,6 +19,9 @@ class CaseInsensitiveSlugRelatedField(serializers.SlugRelatedField):
         except queryset.model.MultipleObjectsReturned:
             # Ambiguous reference because multiple objects match case-insensitively
             self.fail("invalid")
+        # Unreachable: self.fail() always raises ValidationError. Present so every
+        # path terminates explicitly (no implicit None return).
+        raise AssertionError("unreachable")  # pragma: no cover
 
 
 # class CachedCaseInsensitiveSlugRelatedField(serializers.SlugRelatedField):

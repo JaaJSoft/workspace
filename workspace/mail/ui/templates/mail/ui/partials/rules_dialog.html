@@ -96,7 +96,7 @@
 
         <div class="space-y-2">
           <div class="text-sm font-semibold">Folder</div>
-          {% include "mail/ui/partials/_folder_select.html" with model="rulesApplyFolderId" on_change="rulesApplyResult = null" direction="dropdown-top" %}
+          {% include "mail/ui/partials/_folder_list.html" with model="rulesApplyFolderId" on_change="rulesApplyResult = null" %}
           <p class="text-xs text-base-content/60">Scans the 500 most recent messages of the folder.</p>
         </div>
 
@@ -191,7 +191,7 @@
                 <option :value="lbl.uuid" x-text="lbl.name"></option>
               </template>
             </select>
-            {% include "mail/ui/partials/_folder_select.html" with model="rulesForm.simpleAction.folder_id" x_show="rulesForm.simpleAction.type === 'move_to_folder'" class="w-full sm:flex-1 sm:w-auto sm:min-w-0" %}
+            {% include "mail/ui/partials/_folder_list.html" with model="rulesForm.simpleAction.folder_id" x_show="rulesForm.simpleAction.type === 'move_to_folder'" class="basis-full" %}
           </div>
         </div>
 

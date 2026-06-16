@@ -15,9 +15,7 @@ rules folder dropdown, so the picker looks identical everywhere.
     </div>
     <p class="text-sm text-base-content/60 mb-3"
        x-text="moveCount === 1 ? 'Select a destination folder.' : `Move ${moveCount} messages to:`"></p>
-    <ul class="menu menu-sm w-full max-h-72 flex-nowrap overflow-y-auto rounded-box border border-base-300 bg-base-100 p-1">
-      {% include "mail/ui/partials/_folder_options.html" with model="moveSelectedId" folders="moveTargets" %}
-    </ul>
+    {% include "mail/ui/partials/_folder_list.html" with model="moveSelectedId" folders="moveTargets" %}
     <div class="modal-action">
       <button class="btn btn-ghost btn-sm" @click="moveCancel()">Cancel</button>
       <button class="btn btn-warning btn-sm" :disabled="!moveSelectedId" @click="moveConfirm()">Move</button>

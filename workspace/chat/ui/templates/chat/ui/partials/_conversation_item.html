@@ -76,7 +76,7 @@ Used by:
         </span>
         <span class="flex-shrink-0 w-12 h-5 inline-flex items-center justify-end">
           <span class="text-xs text-base-content/50 whitespace-nowrap group-hover/conv:hidden">{{ conv.time_ago }}</span>
-          <span class="hidden group-hover/conv:inline-flex items-center justify-center w-5 h-5 rounded hover:bg-base-content/10"
+          <span class="hidden group-hover/conv:inline-flex btn btn-ghost btn-xs btn-square min-h-0 h-5 w-5"
                 @click.stop="openConvContextMenu($event, '{{ conv.uuid }}', '{{ conv.kind }}'{% if pinned %}, true{% endif %})"
                 title="More options">
             <i data-lucide="ellipsis" class="w-3.5 h-3.5"></i>

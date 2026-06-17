@@ -227,12 +227,14 @@ window.mailAccountsMixin = function mailAccountsMixin() {
         text: account.signature || '',
         saving: false,
       };
+      this.signatureEditError = '';
       document.getElementById('mail-signature-dialog').showModal();
     },
 
     async saveSignature() {
       if (this.signatureEdit.saving) return;
       this.signatureEdit.saving = true;
+      this.signatureEditError = '';
       try {
         const res = await this._fetch(`/api/v1/mail/accounts/${this.signatureEdit.uuid}`, {
           method: 'PATCH',
@@ -242,9 +244,12 @@ window.mailAccountsMixin = function mailAccountsMixin() {
           const acc = this.accounts.find(a => a.uuid === this.signatureEdit.uuid);
           if (acc) acc.signature = this.signatureEdit.text;
           document.getElementById('mail-signature-dialog').close();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          this.signatureEditError = data.detail || 'Failed to save signature';
         }
       } catch (e) {
-        // Leave the dialog open on failure so the user can retry.
+        this.signatureEditError = 'Failed to save signature';
       } finally {
         this.signatureEdit.saving = false;
       }

@@ -20,6 +20,7 @@ class MailAccount(models.Model):
     )
     email = models.EmailField()
     display_name = models.CharField(max_length=255, blank=True, default="")
+    signature = models.TextField(blank=True, default="")
     auth_method = models.CharField(
         max_length=10,
         choices=AuthMethod.choices,

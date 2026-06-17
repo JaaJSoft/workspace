@@ -87,8 +87,13 @@ class RulesEditFormPreselectTests(PlaywrightTestCase):
         expect(op_select).to_have_value("equals")
 
         # Saving without touching the field must keep it as "subject":
-        # proves the displayed value and the persisted value agree.
-        self.page.get_by_role("button", name="Save").click()
+        # proves the displayed value and the persisted value agree. Scope the
+        # locator to the rules dialog: other always-in-DOM dialogs (e.g. the
+        # signature dialog) also expose a "Save" button, so an unscoped
+        # get_by_role would violate strict mode.
+        self.page.locator("#mail-rules-dialog").get_by_role(
+            "button", name="Save"
+        ).click()
         self.page.wait_for_function(
             """(uuid) => {
               const root = document.querySelector('[x-data="mailApp()"]');

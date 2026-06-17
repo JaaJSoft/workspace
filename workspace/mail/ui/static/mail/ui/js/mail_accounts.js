@@ -220,6 +220,41 @@ window.mailAccountsMixin = function mailAccountsMixin() {
       }
     },
 
+    showSignature(account) {
+      this.signatureEdit = {
+        uuid: account.uuid,
+        email: account.email,
+        text: account.signature || '',
+        saving: false,
+      };
+      this.signatureEditError = '';
+      document.getElementById('mail-signature-dialog').showModal();
+    },
+
+    async saveSignature() {
+      if (this.signatureEdit.saving) return;
+      this.signatureEdit.saving = true;
+      this.signatureEditError = '';
+      try {
+        const res = await this._fetch(`/api/v1/mail/accounts/${this.signatureEdit.uuid}`, {
+          method: 'PATCH',
+          body: { signature: this.signatureEdit.text },
+        });
+        if (res.ok) {
+          const acc = this.accounts.find(a => a.uuid === this.signatureEdit.uuid);
+          if (acc) acc.signature = this.signatureEdit.text;
+          document.getElementById('mail-signature-dialog').close();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          this.signatureEditError = data.detail || 'Failed to save signature';
+        }
+      } catch (e) {
+        this.signatureEditError = 'Failed to save signature';
+      } finally {
+        this.signatureEdit.saving = false;
+      }
+    },
+
     // ----- Account context menu -----
     openAccountContextMenu(event, account) {
       event.preventDefault();
@@ -253,6 +288,9 @@ window.mailAccountsMixin = function mailAccountsMixin() {
           break;
         case 'edit':
           this.showEditAccount(account);
+          break;
+        case 'signature':
+          this.showSignature(account);
           break;
         case 'test':
           this.testAccount(account.uuid);

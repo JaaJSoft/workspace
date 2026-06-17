@@ -489,6 +489,43 @@ x-data="mailApp()"
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
+<!-- Signature dialog (opened per-account from the account context menu) -->
+<dialog id="mail-signature-dialog" class="modal">
+  <div class="modal-box max-w-lg">
+    <h3 class="font-bold text-lg mb-1">Signature</h3>
+    <p class="text-sm text-base-content/50 mb-4" x-text="signatureEdit.email"></p>
+    <form @submit.prevent="saveSignature()">
+      <label class="form-control w-full">
+        <div class="label">
+          <span class="label-text">This signature is added to new messages, replies and forwards.</span>
+        </div>
+        <textarea
+          x-model="signatureEdit.text"
+          class="textarea textarea-bordered w-full"
+          rows="6"
+          maxlength="5000"
+          placeholder="Your signature"></textarea>
+      </label>
+      <div class="mt-3" x-show="signatureEditError" x-cloak>
+        <div class="alert alert-error text-white text-sm">
+          <i data-lucide="x-circle" class="w-4 h-4"></i>
+          <span x-text="signatureEditError"></span>
+        </div>
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost btn-sm"
+                @click="document.getElementById('mail-signature-dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm"
+                :class="signatureEdit.saving ? 'pointer-events-none opacity-60' : ''">
+          <span class="loading loading-spinner loading-xs" x-show="signatureEdit.saving" x-cloak></span>
+          Save
+        </button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
 <!-- Embedded data -->
 {{ accounts|json_script:"accounts-data" }}
 {{ oauth_providers|json_script:"oauth-providers-data" }}
@@ -500,6 +537,7 @@ x-data="mailApp()"
 <script src="{% static 'mail/ui/js/mail_accounts.js' %}"></script>
 <script src="{% static 'mail/ui/js/mail_folders.js' %}"></script>
 <script src="{% static 'mail/ui/js/mail_messages.js' %}"></script>
+<script src="{% static 'mail/ui/js/mail_signature.js' %}"></script>
 <script src="{% static 'mail/ui/js/mail_compose.js' %}"></script>
 <script src="{% static 'mail/ui/js/mail_labels.js' %}"></script>
 <script src="{% static 'mail/ui/js/mail_ai.js' %}"></script>

@@ -49,6 +49,8 @@ function mailApp() {
     editAccount: null,
     editAccountError: '',
     savingAccount: false,
+    signatureEdit: { uuid: null, email: '', text: '', saving: false },
+    signatureEditError: '',
 
     // Preferences (reactive copy)
     mailPrefs: { ...window._mailPrefsCache },
@@ -483,7 +485,7 @@ function _defaultCompose() {
     subject: '', body: '', is_reply: false, reply_message_id: null,
     attachments: [], picked_files: [], sending: false, error: '',
     draft_id: null, saving: false, last_saved: null,
-    _saveTimer: null,
+    _saveTimer: null, _sigBlock: '',
   };
 }
 

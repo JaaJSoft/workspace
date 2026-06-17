@@ -5,6 +5,7 @@ window.mailComposeMixin = function mailComposeMixin() {
   return {
     // ----- Compose -----
     async showCompose(defaults = {}) {
+      let restored = false;
       this.compose = { ..._defaultCompose(), ...defaults };
       // Normalize to/cc/bcc to arrays
       this.compose.to = _parseEmails(this.compose.to);
@@ -35,12 +36,23 @@ window.mailComposeMixin = function mailComposeMixin() {
             this.compose.body = saved.body || '';
             this.compose.draft_id = saved.draft_id || null;
             this.compose.is_reply = saved.is_reply || false;
+            this.compose._sigBlock = saved._sigBlock || '';
             if (saved.account_id) this.compose.account_id = saved.account_id;
             if (saved.cc?.length || saved.bcc?.length) this.showCcBcc = true;
+            restored = true;
           } else {
             this._clearLocalStorageDraft();
           }
         }
+      }
+
+      // Pre-insert the active account's signature, but never on a restored
+      // draft (the saved body already contains its signature).
+      if (!restored) {
+        const acc = this.accounts.find(a => a.uuid === this.compose.account_id);
+        const r = window.mailSignature.applySignature(this.compose.body, acc && acc.signature);
+        this.compose.body = r.body;
+        this.compose._sigBlock = r.block;
       }
 
       document.getElementById('mail-compose-dialog').showModal();
@@ -55,6 +67,14 @@ window.mailComposeMixin = function mailComposeMixin() {
       }
       document.getElementById('mail-compose-dialog').close();
       this.compose = _defaultCompose();
+    },
+
+    onComposeAccountChange() {
+      const acc = this.accounts.find(a => a.uuid === this.compose.account_id);
+      const r = window.mailSignature.swapSignature(
+        this.compose.body, this.compose._sigBlock, acc && acc.signature);
+      this.compose.body = r.body;
+      this.compose._sigBlock = r.block;
     },
 
     replyTo(msg) {
@@ -366,6 +386,7 @@ window.mailComposeMixin = function mailComposeMixin() {
           body: this.compose.body,
           draft_id: this.compose.draft_id,
           is_reply: this.compose.is_reply,
+          _sigBlock: this.compose._sigBlock,
           saved_at: Date.now(),
         };
         localStorage.setItem('mail_compose_draft', JSON.stringify(data));

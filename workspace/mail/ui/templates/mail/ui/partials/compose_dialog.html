@@ -17,7 +17,7 @@
         <!-- From -->
         <div class="flex items-center gap-3 py-1.5 border-b border-base-200">
           <label class="text-xs font-medium text-base-content/40 w-10 shrink-0">From</label>
-          <select x-model="compose.account_id"
+          <select x-model="compose.account_id" @change="onComposeAccountChange()"
                   class="select select-ghost select-sm flex-1 focus:outline-none focus:bg-transparent" required>
             <template x-for="acc in accounts" :key="acc.uuid">
               <option :value="acc.uuid"

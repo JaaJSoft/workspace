@@ -535,12 +535,12 @@ def delete_file_on_delete(sender, instance, **kwargs):
                             break
                 except Exception as e:
                     logger.warning(
-                        f"Signal: Could not remove empty directory for {scrub(file_path)}: {e}"
+                        f"Signal: Could not remove empty directory for {scrub(file_path)}: {scrub(e)}"
                     )
 
         except Exception as e:
             logger.error(
-                f"Signal: Error deleting physical file {scrub(instance.content.name)}: {e}"
+                f"Signal: Error deleting physical file {scrub(instance.content.name)}: {scrub(e)}"
             )
 
     elif instance.node_type == File.NodeType.FOLDER:
@@ -565,7 +565,7 @@ def delete_file_on_delete(sender, instance, **kwargs):
                     )
         except Exception as e:
             logger.warning(
-                f"Signal: Could not delete folder {scrub(instance.name)}: {e}"
+                f"Signal: Could not delete folder {scrub(instance.name)}: {scrub(e)}"
             )
 
 

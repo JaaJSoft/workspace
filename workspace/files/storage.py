@@ -44,7 +44,9 @@ class OverwriteStorage(FileSystemStorage):
                 from workspace.common.logging import scrub
 
                 logger = logging.getLogger(__name__)
-                logger.warning(f"Could not delete existing file '{scrub(name)}': {e}")
+                logger.warning(
+                    f"Could not delete existing file '{scrub(name)}': {scrub(e)}"
+                )
                 # Fall back to Django's default behaviour (unique suffix)
                 # so FileSystemStorage._save() does not loop forever.
                 return super().get_available_name(name, max_length)

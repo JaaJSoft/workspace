@@ -36,6 +36,7 @@ window.mailComposeMixin = function mailComposeMixin() {
             this.compose.body = saved.body || '';
             this.compose.draft_id = saved.draft_id || null;
             this.compose.is_reply = saved.is_reply || false;
+            this.compose._sigBlock = saved._sigBlock || '';
             if (saved.account_id) this.compose.account_id = saved.account_id;
             if (saved.cc?.length || saved.bcc?.length) this.showCcBcc = true;
             restored = true;
@@ -385,6 +386,7 @@ window.mailComposeMixin = function mailComposeMixin() {
           body: this.compose.body,
           draft_id: this.compose.draft_id,
           is_reply: this.compose.is_reply,
+          _sigBlock: this.compose._sigBlock,
           saved_at: Date.now(),
         };
         localStorage.setItem('mail_compose_draft', JSON.stringify(data));

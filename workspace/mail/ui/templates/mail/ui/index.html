@@ -513,9 +513,9 @@ x-data="mailApp()"
         </div>
       </div>
       <div class="modal-action">
-        <button type="button" class="btn btn-ghost"
+        <button type="button" class="btn btn-ghost btn-sm"
                 @click="document.getElementById('mail-signature-dialog').close()">Cancel</button>
-        <button type="submit" class="btn btn-primary"
+        <button type="submit" class="btn btn-primary btn-sm"
                 :class="signatureEdit.saving ? 'pointer-events-none opacity-60' : ''">
           <span class="loading loading-spinner loading-xs" x-show="signatureEdit.saving" x-cloak></span>
           Save

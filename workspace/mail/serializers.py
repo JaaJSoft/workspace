@@ -33,6 +33,7 @@ class MailAccountSerializer(serializers.ModelSerializer):
             "uuid",
             "email",
             "display_name",
+            "signature",
             "auth_method",
             "imap_host",
             "imap_port",
@@ -68,6 +69,7 @@ class MailAccountUpdateSerializer(serializers.Serializer):
     display_name = serializers.CharField(
         max_length=255, required=False, allow_blank=True
     )
+    signature = serializers.CharField(required=False, allow_blank=True, max_length=5000)
     imap_host = serializers.CharField(max_length=255, required=False)
     imap_port = serializers.IntegerField(required=False)
     imap_use_ssl = serializers.BooleanField(required=False)

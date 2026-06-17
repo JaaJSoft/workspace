@@ -87,6 +87,34 @@ class SyncAllUsersTaskTests(TestCase):
         }
         self.assertEqual(synced_pks, {self.alice.pk, self.bob.pk})
 
+    def test_malicious_username_cannot_forge_log_lines(self):
+        # A username carrying CR/LF must not be able to inject a second
+        # (forged) log line — it has to be flattened before logging
+        # (CWE-117 log injection).
+        User.objects.update(is_active=False)
+        User.objects.create_user(
+            username="evil\r\nINFO:root:forged admin login",
+            password="pass",
+        )
+
+        fake_service = mock.Mock()
+        fake_service.sync_user_recursive.return_value = SyncResult()
+
+        with mock.patch(
+            "workspace.files.sync.FileSyncService",
+            return_value=fake_service,
+        ):
+            with self.assertLogs("workspace.files.tasks", level="INFO") as cm:
+                files_tasks.sync_all_users.run()
+
+        per_user_lines = [m for m in cm.output if "Syncing files for user" in m]
+        self.assertEqual(len(per_user_lines), 1)
+        line = per_user_lines[0]
+        self.assertNotIn("\r", line)
+        self.assertNotIn("\n", line)
+        # The username content is preserved, just flattened onto one line.
+        self.assertIn("forged admin login", line)
+
 
 class PurgeTrashTaskTests(TestCase):
     @classmethod

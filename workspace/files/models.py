@@ -9,6 +9,7 @@ from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.utils import timezone
 
+from workspace.common.logging import scrub
 from workspace.common.uuids import uuid_v7_or_v4
 
 from .storage import OverwriteStorage
@@ -514,7 +515,7 @@ def delete_file_on_delete(sender, instance, **kwargs):
             file_path = instance.content.name
             if file_path and default_storage.exists(file_path):
                 default_storage.delete(file_path)
-                logger.info(f"Signal: Deleted physical file: {file_path}")
+                logger.info(f"Signal: Deleted physical file: {scrub(file_path)}")
 
                 # Try to remove empty parent directories
                 try:
@@ -525,7 +526,7 @@ def delete_file_on_delete(sender, instance, **kwargs):
                             if not os.listdir(full_path):  # Directory is empty
                                 os.rmdir(full_path)
                                 logger.info(
-                                    f"Signal: Deleted empty directory: {dir_path}"
+                                    f"Signal: Deleted empty directory: {scrub(dir_path)}"
                                 )
                                 dir_path = os.path.dirname(dir_path)
                             else:
@@ -534,12 +535,12 @@ def delete_file_on_delete(sender, instance, **kwargs):
                             break
                 except Exception as e:
                     logger.warning(
-                        f"Signal: Could not remove empty directory for {file_path}: {e}"
+                        f"Signal: Could not remove empty directory for {scrub(file_path)}: {scrub(e)}"
                     )
 
         except Exception as e:
             logger.error(
-                f"Signal: Error deleting physical file {instance.content.name}: {e}"
+                f"Signal: Error deleting physical file {scrub(instance.content.name)}: {scrub(e)}"
             )
 
     elif instance.node_type == File.NodeType.FOLDER:
@@ -559,9 +560,13 @@ def delete_file_on_delete(sender, instance, **kwargs):
                 if os.path.exists(full_path) and os.path.isdir(full_path):
                     # Remove directory and all its contents (in case there are orphaned files)
                     shutil.rmtree(full_path)
-                    logger.info(f"Signal: Deleted folder and contents: {full_path}")
+                    logger.info(
+                        f"Signal: Deleted folder and contents: {scrub(full_path)}"
+                    )
         except Exception as e:
-            logger.warning(f"Signal: Could not delete folder {instance.name}: {e}")
+            logger.warning(
+                f"Signal: Could not delete folder {scrub(instance.name)}: {scrub(e)}"
+            )
 
 
 @receiver(pre_delete, sender="auth.Group")

@@ -8,6 +8,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+from workspace.common.logging import scrub
+
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
@@ -28,7 +30,7 @@ def sync_all_users(self):
     }
 
     for user in User.objects.filter(is_active=True).iterator():
-        logger.info("Syncing files for user: %s", user.username)
+        logger.info("Syncing files for user: %s", scrub(user.username))
         result = service.sync_user_recursive(user)
         total["users_processed"] += 1
         total["files_created"] += result.files_created

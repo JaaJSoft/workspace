@@ -49,6 +49,7 @@ function mailApp() {
     editAccount: null,
     editAccountError: '',
     savingAccount: false,
+    signatureEdit: { uuid: null, email: '', text: '', saving: false },
 
     // Preferences (reactive copy)
     mailPrefs: { ...window._mailPrefsCache },

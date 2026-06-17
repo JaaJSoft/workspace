@@ -5,6 +5,7 @@ window.mailComposeMixin = function mailComposeMixin() {
   return {
     // ----- Compose -----
     async showCompose(defaults = {}) {
+      let restored = false;
       this.compose = { ..._defaultCompose(), ...defaults };
       // Normalize to/cc/bcc to arrays
       this.compose.to = _parseEmails(this.compose.to);
@@ -37,10 +38,20 @@ window.mailComposeMixin = function mailComposeMixin() {
             this.compose.is_reply = saved.is_reply || false;
             if (saved.account_id) this.compose.account_id = saved.account_id;
             if (saved.cc?.length || saved.bcc?.length) this.showCcBcc = true;
+            restored = true;
           } else {
             this._clearLocalStorageDraft();
           }
         }
+      }
+
+      // Pre-insert the active account's signature, but never on a restored
+      // draft (the saved body already contains its signature).
+      if (!restored) {
+        const acc = this.accounts.find(a => a.uuid === this.compose.account_id);
+        const r = window.mailSignature.applySignature(this.compose.body, acc && acc.signature);
+        this.compose.body = r.body;
+        this.compose._sigBlock = r.block;
       }
 
       document.getElementById('mail-compose-dialog').showModal();
@@ -55,6 +66,14 @@ window.mailComposeMixin = function mailComposeMixin() {
       }
       document.getElementById('mail-compose-dialog').close();
       this.compose = _defaultCompose();
+    },
+
+    onComposeAccountChange() {
+      const acc = this.accounts.find(a => a.uuid === this.compose.account_id);
+      const r = window.mailSignature.swapSignature(
+        this.compose.body, this.compose._sigBlock, acc && acc.signature);
+      this.compose.body = r.body;
+      this.compose._sigBlock = r.block;
     },
 
     replyTo(msg) {

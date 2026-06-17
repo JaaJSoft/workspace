@@ -484,7 +484,7 @@ function _defaultCompose() {
     subject: '', body: '', is_reply: false, reply_message_id: null,
     attachments: [], picked_files: [], sending: false, error: '',
     draft_id: null, saving: false, last_saved: null,
-    _saveTimer: null,
+    _saveTimer: null, _sigBlock: '',
   };
 }
 

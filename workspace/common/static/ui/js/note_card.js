@@ -21,7 +21,7 @@ var _noteCardPlacement = 'bottom';
 var _noteCardShowTimeout = null;
 var _noteCardHideTimeout = null;
 var _noteCardCloseTimeout = null;
-var _noteCardFetching = false;
+var _noteCardFetchingUuid = null;
 
 /**
  * Extract the target file UUID from a note-link href (/notes?file=<uuid>).
@@ -91,21 +91,21 @@ window._noteCardShow = function(anchor, uuid) {
     if (cacheValid) {
       window._setPopoverContent(popover, cached);
       if (typeof Alpine !== 'undefined') Alpine.initTree(popover);
-    } else if (!_noteCardFetching) {
-      _noteCardFetching = true;
+    } else if (_noteCardFetchingUuid !== uuid) {
+      _noteCardFetchingUuid = uuid;
       fetch('/files/' + uuid + '/card', { credentials: 'same-origin' })
         .then(function(r) { return r.ok ? r.text() : ''; })
         .then(function(html) {
           _noteCardCache[uuid] = html;
           _noteCardCacheTimes[uuid] = Date.now();
-          _noteCardFetching = false;
+          if (_noteCardFetchingUuid === uuid) _noteCardFetchingUuid = null;
           // Inject only if this is still the note being shown.
           if (_noteCardPopover && _noteCardUuid === uuid) {
             window._setPopoverContent(_noteCardPopover, html);
             if (typeof Alpine !== 'undefined') Alpine.initTree(_noteCardPopover);
           }
         })
-        .catch(function() { _noteCardFetching = false; });
+        .catch(function() { if (_noteCardFetchingUuid === uuid) _noteCardFetchingUuid = null; });
     }
   }, 500);
 };
@@ -116,6 +116,7 @@ window._noteCardScheduleHide = function() {
     clearTimeout(_noteCardShowTimeout);
     _noteCardShowTimeout = null;
   }
+  if (_noteCardHideTimeout) clearTimeout(_noteCardHideTimeout);
   _noteCardHideTimeout = setTimeout(function() {
     if (_noteCardPopover) {
       window._applyPopoverTransform(_noteCardPopover, _noteCardPlacement, false);

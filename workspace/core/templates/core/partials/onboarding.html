@@ -1,11 +1,13 @@
 <dialog id="onboarding-dialog" class="modal"
+        aria-labelledby="onboarding-title"
         x-data="onboardingWizard({{ ONBOARDING_PENDING|yesno:'true,false' }})"
         x-init="
           {% if ONBOARDING_PENDING %}
           $nextTick(() => setTimeout(() => window.dispatchEvent(new CustomEvent('onboarding-open')), 400));
           {% endif %}
         "
-        @onboarding-open.window="$el.showModal()"
+        @onboarding-open.window="step = 1; $el.showModal(); focusStep()"
+        @keydown="if ($event.key === 'ArrowRight') { next() } else if ($event.key === 'ArrowLeft') { prev() }"
         @close="markCompleteIfNeeded()">
   <div class="modal-box w-11/12 max-w-2xl p-0 flex flex-col">
     <!-- Header -->
@@ -14,7 +16,7 @@
         <i data-lucide="rocket" class="w-5 h-5 text-primary"></i>
       </div>
       <div class="flex-1">
-        <h3 class="font-bold text-lg">Welcome aboard</h3>
+        <h3 id="onboarding-title" class="font-bold text-lg">Welcome aboard</h3>
         <p class="text-xs text-base-content/50">
           Step <span x-text="step"></span> of 3
         </p>
@@ -27,49 +29,67 @@
     </div>
 
     <!-- Progress bar -->
-    <div class="h-1 bg-base-200">
-      <div class="h-full bg-primary transition-all duration-300"
+    <div class="h-1 bg-base-200" aria-hidden="true">
+      <div class="h-full bg-primary transition-all duration-300 motion-reduce:transition-none"
            :style="`width: ${(step / 3) * 100}%`"></div>
     </div>
 
     <!-- Body -->
-    <div class="flex-1 overflow-y-auto overscroll-contain px-6 py-6 min-h-[26rem]">
+    <div class="flex-1 overflow-y-auto overscroll-contain px-6 py-6 min-h-[26rem]" aria-live="polite">
       <!-- Step 1: Welcome -->
-      <div x-show="step === 1" class="text-center">
+      <div x-show="step === 1" data-step="1" class="text-center">
         <div class="mx-auto w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
           <i data-lucide="sparkles" class="w-10 h-10 text-primary"></i>
         </div>
-        <h2 class="text-2xl font-bold mb-2">Welcome to JaaJ Workspace</h2>
+        <h2 data-step-title tabindex="-1"
+            class="text-2xl font-bold mb-2">Welcome{% if user.first_name %}, {{ user.first_name }}{% endif %}</h2>
         <p class="text-base-content/70 max-w-md mx-auto">
-          Your all-in-one space for files, notes, mail, calendar, chat, and more.
+          JaaJ Workspace is your all-in-one space for files, notes, mail, calendar, chat, and more.
           Let's take a quick tour so you know where everything lives.
         </p>
       </div>
 
       <!-- Step 2: Modules -->
-      <div x-show="step === 2" x-cloak>
-        <h2 class="text-xl font-bold mb-1">Everything in one place</h2>
+      <div x-show="step === 2" data-step="2" x-cloak>
+        <h2 data-step-title tabindex="-1" class="text-xl font-bold mb-1">Everything in one place</h2>
         <p class="text-sm text-base-content/60 mb-4">
-          Each module lives in its own page. Switch between them from the dashboard or via the search bar.
+          Each module lives in its own page. Pick one to jump straight in - you can always come back here later.
         </p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {% for module in workspace_active_modules %}
-            <div class="flex items-start gap-3 p-3 rounded-lg border border-base-300">
-              <div class="rounded-lg bg-{{ module.color }}/10 p-2 shrink-0">
-                <i data-lucide="{{ module.icon }}" class="w-5 h-5 text-{{ module.color }}"></i>
+            {% if module.url %}
+              <a href="{{ module.url }}"
+                 @click.prevent="goTo('{{ module.url|escapejs }}')"
+                 class="flex items-start gap-3 p-3 rounded-lg border border-base-300 hover:border-primary hover:bg-base-200 transition-colors">
+                <div class="rounded-lg bg-{{ module.color }}/10 p-2 shrink-0">
+                  <i data-lucide="{{ module.icon }}" class="w-5 h-5 text-{{ module.color }}"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm">{{ module.name }}</div>
+                  <div class="text-xs text-base-content/60">{{ module.description }}</div>
+                </div>
+                <i data-lucide="arrow-right" class="w-4 h-4 text-base-content/30 self-center shrink-0"></i>
+              </a>
+            {% else %}
+              <div class="flex items-start gap-3 p-3 rounded-lg border border-base-300">
+                <div class="rounded-lg bg-{{ module.color }}/10 p-2 shrink-0">
+                  <i data-lucide="{{ module.icon }}" class="w-5 h-5 text-{{ module.color }}"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm">{{ module.name }}</div>
+                  <div class="text-xs text-base-content/60">{{ module.description }}</div>
+                </div>
               </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-semibold text-sm">{{ module.name }}</div>
-                <div class="text-xs text-base-content/60">{{ module.description }}</div>
-              </div>
-            </div>
+            {% endif %}
+          {% empty %}
+            <p class="text-sm text-base-content/50">Your modules will appear here once they're enabled.</p>
           {% endfor %}
         </div>
       </div>
 
       <!-- Step 3: Ready -->
-      <div x-show="step === 3" x-cloak>
-        <h2 class="text-xl font-bold mb-1">You're all set</h2>
+      <div x-show="step === 3" data-step="3" x-cloak>
+        <h2 data-step-title tabindex="-1" class="text-xl font-bold mb-1">You're all set</h2>
         <p class="text-sm text-base-content/60 mb-4">A few tips to get the most out of the app:</p>
         <ul class="space-y-3">
           <li class="flex items-start gap-3">
@@ -128,32 +148,38 @@
 
     <!-- Footer -->
     <div class="flex items-center justify-between gap-2 px-5 py-4 border-t border-base-300 shrink-0">
-      <button type="button"
-              class="btn btn-ghost btn-sm"
-              :class="step === 1 ? 'invisible' : ''"
-              @click="step = Math.max(1, step - 1)">
-        <i data-lucide="chevron-left" class="w-4 h-4"></i>
-        Back
-      </button>
-      <div class="flex gap-2">
+      <div class="flex items-center gap-1">
+        <button type="button"
+                x-show="step > 1"
+                class="btn btn-ghost btn-sm"
+                @click="prev()">
+          <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          Back
+        </button>
+        <form method="dialog" x-show="step < 3">
+          <button type="submit" class="btn btn-ghost btn-sm text-base-content/50">Skip tour</button>
+        </form>
+      </div>
+      <div class="flex gap-2" aria-hidden="true">
         <template x-for="i in 3" :key="i">
-          <span class="w-2 h-2 rounded-full transition-colors"
+          <span class="w-2 h-2 rounded-full transition-colors motion-reduce:transition-none"
                 :class="i <= step ? 'bg-primary' : 'bg-base-300'"></span>
         </template>
       </div>
       <button x-show="step < 3"
               type="button"
               class="btn btn-primary btn-sm"
-              @click="step = Math.min(3, step + 1)">
+              @click="next()">
         Next
         <i data-lucide="chevron-right" class="w-4 h-4"></i>
       </button>
-      <form x-show="step === 3" method="dialog" x-cloak>
-        <button type="submit" class="btn btn-primary btn-sm">
-          Get started
-          <i data-lucide="check" class="w-4 h-4"></i>
-        </button>
-      </form>
+      <a x-show="step === 3" x-cloak
+         href="{% url 'dashboard:index' %}"
+         class="btn btn-primary btn-sm"
+         @click.prevent="goTo('{% url 'dashboard:index' %}')">
+        Get started
+        <i data-lucide="check" class="w-4 h-4"></i>
+      </a>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -164,18 +190,48 @@
     return {
       step: 1,
       completed: !pending,
+      next() {
+        this.step = Math.min(3, this.step + 1);
+        this.focusStep();
+      },
+      prev() {
+        this.step = Math.max(1, this.step - 1);
+        this.focusStep();
+      },
+      focusStep() {
+        // Move focus to the active step's heading so screen readers announce
+        // the new step (the body is aria-live, but focusing the heading gives
+        // a reliable landing point for keyboard users too).
+        this.$nextTick(() => {
+          const heading = this.$root.querySelector(
+            `[data-step="${this.step}"] [data-step-title]`
+          );
+          if (heading) heading.focus();
+        });
+      },
       markCompleteIfNeeded() {
-        if (this.completed) return;
+        if (this.completed) return Promise.resolve();
         this.completed = true;
-        fetch('/api/v1/settings/core/onboarding_completed', {
+        // keepalive lets the request finish even when the click also navigates
+        // away (module cards, "Get started"); .catch keeps a network failure
+        // from bubbling as an unhandled rejection.
+        return fetch('/api/v1/settings/core/onboarding_completed', {
           method: 'PUT',
           credentials: 'same-origin',
+          keepalive: true,
           headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCSRFToken(),
           },
           body: JSON.stringify({ value: true }),
-        });
+        }).catch(() => {});
+      },
+      async goTo(url) {
+        // Persist completion BEFORE navigating: the destination page runs the
+        // same context processor and would re-open the tour if the flag isn't
+        // written yet. Awaiting closes that race.
+        await this.markCompleteIfNeeded();
+        window.location.href = url;
       },
       openChangelog() {
         // Close this dialog first - the native close event will fire and

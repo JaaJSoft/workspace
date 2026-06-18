@@ -681,6 +681,29 @@ def view_file(request, uuid):
     return HttpResponse(html)
 
 
+@login_required
+def file_card(request, uuid):
+    """Return a compact file/note card partial for the hover popover."""
+    file_obj = (
+        File.objects.filter(uuid=uuid, deleted_at__isnull=True)
+        .prefetch_related("file_tags__tag")
+        .first()
+    )
+    if not file_obj or not FileService.can_access(request.user, file_obj):
+        raise Http404
+
+    from workspace.files.services.excerpt import first_content_line
+
+    return render(
+        request,
+        "files/ui/partials/file_card.html",
+        {
+            "file": file_obj,
+            "first_line": first_content_line(file_obj),
+        },
+    )
+
+
 @ensure_csrf_cookie
 def shared_file_view(request, token):
     """Public standalone page for viewing a shared file."""

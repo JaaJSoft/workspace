@@ -10,18 +10,18 @@
  */
 
 /* Cache with 30s TTL */
-var _noteCardCache = {};
-var _noteCardCacheTimes = {};
-var _NOTE_CARD_CACHE_TTL = 30000;
+const _noteCardCache = {};
+const _noteCardCacheTimes = {};
+const _NOTE_CARD_CACHE_TTL = 30000;
 
 /* Single shared popover state */
-var _noteCardPopover = null;
-var _noteCardUuid = null;
-var _noteCardPlacement = 'bottom';
-var _noteCardShowTimeout = null;
-var _noteCardHideTimeout = null;
-var _noteCardCloseTimeout = null;
-var _noteCardFetchingUuid = null;
+let _noteCardPopover = null;
+let _noteCardUuid = null;
+let _noteCardPlacement = 'bottom';
+let _noteCardShowTimeout = null;
+let _noteCardHideTimeout = null;
+let _noteCardCloseTimeout = null;
+let _noteCardFetchingUuid = null;
 
 /**
  * Extract the target file UUID from a note-link href (/notes?file=<uuid>).
@@ -29,21 +29,21 @@ var _noteCardFetchingUuid = null;
  */
 function noteCardFileUuidFromHref(href) {
   if (!href) return null;
-  var m = /[?&]file=([0-9a-fA-F-]{36})/.exec(href);
+  const m = /[?&]file=([0-9a-fA-F-]{36})/.exec(href);
   return m ? m[1] : null;
 }
 window.noteCardFileUuidFromHref = noteCardFileUuidFromHref;
 
 function _noteCardEnsurePopover() {
   if (_noteCardPopover) return _noteCardPopover;
-  var popover = document.createElement('div');
+  const popover = document.createElement('div');
   popover.className = 'note-card-popover fixed z-[9999] bg-base-100 rounded-xl shadow-lg ring-1 ring-base-300';
   popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
   popover.style.opacity = '0';
   popover.style.display = 'none';
-  var spinWrap = document.createElement('div');
+  const spinWrap = document.createElement('div');
   spinWrap.className = 'p-4 flex justify-center';
-  var spinner = document.createElement('span');
+  const spinner = document.createElement('span');
   spinner.className = 'loading loading-spinner loading-sm';
   spinWrap.appendChild(spinner);
   popover.appendChild(spinWrap);
@@ -70,10 +70,10 @@ window._noteCardShow = function(anchor, uuid) {
 
   _noteCardShowTimeout = setTimeout(function() {
     _noteCardShowTimeout = null;
-    var popover = _noteCardEnsurePopover();
+    const popover = _noteCardEnsurePopover();
     _noteCardUuid = uuid;
 
-    var pos = window._computePopoverPosition(anchor, 240);
+    const pos = window._computePopoverPosition(anchor, 240);
     popover.style.left = pos.left + 'px';
     popover.style.top = pos.top + 'px';
     _noteCardPlacement = pos.placement;
@@ -85,8 +85,8 @@ window._noteCardShow = function(anchor, uuid) {
     popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
     window._applyPopoverTransform(popover, pos.placement, true);
 
-    var cached = _noteCardCache[uuid];
-    var cacheValid = cached !== undefined &&
+    const cached = _noteCardCache[uuid];
+    const cacheValid = cached !== undefined &&
       (_noteCardCacheTimes[uuid] || 0) + _NOTE_CARD_CACHE_TTL > Date.now();
     if (cacheValid) {
       window._setPopoverContent(popover, cached);

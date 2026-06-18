@@ -17,7 +17,14 @@ _EXCERPT_SCAN_MAX_BYTES = 8192
 
 _HEADING_RE = re.compile(r"^#{1,6}(\s|$)")
 _LIST_OR_QUOTE_RE = re.compile(r"^\s*([-*+>]|\d+\.)\s+")
-_EMPHASIS_RE = re.compile(r"[*_`]")
+# Matches paired inline emphasis/code markers and captures the inner text.
+# Alternatives (in order of precedence):
+#   \*\*(.+?)\*\*  - bold (**...**)
+#   \*(.+?)\*      - italic (*...*)
+#   `(.+?)`        - inline code (`...`)
+#   \b_(.+?)_\b    - underscore emphasis only at word boundaries,
+#                    so intra-word underscores (profit_margin) are left intact.
+_EMPHASIS_RE = re.compile(r"\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|\b_(.+?)_\b")
 
 
 def _strip_frontmatter(lines):
@@ -46,7 +53,9 @@ def first_line_from_text(text, max_len=160) -> str:
         if not line or _HEADING_RE.match(line):
             continue
         line = _LIST_OR_QUOTE_RE.sub("", line, count=1).strip()
-        line = _EMPHASIS_RE.sub("", line).strip()
+        line = _EMPHASIS_RE.sub(
+            lambda m: next(g for g in m.groups() if g is not None), line
+        ).strip()
         if not line:
             continue
         return line[:max_len]

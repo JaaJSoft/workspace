@@ -41,6 +41,20 @@ class FirstLineFromTextTests(SimpleTestCase):
     def test_only_headings_returns_empty(self):
         self.assertEqual(first_line_from_text("# A\n## B"), "")
 
+    def test_strips_bold_paired(self):
+        self.assertEqual(first_line_from_text("**bold** text"), "bold text")
+
+    def test_strips_italic_paired(self):
+        self.assertEqual(first_line_from_text("*italic* word"), "italic word")
+
+    def test_strips_code_paired(self):
+        self.assertEqual(first_line_from_text("`code` here"), "code here")
+
+    def test_preserves_intraword_underscore(self):
+        self.assertEqual(
+            first_line_from_text("profit_margin is 50%"), "profit_margin is 50%"
+        )
+
 
 class FirstContentLineTests(TestCase):
     def setUp(self):

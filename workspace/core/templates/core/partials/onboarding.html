@@ -59,7 +59,7 @@
           {% for module in workspace_active_modules %}
             {% if module.url %}
               <a href="{{ module.url }}"
-                 @click.prevent="goTo('{{ module.url }}')"
+                 @click.prevent="goTo('{{ module.url|escapejs }}')"
                  class="flex items-start gap-3 p-3 rounded-lg border border-base-300 hover:border-primary hover:bg-base-200 transition-colors">
                 <div class="rounded-lg bg-{{ module.color }}/10 p-2 shrink-0">
                   <i data-lucide="{{ module.icon }}" class="w-5 h-5 text-{{ module.color }}"></i>

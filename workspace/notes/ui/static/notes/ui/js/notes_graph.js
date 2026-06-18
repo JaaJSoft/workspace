@@ -62,6 +62,13 @@ let _resizeObserver = null;
 let _palette = null;
 let _openGen = 0;
 let _fitPending = false; // one-shot: zoom-to-fit once the next layout settles
+
+// Note card popover: desktop-only, anchored to a node's screen position.
+const _cardHasHover = (typeof window !== 'undefined' && window.matchMedia)
+  ? window.matchMedia('(hover: hover)').matches
+  : false;
+let _cardBox = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+const _cardAnchor = { getBoundingClientRect: function() { return _cardBox; } };
 let _state = {
   scope: 'mine',
   kind: 'all',
@@ -333,6 +340,22 @@ async function open(container, opts) {
         }
         _applyColors();
         container.style.cursor = n ? 'pointer' : '';
+
+        // Note card popover: position at the node's screen point (canvas
+        // coords -> viewport coords via the container's bounding rect).
+        if (_cardHasHover && window._noteCardShow) {
+          if (n && _fg) {
+            const sc = _fg.graph2ScreenCoords(n.x, n.y);
+            const crect = container.getBoundingClientRect();
+            const cx = crect.left + sc.x;
+            const cy = crect.top + sc.y;
+            const r = 6;
+            _cardBox = { left: cx - r, top: cy - r, right: cx + r, bottom: cy + r, width: 2 * r, height: 2 * r };
+            window._noteCardShow(_cardAnchor, n.uuid);
+          } else {
+            window._noteCardScheduleHide();
+          }
+        }
       })
       // Frame the graph once the force layout settles after a (re)load.
       .onEngineStop(() => {
@@ -372,6 +395,7 @@ function fitView() {
 
 function destroy() {
   _openGen++; // invalidate any in-flight open() / _load()
+  if (window._noteCardScheduleHide) window._noteCardScheduleHide();
   _setLoading(false); // an invalidated in-flight load won't clear it (gen mismatch)
   _fitPending = false;
   if (_resizeObserver) {

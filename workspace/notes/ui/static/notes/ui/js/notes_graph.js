@@ -353,7 +353,7 @@ async function open(container, opts) {
             _cardBox = { left: cx - r, top: cy - r, right: cx + r, bottom: cy + r, width: 2 * r, height: 2 * r };
             window._noteCardShow(_cardAnchor, n.uuid);
           } else {
-            window._noteCardScheduleHide();
+            if (window._noteCardScheduleHide) window._noteCardScheduleHide();
           }
         }
       })

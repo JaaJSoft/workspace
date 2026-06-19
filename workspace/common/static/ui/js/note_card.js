@@ -14,6 +14,10 @@ const _noteCardCache = {};
 const _noteCardCacheTimes = {};
 const _NOTE_CARD_CACHE_TTL = 30000;
 
+/* Loading placeholder shown while a card is being fetched. */
+const _NOTE_CARD_LOADING_HTML =
+  '<div class="p-4 flex justify-center"><span class="loading loading-spinner loading-sm"></span></div>';
+
 /* Single shared popover state */
 let _noteCardPopover = null;
 let _noteCardUuid = null;
@@ -41,12 +45,7 @@ function _noteCardEnsurePopover() {
   popover.style.transition = 'opacity 150ms ease-out, transform 150ms ease-out';
   popover.style.opacity = '0';
   popover.style.display = 'none';
-  const spinWrap = document.createElement('div');
-  spinWrap.className = 'p-4 flex justify-center';
-  const spinner = document.createElement('span');
-  spinner.className = 'loading loading-spinner loading-sm';
-  spinWrap.appendChild(spinner);
-  popover.appendChild(spinWrap);
+  window._setPopoverContent(popover, _NOTE_CARD_LOADING_HTML);
   popover.addEventListener('mouseenter', function() { window._noteCardCancelHide(); });
   popover.addEventListener('mouseleave', function() { window._noteCardScheduleHide(); });
   document.body.appendChild(popover);
@@ -93,6 +92,8 @@ window._noteCardShow = function(anchor, uuid) {
       if (typeof Alpine !== 'undefined') Alpine.initTree(popover);
     } else if (_noteCardFetchingUuid !== uuid) {
       _noteCardFetchingUuid = uuid;
+      // Reset to the spinner so the previous note's card isn't shown while loading.
+      window._setPopoverContent(popover, _NOTE_CARD_LOADING_HTML);
       fetch('/files/' + uuid + '/card', { credentials: 'same-origin' })
         .then(function(r) { return r.ok ? r.text() : ''; })
         .then(function(html) {

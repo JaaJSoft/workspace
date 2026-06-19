@@ -120,6 +120,8 @@ window.markdownViewerCrepe = function() {
   let _debounceTimer = null;
   let _intervalTimer = null;
   let _beforeUnloadHandler = null;
+  let _noteLinkOver = null;
+  let _noteLinkOut = null;
 
   function getCSRFToken() {
     const match = document.cookie.split('; ').find(function(row) { return row.startsWith('csrftoken='); });
@@ -255,6 +257,28 @@ window.markdownViewerCrepe = function() {
 
         self.loading = false;
 
+        // Note card popover on internal note links (desktop only). Delegated
+        // because Milkdown recreates the <a> nodes on every edit.
+        if (window.matchMedia && window.matchMedia('(hover: hover)').matches
+            && window._noteCardShow && window._noteCardScheduleHide
+            && window.noteCardFileUuidFromHref) {
+          _noteLinkOver = function(e) {
+            const a = e.target.closest && e.target.closest('a[href*="file="]');
+            if (!a) return;
+            const uuid = window.noteCardFileUuidFromHref(a.getAttribute('href'));
+            if (uuid) window._noteCardShow(a, uuid);
+          };
+          _noteLinkOut = function(e) {
+            const a = e.target.closest && e.target.closest('a[href*="file="]');
+            if (!a) return;
+            // Ignore moves that stay inside the same link.
+            if (e.relatedTarget && a.contains(e.relatedTarget)) return;
+            window._noteCardScheduleHide();
+          };
+          container.addEventListener('mouseover', _noteLinkOver);
+          container.addEventListener('mouseout', _noteLinkOut);
+        }
+
         if (self.canEdit) {
           _beforeUnloadHandler = function(e) {
             if (self.isDirty) e.preventDefault();
@@ -352,6 +376,12 @@ window.markdownViewerCrepe = function() {
         _beforeUnloadHandler = null;
       }
       if (_lock) _lock.dispose();
+      if (_container) {
+        if (_noteLinkOver) _container.removeEventListener('mouseover', _noteLinkOver);
+        if (_noteLinkOut) _container.removeEventListener('mouseout', _noteLinkOut);
+        _noteLinkOver = null;
+        _noteLinkOut = null;
+      }
       if (_keydownHandler && _container) {
         _container.removeEventListener('keydown', _keydownHandler, true);
         _keydownHandler = null;

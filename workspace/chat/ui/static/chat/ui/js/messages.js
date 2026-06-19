@@ -237,6 +237,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         if (resp.ok) {
           const msg = await resp.json();
           this._updateConversationLastMessage(this.activeConversation.uuid, msg);
+          // Re-render the sidebar so this conversation bubbles to the top.
+          // The sender is excluded from the SSE broadcast (the receivers'
+          // refresh path), so the send path must refresh the list itself.
+          this.refreshConversationList();
           // Re-fetch messages — replaces optimistic bubble with real server-rendered one
           await this._refreshCurrentMessages();
           // If bot already replied during the round-trip, hide typing immediately

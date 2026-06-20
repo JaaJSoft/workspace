@@ -5,6 +5,7 @@ from . import (
     views_attachments,
     views_avatar,
     views_bots,
+    views_calls,
     views_interactions,
     views_messages,
     views_pins,
@@ -91,6 +92,32 @@ urlpatterns = [
         "api/v1/chat/conversations/<uuid:conversation_id>/typing",
         views_typing.TypingIndicatorView.as_view(),
         name="chat-typing",
+    ),
+    # Calls
+    path(
+        "api/v1/chat/conversations/<uuid:conversation_id>/call",
+        views_calls.CallStateView.as_view(),
+        name="chat-call-state",
+    ),
+    path(
+        "api/v1/chat/conversations/<uuid:conversation_id>/call/join",
+        views_calls.CallJoinView.as_view(),
+        name="chat-call-join",
+    ),
+    path(
+        "api/v1/chat/conversations/<uuid:conversation_id>/call/leave",
+        views_calls.CallLeaveView.as_view(),
+        name="chat-call-leave",
+    ),
+    path(
+        "api/v1/chat/conversations/<uuid:conversation_id>/call/signal",
+        views_calls.CallSignalView.as_view(),
+        name="chat-call-signal",
+    ),
+    path(
+        "api/v1/chat/conversations/<uuid:conversation_id>/call/heartbeat",
+        views_calls.CallHeartbeatView.as_view(),
+        name="chat-call-heartbeat",
     ),
     # Group avatars
     path(

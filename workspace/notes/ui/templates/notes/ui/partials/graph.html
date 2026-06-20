@@ -32,6 +32,31 @@
           <option value="journal">Journal</option>
           <option value="regular">Regular notes</option>
         </select>
+        <!-- Tag multi-select dropdown: keep only nodes carrying a selected tag.
+             Mirrors the note-list tag filter (toggleGraphTag / graphTags). -->
+        <div class="relative flex-shrink-0" x-show="allTags.length > 0"
+             @click.outside="showGraphTagDropdown = false">
+          <button class="btn btn-sm gap-1"
+                  :class="graphTags.length > 0 ? 'btn-secondary' : 'btn-ghost'"
+                  @click="showGraphTagDropdown = !showGraphTagDropdown">
+            <i data-lucide="tag" class="w-3.5 h-3.5"></i>
+            <span class="truncate max-w-24" x-text="graphTags.length > 0 ? selectedGraphTagNames() : 'Tags'"></span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+          </button>
+          <div class="absolute left-0 top-full mt-1 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg min-w-48 max-h-64 overflow-y-auto py-1"
+               x-show="showGraphTagDropdown" x-cloak x-transition>
+            <button class="w-full text-left px-3 py-1.5 hover:bg-base-200 text-xs text-base-content/60"
+                    x-show="graphTags.length > 0" @click="clearGraphTags()">Clear filter</button>
+            <template x-for="tag in allTags" :key="tag.uuid">
+              <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-base-200 cursor-pointer text-sm">
+                <input type="checkbox" class="checkbox checkbox-xs"
+                       :checked="graphTags.indexOf(tag.uuid) !== -1"
+                       @change="toggleGraphTag(tag.uuid)">
+                <span class="badge badge-xs" :class="'badge-' + tag.color" x-text="tag.name"></span>
+              </label>
+            </template>
+          </div>
+        </div>
       </div>
       <button class="btn btn-ghost btn-sm btn-square flex-shrink-0" @click="resetGraphView()"
               aria-label="Reset view" title="Reset view">

@@ -34,6 +34,7 @@ def build_file_graph(
     exclude_descendants_of=None,
     favorites=None,
     search=None,
+    tags=None,
 ) -> dict:
     """Return ``{"nodes": [...], "edges": [...]}`` for *user* in *scope*.
 
@@ -48,6 +49,9 @@ def build_file_graph(
     - ``favorites``: True -> only the user's favorites; False -> only non-favorites;
       None -> no favorite filter.
     - ``search``: keep only nodes whose name matches (case-insensitive substring).
+    - ``tags`` (iterable of tag UUIDs): keep only nodes carrying at least one of
+      those tags (OR semantics, mirroring the file-list ``?tags=`` filter). An
+      empty/None iterable applies no tag filter.
 
     Edges are restricted to the surviving nodes, so a node linked only to
     filtered-out nodes appears isolated. The notes kind filters map onto these
@@ -84,6 +88,11 @@ def build_file_graph(
         base = base.exclude(favorites__owner=user)
     if search:
         base = base.filter(name__icontains=search)
+    if tags:
+        # OR semantics: a node matches if it carries any of the requested tags.
+        # The join to file_tags fans out one row per matching tag, so distinct()
+        # collapses a node tagged with several of the selected tags back to one.
+        base = base.filter(file_tags__tag__uuid__in=list(tags)).distinct()
     base = FileService.annotate_for_serializer(base, user)
 
     # Serialize nodes with the canonical FileSerializer so a graph node is the

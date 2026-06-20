@@ -91,7 +91,9 @@ class FileGraphView(APIView):
                 continue
             value = parse_uuid_or_none(part)
             if value is None:
-                raise ValidationError({"tags": "Must be a comma-separated list of UUIDs."})
+                raise ValidationError(
+                    {"tags": "Must be a comma-separated list of UUIDs."}
+                )
             uuids.append(value)
         return uuids or None
 

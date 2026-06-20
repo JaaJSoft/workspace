@@ -10,7 +10,6 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-import json
 import mimetypes
 import os
 from pathlib import Path
@@ -703,12 +702,11 @@ if DEBUG:
 # --------------------------------------------------
 # Chat calls (WebRTC)
 # --------------------------------------------------
-# ICE servers are read from config so TURN can be added later without code
-# changes. Override CHAT_CALL_ICE_SERVERS with a JSON array of RTCIceServer
-# dicts, e.g. [{"urls": "turn:turn.example.com", "username": "u", "credential": "p"}].
-CHAT_CALL_ICE_SERVERS = json.loads(
-    os.getenv("CHAT_CALL_ICE_SERVERS") or '[{"urls": "stun:stun.l.google.com:19302"}]'
-)
+# ICE servers (STUN/TURN) for chat calls. See workspace.common.webrtc for the
+# env-var format. Configured here so TURN can be added later without code changes.
+from workspace.common.webrtc import build_ice_servers
+
+CHAT_CALL_ICE_SERVERS = build_ice_servers()
 CHAT_CALL_MAX_PARTICIPANTS = int(os.getenv("CHAT_CALL_MAX_PARTICIPANTS", "6"))
 CHAT_CALL_PRESENCE_TTL = int(os.getenv("CHAT_CALL_PRESENCE_TTL", "12"))
 

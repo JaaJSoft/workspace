@@ -156,6 +156,7 @@ window.notesApp = function notesApp(config) {
         graphSearch: '',
         graphTags: [],
         showGraphTagDropdown: false,
+        graphTagSearch: '',
         graphLoading: false,
 
         // Folder arrays (flat lists, lazy-loaded children)
@@ -532,6 +533,7 @@ window.notesApp = function notesApp(config) {
             this.graphSearch = '';
             this.graphTags = [];
             this.showGraphTagDropdown = false;
+            this.graphTagSearch = '';
             this.graphLoading = false;
         },
 
@@ -566,6 +568,16 @@ window.notesApp = function notesApp(config) {
         clearGraphTags() {
             this.graphTags = [];
             if (window.notesGraph) window.notesGraph.setTags(this.graphTags);
+        },
+
+        // Tags matching the in-dropdown search box (case-insensitive substring).
+        // An empty query returns the full list, so the box only narrows.
+        filteredGraphTags() {
+            const q = this.graphTagSearch.trim().toLowerCase();
+            if (!q) return this.allTags;
+            return this.allTags.filter(function(t) {
+                return t.name.toLowerCase().indexOf(q) !== -1;
+            });
         },
 
         // Comma-joined names of the tags currently filtering the graph, for the

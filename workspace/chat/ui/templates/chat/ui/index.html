@@ -288,7 +288,11 @@ x-data="chatApp({{ user.id }})"
                 </div>
                 <div class="ml-auto flex items-center gap-1">
                   <button class="btn btn-ghost btn-xs btn-square" @click="toggleMute()" :class="isMuted ? 'text-error' : ''" :title="isMuted ? 'Unmute' : 'Mute'">
-                    <i :data-lucide="isMuted ? 'mic-off' : 'mic'" class="w-4 h-4"></i>
+                    <!-- Two static icons toggled by x-show on the wrapper: Lucide
+                         replaces the <i> with an <svg>, so a reactive :data-lucide
+                         binding on the <i> would never re-render. -->
+                    <span x-show="!isMuted"><i data-lucide="mic" class="w-4 h-4"></i></span>
+                    <span x-show="isMuted" x-cloak><i data-lucide="mic-off" class="w-4 h-4"></i></span>
                   </button>
                   <button class="btn btn-error btn-xs" @click="leaveCall()">Leave</button>
                 </div>

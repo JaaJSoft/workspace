@@ -256,6 +256,17 @@ def cleanup_stale_participants(session):
     """Reap participants whose heartbeat expired; end the call if none remain."""
     from ..models import CallParticipant, CallSession
 
+    # Lock the session row and re-read its state: concurrent sweeps (or a racing
+    # leave_call) must not both run the end-call path on the same session, which
+    # would fire call_ended twice and finalize the system message twice.
+    session = (
+        CallSession.objects.select_for_update()
+        .filter(pk=session.pk, state=CallSession.State.ACTIVE)
+        .first()
+    )
+    if session is None:
+        return False
+
     fresh = set(get_presence(session.uuid).keys())
     stale = CallParticipant.objects.filter(
         session=session, left_at__isnull=True
@@ -273,9 +284,9 @@ def cleanup_stale_participants(session):
     if not CallParticipant.objects.filter(
         session=session, left_at__isnull=True
     ).exists():
-        if session.state == CallSession.State.ACTIVE:
-            _end_call(session)
-            return True
+        # State is guaranteed ACTIVE here (locked + filtered above).
+        _end_call(session)
+        return True
     return False
 
 

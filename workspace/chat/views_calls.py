@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 
 from .services import calls
 from .services.call_signaling import send_signal
-from .services.conversations import get_active_membership
+from .services.conversations import get_active_membership, is_active_member
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +84,21 @@ class CallSignalView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         # The target must be an active member of this same conversation.
-        if not get_active_membership_by_id(to_user_id, conversation_id):
+        if not is_active_member(to_user_id, conversation_id):
             return Response(
                 {"detail": "Target is not a member."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        send_signal(conversation_id, to_user_id, request.user.id, signal)
+        # Signals are scoped to the active call session, so the envelope must
+        # carry the session id (not the conversation id) for client-side
+        # session filtering. No active call means there is nothing to signal.
+        session = calls.get_active_call(conversation_id)
+        if session is None:
+            return Response(
+                {"detail": "No active call."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        send_signal(session.uuid, to_user_id, request.user.id, signal)
         return Response({"status": "ok"})
 
 
@@ -122,12 +131,3 @@ class CallHeartbeatView(APIView):
                 exclude_user_id=request.user.id,
             )
         return Response({"status": "ok"})
-
-
-def get_active_membership_by_id(user_id, conversation_id):
-    """Active-membership check for an arbitrary user id (target of a signal)."""
-    from .models import ConversationMember
-
-    return ConversationMember.objects.filter(
-        conversation_id=conversation_id, user_id=user_id, left_at__isnull=True
-    ).exists()

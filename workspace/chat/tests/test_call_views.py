@@ -74,6 +74,10 @@ class CallViewTests(TestCase):
         ]
         self.assertEqual(len(delivered), 1)
         self.assertEqual(delivered[0]["data"]["from_user_id"], self.a.id)
+        # The envelope must carry the active call SESSION id (not the
+        # conversation id), so clients can scope signals to the right call.
+        session = calls.get_active_call(self.conv.uuid)
+        self.assertEqual(delivered[0]["data"]["session_id"], str(session.uuid))
 
     def test_signal_to_non_member_rejected(self):
         self.client.force_authenticate(self.a)

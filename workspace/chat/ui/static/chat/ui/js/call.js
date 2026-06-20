@@ -268,15 +268,21 @@ window.chatCallMixin = function chatCallMixin() {
       const signal = detail.signal || {};
       const peer = this._ensurePeer(fromId, /* initiateOffer */ false);
       const pc = peer.pc;
-      if (signal.type === 'offer') {
-        await pc.setRemoteDescription(signal.sdp);
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        this._sendSignal(fromId, { type: 'answer', sdp: pc.localDescription });
-      } else if (signal.type === 'answer') {
-        await pc.setRemoteDescription(signal.sdp);
-      } else if (signal.type === 'ice' && signal.candidate) {
-        try { await pc.addIceCandidate(signal.candidate); } catch (e) { /* ignore */ }
+      try {
+        if (signal.type === 'offer') {
+          await pc.setRemoteDescription(signal.sdp);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          this._sendSignal(fromId, { type: 'answer', sdp: pc.localDescription });
+        } else if (signal.type === 'answer') {
+          await pc.setRemoteDescription(signal.sdp);
+        } else if (signal.type === 'ice' && signal.candidate) {
+          await pc.addIceCandidate(signal.candidate);
+        }
+      } catch (e) {
+        // Negotiation can fail on browser quirks or out-of-order signals; keep
+        // the call alive instead of raising an unhandled promise rejection.
+        console.warn('WebRTC signal handling failed:', signal.type, e);
       }
     },
 

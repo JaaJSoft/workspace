@@ -159,3 +159,25 @@ class CleanupTests(TestCase):
         self.assertEqual(len(state["participants"]), 1)
         self.assertEqual(state["participants"][0]["user_id"], self.a.id)
         self.assertEqual(state["participants"][0]["media_state"], {"audio": True})
+
+
+class EndStaleCallsTaskTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.a = User.objects.create_user(username="a", password="x")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.a
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.a)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_task_ends_stale_call(self):
+        from workspace.chat.tasks import end_stale_calls
+
+        calls.start_or_join_call(self.a, self.conv.uuid)
+        cache.clear()
+        self.assertEqual(end_stale_calls(), 1)
+        self.assertIsNone(calls.get_active_call(self.conv.uuid))

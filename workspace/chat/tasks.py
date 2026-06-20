@@ -82,3 +82,14 @@ def fetch_link_previews(message_uuid: str, urls: list[str]):
 
     if created_any:
         notify_conversation_members(message.conversation)
+
+
+@shared_task(name="chat.end_stale_calls", ignore_result=True)
+def end_stale_calls():
+    """Reap call sessions whose participants all stopped sending heartbeats."""
+    from .services.calls import end_stale_calls as _end_stale_calls
+
+    count = _end_stale_calls()
+    if count:
+        logger.info("end_stale_calls: ended %s stale call(s)", count)
+    return count

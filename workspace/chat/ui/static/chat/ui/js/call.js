@@ -293,6 +293,20 @@ window.chatCallMixin = function chatCallMixin() {
       }
     },
 
+    // Refresh the banner for the conversation now in view. Called whenever the
+    // active conversation changes (including F5), so an already-ongoing call is
+    // joinable even though no SSE event fired while we were away.
+    _syncCallBanner() {
+      // Never clobber the call we are actually in while browsing other convs.
+      if (this.inCall) return;
+      if (!this.activeConversation) {
+        this.callSession = null;
+        this.callParticipants = [];
+        return;
+      }
+      this._refreshCallState();
+    },
+
     async _refreshCallState() {
       if (!this.activeConversation) return;
       try {

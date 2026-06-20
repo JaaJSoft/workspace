@@ -44,6 +44,11 @@ function chatApp(currentUserId) {
       // animating the very first paint.
       this.$nextTick(() => { this.sidebarMounted = true; });
 
+      // Whenever the open conversation changes (initial load, F5, navigation),
+      // sync the call banner so an already-ongoing call is joinable - SSE events
+      // only fire for calls that start while you are already here.
+      this.$watch('activeConversation', () => this._syncCallBanner?.());
+
       // Hydrate chat preferences from the server once the initial fetch
       // resolved, and keep listening for cross-component updates fired
       // by the preferences popover/dialog.

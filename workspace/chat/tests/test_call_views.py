@@ -118,3 +118,20 @@ class CallViewTests(TestCase):
         self.client.post(self._url("/join"))
         self.client.post(self._url("/leave"))
         self.assertIsNone(calls.get_active_call(self.conv.uuid))
+
+    def test_cannot_start_call_in_bot_conversation(self):
+        from workspace.ai.models import BotProfile
+
+        User = get_user_model()
+        bot = User.objects.create_user(username="callbot", password="x")
+        BotProfile.objects.create(user=bot, is_public=True)
+        bot_conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.a
+        )
+        ConversationMember.objects.create(conversation=bot_conv, user=self.a)
+        ConversationMember.objects.create(conversation=bot_conv, user=bot)
+
+        self.client.force_authenticate(self.a)
+        resp = self.client.post(f"/api/v1/chat/conversations/{bot_conv.uuid}/call/join")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIsNone(calls.get_active_call(bot_conv.uuid))

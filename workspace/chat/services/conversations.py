@@ -38,6 +38,19 @@ def is_active_member(user_id, conversation_id):
     ).exists()
 
 
+def is_bot_conversation(conversation_id):
+    """Whether the conversation includes an AI bot member.
+
+    Used to disable features that make no sense with a bot, such as calls.
+    """
+    from ..models import ConversationMember
+
+    return ConversationMember.objects.filter(
+        conversation_id=conversation_id,
+        user__bot_profile__isnull=False,
+    ).exists()
+
+
 @transaction.atomic
 def get_or_create_dm(user, other_user):
     """Get or create a DM conversation between two users.

@@ -9,7 +9,11 @@ from rest_framework.views import APIView
 
 from .services import calls
 from .services.call_signaling import send_signal
-from .services.conversations import get_active_membership, is_active_member
+from .services.conversations import (
+    get_active_membership,
+    is_active_member,
+    is_bot_conversation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +40,11 @@ class CallJoinView(APIView):
     def post(self, request, conversation_id):
         if not get_active_membership(request.user, conversation_id):
             return Response(status=status.HTTP_404_NOT_FOUND)
+        if is_bot_conversation(conversation_id):
+            return Response(
+                {"detail": "Calls are not available in AI conversations."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             session, _, _ = calls.start_or_join_call(request.user, conversation_id)
         except calls.CallFull:

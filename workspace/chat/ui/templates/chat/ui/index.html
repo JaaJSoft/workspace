@@ -290,6 +290,7 @@ x-data="chatApp({{ user.id }})"
         <!-- Header actions -->
         <div class="flex items-center gap-0.5">
           <button
+            x-show="!isBotConversation(activeConversation)"
             class="btn btn-ghost btn-sm btn-square"
             @click="startOrJoinCall()"
             :disabled="inCall || joiningCall"

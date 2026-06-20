@@ -181,13 +181,13 @@ x-data="chatApp({{ user.id }})"
           </div>
         </button>
         <div class="flex items-center gap-2">
-          <button class="btn btn-sm btn-ghost flex-1 gap-1.5" :class="isMuted ? 'text-error' : ''" @click="toggleMute()">
-            <span x-show="!isMuted" class="contents"><i data-lucide="mic" class="w-4 h-4"></i></span>
-            <span x-show="isMuted" x-cloak class="contents"><i data-lucide="mic-off" class="w-4 h-4"></i></span>
+          <button class="btn btn-xs btn-ghost flex-1 gap-1" :class="isMuted ? 'text-error' : ''" @click="toggleMute()">
+            <span x-show="!isMuted" class="contents"><i data-lucide="mic" class="w-3.5 h-3.5"></i></span>
+            <span x-show="isMuted" x-cloak class="contents"><i data-lucide="mic-off" class="w-3.5 h-3.5"></i></span>
             <span x-text="isMuted ? 'Unmute' : 'Mute'"></span>
           </button>
-          <button class="btn btn-sm btn-error flex-1 gap-1.5" @click="leaveCall()">
-            <i data-lucide="phone-off" class="w-4 h-4"></i>
+          <button class="btn btn-xs btn-error flex-1 gap-1" @click="leaveCall()">
+            <i data-lucide="phone-off" class="w-3.5 h-3.5"></i>
             Leave
           </button>
         </div>

@@ -116,3 +116,46 @@ class LifecycleTests(TestCase):
             calls.start_or_join_call(self.a, self.conv.uuid)
             with self.assertRaises(calls.CallFull):
                 calls.start_or_join_call(self.b, self.conv.uuid)
+
+
+class CleanupTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.a = User.objects.create_user(username="a", password="x")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.a
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.a)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_cleanup_ends_session_when_no_fresh_presence(self):
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        cache.clear()  # wipe heartbeats -> everyone looks stale
+        ended = calls.cleanup_stale_participants(session)
+        self.assertTrue(ended)
+        session.refresh_from_db()
+        self.assertEqual(session.state, CallSession.State.ENDED)
+
+    def test_cleanup_keeps_session_with_fresh_presence(self):
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        ended = calls.cleanup_stale_participants(session)
+        self.assertFalse(ended)
+        session.refresh_from_db()
+        self.assertEqual(session.state, CallSession.State.ACTIVE)
+
+    def test_end_stale_calls_counts_ended(self):
+        calls.start_or_join_call(self.a, self.conv.uuid)
+        cache.clear()
+        self.assertEqual(calls.end_stale_calls(), 1)
+
+    def test_serialize_call_state(self):
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        state = calls.serialize_call_state(session)
+        self.assertTrue(state["active"])
+        self.assertEqual(state["session_id"], str(session.uuid))
+        self.assertEqual(len(state["participants"]), 1)
+        self.assertEqual(state["participants"][0]["user_id"], self.a.id)
+        self.assertEqual(state["participants"][0]["media_state"], {"audio": True})

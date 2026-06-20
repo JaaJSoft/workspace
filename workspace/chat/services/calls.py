@@ -249,3 +249,65 @@ def _end_call(session):
         },
     )
     return session
+
+
+@transaction.atomic
+def cleanup_stale_participants(session):
+    """Reap participants whose heartbeat expired; end the call if none remain."""
+    from ..models import CallParticipant, CallSession
+
+    fresh = set(get_presence(session.uuid).keys())
+    stale = CallParticipant.objects.filter(
+        session=session, left_at__isnull=True
+    ).exclude(user_id__in=[int(uid) for uid in fresh])
+    left_ids = list(stale.values_list("user_id", flat=True))
+    if left_ids:
+        stale.update(left_at=timezone.now())
+        for uid in left_ids:
+            _broadcast(
+                session.conversation_id,
+                "call_participant_left",
+                {"session_id": str(session.uuid), "user_id": uid},
+            )
+
+    if not CallParticipant.objects.filter(
+        session=session, left_at__isnull=True
+    ).exists():
+        if session.state == CallSession.State.ACTIVE:
+            _end_call(session)
+            return True
+    return False
+
+
+def end_stale_calls():
+    """Celery-driven sweep: end every active call with no live participants."""
+    from ..models import CallSession
+
+    ended = 0
+    for session in CallSession.objects.filter(
+        state=CallSession.State.ACTIVE
+    ).select_related("system_message"):
+        if cleanup_stale_participants(session):
+            ended += 1
+    return ended
+
+
+def serialize_call_state(session):
+    presence = get_presence(session.uuid)
+    participants = []
+    for p in list_active_participants(session):
+        participants.append(
+            {
+                "user_id": p.user_id,
+                "display_name": p.user.get_full_name() or p.user.username,
+                "media_state": presence.get(str(p.user_id), dict(DEFAULT_MEDIA_STATE)),
+            }
+        )
+    return {
+        "active": session.state == session.State.ACTIVE,
+        "session_id": str(session.uuid),
+        "conversation_id": str(session.conversation_id),
+        "started_by": session.started_by_id,
+        "media_kind": session.media_kind,
+        "participants": participants,
+    }

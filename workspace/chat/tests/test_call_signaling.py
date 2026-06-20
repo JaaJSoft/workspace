@@ -1,3 +1,4 @@
+from unittest.mock import patch
 from uuid import uuid4
 
 from django.core.cache import cache
@@ -42,10 +43,11 @@ class CallSignalingTests(SimpleTestCase):
 
     def test_send_signal_enqueues_call_signal_and_notifies(self):
         sess = uuid4()
-        with self.settings():
+        with patch("workspace.chat.services.call_signaling.notify_sse") as mock_notify:
             sig.send_signal(
                 sess, to_user_id=7, from_user_id=3, signal={"type": "offer"}
             )
+        mock_notify.assert_called_once_with("chat", 7)
         out = sig.drain_events(7)
         self.assertEqual(out[0]["event"], "call_signal")
         self.assertEqual(out[0]["data"]["from_user_id"], 3)

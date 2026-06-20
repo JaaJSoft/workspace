@@ -65,7 +65,12 @@ class ConversationMember(models.Model):
 
 
 class Message(models.Model):
+    class Kind(models.TextChoices):
+        USER = "user", "User"
+        SYSTEM = "system", "System"
+
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    kind = models.CharField(max_length=8, choices=Kind.choices, default=Kind.USER)
     conversation = models.ForeignKey(
         Conversation,
         on_delete=models.CASCADE,
@@ -317,3 +322,82 @@ class MessageInteraction(models.Model):
     def __str__(self):
         state = "pending" if self.interacted_at is None else "answered"
         return f"{self.kind} on {self.message_id} ({state})"
+
+
+class CallSession(models.Model):
+    class State(models.TextChoices):
+        ACTIVE = "active", "Active"
+        ENDED = "ended", "Ended"
+
+    class MediaKind(models.TextChoices):
+        AUDIO = "audio", "Audio"
+        VIDEO = "video", "Video"
+        SCREEN = "screen", "Screen"
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name="call_sessions"
+    )
+    started_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
+    state = models.CharField(max_length=8, choices=State.choices, default=State.ACTIVE)
+    media_kind = models.CharField(
+        max_length=8, choices=MediaKind.choices, default=MediaKind.AUDIO
+    )
+    system_message = models.OneToOneField(
+        Message,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="call_session",
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["conversation"],
+                condition=models.Q(state="active"),
+                name="one_active_call_per_conversation",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["conversation", "state"]),
+            models.Index(fields=["state"]),
+        ]
+
+    def __str__(self):
+        return f"Call {self.uuid} in {self.conversation_id} ({self.state})"
+
+    @property
+    def duration_seconds(self):
+        if self.ended_at is None:
+            return None
+        return int((self.ended_at - self.started_at).total_seconds())
+
+
+class CallParticipant(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    session = models.ForeignKey(
+        CallSession, on_delete=models.CASCADE, related_name="participants"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
+    joined_at = models.DateTimeField(auto_now_add=True)
+    left_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["session", "user"], name="unique_call_participant"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["session", "left_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} in call {self.session_id}"

@@ -21,9 +21,17 @@ function chatCallOtherParticipantIds(participants, selfId) {
     .filter((id) => id !== selfId);
 }
 
+function chatCallEventForCurrentSession(detail, callSession) {
+  // True when an incoming call event belongs to the session the mixin is
+  // currently tracking (the call you are in, or the banner you are showing).
+  // Guards against a different conversation's call events corrupting this one.
+  return !!callSession && !!detail && detail.session_id === callSession.session_id;
+}
+
 window.chatCallShouldOffer = chatCallShouldOffer;
 window.chatCallMergeMediaState = chatCallMergeMediaState;
 window.chatCallOtherParticipantIds = chatCallOtherParticipantIds;
+window.chatCallEventForCurrentSession = chatCallEventForCurrentSession;
 
 window.chatCallMixin = function chatCallMixin() {
   return {
@@ -220,6 +228,7 @@ window.chatCallMixin = function chatCallMixin() {
       this._refreshCallState();
     },
     onCallEnded(detail) {
+      if (this.callSession && detail && detail.session_id !== this.callSession.session_id) return;
       // Single active call per conversation: any call_ended clears the banner
       // and tears down our local peer connections if we were in the call.
       this.callSession = null;
@@ -231,6 +240,7 @@ window.chatCallMixin = function chatCallMixin() {
     },
     onCallParticipantJoined(detail) {
       if (!this.inCall) { this._refreshCallState(); return; }
+      if (!window.chatCallEventForCurrentSession(detail, this.callSession)) return;
       const id = detail.user_id;
       if (id === this.currentUserId) return;
       if (!this.callParticipants.find((p) => p.user_id === id)) {
@@ -242,11 +252,13 @@ window.chatCallMixin = function chatCallMixin() {
       }
     },
     onCallParticipantLeft(detail) {
+      if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
       this.callParticipants = this.callParticipants.filter((p) => p.user_id !== detail.user_id);
       this._closePeer(detail.user_id);
       if (!this.inCall) this._refreshCallState();
     },
     onCallParticipantUpdated(detail) {
+      if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
       const p = this.callParticipants.find((x) => x.user_id === detail.user_id);
       if (p) p.media_state = detail.media_state;
     },

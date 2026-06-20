@@ -23,3 +23,26 @@ test('otherParticipantIds excludes self', () => {
   );
   assert.deepStrictEqual(Array.from(ids), [1, 3]);
 });
+
+test('chatCallEventForCurrentSession returns true for matching session_id', () => {
+  const session = { session_id: 'abc-123' };
+  const detail = { session_id: 'abc-123' };
+  assert.equal(ctx.chatCallEventForCurrentSession(detail, session), true);
+});
+
+test('chatCallEventForCurrentSession returns false for different session_id', () => {
+  const session = { session_id: 'abc-123' };
+  const detail = { session_id: 'xyz-999' };
+  assert.equal(ctx.chatCallEventForCurrentSession(detail, session), false);
+});
+
+test('chatCallEventForCurrentSession returns false when callSession is null', () => {
+  const detail = { session_id: 'abc-123' };
+  assert.equal(ctx.chatCallEventForCurrentSession(detail, null), false);
+});
+
+test('chatCallEventForCurrentSession returns false when detail is null or undefined', () => {
+  const session = { session_id: 'abc-123' };
+  assert.equal(ctx.chatCallEventForCurrentSession(null, session), false);
+  assert.equal(ctx.chatCallEventForCurrentSession(undefined, session), false);
+});

@@ -4,8 +4,13 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from workspace.chat.models import CallParticipant, CallSession, Conversation, Message
-from workspace.chat.models import ConversationMember
+from workspace.chat.models import (
+    CallParticipant,
+    CallSession,
+    Conversation,
+    ConversationMember,
+    Message,
+)
 from workspace.chat.services import call_signaling as sig
 from workspace.chat.services import calls
 

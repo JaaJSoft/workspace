@@ -220,10 +220,10 @@ window.chatCallMixin = function chatCallMixin() {
       this._refreshCallState();
     },
     onCallEnded(detail) {
+      // Single active call per conversation: any call_ended clears the banner
+      // and tears down our local peer connections if we were in the call.
       this.callSession = null;
-      if (this.inCall && (!detail || detail.session_id === (this.callSession && this.callSession.session_id))) {
-        // If our own session ended under us, tear down locally.
-      }
+      this.callParticipants = [];
       if (this.inCall) this.leaveCall();
       if (typeof this._refreshMessagesPreservingScroll === 'function' && this.activeConversation) {
         this._refreshMessagesPreservingScroll();

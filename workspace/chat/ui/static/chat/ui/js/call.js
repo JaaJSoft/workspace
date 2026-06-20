@@ -24,3 +24,258 @@ function chatCallOtherParticipantIds(participants, selfId) {
 window.chatCallShouldOffer = chatCallShouldOffer;
 window.chatCallMergeMediaState = chatCallMergeMediaState;
 window.chatCallOtherParticipantIds = chatCallOtherParticipantIds;
+
+window.chatCallMixin = function chatCallMixin() {
+  return {
+    // -- Call state ------------------------------------------
+    callSession: null,           // serialized state of the active call, or null
+    callParticipants: [],        // [{user_id, display_name, media_state}]
+    inCall: false,               // am I currently joined?
+    isMuted: false,
+    joiningCall: false,
+    _peers: {},                  // user_id -> { pc, audioEl }
+    _localStream: null,
+    _iceServers: [],
+    _heartbeatTimer: null,
+
+    _csrf() {
+      return (typeof getCSRFToken === 'function') ? getCSRFToken()
+        : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+    },
+
+    _loadIceServers() {
+      if (this._iceServers.length) return this._iceServers;
+      const el = document.getElementById('call-ice-servers-data');
+      if (el) {
+        try { this._iceServers = JSON.parse(el.textContent); } catch (e) { this._iceServers = []; }
+      }
+      return this._iceServers;
+    },
+
+    callBannerVisible() {
+      return !!this.callSession && !this.inCall;
+    },
+
+    isInCall() {
+      return this.inCall;
+    },
+
+    _mediaState() {
+      return { audio: !this.isMuted };
+    },
+
+    // -- Lifecycle: join / leave -----------------------------
+    async startOrJoinCall() {
+      if (!this.activeConversation || this.joiningCall) return;
+      this.joiningCall = true;
+      const convId = this.activeConversation.uuid;
+      try {
+        this._localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        this.joiningCall = false;
+        if (typeof this.showAlert === 'function') {
+          this.showAlert('error', 'Microphone permission is required to join a call.');
+        }
+        return;
+      }
+      let resp;
+      try {
+        resp = await fetch(`/api/v1/chat/conversations/${convId}/call/join`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+        });
+      } catch (e) {
+        this._teardownLocal();
+        this.joiningCall = false;
+        return;
+      }
+      if (resp.status === 409) {
+        this._teardownLocal();
+        this.joiningCall = false;
+        if (typeof this.showAlert === 'function') this.showAlert('warning', 'This call is full.');
+        return;
+      }
+      const data = await resp.json();
+      this._iceServers = data.ice_servers || [];
+      this.callSession = data.state;
+      this.callParticipants = data.state.participants || [];
+      this.inCall = true;
+      this.joiningCall = false;
+
+      // As the newcomer, wait for existing participants to offer; just create
+      // peer slots for everyone already here.
+      for (const id of window.chatCallOtherParticipantIds(this.callParticipants, this.currentUserId)) {
+        this._ensurePeer(id, /* initiateOffer */ false);
+      }
+      this._startHeartbeat();
+    },
+
+    async leaveCall() {
+      const convId = this.activeConversation && this.activeConversation.uuid;
+      this._stopHeartbeat();
+      for (const id of Object.keys(this._peers)) this._closePeer(Number(id));
+      this._teardownLocal();
+      this.inCall = false;
+      this.isMuted = false;
+      this.callParticipants = [];
+      this.callSession = null;
+      if (convId) {
+        try {
+          await fetch(`/api/v1/chat/conversations/${convId}/call/leave`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': this._csrf() },
+          });
+        } catch (e) { /* best effort */ }
+      }
+    },
+
+    toggleMute() {
+      this.isMuted = !this.isMuted;
+      if (this._localStream) {
+        this._localStream.getAudioTracks().forEach((t) => { t.enabled = !this.isMuted; });
+      }
+      this._sendHeartbeat(); // pushes the new media_state immediately
+    },
+
+    _teardownLocal() {
+      if (this._localStream) {
+        this._localStream.getTracks().forEach((t) => t.stop());
+        this._localStream = null;
+      }
+    },
+
+    // -- Heartbeat -------------------------------------------
+    _startHeartbeat() {
+      this._sendHeartbeat();
+      this._heartbeatTimer = setInterval(() => this._sendHeartbeat(), 5000);
+    },
+    _stopHeartbeat() {
+      if (this._heartbeatTimer) { clearInterval(this._heartbeatTimer); this._heartbeatTimer = null; }
+    },
+    async _sendHeartbeat() {
+      if (!this.inCall || !this.activeConversation) return;
+      try {
+        await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/call/heartbeat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          body: JSON.stringify({ media_state: this._mediaState() }),
+        });
+      } catch (e) { /* transient */ }
+    },
+
+    // -- Peer connections ------------------------------------
+    _ensurePeer(peerId, initiateOffer) {
+      if (this._peers[peerId]) return this._peers[peerId];
+      const pc = new RTCPeerConnection({ iceServers: this._loadIceServers() });
+      const audioEl = document.createElement('audio');
+      audioEl.autoplay = true;
+      audioEl.dataset.peer = String(peerId);
+      document.body.appendChild(audioEl);
+
+      if (this._localStream) {
+        this._localStream.getTracks().forEach((t) => pc.addTrack(t, this._localStream));
+      }
+      pc.ontrack = (ev) => { audioEl.srcObject = ev.streams[0]; };
+      pc.onicecandidate = (ev) => {
+        if (ev.candidate) this._sendSignal(peerId, { type: 'ice', candidate: ev.candidate });
+      };
+      pc.oniceconnectionstatechange = () => {
+        if (['failed', 'closed', 'disconnected'].includes(pc.iceConnectionState)) {
+          // Let cleanup / participant_left handle teardown.
+        }
+      };
+      this._peers[peerId] = { pc, audioEl };
+      if (initiateOffer) {
+        pc.createOffer()
+          .then((offer) => pc.setLocalDescription(offer)
+            .then(() => this._sendSignal(peerId, { type: 'offer', sdp: pc.localDescription })));
+      }
+      return this._peers[peerId];
+    },
+
+    _closePeer(peerId) {
+      const peer = this._peers[peerId];
+      if (!peer) return;
+      try { peer.pc.close(); } catch (e) { /* ignore */ }
+      if (peer.audioEl && peer.audioEl.parentNode) peer.audioEl.parentNode.removeChild(peer.audioEl);
+      delete this._peers[peerId];
+    },
+
+    async _sendSignal(toUserId, signal) {
+      if (!this.activeConversation) return;
+      try {
+        await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/call/signal`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
+          body: JSON.stringify({ to_user_id: toUserId, signal }),
+        });
+      } catch (e) { /* transient */ }
+    },
+
+    // -- SSE handlers (wired in index.html) ------------------
+    onCallStarted(detail) {
+      if (!this.activeConversation || detail.conversation_id !== this.activeConversation.uuid) return;
+      if (this.inCall) return;
+      // Show the "call in progress" banner; fetch authoritative state.
+      this._refreshCallState();
+    },
+    onCallEnded(detail) {
+      this.callSession = null;
+      if (this.inCall && (!detail || detail.session_id === (this.callSession && this.callSession.session_id))) {
+        // If our own session ended under us, tear down locally.
+      }
+      if (this.inCall) this.leaveCall();
+      if (typeof this._refreshMessagesPreservingScroll === 'function' && this.activeConversation) {
+        this._refreshMessagesPreservingScroll();
+      }
+    },
+    onCallParticipantJoined(detail) {
+      if (!this.inCall) { this._refreshCallState(); return; }
+      const id = detail.user_id;
+      if (id === this.currentUserId) return;
+      if (!this.callParticipants.find((p) => p.user_id === id)) {
+        this.callParticipants.push({ user_id: id, display_name: detail.display_name, media_state: detail.media_state });
+      }
+      // Existing participant (me) offers to the newcomer.
+      if (window.chatCallShouldOffer(this.currentUserId, id)) {
+        this._ensurePeer(id, /* initiateOffer */ true);
+      }
+    },
+    onCallParticipantLeft(detail) {
+      this.callParticipants = this.callParticipants.filter((p) => p.user_id !== detail.user_id);
+      this._closePeer(detail.user_id);
+      if (!this.inCall) this._refreshCallState();
+    },
+    onCallParticipantUpdated(detail) {
+      const p = this.callParticipants.find((x) => x.user_id === detail.user_id);
+      if (p) p.media_state = detail.media_state;
+    },
+    async onCallSignal(detail) {
+      if (!this.inCall) return;
+      const fromId = detail.from_user_id;
+      const signal = detail.signal || {};
+      const peer = this._ensurePeer(fromId, /* initiateOffer */ false);
+      const pc = peer.pc;
+      if (signal.type === 'offer') {
+        await pc.setRemoteDescription(signal.sdp);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        this._sendSignal(fromId, { type: 'answer', sdp: pc.localDescription });
+      } else if (signal.type === 'answer') {
+        await pc.setRemoteDescription(signal.sdp);
+      } else if (signal.type === 'ice' && signal.candidate) {
+        try { await pc.addIceCandidate(signal.candidate); } catch (e) { /* ignore */ }
+      }
+    },
+
+    async _refreshCallState() {
+      if (!this.activeConversation) return;
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/call`);
+        const data = await resp.json();
+        this.callSession = data.active ? data : null;
+        this.callParticipants = data.active ? (data.participants || []) : [];
+      } catch (e) { /* transient */ }
+    },
+  };
+};

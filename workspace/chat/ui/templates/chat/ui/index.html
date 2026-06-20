@@ -156,46 +156,60 @@ x-data="chatApp({{ user.id }})"
       </ul>
     </div>
 
-    <!-- In-call panel: same menu idiom as the rest of the sidebar (see
-         drawer_item.html). Expanded shows an "In call" row that opens the call
-         conversation, plus Mute and Leave. Collapsed / mobile shows just the
-         Mute and Leave icons stacked, like the other sidebar entries. -->
+    <!-- In-call panel. Desktop (expanded sidebar): one unified card with call
+         info, participants and the controls. Mobile / collapsed sidebar: just
+         the Mute and Leave icons stacked, like the other sidebar entries. -->
     <div x-show="inCall" x-cloak class="border-t border-base-300 px-3 py-2 mb-2">
-      <ul class="menu p-0">
-        <!-- In call -> open the call conversation (expanded only) -->
-        <li class="list-none" x-show="!collapsed" x-cloak>
-          <button type="button"
-                  class="flex items-center w-full text-left p-2 gap-3 text-base rounded-lg transition-colors text-success hover:bg-success/10"
-                  @click="callSession && selectConversationById(callSession.conversation_id)"
-                  title="Go to the call conversation">
-            <i data-lucide="phone-call" class="w-5 h-5 flex-shrink-0"></i>
-            <span class="flex items-center gap-2 flex-1 min-w-0">
-              <span class="font-semibold">In call</span>
-              <span class="badge badge-success badge-sm" x-text="callParticipants.length"></span>
-            </span>
+      <!-- Desktop: unified call card -->
+      <div x-show="!collapsed" x-cloak
+           class="rounded-lg border border-base-300 bg-base-100 p-2 flex flex-col gap-2">
+        <button type="button"
+                class="flex items-center gap-2 text-left -m-0.5 p-0.5 rounded-md hover:bg-base-200 transition-colors"
+                @click="callSession && selectConversationById(callSession.conversation_id)"
+                title="Go to the call conversation">
+          <i data-lucide="phone-call" class="w-4 h-4 text-success flex-shrink-0"></i>
+          <div class="flex flex-col min-w-0 leading-tight flex-1">
+            <span class="text-xs font-semibold text-success">In call</span>
+            <span class="text-[0.6rem] text-base-content/60 truncate" x-text="callParticipants.length + ' participant' + (callParticipants.length > 1 ? 's' : '')"></span>
+          </div>
+          <div class="flex -space-x-2">
+            <template x-for="p in callParticipants.slice(0, 3)" :key="p.user_id">
+              <div class="tooltip" :data-tip="p.display_name + (p.media_state && p.media_state.audio === false ? ' (muted)' : '')">
+                <div x-html="window.userAvatarHtml(p.user_id, p.display_name, 'w-6 h-6 text-[0.6rem]', { presence: false })"></div>
+              </div>
+            </template>
+          </div>
+        </button>
+        <div class="flex items-center gap-2">
+          <button class="btn btn-sm btn-ghost flex-1 gap-1.5" :class="isMuted ? 'text-error' : ''" @click="toggleMute()">
+            <span x-show="!isMuted" class="contents"><i data-lucide="mic" class="w-4 h-4"></i></span>
+            <span x-show="isMuted" x-cloak class="contents"><i data-lucide="mic-off" class="w-4 h-4"></i></span>
+            <span x-text="isMuted ? 'Unmute' : 'Mute'"></span>
           </button>
-        </li>
-        <!-- Mute / Unmute -->
-        <li class="list-none" :class="collapsed ? 'flex justify-center' : ''">
+          <button class="btn btn-sm btn-error flex-1 gap-1.5" @click="leaveCall()">
+            <i data-lucide="phone-off" class="w-4 h-4"></i>
+            Leave
+          </button>
+        </div>
+      </div>
+      <!-- Mobile / collapsed sidebar: just the two controls stacked -->
+      <ul x-show="collapsed" x-cloak class="menu p-0">
+        <li class="list-none flex justify-center">
           <button type="button"
-                  class="flex items-center w-full text-left text-base rounded-lg transition-colors"
-                  :class="[collapsed ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3', isMuted ? 'text-error hover:bg-error/10' : 'text-base-content/70 hover:bg-base-content/5 hover:text-base-content']"
+                  class="flex items-center justify-center w-10 h-10 !p-0 rounded-lg transition-colors"
+                  :class="isMuted ? 'text-error hover:bg-error/10' : 'text-base-content/70 hover:bg-base-content/5 hover:text-base-content'"
                   @click="toggleMute()"
-                  :title="collapsed ? (isMuted ? 'Unmute' : 'Mute') : ''">
+                  :title="isMuted ? 'Unmute' : 'Mute'">
             <span x-show="!isMuted" class="contents"><i data-lucide="mic" class="w-5 h-5 flex-shrink-0"></i></span>
             <span x-show="isMuted" x-cloak class="contents"><i data-lucide="mic-off" class="w-5 h-5 flex-shrink-0"></i></span>
-            <span x-show="!collapsed" x-transition class="flex-1" x-text="isMuted ? 'Unmute' : 'Mute'"></span>
           </button>
         </li>
-        <!-- Leave -->
-        <li class="list-none" :class="collapsed ? 'flex justify-center' : ''">
+        <li class="list-none flex justify-center">
           <button type="button"
-                  class="flex items-center w-full text-left text-base rounded-lg transition-colors text-error hover:bg-error/10"
-                  :class="collapsed ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3'"
+                  class="flex items-center justify-center w-10 h-10 !p-0 rounded-lg transition-colors text-error hover:bg-error/10"
                   @click="leaveCall()"
-                  :title="collapsed ? 'Leave call' : ''">
+                  title="Leave call">
             <i data-lucide="phone-off" class="w-5 h-5 flex-shrink-0"></i>
-            <span x-show="!collapsed" x-transition class="flex-1">Leave call</span>
           </button>
         </li>
       </ul>

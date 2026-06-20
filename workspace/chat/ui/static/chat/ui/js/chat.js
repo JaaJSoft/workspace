@@ -49,6 +49,11 @@ function chatApp(currentUserId) {
       // only fire for calls that start while you are already here.
       this.$watch('activeConversation', () => this._syncCallBanner?.());
 
+      // Clean up an in-progress call when the page goes away (navigating to
+      // another module, reload, tab close) so others are not left waiting for
+      // the ~1 min stale-call sweep.
+      window.addEventListener('pagehide', () => { if (this.inCall) this._leaveBeacon?.(); });
+
       // Hydrate chat preferences from the server once the initial fetch
       // resolved, and keep listening for cross-component updates fired
       // by the preferences popover/dialog.

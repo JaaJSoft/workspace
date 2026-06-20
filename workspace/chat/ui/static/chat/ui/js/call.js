@@ -126,7 +126,9 @@ window.chatCallMixin = function chatCallMixin() {
     },
 
     async leaveCall() {
-      const convId = this.activeConversation && this.activeConversation.uuid;
+      // Leave the call's own conversation, captured before we clear the session
+      // (you may be viewing a different conversation while in the call).
+      const convId = this.callSession && this.callSession.conversation_id;
       this._stopHeartbeat();
       for (const id of Object.keys(this._peers)) this._closePeer(Number(id));
       this._teardownLocal();
@@ -142,6 +144,21 @@ window.chatCallMixin = function chatCallMixin() {
           });
         } catch (e) { /* best effort */ }
       }
+    },
+
+    // Best-effort clean leave when the page is unloading (navigation to another
+    // module, reload, tab close). keepalive lets the POST outlive the page and,
+    // unlike sendBeacon, carries the CSRF header the endpoint requires.
+    _leaveBeacon() {
+      const convId = this.callSession && this.callSession.conversation_id;
+      if (!convId) return;
+      try {
+        fetch(`/api/v1/chat/conversations/${convId}/call/leave`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': this._csrf() },
+          keepalive: true,
+        });
+      } catch (e) { /* page is going away */ }
     },
 
     toggleMute() {
@@ -168,9 +185,13 @@ window.chatCallMixin = function chatCallMixin() {
       if (this._heartbeatTimer) { clearInterval(this._heartbeatTimer); this._heartbeatTimer = null; }
     },
     async _sendHeartbeat() {
-      if (!this.inCall || !this.activeConversation) return;
+      // Always target the call's own conversation, not the one being viewed:
+      // you stay in the call while browsing elsewhere, so a heartbeat to the
+      // active conversation would miss the call and let the sweep reap you.
+      const convId = this.callSession && this.callSession.conversation_id;
+      if (!this.inCall || !convId) return;
       try {
-        await fetch(`/api/v1/chat/conversations/${this.activeConversation.uuid}/call/heartbeat`, {
+        await fetch(`/api/v1/chat/conversations/${convId}/call/heartbeat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf() },
           body: JSON.stringify({ media_state: this._mediaState() }),

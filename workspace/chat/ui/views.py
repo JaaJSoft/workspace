@@ -218,6 +218,15 @@ def group_messages(messages, current_user):
             )
             current_date = msg_date
 
+        # System messages (e.g. call start/end) never group with user messages
+        # and render as their own centered row.
+        if msg.kind == Message.Kind.SYSTEM:
+            if current_group:
+                groups.append(current_group)
+                current_group = None
+            groups.append({"type": "system", "message": msg})
+            continue
+
         # Check if this message continues the current group
         can_group = (
             current_group

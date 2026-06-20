@@ -30,6 +30,12 @@ x-data="chatApp({{ user.id }})"
 @chat-link_preview.window="handleSSELinkPreview($event.detail)"
 @chat-read.window="handleSSERead($event.detail)"
 @chat-typing.window="handleSSETyping($event.detail)"
+@chat-call_started.window="onCallStarted($event.detail)"
+@chat-call_participant_joined.window="onCallParticipantJoined($event.detail)"
+@chat-call_participant_left.window="onCallParticipantLeft($event.detail)"
+@chat-call_participant_updated.window="onCallParticipantUpdated($event.detail)"
+@chat-call_ended.window="onCallEnded($event.detail)"
+@chat-call_signal.window="onCallSignal($event.detail)"
 @keydown.window="
   if ($event.altKey && $event.key === 'n') { $event.preventDefault(); showNewConversationDialog(); }
   if (($event.ctrlKey || $event.metaKey) && $event.key === 'f' && activeConversation) { $event.preventDefault(); toggleSearchPanel(); }
@@ -226,6 +232,14 @@ x-data="chatApp({{ user.id }})"
         <div class="flex items-center gap-0.5">
           <button
             class="btn btn-ghost btn-sm btn-square"
+            @click="startOrJoinCall()"
+            :disabled="inCall || joiningCall"
+            title="Start or join a call"
+          >
+            <i data-lucide="phone" class="w-4 h-4"></i>
+          </button>
+          <button
+            class="btn btn-ghost btn-sm btn-square"
             :class="showSearchPanel ? 'bg-base-200' : ''"
             @click="toggleSearchPanel()"
             title="Search in conversation (Ctrl+F)"
@@ -250,6 +264,37 @@ x-data="chatApp({{ user.id }})"
       <div class="flex-1 flex min-h-0 min-w-0">
         <!-- Messages column -->
         <div class="flex-1 flex flex-col min-w-0 relative">
+          <!-- Call bar -->
+          <div x-show="callBannerVisible() || inCall" x-cloak
+               class="px-4 py-2 border-b border-base-300 flex items-center gap-3"
+               :class="inCall ? 'bg-info/10' : 'bg-base-200'">
+            <i data-lucide="phone" class="w-4 h-4 text-info flex-shrink-0"></i>
+            <!-- Not in call: prompt to join -->
+            <template x-if="!inCall">
+              <div class="flex items-center gap-2 flex-1 min-w-0">
+                <span class="text-sm" x-text="'Call in progress' + (callParticipants.length ? ' - ' + callParticipants.length + ' participant' + (callParticipants.length > 1 ? 's' : '') : '')"></span>
+                <button class="btn btn-info btn-xs ml-auto" @click="startOrJoinCall()" :disabled="joiningCall">Join</button>
+              </div>
+            </template>
+            <!-- In call: participants + controls -->
+            <template x-if="inCall">
+              <div class="flex items-center gap-2 flex-1 min-w-0">
+                <div class="flex -space-x-2">
+                  <template x-for="p in callParticipants" :key="p.user_id">
+                    <div class="tooltip" :data-tip="p.display_name + (p.media_state && p.media_state.audio === false ? ' (muted)' : '')">
+                      <div x-html="window.userAvatarHtml(p.user_id, p.display_name, 'w-7 h-7 text-[0.6rem]', { presence: false })"></div>
+                    </div>
+                  </template>
+                </div>
+                <div class="ml-auto flex items-center gap-1">
+                  <button class="btn btn-ghost btn-xs btn-square" @click="toggleMute()" :class="isMuted ? 'text-error' : ''" :title="isMuted ? 'Unmute' : 'Mute'">
+                    <i :data-lucide="isMuted ? 'mic-off' : 'mic'" class="w-4 h-4"></i>
+                  </button>
+                  <button class="btn btn-error btn-xs" @click="leaveCall()">Leave</button>
+                </div>
+              </div>
+            </template>
+          </div>
           <!-- Pinned messages banner -->
           <div x-show="pinnedMessages.length > 0" x-cloak
                class="px-4 py-2 bg-warning/10 border-b border-warning/20 flex items-center gap-2 cursor-pointer hover:bg-warning/15 transition-colors"
@@ -744,6 +789,7 @@ x-data="chatApp({{ user.id }})"
 
 <!-- Embedded conversation data for fast Alpine init -->
 {{ conversations|json_script:"conversations-data" }}
+{{ ice_servers|json_script:"call-ice-servers-data" }}
 {% if initial_conversation_uuid %}<script id="initial-conversation" type="application/json">"{{ initial_conversation_uuid }}"</script>{% endif %}
 {% endblock %}
 
@@ -757,5 +803,6 @@ x-data="chatApp({{ user.id }})"
 <script src="{% static 'chat/ui/js/panels.js' %}"></script>
 <script src="{% static 'chat/ui/js/bot.js' %}"></script>
 <script src="{% static 'chat/ui/js/input.js' %}"></script>
+<script src="{% static 'chat/ui/js/call.js' %}"></script>
 <script src="{% static 'chat/ui/js/chat.js' %}"></script>
 {% endblock %}

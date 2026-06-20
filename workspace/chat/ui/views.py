@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import OuterRef, Prefetch, Subquery
 from django.http import HttpResponse, HttpResponseForbidden
@@ -162,6 +163,7 @@ def chat_view(request, conversation_uuid=None):
             "initial_conversation_uuid": str(conversation_uuid)
             if conversation_uuid
             else "",
+            "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
         },
     )
 

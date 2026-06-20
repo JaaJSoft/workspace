@@ -8,6 +8,12 @@ reaped without a clean "leave". Lifecycle mutations fan out cache events via
 
 from django.conf import settings
 from django.core.cache import cache
+from django.db import transaction
+from django.utils import timezone
+
+from workspace.core.sse_registry import notify_sse
+
+from .call_signaling import enqueue_event
 
 DEFAULT_MEDIA_STATE = {"audio": True}
 
@@ -53,3 +59,193 @@ def drop_presence(session_id, user_id):
     if data and str(user_id) in data:
         del data[str(user_id)]
         cache.set(key, data, presence_ttl())
+
+
+class CallFull(Exception):
+    """Raised when a join would exceed CHAT_CALL_MAX_PARTICIPANTS."""
+
+
+def max_participants():
+    return int(getattr(settings, "CHAT_CALL_MAX_PARTICIPANTS", 6))
+
+
+def get_active_call(conversation_id):
+    from ..models import CallSession
+
+    return (
+        CallSession.objects.filter(
+            conversation_id=conversation_id, state=CallSession.State.ACTIVE
+        )
+        .select_related("system_message", "started_by")
+        .first()
+    )
+
+
+def list_active_participants(session):
+    from ..models import CallParticipant
+
+    return list(
+        CallParticipant.objects.filter(session=session, left_at__isnull=True)
+        .select_related("user")
+        .order_by("joined_at")
+    )
+
+
+def _active_member_ids(conversation_id):
+    from ..models import ConversationMember
+
+    return list(
+        ConversationMember.objects.filter(
+            conversation_id=conversation_id, left_at__isnull=True
+        ).values_list("user_id", flat=True)
+    )
+
+
+def _broadcast(conversation_id, event, data, exclude_user_id=None):
+    """Fan a call event out to every active conversation member, then wake them."""
+    for uid in _active_member_ids(conversation_id):
+        if exclude_user_id is not None and uid == exclude_user_id:
+            continue
+        enqueue_event(uid, event, data)
+        notify_sse("chat", uid)
+
+
+def _render_system_call_body(state, duration_label=None):
+    """Plain-text fallback body. The visible bubble is rendered by the template
+    from tool_data; body keeps the message readable in previews/search."""
+    if state == "ended":
+        return f"Call ended - {duration_label}" if duration_label else "Call ended"
+    return "Call started"
+
+
+@transaction.atomic
+def start_or_join_call(user, conversation_id):
+    from ..models import CallParticipant, CallSession, Message
+
+    session = (
+        CallSession.objects.select_for_update()
+        .filter(conversation_id=conversation_id, state=CallSession.State.ACTIVE)
+        .first()
+    )
+    created_session = False
+    if session is None:
+        session = CallSession.objects.create(
+            conversation_id=conversation_id, started_by=user
+        )
+        msg = Message.objects.create(
+            conversation_id=conversation_id,
+            author=user,
+            kind=Message.Kind.SYSTEM,
+            body=_render_system_call_body("active"),
+            tool_data={
+                "type": "call",
+                "session_id": str(session.uuid),
+                "media_kind": session.media_kind,
+                "state": "active",
+            },
+        )
+        session.system_message = msg
+        session.save(update_fields=["system_message"])
+        created_session = True
+
+    # Capacity check counts currently-active participants (excluding a rejoin).
+    active_qs = CallParticipant.objects.filter(session=session, left_at__isnull=True)
+    if not active_qs.filter(user=user).exists():
+        if active_qs.count() >= max_participants():
+            raise CallFull()
+
+    participant, _ = CallParticipant.objects.get_or_create(
+        session=session, user=user, defaults={"left_at": None}
+    )
+    if participant.left_at is not None:
+        participant.left_at = None
+        participant.save(update_fields=["left_at"])
+
+    touch_presence(session.uuid, user.id, DEFAULT_MEDIA_STATE)
+
+    display_name = user.get_full_name() or user.username
+    if created_session:
+        _broadcast(
+            conversation_id,
+            "call_started",
+            {
+                "session_id": str(session.uuid),
+                "conversation_id": str(conversation_id),
+                "started_by": user.id,
+                "media_kind": session.media_kind,
+            },
+        )
+    else:
+        _broadcast(
+            conversation_id,
+            "call_participant_joined",
+            {
+                "session_id": str(session.uuid),
+                "user_id": user.id,
+                "display_name": display_name,
+                "media_state": DEFAULT_MEDIA_STATE,
+            },
+        )
+
+    return session, participant, created_session
+
+
+@transaction.atomic
+def leave_call(user, conversation_id):
+    from ..models import CallParticipant, CallSession
+
+    session = (
+        CallSession.objects.select_for_update()
+        .filter(conversation_id=conversation_id, state=CallSession.State.ACTIVE)
+        .first()
+    )
+    if session is None:
+        return None
+
+    CallParticipant.objects.filter(
+        session=session, user=user, left_at__isnull=True
+    ).update(left_at=timezone.now())
+    drop_presence(session.uuid, user.id)
+
+    if CallParticipant.objects.filter(session=session, left_at__isnull=True).exists():
+        _broadcast(
+            conversation_id,
+            "call_participant_left",
+            {"session_id": str(session.uuid), "user_id": user.id},
+        )
+        return session
+
+    return _end_call(session)
+
+
+def _end_call(session):
+    """Mark a session ended, finalize its system message, broadcast call_ended."""
+    from ..models import CallSession
+
+    session.state = CallSession.State.ENDED
+    session.ended_at = timezone.now()
+    session.save(update_fields=["state", "ended_at"])
+
+    duration = session.duration_seconds or 0
+    label = format_duration(duration)
+    msg = session.system_message
+    if msg is not None:
+        data = dict(msg.tool_data or {})
+        data["state"] = "ended"
+        data["duration_seconds"] = duration
+        data["duration_label"] = label
+        msg.tool_data = data
+        msg.body = _render_system_call_body("ended", label)
+        msg.edited_at = timezone.now()
+        msg.save(update_fields=["tool_data", "body", "edited_at"])
+
+    _broadcast(
+        session.conversation_id,
+        "call_ended",
+        {
+            "session_id": str(session.uuid),
+            "duration": duration,
+            "duration_label": label,
+        },
+    )
+    return session

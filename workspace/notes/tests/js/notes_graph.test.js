@@ -6,6 +6,7 @@ const ctx = loadScript('workspace/notes/ui/static/notes/ui/js/notes_graph.js');
 const nodeColorKey = ctx.notesGraph.nodeColorKey;
 const fitZoom = ctx.notesGraph.fitZoom;
 const linkActive = ctx.notesGraph.linkActive;
+const makeFitLatch = ctx.notesGraph.makeFitLatch;
 
 test('favorite takes precedence over journal and regular', () => {
   assert.equal(nodeColorKey({ is_favorite: true, parent: 'J' }, 'J'), 'favorite');
@@ -48,4 +49,36 @@ test('linkActive: active only when BOTH endpoints are in the neighbourhood', () 
   assert.equal(linkActive('h', nb, 'n1', 'n2'), true); // neighbour <-> neighbour
   assert.equal(linkActive('h', nb, 'n1', 'x'), false); // neighbour -> unrelated: dimmed
   assert.equal(linkActive('h', nb, 'x', 'y'), false); // unrelated link: dimmed
+});
+
+test('fitLatch: armed then consumed once frames the layout, then stops', () => {
+  const latch = makeFitLatch();
+  latch.arm();
+  assert.equal(latch.consume(), true);  // engine settles -> fit fires once
+  assert.equal(latch.consume(), false); // a reheat/restop must not re-fit
+});
+
+test('fitLatch: consume without arm never fits', () => {
+  const latch = makeFitLatch();
+  assert.equal(latch.consume(), false);
+});
+
+// Regression: the user pans/zooms while the force layout is still cooling, then
+// a late onEngineStop fires. Before the fix the pending fit would snap the view
+// back to fit ("fit content triggers itself at random"); cancel() drops it.
+test('fitLatch: a user takeover before the engine settles cancels the auto-fit', () => {
+  const latch = makeFitLatch();
+  latch.arm();         // load: queue a one-shot fit
+  assert.equal(latch.isPending(), true);
+  latch.cancel();      // user pans/zooms/drags -> takes over the camera
+  assert.equal(latch.isPending(), false);
+  assert.equal(latch.consume(), false); // late onEngineStop must NOT re-fit
+});
+
+test('fitLatch: re-arming after a cancel restores the one-shot fit', () => {
+  const latch = makeFitLatch();
+  latch.arm();
+  latch.cancel();
+  latch.arm();         // a fresh load (scope/kind/search/tag change) re-arms
+  assert.equal(latch.consume(), true);
 });

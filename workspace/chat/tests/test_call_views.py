@@ -99,6 +99,16 @@ class CallViewTests(TestCase):
             calls.get_presence(session.uuid)[str(self.a.id)], {"audio": False}
         )
 
+    def test_signal_with_boolean_user_id_rejected(self):
+        self.client.force_authenticate(self.a)
+        self.client.post(self._url("/join"))
+        resp = self.client.post(
+            self._url("/signal"),
+            {"to_user_id": True, "signal": {"type": "offer"}},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
     def test_leave_ends_solo_call(self):
         self.client.force_authenticate(self.a)
         self.client.post(self._url("/join"))

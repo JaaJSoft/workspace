@@ -74,7 +74,11 @@ class CallSignalView(APIView):
 
         to_user_id = request.data.get("to_user_id")
         signal = request.data.get("signal")
-        if not isinstance(to_user_id, int) or not isinstance(signal, dict):
+        if (
+            isinstance(to_user_id, bool)
+            or not isinstance(to_user_id, int)
+            or not isinstance(signal, dict)
+        ):
             return Response(
                 {"detail": "to_user_id (int) and signal (object) are required."},
                 status=status.HTTP_400_BAD_REQUEST,

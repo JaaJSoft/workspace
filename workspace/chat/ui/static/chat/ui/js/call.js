@@ -116,6 +116,13 @@ window.chatCallMixin = function chatCallMixin() {
         this._ensurePeer(id, /* initiateOffer */ false);
       }
       this._startHeartbeat();
+
+      // The "Call started" system message is authored by us, and the SSE stream
+      // excludes our own messages, so it is never pushed back to us. Refresh the
+      // message list so the initiator sees it too, like the other participants.
+      if (typeof this._refreshMessagesPreservingScroll === 'function' && this.activeConversation) {
+        this._refreshMessagesPreservingScroll();
+      }
     },
 
     async leaveCall() {

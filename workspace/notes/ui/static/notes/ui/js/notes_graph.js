@@ -73,6 +73,7 @@ let _state = {
   scope: 'mine',
   kind: 'all',
   search: '',
+  tags: [],
   journalUuid: null,
   notesRoot: null,
   onNodeClick: null,
@@ -240,6 +241,9 @@ async function _load() {
   }
   if (under) params.push('under=' + encodeURIComponent(under));
   if (_state.search) params.push('search=' + encodeURIComponent(_state.search));
+  if (_state.tags && _state.tags.length) {
+    params.push('tags=' + encodeURIComponent(_state.tags.join(',')));
+  }
   const url = '/api/v1/files/graph?' + params.join('&');
   try {
     const resp = await fetch(url, { credentials: 'same-origin' });
@@ -275,6 +279,7 @@ async function open(container, opts) {
   _state.scope = (opts && opts.scope) || 'mine';
   _state.kind = 'all';
   _state.search = '';
+  _state.tags = [];
   _state.journalUuid = (opts && opts.journalUuid) || null;
   _state.notesRoot = (opts && opts.notesRoot) || null;
   _state.onNodeClick = (opts && opts.onNodeClick) || null;
@@ -388,6 +393,12 @@ function setKind(kind) {
   _load();
 }
 
+// Replace the active tag filter (array of tag UUIDs). An empty array clears it.
+function setTags(tags) {
+  _state.tags = Array.isArray(tags) ? tags.slice() : [];
+  _load();
+}
+
 // Reset the camera: re-frame all nodes (undo manual pan/zoom).
 function fitView() {
   _frameGraph(400);
@@ -415,6 +426,7 @@ function destroy() {
     scope: 'mine',
     kind: 'all',
     search: '',
+    tags: [],
     journalUuid: null,
     notesRoot: null,
     onNodeClick: null,
@@ -424,4 +436,4 @@ function destroy() {
   };
 }
 
-window.notesGraph = { nodeColorKey, fitZoom, linkActive, open, setScope, setKind, setSearch, fitView, destroy };
+window.notesGraph = { nodeColorKey, fitZoom, linkActive, open, setScope, setKind, setSearch, setTags, fitView, destroy };

@@ -3,7 +3,7 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.files.models import File, FileFavorite, FileLink
+from workspace.files.models import File, FileFavorite, FileLink, FileTag, Tag
 from workspace.files.services.graph import build_file_graph
 
 User = get_user_model()
@@ -175,6 +175,50 @@ class BuildFileGraphTests(TestCase):
         self.assertNotIn(str(inside.uuid), ids)  # subtree dropped
         self.assertIn(str(self.a.uuid), ids)  # root-level note kept
 
+    def test_tags_filter_keeps_only_tagged_nodes(self):
+        # A single-tag filter keeps only nodes carrying that tag; edges drop to
+        # the surviving set (a->b is gone because a is filtered out).
+        tag = Tag.objects.create(owner=self.user, name="work")
+        FileTag.objects.create(file=self.b, tag=tag)
+        g = build_file_graph(
+            self.user, scope="mine", file_type="markdown", tags=[tag.uuid]
+        )
+        ids = {n["uuid"] for n in g["nodes"]}
+        self.assertEqual(ids, {str(self.b.uuid)})
+        self.assertEqual(g["edges"], [])
+
+    def test_tags_filter_is_or_across_tags(self):
+        # Multiple tags use OR semantics: a node matches if it carries any of them.
+        t1 = Tag.objects.create(owner=self.user, name="t1")
+        t2 = Tag.objects.create(owner=self.user, name="t2")
+        FileTag.objects.create(file=self.a, tag=t1)
+        FileTag.objects.create(file=self.c, tag=t2)
+        g = build_file_graph(
+            self.user, scope="mine", file_type="markdown", tags=[t1.uuid, t2.uuid]
+        )
+        ids = {n["uuid"] for n in g["nodes"]}
+        self.assertEqual(ids, {str(self.a.uuid), str(self.c.uuid)})
+
+    def test_tags_filter_no_duplicate_when_node_has_several_selected_tags(self):
+        # A node carrying several of the selected tags fans out one row per tag;
+        # distinct() must collapse it back to a single node.
+        t1 = Tag.objects.create(owner=self.user, name="t1")
+        t2 = Tag.objects.create(owner=self.user, name="t2")
+        FileTag.objects.create(file=self.a, tag=t1)
+        FileTag.objects.create(file=self.a, tag=t2)
+        g = build_file_graph(
+            self.user, scope="mine", file_type="markdown", tags=[t1.uuid, t2.uuid]
+        )
+        ids = [n["uuid"] for n in g["nodes"]]
+        self.assertEqual(ids.count(str(self.a.uuid)), 1)
+
+    def test_tags_none_applies_no_filter(self):
+        tag = Tag.objects.create(owner=self.user, name="work")
+        FileTag.objects.create(file=self.b, tag=tag)
+        g = build_file_graph(self.user, scope="mine", file_type="markdown", tags=None)
+        ids = {n["uuid"] for n in g["nodes"]}
+        self.assertEqual(ids, {str(self.a.uuid), str(self.b.uuid), str(self.c.uuid)})
+
     def test_nodes_are_file_serializer_dto(self):
         # A node is the canonical FileSerializer DTO, not a hand-rolled subset:
         # keyed by "uuid" (no synthetic "id") and carrying the full surface.
@@ -277,3 +321,34 @@ class FileGraphEndpointTests(APITestCase):
     def test_invalid_exclude_descendants_of_400(self):
         resp = self.client.get("/api/v1/files/graph?exclude_descendants_of=bogus")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_tags_param_filters(self):
+        tag = Tag.objects.create(owner=self.user, name="work")
+        FileTag.objects.create(file=self.a, tag=tag)
+        resp = self.client.get(f"/api/v1/files/graph?type=markdown&tags={tag.uuid}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ids = {n["uuid"] for n in resp.data["nodes"]}
+        self.assertEqual(ids, {str(self.a.uuid)})
+
+    def test_tags_param_multiple_comma_separated(self):
+        t1 = Tag.objects.create(owner=self.user, name="t1")
+        t2 = Tag.objects.create(owner=self.user, name="t2")
+        FileTag.objects.create(file=self.a, tag=t1)
+        FileTag.objects.create(file=self.b, tag=t2)
+        resp = self.client.get(
+            f"/api/v1/files/graph?type=markdown&tags={t1.uuid},{t2.uuid}"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ids = {n["uuid"] for n in resp.data["nodes"]}
+        self.assertEqual(ids, {str(self.a.uuid), str(self.b.uuid)})
+
+    def test_invalid_tags_400(self):
+        resp = self.client.get("/api/v1/files/graph?tags=bogus")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_empty_tags_is_unset(self):
+        # `?tags=` (empty) means "no filter": all nodes returned.
+        resp = self.client.get("/api/v1/files/graph?type=markdown&tags=")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ids = {n["uuid"] for n in resp.data["nodes"]}
+        self.assertEqual(ids, {str(self.a.uuid), str(self.b.uuid)})

@@ -53,6 +53,14 @@ _VALID_SCOPES = {"mine", "all"}
             type=OpenApiTypes.BOOL,
             description="true -> only favorites; false -> only non-favorites.",
         ),
+        OpenApiParameter(
+            name="tags",
+            type=OpenApiTypes.STR,
+            description=(
+                "Comma-separated tag UUIDs; keep only nodes carrying at least "
+                "one of them (OR)."
+            ),
+        ),
     ],
 )
 class FileGraphView(APIView):
@@ -68,6 +76,25 @@ class FileGraphView(APIView):
             raise ValidationError({name: "Must be a valid UUID."})
         return value
 
+    def _tags_param(self, request):
+        """Parse the comma-separated ``tags`` filter into a list of UUIDs.
+
+        Returns None when absent. A collection filter, so a malformed UUID is a
+        client bug -> 400 (per the query-param parsing contract)."""
+        raw = request.query_params.get("tags")
+        if not raw:
+            return None
+        uuids = []
+        for part in raw.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            value = parse_uuid_or_none(part)
+            if value is None:
+                raise ValidationError({"tags": "Must be a comma-separated list of UUIDs."})
+            uuids.append(value)
+        return uuids or None
+
     def get(self, request):
         scope = request.query_params.get("scope", "mine")
         if scope not in _VALID_SCOPES:
@@ -81,5 +108,6 @@ class FileGraphView(APIView):
             exclude_descendants_of=self._uuid_param(request, "exclude_descendants_of"),
             favorites=is_truthy(fav_raw) if fav_raw else None,
             search=request.query_params.get("search") or None,
+            tags=self._tags_param(request),
         )
         return Response(data)

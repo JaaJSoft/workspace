@@ -154,6 +154,8 @@ window.notesApp = function notesApp(config) {
         graphScope: 'mine',
         graphKind: 'all',
         graphSearch: '',
+        graphTags: [],
+        showGraphTagDropdown: false,
         graphLoading: false,
 
         // Folder arrays (flat lists, lazy-loaded children)
@@ -528,6 +530,8 @@ window.notesApp = function notesApp(config) {
             if (window.notesGraph && window.notesGraph.destroy) window.notesGraph.destroy();
             this.graphKind = 'all';
             this.graphSearch = '';
+            this.graphTags = [];
+            this.showGraphTagDropdown = false;
             this.graphLoading = false;
         },
 
@@ -547,6 +551,31 @@ window.notesApp = function notesApp(config) {
 
         onGraphSearch() {
             if (window.notesGraph) window.notesGraph.setSearch(this.graphSearch);
+        },
+
+        toggleGraphTag(tagUuid) {
+            const idx = this.graphTags.indexOf(tagUuid);
+            if (idx === -1) {
+                this.graphTags.push(tagUuid);
+            } else {
+                this.graphTags.splice(idx, 1);
+            }
+            if (window.notesGraph) window.notesGraph.setTags(this.graphTags);
+        },
+
+        clearGraphTags() {
+            this.graphTags = [];
+            if (window.notesGraph) window.notesGraph.setTags(this.graphTags);
+        },
+
+        // Comma-joined names of the tags currently filtering the graph, for the
+        // dropdown button label (mirrors selectedTagNames() in the note list).
+        selectedGraphTagNames() {
+            const selected = this.graphTags;
+            return this.allTags
+                .filter(function(t) { return selected.indexOf(t.uuid) !== -1; })
+                .map(function(t) { return t.name; })
+                .join(', ');
         },
 
         openNoteFromGraph(uuid) {

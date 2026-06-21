@@ -61,7 +61,30 @@ let _container = null;
 let _resizeObserver = null;
 let _palette = null;
 let _openGen = 0;
-let _fitPending = false; // one-shot: zoom-to-fit once the next layout settles
+let _userTakeoverHandler = null; // cancels a pending fit on the first user pan/zoom/drag
+
+// One-shot latch for the "zoom-to-fit once the layout settles" behaviour.
+// arm() on every (re)load, consume() when onEngineStop fires (returns true at
+// most once per arm), and cancel() the moment the user takes over the camera.
+// The d3 force layout can keep cooling for seconds after a load (and reheats on
+// node drag), so onEngineStop fires well after the data arrived; without the
+// cancel a late stop would yank a manually panned/zoomed view back to fit,
+// which reads as the fit "triggering itself at random".
+function makeFitLatch() {
+  let pending = false;
+  return {
+    arm() { pending = true; },
+    cancel() { pending = false; },
+    consume() {
+      if (!pending) return false;
+      pending = false;
+      return true;
+    },
+    isPending() { return pending; },
+  };
+}
+
+let _fitLatch = makeFitLatch();
 
 // Note card popover: desktop-only, anchored to a node's screen position.
 const _cardHasHover = (typeof window !== 'undefined' && window.matchMedia)
@@ -73,6 +96,7 @@ let _state = {
   scope: 'mine',
   kind: 'all',
   search: '',
+  tags: [],
   journalUuid: null,
   notesRoot: null,
   onNodeClick: null,
@@ -240,6 +264,9 @@ async function _load() {
   }
   if (under) params.push('under=' + encodeURIComponent(under));
   if (_state.search) params.push('search=' + encodeURIComponent(_state.search));
+  if (_state.tags && _state.tags.length) {
+    params.push('tags=' + encodeURIComponent(_state.tags.join(',')));
+  }
   const url = '/api/v1/files/graph?' + params.join('&');
   try {
     const resp = await fetch(url, { credentials: 'same-origin' });
@@ -255,7 +282,7 @@ async function _load() {
     (data.nodes || []).forEach((n) => {
       n.val = 1 + (deg[n.uuid] || 0);
     });
-    _fitPending = true; // frame the new layout once it settles (onEngineStop)
+    _fitLatch.arm(); // frame the new layout once it settles (onEngineStop)
     _fg.graphData({ nodes: data.nodes, links: data.edges });
     _applyColors();
   } catch (e) {
@@ -275,6 +302,7 @@ async function open(container, opts) {
   _state.scope = (opts && opts.scope) || 'mine';
   _state.kind = 'all';
   _state.search = '';
+  _state.tags = [];
   _state.journalUuid = (opts && opts.journalUuid) || null;
   _state.notesRoot = (opts && opts.notesRoot) || null;
   _state.onNodeClick = (opts && opts.onNodeClick) || null;
@@ -357,17 +385,22 @@ async function open(container, opts) {
           }
         }
       })
-      // Frame the graph once the force layout settles after a (re)load.
+      // Frame the graph once the force layout settles after a (re)load - unless
+      // the user already took over the camera (latch cancelled below).
       .onEngineStop(() => {
-        if (_fitPending && _fg) {
-          _fitPending = false;
-          _frameGraph(400);
-        }
+        if (_fg && _fitLatch.consume()) _frameGraph(400);
       });
     _resizeObserver = new ResizeObserver(() => {
       if (_fg && _container) _fg.width(_container.clientWidth).height(_container.clientHeight);
     });
     _resizeObserver.observe(container);
+    // A manual pan/zoom/drag means the user is steering the camera; drop any
+    // pending auto-fit so a late onEngineStop can't snap their view back. Native
+    // wheel/pointer events only fire on real interaction - the programmatic
+    // centerAt/zoom of _frameGraph doesn't dispatch them, so no false cancel.
+    _userTakeoverHandler = () => _fitLatch.cancel();
+    container.addEventListener('wheel', _userTakeoverHandler, { passive: true });
+    container.addEventListener('pointerdown', _userTakeoverHandler, { passive: true });
   }
   _fg.width(container.clientWidth).height(container.clientHeight);
   await _load();
@@ -388,6 +421,12 @@ function setKind(kind) {
   _load();
 }
 
+// Replace the active tag filter (array of tag UUIDs). An empty array clears it.
+function setTags(tags) {
+  _state.tags = Array.isArray(tags) ? tags.slice() : [];
+  _load();
+}
+
 // Reset the camera: re-frame all nodes (undo manual pan/zoom).
 function fitView() {
   _frameGraph(400);
@@ -397,7 +436,7 @@ function destroy() {
   _openGen++; // invalidate any in-flight open() / _load()
   if (window._noteCardScheduleHide) window._noteCardScheduleHide();
   _setLoading(false); // an invalidated in-flight load won't clear it (gen mismatch)
-  _fitPending = false;
+  _fitLatch.cancel();
   if (_resizeObserver) {
     _resizeObserver.disconnect();
     _resizeObserver = null;
@@ -408,13 +447,19 @@ function destroy() {
     _fg = null;
   }
   if (_container) {
+    if (_userTakeoverHandler) {
+      _container.removeEventListener('wheel', _userTakeoverHandler);
+      _container.removeEventListener('pointerdown', _userTakeoverHandler);
+    }
     _container.replaceChildren();
     _container = null;
   }
+  _userTakeoverHandler = null;
   _state = {
     scope: 'mine',
     kind: 'all',
     search: '',
+    tags: [],
     journalUuid: null,
     notesRoot: null,
     onNodeClick: null,
@@ -424,4 +469,4 @@ function destroy() {
   };
 }
 
-window.notesGraph = { nodeColorKey, fitZoom, linkActive, open, setScope, setKind, setSearch, fitView, destroy };
+window.notesGraph = { nodeColorKey, fitZoom, linkActive, makeFitLatch, open, setScope, setKind, setSearch, setTags, fitView, destroy };

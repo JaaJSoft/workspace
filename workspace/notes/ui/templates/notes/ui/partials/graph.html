@@ -32,6 +32,41 @@
           <option value="journal">Journal</option>
           <option value="regular">Regular notes</option>
         </select>
+        <!-- Tag multi-select dropdown: keep only nodes carrying a selected tag.
+             Mirrors the note-list tag filter (toggleGraphTag / graphTags). -->
+        <div class="relative flex-shrink-0" x-show="allTags.length > 0"
+             @click.outside="showGraphTagDropdown = false">
+          <button class="btn btn-sm gap-1"
+                  :class="graphTags.length > 0 ? 'btn-secondary' : 'btn-ghost'"
+                  @click="showGraphTagDropdown = !showGraphTagDropdown">
+            <i data-lucide="tag" class="w-3.5 h-3.5"></i>
+            <span class="truncate max-w-24" x-text="graphTags.length > 0 ? selectedGraphTagNames() : 'Tags'"></span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+          </button>
+          <div class="absolute left-0 top-full mt-1 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg w-56 max-h-72 overflow-hidden flex flex-col"
+               x-show="showGraphTagDropdown" x-cloak x-transition>
+            <!-- Search box: filters the list below by name (filteredGraphTags). -->
+            <div class="p-2 border-b border-base-300">
+              <input type="text" class="input input-xs input-bordered w-full"
+                     placeholder="Filter tags..." x-model="graphTagSearch"
+                     @keydown.escape.stop="graphTagSearch = ''">
+            </div>
+            <div class="overflow-y-auto py-1">
+              <button class="w-full text-left px-3 py-1.5 hover:bg-base-200 text-xs text-base-content/60"
+                      x-show="graphTags.length > 0" @click="clearGraphTags()">Clear filter</button>
+              <template x-for="tag in filteredGraphTags()" :key="tag.uuid">
+                <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-base-200 cursor-pointer text-sm">
+                  <input type="checkbox" class="checkbox checkbox-xs"
+                         :checked="graphTags.indexOf(tag.uuid) !== -1"
+                         @change="toggleGraphTag(tag.uuid)">
+                  <span class="badge badge-xs" :class="'badge-' + tag.color" x-text="tag.name"></span>
+                </label>
+              </template>
+              <div x-show="filteredGraphTags().length === 0"
+                   class="px-3 py-2 text-xs text-base-content/40">No tags found</div>
+            </div>
+          </div>
+        </div>
       </div>
       <button class="btn btn-ghost btn-sm btn-square flex-shrink-0" @click="resetGraphView()"
               aria-label="Reset view" title="Reset view">

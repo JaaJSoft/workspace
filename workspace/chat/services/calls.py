@@ -72,13 +72,35 @@ def max_participants():
 def get_active_call(conversation_id):
     from ..models import CallSession
 
-    return (
+    session = (
         CallSession.objects.filter(
             conversation_id=conversation_id, state=CallSession.State.ACTIVE
         )
         .select_related("system_message", "started_by")
         .first()
     )
+    if session is None:
+        return None
+    # Self-heal on read: a call is only really "in progress" if at least one
+    # participant still has a live heartbeat. Reconcile the durable ACTIVE row
+    # against ephemeral presence so a phantom call (tab crash, lost network,
+    # server or cache restart, or the Celery beat sweep not running) is ended on
+    # the next read instead of advertising a dead call forever. The cheap stale
+    # check avoids taking the cleanup write-lock on every healthy read.
+    if _has_stale_participants(session) and cleanup_stale_participants(session):
+        return None
+    return session
+
+
+def _has_stale_participants(session):
+    """Whether any active participant lacks a fresh heartbeat (no DB lock)."""
+    from ..models import CallParticipant
+
+    fresh = set(get_presence(session.uuid).keys())
+    active_ids = CallParticipant.objects.filter(
+        session=session, left_at__isnull=True
+    ).values_list("user_id", flat=True)
+    return any(str(uid) not in fresh for uid in active_ids)
 
 
 def list_active_participants(session):

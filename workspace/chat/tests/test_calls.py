@@ -156,6 +156,24 @@ class CleanupTests(TestCase):
         cache.clear()
         self.assertEqual(calls.end_stale_calls(), 1)
 
+    def test_get_active_call_reaps_phantom_call_on_read(self):
+        # A call whose heartbeats all expired (tab crash, lost network, server
+        # or cache restart) leaves an ACTIVE row in the DB with no live
+        # presence. The read path must self-heal so the banner stops advertising
+        # a phantom call, without depending on the Celery beat sweep running.
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        cache.clear()  # wipe heartbeats: nobody is live anymore
+        self.assertIsNone(calls.get_active_call(self.conv.uuid))
+        session.refresh_from_db()
+        self.assertEqual(session.state, CallSession.State.ENDED)
+
+    def test_get_active_call_keeps_live_call(self):
+        # A call with a fresh heartbeat must survive the self-heal read path.
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        self.assertIsNotNone(calls.get_active_call(self.conv.uuid))
+        session.refresh_from_db()
+        self.assertEqual(session.state, CallSession.State.ACTIVE)
+
     def test_serialize_call_state(self):
         session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
         state = calls.serialize_call_state(session)

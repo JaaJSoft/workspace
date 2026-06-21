@@ -16,6 +16,7 @@ test('classify from SDP candidate string', () => {
   assert.equal(ctx.chatDiagClassifyCandidate(s), 'srflx');
   const r = { candidate: 'candidate:3 1 udp 41885439 5.6.7.8 60000 typ relay raddr 1.2.3.4 rport 50001' };
   assert.equal(ctx.chatDiagClassifyCandidate(r), 'relay');
+  assert.equal(ctx.chatDiagClassifyCandidate('candidate:4 1 udp 1685987071 1.2.3.4 50002 typ prflx raddr 192.168.1.2 rport 50000'), 'prflx');
 });
 
 test('classify unknown when no type present', () => {
@@ -48,4 +49,5 @@ test('routeLane maps lanes and guards run_id', () => {
   assert.equal(ctx.chatDiagRouteLane({ lane: 'to_caller', run_id: 'r1' }, 'r1'), 'caller');
   assert.equal(ctx.chatDiagRouteLane({ lane: 'to_caller', run_id: 'OLD' }, 'r1'), null);
   assert.equal(ctx.chatDiagRouteLane(null, 'r1'), null);
+  assert.equal(ctx.chatDiagRouteLane({ lane: 'sideways', run_id: 'r1' }, 'r1'), null);
 });

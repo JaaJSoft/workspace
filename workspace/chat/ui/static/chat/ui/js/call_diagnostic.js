@@ -58,6 +58,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
     _diagPeers: { caller: null, callee: null },
     _diagStream: null,
     _diagPending: { caller: [], callee: [] }, // ICE buffered until remote desc set
+    _diagOnServerEcho: null,
 
     _diagStep(key) {
       return this.diagSteps.find((s) => s.key === key);
@@ -76,6 +77,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
     closeDiagnostic() {
       this.diagOpen = false;
       this._diagCleanup();
+      this.diagRunning = false;
     },
 
     _diagCleanup() {
@@ -89,6 +91,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
         this._diagStream.getTracks().forEach((t) => t.stop());
         this._diagStream = null;
       }
+      this._diagOnServerEcho = null;
     },
 
     async _runDiagnostic() {

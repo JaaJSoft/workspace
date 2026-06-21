@@ -144,6 +144,11 @@ window.chatCallMixin = function chatCallMixin() {
           });
         } catch (e) { /* best effort */ }
       }
+      // Hanging up clears callSession, but the call may still be ongoing with
+      // the others. Re-sync the banner for the conversation in view so a
+      // still-active call becomes joinable again right away, instead of waiting
+      // on the SSE round-trip that re-advertises it.
+      this._syncCallBanner();
     },
 
     // Best-effort clean leave when the page is unloading (navigation to another

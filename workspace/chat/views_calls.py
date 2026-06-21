@@ -8,7 +8,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .services import calls
-from .services.call_signaling import send_diagnostic_signal, send_signal
+from .services.call_signaling import (
+    DIAGNOSTIC_LANES,
+    send_diagnostic_signal,
+    send_signal,
+)
 from .services.conversations import (
     get_active_membership,
     is_active_member,
@@ -151,9 +155,8 @@ class CallDiagnosticSignalView(APIView):
         lane = request.data.get("lane")
         signal = request.data.get("signal")
         run_id = request.data.get("run_id")
-        valid_lanes = ("to_caller", "to_callee")
         if (
-            lane not in valid_lanes
+            lane not in DIAGNOSTIC_LANES
             or not isinstance(signal, dict)
             or not isinstance(run_id, str)
             or not run_id

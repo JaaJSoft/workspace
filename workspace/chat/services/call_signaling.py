@@ -59,3 +59,23 @@ def send_signal(session_id, to_user_id, from_user_id, signal):
     )
     notify_sse("chat", to_user_id)
     return envelope_id
+
+
+DIAGNOSTIC_LANES = ("to_caller", "to_callee")
+
+
+def send_diagnostic_signal(user_id, lane, signal, run_id):
+    """Echo a diagnostic WebRTC signal back to its own sender, then wake their stream.
+
+    Used by the call connection diagnostic: two local peer connections in the
+    same browser exchange SDP/ICE through the server, so this delivers the
+    signal to the originating user (not a remote peer). The ``lane`` tells the
+    client which of its two local connections the echo is destined for.
+    """
+    envelope_id = enqueue_event(
+        user_id,
+        "call_diagnostic_signal",
+        {"lane": lane, "signal": signal, "run_id": run_id},
+    )
+    notify_sse("chat", user_id)
+    return envelope_id

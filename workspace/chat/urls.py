@@ -94,6 +94,12 @@ urlpatterns = [
         name="chat-typing",
     ),
     # Calls
+    # Call connection diagnostic (user-scoped, no conversation)
+    path(
+        "api/v1/chat/call/diagnostic/signal",
+        views_calls.CallDiagnosticSignalView.as_view(),
+        name="chat-call-diagnostic-signal",
+    ),
     path(
         "api/v1/chat/conversations/<uuid:conversation_id>/call",
         views_calls.CallStateView.as_view(),

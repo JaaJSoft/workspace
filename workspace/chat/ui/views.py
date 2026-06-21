@@ -25,6 +25,7 @@ from workspace.chat.services.conversations import (
 from workspace.chat.services.reactions import quick_reactions_for
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.ui.viewers import ViewerRegistry
+from workspace.users.services.settings import get_setting
 
 
 def _build_conversation_context(user):
@@ -164,6 +165,9 @@ def chat_view(request, conversation_uuid=None):
             if conversation_uuid
             else "",
             "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
+            "call_sounds_enabled": get_setting(
+                request.user, "chat", "call_sounds", default=True
+            ),
         },
     )
 

@@ -54,6 +54,9 @@ function chatApp(currentUserId) {
       // the ~1 min stale-call sweep.
       window.addEventListener('pagehide', () => { if (this.inCall) this._leaveBeacon?.(); });
 
+      // Apply the user's call-sound preference to the audio engine.
+      this._initCallSounds?.();
+
       // Hydrate chat preferences from the server once the initial fetch
       // resolved, and keep listening for cross-component updates fired
       // by the preferences popover/dialog.

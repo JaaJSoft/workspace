@@ -60,6 +60,22 @@ window.chatCallMixin = function chatCallMixin() {
       return this._iceServers;
     },
 
+    _initCallSounds() {
+      if (!window.chatCallSounds) return;
+      const el = document.getElementById('call-sounds-enabled-data');
+      let on = true;
+      if (el) {
+        try { on = !!JSON.parse(el.textContent); } catch (e) { on = true; }
+      }
+      window.chatCallSounds.setEnabled(on);
+    },
+
+    _playCallCue(event) {
+      if (window.chatCallSounds && window.chatCallSoundCue) {
+        window.chatCallSounds.play(window.chatCallSoundCue(event, this.isMuted));
+      }
+    },
+
     callBannerVisible() {
       return !!this.callSession && !this.inCall;
     },

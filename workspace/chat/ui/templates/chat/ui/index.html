@@ -37,6 +37,7 @@ x-data="chatApp({{ user.id }})"
 @chat-call_ended.window="onCallEnded($event.detail)"
 @chat-call_signal.window="onCallSignal($event.detail)"
 @chat-call_diagnostic_signal.window="onCallDiagnosticSignal($event.detail)"
+@chat-run-diagnostic.window="openDiagnostic()"
 @keydown.window="
   if ($event.altKey && $event.key === 'n') { $event.preventDefault(); showNewConversationDialog(); }
   if (($event.ctrlKey || $event.metaKey) && $event.key === 'f' && activeConversation) { $event.preventDefault(); toggleSearchPanel(); }
@@ -64,7 +65,8 @@ x-data="chatApp({{ user.id }})"
            'transition-all duration-300': sidebarMounted,
          }">
     <!-- Sidebar header -->
-    <div class="border-b border-base-300 py-4 px-3 relative" x-data="{ ...chatPreferences(), prefsOpen: false }">
+    <div class="border-b border-base-300 py-4 px-3 relative" x-data="{ ...chatPreferences(), prefsOpen: false }"
+         @chat-run-diagnostic.window="prefsOpen = false">
       <div class="flex items-center" :class="collapsed ? 'justify-center' : 'justify-between'">
         <h2 class="text-xl font-semibold flex items-center gap-2" :class="collapsed ? '' : 'pl-2'">
           <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
@@ -315,14 +317,6 @@ x-data="chatApp({{ user.id }})"
 
         <!-- Header actions -->
         <div class="flex items-center gap-0.5">
-          <button
-            x-show="!isBotConversation(activeConversation)"
-            class="btn btn-ghost btn-sm btn-square"
-            @click="openDiagnostic()"
-            title="Test call connection"
-          >
-            <i data-lucide="activity" class="w-4 h-4"></i>
-          </button>
           <button
             x-show="!isBotConversation(activeConversation)"
             class="btn btn-ghost btn-sm btn-square"

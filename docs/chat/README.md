@@ -40,8 +40,8 @@ production is recommended.
 
 ### Call connection diagnostic
 
-The `activity` button in a conversation header runs a non-intrusive self-test:
-microphone access, ICE/STUN-TURN reachability, and a WebRTC loopback whose
+The "Test call connection" button in the chat preferences runs a non-intrusive
+self-test: microphone access, ICE/STUN-TURN reachability, and a WebRTC loopback whose
 signaling round-trips through `POST /api/v1/chat/call/diagnostic/signal`. It does
 not start a real call and does not notify other members.
 

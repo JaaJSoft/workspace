@@ -29,3 +29,10 @@ test('chatCallSounds exposes play and setEnabled', () => {
   ctx.chatCallSounds.play('join');
   ctx.chatCallSounds.play(null);
 });
+
+test('play is a no-op (no throw) when disabled', () => {
+  // The disabled path returns before touching Web Audio at all.
+  ctx.chatCallSounds.setEnabled(false);
+  ctx.chatCallSounds.play('join');
+  ctx.chatCallSounds.setEnabled(true); // restore for any later assertions
+});

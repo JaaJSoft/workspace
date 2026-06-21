@@ -125,6 +125,7 @@ window.chatCallMixin = function chatCallMixin() {
       this.callParticipants = data.state.participants || [];
       this.inCall = true;
       this.joiningCall = false;
+      this._playCallCue('join');
 
       // As the newcomer, wait for existing participants to offer; just create
       // peer slots for everyone already here.
@@ -145,6 +146,7 @@ window.chatCallMixin = function chatCallMixin() {
       // Leave the call's own conversation, captured before we clear the session
       // (you may be viewing a different conversation while in the call).
       const convId = this.callSession && this.callSession.conversation_id;
+      this._playCallCue('leave');
       this._stopHeartbeat();
       for (const id of Object.keys(this._peers)) this._closePeer(Number(id));
       this._teardownLocal();
@@ -188,6 +190,7 @@ window.chatCallMixin = function chatCallMixin() {
         this._localStream.getAudioTracks().forEach((t) => { t.enabled = !this.isMuted; });
       }
       this._sendHeartbeat(); // pushes the new media_state immediately
+      this._playCallCue('toggle-mute');
     },
 
     _teardownLocal() {
@@ -292,6 +295,7 @@ window.chatCallMixin = function chatCallMixin() {
       if (!window.chatCallEventForCurrentSession(detail, this.callSession)) return;
       const id = detail.user_id;
       if (id === this.currentUserId) return;
+      this._playCallCue('peer-join');
       if (!this.callParticipants.find((p) => p.user_id === id)) {
         this.callParticipants.push({ user_id: id, display_name: detail.display_name, media_state: detail.media_state });
       }
@@ -302,6 +306,9 @@ window.chatCallMixin = function chatCallMixin() {
     },
     onCallParticipantLeft(detail) {
       if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
+      if (this.inCall && detail.user_id !== this.currentUserId) {
+        this._playCallCue('peer-leave');
+      }
       this.callParticipants = this.callParticipants.filter((p) => p.user_id !== detail.user_id);
       this._closePeer(detail.user_id);
       if (!this.inCall) this._refreshCallState();

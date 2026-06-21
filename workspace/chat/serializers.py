@@ -135,6 +135,8 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = [
             "uuid",
+            "kind",
+            "tool_data",
             "conversation_id",
             "author",
             "body",

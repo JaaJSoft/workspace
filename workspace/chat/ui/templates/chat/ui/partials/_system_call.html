@@ -1,0 +1,15 @@
+{% comment %}
+Centered system row for a call session. Driven by message.tool_data:
+  type="call", state="active"|"ended", duration_label (when ended).
+Visual only - no behavioral assertions in tests for this markup.
+{% endcomment %}
+<div class="flex justify-center my-3" id="msg-{{ message.uuid }}">
+  <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-base-200 text-xs text-base-content/70">
+    <i data-lucide="phone" class="w-3.5 h-3.5 text-info"></i>
+    {% if message.tool_data.state == 'ended' %}
+      <span>Call ended{% if message.tool_data.duration_label %} - {{ message.tool_data.duration_label }}{% endif %}</span>
+    {% else %}
+      <span>Call started</span>
+    {% endif %}
+  </div>
+</div>

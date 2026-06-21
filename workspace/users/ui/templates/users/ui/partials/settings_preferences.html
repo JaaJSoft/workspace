@@ -115,6 +115,31 @@
       </div>
     </div>
   </div>
+
+  <div class="card bg-base-100 border border-base-300 shadow-sm mt-4" x-data="chatPrefsForm()">
+    <div class="card-body">
+      <h2 class="card-title text-lg gap-2">
+        <i data-lucide="phone" class="w-5 h-5"></i>
+        Chat calls
+      </h2>
+      <p class="text-sm text-base-content/60 mt-1">Control sound feedback during audio calls.</p>
+
+      <div class="mt-4 space-y-3">
+        <label class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-medium">Call sounds</div>
+            <div class="text-xs text-base-content/60">Play a short sound when you join or leave a call, when someone else joins or leaves, and when you mute or unmute.</div>
+          </div>
+          <input
+            type="checkbox"
+            class="toggle toggle-primary"
+            x-model="callSounds"
+            @change="save('call_sounds', callSounds)"
+          >
+        </label>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -190,6 +215,19 @@
       showEmpty: {{ show_upcoming_empty|yesno:"true,false" }},
       save(key, value) {
         fetch('/api/v1/settings/dashboard/' + key, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ value: value }),
+        });
+      },
+    };
+  }
+
+  function chatPrefsForm() {
+    return {
+      callSounds: {{ call_sounds|yesno:"true,false" }},
+      save(key, value) {
+        fetch('/api/v1/settings/chat/' + key, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ value: value }),

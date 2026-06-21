@@ -699,6 +699,17 @@ if DEBUG:
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
 
+# --------------------------------------------------
+# Chat calls (WebRTC)
+# --------------------------------------------------
+# ICE servers (STUN/TURN) for chat calls. See workspace.common.webrtc for the
+# env-var format. Configured here so TURN can be added later without code changes.
+from workspace.common.webrtc import build_ice_servers
+
+CHAT_CALL_ICE_SERVERS = build_ice_servers()
+CHAT_CALL_MAX_PARTICIPANTS = int(os.getenv("CHAT_CALL_MAX_PARTICIPANTS", "6"))
+CHAT_CALL_PRESENCE_TTL = int(os.getenv("CHAT_CALL_PRESENCE_TTL", "12"))
+
 # Celery Beat schedule for periodic tasks
 from celery.schedules import crontab
 
@@ -734,6 +745,10 @@ CELERY_BEAT_SCHEDULE = {
     "purge-orphan-attachments": {
         "task": "chat.purge_orphan_attachments",
         "schedule": crontab(hour=4, minute=0),  # Every day at 4:00 AM
+    },
+    "end-stale-calls": {
+        "task": "chat.end_stale_calls",
+        "schedule": 60.0,  # Every minute: reap calls whose tabs all vanished
     },
     "sync-external-calendars": {
         "task": "calendar.sync_all_external_calendars",

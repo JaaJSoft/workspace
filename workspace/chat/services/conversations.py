@@ -22,6 +22,35 @@ def get_active_membership(user, conversation_id):
     ).first()
 
 
+def is_active_member(user_id, conversation_id):
+    """Whether *user_id* (a raw id, not a User object) is an active member.
+
+    Companion to ``get_active_membership`` for cases where only the id is known
+    (e.g. validating the target of a relayed signal) so membership checks stay
+    in one place.
+    """
+    from ..models import ConversationMember
+
+    return ConversationMember.objects.filter(
+        conversation_id=conversation_id,
+        user_id=user_id,
+        left_at__isnull=True,
+    ).exists()
+
+
+def is_bot_conversation(conversation_id):
+    """Whether the conversation includes an AI bot member.
+
+    Used to disable features that make no sense with a bot, such as calls.
+    """
+    from ..models import ConversationMember
+
+    return ConversationMember.objects.filter(
+        conversation_id=conversation_id,
+        user__bot_profile__isnull=False,
+    ).exists()
+
+
 @transaction.atomic
 def get_or_create_dm(user, other_user):
     """Get or create a DM conversation between two users.

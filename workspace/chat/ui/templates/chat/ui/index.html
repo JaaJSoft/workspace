@@ -233,6 +233,31 @@ x-data="chatApp({{ user.id }})"
     </div>
   </aside>
 </div>
+
+<!-- Mobile in-call controls. On mobile the sidebar (which holds the in-call
+     card) is hidden while a conversation is open, so the Mute and Leave buttons
+     inside it become unreachable during a call. Surface them as a floating
+     widget, shown only on mobile when the sidebar is hidden, so the controls
+     stay reachable. It floats above the composer (centered pill) rather than
+     covering it. -->
+<div x-show="inCall && (activeConversation || pendingInitialConvUuid)" x-cloak
+     class="lg:hidden fixed bottom-24 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-1 rounded-full border border-base-300 bg-base-200/95 backdrop-blur shadow-lg pl-1 pr-1.5 py-1">
+  <button type="button"
+          class="flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-base-300 transition-colors"
+          @click="callSession && selectConversationById(callSession.conversation_id)"
+          title="Go to the call conversation">
+    <i data-lucide="phone-call" class="w-4 h-4 text-success flex-shrink-0"></i>
+    <span class="text-xs font-semibold text-success">In call</span>
+  </button>
+  <button class="btn btn-sm btn-circle btn-ghost" :class="isMuted ? 'text-error' : ''"
+          @click="toggleMute()" :title="isMuted ? 'Unmute' : 'Mute'">
+    <span x-show="!isMuted" class="contents"><i data-lucide="mic" class="w-4 h-4"></i></span>
+    <span x-show="isMuted" x-cloak class="contents"><i data-lucide="mic-off" class="w-4 h-4"></i></span>
+  </button>
+  <button class="btn btn-sm btn-circle btn-error" @click="leaveCall()" title="Leave call">
+    <i data-lucide="phone-off" class="w-4 h-4"></i>
+  </button>
+</div>
 {% endblock %}
 
 {% block content %}

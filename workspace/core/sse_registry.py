@@ -7,6 +7,8 @@ import orjson
 from django.core.cache import cache
 from django.utils import timezone
 
+from workspace.common.logging import scrub
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,7 +92,7 @@ def notify_sse(provider_slug: str, user_id: int):
                 "Redis publish failed for SSE notify (provider=%s, user=%s), "
                 "falling back to cache",
                 provider_slug,
-                user_id,
+                scrub(user_id),
                 exc_info=True,
             )
 

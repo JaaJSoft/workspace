@@ -52,10 +52,25 @@ function chatDiagConnectionUp(connectionState, iceConnectionState) {
   );
 }
 
+function chatDiagRmsToLevel(samples) {
+  // Analyser time-domain bytes are centered on 128. Compute the RMS deviation
+  // from center (0..~1), scale so normal speech moves the bar noticeably, and
+  // clamp to a 0..100 percentage for the volume bar width.
+  if (!samples || !samples.length) return 0;
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const d = (samples[i] - 128) / 128;
+    sum += d * d;
+  }
+  const rms = Math.sqrt(sum / samples.length);
+  return Math.max(0, Math.min(100, Math.round(rms * 400)));
+}
+
 window.chatDiagClassifyCandidate = chatDiagClassifyCandidate;
 window.chatDiagSummarizeIce = chatDiagSummarizeIce;
 window.chatDiagRouteLane = chatDiagRouteLane;
 window.chatDiagConnectionUp = chatDiagConnectionUp;
+window.chatDiagRmsToLevel = chatDiagRmsToLevel;
 
 window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
   return {

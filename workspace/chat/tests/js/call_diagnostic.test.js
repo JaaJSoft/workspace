@@ -69,3 +69,30 @@ test('connectionUp: still establishing -> false', () => {
   assert.equal(ctx.chatDiagConnectionUp('new', 'new'), false);
   assert.equal(ctx.chatDiagConnectionUp('failed', 'failed'), false);
 });
+
+test('rmsToLevel: silence (centered samples) -> 0', () => {
+  const silent = new Uint8Array(16).fill(128);
+  assert.equal(ctx.chatDiagRmsToLevel(silent), 0);
+});
+
+test('rmsToLevel: empty or nullish -> 0', () => {
+  assert.equal(ctx.chatDiagRmsToLevel(new Uint8Array(0)), 0);
+  assert.equal(ctx.chatDiagRmsToLevel(null), 0);
+});
+
+test('rmsToLevel: known mid input -> proportional level', () => {
+  // (144 - 128) / 128 = 0.125 rms; 0.125 * 400 = 50.
+  const mid = new Uint8Array(16).fill(144);
+  assert.equal(ctx.chatDiagRmsToLevel(mid), 50);
+});
+
+test('rmsToLevel: full-scale signal clamps to 100', () => {
+  const loud = Uint8Array.from({ length: 16 }, (_, i) => (i % 2 ? 255 : 0));
+  assert.equal(ctx.chatDiagRmsToLevel(loud), 100);
+});
+
+test('rmsToLevel: monotonic - louder is not quieter', () => {
+  const quiet = new Uint8Array(16).fill(136); // d = 0.0625
+  const louder = new Uint8Array(16).fill(144); // d = 0.125
+  assert.ok(ctx.chatDiagRmsToLevel(louder) >= ctx.chatDiagRmsToLevel(quiet));
+});

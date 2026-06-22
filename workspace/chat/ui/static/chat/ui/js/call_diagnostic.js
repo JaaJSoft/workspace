@@ -89,6 +89,15 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
     _diagPending: { caller: [], callee: [] }, // ICE buffered until remote desc set
     _diagOnServerEcho: null,
 
+    // -- Live audio stage (shown after the loopback passes) --
+    diagLive: false,          // is the live volume/monitor stage active?
+    diagLevel: 0,             // 0..100 current volume bar level
+    diagMonitor: false,       // is "hear myself" playback unmuted?
+    _diagRemoteStream: null,  // audio received back through the loopback
+    _diagAudioCtx: null,
+    _diagAnalyser: null,
+    _diagRaf: null,
+
     _diagStep(key) {
       return this.diagSteps.find((s) => s.key === key);
     },
@@ -120,6 +129,18 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
         this._diagStream.getTracks().forEach((t) => t.stop());
         this._diagStream = null;
       }
+      if (this._diagRaf) { cancelAnimationFrame(this._diagRaf); this._diagRaf = null; }
+      this._diagAnalyser = null;
+      if (this._diagAudioCtx) {
+        try { this._diagAudioCtx.close(); } catch (e) { /* ignore */ }
+        this._diagAudioCtx = null;
+      }
+      const monEl = this.$refs && this.$refs.diagMonitorEl;
+      if (monEl) { try { monEl.pause(); } catch (e) { /* ignore */ } monEl.srcObject = null; }
+      this._diagRemoteStream = null;
+      this.diagLive = false;
+      this.diagLevel = 0;
+      this.diagMonitor = false;
       this._diagOnServerEcho = null;
     },
 
@@ -225,6 +246,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
           settled = true;
           clearTimeout(timer);
           this._diagSet('loopback', ok ? 'pass' : 'fail', detail);
+          if (ok) { this.diagLive = true; this._diagStartMeter(); }
           resolve(ok);
         };
         const timer = setTimeout(
@@ -241,6 +263,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
         callee.onicecandidate = (ev) => {
           if (ev.candidate) this._diagSendSignal('to_caller', { type: 'ice', candidate: ev.candidate });
         };
+        callee.ontrack = (ev) => { this._diagRemoteStream = ev.streams[0]; };
         const onConnected = () => {
           if (window.chatDiagConnectionUp(caller.connectionState, caller.iceConnectionState)) {
             finish(true, 'Connected end-to-end through the server.');
@@ -312,6 +335,46 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
       this._diagPending[role] = [];
       for (const cand of queued) {
         try { await pc.addIceCandidate(cand); } catch (e) { /* ignore */ }
+      }
+    },
+
+    _diagStartMeter() {
+      const stream = this._diagRemoteStream;
+      const el = this.$refs.diagMonitorEl;
+      if (!stream || !el) return; // nothing came back; bar stays flat
+      // Attach the remote stream to the (muted) audio element. This both keeps
+      // playback ready for the "hear myself" toggle and, on Chrome, pumps the
+      // remote WebRTC stream so the AnalyserNode actually receives samples.
+      el.srcObject = stream;
+      el.muted = !this.diagMonitor;
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        this._diagAudioCtx = new Ctx();
+        const source = this._diagAudioCtx.createMediaStreamSource(stream);
+        this._diagAnalyser = this._diagAudioCtx.createAnalyser();
+        this._diagAnalyser.fftSize = 256;
+        source.connect(this._diagAnalyser);
+        const buf = new Uint8Array(this._diagAnalyser.fftSize);
+        const tick = () => {
+          if (!this._diagAnalyser) return;
+          this._diagAnalyser.getByteTimeDomainData(buf);
+          this.diagLevel = window.chatDiagRmsToLevel(buf);
+          this._diagRaf = requestAnimationFrame(tick);
+        };
+        tick();
+      } catch (e) {
+        // Web Audio unavailable; the toggle still plays audio via the element.
+      }
+    },
+
+    _diagToggleMonitor() {
+      this.diagMonitor = !this.diagMonitor;
+      const el = this.$refs.diagMonitorEl;
+      if (el) el.muted = !this.diagMonitor;
+      // Browsers may start the context suspended until a user gesture; this
+      // toggle is that gesture.
+      if (this._diagAudioCtx && this._diagAudioCtx.state === 'suspended') {
+        this._diagAudioCtx.resume();
       }
     },
   };

@@ -277,6 +277,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
           if (settled) return;
           settled = true;
           clearTimeout(timer);
+          clearInterval(resend);
           // Stale run (closed/superseded): the cleanup already ran elsewhere, so
           // just resolve without touching the current run's UI or resources.
           if (this.diagRunId !== runId) { resolve(ok); return; }
@@ -298,18 +299,12 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
           25000,
         );
 
-        // Non-trickle ICE: wait for gathering to complete (null candidate), then
-        // send the full local SDP (all candidates embedded) as a single message.
-        // This cuts loopback signaling from ~20 POSTs to 2, which is far more
-        // reliable when the SSE relay is the cache-polling fallback (no Redis)
-        // rather than Redis pub/sub - a dropped trickle candidate no longer
-        // breaks the connection.
-        caller.onicecandidate = (ev) => {
-          if (!ev.candidate) this._diagSendSignal('to_callee', { type: 'offer', sdp: caller.localDescription });
-        };
-        callee.onicecandidate = (ev) => {
-          if (!ev.candidate) this._diagSendSignal('to_caller', { type: 'answer', sdp: callee.localDescription });
-        };
+        // Non-trickle ICE: the full local SDP (candidates embedded) is sent as a
+        // single message per side, so the loopback exchanges 2 messages instead
+        // of ~20 trickled candidates - far more reliable than relying on every
+        // candidate POST surviving the SSE relay. The send timing is handled by
+        // _diagSendSdp (gathering-ready or a short cap), not gathering completion,
+        // so a slow or unreachable TURN server cannot stall the offer.
         callee.ontrack = (ev) => {
           this._diagRemoteStream = ev.streams[0];
           if (this.diagLive) this._diagStartMeter();
@@ -341,12 +336,42 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
           try { caller.addTransceiver('audio'); } catch (e) { /* ignore */ }
         }
 
-        // setLocalDescription starts ICE gathering; the full offer is sent from
-        // caller.onicecandidate once gathering completes (non-trickle, above).
+        // setLocalDescription starts ICE gathering; _diagSendSdp posts the offer
+        // as soon as usable candidates are gathered (or a short cap elapses).
         caller.createOffer()
           .then((offer) => caller.setLocalDescription(offer))
+          .then(() => this._diagSendSdp(caller, 'to_callee', 'offer', runId))
           .catch(() => finish(false, 'Failed to create the loopback offer.'));
+
+        // Resend the offer until the answer arrives, so a single dropped echo on
+        // the signaling relay does not strand the loopback. The callee resends
+        // its answer when it sees a duplicate offer (see onCallDiagnosticSignal).
+        const resend = setInterval(() => {
+          if (settled || this.diagRunId !== runId) { clearInterval(resend); return; }
+          if (!caller.currentRemoteDescription && caller.localDescription) {
+            this._diagSendSignal('to_callee', { type: 'offer', sdp: caller.localDescription });
+          }
+        }, 4000);
       });
+    },
+
+    _diagSendSdp(pc, lane, type, runId) {
+      // Send pc.localDescription once ICE gathering has produced usable
+      // candidates, then stop. We do NOT wait for gathering to fully complete:
+      // completion also waits on STUN/TURN, and an unreachable TURN can delay it
+      // for many seconds. The localDescription already carries the host
+      // candidates that a same-machine loopback needs, so a short cap is safe.
+      let sent = false;
+      const send = () => {
+        if (sent || this.diagRunId !== runId || !pc.localDescription) return;
+        sent = true;
+        this._diagSendSignal(lane, { type, sdp: pc.localDescription });
+      };
+      if (pc.iceGatheringState === 'complete') { send(); return; }
+      pc.addEventListener('icegatheringstatechange', () => {
+        if (pc.iceGatheringState === 'complete') send();
+      });
+      setTimeout(send, 1500);
     },
 
     async _diagSendSignal(lane, signal) {
@@ -368,13 +393,19 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
       const signal = detail.signal || {};
       try {
         if (signal.type === 'offer') {
+          if (pc.localDescription) {
+            // We already answered this loopback; the answer echo was likely lost
+            // on the relay (the caller resent its offer). Resend the answer.
+            this._diagSendSignal('to_caller', { type: 'answer', sdp: pc.localDescription });
+            return;
+          }
           await pc.setRemoteDescription(signal.sdp);
           await this._diagFlushPending(role);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          // The full answer (with candidates) is sent from callee.onicecandidate
-          // once gathering completes (non-trickle).
+          this._diagSendSdp(pc, 'to_caller', 'answer', this.diagRunId);
         } else if (signal.type === 'answer') {
+          if (pc.currentRemoteDescription) return; // already applied (duplicate)
           await pc.setRemoteDescription(signal.sdp);
           await this._diagFlushPending(role);
         } else if (signal.type === 'ice' && signal.candidate) {

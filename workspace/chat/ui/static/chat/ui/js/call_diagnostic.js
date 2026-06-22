@@ -263,7 +263,10 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
         callee.onicecandidate = (ev) => {
           if (ev.candidate) this._diagSendSignal('to_caller', { type: 'ice', candidate: ev.candidate });
         };
-        callee.ontrack = (ev) => { this._diagRemoteStream = ev.streams[0]; };
+        callee.ontrack = (ev) => {
+          this._diagRemoteStream = ev.streams[0];
+          if (this.diagLive) this._diagStartMeter();
+        };
         const onConnected = () => {
           if (window.chatDiagConnectionUp(caller.connectionState, caller.iceConnectionState)) {
             finish(true, 'Connected end-to-end through the server.');
@@ -340,8 +343,9 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
 
     _diagStartMeter() {
       const stream = this._diagRemoteStream;
-      const el = this.$refs.diagMonitorEl;
+      const el = this.$refs && this.$refs.diagMonitorEl;
       if (!stream || !el) return; // nothing came back; bar stays flat
+      if (this._diagAudioCtx) return; // meter already running
       // Attach the remote stream to the (muted) audio element. This both keeps
       // playback ready for the "hear myself" toggle and, on Chrome, pumps the
       // remote WebRTC stream so the AnalyserNode actually receives samples.

@@ -11,7 +11,7 @@
       :checked="prefs.compactMessageView"
       @change="update('compactMessageView', $event.target.checked)">
   </label>
-  <div class="pt-2 border-t border-base-300">
+  <div class="pt-4 border-t border-base-300">
     <button type="button"
       class="btn btn-ghost btn-sm w-full justify-start gap-2 hover:text-info"
       @click="$dispatch('chat-run-diagnostic'); $el.closest('dialog')?.close()">

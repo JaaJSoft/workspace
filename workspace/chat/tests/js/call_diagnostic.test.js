@@ -96,3 +96,19 @@ test('rmsToLevel: monotonic - louder is not quieter', () => {
   const louder = new Uint8Array(16).fill(144); // d = 0.125
   assert.ok(ctx.chatDiagRmsToLevel(louder) >= ctx.chatDiagRmsToLevel(quiet));
 });
+
+test('loopbackConnected: caller connected -> true', () => {
+  assert.equal(ctx.chatDiagLoopbackConnected('connected', 'checking', 'new', 'new'), true);
+});
+
+test('loopbackConnected: callee connected while caller checking -> true', () => {
+  // Regression: in a same-machine loopback the answerer (callee) often reaches
+  // ICE 'connected' first while the caller is still 'checking'. Watching only
+  // the caller missed this and produced a false media timeout.
+  assert.equal(ctx.chatDiagLoopbackConnected('connecting', 'checking', 'connecting', 'connected'), true);
+});
+
+test('loopbackConnected: neither peer up -> false', () => {
+  assert.equal(ctx.chatDiagLoopbackConnected('connecting', 'checking', 'connecting', 'checking'), false);
+  assert.equal(ctx.chatDiagLoopbackConnected('new', 'new', 'new', 'new'), false);
+});

@@ -52,6 +52,18 @@ function chatDiagConnectionUp(connectionState, iceConnectionState) {
   );
 }
 
+function chatDiagLoopbackConnected(callerConnState, callerIceState, calleeConnState, calleeIceState) {
+  // A same-machine loopback is usable as soon as EITHER local peer reports a
+  // working candidate pair. The offerer (caller) and answerer (callee) reach
+  // 'connected' at different times - the callee frequently gets there first
+  // while the caller still shows 'checking' - so watching only one side misses
+  // the connection and produces a false media timeout.
+  return (
+    chatDiagConnectionUp(callerConnState, callerIceState) ||
+    chatDiagConnectionUp(calleeConnState, calleeIceState)
+  );
+}
+
 function chatDiagRmsToLevel(samples) {
   // Analyser time-domain bytes are centered on 128. Compute the RMS deviation
   // from center (0..~1), scale so normal speech moves the bar noticeably, and
@@ -70,6 +82,7 @@ window.chatDiagClassifyCandidate = chatDiagClassifyCandidate;
 window.chatDiagSummarizeIce = chatDiagSummarizeIce;
 window.chatDiagRouteLane = chatDiagRouteLane;
 window.chatDiagConnectionUp = chatDiagConnectionUp;
+window.chatDiagLoopbackConnected = chatDiagLoopbackConnected;
 window.chatDiagRmsToLevel = chatDiagRmsToLevel;
 
 window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
@@ -253,27 +266,37 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
           () => finish(false, serverProven
             ? 'Server relay OK, but the media connection timed out (NAT/firewall?).'
             : 'No response from the server relay.'),
-          12000,
+          25000,
         );
 
-        // ICE trickle: caller -> callee uses lane to_callee, and vice versa.
+        // Non-trickle ICE: wait for gathering to complete (null candidate), then
+        // send the full local SDP (all candidates embedded) as a single message.
+        // This cuts loopback signaling from ~20 POSTs to 2, which is far more
+        // reliable when the SSE relay is the cache-polling fallback (no Redis)
+        // rather than Redis pub/sub - a dropped trickle candidate no longer
+        // breaks the connection.
         caller.onicecandidate = (ev) => {
-          if (ev.candidate) this._diagSendSignal('to_callee', { type: 'ice', candidate: ev.candidate });
+          if (!ev.candidate) this._diagSendSignal('to_callee', { type: 'offer', sdp: caller.localDescription });
         };
         callee.onicecandidate = (ev) => {
-          if (ev.candidate) this._diagSendSignal('to_caller', { type: 'ice', candidate: ev.candidate });
+          if (!ev.candidate) this._diagSendSignal('to_caller', { type: 'answer', sdp: callee.localDescription });
         };
         callee.ontrack = (ev) => {
           this._diagRemoteStream = ev.streams[0];
           if (this.diagLive) this._diagStartMeter();
         };
         const onConnected = () => {
-          if (window.chatDiagConnectionUp(caller.connectionState, caller.iceConnectionState)) {
+          if (window.chatDiagLoopbackConnected(
+            caller.connectionState, caller.iceConnectionState,
+            callee.connectionState, callee.iceConnectionState,
+          )) {
             finish(true, 'Connected end-to-end through the server.');
           }
         };
         caller.onconnectionstatechange = onConnected;
         caller.oniceconnectionstatechange = onConnected;
+        callee.onconnectionstatechange = onConnected;
+        callee.oniceconnectionstatechange = onConnected;
 
         // Track when the first echo proves the server path is alive.
         this._diagOnServerEcho = () => {
@@ -289,9 +312,10 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
           try { caller.addTransceiver('audio'); } catch (e) { /* ignore */ }
         }
 
+        // setLocalDescription starts ICE gathering; the full offer is sent from
+        // caller.onicecandidate once gathering completes (non-trickle, above).
         caller.createOffer()
           .then((offer) => caller.setLocalDescription(offer))
-          .then(() => this._diagSendSignal('to_callee', { type: 'offer', sdp: caller.localDescription }))
           .catch(() => finish(false, 'Failed to create the loopback offer.'));
       });
     },
@@ -319,7 +343,8 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
           await this._diagFlushPending(role);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          this._diagSendSignal('to_caller', { type: 'answer', sdp: pc.localDescription });
+          // The full answer (with candidates) is sent from callee.onicecandidate
+          // once gathering completes (non-trickle).
         } else if (signal.type === 'answer') {
           await pc.setRemoteDescription(signal.sdp);
           await this._diagFlushPending(role);

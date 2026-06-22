@@ -8,7 +8,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .services import calls
-from .services.call_signaling import send_signal
+from .services.call_signaling import (
+    DIAGNOSTIC_LANES,
+    send_diagnostic_signal,
+    send_signal,
+)
 from .services.conversations import (
     get_active_membership,
     is_active_member,
@@ -139,4 +143,32 @@ class CallHeartbeatView(APIView):
                 },
                 exclude_user_id=request.user.id,
             )
+        return Response({"status": "ok"})
+
+
+@extend_schema(tags=["Chat"])
+class CallDiagnosticSignalView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Echo a diagnostic WebRTC signal back to the sender")
+    def post(self, request):
+        lane = request.data.get("lane")
+        signal = request.data.get("signal")
+        run_id = request.data.get("run_id")
+        if (
+            lane not in DIAGNOSTIC_LANES
+            or not isinstance(signal, dict)
+            or not isinstance(run_id, str)
+            or not run_id
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "lane (to_caller|to_callee), signal (object) and "
+                        "run_id (string) are required."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        send_diagnostic_signal(request.user.id, lane, signal, run_id)
         return Response({"status": "ok"})

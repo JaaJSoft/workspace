@@ -36,6 +36,7 @@ function chatApp(currentUserId) {
     ...chatBotMixin(),
     ...chatInputMixin(),
     ...chatCallMixin(),
+    ...chatCallDiagnosticMixin(),
 
     // ── Init: orchestrates first paint and global listeners ─
     async init() {

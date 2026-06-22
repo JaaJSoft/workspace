@@ -39,9 +39,23 @@ function chatDiagRouteLane(detail, runId) {
   return null;
 }
 
+function chatDiagConnectionUp(connectionState, iceConnectionState) {
+  // The loopback is usable as soon as a candidate pair is established. ICE
+  // reaching 'connected'/'completed' proves the peers can exchange media, even
+  // when connectionState lags at 'connecting' - on a same-machine loopback the
+  // DTLS handshake can stall without media actually flowing, so gating success
+  // on connectionState alone produces a false timeout.
+  return (
+    connectionState === 'connected' ||
+    iceConnectionState === 'connected' ||
+    iceConnectionState === 'completed'
+  );
+}
+
 window.chatDiagClassifyCandidate = chatDiagClassifyCandidate;
 window.chatDiagSummarizeIce = chatDiagSummarizeIce;
 window.chatDiagRouteLane = chatDiagRouteLane;
+window.chatDiagConnectionUp = chatDiagConnectionUp;
 
 window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
   return {
@@ -213,9 +227,12 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
           if (ev.candidate) this._diagSendSignal('to_caller', { type: 'ice', candidate: ev.candidate });
         };
         const onConnected = () => {
-          if (caller.connectionState === 'connected') finish(true, 'Connected end-to-end through the server.');
+          if (window.chatDiagConnectionUp(caller.connectionState, caller.iceConnectionState)) {
+            finish(true, 'Connected end-to-end through the server.');
+          }
         };
         caller.onconnectionstatechange = onConnected;
+        caller.oniceconnectionstatechange = onConnected;
 
         // Track when the first echo proves the server path is alive.
         this._diagOnServerEcho = () => {

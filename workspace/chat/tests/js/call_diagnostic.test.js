@@ -51,3 +51,21 @@ test('routeLane maps lanes and guards run_id', () => {
   assert.equal(ctx.chatDiagRouteLane(null, 'r1'), null);
   assert.equal(ctx.chatDiagRouteLane({ lane: 'sideways', run_id: 'r1' }, 'r1'), null);
 });
+
+test('connectionUp: connectionState connected -> true', () => {
+  assert.equal(ctx.chatDiagConnectionUp('connected', 'checking'), true);
+});
+
+test('connectionUp: iceConnectionState connected or completed -> true', () => {
+  // Regression: a same-machine loopback can reach ICE 'connected' while
+  // connectionState lags at 'connecting' (DTLS stalls without media flowing).
+  // The old criterion (connectionState === 'connected' only) timed out here.
+  assert.equal(ctx.chatDiagConnectionUp('connecting', 'connected'), true);
+  assert.equal(ctx.chatDiagConnectionUp('connecting', 'completed'), true);
+});
+
+test('connectionUp: still establishing -> false', () => {
+  assert.equal(ctx.chatDiagConnectionUp('connecting', 'checking'), false);
+  assert.equal(ctx.chatDiagConnectionUp('new', 'new'), false);
+  assert.equal(ctx.chatDiagConnectionUp('failed', 'failed'), false);
+});

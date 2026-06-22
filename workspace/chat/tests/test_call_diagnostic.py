@@ -43,6 +43,28 @@ class CallDiagnosticSignalTests(TestCase):
         # ...and never leaks to another user.
         self.assertEqual(drain_events(self.other.id), [])
 
+    def test_signal_delivered_through_chat_sse_poll(self):
+        # Evidence: the echo enqueued by the endpoint must be re-emitted by the
+        # same user's ChatSSEProvider.poll() as a call_diagnostic_signal event.
+        from workspace.chat.sse_provider import ChatSSEProvider
+
+        self.client.force_authenticate(self.user)
+        signal = {"type": "offer", "sdp": "v=0..."}
+        resp = self.client.post(
+            self.url,
+            {"lane": "to_callee", "signal": signal, "run_id": "run-xyz"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        provider = ChatSSEProvider(self.user, None)
+        events = provider.poll(None)
+        names = [name for (name, _data, _id) in events]
+        self.assertIn("call_diagnostic_signal", names)
+        env = next(d for (n, d, _i) in events if n == "call_diagnostic_signal")
+        self.assertEqual(env["run_id"], "run-xyz")
+        self.assertEqual(env["lane"], "to_callee")
+
     def test_invalid_lane_rejected(self):
         self.client.force_authenticate(self.user)
         resp = self.client.post(

@@ -127,6 +127,10 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
 
     closeDiagnostic() {
       this.diagOpen = false;
+      // Invalidate the active run token so in-flight async resolutions (the
+      // loopback timer, getUserMedia, ICE gathering) from the closed run are
+      // ignored when they fire and cannot overwrite a later reopened run.
+      this.diagRunId = '';
       this._diagCleanup();
       this.diagRunning = false;
     },
@@ -163,11 +167,17 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
       this._diagCleanup();
       // New nonce per run so echoes from a previous run are ignored.
       this.diagRunId = 'diag-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
+      const runId = this.diagRunId;
       this.diagSteps.forEach((s) => { s.status = 'pending'; s.detail = ''; });
 
+      // After each await, bail out if the run was closed or superseded (the
+      // token changed) so a stale step cannot drive the summary/running state.
       await this._diagStepMic();
+      if (this.diagRunId !== runId) return;
       const iceVerdict = await this._diagStepIce();
+      if (this.diagRunId !== runId) return;
       const loopOk = await this._diagStepLoopback();
+      if (this.diagRunId !== runId) return;
 
       const micOk = this._diagStep('mic').status === 'pass';
       if (loopOk && micOk && iceVerdict !== 'warn') {
@@ -181,18 +191,26 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
     },
 
     async _diagStepMic() {
+      const runId = this.diagRunId;
       this._diagSet('mic', 'running', 'Requesting microphone...');
       try {
-        this._diagStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // If the run was closed/superseded while the prompt was open, drop the
+        // capture instead of leaving the microphone live and clobbering state.
+        if (this.diagRunId !== runId) { stream.getTracks().forEach((t) => t.stop()); return; }
+        this._diagStream = stream;
         this._diagSet('mic', 'pass', 'Microphone captured.');
       } catch (e) {
+        if (this.diagRunId !== runId) return;
         this._diagSet('mic', 'fail', 'Microphone unavailable or permission denied.');
       }
     },
 
     async _diagStepIce() {
+      const runId = this.diagRunId;
       this._diagSet('ice', 'running', 'Gathering ICE candidates...');
       const candidates = await this._diagGatherCandidates();
+      if (this.diagRunId !== runId) return 'fail'; // run closed/superseded mid-gather
       const summary = window.chatDiagSummarizeIce(candidates);
       const parts = [];
       if (summary.relay) parts.push('TURN reachable');
@@ -237,6 +255,7 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
     },
 
     _diagStepLoopback() {
+      const runId = this.diagRunId;
       this._diagSet('loopback', 'running', 'Connecting through the server...');
       return new Promise((resolve) => {
         let settled = false;
@@ -258,8 +277,18 @@ window.chatCallDiagnosticMixin = function chatCallDiagnosticMixin() {
           if (settled) return;
           settled = true;
           clearTimeout(timer);
+          // Stale run (closed/superseded): the cleanup already ran elsewhere, so
+          // just resolve without touching the current run's UI or resources.
+          if (this.diagRunId !== runId) { resolve(ok); return; }
           this._diagSet('loopback', ok ? 'pass' : 'fail', detail);
-          if (ok) { this.diagLive = true; this._diagStartMeter(); }
+          if (ok) {
+            this.diagLive = true;
+            this._diagStartMeter();
+          } else {
+            // Failure: no live stage will use the peers or mic, so release them
+            // now instead of holding the microphone open until the user closes.
+            this._diagCleanup();
+          }
           resolve(ok);
         };
         const timer = setTimeout(

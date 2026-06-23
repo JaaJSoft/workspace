@@ -104,11 +104,11 @@ Integrated email client to centralize communication.
 - [x] Customizable mail preferences - density, preview lines, label visibility
 - [x] Mobile-responsive layout with sidebar toggle
 - [ ] Full-text search in emails
-- [ ] HTML signatures per account
+- [x] HTML signatures per account
 - [ ] Snooze / reminders
 - [ ] Convert email to task (link with Tasks)
 - [ ] Email templates
-- [ ] Filters and automatic rules
+- [x] Filters and automatic rules
 - [ ] Scheduled send - compose now, send later via Celery delayed task
 - [ ] Undo send - 10s grace period before actually sending (queue + cancel)
 
@@ -335,7 +335,7 @@ Features shared across all modules.
 - [x] **Orphan attachments purge** - Celery task + management command `purge_orphan_attachments` for chat file cleanup
 - [ ] **Session cleanup** - Tâche Celery pour `clearsessions` (purge des sessions DB expirées quand Redis n'est pas utilisé)
 - [x] **Admin enrichi** - File, FileFavorite, PinnedFolder, ConversationMember, PinnedMessage, PinnedConversation dans l'admin avec filtres et recherche
-- [ ] **Background file processing** - Celery pipeline for thumbnails, virus scan, metadata extraction on upload
+- [x] **Background file processing** - Celery pipeline for thumbnails, virus scan, metadata extraction on upload
 - [ ] **CDN / S3 storage backend** - django-storages for scalable file storage (MinIO for self-hosted)
 - [ ] **Rate limiting** - django-ratelimit on API endpoints (login, file upload, chat send)
 - [x] **Metrics endpoint** - Prometheus /metrics (request latency, DB pool, cache hit rate, active SSE connections)
@@ -349,7 +349,7 @@ Features shared across all modules.
 - [x] Mobile responsive design - Tailwind responsive classes across all modules
 - [x] Modular sidebar (each module = one section)
 - [x] Customizable themes (12 themes: light, dark, cupcake, emerald, corporate, forest, dracula, night, winter, nord, sunset, autumn)
-- [ ] Onboarding wizard for new users
+- [x] Onboarding wizard for new users
 - [ ] Focus mode (hide sidebar) - per-module sidebar collapse exists (Chat, Calendar)
 - [x] Keyboard shortcuts per module (Files, Calendar, Chat, global Ctrl+K)
 - [ ] i18n (FR, EN minimum) - Django i18n enabled but no translations yet

@@ -117,22 +117,22 @@ See [docs/deployments/](docs/deployments/) for Docker Compose and Kubernetes exa
 
 ### Environment Variables
 
-| Variable               | Description                                            | Default                      |
-|------------------------|--------------------------------------------------------|------------------------------|
-| `SECRET_KEY`           | Django secret key                                      | *required in production*     |
-| `DEBUG`                | Enable debug mode                                      | `True`                       |
-| `ALLOWED_HOSTS`        | Comma-separated allowed hosts                          | `*`                          |
-| `CSRF_TRUSTED_ORIGINS` | Comma-separated trusted CSRF origins                   | *(none)*                     |
-| `DATABASE_URL`         | Database connection string                             | `sqlite:///db.sqlite3`       |
-| `REDIS_URL`            | Redis URL for cache and sessions                       | *(none, in-memory fallback)* |
-| `GUNICORN_WORKERS`     | Gunicorn worker count (Docker)                         | `3`                          |
-| `TRASH_RETENTION_DAYS` | Days before trashed items are permanently deleted      | `30`                         |
-| `AI_API_KEY`           | OpenAI API key (or compatible provider)                | *(none, AI disabled)*        |
-| `AI_BASE_URL`          | Custom LLM API base URL (Ollama, LM Studio, etc.)     | *(OpenAI default)*           |
-| `AI_MODEL`             | Default LLM model                                      | `gpt-5`                      |
-| `AI_MAX_TOKENS`        | Maximum tokens per AI response                         | `2048`                       |
-| `AI_IMAGE_MODEL`       | Model for image generation                             | `dall-e-3`                   |
-| `AI_IMAGE_BASE_URL`    | Custom image generation base URL                       | *(same as AI_BASE_URL)*      |
+| Variable               | Description                                       | Default                      |
+|------------------------|---------------------------------------------------|------------------------------|
+| `SECRET_KEY`           | Django secret key                                 | *required in production*     |
+| `DEBUG`                | Enable debug mode                                 | `True`                       |
+| `ALLOWED_HOSTS`        | Comma-separated allowed hosts                     | `*`                          |
+| `CSRF_TRUSTED_ORIGINS` | Comma-separated trusted CSRF origins              | *(none)*                     |
+| `DATABASE_URL`         | Database connection string                        | `sqlite:///db.sqlite3`       |
+| `REDIS_URL`            | Redis URL for cache and sessions                  | *(none, in-memory fallback)* |
+| `GUNICORN_WORKERS`     | Gunicorn worker count (Docker)                    | `3`                          |
+| `TRASH_RETENTION_DAYS` | Days before trashed items are permanently deleted | `30`                         |
+| `AI_API_KEY`           | OpenAI API key (or compatible provider)           | *(none, AI disabled)*        |
+| `AI_BASE_URL`          | Custom LLM API base URL (Ollama, LM Studio, etc.) | *(OpenAI default)*           |
+| `AI_MODEL`             | Default LLM model                                 | `gpt-5`                      |
+| `AI_MAX_TOKENS`        | Maximum tokens per AI response                    | `2048`                       |
+| `AI_IMAGE_MODEL`       | Model for image generation                        | `dall-e-3`                   |
+| `AI_IMAGE_BASE_URL`    | Custom image generation base URL                  | *(same as AI_BASE_URL)*      |
 
 ## API
 

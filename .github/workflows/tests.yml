@@ -19,7 +19,7 @@ jobs:
     name: Lint (ruff)
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # ruff-action resolves the ruff version from the exact pin in
       # pyproject.toml, so CI and local runs always use the same release.
@@ -68,7 +68,7 @@ jobs:
     name: Tests (${{ matrix.module }})
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -115,7 +115,7 @@ jobs:
     name: E2E (${{ matrix.module }})
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -143,7 +143,7 @@ jobs:
     name: JS unit tests
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -158,7 +158,7 @@ jobs:
     name: WebDAV (davfs2 mount)
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6

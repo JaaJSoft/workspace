@@ -13,6 +13,8 @@ concurrency:
 permissions:
   contents: read
   packages: write
+  # Required so Trivy's SARIF report shows up under Security -> Code scanning.
+  security-events: write
 
 env:
   SHOULD_PUSH: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
@@ -61,10 +63,33 @@ jobs:
           context: .
           push: false
           load: true
-          tags: workspace:pg-smoke
+          tags: workspace:ci
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: workspace:ci
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          # Report only - never fail the build on findings (they surface in
+          # the Security tab instead). Bump to e.g. '1' to gate the pipeline.
+          exit-code: '0'
+        env:
+          # Persist the vuln DB across runs so we don't hit GHCR rate limits.
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db,public.ecr.aws/aquasecurity/trivy-db
+
+      - name: Upload Trivy SARIF to GitHub code scanning
+        # always() so results upload even if an earlier step (e.g. smoke) fails.
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-image
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -103,7 +128,7 @@ jobs:
             -e DEBUG=False \
             -e ALLOWED_HOSTS=127.0.0.1,localhost \
             -e SECRET_KEY=smoke-test-key-not-secret \
-            workspace:pg-smoke
+            workspace:ci
 
           trap 'echo "--- container logs ---"; \
                 docker logs workspace-smoke 2>&1 || true; \

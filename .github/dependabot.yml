@@ -11,3 +11,12 @@ updates:
       interval: "daily"
     versioning-strategy: increase
 
+  - package-ecosystem: "github-actions"
+    directory: "/" # Workflows under .github/workflows
+    schedule:
+      interval: "daily"
+
+  - package-ecosystem: "docker"
+    directory: "/" # Dockerfile location
+    schedule:
+      interval: "daily"

@@ -2,7 +2,7 @@
 # Stage 1: CSS builder (Tailwind + DaisyUI + Typography)
 # Runs npm + tailwindcss to produce workspace/common/static/css/app.css.
 # Always rebuilds in CI so a stale committed CSS file can never ship to prod.
-FROM node:24-bookworm-slim AS css-builder
+FROM node:26-bookworm-slim AS css-builder
 
 WORKDIR /build
 

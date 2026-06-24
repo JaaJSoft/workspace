@@ -29,7 +29,7 @@ dependencies = [
     "myl-discovery>=0.6.4",
     "icalendar>=7.2.0",
     # utils
-    "mistune>=3.3.0",
+    "mistune>=3.3.2",
     "pygments>=2.20.0",
     "dj-database-url>=2.3.0",
     "psycopg[binary,pool]>=3.3.4",

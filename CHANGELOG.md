@@ -4,7 +4,7 @@
 
 ### Highlights
 
-Your notes now have a graph view: each note appears as a node and each link between them as a line, Obsidian-style, with search and color coding. Both the notes list and the files list gain a compact mode that fits more rows on screen, and image thumbnails now appear right after upload instead of after a wait. The rest of the release rounds things out with calendar, chat, and mail improvements plus a handful of fixes.
+See your notes as a connected graph, fit more into every list with the new compact views, and watch thumbnails appear the moment you upload.
 
 ### Notes
 
@@ -48,7 +48,7 @@ Your notes now have a graph view: each note appears as a node and each link betw
 
 ### Highlights
 
-You can now run a mail rule against messages you already have, not just new arrivals. The rest of the release is interface polish and fixes: a more consistent button style across the app, plus smaller corrections in mail, files, and chat.
+Run a mail rule against messages you already have, not just new arrivals, alongside a more consistent button style and a handful of fixes across mail, files, and chat.
 
 ### Mail
 
@@ -94,7 +94,7 @@ Notes can now link to each other Obsidian-style: type `[[` in the Markdown edito
 
 ### Highlights
 
-Attach files you already have in your workspace to chat messages and emails, with no re-uploading. File types are now detected from a file's actual content rather than its extension, so files open in the right viewer even when the extension is wrong or missing. The release also adds command-palette quick actions, a compact chat mode, and more granular mail AI switches.
+Attach files you already have to chat messages and emails with no re-uploading, and let file types be detected from real content so everything opens in the right viewer even when the extension lies.
 
 ### Files & Sharing
 
@@ -160,7 +160,7 @@ Mail gains a full filters and rules engine: set conditions on incoming messages 
 
 ### Highlights
 
-The headline feature this release is automatic calendar event extraction from your inbox: AI bots can now read confirmed bookings, meetings, and tickets straight out of an email thread and add them to your calendar, with a short rationale and a confidence score for each event. New users land on a guided welcome tour the first time they sign in, and AI chat picks up a couple of reliability and speed wins around the retry path and prompt caching.
+AI bots now read confirmed bookings, meetings, and tickets straight out of your inbox and add them to your calendar, each with a short rationale and a confidence score. New users also get a guided welcome tour on their first sign-in.
 
 ### Calendar
 
@@ -180,7 +180,7 @@ The headline feature this release is automatic calendar event extraction from yo
 
 ### Highlights
 
-This release rebuilds the theme picker around two independent slots, so the navbar sun/moon toggle now swaps between your preferred light theme and your preferred dark theme instead of forcing the defaults back. The picker list also doubles, with 13 light and 13 dark DaisyUI themes available. Behind the scenes, settings saves are faster and no longer trip "database is locked" errors on self-hosted SQLite instances when you click through themes quickly.
+The rebuilt theme picker keeps a separate light and dark theme, so the navbar sun/moon toggle swaps between your two favourites instead of resetting to the defaults, now with 26 themes to choose from.
 
 ### Themes
 
@@ -198,7 +198,7 @@ This release rebuilds the theme picker around two independent slots, so the navb
 
 ### Highlights
 
-A small release focused on release awareness. The "What's new" modal now opens by itself the first time you visit after new changelog entries are added, so you do not have to dig into the user menu to discover them. Inside the modal, the version sidebar flags which releases you have already read and which are still new to you.
+The "What's new" modal now opens by itself the first time you visit after a new release, and flags which versions you have already read.
 
 ### Changelog
 
@@ -210,7 +210,7 @@ A small release focused on release awareness. The "What's new" modal now opens b
 
 ### Highlights
 
-This release brings PostgreSQL as a first-class database option and ships a tool to migrate an existing workspace off SQLite without losing data. Files gain a per-file activity timeline in the Properties panel, and right-clicking a file with several selected now applies the menu action to the whole selection. Several long-standing duplication bugs in calendar sync and scheduled AI messages are fixed, and a handful of mobile and error-handling rough edges are smoothed.
+PostgreSQL becomes a first-class database, with a tool to migrate an existing workspace off SQLite without losing data. Files also gain a per-file activity timeline, and several long-standing duplication bugs in calendar sync and scheduled messages are fixed.
 
 ### Database
 
@@ -249,7 +249,7 @@ This release brings PostgreSQL as a first-class database option and ships a tool
 
 ### Highlights
 
-A reliability and polish release. Mail data integrity is hardened against IMAP failures: failed moves no longer lose mail, deleted drafts stay deleted, and folders with accented names rename correctly. File operations are safer too, with atomic locking, ownership-checked release, streaming copies, and content that follows folder moves. The changelog page is redesigned with a vertical timeline and sticky version navigation, and the dashboard now shows ongoing and all-day events as upcoming. Pages and listings load faster across the app.
+A reliability and polish release: mail is hardened against IMAP failures so moves, drafts, and accented folders all behave, file operations are safer, and pages load faster across the app.
 
 ### Mail
 
@@ -311,7 +311,7 @@ A reliability and polish release. Mail data integrity is hardened against IMAP f
 
 ### Highlights
 
-Performance and reliability release. Listings, sidebars, and notifications across the workspace are noticeably faster. Large WebDAV uploads are more reliable on slow networks. Rename and permission rules are now consistent between the UI and the backend - no more buttons that look clickable but fail. New personal API tokens let you connect third-party apps and scripts to your workspace.
+Listings, sidebars, and notifications are noticeably faster and large WebDAV uploads hold up on slow networks, while new personal API tokens let you connect third-party apps and scripts to your workspace.
 
 ### Performance
 
@@ -355,7 +355,7 @@ Performance and reliability release. Listings, sidebars, and notifications acros
 
 ### Highlights
 
-Calendar overhaul with infinite scroll and a smoother mobile experience. WebDAV reliability improves on Windows, and concurrent uploads no longer cause duplicates or corruption. Notes gains new keyboard shortcuts.
+The calendar gets infinite scroll and a smoother mobile experience, while WebDAV grows more reliable on Windows and under concurrent uploads.
 
 ### Calendar
 
@@ -383,7 +383,7 @@ Calendar overhaul with infinite scroll and a smoother mobile experience. WebDAV 
 
 ### Highlights
 
-**Profile customization** arrives with bio, role, and banner palette. Rich media in chat gets a major boost - link previews, a shared media gallery, and video attachments analyzable by the AI. WebDAV now shows your storage quota, and broad caching makes heavy pages noticeably snappier.
+**Profile customization** arrives with bio, role, and banner palette, and chat gains rich media: **link previews**, a **shared media gallery**, and AI-readable **video attachments**.
 
 ### Profile
 
@@ -427,7 +427,7 @@ Calendar overhaul with infinite scroll and a smoother mobile experience. WebDAV 
 
 ### Highlights
 
-**Subscribe to external calendars** (ICS) with automatic background sync. **Group folders** bring shared file spaces across teams. Notes gains a **context menu**, autosave indicators, and default/journal folder preferences.
+**Subscribe to external calendars** (ICS) with automatic background sync, and share files across teams with new **group folders**.
 
 ### Calendar
 
@@ -467,7 +467,7 @@ Calendar overhaul with infinite scroll and a smoother mobile experience. WebDAV 
 
 ### Highlights
 
-**Notes**, a new Markdown-based note-taking app, joins the workspace - with tags, advanced filters, and folder-tree sidebar organization. Mail now lands on a **unified inbox** with customizable density. A new workspace-wide **Favorites** view lets you pin content from every module.
+**Notes**, a new Markdown note-taking app with tags, filters, and folder-tree organization, joins the workspace, alongside a **unified inbox** for mail and a workspace-wide **Favorites** view.
 
 ### New: Notes
 
@@ -552,7 +552,7 @@ Markdown-based note-taking app with rich organization features.
 
 ### Highlights
 
-AI gains **web search**, **scheduled messages**, and dedicated search tools for calendar, chat, mail, and files. Mail introduces **AI-powered labels**, and the app becomes installable as a **PWA** with offline caching. A new "What's new" viewer lets you browse the changelog directly from the user menu.
+AI gains **web search**, **scheduled messages**, and dedicated search across calendar, chat, mail, and files. Mail adds **AI-powered labels**, and the app becomes installable as a **PWA** with offline caching.
 
 ### AI & Bots
 
@@ -607,7 +607,7 @@ Enhanced AI capabilities with web search, scheduling, and improved tool handling
 
 ### Highlights
 
-Major overhaul of **AI bots**: bots now remember context, mention users, search the workspace, and generate or edit images, with fine-grained access and capability controls. Chat gains **drafts**, **@mentions**, and syntax highlighting. The dashboard welcomes you with a **personalized greeting**, a weather widget, and upcoming events.
+A major **AI bots** overhaul: bots now remember context, mention users, search the workspace, and generate images, with fine-grained access controls. Chat also gains **drafts**, **@mentions**, and syntax highlighting.
 
 ### AI & Bots
 
@@ -697,7 +697,7 @@ AI-powered assistant integrated across Chat and Mail modules.
 
 ### Highlights
 
-**Calendar polls** - schedule events democratically by proposing time slots, inviting guests (even without an account), collecting votes, and picking the final slot. Chat gets an **emoji picker** and optimistic message sending. **File locking** prevents concurrent editing conflicts.
+**Calendar polls** let you schedule events democratically: propose time slots, invite guests (even without an account), collect votes, and pick the winner. Chat adds an **emoji picker**, and **file locking** prevents concurrent editing conflicts.
 
 ### Calendar
 
@@ -792,7 +792,7 @@ A real-time **notification system** lands with its own UI panel. User **presence
 
 ### Highlights
 
-**Mail**, a new IMAP/SMTP mail client, joins the workspace - with account auto-discovery, drafts, a hierarchical folder tree, drag-and-drop message management, and direct "Save to Files". Calendar gains **recurring events** with scope-aware editing. Kubernetes deployment manifests are now available for self-hosters.
+**Mail**, a new IMAP/SMTP client with account auto-discovery, drafts, and drag-and-drop folders, joins the workspace, and the calendar gains **recurring events** with scope-aware editing.
 
 ### New module: Mail
 
@@ -848,7 +848,7 @@ IMAP/SMTP mail client integrated into the workspace.
 
 ### Highlights
 
-Calendar introduces an **Agenda view** with a chronological event listing. Chat now supports **attachments** - upload files to messages and save them directly to your file browser. Files gets a **comments** system.
+The calendar introduces an **Agenda view**, chat now supports **attachments** you can save straight to Files, and files get a **comments** system.
 
 ### Calendar
 

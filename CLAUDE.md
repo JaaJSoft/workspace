@@ -69,7 +69,7 @@ Every bug fix must ship with a regression test. Write the test alongside the fix
 **Structure of a release entry:**
 
 1. `## <version> - <title>` heading. The title is a short thematic label (2-4 words) summarizing the release theme: *Performance & Reliability*, *Calendar Overhaul*, *Profile & Rich Media*. It shows up next to the version number in the in-app "What's new" modal. Em-dash (`-`), en-dash (`-`), hyphen (`-`), and colon (`:`) are all accepted as separators; the title is optional but recommended for non-patch releases.
-2. `### Highlights` - one short paragraph (2-4 sentences) summarizing the theme of the release and what users will notice. No bullet list here.
+2. `### Highlights` - 1-2 punchy sentences selling the release: what users will notice, phrased to make the update feel worth installing, without overselling. Keep it short relative to the sections below (those carry the detail). No bullet list here.
 3. Then one `###` section per user-facing area (module name or feature theme: *Chat*, *Files & Notes*, *Calendar*, *WebDAV*, *Profile & UI*, *Performance*, *API Tokens*, *Fixes*, …).
 
 **What to include:** new features, visible improvements, behavior changes, user-visible bug fixes, performance gains phrased as *"faster X"* / *"quicker Y"*, new integrations or endpoints that users can call.

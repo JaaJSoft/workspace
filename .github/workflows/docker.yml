@@ -63,7 +63,7 @@ jobs:
           context: .
           push: false
           load: true
-          tags: workspace:pg-smoke
+          tags: workspace:ci
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -71,7 +71,7 @@ jobs:
       - name: Scan image for vulnerabilities (Trivy)
         uses: aquasecurity/trivy-action@0.33.1
         with:
-          image-ref: workspace:pg-smoke
+          image-ref: workspace:ci
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
@@ -128,7 +128,7 @@ jobs:
             -e DEBUG=False \
             -e ALLOWED_HOSTS=127.0.0.1,localhost \
             -e SECRET_KEY=smoke-test-key-not-secret \
-            workspace:pg-smoke
+            workspace:ci
 
           trap 'echo "--- container logs ---"; \
                 docker logs workspace-smoke 2>&1 || true; \

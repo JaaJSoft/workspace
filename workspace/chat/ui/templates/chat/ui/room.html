@@ -3,11 +3,73 @@
 
 {% block title %}Voice room - Workspace{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'ui/css/ai-thinking.css' %}">
+<link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" integrity="sha384-6LFfkTKLRlzFtgx8xsWyBdKGpcMMQTkv+dB7rAbugeJAu1Ym2q1Aji1cjHBG12Xh" crossorigin="anonymous" />
+<script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+{% endblock %}
+
 {% block content %}
-<div id="voice-room" data-conversation-uuid="{{ conversation_uuid }}">
-  <h1 class="sr-only">Voice room: {{ conversation_title }}</h1>
+<div class="h-screen flex flex-col"
+     x-data="chatRoomApp({{ current_user_id }}, '{{ conversation_uuid }}')"
+     @chat-message.window="handleSSEMessage($event.detail)"
+     @chat-call_participant_joined.window="onCallParticipantJoined($event.detail)"
+     @chat-call_participant_left.window="onCallParticipantLeft($event.detail)"
+     @chat-call_participant_updated.window="onCallParticipantUpdated($event.detail)"
+     @chat-call_ended.window="onCallEnded($event.detail)"
+     @chat-call_signal.window="onCallSignal($event.detail)">
+  <div class="flex flex-1 min-h-0">
+    <!-- Participants grid -->
+    <section class="flex-1 flex flex-col bg-base-200 p-4 min-w-0">
+      <h1 class="text-lg font-semibold mb-4 truncate">{{ conversation_title }}</h1>
+      <div class="flex-1 grid gap-3 content-start"
+           style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">
+        <template x-for="p in callParticipants" :key="p.user_id">
+          <div class="aspect-video rounded-xl bg-base-100 border-2 flex flex-col items-center justify-center gap-2 transition-colors"
+               :class="isSpeaking(p.user_id) ? 'border-success' : 'border-base-300'">
+            <div x-html="window.userAvatarHtml(p.user_id, p.display_name, 'w-12 h-12', { presence: false })"></div>
+            <span class="text-sm truncate max-w-full px-2" x-text="p.display_name"></span>
+            <i x-show="p.media_state && p.media_state.audio === false" data-lucide="mic-off" class="w-4 h-4 text-error"></i>
+          </div>
+        </template>
+      </div>
+      <!-- Controls bar -->
+      <div class="flex items-center justify-center gap-3 pt-4">
+        <button class="btn btn-circle" :class="isMuted ? 'btn-error' : 'btn-ghost'" @click="toggleMute()"
+                :title="isMuted ? 'Unmute' : 'Mute'">
+          <i :data-lucide="isMuted ? 'mic-off' : 'mic'" class="w-5 h-5"></i>
+        </button>
+        <button class="btn btn-error btn-circle" @click="leaveCall(); window.close()" title="Leave call">
+          <i data-lucide="phone-off" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </section>
+    <!-- Chat pane -->
+    <aside class="w-96 max-w-[40%] border-l border-base-300 flex flex-col min-w-0">
+      {% include "chat/ui/partials/conversation_pane.html" %}
+    </aside>
+  </div>
 </div>
+
 {{ participants|json_script:"room-participants-data" }}
 {{ ice_servers|json_script:"call-ice-servers-data" }}
 {{ call_sounds_enabled|json_script:"call-sounds-enabled-data" }}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
+<script src="{% static 'chat/ui/js/chat_preferences.js' %}"></script>
+<script src="{% static 'chat/ui/js/conversations.js' %}"></script>
+<script src="{% static 'chat/ui/js/messages.js' %}"></script>
+<script src="{% static 'chat/ui/js/sse.js' %}"></script>
+<script src="{% static 'chat/ui/js/members.js' %}"></script>
+<script src="{% static 'chat/ui/js/panels.js' %}"></script>
+<script src="{% static 'chat/ui/js/bot.js' %}"></script>
+<script src="{% static 'chat/ui/js/input.js' %}"></script>
+<script src="{% static 'chat/ui/js/call_sounds.js' %}"></script>
+<script src="{% static 'chat/ui/js/call.js' %}"></script>
+<script src="{% static 'chat/ui/js/call_room.js' %}"></script>
+<script src="{% static 'chat/ui/js/call_diagnostic.js' %}"></script>
+<script src="{% static 'chat/ui/js/room.js' %}"></script>
 {% endblock %}

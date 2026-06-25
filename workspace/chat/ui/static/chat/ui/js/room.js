@@ -46,6 +46,7 @@ function chatRoomApp(currentUserId, conversationId) {
     // Lightweight speaking meter: sample local + remote streams ~10/s and flag
     // tiles whose normalized RMS crosses the threshold. Purely visual.
     _startSpeakingMeter() {
+      if (this._meterTimer) return; // already running
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
       this._audioCtx = new Ctx();
@@ -65,6 +66,12 @@ function chatRoomApp(currentUserId, conversationId) {
         for (const id of Object.keys(this._peers || {})) {
           const el = this._peers[id].audioEl;
           if (el && el.srcObject) attach(Number(id), el.srcObject);
+        }
+        // Prune analysers for peers that have departed; always keep local user
+        const activeIds = new Set(Object.keys(this._peers || {}));
+        activeIds.add(String(this.currentUserId));
+        for (const id of Object.keys(analysers)) {
+          if (!activeIds.has(id)) delete analysers[id];
         }
         const next = {};
         for (const id of Object.keys(analysers)) {

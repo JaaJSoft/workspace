@@ -475,6 +475,26 @@ class GenerateImageToolTest(TestCase):
         self.assertNotIn("images", self.context)
 
     @patch("workspace.ai.tools.get_image_client")
+    def test_generate_image_malformed_b64_reports_error(self, mock_get_client):
+        """A malformed base64 payload must surface as an error, not crash."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [MagicMock(b64_json="!!!not-base64!!!")]
+        mock_client.images.generate.return_value = mock_response
+        mock_get_client.return_value = mock_client
+
+        result = self.provider.generate_image(
+            GenerateImageParams(prompt="a cat"),
+            user=None,
+            bot=None,
+            conversation_id=self.conv_id,
+            context=self.context,
+        )
+        self.assertIn("Error", result)
+        self.assertNotIn("successfully", result)
+        self.assertNotIn("images", self.context)
+
+    @patch("workspace.ai.tools.get_image_client")
     def test_generate_image_empty_b64_reports_error(self, mock_get_client):
         """An empty b64_json payload must surface as an error, not success."""
         mock_client = MagicMock()

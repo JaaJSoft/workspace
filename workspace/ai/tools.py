@@ -261,13 +261,29 @@ Do NOT use this to modify an existing image — use edit_image instead."""
             ).inc()
             logger.exception("Image generation failed")
             return f"Error: image generation failed — {e}"
+        data = getattr(response, "data", None) or []
+        b64 = data[0].b64_json if data else None
+        image_data = base64.b64decode(b64) if b64 else b""
+        if not image_data:
+            AI_IMAGE_REQUESTS.labels(
+                model=settings.AI_IMAGE_MODEL,
+                op="generate",
+                status="error",
+            ).inc()
+            logger.error(
+                "Image generation returned no image: model=%s size=%s prompt=%.80s",
+                settings.AI_IMAGE_MODEL,
+                size,
+                prompt,
+            )
+            return "Error: the image model returned no image — generation failed"
+
         AI_IMAGE_REQUESTS.labels(
             model=settings.AI_IMAGE_MODEL,
             op="generate",
             status="ok",
         ).inc()
 
-        image_data = base64.b64decode(response.data[0].b64_json)
         logger.info(
             "Image generated: model=%s size=%s bytes=%d prompt=%.80s",
             settings.AI_IMAGE_MODEL,

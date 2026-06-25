@@ -454,6 +454,46 @@ class GenerateImageToolTest(TestCase):
         self.assertIn("Error", result)
         self.assertNotIn("images", self.context)
 
+    @patch("workspace.ai.tools.get_image_client")
+    def test_generate_image_empty_data_reports_error(self, mock_get_client):
+        """A successful API call that returns no image must not report success."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = []
+        mock_client.images.generate.return_value = mock_response
+        mock_get_client.return_value = mock_client
+
+        result = self.provider.generate_image(
+            GenerateImageParams(prompt="a cat"),
+            user=None,
+            bot=None,
+            conversation_id=self.conv_id,
+            context=self.context,
+        )
+        self.assertIn("Error", result)
+        self.assertNotIn("successfully", result)
+        self.assertNotIn("images", self.context)
+
+    @patch("workspace.ai.tools.get_image_client")
+    def test_generate_image_empty_b64_reports_error(self, mock_get_client):
+        """An empty b64_json payload must surface as an error, not success."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [MagicMock(b64_json="")]
+        mock_client.images.generate.return_value = mock_response
+        mock_get_client.return_value = mock_client
+
+        result = self.provider.generate_image(
+            GenerateImageParams(prompt="a cat"),
+            user=None,
+            bot=None,
+            conversation_id=self.conv_id,
+            context=self.context,
+        )
+        self.assertIn("Error", result)
+        self.assertNotIn("successfully", result)
+        self.assertNotIn("images", self.context)
+
 
 class EditImageToolTest(TestCase):
     """Unit tests for the edit_image tool."""
@@ -592,6 +632,32 @@ class EditImageToolTest(TestCase):
             context=self.context,
         )
         self.assertIn("Error", result)
+
+    @patch("workspace.ai.services.image.get_image_client")
+    def test_edit_image_empty_result_reports_error(self, mock_get_client):
+        """A backend that returns no image bytes must not report success."""
+        self._attach_image()
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [MagicMock(b64_json="")]
+        mock_client.images.edit.return_value = mock_response
+        mock_get_client.return_value = mock_client
+
+        with patch(
+            "workspace.ai.services.image._edit_via_ollama",
+            side_effect=Exception("Ollama failed"),
+        ):
+            result = self.provider.edit_image(
+                EditImageParams(prompt="make it blue"),
+                user=self.user,
+                bot=None,
+                conversation_id=str(self.conv.uuid),
+                context=self.context,
+            )
+
+        self.assertIn("Error", result)
+        self.assertNotIn("successfully", result)
+        self.assertNotIn("images", self.context)
 
 
 @override_settings(

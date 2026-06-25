@@ -45,6 +45,10 @@ function chatApp(currentUserId) {
       // animating the very first paint.
       this.$nextTick(() => { this.sidebarMounted = true; });
 
+      // The main chat tab never owns the microphone; the dedicated room tab
+      // does. Force observer so any stray join path opens the room instead.
+      this.callRole = 'observer';
+
       // Whenever the open conversation changes (initial load, F5, navigation),
       // sync the call banner so an already-ongoing call is joinable - SSE events
       // only fire for calls that start while you are already here.

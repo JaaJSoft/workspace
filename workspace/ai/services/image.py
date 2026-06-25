@@ -79,6 +79,19 @@ def ai_edit_image(source_data: bytes, prompt: str, size: str = "1024x1024") -> b
             logger.exception("Image edit failed on both OpenAI and Ollama backends")
             raise RuntimeError(f"image edit failed — {ollama_err}") from ollama_err
 
+    if not image_data:
+        AI_IMAGE_REQUESTS.labels(
+            model=settings.AI_IMAGE_MODEL,
+            op="edit",
+            status="error",
+        ).inc()
+        logger.error(
+            "Image edit produced no image: model=%s size=%s",
+            settings.AI_IMAGE_MODEL,
+            size,
+        )
+        raise RuntimeError("image edit produced no image")
+
     AI_IMAGE_REQUESTS.labels(
         model=settings.AI_IMAGE_MODEL,
         op="edit",
@@ -97,7 +110,12 @@ def _edit_via_openai(client, image_file, prompt, size):
         n=1,
         response_format="b64_json",
     )
-    return base64.b64decode(response.data[0].b64_json)
+    data = getattr(response, "data", None) or []
+    b64 = data[0].b64_json if data else None
+    image_data = base64.b64decode(b64) if b64 else b""
+    if not image_data:
+        raise RuntimeError("OpenAI images.edit returned no image")
+    return image_data
 
 
 def _edit_via_ollama(source_data, prompt):

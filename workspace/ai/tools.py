@@ -1,12 +1,15 @@
 """Core AI chat tools (memory, workspace search, avatar, image generation)."""
 
 import base64
+import binascii
 import json
 import logging
 from datetime import UTC
 
 from django.conf import settings
 from pydantic import BaseModel, Field
+
+from workspace.common.logging import scrub
 
 from .client import get_image_client
 from .models import UserMemory
@@ -261,13 +264,32 @@ Do NOT use this to modify an existing image — use edit_image instead."""
             ).inc()
             logger.exception("Image generation failed")
             return f"Error: image generation failed — {e}"
+        data = getattr(response, "data", None) or []
+        b64 = data[0].b64_json if data else None
+        try:
+            image_data = base64.b64decode(b64) if b64 else b""
+        except binascii.Error, ValueError:
+            image_data = b""
+        if not image_data:
+            AI_IMAGE_REQUESTS.labels(
+                model=settings.AI_IMAGE_MODEL,
+                op="generate",
+                status="error",
+            ).inc()
+            logger.error(
+                "Image generation returned no image: model=%s size=%s prompt=%.80s",
+                settings.AI_IMAGE_MODEL,
+                size,
+                scrub(prompt),
+            )
+            return "Error: the image model returned no image — generation failed"
+
         AI_IMAGE_REQUESTS.labels(
             model=settings.AI_IMAGE_MODEL,
             op="generate",
             status="ok",
         ).inc()
 
-        image_data = base64.b64decode(response.data[0].b64_json)
         logger.info(
             "Image generated: model=%s size=%s bytes=%d prompt=%.80s",
             settings.AI_IMAGE_MODEL,

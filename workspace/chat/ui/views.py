@@ -173,6 +173,57 @@ def chat_view(request, conversation_uuid=None):
 
 
 @login_required
+@ensure_csrf_cookie
+def chat_room_view(request, conversation_uuid):
+    """Dedicated voice-room page for a single conversation.
+
+    Opens in its own browser tab and owns the WebRTC call. Access is gated by
+    active membership, exactly like the message endpoints.
+    """
+    membership = get_active_membership(request.user, conversation_uuid)
+    if not membership:
+        return HttpResponseForbidden()
+
+    conversation = membership.conversation
+    members = (
+        ConversationMember.objects.filter(
+            conversation_id=conversation_uuid,
+            left_at__isnull=True,
+        )
+        .select_related("user")
+        .order_by("user_id")
+    )
+
+    def _display(u):
+        return u.get_full_name() or u.username
+
+    participants = [
+        {"user_id": m.user_id, "display_name": _display(m.user)} for m in members
+    ]
+
+    title = (
+        conversation.title
+        or ", ".join(_display(m.user) for m in members if m.user_id != request.user.id)
+        or "Conversation"
+    )
+
+    return render(
+        request,
+        "chat/ui/room.html",
+        {
+            "conversation_uuid": str(conversation_uuid),
+            "conversation_title": title,
+            "participants": participants,
+            "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
+            "call_sounds_enabled": get_setting(
+                request.user, "chat", "call_sounds", default=True
+            ),
+            "current_user_id": request.user.id,
+        },
+    )
+
+
+@login_required
 def conversation_list_view(request):
     """Partial: conversation list HTML for alpine-ajax refresh."""
     conv_list = _build_conversation_context(request.user)

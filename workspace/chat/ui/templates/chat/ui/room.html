@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Voice room - Workspace{% endblock %}
+
+{% block content %}
+<div id="voice-room" data-conversation-uuid="{{ conversation_uuid }}">
+  <h1 class="sr-only">Voice room: {{ conversation_title }}</h1>
+</div>
+{{ participants|json_script:"room-participants-data" }}
+{{ ice_servers|json_script:"call-ice-servers-data" }}
+{{ call_sounds_enabled|json_script:"call-sounds-enabled-data" }}
+{% endblock %}

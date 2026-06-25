@@ -159,60 +159,32 @@ x-data="chatApp({{ user.id }})"
       </ul>
     </div>
 
-    <!-- In-call panel. Desktop (expanded sidebar): one unified card with call
-         info, participants and the controls. Mobile / collapsed sidebar: just
-         the Mute and Leave icons stacked, like the other sidebar entries. -->
-    <div x-show="inCall" x-cloak class="border-t border-base-300 px-3 py-2 mb-2">
-      <!-- Desktop: unified call card -->
+    <!-- Passive call banner. The call itself lives in the dedicated room tab;
+         here we only reflect server state and offer Join / Return to room. -->
+    <div x-show="callBannerAction()" x-cloak class="border-t border-base-300 px-3 py-2 mb-2">
       <div x-show="!collapsed" x-cloak
            class="rounded-lg border border-base-300 bg-base-100 p-2 flex flex-col gap-2">
-        <button type="button"
-                class="flex items-center gap-2 text-left -m-0.5 p-0.5 rounded-md hover:bg-base-200 transition-colors"
-                @click="callSession && selectConversationById(callSession.conversation_id)"
-                title="Go to the call conversation">
+        <div class="flex items-center gap-2">
           <i data-lucide="phone-call" class="w-4 h-4 text-success flex-shrink-0"></i>
           <div class="flex flex-col min-w-0 leading-tight flex-1">
-            <span class="text-xs font-semibold text-success">In call</span>
-            <span class="text-[0.6rem] text-base-content/60 truncate" x-text="callParticipants.length + ' participant' + (callParticipants.length > 1 ? 's' : '')"></span>
+            <span class="text-xs font-semibold text-success">Call in progress</span>
+            <span class="text-[0.6rem] text-base-content/60 truncate"
+                  x-text="callParticipants.length + ' participant' + (callParticipants.length > 1 ? 's' : '')"></span>
           </div>
-          <div class="flex -space-x-2">
-            <template x-for="p in callParticipants.slice(0, 3)" :key="p.user_id">
-              <div class="tooltip" :data-tip="p.display_name + (p.media_state && p.media_state.audio === false ? ' (muted)' : '')">
-                <div x-html="window.userAvatarHtml(p.user_id, p.display_name, 'w-6 h-6 text-[0.6rem]', { presence: false })"></div>
-              </div>
-            </template>
-          </div>
-        </button>
-        <div class="flex items-center gap-2">
-          <button class="btn btn-xs btn-ghost flex-1 gap-1" :class="isMuted ? 'text-error' : ''" @click="toggleMute()">
-            <span x-show="!isMuted" class="contents"><i data-lucide="mic" class="w-3.5 h-3.5"></i></span>
-            <span x-show="isMuted" x-cloak class="contents"><i data-lucide="mic-off" class="w-3.5 h-3.5"></i></span>
-            <span x-text="isMuted ? 'Unmute' : 'Mute'"></span>
-          </button>
-          <button class="btn btn-xs btn-error flex-1 gap-1" @click="leaveCall()">
-            <i data-lucide="phone-off" class="w-3.5 h-3.5"></i>
-            Leave
-          </button>
         </div>
+        <button class="btn btn-xs btn-success gap-1"
+                @click="openCallRoom(callSession && callSession.conversation_id)">
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          <span x-text="callBannerAction() === 'return' ? 'Return to room' : 'Join call'"></span>
+        </button>
       </div>
-      <!-- Mobile / collapsed sidebar: just the two controls stacked -->
       <ul x-show="collapsed" x-cloak class="menu p-0">
         <li class="list-none flex justify-center">
           <button type="button"
-                  class="flex items-center justify-center w-10 h-10 !p-0 rounded-lg transition-colors"
-                  :class="isMuted ? 'text-error hover:bg-error/10' : 'text-base-content/70 hover:bg-base-content/5 hover:text-base-content'"
-                  @click="toggleMute()"
-                  :title="isMuted ? 'Unmute' : 'Mute'">
-            <span x-show="!isMuted" class="contents"><i data-lucide="mic" class="w-5 h-5 flex-shrink-0"></i></span>
-            <span x-show="isMuted" x-cloak class="contents"><i data-lucide="mic-off" class="w-5 h-5 flex-shrink-0"></i></span>
-          </button>
-        </li>
-        <li class="list-none flex justify-center">
-          <button type="button"
-                  class="flex items-center justify-center w-10 h-10 !p-0 rounded-lg transition-colors text-error hover:bg-error/10"
-                  @click="leaveCall()"
-                  title="Leave call">
-            <i data-lucide="phone-off" class="w-5 h-5 flex-shrink-0"></i>
+                  class="flex items-center justify-center w-10 h-10 !p-0 rounded-lg text-success hover:bg-success/10 transition-colors"
+                  @click="openCallRoom(callSession && callSession.conversation_id)"
+                  title="Open voice room">
+            <i data-lucide="phone-call" class="w-5 h-5 flex-shrink-0"></i>
           </button>
         </li>
       </ul>
@@ -237,30 +209,7 @@ x-data="chatApp({{ user.id }})"
   </aside>
 </div>
 
-<!-- Mobile in-call controls. On mobile the sidebar (which holds the in-call
-     card) is hidden while a conversation is open, so the Mute and Leave buttons
-     inside it become unreachable during a call. Surface them as a floating
-     widget, shown only on mobile when the sidebar is hidden, so the controls
-     stay reachable. It floats above the composer (centered pill) rather than
-     covering it. -->
-<div x-show="inCall && (activeConversation || pendingInitialConvUuid)" x-cloak
-     class="lg:hidden fixed bottom-24 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-1 rounded-full border border-base-300 bg-base-200/95 backdrop-blur shadow-lg pl-1 pr-1.5 py-1">
-  <button type="button"
-          class="flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-base-300 transition-colors"
-          @click="callSession && selectConversationById(callSession.conversation_id)"
-          title="Go to the call conversation">
-    <i data-lucide="phone-call" class="w-4 h-4 text-success flex-shrink-0"></i>
-    <span class="text-xs font-semibold text-success">In call</span>
-  </button>
-  <button class="btn btn-sm btn-circle btn-ghost" :class="isMuted ? 'text-error' : ''"
-          @click="toggleMute()" :title="isMuted ? 'Unmute' : 'Mute'">
-    <span x-show="!isMuted" class="contents"><i data-lucide="mic" class="w-4 h-4"></i></span>
-    <span x-show="isMuted" x-cloak class="contents"><i data-lucide="mic-off" class="w-4 h-4"></i></span>
-  </button>
-  <button class="btn btn-sm btn-circle btn-error" @click="leaveCall()" title="Leave call">
-    <i data-lucide="phone-off" class="w-4 h-4"></i>
-  </button>
-</div>
+
 {% endblock %}
 
 {% block content %}
@@ -320,7 +269,7 @@ x-data="chatApp({{ user.id }})"
           <button
             x-show="!isBotConversation(activeConversation)"
             class="btn btn-ghost btn-sm btn-square"
-            @click="startOrJoinCall()"
+            @click="openCallRoom()"
             :disabled="inCall || joiningCall"
             title="Start or join a call"
           >
@@ -360,7 +309,7 @@ x-data="chatApp({{ user.id }})"
             <i data-lucide="phone" class="w-4 h-4 text-info flex-shrink-0"></i>
             <div class="flex items-center gap-2 flex-1 min-w-0">
               <span class="text-sm" x-text="'Call in progress' + (callParticipants.length ? ' - ' + callParticipants.length + ' participant' + (callParticipants.length > 1 ? 's' : '') : '')"></span>
-              <button class="btn btn-info btn-xs ml-auto" @click="startOrJoinCall()" :disabled="joiningCall">Join</button>
+              <button class="btn btn-info btn-xs ml-auto" @click="openCallRoom()">Join</button>
             </div>
           </div>
           <!-- Pinned messages banner -->

@@ -41,6 +41,7 @@ window.chatCallMixin = function chatCallMixin() {
     inCall: false,               // am I currently joined?
     isMuted: false,
     joiningCall: false,
+    callRole: 'owner',          // 'owner' (room tab) | 'observer' (main tab)
     _peers: {},                  // user_id -> { pc, audioEl }
     _localStream: null,
     _iceServers: [],
@@ -90,6 +91,12 @@ window.chatCallMixin = function chatCallMixin() {
 
     // -- Lifecycle: join / leave -----------------------------
     async startOrJoinCall() {
+      // The main tab is an observer: it never owns the mic. Joining means
+      // opening the dedicated room tab instead of capturing media here.
+      if (!window.chatCallShouldOwnMedia(this.callRole)) {
+        this.openCallRoom(this.activeConversation && this.activeConversation.uuid);
+        return;
+      }
       if (!this.activeConversation || this.joiningCall) return;
       this.joiningCall = true;
       const convId = this.activeConversation.uuid;
@@ -167,6 +174,29 @@ window.chatCallMixin = function chatCallMixin() {
       // still-active call becomes joinable again right away, instead of waiting
       // on the SSE round-trip that re-advertises it.
       this._syncCallBanner();
+    },
+
+    openCallRoom(conversationId) {
+      const convId = conversationId
+        || (this.callSession && this.callSession.conversation_id)
+        || (this.activeConversation && this.activeConversation.uuid);
+      if (!convId) return;
+      const url = window.chatCallRoomUrl(convId);
+      const name = window.chatCallRoomTabName(convId);
+      const win = window.open(url, name);
+      if (win) {
+        try { win.focus(); } catch (e) { /* background-tab focus may be denied */ }
+      } else if (typeof this.showAlert === 'function') {
+        this.showAlert('warning', 'Allow pop-ups to open the voice room.');
+      }
+    },
+
+    callBannerAction() {
+      return window.chatCallBannerAction(
+        !!this.callSession,
+        this.callParticipants,
+        this.currentUserId,
+      );
     },
 
     // Best-effort clean leave when the page is unloading (navigation to another

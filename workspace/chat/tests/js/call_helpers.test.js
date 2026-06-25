@@ -46,3 +46,9 @@ test('chatCallEventForCurrentSession returns false when detail is null or undefi
   assert.equal(ctx.chatCallEventForCurrentSession(null, session), false);
   assert.equal(ctx.chatCallEventForCurrentSession(undefined, session), false);
 });
+
+test('chatCallShouldOwnMedia gate is wired for observer', () => {
+  // call_room.js owns the gate; this asserts call.js relies on the same name.
+  const roomCtx = loadScript('workspace/chat/ui/static/chat/ui/js/call_room.js');
+  assert.equal(roomCtx.chatCallShouldOwnMedia('observer'), false);
+});

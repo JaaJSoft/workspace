@@ -58,6 +58,7 @@ window.chatCallMixin = function chatCallMixin() {
     remoteStreams: {},           // user_id -> MediaStream (audio+video)
     localVideoStream: null,      // MediaStream wrapping the current outgoing video track
     _localVideoTrack: null,      // the live camera or screen track, or null
+    _videoRequestToken: 0,       // bumped per capture request and on teardown to cancel stale awaits
     _iceServers: [],
     _heartbeatTimer: null,
 
@@ -259,6 +260,7 @@ window.chatCallMixin = function chatCallMixin() {
         this._sendHeartbeat();
         return;
       }
+      const token = ++this._videoRequestToken;
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -268,6 +270,13 @@ window.chatCallMixin = function chatCallMixin() {
         if (typeof this.showAlert === 'function') {
           this.showAlert('error', 'Camera permission is required to turn on video.');
         }
+        return;
+      }
+      // The user may have toggled again or left while the permission prompt was
+      // open: a newer request (or teardown) bumped the token. Discard this stale
+      // stream instead of attaching a track nobody asked for anymore.
+      if (token !== this._videoRequestToken) {
+        stream.getTracks().forEach((t) => t.stop());
         return;
       }
       // Camera and screen are exclusive: starting the camera stops any share.
@@ -284,11 +293,17 @@ window.chatCallMixin = function chatCallMixin() {
         this._sendHeartbeat();
         return;
       }
+      const token = ++this._videoRequestToken;
       let stream;
       try {
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
       } catch (e) {
         // User cancelled the picker, or permission denied: stay as we were.
+        return;
+      }
+      // A newer request or a teardown superseded us while the picker was open.
+      if (token !== this._videoRequestToken) {
+        stream.getTracks().forEach((t) => t.stop());
         return;
       }
       const track = stream.getVideoTracks()[0];
@@ -325,6 +340,9 @@ window.chatCallMixin = function chatCallMixin() {
     },
 
     _teardownLocal() {
+      // Cancel any in-flight getUserMedia/getDisplayMedia: its post-await guard
+      // sees the bumped token and discards the stream rather than reattaching.
+      this._videoRequestToken++;
       if (this._localVideoTrack) {
         try { this._localVideoTrack.stop(); } catch (e) { /* ignore */ }
         this._localVideoTrack = null;

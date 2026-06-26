@@ -52,7 +52,7 @@
                    :class="isSpeaking(p.user_id) ? 'border-success' : 'border-base-300'"
                    @click="pinTile(p.user_id)">
                 <video x-show="hasVideo(p)" autoplay playsinline muted
-                       class="absolute inset-0 w-full h-full object-contain bg-black"
+                       class="absolute inset-0 w-full h-full object-cover bg-black"
                        x-effect="$el.srcObject = streamFor(p.user_id)"></video>
                 <template x-if="!hasVideo(p)">
                   <div class="flex flex-col items-center gap-2">
@@ -91,7 +91,7 @@
                      :class="isSpeaking(p.user_id) ? 'border-success' : 'border-base-300'"
                      @click="pinTile(p.user_id)">
                   <video x-show="hasVideo(p)" autoplay playsinline muted
-                         class="absolute inset-0 w-full h-full object-contain bg-black"
+                         class="absolute inset-0 w-full h-full object-cover bg-black"
                          x-effect="$el.srcObject = streamFor(p.user_id)"></video>
                   <template x-if="!hasVideo(p)">
                     <div x-html="window.userAvatarHtml(p.user_id, p.display_name, 'w-8 h-8 text-sm', { presence: false })"></div>
@@ -106,10 +106,10 @@
         <!-- Self-view tile: hidden while spotlighting (self appears in the strip) -->
         <template x-if="selfParticipant() && !isSpotlight()">
           <div data-testid="self-tile"
-               class="absolute bottom-3 right-3 w-32 rounded-lg bg-base-100 border-2 flex flex-col items-center justify-center gap-1 py-3 px-2 transition-colors overflow-hidden z-10"
+               class="absolute bottom-3 right-3 w-40 aspect-video rounded-lg bg-base-100 border-2 flex flex-col items-center justify-center gap-1 px-2 transition-colors overflow-hidden z-10"
                :class="isSpeaking(currentUserId) ? 'border-success' : 'border-base-300'">
             <video x-show="hasVideo(selfParticipant())" autoplay playsinline muted
-                   class="absolute inset-0 w-full h-full object-contain bg-black"
+                   class="absolute inset-0 w-full h-full object-cover bg-black"
                    x-effect="$el.srcObject = streamFor(currentUserId)"></video>
             <template x-if="!hasVideo(selfParticipant())">
               <div class="flex flex-col items-center gap-1">

@@ -61,7 +61,7 @@
         <!-- Self-view tile: equal inset bottom-right, aligned with the grid edge -->
         <template x-if="selfParticipant()">
           <div data-testid="self-tile"
-               class="absolute bottom-3 right-3 w-32 rounded-xl bg-base-100 border-2 flex flex-col items-center justify-center gap-1 py-3 px-2 transition-colors overflow-hidden z-10"
+               class="absolute bottom-3 right-3 w-32 rounded-lg bg-base-100 border-2 flex flex-col items-center justify-center gap-1 py-3 px-2 transition-colors overflow-hidden z-10"
                :class="isSpeaking(currentUserId) ? 'border-success' : 'border-base-300'">
             <div x-html="window.userAvatarHtml(selfParticipant().user_id, selfParticipant().display_name, 'w-10 h-10', { presence: false })"></div>
             <span class="text-xs truncate max-w-full text-center px-1" x-text="selfParticipant().display_name"></span>

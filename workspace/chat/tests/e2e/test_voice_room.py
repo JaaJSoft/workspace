@@ -51,6 +51,11 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
         ConversationMember.objects.create(conversation=self.conv, user=self.user)
         ConversationMember.objects.create(conversation=self.conv, user=self.peer)
 
+    def tearDown(self):
+        from django.core.cache import cache
+        cache.clear()
+        super().tearDown()
+
     def test_call_survives_main_app_navigation(self):
         # Step 1: Log in, navigate to /chat, open the DM conversation.
         self.login_as(self.user)
@@ -92,7 +97,7 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
         #   - populates callParticipants from the server response (includes the user)
         # The x-for loop renders one tile per participant. Wait for the current
         # user's display_name ("voice-tester") to appear in the participants section.
-        participants_section = room_page.locator("section").first
+        participants_section = room_page.locator('[data-testid="participants-grid"]')
         try:
             expect(
                 participants_section.get_by_text("voice-tester")

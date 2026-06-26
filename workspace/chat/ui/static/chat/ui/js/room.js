@@ -1,6 +1,26 @@
 // Voice room Alpine app. Reuses the chat mixins (messages, input, SSE, members,
 // panels, bot, call) but is locked to a single conversation and owns the call.
 // No sidebar, no conversation list: the room is one conversation, full screen.
+
+/**
+ * Format a duration in milliseconds as mm:ss, or h:mm:ss when >= 1 hour.
+ * Negative values are clamped to 0. Pure function - no side effects.
+ * @param {number} ms
+ * @returns {string}
+ */
+function chatRoomFormatDuration(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const s = total % 60;
+  const m = Math.floor(total / 60) % 60;
+  const h = Math.floor(total / 3600);
+  const pad = (n) => String(n).padStart(2, '0');
+  if (h > 0) {
+    return `${h}:${pad(m)}:${pad(s)}`;
+  }
+  return `${pad(m)}:${pad(s)}`;
+}
+window.chatRoomFormatDuration = chatRoomFormatDuration;
+
 function chatRoomApp(currentUserId, conversationId) {
   return {
     currentUserId: currentUserId,
@@ -8,6 +28,9 @@ function chatRoomApp(currentUserId, conversationId) {
     callRole: 'owner',
     roomParticipants: [],
     speakingIds: {},
+    callElapsed: '00:00',
+    _callStartMs: null,
+    _durationTimer: null,
     _audioCtx: null,
     _meterTimer: null,
     chatPrefs: { ...(window._chatPrefsCache || {}) },
@@ -60,6 +83,7 @@ function chatRoomApp(currentUserId, conversationId) {
       await this.loadMessages(this.roomConversationId);
       await this.startOrJoinCall();
       this._startSpeakingMeter();
+      this._startDurationTimer();
     },
 
     // Lightweight speaking meter: sample local + remote streams ~10/s and flag
@@ -107,6 +131,26 @@ function chatRoomApp(currentUserId, conversationId) {
         }
         this.speakingIds = next;
       }, 100);
+    },
+
+    _startDurationTimer() {
+      if (this._durationTimer) return; // idempotent
+      // Prefer the server-supplied start so all participants share the same clock.
+      const serverTs = this.callSession && this.callSession.started_at;
+      const start = serverTs ? new Date(serverTs).getTime() : Date.now();
+      this._callStartMs = isNaN(start) ? Date.now() : start;
+      this.callElapsed = this._formatDuration(Date.now() - this._callStartMs);
+      this._durationTimer = setInterval(() => {
+        this.callElapsed = this._formatDuration(Date.now() - this._callStartMs);
+      }, 1000);
+    },
+
+    _stopDurationTimer() {
+      if (this._durationTimer) { clearInterval(this._durationTimer); this._durationTimer = null; }
+    },
+
+    _formatDuration(ms) {
+      return window.chatRoomFormatDuration(ms);
     },
 
     _stopSpeakingMeter() {

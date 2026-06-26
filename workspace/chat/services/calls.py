@@ -341,6 +341,7 @@ def serialize_call_state(session):
         "session_id": str(session.uuid),
         "conversation_id": str(session.conversation_id),
         "started_by": session.started_by_id,
+        "started_at": session.started_at.isoformat(),
         "media_kind": session.media_kind,
         "participants": participants,
     }

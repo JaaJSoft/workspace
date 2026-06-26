@@ -47,8 +47,16 @@ test('chatCallEventForCurrentSession returns false when detail is null or undefi
   assert.equal(ctx.chatCallEventForCurrentSession(undefined, session), false);
 });
 
-test('chatCallShouldOwnMedia gate is wired for observer', () => {
-  // call_room.js owns the gate; this asserts call.js relies on the same name.
-  const roomCtx = loadScript('workspace/chat/ui/static/chat/ui/js/call_room.js');
-  assert.equal(roomCtx.chatCallShouldOwnMedia('observer'), false);
+test('startOrJoinCall delegates to the room for an observer (no media capture)', () => {
+  const callCtx = loadScript('workspace/chat/ui/static/chat/ui/js/call.js', {
+    chatCallShouldOwnMedia: (r) => r !== 'observer',
+  });
+  const m = callCtx.chatCallMixin();
+  let openedWith = null;
+  m.openCallRoom = (id) => { openedWith = id; };
+  m.callRole = 'observer';
+  m.activeConversation = { uuid: 'conv-9' };
+  m.startOrJoinCall();
+  assert.equal(openedWith, 'conv-9');     // observer delegates to the room tab
+  assert.equal(m.joiningCall, false);     // never entered the media/join flow
 });

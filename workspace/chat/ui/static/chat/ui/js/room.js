@@ -74,8 +74,10 @@ function chatRoomApp(currentUserId, conversationId) {
       // Load the conversation messages, then auto-join the call.
       await this.loadMessages(this.roomConversationId);
       await this.startOrJoinCall();
-      this._startSpeakingMeter();
-      this._startDurationTimer();
+      if (this.inCall) {
+        this._startSpeakingMeter();
+        this._startDurationTimer();
+      }
     },
 
     // Lightweight speaking meter: sample local + remote streams ~10/s and flag
@@ -151,9 +153,12 @@ function chatRoomApp(currentUserId, conversationId) {
     },
 
     leaveRoom() {
-      this._stopSpeakingMeter();
-      this._stopDurationTimer();
-      return this.leaveCall().finally(() => window.close());
+      return this.leaveCall().finally(() => {
+        window.close();
+        // window.close() is a no-op for a tab the script did not open (e.g. a
+        // direct visit or refresh of the room URL); fall back to the chat list.
+        setTimeout(() => { window.location.href = '/chat'; }, 100);
+      });
     },
 
     isSpeaking(userId) {

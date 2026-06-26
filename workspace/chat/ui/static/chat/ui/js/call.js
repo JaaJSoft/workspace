@@ -150,6 +150,12 @@ window.chatCallMixin = function chatCallMixin() {
     },
 
     async leaveCall() {
+      // Stop the room's speaking meter and duration timer if present (room tab
+      // only; optional chaining makes this a no-op on the main observer tab).
+      // Covers both the explicit Leave and the call_ended path, which both route
+      // through leaveCall.
+      this._stopSpeakingMeter?.();
+      this._stopDurationTimer?.();
       // Leave the call's own conversation, captured before we clear the session
       // (you may be viewing a different conversation while in the call).
       const convId = this.callSession && this.callSession.conversation_id;

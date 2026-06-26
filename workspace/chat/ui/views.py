@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.db.models import OuterRef, Prefetch, Subquery
+from django.db.models import OuterRef, Prefetch, Subquery, prefetch_related_objects
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render
 from django.utils import timezone
@@ -184,20 +184,18 @@ def chat_room_view(request, conversation_uuid):
     if not membership:
         return HttpResponseForbidden()
 
-    # Fetch the conversation with active members prefetched so the serializer
-    # can populate members, member_count, and is_bot_conversation without
-    # extra queries, matching the shape used by the main chat page.
-    conversation = (
-        Conversation.objects.filter(uuid=conversation_uuid)
-        .prefetch_related(
-            Prefetch(
-                "members",
-                queryset=ConversationMember.objects.filter(
-                    left_at__isnull=True,
-                ).select_related("user", "user__bot_profile"),
-            ),
-        )
-        .first()
+    # Reach the conversation through the authorized membership so authorization
+    # and data retrieval stay tied together, then prefetch active members so the
+    # serializer populates members/member_count/is_bot_conversation without N+1.
+    conversation = membership.conversation
+    prefetch_related_objects(
+        [conversation],
+        Prefetch(
+            "members",
+            queryset=ConversationMember.objects.filter(
+                left_at__isnull=True,
+            ).select_related("user", "user__bot_profile"),
+        ),
     )
 
     conversation_data = ConversationListSerializer(conversation).data

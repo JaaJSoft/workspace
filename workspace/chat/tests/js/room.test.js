@@ -7,6 +7,7 @@ const { loadScript } = require('../../../common/tests/js/loader');
 // Stub the mixins and helpers the factory spreads, injected via extraGlobals
 // so they are resolvable when chatRoomApp() is called inside the vm context.
 const stubs = {
+  chatUiHelpersMixin: () => ({}),
   chatConversationsMixin: () => ({ _conversations: true }),
   chatMessagesMixin: () => ({ _msg: true, loadMessages: async () => {} }),
   chatInputMixin: () => ({ _input: true }),

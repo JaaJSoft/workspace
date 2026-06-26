@@ -109,13 +109,49 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
                 print(f"[e2e:room]   {line}")
             raise
 
-        # Step 4: Navigate the MAIN tab to /files - a full page reload to another
+        # Step 4: Type a message into the room's composer and press Enter.
+        # This proves that autoResize($el), handleInputKeydown($event), and
+        # getMessageInput() all resolve correctly in chatRoomApp (the bug was
+        # that these helpers lived only in chatApp's factory body and were absent
+        # from chatRoomApp, causing a ReferenceError/TypeError per keystroke and
+        # Enter-to-send being dead).
+        # The room uses the same conversation_pane.html partial; the desktop
+        # textarea has x-ref="messageInput" and placeholder "Type a message...".
+        room_composer = room_page.locator('textarea[placeholder="Type a message..."]')
+        try:
+            expect(room_composer).to_be_visible(timeout=5_000)
+        except Exception:
+            print(
+                "\n[e2e:room] composer not visible - console messages from room page:"
+            )
+            for line in _room_console:
+                print(f"[e2e:room]   {line}")
+            raise
+
+        room_test_message = "hello from the voice room composer test"
+        room_composer.fill(room_test_message)
+        room_composer.press("Enter")
+
+        room_messages = room_page.locator("#messages-container")
+        try:
+            expect(room_messages.get_by_text(room_test_message)).to_be_visible(
+                timeout=10_000
+            )
+        except Exception:
+            print(
+                "\n[e2e:room] message not visible after Enter - console messages from room page:"
+            )
+            for line in _room_console:
+                print(f"[e2e:room]   {line}")
+            raise
+
+        # Step 5: Navigate the MAIN tab to /files - a full page reload to another
         # module. Under the old architecture the call lived in the chat page and
         # would have been destroyed when the Alpine app tore down here.
         self.page.goto(f"{self.live_server_url}/files")
         self.page.wait_for_load_state("domcontentloaded")
 
-        # Step 5: The room tab must still be alive and still show the participant
+        # Step 6: The room tab must still be alive and still show the participant
         # tile. This is the core regression assertion: because the call is owned
         # by the room tab (not the main tab), main-tab navigation cannot kill it.
         expect(participants_section.get_by_text("voice-tester")).to_be_visible(

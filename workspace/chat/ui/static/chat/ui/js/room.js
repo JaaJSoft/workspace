@@ -12,6 +12,7 @@ function chatRoomApp(currentUserId, conversationId) {
     _meterTimer: null,
     chatPrefs: { ...(window._chatPrefsCache || {}) },
 
+    ...chatUiHelpersMixin(),
     ...chatConversationsMixin(),
     ...chatMessagesMixin(),
     ...chatInputMixin(),

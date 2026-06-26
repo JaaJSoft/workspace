@@ -161,7 +161,7 @@ x-data="chatApp({{ user.id }})"
 
     <!-- Passive call banner. The call itself lives in the dedicated room tab;
          here we only reflect server state and offer Join / Return to room. -->
-    <div x-show="callBannerAction()" x-cloak class="border-t border-base-300 px-3 py-2 mb-2">
+    <div x-show="callBannerAction()" x-cloak data-testid="call-banner" class="border-t border-base-300 px-3 py-2 mb-2">
       <div x-show="!collapsed" x-cloak
            class="rounded-lg border border-base-300 bg-base-100 p-2 flex flex-col gap-2">
         <div class="flex items-center gap-2">

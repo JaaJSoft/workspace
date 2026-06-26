@@ -40,7 +40,7 @@
                 :title="isMuted ? 'Unmute' : 'Mute'">
           <i :data-lucide="isMuted ? 'mic-off' : 'mic'" class="w-5 h-5"></i>
         </button>
-        <button class="btn btn-error btn-circle" @click="leaveCall(); window.close()" title="Leave call">
+        <button class="btn btn-error btn-circle" @click="leaveCall().finally(() => window.close())" title="Leave call">
           <i data-lucide="phone-off" class="w-5 h-5"></i>
         </button>
       </div>

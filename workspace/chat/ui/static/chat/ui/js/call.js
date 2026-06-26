@@ -161,11 +161,20 @@ window.chatCallMixin = function chatCallMixin() {
       this.isMuted = false;
       this.callParticipants = [];
       this.callSession = null;
+      // Notify the main-tab observer synchronously, before the fetch completes.
+      // Posting here (while the page is still alive) ensures the main tab
+      // receives the room-closed signal even if the tab closes before pagehide.
+      if (this._roomChannel) {
+        try {
+          this._roomChannel.postMessage({ type: 'room-closed', conversationId: convId });
+        } catch (e) { /* best effort */ }
+      }
       if (convId) {
         try {
           await fetch(`/api/v1/chat/conversations/${convId}/call/leave`, {
             method: 'POST',
             headers: { 'X-CSRFToken': this._csrf() },
+            keepalive: true,
           });
         } catch (e) { /* best effort */ }
       }

@@ -261,3 +261,119 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
             f"chat aside width {aside_box['width']:.0f}px (overlay mode). "
             f"A ~288px width means the old side-by-side bug is back."
         )
+
+    def test_leave_button_clears_main_tab_banner(self):
+        """Clicking the room Leave button must clear the main-tab call banner.
+
+        Regression: leaveCall() fired a fetch without keepalive=True, so
+        window.close() aborted the in-flight request. The server never got the
+        leave, kept the user as a participant, and the banner lingered until the
+        ~60 s stale-call sweep.
+        """
+        # Step 1: Log in, navigate to chat, open the DM conversation.
+        self.login_as(self.user)
+        self.page.goto(f"{self.live_server_url}/chat")
+
+        list_root = self.page.locator("#conversation-list")
+        expect(list_root.get_by_text("voice-peer")).to_be_visible()
+        list_root.get_by_text("voice-peer").click()
+
+        composer = self.page.locator('textarea[placeholder="Type a message..."]')
+        expect(composer).to_be_visible()
+
+        _main_console: list[str] = []
+        self.page.on(
+            "console",
+            lambda msg: _main_console.append(f"{msg.type}: {msg.text}"),
+        )
+        self.page.on(
+            "pageerror",
+            lambda exc: _main_console.append(f"pageerror: {exc}"),
+        )
+
+        # Step 2: Open the voice room tab and wait for it to join the call.
+        with self.context.expect_page() as room_page_info:
+            self.page.get_by_title("Start or join a call").click()
+
+        room_page = room_page_info.value
+
+        _room_console: list[str] = []
+        room_page.on(
+            "console",
+            lambda msg: _room_console.append(f"{msg.type}: {msg.text}"),
+        )
+        room_page.on(
+            "pageerror",
+            lambda exc: _room_console.append(f"pageerror: {exc}"),
+        )
+
+        room_page.wait_for_load_state("domcontentloaded")
+
+        participants_section = room_page.locator('[data-testid="participants-grid"]')
+        try:
+            expect(participants_section.get_by_text("voice-tester")).to_be_visible(
+                timeout=15_000
+            )
+        except Exception:
+            print("\n[e2e:room] join failed - console messages from room page:")
+            for line in _room_console:
+                print(f"[e2e:room]   {line}")
+            raise
+
+        # Step 3: Precondition - the main tab must show the call banner.
+        #
+        # In local dev (no Redis), SSE events are stored in a shared cache queue
+        # per user ID. The room tab's SSE connection drains `call_started` before
+        # the main tab's connection can see it, so we cannot rely on the normal
+        # SSE delivery path here. Instead, dispatch a synthetic `chat-call_started`
+        # event on the main tab window to trigger the same observer code path
+        # (onCallStarted -> _refreshCallState). The server will return the real
+        # active call state, making this deterministic.
+        conv_uuid = str(self.conv.uuid)
+        self.page.evaluate(
+            f"""
+            () => {{
+              window.dispatchEvent(new CustomEvent('chat-call_started', {{
+                detail: {{
+                  session_id: 'test-session',
+                  conversation_id: '{conv_uuid}',
+                  started_by: {self.user.id},
+                  media_kind: 'audio'
+                }}
+              }}));
+            }}
+            """
+        )
+
+        call_banner = self.page.locator('[data-testid="call-banner"]')
+        try:
+            expect(call_banner).to_be_visible(timeout=10_000)
+        except Exception:
+            print(
+                "\n[e2e:main] call banner never appeared - console messages from main page:"
+            )
+            for line in _main_console:
+                print(f"[e2e:main]   {line}")
+            raise
+
+        # Step 4: Click the Leave button in the room tab. leaveCall() runs then
+        # window.close() fires. The room tab closes.
+        room_page.get_by_title("Leave call").click()
+        try:
+            room_page.wait_for_event("close", timeout=5_000)
+        except Exception:
+            pass  # page may already be closed
+
+        # Step 5: On the main tab, assert the call banner disappears.
+        # With the fix: keepalive=True ensures the leave POST lands; the
+        # delayed observer refresh reads the cleared state and hides the banner.
+        try:
+            expect(call_banner).to_be_hidden(timeout=12_000)
+        except Exception:
+            print("\n[e2e:main] call banner still visible after leave - main console:")
+            for line in _main_console:
+                print(f"[e2e:main]   {line}")
+            print("\n[e2e:room] room tab console at time of failure:")
+            for line in _room_console:
+                print(f"[e2e:room]   {line}")
+            raise

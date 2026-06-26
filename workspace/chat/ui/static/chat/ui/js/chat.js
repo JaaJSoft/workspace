@@ -59,6 +59,11 @@ function chatApp(currentUserId) {
           if (d.type === 'room-open' || d.type === 'room-closed') {
             if (this.activeConversation && typeof this._refreshCallState === 'function') {
               this._refreshCallState();
+              if (d.type === 'room-closed') {
+                // The server-side leave may still be in-flight; re-check after a
+                // short delay so the banner clears without waiting on SSE.
+                setTimeout(() => { try { this._refreshCallState(); } catch (e) {} }, 1200);
+              }
             }
           }
         };

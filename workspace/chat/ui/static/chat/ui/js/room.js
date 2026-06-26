@@ -27,6 +27,8 @@ function chatRoomApp(currentUserId, conversationId) {
     roomConversationId: conversationId,
     callRole: 'owner',
     speakingIds: {},
+    pinnedUserId: null,
+    pinnedManually: false,
     callElapsed: '00:00',
     _callStartMs: null,
     _durationTimer: null,
@@ -175,6 +177,68 @@ function chatRoomApp(currentUserId, conversationId) {
 
     gridColumns() {
       return Math.max(1, Math.ceil(Math.sqrt(this.remoteParticipants().length || 1)));
+    },
+
+    pinTile(userId) {
+      // Click a tile to spotlight it; click the pinned tile again to return to
+      // the grid. Any click marks the choice manual so auto-pin yields to it.
+      this.pinnedUserId = (this.pinnedUserId === userId) ? null : userId;
+      this.pinnedManually = true;
+    },
+
+    backToGrid() {
+      this.pinnedUserId = null;
+      this.pinnedManually = true;
+    },
+
+    spotlightUserId() {
+      return window.chatCallSpotlightTarget(this.callParticipants, this.pinnedUserId);
+    },
+
+    isSpotlight() {
+      return this.spotlightUserId() != null;
+    },
+
+    spotlightParticipant() {
+      const id = this.spotlightUserId();
+      return id == null ? null : this.callParticipants.find((p) => p.user_id === id) || null;
+    },
+
+    stripParticipants() {
+      // Everyone except the spotlighted participant, for the thumbnail strip.
+      const id = this.spotlightUserId();
+      return this.callParticipants.filter((p) => p.user_id !== id);
+    },
+
+    hasVideo(p) {
+      return !!(p && p.media_state && (p.media_state.video || p.media_state.screen));
+    },
+
+    streamFor(userId) {
+      if (userId === this.currentUserId) return this.localVideoStream || null;
+      return this.remoteStreams[userId] || null;
+    },
+
+    onCallParticipantUpdated(detail) {
+      // Apply the media_state update via the mixin's logic, then auto-pin a
+      // fresh screen sharer unless the viewer already pinned manually.
+      const p = this.callParticipants.find((x) => x.user_id === detail.user_id);
+      if (p) p.media_state = detail.media_state;
+      const target = window.chatCallAutoPinTarget(
+        { user_id: detail.user_id, media_state: detail.media_state },
+        this.pinnedManually,
+      );
+      if (target != null) this.pinnedUserId = target;
+    },
+
+    onCallParticipantLeft(detail) {
+      if (detail.user_id !== this.currentUserId) this._playCallCue('peer-leave');
+      this.callParticipants = this.callParticipants.filter((p) => p.user_id !== detail.user_id);
+      this._closePeer(detail.user_id);
+      if (this.pinnedUserId === detail.user_id) {
+        this.pinnedUserId = null;
+        this.pinnedManually = false;  // pin gone; allow auto-pin again
+      }
     },
   };
 }

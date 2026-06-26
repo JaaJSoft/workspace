@@ -73,7 +73,7 @@
 
       <!-- Controls bar: centered dock at bottom -->
       <div class="flex justify-center shrink-0">
-        <div class="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-base-100/90 backdrop-blur border border-base-300 shadow-lg">
+        <div class="inline-flex items-center gap-3 p-3 rounded-full bg-base-100/90 backdrop-blur border border-base-300 shadow-lg">
           <button class="btn btn-circle border-0" :class="isMuted ? 'btn-error' : 'btn-neutral'" @click="toggleMute()"
                   :title="isMuted ? 'Unmute' : 'Mute'">
             <i :data-lucide="isMuted ? 'mic-off' : 'mic'" class="w-5 h-5"></i>

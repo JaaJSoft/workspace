@@ -21,9 +21,9 @@
      @chat-call_signal.window="onCallSignal($event.detail)">
   <div class="flex flex-1 min-h-0">
     <!-- Participants grid -->
-    <section data-testid="participants-grid" class="flex-1 flex flex-col bg-base-200 p-4 min-w-0 relative">
+    <section data-testid="participants-grid" class="flex-1 flex flex-col gap-4 bg-base-200 p-4 min-w-0 relative">
       <!-- Call status bar -->
-      <div class="flex items-center gap-2 text-sm mb-3 shrink-0 px-1">
+      <div class="flex items-center gap-2 text-sm shrink-0">
         <span class="inline-block w-2 h-2 rounded-full bg-success shrink-0"></span>
         <span class="font-medium">In call</span>
         <span class="text-base-content/40">&middot;</span>
@@ -45,7 +45,7 @@
 
         <!-- Remote participants grid: fills available space, columns adapt to count -->
         <template x-if="remoteParticipants().length > 0">
-          <div class="absolute inset-0 grid gap-3"
+          <div class="absolute inset-0 grid gap-4"
                :style="`grid-template-columns: repeat(${gridColumns()}, minmax(0, 1fr)); grid-auto-rows: 1fr;`">
             <template x-for="p in remoteParticipants()" :key="p.user_id">
               <div class="rounded-xl bg-base-100 border-2 flex flex-col items-center justify-center gap-2 transition-colors overflow-hidden"
@@ -72,7 +72,7 @@
       </div>
 
       <!-- Controls bar: centered dock at bottom -->
-      <div class="flex justify-center pt-4 shrink-0">
+      <div class="flex justify-center shrink-0">
         <div class="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-base-100/90 backdrop-blur border border-base-300 shadow-lg">
           <button class="btn btn-circle border-0" :class="isMuted ? 'btn-error' : 'btn-neutral'" @click="toggleMute()"
                   :title="isMuted ? 'Unmute' : 'Mute'">

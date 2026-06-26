@@ -49,6 +49,20 @@ function chatApp(currentUserId) {
       // does. Force observer so any stray join path opens the room instead.
       this.callRole = 'observer';
 
+      // React to room presence from other tabs of this browser: re-sync the
+      // banner so Join/Return reflects reality immediately.
+      try {
+        this._callChannel = new BroadcastChannel('chat-call');
+        this._callChannel.onmessage = (e) => {
+          const d = e.data || {};
+          if (d.type === 'room-open' || d.type === 'room-closed') {
+            if (this.activeConversation && typeof this._refreshCallState === 'function') {
+              this._refreshCallState();
+            }
+          }
+        };
+      } catch (e) { /* unsupported: server state still drives the banner */ }
+
       // Whenever the open conversation changes (initial load, F5, navigation),
       // sync the call banner so an already-ongoing call is joinable - SSE events
       // only fire for calls that start while you are already here.

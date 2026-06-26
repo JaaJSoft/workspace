@@ -29,6 +29,16 @@ function chatRoomApp(currentUserId, conversationId) {
       // activeConversation so every mixin that reads it targets the room call.
       this.activeConversation = { uuid: this.roomConversationId };
 
+      // Announce room presence so the main tab flips Join <-> Return instantly,
+      // without waiting on the heartbeat/SSE round-trip.
+      try {
+        this._roomChannel = new BroadcastChannel('chat-call');
+        this._roomChannel.postMessage({ type: 'room-open', conversationId: this.roomConversationId });
+        window.addEventListener('pagehide', () => {
+          try { this._roomChannel.postMessage({ type: 'room-closed', conversationId: this.roomConversationId }); } catch (e) {}
+        });
+      } catch (e) { /* BroadcastChannel unsupported: fall back to server state */ }
+
       // Seed the participants grid from the embedded server data.
       const seedEl = document.getElementById('room-participants-data');
       if (seedEl) {

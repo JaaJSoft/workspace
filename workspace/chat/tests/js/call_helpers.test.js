@@ -60,3 +60,9 @@ test('startOrJoinCall delegates to the room for an observer (no media capture)',
   assert.equal(openedWith, 'conv-9');     // observer delegates to the room tab
   assert.equal(m.joiningCall, false);     // never entered the media/join flow
 });
+
+test('chatCallMediaState maps mic/camera/screen flags', () => {
+  assert.deepEqual(ctx.chatCallMediaState(false, false, false), { audio: true, video: false, screen: false });
+  assert.deepEqual(ctx.chatCallMediaState(true, true, false), { audio: false, video: true, screen: false });
+  assert.deepEqual(ctx.chatCallMediaState(false, false, true), { audio: true, video: false, screen: true });
+});

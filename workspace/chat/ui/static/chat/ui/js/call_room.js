@@ -32,8 +32,29 @@ function chatCallShouldOwnMedia(role) {
   return role !== 'observer';
 }
 
+function chatCallSpotlightTarget(participants, pinnedUserId) {
+  // Which participant to show large. Pure derivation: the viewer's pin if that
+  // participant is still in the call, otherwise the equal grid (null).
+  if (pinnedUserId == null) return null;
+  const present = (participants || []).some((p) => p.user_id === pinnedUserId);
+  return present ? pinnedUserId : null;
+}
+
+function chatCallAutoPinTarget(participant, pinnedManually) {
+  // Intelligent default: when a participant turns their screen share on and the
+  // viewer has not made an explicit pin choice, auto-pin that sharer. A manual
+  // pin always wins, so we yield.
+  if (pinnedManually) return null;
+  if (participant && participant.media_state && participant.media_state.screen === true) {
+    return participant.user_id;
+  }
+  return null;
+}
+
 window.chatCallRoomUrl = chatCallRoomUrl;
 window.chatCallRoomTabName = chatCallRoomTabName;
 window.chatCallBannerAction = chatCallBannerAction;
 window.chatIsSpeaking = chatIsSpeaking;
 window.chatCallShouldOwnMedia = chatCallShouldOwnMedia;
+window.chatCallSpotlightTarget = chatCallSpotlightTarget;
+window.chatCallAutoPinTarget = chatCallAutoPinTarget;

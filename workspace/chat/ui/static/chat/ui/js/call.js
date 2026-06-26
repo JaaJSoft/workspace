@@ -15,6 +15,14 @@ function chatCallMergeMediaState(current, patch) {
   return Object.assign({}, current || {}, patch || {});
 }
 
+function chatCallMediaState(isMuted, cameraOn, sharing) {
+  // Shape pushed by the heartbeat and read by remote tiles. audio is inverted
+  // mute; video = camera on; screen = screen sharing. Camera and screen are
+  // mutually exclusive at the call layer, but represented as distinct flags so
+  // the UI can show the right icon and trigger auto-pin on screen.
+  return { audio: !isMuted, video: !!cameraOn, screen: !!sharing };
+}
+
 function chatCallOtherParticipantIds(participants, selfId) {
   return (participants || [])
     .map((p) => p.user_id)
@@ -30,6 +38,7 @@ function chatCallEventForCurrentSession(detail, callSession) {
 
 window.chatCallShouldOffer = chatCallShouldOffer;
 window.chatCallMergeMediaState = chatCallMergeMediaState;
+window.chatCallMediaState = chatCallMediaState;
 window.chatCallOtherParticipantIds = chatCallOtherParticipantIds;
 window.chatCallEventForCurrentSession = chatCallEventForCurrentSession;
 

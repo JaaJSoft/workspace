@@ -1,15 +1,5 @@
 # Changelog
 
-## 0.29.0 - Video & Screen Sharing
-
-### Highlights
-Calls can see now. Turn on your camera or share your screen in any conversation call, and click anyone to bring them front and center.
-
-### Chat
-- Turn your camera on or off during a call.
-- Share your screen with everyone in the call. When someone starts sharing, their screen automatically takes the spotlight.
-- Click any participant to spotlight them in a large view, with everyone else in a thumbnail strip. Click again to return to the equal grid.
-
 ## 0.28.0 - Voice Calls & Notes Graph
 
 ### Highlights

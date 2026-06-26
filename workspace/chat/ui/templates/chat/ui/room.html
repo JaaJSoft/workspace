@@ -10,7 +10,7 @@
 <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
 {% endblock %}
 
-{% block content %}
+{% block body %}
 <div class="h-screen flex flex-col"
      x-data="chatRoomApp({{ current_user_id }}, '{{ conversation_uuid }}')"
      @chat-message.window="handleSSEMessage($event.detail)"

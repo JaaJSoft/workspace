@@ -11,6 +11,7 @@ from django.db import transaction
 from wsgidav.dav_error import HTTP_BAD_REQUEST, DAVError
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
+from workspace.common.logging import scrub
 from workspace.files.models import File, file_upload_path
 from workspace.files.services import FileService
 
@@ -87,7 +88,7 @@ class _StreamingWriteBuffer:
         try:
             os.unlink(self._full_path)
         except OSError:
-            logger.debug("Could not remove partial upload %s", self._full_path)
+            logger.debug("Could not remove partial upload %s", scrub(self._full_path))
 
 
 class RootCollection(DAVCollection):
@@ -328,8 +329,8 @@ class FileResource(DAVNonCollection):
         self._write_started_at = time.monotonic()
         logger.info(
             "PUT started for %s by %s",
-            self.path,
-            getattr(self._user, "username", "?"),
+            scrub(self.path),
+            scrub(getattr(self._user, "username", "?")),
         )
         return self._write_buf
 
@@ -338,13 +339,13 @@ class FileResource(DAVNonCollection):
         elapsed = time.monotonic() - getattr(
             self, "_write_started_at", time.monotonic()
         )
-        username = getattr(self._user, "username", "?")
+        username = scrub(getattr(self._user, "username", "?"))
 
         if with_errors:
             buf.abort()
             logger.warning(
                 "PUT failed for %s by %s (%.2fs)",
-                self.path,
+                scrub(self.path),
                 username,
                 elapsed,
             )
@@ -369,7 +370,7 @@ class FileResource(DAVNonCollection):
             logger.warning(
                 "PUT rejected for %s by %s: incomplete transfer "
                 "(%d of %d bytes, %.2fs)",
-                self.path,
+                scrub(self.path),
                 username,
                 buf.size,
                 expected,
@@ -397,7 +398,7 @@ class FileResource(DAVNonCollection):
             except File.DoesNotExist:
                 logger.warning(
                     "File record deleted during upload for %s by %s, recreating",
-                    self.path,
+                    scrub(self.path),
                     username,
                 )
                 self._file = FileService.create_file(
@@ -415,7 +416,7 @@ class FileResource(DAVNonCollection):
 
         logger.info(
             "PUT completed for %s by %s (%d bytes, %.2fs)",
-            self.path,
+            scrub(self.path),
             username,
             buf.size,
             time.monotonic() - self._write_started_at,

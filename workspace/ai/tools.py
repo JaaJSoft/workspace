@@ -116,7 +116,12 @@ If the key already exists it will be updated."""
             key=key,
             defaults={"content": content},
         )
-        logger.info("Memory saved: %s/%s — %s", user.username, bot.username, key)
+        logger.info(
+            "Memory saved: %s/%s - %s",
+            scrub(user.username),
+            scrub(bot.username),
+            scrub(key),
+        )
         return f'Saved memory "{key}".'
 
     @tool(
@@ -131,7 +136,12 @@ Call this when the user explicitly asks you to forget something or when a stored
         key = args.key.strip()
         deleted, _ = UserMemory.objects.filter(user=user, bot=bot, key=key).delete()
         if deleted:
-            logger.info("Memory deleted: %s/%s — %s", user.username, bot.username, key)
+            logger.info(
+                "Memory deleted: %s/%s - %s",
+                scrub(user.username),
+                scrub(bot.username),
+                scrub(key),
+            )
             return f'Deleted memory "{key}".'
         return f'Memory "{key}" not found.'
 
@@ -244,7 +254,7 @@ Do NOT use this to modify an existing image — use edit_image instead."""
             "Starting image generation: model=%s size=%s prompt=%.80s",
             settings.AI_IMAGE_MODEL,
             size,
-            prompt,
+            scrub(prompt),
         )
         from workspace.ai.metrics import AI_IMAGE_REQUESTS
 
@@ -295,7 +305,7 @@ Do NOT use this to modify an existing image — use edit_image instead."""
             settings.AI_IMAGE_MODEL,
             size,
             len(image_data),
-            prompt,
+            scrub(prompt),
         )
 
         context.setdefault("images", []).append(

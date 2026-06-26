@@ -184,6 +184,23 @@ class CleanupTests(TestCase):
         self.assertEqual(state["participants"][0]["user_id"], self.a.id)
         self.assertEqual(state["participants"][0]["media_state"], {"audio": True})
 
+    def test_media_state_video_and_screen_flags_roundtrip(self):
+        # Contract: arbitrary media_state keys (video, screen) must survive
+        # heartbeat -> presence cache -> serialize_call_state unchanged.
+        # Pins the passthrough the frontend video feature depends on.
+        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        calls.touch_presence(
+            session.uuid,
+            self.a.id,
+            {"audio": True, "video": True, "screen": False},
+        )
+
+        state = calls.serialize_call_state(session)
+        me = next(p for p in state["participants"] if p["user_id"] == self.a.id)
+        self.assertEqual(
+            me["media_state"], {"audio": True, "video": True, "screen": False}
+        )
+
 
 class EndStaleCallsTaskTests(TestCase):
     def setUp(self):

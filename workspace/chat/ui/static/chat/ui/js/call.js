@@ -15,6 +15,14 @@ function chatCallMergeMediaState(current, patch) {
   return Object.assign({}, current || {}, patch || {});
 }
 
+function chatCallMediaState(isMuted, cameraOn, sharing) {
+  // Shape pushed by the heartbeat and read by remote tiles. audio is inverted
+  // mute; video = camera on; screen = screen sharing. Camera and screen are
+  // mutually exclusive at the call layer, but represented as distinct flags so
+  // the UI can show the right icon and trigger auto-pin on screen.
+  return { audio: !isMuted, video: !!cameraOn, screen: !!sharing };
+}
+
 function chatCallOtherParticipantIds(participants, selfId) {
   return (participants || [])
     .map((p) => p.user_id)
@@ -30,6 +38,7 @@ function chatCallEventForCurrentSession(detail, callSession) {
 
 window.chatCallShouldOffer = chatCallShouldOffer;
 window.chatCallMergeMediaState = chatCallMergeMediaState;
+window.chatCallMediaState = chatCallMediaState;
 window.chatCallOtherParticipantIds = chatCallOtherParticipantIds;
 window.chatCallEventForCurrentSession = chatCallEventForCurrentSession;
 
@@ -42,8 +51,14 @@ window.chatCallMixin = function chatCallMixin() {
     isMuted: false,
     joiningCall: false,
     callRole: 'owner',          // 'owner' (room tab) | 'observer' (main tab)
-    _peers: {},                  // user_id -> { pc, audioEl }
+    _peers: {},                  // user_id -> { pc, audioEl, remoteStream, videoSender }
     _localStream: null,
+    cameraOn: false,
+    sharing: false,
+    remoteStreams: {},           // user_id -> MediaStream (audio+video)
+    localVideoStream: null,      // MediaStream wrapping the current outgoing video track
+    _localVideoTrack: null,      // the live camera or screen track, or null
+    _videoRequestToken: 0,       // bumped per capture request and on teardown to cancel stale awaits
     _iceServers: [],
     _heartbeatTimer: null,
 
@@ -86,7 +101,7 @@ window.chatCallMixin = function chatCallMixin() {
     },
 
     _mediaState() {
-      return { audio: !this.isMuted };
+      return window.chatCallMediaState(this.isMuted, this.cameraOn, this.sharing);
     },
 
     // -- Lifecycle: join / leave -----------------------------
@@ -238,7 +253,103 @@ window.chatCallMixin = function chatCallMixin() {
       this._playCallCue('toggle-mute');
     },
 
+    async toggleCamera() {
+      if (this.cameraOn) {
+        this._stopLocalVideo();
+        this.cameraOn = false;
+        this._sendHeartbeat();
+        return;
+      }
+      const token = ++this._videoRequestToken;
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+      } catch (e) {
+        if (typeof this.showAlert === 'function') {
+          this.showAlert('error', 'Camera permission is required to turn on video.');
+        }
+        return;
+      }
+      // The user may have toggled again or left while the permission prompt was
+      // open: a newer request (or teardown) bumped the token. Discard this stale
+      // stream instead of attaching a track nobody asked for anymore.
+      if (token !== this._videoRequestToken) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      // Camera and screen are exclusive: starting the camera stops any share.
+      if (this.sharing) this.sharing = false;
+      this._setLocalVideoTrack(stream.getVideoTracks()[0]);
+      this.cameraOn = true;
+      this._sendHeartbeat();
+    },
+
+    async toggleScreenShare() {
+      if (this.sharing) {
+        this._stopLocalVideo();
+        this.sharing = false;
+        this._sendHeartbeat();
+        return;
+      }
+      const token = ++this._videoRequestToken;
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      } catch (e) {
+        // User cancelled the picker, or permission denied: stay as we were.
+        return;
+      }
+      // A newer request or a teardown superseded us while the picker was open.
+      if (token !== this._videoRequestToken) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      const track = stream.getVideoTracks()[0];
+      // The browser's own "Stop sharing" ends the track: revert cleanly.
+      track.addEventListener('ended', () => {
+        if (this.sharing) {
+          this._stopLocalVideo();
+          this.sharing = false;
+          this._sendHeartbeat();
+        }
+      });
+      // Exclusive with the camera.
+      if (this.cameraOn) this.cameraOn = false;
+      this._setLocalVideoTrack(track);
+      this.sharing = true;
+      this._sendHeartbeat();
+    },
+
+    // Route a new outgoing video track (camera or screen) to every peer and the
+    // self-view. Stops the previous track so devices/captures are released.
+    _setLocalVideoTrack(track) {
+      const prev = this._localVideoTrack;
+      this._localVideoTrack = track || null;
+      for (const id of Object.keys(this._peers)) {
+        const sender = this._peers[id].videoSender;
+        if (sender) sender.replaceTrack(track || null);
+      }
+      this.localVideoStream = track ? new MediaStream([track]) : null;
+      if (prev && prev !== track) prev.stop();
+    },
+
+    _stopLocalVideo() {
+      this._setLocalVideoTrack(null);
+    },
+
     _teardownLocal() {
+      // Cancel any in-flight getUserMedia/getDisplayMedia: its post-await guard
+      // sees the bumped token and discards the stream rather than reattaching.
+      this._videoRequestToken++;
+      if (this._localVideoTrack) {
+        try { this._localVideoTrack.stop(); } catch (e) { /* ignore */ }
+        this._localVideoTrack = null;
+      }
+      this.localVideoStream = null;
+      this.cameraOn = false;
+      this.sharing = false;
       if (this._localStream) {
         this._localStream.getTracks().forEach((t) => t.stop());
         this._localStream = null;
@@ -277,10 +388,33 @@ window.chatCallMixin = function chatCallMixin() {
       audioEl.dataset.peer = String(peerId);
       document.body.appendChild(audioEl);
 
+      // One MediaStream per peer holds both audio and video tracks. The hidden
+      // <audio> element plays sound; the participant's <video> tile shows the
+      // same stream (muted, so audio is not doubled).
+      const remoteStream = new MediaStream();
+
       if (this._localStream) {
         this._localStream.getTracks().forEach((t) => pc.addTrack(t, this._localStream));
       }
-      pc.ontrack = (ev) => { audioEl.srcObject = ev.streams[0]; };
+      // Pre-negotiate the video lane up-front (track null). Every later camera/
+      // screen toggle is a replaceTrack on this sender - no renegotiation, so no
+      // mesh glare and no perfect-negotiation handshake.
+      const videoTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' });
+      const videoSender = videoTransceiver.sender;
+      // If we already have an outgoing video track (joined while camera/screen
+      // was on), attach it to this new peer immediately.
+      if (this._localVideoTrack) {
+        videoSender.replaceTrack(this._localVideoTrack);
+      }
+
+      pc.ontrack = (ev) => {
+        remoteStream.addTrack(ev.track);
+        if (ev.track.kind === 'audio') {
+          audioEl.srcObject = remoteStream;
+        }
+        // Reassign (not mutate) so Alpine reacts and tiles bind the stream.
+        this.remoteStreams = Object.assign({}, this.remoteStreams, { [peerId]: remoteStream });
+      };
       pc.onicecandidate = (ev) => {
         if (ev.candidate) this._sendSignal(peerId, { type: 'ice', candidate: ev.candidate });
       };
@@ -289,7 +423,7 @@ window.chatCallMixin = function chatCallMixin() {
           // Let cleanup / participant_left handle teardown.
         }
       };
-      this._peers[peerId] = { pc, audioEl };
+      this._peers[peerId] = { pc, audioEl, remoteStream, videoSender };
       if (initiateOffer) {
         pc.createOffer()
           .then((offer) => pc.setLocalDescription(offer)
@@ -303,6 +437,9 @@ window.chatCallMixin = function chatCallMixin() {
       if (!peer) return;
       try { peer.pc.close(); } catch (e) { /* ignore */ }
       if (peer.audioEl && peer.audioEl.parentNode) peer.audioEl.parentNode.removeChild(peer.audioEl);
+      const next = Object.assign({}, this.remoteStreams);
+      delete next[peerId];
+      this.remoteStreams = next;
       delete this._peers[peerId];
     },
 

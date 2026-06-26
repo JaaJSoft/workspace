@@ -32,8 +32,34 @@ function chatCallShouldOwnMedia(role) {
   return role !== 'observer';
 }
 
+function chatCallAutoPinTarget(participants, pinnedManually) {
+  // The automatic spotlight pick: the first participant actively sharing their
+  // screen. A manual pin always wins, so we yield when one is set. Derived from
+  // the live participants list, so it reflects who is sharing *now*.
+  if (pinnedManually) return null;
+  const sharer = (participants || []).find(
+    (p) => p && p.media_state && p.media_state.screen === true,
+  );
+  return sharer ? sharer.user_id : null;
+}
+
+function chatCallSpotlightTarget(participants, pinnedUserId, pinnedManually) {
+  // Which participant to show large. A manual pin wins while that participant is
+  // still in the call; otherwise the spotlight is derived from live state - the
+  // active screen sharer, or the equal grid (null). Deriving instead of latching
+  // a one-off event means a sharer is spotlighted even for someone who joined
+  // after the share began, and the spotlight clears the moment sharing stops.
+  const list = participants || [];
+  if (pinnedManually && pinnedUserId != null) {
+    return list.some((p) => p.user_id === pinnedUserId) ? pinnedUserId : null;
+  }
+  return chatCallAutoPinTarget(list, pinnedManually);
+}
+
 window.chatCallRoomUrl = chatCallRoomUrl;
 window.chatCallRoomTabName = chatCallRoomTabName;
 window.chatCallBannerAction = chatCallBannerAction;
 window.chatIsSpeaking = chatIsSpeaking;
 window.chatCallShouldOwnMedia = chatCallShouldOwnMedia;
+window.chatCallSpotlightTarget = chatCallSpotlightTarget;
+window.chatCallAutoPinTarget = chatCallAutoPinTarget;

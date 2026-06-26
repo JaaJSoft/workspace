@@ -27,6 +27,8 @@ function chatRoomApp(currentUserId, conversationId) {
     roomConversationId: conversationId,
     callRole: 'owner',
     speakingIds: {},
+    pinnedUserId: null,
+    pinnedManually: false,
     callElapsed: '00:00',
     _callStartMs: null,
     _durationTimer: null,
@@ -175,6 +177,62 @@ function chatRoomApp(currentUserId, conversationId) {
 
     gridColumns() {
       return Math.max(1, Math.ceil(Math.sqrt(this.remoteParticipants().length || 1)));
+    },
+
+    pinTile(userId) {
+      // Click a tile to spotlight it; click the pinned tile again to return to
+      // the grid. Any click marks the choice manual so auto-pin yields to it.
+      this.pinnedUserId = (this.pinnedUserId === userId) ? null : userId;
+      this.pinnedManually = true;
+    },
+
+    backToGrid() {
+      this.pinnedUserId = null;
+      this.pinnedManually = true;
+    },
+
+    spotlightUserId() {
+      return window.chatCallSpotlightTarget(this.callParticipants, this.pinnedUserId, this.pinnedManually);
+    },
+
+    isSpotlight() {
+      return this.spotlightUserId() != null;
+    },
+
+    spotlightParticipant() {
+      const id = this.spotlightUserId();
+      return id == null ? null : this.callParticipants.find((p) => p.user_id === id) || null;
+    },
+
+    stripParticipants() {
+      // Everyone except the spotlighted participant, for the thumbnail strip.
+      const id = this.spotlightUserId();
+      return this.callParticipants.filter((p) => p.user_id !== id);
+    },
+
+    hasVideo(p) {
+      if (p && p.user_id === this.currentUserId) return !!(this.cameraOn || this.sharing);
+      return !!(p && p.media_state && (p.media_state.video || p.media_state.screen));
+    },
+
+    streamFor(userId) {
+      if (userId === this.currentUserId) return this.localVideoStream || null;
+      return this.remoteStreams[userId] || null;
+    },
+
+    // No onCallParticipantUpdated override: the call mixin applies media_state,
+    // and spotlightUserId() derives the auto-pin from that live state, so a
+    // sharer is spotlighted (or cleared) reactively without latching an event.
+
+    onCallParticipantLeft(detail) {
+      if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
+      if (detail.user_id !== this.currentUserId) this._playCallCue('peer-leave');
+      this.callParticipants = this.callParticipants.filter((p) => p.user_id !== detail.user_id);
+      this._closePeer(detail.user_id);
+      if (this.pinnedUserId === detail.user_id) {
+        this.pinnedUserId = null;
+        this.pinnedManually = false;  // pin gone; allow auto-pin again
+      }
     },
   };
 }

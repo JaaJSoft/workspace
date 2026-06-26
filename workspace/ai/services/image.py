@@ -6,6 +6,8 @@ import logging
 
 from django.conf import settings
 
+from workspace.common.logging import scrub
+
 from ..client import get_image_client
 
 logger = logging.getLogger(__name__)
@@ -43,7 +45,7 @@ def ai_edit_image(source_data: bytes, prompt: str, size: str = "1024x1024") -> b
         "Starting image edit: model=%s size=%s prompt=%.80s",
         settings.AI_IMAGE_MODEL,
         size,
-        prompt,
+        scrub(prompt),
     )
 
     from ..metrics import AI_IMAGE_REQUESTS

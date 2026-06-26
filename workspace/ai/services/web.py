@@ -9,6 +9,8 @@ import httpx
 import trafilatura
 from django.conf import settings
 
+from workspace.common.logging import scrub
+
 logger = logging.getLogger(__name__)
 
 # Internal/private IP ranges that must not be fetched (SSRF protection).
@@ -80,7 +82,7 @@ def search(query: str, *, max_results: int = 5) -> list[dict]:
             )
             resp.raise_for_status()
     except httpx.HTTPError:
-        logger.exception("SearXNG search failed for query: %.80s", query)
+        logger.exception("SearXNG search failed for query: %.80s", scrub(query))
         return []
 
     results = [

@@ -211,6 +211,7 @@ function chatRoomApp(currentUserId, conversationId) {
     },
 
     hasVideo(p) {
+      if (p && p.user_id === this.currentUserId) return !!(this.cameraOn || this.sharing);
       return !!(p && p.media_state && (p.media_state.video || p.media_state.screen));
     },
 
@@ -220,6 +221,7 @@ function chatRoomApp(currentUserId, conversationId) {
     },
 
     onCallParticipantUpdated(detail) {
+      if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
       // Apply the media_state update via the mixin's logic, then auto-pin a
       // fresh screen sharer unless the viewer already pinned manually.
       const p = this.callParticipants.find((x) => x.user_id === detail.user_id);
@@ -232,6 +234,7 @@ function chatRoomApp(currentUserId, conversationId) {
     },
 
     onCallParticipantLeft(detail) {
+      if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
       if (detail.user_id !== this.currentUserId) this._playCallCue('peer-leave');
       this.callParticipants = this.callParticipants.filter((p) => p.user_id !== detail.user_id);
       this._closePeer(detail.user_id);

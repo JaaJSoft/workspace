@@ -202,15 +202,11 @@ def chat_room_view(request, conversation_uuid):
 
     conversation_data = ConversationListSerializer(conversation).data
 
-    # Reuse the prefetched members for the participants grid and title.
+    # Reuse the prefetched members for the title.
     active_members = sorted(conversation.members.all(), key=lambda m: m.user_id)
 
     def _display(u):
         return u.get_full_name() or u.username
-
-    participants = [
-        {"user_id": m.user_id, "display_name": _display(m.user)} for m in active_members
-    ]
 
     title = (
         conversation.title
@@ -227,7 +223,6 @@ def chat_room_view(request, conversation_uuid):
             "conversation_uuid": str(conversation_uuid),
             "conversation_title": title,
             "conversation": conversation_data,
-            "participants": participants,
             "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
             "call_sounds_enabled": get_setting(
                 request.user, "chat", "call_sounds", default=True

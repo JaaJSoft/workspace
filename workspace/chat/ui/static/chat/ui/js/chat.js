@@ -57,7 +57,7 @@ function chatApp(currentUserId) {
         this._callChannel.onmessage = (e) => {
           const d = e.data || {};
           if (d.type === 'room-open' || d.type === 'room-closed') {
-            if (this.activeConversation && typeof this._refreshCallState === 'function') {
+            if (this.activeConversation && this.activeConversation.uuid === d.conversationId && typeof this._refreshCallState === 'function') {
               this._refreshCallState();
               if (d.type === 'room-closed') {
                 // The server-side leave may still be in-flight; re-check after a

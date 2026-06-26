@@ -37,6 +37,14 @@ test('chatIsSpeaking compares level against the threshold', () => {
   assert.equal(ctx.chatIsSpeaking(null), false);
 });
 
+test('chatCallBannerAction returns join when participants is null', () => {
+  assert.equal(ctx.chatCallBannerAction(true, null, 1), 'join');
+});
+
+test('chatIsSpeaking returns true at the threshold boundary', () => {
+  assert.equal(ctx.chatIsSpeaking(0.05, 0.05), true);
+});
+
 test('chatCallShouldOwnMedia is false only for observer', () => {
   assert.equal(ctx.chatCallShouldOwnMedia('owner'), true);
   assert.equal(ctx.chatCallShouldOwnMedia('observer'), false);

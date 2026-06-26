@@ -26,7 +26,6 @@ function chatRoomApp(currentUserId, conversationId) {
     currentUserId: currentUserId,
     roomConversationId: conversationId,
     callRole: 'owner',
-    roomParticipants: [],
     speakingIds: {},
     callElapsed: '00:00',
     _callStartMs: null,
@@ -68,13 +67,6 @@ function chatRoomApp(currentUserId, conversationId) {
           try { this._roomChannel.postMessage({ type: 'room-closed', conversationId: this.roomConversationId }); } catch (e) {}
         });
       } catch (e) { /* BroadcastChannel unsupported: fall back to server state */ }
-
-      // Seed the participants grid from the embedded server data.
-      const seedEl = document.getElementById('room-participants-data');
-      if (seedEl) {
-        try { this.roomParticipants = JSON.parse(seedEl.textContent); }
-        catch (e) { this.roomParticipants = []; }
-      }
 
       // Leave cleanly when the tab closes (existing beacon).
       window.addEventListener('pagehide', () => { if (this.inCall) this._leaveBeacon?.(); });
@@ -156,6 +148,12 @@ function chatRoomApp(currentUserId, conversationId) {
     _stopSpeakingMeter() {
       if (this._meterTimer) { clearInterval(this._meterTimer); this._meterTimer = null; }
       if (this._audioCtx) { try { this._audioCtx.close(); } catch (e) {} this._audioCtx = null; }
+    },
+
+    leaveRoom() {
+      this._stopSpeakingMeter();
+      this._stopDurationTimer();
+      return this.leaveCall().finally(() => window.close());
     },
 
     isSpeaking(userId) {

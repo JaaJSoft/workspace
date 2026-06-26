@@ -33,8 +33,9 @@ test('chatRoomApp composes call mixin and owns media', () => {
   assert.equal(typeof app.startOrJoinCall, 'function');
 });
 
-test('chatRoomApp sets currentUserId and initialises roomParticipants', () => {
+test('chatRoomApp sets currentUserId and roomConversationId', () => {
   const app = ctx.chatRoomApp(42, 'conv-2');
   assert.equal(app.currentUserId, 42);
-  assert.ok(Array.isArray(app.roomParticipants), 'roomParticipants must be an array');
+  assert.equal(app.roomConversationId, 'conv-2');
+  assert.equal(app.callRole, 'owner');
 });

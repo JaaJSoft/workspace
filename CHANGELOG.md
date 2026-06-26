@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.28.0 - Voice Calls & Notes Graph
+
+### Highlights
+
+Talk instead of type: start an audio call right inside a conversation. Plus tag filtering and hover cards in the notes graph, per-account mail signatures, and a friendlier welcome tour.
+
+### Chat
+
+- Audio calls are here. Anyone in a direct message or small group can start a call from the call button; other members see a "Call in progress" banner and join when they want, and the call ends when the last person hangs up. Calls run in their own room that stays connected while you browse the rest of the app: the room shows a participants grid that re-tiles as people join, a "who is speaking" indicator, your own self-view, and a live call timer, and you can keep chatting in the same window. In-call you can mute, see who else is on (with a muted indicator), and leave. Short sound cues play on join, leave, and mute (on by default, with an opt-out in chat preferences), and the history records when a call started and how long it lasted.
+- A "Test call connection" button in chat preferences runs a quick self-test (microphone, network, and a full loopback through the server) so you can confirm calls work before getting on one.
+- A conversation now jumps to the top of the list as soon as you send a message in it.
+- The user-search dropdown no longer gets clipped inside conversation dialogs.
+
+### Notes
+
+- The graph view can now be filtered by tag: a new Tags button keeps only the notes carrying the tags you pick, with a search box to narrow a long tag list. Edges to hidden notes drop away accordingly.
+- Hovering a note - on a graph node or an internal `[[link]]` in the editor - now shows a mini-card with its title, tags, and first line, plus an Open button.
+- The graph shows a loading spinner while it builds, and panning or zooming no longer snaps back to a centered view.
+
+### Mail
+
+- Each mail account can now have its own signature. Set it from the account menu; it is added automatically when you compose, reply, or forward, and swaps when you change the sender account.
+- Picking a folder - whether moving a message or setting up a rule - now uses one consistent list that matches your sidebar's order, icons, and colors, instead of three different pickers.
+
+### Onboarding
+
+- The welcome tour is now interactive: it greets you by name, lets you click straight into a module, skip the tour, and move between steps with the arrow keys, with better screen-reader and reduced-motion support.
+
+### Fixes
+
+- When image generation or editing comes back empty, the assistant now reports the failure instead of claiming success.
+- Guest chips in the event and poll dialogs no longer overflow: the avatar and remove button line up cleanly inside the pill.
+- Squared the remaining round buttons across the chat composer, conversation list, settings, and file picker, so they match the square controls already beside them.
+
 ## 0.27.0 - Note Graph & Compact Views
 
 ### Highlights

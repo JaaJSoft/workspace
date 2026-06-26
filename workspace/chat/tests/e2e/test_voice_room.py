@@ -171,3 +171,93 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
         expect(participants_section.get_by_text("voice-tester")).to_be_visible(
             timeout=5_000
         )
+
+    def test_info_panel_overlays_full_chat_pane_in_room(self):
+        """Info panel must REPLACE the chat in the room (overlay), not sit beside it.
+
+        The voice room uses overlay_panels=True so the info panel fills the full
+        chat aside width rather than squeezing a 288px side-by-side panel next to
+        the messages. This geometry assertion proves the fix is in place.
+        """
+        # Open the main chat page and select the DM conversation.
+        self.login_as(self.user)
+        self.page.goto(f"{self.live_server_url}/chat")
+
+        list_root = self.page.locator("#conversation-list")
+        expect(list_root.get_by_text("voice-peer")).to_be_visible()
+        list_root.get_by_text("voice-peer").click()
+
+        composer = self.page.locator('textarea[placeholder="Type a message..."]')
+        expect(composer).to_be_visible()
+
+        # Open the voice room tab.
+        with self.context.expect_page() as room_page_info:
+            self.page.get_by_title("Start or join a call").click()
+
+        room_page = room_page_info.value
+
+        _room_console: list[str] = []
+        room_page.on(
+            "console",
+            lambda msg: _room_console.append(f"{msg.type}: {msg.text}"),
+        )
+        room_page.on(
+            "pageerror",
+            lambda exc: _room_console.append(f"pageerror: {exc}"),
+        )
+
+        room_page.wait_for_load_state("domcontentloaded")
+
+        # Wait for the room to be ready before checking panel geometry.
+        participants_section = room_page.locator('[data-testid="participants-grid"]')
+        try:
+            expect(participants_section.get_by_text("voice-tester")).to_be_visible(
+                timeout=15_000
+            )
+        except Exception:
+            print("\n[e2e:room] join failed - console messages from room page:")
+            for line in _room_console:
+                print(f"[e2e:room]   {line}")
+            raise
+
+        # Measure the chat aside before opening the info panel.
+        chat_aside = room_page.locator("aside")
+        aside_box = chat_aside.bounding_box()
+        assert aside_box is not None, "chat aside element not found"
+
+        # The overlay info panel must not be visible before the button is clicked.
+        info_overlay = room_page.locator('[data-testid="info-panel-overlay"]')
+        expect(info_overlay).not_to_be_visible()
+
+        # Click the info button ("I").
+        try:
+            room_page.get_by_title("Conversation info (Alt+I)").click()
+        except Exception:
+            print(
+                "\n[e2e:room] info button not found - console messages from room page:"
+            )
+            for line in _room_console:
+                print(f"[e2e:room]   {line}")
+            raise
+
+        # The overlay panel must become visible.
+        try:
+            expect(info_overlay).to_be_visible(timeout=5_000)
+        except Exception:
+            print(
+                "\n[e2e:room] info overlay not visible - console messages from room page:"
+            )
+            for line in _room_console:
+                print(f"[e2e:room]   {line}")
+            raise
+
+        # Geometry check: the overlay must fill the full chat aside, not sit
+        # beside the messages as a 288px (w-72) side panel.
+        overlay_box = info_overlay.bounding_box()
+        assert overlay_box is not None, "info panel overlay bounding box is None"
+        tolerance = 20  # pixels - accounts for borders and rounding
+        assert abs(overlay_box["width"] - aside_box["width"]) <= tolerance, (
+            f"Info panel overlay width {overlay_box['width']:.0f}px should match "
+            f"chat aside width {aside_box['width']:.0f}px (overlay mode). "
+            f"A ~288px width means the old side-by-side bug is back."
+        )

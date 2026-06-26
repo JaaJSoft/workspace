@@ -426,7 +426,7 @@
           x-transition:leave="transition-[width] ease-in duration-150"
           x-transition:leave-start="!w-72"
           x-transition:leave-end="!w-0"
-          class="hidden lg:flex w-72 border-l border-base-300 bg-base-100 flex-col overflow-hidden"
+          class="{% if overlay_panels %}hidden{% else %}hidden lg:flex{% endif %} w-72 border-l border-base-300 bg-base-100 flex-col overflow-hidden"
         >
           <div class="w-72 flex-1 overflow-y-auto">
             {% include "chat/ui/partials/info_panel.html" %}
@@ -442,7 +442,7 @@
           x-transition:leave="transition-[width] ease-in duration-150"
           x-transition:leave-start="!w-72"
           x-transition:leave-end="!w-0"
-          class="hidden lg:flex w-72 border-l border-base-300 bg-base-100 flex-col overflow-hidden"
+          class="{% if overlay_panels %}hidden{% else %}hidden lg:flex{% endif %} w-72 border-l border-base-300 bg-base-100 flex-col overflow-hidden"
         >
           <div class="w-72 flex-1 overflow-y-auto">
             {% include "chat/ui/partials/search_panel.html" %}
@@ -459,7 +459,8 @@
         x-transition:leave="transition ease-in duration-150"
         x-transition:leave-start="translate-x-0"
         x-transition:leave-end="translate-x-full"
-        class="lg:hidden absolute inset-0 z-30 bg-base-100 flex flex-col overflow-y-auto"
+        class="{% if overlay_panels %}absolute{% else %}lg:hidden absolute{% endif %} inset-0 z-30 bg-base-100 flex flex-col overflow-y-auto"
+        data-testid="info-panel-overlay"
       >
         {% include "chat/ui/partials/info_panel.html" %}
       </div>
@@ -473,7 +474,8 @@
         x-transition:leave="transition ease-in duration-150"
         x-transition:leave-start="translate-x-0"
         x-transition:leave-end="translate-x-full"
-        class="lg:hidden absolute inset-0 z-30 bg-base-100 flex flex-col overflow-y-auto"
+        class="{% if overlay_panels %}absolute{% else %}lg:hidden absolute{% endif %} inset-0 z-30 bg-base-100 flex flex-col overflow-y-auto"
+        data-testid="search-panel-overlay"
       >
         {% include "chat/ui/partials/search_panel.html" %}
       </div>

@@ -12,6 +12,7 @@ function chatRoomApp(currentUserId, conversationId) {
     _meterTimer: null,
     chatPrefs: { ...(window._chatPrefsCache || {}) },
 
+    ...chatConversationsMixin(),
     ...chatMessagesMixin(),
     ...chatInputMixin(),
     ...chatSseMixin(),
@@ -19,6 +20,7 @@ function chatRoomApp(currentUserId, conversationId) {
     ...chatPanelsMixin(),
     ...chatBotMixin(),
     ...chatCallMixin(),
+    ...chatCallDiagnosticMixin(),
 
     async init() {
       this._initCallSounds?.();

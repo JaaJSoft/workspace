@@ -73,7 +73,7 @@
             <div class="relative flex-1 min-h-0 rounded-xl bg-base-100 border-2 border-base-300 overflow-hidden flex items-center justify-center cursor-pointer"
                  @click="backToGrid()">
               <template x-if="spotlightParticipant() && hasVideo(spotlightParticipant())">
-                <video autoplay playsinline :muted="spotlightUserId() === currentUserId"
+                <video autoplay playsinline muted
                        class="absolute inset-0 w-full h-full object-contain bg-black"
                        x-effect="$el.srcObject = streamFor(spotlightUserId())"></video>
               </template>
@@ -90,7 +90,7 @@
                 <div class="relative w-28 h-20 shrink-0 rounded-lg bg-base-100 border-2 overflow-hidden flex items-center justify-center cursor-pointer"
                      :class="isSpeaking(p.user_id) ? 'border-success' : 'border-base-300'"
                      @click="pinTile(p.user_id)">
-                  <video x-show="hasVideo(p)" autoplay playsinline :muted="p.user_id === currentUserId"
+                  <video x-show="hasVideo(p)" autoplay playsinline muted
                          class="absolute inset-0 w-full h-full object-contain bg-black"
                          x-effect="$el.srcObject = streamFor(p.user_id)"></video>
                   <template x-if="!hasVideo(p)">

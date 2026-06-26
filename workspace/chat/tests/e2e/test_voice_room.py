@@ -53,6 +53,7 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
 
     def tearDown(self):
         from django.core.cache import cache
+
         cache.clear()
         super().tearDown()
 
@@ -99,13 +100,11 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
         # user's display_name ("voice-tester") to appear in the participants section.
         participants_section = room_page.locator('[data-testid="participants-grid"]')
         try:
-            expect(
-                participants_section.get_by_text("voice-tester")
-            ).to_be_visible(timeout=15_000)
-        except Exception:
-            print(
-                "\n[e2e:room] join failed - console messages from room page:"
+            expect(participants_section.get_by_text("voice-tester")).to_be_visible(
+                timeout=15_000
             )
+        except Exception:
+            print("\n[e2e:room] join failed - console messages from room page:")
             for line in _room_console:
                 print(f"[e2e:room]   {line}")
             raise
@@ -119,6 +118,6 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
         # Step 5: The room tab must still be alive and still show the participant
         # tile. This is the core regression assertion: because the call is owned
         # by the room tab (not the main tab), main-tab navigation cannot kill it.
-        expect(
-            participants_section.get_by_text("voice-tester")
-        ).to_be_visible(timeout=5_000)
+        expect(participants_section.get_by_text("voice-tester")).to_be_visible(
+            timeout=5_000
+        )

@@ -71,15 +71,17 @@
 
       </div>
 
-      <!-- Controls bar: centered at bottom -->
-      <div class="flex items-center justify-center gap-3 pt-4 shrink-0">
-        <button class="btn btn-circle" :class="isMuted ? 'btn-error' : 'btn-ghost'" @click="toggleMute()"
-                :title="isMuted ? 'Unmute' : 'Mute'">
-          <i :data-lucide="isMuted ? 'mic-off' : 'mic'" class="w-5 h-5"></i>
-        </button>
-        <button class="btn btn-error btn-circle" @click="leaveCall().finally(() => window.close())" title="Leave call">
-          <i data-lucide="phone-off" class="w-5 h-5"></i>
-        </button>
+      <!-- Controls bar: centered dock at bottom -->
+      <div class="flex justify-center pt-4 shrink-0">
+        <div class="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-base-100/90 backdrop-blur border border-base-300 shadow-lg">
+          <button class="btn btn-circle border-0" :class="isMuted ? 'btn-error' : 'btn-neutral'" @click="toggleMute()"
+                  :title="isMuted ? 'Unmute' : 'Mute'">
+            <i :data-lucide="isMuted ? 'mic-off' : 'mic'" class="w-5 h-5"></i>
+          </button>
+          <button class="btn btn-error btn-circle border-0" @click="leaveCall().finally(() => window.close())" title="Leave call">
+            <i data-lucide="phone-off" class="w-5 h-5"></i>
+          </button>
+        </div>
       </div>
 
     </section>

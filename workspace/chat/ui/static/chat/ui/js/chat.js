@@ -28,6 +28,7 @@ function chatApp(currentUserId) {
     // Order matters when two mixins define the same key - later spreads
     // override earlier ones. Today no mixin intentionally overrides
     // another's keys.
+    ...chatUiHelpersMixin(),
     ...chatConversationsMixin(),
     ...chatMessagesMixin(),
     ...chatSseMixin(),
@@ -44,6 +45,29 @@ function chatApp(currentUserId) {
       // its initial bind, so toggleCollapse() animates smoothly without
       // animating the very first paint.
       this.$nextTick(() => { this.sidebarMounted = true; });
+
+      // The main chat tab never owns the microphone; the dedicated room tab
+      // does. Force observer so any stray join path opens the room instead.
+      this.callRole = 'observer';
+
+      // React to room presence from other tabs of this browser: re-sync the
+      // banner so Join/Return reflects reality immediately.
+      try {
+        this._callChannel = new BroadcastChannel('chat-call');
+        this._callChannel.onmessage = (e) => {
+          const d = e.data || {};
+          if (d.type === 'room-open' || d.type === 'room-closed') {
+            if (this.activeConversation && this.activeConversation.uuid === d.conversationId && typeof this._refreshCallState === 'function') {
+              this._refreshCallState();
+              if (d.type === 'room-closed') {
+                // The server-side leave may still be in-flight; re-check after a
+                // short delay so the banner clears without waiting on SSE.
+                setTimeout(() => { try { this._refreshCallState(); } catch (e) {} }, 1200);
+              }
+            }
+          }
+        };
+      } catch (e) { /* unsupported: server state still drives the banner */ }
 
       // Whenever the open conversation changes (initial load, F5, navigation),
       // sync the call banner so an already-ongoing call is joinable - SSE events
@@ -210,44 +234,6 @@ function chatApp(currentUserId) {
     toggleCollapse() {
       this.collapsed = !this.collapsed;
       localStorage.setItem('chatSidebarCollapsed', JSON.stringify(this.collapsed));
-    },
-
-    isMobile() {
-      return window.matchMedia('(max-width: 1023px)').matches;
-    },
-
-    isSmallScreen() {
-      return window.matchMedia('(max-width: 639px)').matches;
-    },
-
-    getMessageInput() {
-      return this.isSmallScreen()
-        ? this.$refs.messageInputMobile
-        : this.$refs.messageInput;
-    },
-
-    // ── Generic helpers (shared across mixins) ──────────────
-    formatDate(iso) {
-      if (!iso) return '';
-      const d = new Date(iso);
-      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-    },
-
-    formatDateTime(iso) {
-      if (!iso) return '';
-      const d = new Date(iso);
-      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    },
-
-    memberDisplayName(member) {
-      const u = member.user;
-      const full = ((u.first_name || '') + ' ' + (u.last_name || '')).trim();
-      return full || u.username;
-    },
-
-    autoResize(el) {
-      el.style.height = 'auto';
-      el.style.height = Math.min(el.scrollHeight, 128) + 'px';
     },
   };
 }

@@ -179,6 +179,7 @@ class CleanupTests(TestCase):
         state = calls.serialize_call_state(session)
         self.assertTrue(state["active"])
         self.assertEqual(state["session_id"], str(session.uuid))
+        self.assertEqual(state["started_at"], session.started_at.isoformat())
         self.assertEqual(len(state["participants"]), 1)
         self.assertEqual(state["participants"][0]["user_id"], self.a.id)
         self.assertEqual(state["participants"][0]["media_state"], {"audio": True})

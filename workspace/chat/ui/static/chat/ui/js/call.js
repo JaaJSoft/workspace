@@ -41,6 +41,7 @@ window.chatCallMixin = function chatCallMixin() {
     inCall: false,               // am I currently joined?
     isMuted: false,
     joiningCall: false,
+    callRole: 'owner',          // 'owner' (room tab) | 'observer' (main tab)
     _peers: {},                  // user_id -> { pc, audioEl }
     _localStream: null,
     _iceServers: [],
@@ -90,6 +91,12 @@ window.chatCallMixin = function chatCallMixin() {
 
     // -- Lifecycle: join / leave -----------------------------
     async startOrJoinCall() {
+      // The main tab is an observer: it never owns the mic. Joining means
+      // opening the dedicated room tab instead of capturing media here.
+      if (!window.chatCallShouldOwnMedia(this.callRole)) {
+        this.openCallRoom(this.activeConversation && this.activeConversation.uuid);
+        return;
+      }
       if (!this.activeConversation || this.joiningCall) return;
       this.joiningCall = true;
       const convId = this.activeConversation.uuid;
@@ -143,6 +150,12 @@ window.chatCallMixin = function chatCallMixin() {
     },
 
     async leaveCall() {
+      // Stop the room's speaking meter and duration timer if present (room tab
+      // only; optional chaining makes this a no-op on the main observer tab).
+      // Covers both the explicit Leave and the call_ended path, which both route
+      // through leaveCall.
+      this._stopSpeakingMeter?.();
+      this._stopDurationTimer?.();
       // Leave the call's own conversation, captured before we clear the session
       // (you may be viewing a different conversation while in the call).
       const convId = this.callSession && this.callSession.conversation_id;
@@ -154,11 +167,20 @@ window.chatCallMixin = function chatCallMixin() {
       this.isMuted = false;
       this.callParticipants = [];
       this.callSession = null;
+      // Notify the main-tab observer synchronously, before the fetch completes.
+      // Posting here (while the page is still alive) ensures the main tab
+      // receives the room-closed signal even if the tab closes before pagehide.
+      if (this._roomChannel) {
+        try {
+          this._roomChannel.postMessage({ type: 'room-closed', conversationId: convId });
+        } catch (e) { /* best effort */ }
+      }
       if (convId) {
         try {
           await fetch(`/api/v1/chat/conversations/${convId}/call/leave`, {
             method: 'POST',
             headers: { 'X-CSRFToken': this._csrf() },
+            keepalive: true,
           });
         } catch (e) { /* best effort */ }
       }
@@ -167,6 +189,29 @@ window.chatCallMixin = function chatCallMixin() {
       // still-active call becomes joinable again right away, instead of waiting
       // on the SSE round-trip that re-advertises it.
       this._syncCallBanner();
+    },
+
+    openCallRoom(conversationId) {
+      const convId = conversationId
+        || (this.callSession && this.callSession.conversation_id)
+        || (this.activeConversation && this.activeConversation.uuid);
+      if (!convId) return;
+      const url = window.chatCallRoomUrl(convId);
+      const name = window.chatCallRoomTabName(convId);
+      const win = window.open(url, name);
+      if (win) {
+        try { win.focus(); } catch (e) { /* background-tab focus may be denied */ }
+      } else if (typeof this.showAlert === 'function') {
+        this.showAlert('warning', 'Allow pop-ups to open the voice room.');
+      }
+    },
+
+    callBannerAction() {
+      return window.chatCallBannerAction(
+        !!this.callSession,
+        this.callParticipants,
+        this.currentUserId,
+      );
     },
 
     // Best-effort clean leave when the page is unloading (navigation to another

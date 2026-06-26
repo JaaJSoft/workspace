@@ -19,6 +19,11 @@ urlpatterns = [
         name="message_readers",
     ),
     path(
+        "/room/<uuid:conversation_uuid>",
+        views.chat_room_view,
+        name="room",
+    ),
+    path(
         "/view-attachment/<uuid:attachment_uuid>",
         views.view_attachment,
         name="view_attachment",

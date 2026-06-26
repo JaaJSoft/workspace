@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.db.models import OuterRef, Prefetch, Subquery
+from django.db.models import OuterRef, Prefetch, Subquery, prefetch_related_objects
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render
 from django.utils import timezone
@@ -168,6 +168,64 @@ def chat_view(request, conversation_uuid=None):
             "call_sounds_enabled": get_setting(
                 request.user, "chat", "call_sounds", default=True
             ),
+        },
+    )
+
+
+@login_required
+@ensure_csrf_cookie
+def chat_room_view(request, conversation_uuid):
+    """Dedicated voice-room page for a single conversation.
+
+    Opens in its own browser tab and owns the WebRTC call. Access is gated by
+    active membership, exactly like the message endpoints.
+    """
+    membership = get_active_membership(request.user, conversation_uuid)
+    if not membership:
+        return HttpResponseForbidden()
+
+    # Reach the conversation through the authorized membership so authorization
+    # and data retrieval stay tied together, then prefetch active members so the
+    # serializer populates members/member_count/is_bot_conversation without N+1.
+    conversation = membership.conversation
+    prefetch_related_objects(
+        [conversation],
+        Prefetch(
+            "members",
+            queryset=ConversationMember.objects.filter(
+                left_at__isnull=True,
+            ).select_related("user", "user__bot_profile"),
+        ),
+    )
+
+    conversation_data = ConversationListSerializer(conversation).data
+
+    # Reuse the prefetched members for the title.
+    active_members = sorted(conversation.members.all(), key=lambda m: m.user_id)
+
+    def _display(u):
+        return u.get_full_name() or u.username
+
+    title = (
+        conversation.title
+        or ", ".join(
+            _display(m.user) for m in active_members if m.user_id != request.user.id
+        )
+        or "Conversation"
+    )
+
+    return render(
+        request,
+        "chat/ui/room.html",
+        {
+            "conversation_uuid": str(conversation_uuid),
+            "conversation_title": title,
+            "conversation": conversation_data,
+            "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
+            "call_sounds_enabled": get_setting(
+                request.user, "chat", "call_sounds", default=True
+            ),
+            "current_user_id": request.user.id,
         },
     )
 

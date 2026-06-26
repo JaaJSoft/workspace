@@ -109,6 +109,20 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
                 print(f"[e2e:room]   {line}")
             raise
 
+        # Step 3b: Verify the conversation header shows the real name, not
+        # "Group". activeConversation is now seeded from room-conversation-data
+        # (the full ConversationListSerializer payload), so conversationName()
+        # returns the other member's username for a DM, not the "Group" fallback.
+        conv_header = room_page.locator("h3.font-semibold.text-sm.truncate").first
+        try:
+            expect(conv_header).not_to_have_text("Group", timeout=5_000)
+            expect(conv_header).to_have_text("voice-peer", timeout=5_000)
+        except Exception:
+            print("\n[e2e:room] header check failed - console messages from room page:")
+            for line in _room_console:
+                print(f"[e2e:room]   {line}")
+            raise
+
         # Step 4: Type a message into the room's composer and press Enter.
         # This proves that autoResize($el), handleInputKeydown($event), and
         # getMessageInput() all resolve correctly in chatRoomApp (the bug was

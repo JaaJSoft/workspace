@@ -184,26 +184,39 @@ def chat_room_view(request, conversation_uuid):
     if not membership:
         return HttpResponseForbidden()
 
-    conversation = membership.conversation
-    members = (
-        ConversationMember.objects.filter(
-            conversation_id=conversation_uuid,
-            left_at__isnull=True,
+    # Fetch the conversation with active members prefetched so the serializer
+    # can populate members, member_count, and is_bot_conversation without
+    # extra queries, matching the shape used by the main chat page.
+    conversation = (
+        Conversation.objects.filter(uuid=conversation_uuid)
+        .prefetch_related(
+            Prefetch(
+                "members",
+                queryset=ConversationMember.objects.filter(
+                    left_at__isnull=True,
+                ).select_related("user", "user__bot_profile"),
+            ),
         )
-        .select_related("user")
-        .order_by("user_id")
+        .first()
     )
+
+    conversation_data = ConversationListSerializer(conversation).data
+
+    # Reuse the prefetched members for the participants grid and title.
+    active_members = sorted(conversation.members.all(), key=lambda m: m.user_id)
 
     def _display(u):
         return u.get_full_name() or u.username
 
     participants = [
-        {"user_id": m.user_id, "display_name": _display(m.user)} for m in members
+        {"user_id": m.user_id, "display_name": _display(m.user)} for m in active_members
     ]
 
     title = (
         conversation.title
-        or ", ".join(_display(m.user) for m in members if m.user_id != request.user.id)
+        or ", ".join(
+            _display(m.user) for m in active_members if m.user_id != request.user.id
+        )
         or "Conversation"
     )
 
@@ -213,6 +226,7 @@ def chat_room_view(request, conversation_uuid):
         {
             "conversation_uuid": str(conversation_uuid),
             "conversation_title": title,
+            "conversation": conversation_data,
             "participants": participants,
             "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
             "call_sounds_enabled": get_setting(

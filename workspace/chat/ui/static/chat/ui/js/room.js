@@ -26,9 +26,15 @@ function chatRoomApp(currentUserId, conversationId) {
     async init() {
       this._initCallSounds?.();
 
-      // Lock the app to this conversation (no list, no switching). Seed
-      // activeConversation so every mixin that reads it targets the room call.
-      this.activeConversation = { uuid: this.roomConversationId };
+      // Seed the active conversation from server-serialized data so the reused
+      // conversation pane (header, info panel) shows the real name and members,
+      // not the "Group" fallback. Fall back to a uuid-only stub if missing.
+      let conv = null;
+      const convEl = document.getElementById('room-conversation-data');
+      if (convEl) {
+        try { conv = JSON.parse(convEl.textContent); } catch (e) { conv = null; }
+      }
+      this.activeConversation = conv || { uuid: this.roomConversationId };
 
       // Announce room presence so the main tab flips Join <-> Return instantly,
       // without waiting on the heartbeat/SSE round-trip.

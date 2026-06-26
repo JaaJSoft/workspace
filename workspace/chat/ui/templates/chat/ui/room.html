@@ -53,6 +53,7 @@
 </div>
 
 {{ participants|json_script:"room-participants-data" }}
+{{ conversation|json_script:"room-conversation-data" }}
 {% endblock %}
 
 {% block extra_scripts %}

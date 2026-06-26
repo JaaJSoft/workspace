@@ -32,23 +32,28 @@ function chatCallShouldOwnMedia(role) {
   return role !== 'observer';
 }
 
-function chatCallSpotlightTarget(participants, pinnedUserId) {
-  // Which participant to show large. Pure derivation: the viewer's pin if that
-  // participant is still in the call, otherwise the equal grid (null).
-  if (pinnedUserId == null) return null;
-  const present = (participants || []).some((p) => p.user_id === pinnedUserId);
-  return present ? pinnedUserId : null;
+function chatCallAutoPinTarget(participants, pinnedManually) {
+  // The automatic spotlight pick: the first participant actively sharing their
+  // screen. A manual pin always wins, so we yield when one is set. Derived from
+  // the live participants list, so it reflects who is sharing *now*.
+  if (pinnedManually) return null;
+  const sharer = (participants || []).find(
+    (p) => p && p.media_state && p.media_state.screen === true,
+  );
+  return sharer ? sharer.user_id : null;
 }
 
-function chatCallAutoPinTarget(participant, pinnedManually) {
-  // Intelligent default: when a participant turns their screen share on and the
-  // viewer has not made an explicit pin choice, auto-pin that sharer. A manual
-  // pin always wins, so we yield.
-  if (pinnedManually) return null;
-  if (participant && participant.media_state && participant.media_state.screen === true) {
-    return participant.user_id;
+function chatCallSpotlightTarget(participants, pinnedUserId, pinnedManually) {
+  // Which participant to show large. A manual pin wins while that participant is
+  // still in the call; otherwise the spotlight is derived from live state - the
+  // active screen sharer, or the equal grid (null). Deriving instead of latching
+  // a one-off event means a sharer is spotlighted even for someone who joined
+  // after the share began, and the spotlight clears the moment sharing stops.
+  const list = participants || [];
+  if (pinnedManually && pinnedUserId != null) {
+    return list.some((p) => p.user_id === pinnedUserId) ? pinnedUserId : null;
   }
-  return null;
+  return chatCallAutoPinTarget(list, pinnedManually);
 }
 
 window.chatCallRoomUrl = chatCallRoomUrl;

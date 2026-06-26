@@ -192,7 +192,7 @@ function chatRoomApp(currentUserId, conversationId) {
     },
 
     spotlightUserId() {
-      return window.chatCallSpotlightTarget(this.callParticipants, this.pinnedUserId);
+      return window.chatCallSpotlightTarget(this.callParticipants, this.pinnedUserId, this.pinnedManually);
     },
 
     isSpotlight() {
@@ -220,18 +220,9 @@ function chatRoomApp(currentUserId, conversationId) {
       return this.remoteStreams[userId] || null;
     },
 
-    onCallParticipantUpdated(detail) {
-      if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
-      // Apply the media_state update via the mixin's logic, then auto-pin a
-      // fresh screen sharer unless the viewer already pinned manually.
-      const p = this.callParticipants.find((x) => x.user_id === detail.user_id);
-      if (p) p.media_state = detail.media_state;
-      const target = window.chatCallAutoPinTarget(
-        { user_id: detail.user_id, media_state: detail.media_state },
-        this.pinnedManually,
-      );
-      if (target != null) this.pinnedUserId = target;
-    },
+    // No onCallParticipantUpdated override: the call mixin applies media_state,
+    // and spotlightUserId() derives the auto-pin from that live state, so a
+    // sharer is spotlighted (or cleared) reactively without latching an event.
 
     onCallParticipantLeft(detail) {
       if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;

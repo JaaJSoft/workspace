@@ -117,6 +117,18 @@ function chatRoomApp(currentUserId, conversationId) {
     isSpeaking(userId) {
       return !!this.speakingIds[userId];
     },
+
+    remoteParticipants() {
+      return this.callParticipants.filter(p => p.user_id !== this.currentUserId);
+    },
+
+    selfParticipant() {
+      return this.callParticipants.find(p => p.user_id === this.currentUserId) || null;
+    },
+
+    gridColumns() {
+      return Math.max(1, Math.ceil(Math.sqrt(this.remoteParticipants().length || 1)));
+    },
   };
 }
 

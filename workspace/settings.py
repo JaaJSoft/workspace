@@ -115,7 +115,6 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "knox",
     "django_filters",
-    "simple_history",
     "django_prometheus",
     "django_http_compression",
     # Workspace apps
@@ -240,8 +239,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_http_compression.middleware.HttpCompressionMiddleware",
-    # django-simple-history middleware to track user in history
-    "simple_history.middleware.HistoryRequestMiddleware",
     # Mesure du temps de traitement pour affichage dans le footer UI et header HTTP
     # 'Workspace.common.middleware.RequestTimingMiddleware',
     "django_prometheus.middleware.PrometheusAfterMiddleware",
@@ -630,11 +627,6 @@ if not DEBUG:
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-# django-simple-history configuration
-# Keep history records indefinitely (no automatic deletion)
-SIMPLE_HISTORY_HISTORY_ID_USE_UUID = True  # Use UUID for history IDs
-SIMPLE_HISTORY_REVERT_DISABLED = False  # Allow reverting to previous versions
 
 # Django Debug Toolbar configuration (only active in DEBUG mode)
 if DEBUG:

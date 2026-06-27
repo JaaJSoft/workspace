@@ -26,6 +26,29 @@ document.addEventListener('alpine:init', function () {
       if (Array.isArray(data.bot)) this.bot = new Set(data.bot);
     },
 
+    setLocalStatus(userId, status) {
+      // Optimistic local update when the current user picks a status from the
+      // navbar, applied before the next SSE snapshot confirms it. Reassign the
+      // Sets instead of mutating them in place: Alpine reactivity does not
+      // track `Set.add`/`Set.delete`, so an in-place mutation would leave the
+      // user's own ring stale until the next snapshot.
+      const uid = Number(userId);
+      const online = new Set(this.online);
+      const away = new Set(this.away);
+      const busy = new Set(this.busy);
+      online.delete(uid);
+      away.delete(uid);
+      busy.delete(uid);
+      if (status === 'online') online.add(uid);
+      else if (status === 'away') away.add(uid);
+      else if (status === 'busy') busy.add(uid);
+      // 'invisible' (or anything else) leaves the user out of every bucket,
+      // so they render as offline to themselves too.
+      this.online = online;
+      this.away = away;
+      this.busy = busy;
+    },
+
     statusOf(userId) {
       const uid = Number(userId);
       if (this.bot.has(uid)) return 'bot';

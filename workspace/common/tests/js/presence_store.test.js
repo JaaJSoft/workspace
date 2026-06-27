@@ -86,6 +86,48 @@ test('an explicit empty `bot` array still clears bots (real deletion)', () => {
   assert.equal(p.statusOf(42), 'offline');
 });
 
+test('setLocalStatus moves the user into the chosen bucket', () => {
+  const p = loadPresenceStore();
+  p.handleSnapshot({ online: [], away: [], busy: [], bot: [] });
+
+  p.setLocalStatus(7, 'busy');
+  assert.equal(p.statusOf(7), 'busy');
+
+  p.setLocalStatus(7, 'away');
+  assert.equal(p.statusOf(7), 'away');
+
+  p.setLocalStatus(7, 'online');
+  assert.equal(p.statusOf(7), 'online');
+
+  // Invisible (or any unknown) leaves the user out of every bucket.
+  p.setLocalStatus(7, 'invisible');
+  assert.equal(p.statusOf(7), 'offline');
+});
+
+test('setLocalStatus reassigns the Sets so Alpine reactivity fires', () => {
+  const p = loadPresenceStore();
+  p.handleSnapshot({ online: [], away: [], busy: [], bot: [] });
+
+  const beforeOnline = p.online;
+  const beforeBusy = p.busy;
+  p.setLocalStatus(7, 'busy');
+
+  // The buggy navbar mutated the Sets in place (p.online.add/delete), which
+  // Alpine does not track. The fix must hand back fresh Set instances.
+  assert.notStrictEqual(p.online, beforeOnline);
+  assert.notStrictEqual(p.busy, beforeBusy);
+});
+
+test('setLocalStatus does not disturb other users or bots', () => {
+  const p = loadPresenceStore();
+  p.handleSnapshot({ online: [1], away: [], busy: [], bot: [42] });
+
+  p.setLocalStatus(7, 'away');
+  assert.equal(p.statusOf(1), 'online');
+  assert.equal(p.statusOf(42), 'bot');
+  assert.equal(p.statusOf(7), 'away');
+});
+
 test('volatile buckets still update to empty (users genuinely go offline)', () => {
   const p = loadPresenceStore();
   p.handleSnapshot({ online: [1], away: [], busy: [], bot: [] });

@@ -4,7 +4,7 @@
 
 A self-hosted productivity suite built with Django. Files, chat, email, calendar, AI assistants, and more - in a single platform you control.
 
-From a Raspberry Pi to a Kubernetes cluster. One codebase, any scale.
+From a Raspberry Pi to a Kubernetes cluster. One app, any scale.
 
 ![Workspace Dashboard](docs/images/home.png)
 

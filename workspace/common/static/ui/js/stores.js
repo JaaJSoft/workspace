@@ -11,10 +11,42 @@ document.addEventListener('alpine:init', function () {
     bot: new Set(),
 
     handleSnapshot(data) {
-      this.online = new Set(data.online || []);
-      this.away = new Set(data.away || []);
-      this.busy = new Set(data.busy || []);
-      this.bot = new Set(data.bot || []);
+      // Only overwrite a bucket when the payload actually carries it. A
+      // presence update that omits a category (partial/empty/malformed
+      // payload) must NOT wipe the previous membership — otherwise every
+      // ring in that bucket flickers to "offline" until the next good
+      // snapshot. This matters most for `bot`, which is static identity
+      // (bots have no UserPresence row, so their ring depends solely on
+      // this list): a missing `bot` array would erase every bot ring for
+      // no reason. Keep the previous info when none is received.
+      if (!data) return;
+      if (Array.isArray(data.online)) this.online = new Set(data.online);
+      if (Array.isArray(data.away)) this.away = new Set(data.away);
+      if (Array.isArray(data.busy)) this.busy = new Set(data.busy);
+      if (Array.isArray(data.bot)) this.bot = new Set(data.bot);
+    },
+
+    setLocalStatus(userId, status) {
+      // Optimistic local update when the current user picks a status from the
+      // navbar, applied before the next SSE snapshot confirms it. Reassign the
+      // Sets instead of mutating them in place: Alpine reactivity does not
+      // track `Set.add`/`Set.delete`, so an in-place mutation would leave the
+      // user's own ring stale until the next snapshot.
+      const uid = Number(userId);
+      const online = new Set(this.online);
+      const away = new Set(this.away);
+      const busy = new Set(this.busy);
+      online.delete(uid);
+      away.delete(uid);
+      busy.delete(uid);
+      if (status === 'online') online.add(uid);
+      else if (status === 'away') away.add(uid);
+      else if (status === 'busy') busy.add(uid);
+      // 'invisible' (or anything else) leaves the user out of every bucket,
+      // so they render as offline to themselves too.
+      this.online = online;
+      this.away = away;
+      this.busy = busy;
     },
 
     statusOf(userId) {

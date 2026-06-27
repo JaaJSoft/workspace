@@ -189,12 +189,7 @@
                 async setStatus(s) {
                   this.current = s;
                   this.open = false;
-                  const uid = {{ user.id }};
-                  const p = $store.presence;
-                  p.online.delete(uid); p.away.delete(uid); p.busy.delete(uid);
-                  if (s === 'online') p.online.add(uid);
-                  else if (s === 'away') p.away.add(uid);
-                  else if (s === 'busy') p.busy.add(uid);
+                  $store.presence.setLocalStatus({{ user.id }}, s);
                   await fetch('/api/v1/users/me/status', {
                     method: 'PUT',
                     credentials: 'same-origin',

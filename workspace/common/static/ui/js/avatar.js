@@ -12,15 +12,22 @@ window.userAvatarHtml = function(userId, username, sizeClass, options) {
   const initial = (username || '?')[0].toUpperCase();
   const imgUrl = `/api/v1/users/${userId}/avatar`;
 
+  // Keep the ring SHAPE static (like the dot below) so the avatar always has
+  // a visible ring; only its COLOR comes from the reactive `:class` binding.
+  // When this HTML is injected into a list (x-html / alpine-ajax swap) the
+  // Alpine binding is not always re-initialised — if `ring-2` lived inside the
+  // binding the ring would vanish entirely, while the statically-shaped dot
+  // survived ("dot but no ring"). Static shape + reactive colour fixes that.
+  const ringShape = showPresence ? ' ring-2 ring-offset-base-100 ring-offset-1' : '';
   const ringAttr = showPresence
-    ? ` :class="'ring-2 ring-offset-base-100 ring-offset-1 ' + $store.presence.ringClass(${userId})"`
+    ? ` :class="$store.presence.ringClass(${userId})"`
     : '';
   const dotHtml = showPresence
     ? `<span class="absolute bottom-0 right-0 block w-2.5 h-2.5 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass(${userId})"></span>`
     : '';
 
   return `<div class="avatar relative" data-user-id="${userId}">` +
-    `<div class="${sizeClass} rounded-full overflow-hidden"${ringAttr}>` +
+    `<div class="${sizeClass} rounded-full overflow-hidden${ringShape}"${ringAttr}>` +
       `<img src="${imgUrl}" alt="${username}" class="block w-full h-full object-cover" ` +
         `onerror="this.onerror=null;` +
         `let d=this.closest('.avatar');` +

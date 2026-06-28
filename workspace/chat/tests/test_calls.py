@@ -183,6 +183,42 @@ class FirstJoinRaceTests(TestCase):
         )
         self.assertEqual(len(calls.list_active_participants(winner)), 2)
 
+    def test_compound_race_retries_more_than_once_until_join(self):
+        # A single retry only closes the two-party race. In a compound race the
+        # second attempt can trip the constraint again (the winner ended its call
+        # and a third member started a fresh one in the gap). As long as an active
+        # session keeps existing, the recovery must keep retrying instead of
+        # surfacing the second IntegrityError as a 500.
+        from django.db import IntegrityError
+
+        # A real active session so the race-winner guard passes on every attempt.
+        winner, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        sentinel = (winner, object(), False)
+
+        with mock.patch.object(
+            calls,
+            "_start_or_join_once",
+            side_effect=[IntegrityError("x"), IntegrityError("y"), sentinel],
+        ) as once:
+            result = calls.start_or_join_call(self.b, self.conv.uuid)
+
+        self.assertIs(result, sentinel)
+        self.assertEqual(once.call_count, 3)
+
+    def test_unrelated_integrity_error_propagates_without_retry(self):
+        # The recovery is only for the first-join race, identified by an active
+        # session now existing. An IntegrityError with no active session present
+        # is some other failure and must propagate, not be retried/swallowed.
+        from django.db import IntegrityError
+
+        with mock.patch.object(
+            calls, "_start_or_join_once", side_effect=IntegrityError("boom")
+        ) as once:
+            with self.assertRaises(IntegrityError):
+                calls.start_or_join_call(self.b, self.conv.uuid)
+
+        self.assertEqual(once.call_count, 1)
+
 
 class CleanupTests(TestCase):
     def setUp(self):

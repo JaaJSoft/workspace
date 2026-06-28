@@ -143,8 +143,10 @@ def _render_system_call_body(state, duration_label=None):
 def _active_session_for_update(conversation_id):
     """Locked read of the conversation's active call session (or None).
 
-    Extracted so the first-join race recovery can re-run the lookup, and so
-    tests can simulate the loser's stale "no active call" read.
+    Isolated as a single mockable seam: the first-join race tests simulate the
+    loser's stale "no active call" read by patching this one function. (The
+    retry re-reads because start_or_join_call re-invokes the whole atomic body,
+    not because this lookup is a separate function.)
     """
     from ..models import CallSession
 
@@ -224,15 +226,29 @@ def _start_or_join_once(user, conversation_id):
 
 
 def start_or_join_call(user, conversation_id):
-    try:
-        return _start_or_join_once(user, conversation_id)
-    except IntegrityError:
-        # Lost the first-join race: another request created the active session
-        # between our "no active call" read and our INSERT, tripping the
-        # one_active_call_per_conversation partial unique constraint. The first
-        # atomic block has rolled back; retry once so the locked read now sees
-        # the winner's committed session and we join it instead of erroring out.
-        return _start_or_join_once(user, conversation_id)
+    from ..models import CallSession
+
+    # Only the first-join race is recoverable: a competing request committed the
+    # active session between our "no active call" read and our INSERT, tripping
+    # the one_active_call_per_conversation partial unique constraint. That race is
+    # identifiable by an active session now existing (our atomic block rolled
+    # back). Any other IntegrityError is a real failure and must propagate rather
+    # than be masked by a blind retry.
+    #
+    # A single retry only closes the two-party race; retry a bounded number of
+    # times so a rarer compound race (the winner ends its call and a third member
+    # starts a fresh one in the gap, re-tripping the constraint) also recovers
+    # instead of surfacing as a 500. The bound guarantees termination.
+    max_attempts = 4
+    for attempt in range(max_attempts):
+        try:
+            return _start_or_join_once(user, conversation_id)
+        except IntegrityError:
+            race_winner_exists = CallSession.objects.filter(
+                conversation_id=conversation_id, state=CallSession.State.ACTIVE
+            ).exists()
+            if not race_winner_exists or attempt == max_attempts - 1:
+                raise
 
 
 @transaction.atomic

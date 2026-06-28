@@ -42,6 +42,9 @@ class BuildDashboardContextTests(TestCase):
             password="pass123",
         )
 
+    def tearDown(self):
+        cache.clear()
+
     @patch("workspace.dashboard.views.registry")
     @patch("workspace.dashboard.views.visible_modules")
     def test_context_includes_pending_action_counts_on_modules(
@@ -177,6 +180,72 @@ class BuildDashboardContextTests(TestCase):
         context = _build_dashboard_context(self.user)
         files_mod = context["modules"][0]
         self.assertTrue(files_mod["preview"])
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_hidden_modules_excluded_from_grid(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat"), _mod("mail"), _mod("files")]
+        mock_registry.get_pending_action_counts.return_value = {}
+        set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
+
+        context = _build_dashboard_context(self.user)
+
+        slugs = [m["slug"] for m in context["modules"]]
+        self.assertNotIn("mail", slugs)
+        self.assertIn("chat", slugs)
+        self.assertIn("files", slugs)
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_empty_hidden_modules_shows_all(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat"), _mod("mail")]
+        mock_registry.get_pending_action_counts.return_value = {}
+
+        context = _build_dashboard_context(self.user)
+
+        slugs = [m["slug"] for m in context["modules"]]
+        self.assertEqual(set(slugs), {"chat", "mail"})
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_unknown_hidden_slug_is_ignored(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat")]
+        mock_registry.get_pending_action_counts.return_value = {}
+        set_setting(self.user, "dashboard", "hidden_modules", ["nonexistent"])
+
+        context = _build_dashboard_context(self.user)
+
+        slugs = [m["slug"] for m in context["modules"]]
+        self.assertEqual(slugs, ["chat"])
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_context_includes_dashboard_apps_with_hidden_flag(
+        self, mock_visible, mock_registry
+    ):
+        mock_visible.return_value = [_mod("chat"), _mod("mail"), _mod("dashboard")]
+        mock_registry.get_pending_action_counts.return_value = {}
+        set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
+
+        context = _build_dashboard_context(self.user)
+
+        apps = {a["slug"]: a for a in context["dashboard_apps"]}
+        self.assertNotIn("dashboard", apps)  # dashboard tile excluded
+        self.assertFalse(apps["chat"]["hidden"])
+        self.assertTrue(apps["mail"]["hidden"])
+        # hidden app still appears in the popover list (unlike the grid)
+        self.assertIn("mail", apps)
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_context_includes_upcoming_toggles(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat")]
+        mock_registry.get_pending_action_counts.return_value = {}
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertTrue(context["show_upcoming_events"])  # default
+        self.assertTrue(context["show_upcoming_empty"])  # default
 
 
 # ── _get_activity_context ───────────────────────────────────────
@@ -412,6 +481,51 @@ class IndexViewTests(TestCase):
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "$ajax(feedUrl, { target: 'dashboard-activity' })")
+
+
+# ── modules_fragment view ───────────────────────────────────────
+
+
+class ModulesFragmentTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="moduser",
+            password="pass123",
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_requires_login(self):
+        resp = self.client.get("/dashboard/modules")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("login", resp.url)
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_excludes_hidden_modules(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat"), _mod("mail")]
+        mock_registry.get_pending_action_counts.return_value = {}
+        set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
+        self.client.login(username="moduser", password="pass123")
+
+        resp = self.client.get("/dashboard/modules")
+
+        self.assertEqual(resp.status_code, 200)
+        slugs = [m["slug"] for m in resp.context["modules"]]
+        self.assertIn("chat", slugs)
+        self.assertNotIn("mail", slugs)
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_renders_swap_target_id(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat")]
+        mock_registry.get_pending_action_counts.return_value = {}
+        self.client.login(username="moduser", password="pass123")
+
+        resp = self.client.get("/dashboard/modules")
+
+        self.assertContains(resp, 'id="dashboard-modules-grid"')
 
 
 # ── activity_feed view ──────────────────────────────────────────

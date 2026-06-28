@@ -1,10 +1,37 @@
 import orjson
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.test import TestCase
+from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from workspace.mail.models import MailAccount
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
+
+
+class MailIndexAIFeaturesContextTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="mailai", password="pass123")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_mail_ai_features_default_all_true(self):
+        resp = self.client.get(reverse("mail_ui:index"))
+        self.assertEqual(
+            resp.context["mail_ai_features"],
+            {"classify": True, "extract": True, "manual": True},
+        )
+
+    def test_mail_ai_features_reflect_stored_setting(self):
+        set_setting(self.user, "mail", "ai_classify", False)
+        resp = self.client.get(reverse("mail_ui:index"))
+        self.assertFalse(resp.context["mail_ai_features"]["classify"])
+        self.assertTrue(resp.context["mail_ai_features"]["extract"])
+        self.assertTrue(resp.context["mail_ai_features"]["manual"])
 
 
 class MailAccountSignatureApiTests(APITestCase):

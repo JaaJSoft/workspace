@@ -11,6 +11,12 @@
       :checked="prefs.compactMessageView"
       @change="update('compactMessageView', $event.target.checked)">
   </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Call sounds</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-info"
+      :checked="callSounds"
+      @change="saveCallSounds($event.target.checked)">
+  </label>
   <div class="pt-4 border-t border-base-300">
     <button type="button"
       class="btn btn-ghost btn-sm w-full justify-start gap-2 hover:text-info"

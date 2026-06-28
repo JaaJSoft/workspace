@@ -32,4 +32,24 @@
       :checked="prefs.confirmBeforeDelete"
       @change="update('confirmBeforeDelete', $event.target.checked)">
   </label>
+  <hr class="border-base-300">
+  <div class="text-xs font-semibold uppercase tracking-wide text-base-content/60">AI features</div>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Auto-classify new emails</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-warning"
+      :checked="ai.classify"
+      @change="saveAiFeature('classify', $event.target.checked)">
+  </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">Extract events and tasks</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-warning"
+      :checked="ai.extract"
+      @change="saveAiFeature('extract', $event.target.checked)">
+  </label>
+  <label class="flex items-center justify-between gap-2 cursor-pointer">
+    <span class="text-sm">AI writing assistance</span>
+    <input type="checkbox" class="toggle toggle-sm toggle-warning"
+      :checked="ai.manual"
+      @change="saveAiFeature('manual', $event.target.checked)">
+  </label>
 </div>

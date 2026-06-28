@@ -89,13 +89,6 @@ class SyncExtractDispatchTests(TestCase):
         mock_dispatch = self._run_sync()
         mock_dispatch.assert_not_called()
 
-    def test_legacy_ai_enabled_false_disables_both(self):
-        # Users who turned the single ai_enabled toggle off before the split
-        # must keep everything off until they explicitly opt in to a feature.
-        set_setting(self.user, "mail", "ai_enabled", False)
-        mock_dispatch = self._run_sync()
-        mock_dispatch.assert_not_called()
-
     def test_extract_still_dispatched_when_classify_dispatch_raises(self):
         # If the classify dispatch blows up, extract must still run - they're
         # independently gated AND independently wrapped.

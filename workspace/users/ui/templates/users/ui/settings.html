@@ -35,14 +35,14 @@
           Profile
         </button>
         <button
-          @click="tab = 'preferences'; updateHash()"
+          @click="tab = 'appearance'; updateHash()"
           class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
-          :class="tab === 'preferences'
+          :class="tab === 'appearance'
             ? 'bg-primary/10 text-primary font-semibold'
             : 'hover:bg-base-200 text-base-content'"
         >
           <i data-lucide="palette" class="w-4 h-4"></i>
-          Preferences
+          Appearance
         </button>
         <button
           @click="tab = 'security'; updateHash()"
@@ -65,16 +65,6 @@
           API Tokens
         </button>
         <button
-          @click="tab = 'mail'; updateHash()"
-          class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
-          :class="tab === 'mail'
-            ? 'bg-primary/10 text-primary font-semibold'
-            : 'hover:bg-base-200 text-base-content'"
-        >
-          <i data-lucide="mail" class="w-4 h-4"></i>
-          Mail
-        </button>
-        <button
           @click="tab = 'usage'; updateHash()"
           class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
           :class="tab === 'usage'
@@ -90,10 +80,9 @@
     <!-- Content -->
     <div class="flex-1 min-w-0">
       {% include "users/ui/partials/settings_profile.html" %}
-      {% include "users/ui/partials/settings_preferences.html" %}
+      {% include "users/ui/partials/settings_appearance.html" %}
       {% include "users/ui/partials/settings_security.html" %}
       {% include "users/ui/partials/settings_tokens.html" %}
-      {% include "users/ui/partials/settings_mail.html" %}
       {% include "users/ui/partials/settings_usage.html" %}
     </div>
   </div>
@@ -104,10 +93,9 @@
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
 <script>
   function settingsPage() {
-    const validTabs = ['profile', 'preferences', 'security', 'tokens', 'mail', 'usage'];
+    const validTabs = ['profile', 'appearance', 'security', 'tokens', 'usage'];
     return {
       tab: validTabs.includes(location.hash.replace('#', '')) ? location.hash.replace('#', '') : 'profile',
-      settings: {},
       async init() {
         window.addEventListener('hashchange', () => {
           const hash = location.hash.replace('#', '');
@@ -115,36 +103,9 @@
             this.tab = hash;
           }
         });
-        try {
-          const res = await fetch('/api/v1/settings?module=mail');
-          if (res.ok) {
-            const data = await res.json();
-            (data.results || []).forEach(s => {
-              if (!this.settings[s.module]) this.settings[s.module] = {};
-              this.settings[s.module][s.key] = s.value;
-            });
-          }
-        } catch (e) {
-          // silently ignore — defaults will be used
-        }
       },
       updateHash() {
         location.hash = this.tab;
-      },
-      getSetting(module, key, defaultValue) {
-        return (this.settings[module] && this.settings[module][key] !== undefined)
-          ? this.settings[module][key]
-          : defaultValue;
-      },
-      setSetting(module, key, value) {
-        if (!this.settings[module]) this.settings[module] = {};
-        this.settings[module][key] = value;
-        const csrfToken = getCSRFToken();
-        fetch('/api/v1/settings/' + module + '/' + key, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ value: value }),
-        });
       },
     };
   }

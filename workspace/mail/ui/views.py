@@ -4,6 +4,10 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.mail.models import MailAccount
 from workspace.mail.serializers import MailAccountSerializer
+from workspace.mail.services.ai_settings import (
+    MAIL_AI_FEATURES,
+    is_mail_ai_feature_enabled,
+)
 from workspace.mail.services.oauth2 import get_available_providers
 
 
@@ -18,5 +22,8 @@ def index(request):
         {
             "accounts": MailAccountSerializer(accounts, many=True).data,
             "oauth_providers": get_available_providers(),
+            "mail_ai_features": {
+                f: is_mail_ai_feature_enabled(request.user, f) for f in MAIL_AI_FEATURES
+            },
         },
     )

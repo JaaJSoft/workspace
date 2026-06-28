@@ -245,10 +245,7 @@ def profile_activity_feed(request, username):
 def settings_view(request):
     from django.conf import settings as django_settings
 
-    # Batch reads per module - one query per module instead of one per key.
     profile_settings = get_module_settings(request.user, "profile")
-    dashboard_settings = get_module_settings(request.user, "dashboard")
-    chat_settings = get_module_settings(request.user, "chat")
     return render(
         request,
         "users/ui/settings.html",
@@ -260,11 +257,6 @@ def settings_view(request):
             "profile_role": profile_settings.get("role") or "",
             "banner_palette": profile_settings.get("banner_palette"),
             "banner_palettes": BANNER_PALETTES,
-            "show_upcoming_events": dashboard_settings.get(
-                "show_upcoming_events", True
-            ),
-            "show_upcoming_empty": dashboard_settings.get("show_upcoming_empty", True),
-            "call_sounds": chat_settings.get("call_sounds", True),
         },
     )
 

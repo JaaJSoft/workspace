@@ -36,7 +36,7 @@ module.exports = {
     require('daisyui'),
   ],
   // Themes available in the user preference picker
-  // (workspace/users/ui/templates/users/ui/partials/settings_preferences.html
+  // (workspace/users/ui/templates/users/ui/partials/settings_appearance.html
   // lightThemes + darkThemes). Listing a theme bakes it into the bundle;
   // omitting it would break that user's selection.
   daisyui: {

@@ -8,7 +8,7 @@ reaped without a clean "leave". Lifecycle mutations fan out cache events via
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from workspace.core.sse_registry import notify_sse
@@ -140,15 +140,26 @@ def _render_system_call_body(state, duration_label=None):
     return "Call started"
 
 
-@transaction.atomic
-def start_or_join_call(user, conversation_id):
-    from ..models import CallParticipant, CallSession, Message
+def _active_session_for_update(conversation_id):
+    """Locked read of the conversation's active call session (or None).
 
-    session = (
+    Extracted so the first-join race recovery can re-run the lookup, and so
+    tests can simulate the loser's stale "no active call" read.
+    """
+    from ..models import CallSession
+
+    return (
         CallSession.objects.select_for_update()
         .filter(conversation_id=conversation_id, state=CallSession.State.ACTIVE)
         .first()
     )
+
+
+@transaction.atomic
+def _start_or_join_once(user, conversation_id):
+    from ..models import CallParticipant, CallSession, Message
+
+    session = _active_session_for_update(conversation_id)
     created_session = False
     if session is None:
         session = CallSession.objects.create(
@@ -210,6 +221,18 @@ def start_or_join_call(user, conversation_id):
         )
 
     return session, participant, created_session
+
+
+def start_or_join_call(user, conversation_id):
+    try:
+        return _start_or_join_once(user, conversation_id)
+    except IntegrityError:
+        # Lost the first-join race: another request created the active session
+        # between our "no active call" read and our INSERT, tripping the
+        # one_active_call_per_conversation partial unique constraint. The first
+        # atomic block has rolled back; retry once so the locked read now sees
+        # the winner's committed session and we join it instead of erroring out.
+        return _start_or_join_once(user, conversation_id)
 
 
 @transaction.atomic

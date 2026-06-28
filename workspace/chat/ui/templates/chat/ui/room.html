@@ -18,7 +18,9 @@
      @chat-call_participant_left.window="onCallParticipantLeft($event.detail)"
      @chat-call_participant_updated.window="onCallParticipantUpdated($event.detail)"
      @chat-call_ended.window="onCallEnded($event.detail)"
-     @chat-call_signal.window="onCallSignal($event.detail)">
+     @chat-call_signal.window="onCallSignal($event.detail)"
+     @chat-call_diagnostic_signal.window="onCallDiagnosticSignal($event.detail)"
+     @chat-run-diagnostic.window="openDiagnostic()">
   <div class="flex flex-1 min-h-0">
     <!-- Participants grid -->
     <section data-testid="participants-grid" class="flex-1 flex flex-col gap-4 bg-base-200 p-4 min-w-0 relative">
@@ -141,6 +143,10 @@
           <button class="btn btn-circle border-0" :class="sharing ? 'btn-primary' : 'btn-neutral'" @click="toggleScreenShare()"
                   :title="sharing ? 'Stop sharing' : 'Share screen'">
             <i data-lucide="screen-share" class="w-5 h-5"></i>
+          </button>
+          <button class="btn btn-neutral btn-circle border-0" @click="openDiagnostic()" :disabled="diagRunning"
+                  title="Connection diagnostic">
+            <i data-lucide="activity" class="w-5 h-5"></i>
           </button>
           <button class="btn btn-error btn-circle border-0" @click="leaveRoom()" title="Leave call">
             <i data-lucide="phone-off" class="w-5 h-5"></i>

@@ -483,6 +483,51 @@ class IndexViewTests(TestCase):
         self.assertContains(resp, "$ajax(feedUrl, { target: 'dashboard-activity' })")
 
 
+# ── modules_fragment view ───────────────────────────────────────
+
+
+class ModulesFragmentTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="moduser",
+            password="pass123",
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_requires_login(self):
+        resp = self.client.get("/dashboard/modules")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("login", resp.url)
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_excludes_hidden_modules(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat"), _mod("mail")]
+        mock_registry.get_pending_action_counts.return_value = {}
+        set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
+        self.client.login(username="moduser", password="pass123")
+
+        resp = self.client.get("/dashboard/modules")
+
+        self.assertEqual(resp.status_code, 200)
+        slugs = [m["slug"] for m in resp.context["modules"]]
+        self.assertIn("chat", slugs)
+        self.assertNotIn("mail", slugs)
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_renders_swap_target_id(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat")]
+        mock_registry.get_pending_action_counts.return_value = {}
+        self.client.login(username="moduser", password="pass123")
+
+        resp = self.client.get("/dashboard/modules")
+
+        self.assertContains(resp, 'id="dashboard-modules-grid"')
+
+
 # ── activity_feed view ──────────────────────────────────────────
 
 

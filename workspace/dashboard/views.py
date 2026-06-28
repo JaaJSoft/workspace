@@ -75,10 +75,16 @@ def _activity_shell_context(source=None):
     }
 
 
-def _build_dashboard_context(user, include_activity=True, activity_source=None):
+def _dashboard_modules(user):
+    """Build the dashboard app tiles and the settings-popover app list.
+
+    Returns ``(modules, dashboard_apps)`` where ``modules`` is the visible grid
+    (hidden slugs and the dashboard tile excluded, pending counts attached) and
+    ``dashboard_apps`` is every visible app with a ``hidden`` flag for the
+    settings popover.
+    """
     pending_action_counts = registry.get_pending_action_counts(user)
-    dashboard_settings = get_module_settings(user, "dashboard")
-    hidden = set(dashboard_settings.get("hidden_modules") or [])
+    hidden = set(get_module_settings(user, "dashboard").get("hidden_modules") or [])
     modules = []
     dashboard_apps = []
     for m in visible_modules(user):
@@ -98,6 +104,12 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
         data = asdict(m)
         data["pending_action_count"] = pending_action_counts.get(m.slug, 0)
         modules.append(data)
+    return modules, dashboard_apps
+
+
+def _build_dashboard_context(user, include_activity=True, activity_source=None):
+    dashboard_settings = get_module_settings(user, "dashboard")
+    modules, dashboard_apps = _dashboard_modules(user)
 
     context = {
         "modules": modules,
@@ -124,6 +136,17 @@ def index(request):
     context.update(_activity_shell_context())
     context["activity_tab"] = "all"
     return render(request, "dashboard/index.html", context)
+
+
+@login_required
+def modules_fragment(request):
+    """Dashboard app grid, re-rendered after a visibility change (alpine-ajax swap)."""
+    modules, _ = _dashboard_modules(request.user)
+    return render(
+        request,
+        "dashboard/partials/modules_grid_fragment.html",
+        {"modules": modules},
+    )
 
 
 @login_required

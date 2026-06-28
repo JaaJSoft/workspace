@@ -529,6 +529,7 @@ x-data="mailApp()"
 <!-- Embedded data -->
 {{ accounts|json_script:"accounts-data" }}
 {{ oauth_providers|json_script:"oauth-providers-data" }}
+{{ mail_ai_features|json_script:"mail-ai-features-data" }}
 {% endblock %}
 
 {% block extra_scripts %}

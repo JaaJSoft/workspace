@@ -56,6 +56,11 @@ window.chatPreferences = function chatPreferences() {
 
         saveCallSounds(value) {
             this.callSounds = value;
+            // Apply live: the call-sounds engine reads its enabled flag from the
+            // json_script seed only at init, so without this a toggle would not
+            // take effect until the page reloads (the toggle and calls now live
+            // on the same page).
+            if (window.chatCallSounds) window.chatCallSounds.setEnabled(value);
             fetch('/api/v1/settings/chat/call_sounds', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },

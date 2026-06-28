@@ -4,7 +4,7 @@
 // user-settings API.
 //
 // All three attributes are read live on every event - the preferences page
-// (settings_preferences.html) mutates them when the user picks a new theme,
+// (settings_appearance.html) mutates them when the user picks a new theme,
 // and we want the toggle to reflect those changes without a page reload.
 (function () {
   const themeToggle = document.getElementById('themeToggle');

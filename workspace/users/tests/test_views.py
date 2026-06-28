@@ -790,38 +790,3 @@ class UserGroupsTests(UserTestMixin, APITestCase):
         other.groups.add(group)
         resp = self.client.get(self.URL)
         self.assertEqual(resp.data, [])
-
-
-# ── SettingsViewDashboardContext ────────────────────────────────
-
-
-class SettingsViewDashboardContextTests(TestCase):
-    """Smoke tests that the settings page exposes the dashboard toggles."""
-
-    SETTINGS_URL = "/users/settings"
-
-    def setUp(self):
-        self.user = User.objects.create_user(
-            username="settingsuser",
-            password="pass123",
-        )
-        self.client.login(username="settingsuser", password="pass123")
-
-    def tearDown(self):
-        cache.clear()
-
-    def test_show_upcoming_events_default_true_in_context(self):
-        resp = self.client.get(self.SETTINGS_URL)
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.context["show_upcoming_events"], True)
-
-    def test_show_upcoming_empty_default_true_in_context(self):
-        resp = self.client.get(self.SETTINGS_URL)
-        self.assertEqual(resp.context["show_upcoming_empty"], True)
-
-    def test_stored_false_values_reflected_in_context(self):
-        set_setting(self.user, "dashboard", "show_upcoming_events", False)
-        set_setting(self.user, "dashboard", "show_upcoming_empty", False)
-        resp = self.client.get(self.SETTINGS_URL)
-        self.assertEqual(resp.context["show_upcoming_events"], False)
-        self.assertEqual(resp.context["show_upcoming_empty"], False)

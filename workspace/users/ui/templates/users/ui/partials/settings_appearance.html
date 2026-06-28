@@ -1,5 +1,5 @@
-<!-- Preferences Tab -->
-<div x-show="tab === 'preferences'" x-cloak x-data="themePickerForm()">
+<!-- Appearance Tab -->
+<div x-show="tab === 'appearance'" x-cloak x-data="themePickerForm()">
   <div class="card bg-base-100 border border-base-300 shadow-sm">
     <div class="card-body">
       <h2 class="card-title text-lg gap-2">
@@ -73,103 +73,6 @@
       </div>
     </div>
   </div>
-
-  <div class="card bg-base-100 border border-base-300 shadow-sm mt-4" x-data="dashboardPrefsForm()">
-    <div class="card-body">
-      {{ dashboard_apps|json_script:"dashboard-apps-data" }}
-      <h2 class="card-title text-lg gap-2">
-        <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
-        Dashboard
-      </h2>
-      <p class="text-sm text-base-content/60 mt-1">Control which widgets appear on your dashboard.</p>
-
-      <div class="mt-4 space-y-3">
-        <label class="flex items-center justify-between gap-4">
-          <div>
-            <div class="font-medium">Show upcoming events</div>
-            <div class="text-xs text-base-content/60">Display today's calendar events on the dashboard.</div>
-          </div>
-          <input
-            type="checkbox"
-            class="toggle toggle-primary"
-            x-model="showUpcoming"
-            @change="save('show_upcoming_events', showUpcoming)"
-          >
-        </label>
-
-        <label
-          class="flex items-center justify-between gap-4"
-          :class="{ 'opacity-40 pointer-events-none': !showUpcoming }"
-        >
-          <div>
-            <div class="font-medium">Show empty state</div>
-            <div class="text-xs text-base-content/60">Display "No upcoming events today." when the list is empty.</div>
-          </div>
-          <input
-            type="checkbox"
-            class="toggle toggle-primary"
-            x-model="showEmpty"
-            @change="save('show_upcoming_empty', showEmpty)"
-            :disabled="!showUpcoming"
-          >
-        </label>
-      </div>
-
-      <div
-        class="mt-5 pt-4 border-t border-base-300"
-        x-init="$nextTick(() => window.lucide && window.lucide.createIcons())"
-      >
-        <div class="font-medium">Apps</div>
-        <div class="text-xs text-base-content/60 mb-3">Choose which apps appear on your dashboard.</div>
-        <div class="space-y-2">
-          <template x-for="app in apps" :key="app.slug">
-            <label class="flex items-center justify-between gap-4">
-              <div class="flex items-center gap-2">
-                <span
-                  class="w-7 h-7 rounded-lg flex items-center justify-center"
-                  :class="`bg-${app.color}/10 text-${app.color}`"
-                >
-                  <i :data-lucide="app.icon" class="w-4 h-4"></i>
-                </span>
-                <span class="font-medium" x-text="app.name"></span>
-              </div>
-              <input
-                type="checkbox"
-                class="toggle toggle-primary"
-                :checked="isVisible(app.slug)"
-                @change="toggleApp(app.slug, $event.target.checked)"
-              >
-            </label>
-          </template>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card bg-base-100 border border-base-300 shadow-sm mt-4" x-data="chatPrefsForm()">
-    <div class="card-body">
-      <h2 class="card-title text-lg gap-2">
-        <i data-lucide="phone" class="w-5 h-5"></i>
-        Chat calls
-      </h2>
-      <p class="text-sm text-base-content/60 mt-1">Control sound feedback during audio calls.</p>
-
-      <div class="mt-4 space-y-3">
-        <label class="flex items-center justify-between gap-4">
-          <div>
-            <div class="font-medium">Call sounds</div>
-            <div class="text-xs text-base-content/60">Play a short sound when you join or leave a call, when someone else joins or leaves, and when you mute or unmute.</div>
-          </div>
-          <input
-            type="checkbox"
-            class="toggle toggle-primary"
-            x-model="callSounds"
-            @change="save('call_sounds', callSounds)"
-          >
-        </label>
-      </div>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -234,47 +137,6 @@
             [kind + '_theme']: id,
             theme: id,
           }),
-        });
-      },
-    };
-  }
-
-  function dashboardPrefsForm() {
-    const apps = JSON.parse(document.getElementById('dashboard-apps-data').textContent);
-    return {
-      showUpcoming: {{ show_upcoming_events|yesno:"true,false" }},
-      showEmpty: {{ show_upcoming_empty|yesno:"true,false" }},
-      apps: apps,
-      hidden: apps.filter(a => a.hidden).map(a => a.slug),
-      isVisible(slug) {
-        return !this.hidden.includes(slug);
-      },
-      toggleApp(slug, visible) {
-        if (visible) {
-          this.hidden = this.hidden.filter(s => s !== slug);
-        } else if (!this.hidden.includes(slug)) {
-          this.hidden.push(slug);
-        }
-        this.save('hidden_modules', this.hidden);
-      },
-      save(key, value) {
-        fetch('/api/v1/settings/dashboard/' + key, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ value: value }),
-        });
-      },
-    };
-  }
-
-  function chatPrefsForm() {
-    return {
-      callSounds: {{ call_sounds|yesno:"true,false" }},
-      save(key, value) {
-        fetch('/api/v1/settings/chat/' + key, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ value: value }),
         });
       },
     };

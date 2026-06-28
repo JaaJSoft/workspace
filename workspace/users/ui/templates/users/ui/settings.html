@@ -35,14 +35,14 @@
           Profile
         </button>
         <button
-          @click="tab = 'preferences'; updateHash()"
+          @click="tab = 'appearance'; updateHash()"
           class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
-          :class="tab === 'preferences'
+          :class="tab === 'appearance'
             ? 'bg-primary/10 text-primary font-semibold'
             : 'hover:bg-base-200 text-base-content'"
         >
           <i data-lucide="palette" class="w-4 h-4"></i>
-          Preferences
+          Appearance
         </button>
         <button
           @click="tab = 'security'; updateHash()"
@@ -90,7 +90,7 @@
     <!-- Content -->
     <div class="flex-1 min-w-0">
       {% include "users/ui/partials/settings_profile.html" %}
-      {% include "users/ui/partials/settings_preferences.html" %}
+      {% include "users/ui/partials/settings_appearance.html" %}
       {% include "users/ui/partials/settings_security.html" %}
       {% include "users/ui/partials/settings_tokens.html" %}
       {% include "users/ui/partials/settings_mail.html" %}
@@ -104,7 +104,7 @@
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
 <script>
   function settingsPage() {
-    const validTabs = ['profile', 'preferences', 'security', 'tokens', 'mail', 'usage'];
+    const validTabs = ['profile', 'appearance', 'security', 'tokens', 'mail', 'usage'];
     return {
       tab: validTabs.includes(location.hash.replace('#', '')) ? location.hash.replace('#', '') : 'profile',
       settings: {},

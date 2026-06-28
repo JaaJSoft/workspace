@@ -19,6 +19,25 @@
 
     {# ── Top-right controls: dashboard settings + usage ── #}
     <div class="absolute right-0 top-0 flex items-center gap-1">
+      {# ── Usage popover ── #}
+      <div class="relative" x-data="usagePopover()" @click.outside="open = false">
+        <button
+          @click="toggle()"
+          class="btn btn-ghost btn-sm btn-square"
+          title="Workspace usage"
+        >
+          <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+        </button>
+        <div
+          x-show="open"
+          x-cloak
+          x-transition.opacity
+          class="absolute right-0 top-full mt-2 z-50 w-72 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
+        >
+          {% include 'dashboard/partials/usage_widget.html' %}
+        </div>
+      </div>
+
       {# ── Dashboard settings popover ── #}
       <div class="dropdown dropdown-end" x-data="dashboardPrefsForm()">
         {{ dashboard_apps|json_script:"dashboard-apps-data" }}
@@ -37,25 +56,6 @@
             Dashboard
           </h4>
           {% include "dashboard/partials/_preferences_content.html" %}
-        </div>
-      </div>
-
-      {# ── Usage popover ── #}
-      <div class="relative" x-data="usagePopover()" @click.outside="open = false">
-        <button
-          @click="toggle()"
-          class="btn btn-ghost btn-sm btn-square"
-          title="Workspace usage"
-        >
-          <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
-        </button>
-        <div
-          x-show="open"
-          x-cloak
-          x-transition.opacity
-          class="absolute right-0 top-full mt-2 z-50 w-72 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
-        >
-          {% include 'dashboard/partials/usage_widget.html' %}
         </div>
       </div>
     </div>

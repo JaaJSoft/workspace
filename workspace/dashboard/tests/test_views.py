@@ -42,6 +42,9 @@ class BuildDashboardContextTests(TestCase):
             password="pass123",
         )
 
+    def tearDown(self):
+        cache.clear()
+
     @patch("workspace.dashboard.views.registry")
     @patch("workspace.dashboard.views.visible_modules")
     def test_context_includes_pending_action_counts_on_modules(
@@ -177,6 +180,43 @@ class BuildDashboardContextTests(TestCase):
         context = _build_dashboard_context(self.user)
         files_mod = context["modules"][0]
         self.assertTrue(files_mod["preview"])
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_hidden_modules_excluded_from_grid(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat"), _mod("mail"), _mod("files")]
+        mock_registry.get_pending_action_counts.return_value = {}
+        set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
+
+        context = _build_dashboard_context(self.user)
+
+        slugs = [m["slug"] for m in context["modules"]]
+        self.assertNotIn("mail", slugs)
+        self.assertIn("chat", slugs)
+        self.assertIn("files", slugs)
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_empty_hidden_modules_shows_all(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat"), _mod("mail")]
+        mock_registry.get_pending_action_counts.return_value = {}
+
+        context = _build_dashboard_context(self.user)
+
+        slugs = [m["slug"] for m in context["modules"]]
+        self.assertEqual(set(slugs), {"chat", "mail"})
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_unknown_hidden_slug_is_ignored(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat")]
+        mock_registry.get_pending_action_counts.return_value = {}
+        set_setting(self.user, "dashboard", "hidden_modules", ["nonexistent"])
+
+        context = _build_dashboard_context(self.user)
+
+        slugs = [m["slug"] for m in context["modules"]]
+        self.assertEqual(slugs, ["chat"])
 
 
 # ── _get_activity_context ───────────────────────────────────────

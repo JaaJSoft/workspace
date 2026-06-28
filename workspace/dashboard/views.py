@@ -77,9 +77,10 @@ def _activity_shell_context(source=None):
 
 def _build_dashboard_context(user, include_activity=True, activity_source=None):
     pending_action_counts = registry.get_pending_action_counts(user)
+    hidden = set(get_setting(user, "dashboard", "hidden_modules", default=[]) or [])
     modules = []
     for m in visible_modules(user):
-        if m.slug == "dashboard":
+        if m.slug == "dashboard" or m.slug in hidden:
             continue
         data = asdict(m)
         data["pending_action_count"] = pending_action_counts.get(m.slug, 0)

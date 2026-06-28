@@ -15,6 +15,7 @@ from workspace.core.services.activity import (
     get_sources,
     get_usage_stats,
 )
+from workspace.core.services.module_visibility import visible_modules
 from workspace.users.banner_palettes import BANNER_PALETTES, gradient_from_palette_value
 from workspace.users.services import avatar as avatar_service
 from workspace.users.services import presence as presence_service
@@ -249,6 +250,18 @@ def settings_view(request):
     profile_settings = get_module_settings(request.user, "profile")
     dashboard_settings = get_module_settings(request.user, "dashboard")
     chat_settings = get_module_settings(request.user, "chat")
+    hidden_modules = dashboard_settings.get("hidden_modules") or []
+    dashboard_apps = [
+        {
+            "slug": m.slug,
+            "name": m.name,
+            "icon": m.icon,
+            "color": m.color,
+            "hidden": m.slug in hidden_modules,
+        }
+        for m in visible_modules(request.user)
+        if m.slug != "dashboard"
+    ]
     return render(
         request,
         "users/ui/settings.html",
@@ -265,6 +278,7 @@ def settings_view(request):
             ),
             "show_upcoming_empty": dashboard_settings.get("show_upcoming_empty", True),
             "call_sounds": chat_settings.get("call_sounds", True),
+            "dashboard_apps": dashboard_apps,
         },
     )
 

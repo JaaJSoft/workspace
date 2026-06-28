@@ -249,6 +249,9 @@ def start_or_join_call(user, conversation_id):
             ).exists()
             if not race_winner_exists or attempt == max_attempts - 1:
                 raise
+    # Unreachable: the final iteration either returns or re-raises above. Kept as
+    # a defensive guard so the function never falls through to an implicit None.
+    raise RuntimeError("start_or_join_call exhausted retries without returning")
 
 
 @transaction.atomic

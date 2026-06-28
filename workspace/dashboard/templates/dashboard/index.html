@@ -12,48 +12,51 @@
 
   {# ── Hero ── #}
   <section class="text-center space-y-1 relative">
-    {# ── Dashboard settings popover ── #}
-    <div class="dropdown dropdown-start absolute left-0 top-0" x-data="dashboardPrefsForm()">
-      {{ dashboard_apps|json_script:"dashboard-apps-data" }}
-      <button
-        type="button"
-        tabindex="0"
-        class="btn btn-ghost btn-sm btn-square"
-        aria-label="Dashboard settings"
-        title="Dashboard settings"
-      >
-        <i data-lucide="settings" class="w-4 h-4"></i>
-      </button>
-      <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-72 mt-1 text-left">
-        <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
-          <i data-lucide="layout-dashboard" class="w-4 h-4 text-primary"></i>
-          Dashboard
-        </h4>
-        {% include "dashboard/partials/_preferences_content.html" %}
-      </div>
-    </div>
-
     <h1 class="text-3xl font-semibold text-base-content" x-data x-text="(() => { const h = new Date().getHours(); const g = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; return g + ', {{ user.first_name|default:user.username }}.'; })()">Welcome back, {{ user.first_name|default:user.username }}.</h1>
     <p class="text-base-content/60" x-data="weatherWidget()" x-cloak>
       <span x-text="label"></span>
     </p>
 
-    {# ── Usage popover ── #}
-    <div class="absolute right-0 top-0" x-data="usagePopover()" @click.outside="open = false">
-      <button
-        @click="toggle()"
-        class="btn btn-ghost btn-sm btn-square"
-        title="Workspace usage"
-      >
-        <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
-      </button>
-      <div
-        x-show="open"
-        x-cloak
-        x-transition.opacity
-        class="absolute right-0 top-full mt-2 z-50 w-72 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
-      >
-        {% include 'dashboard/partials/usage_widget.html' %}
+    {# ── Top-right controls: dashboard settings + usage ── #}
+    <div class="absolute right-0 top-0 flex items-center gap-1">
+      {# ── Dashboard settings popover ── #}
+      <div class="dropdown dropdown-end" x-data="dashboardPrefsForm()">
+        {{ dashboard_apps|json_script:"dashboard-apps-data" }}
+        <button
+          type="button"
+          tabindex="0"
+          class="btn btn-ghost btn-sm btn-square"
+          aria-label="Dashboard settings"
+          title="Dashboard settings"
+        >
+          <i data-lucide="settings" class="w-4 h-4"></i>
+        </button>
+        <div tabindex="0" class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-4 w-72 mt-1 text-left">
+          <h4 class="font-semibold text-sm mb-3 flex items-center gap-2">
+            <i data-lucide="layout-dashboard" class="w-4 h-4 text-primary"></i>
+            Dashboard
+          </h4>
+          {% include "dashboard/partials/_preferences_content.html" %}
+        </div>
+      </div>
+
+      {# ── Usage popover ── #}
+      <div class="relative" x-data="usagePopover()" @click.outside="open = false">
+        <button
+          @click="toggle()"
+          class="btn btn-ghost btn-sm btn-square"
+          title="Workspace usage"
+        >
+          <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+        </button>
+        <div
+          x-show="open"
+          x-cloak
+          x-transition.opacity
+          class="absolute right-0 top-full mt-2 z-50 w-72 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
+        >
+          {% include 'dashboard/partials/usage_widget.html' %}
+        </div>
       </div>
     </div>
   </section>

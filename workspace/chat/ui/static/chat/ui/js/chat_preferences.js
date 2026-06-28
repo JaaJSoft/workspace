@@ -35,6 +35,10 @@ window.chatPreferences = function chatPreferences() {
 
     return {
         prefs: { ...window._chatPrefsCache },
+        callSounds: (function () {
+            const el = document.getElementById('call-sounds-enabled-data');
+            return el ? JSON.parse(el.textContent) : true;
+        })(),
 
         async init() {
             await window._chatPrefsReady;
@@ -48,6 +52,15 @@ window.chatPreferences = function chatPreferences() {
             this.prefs[key] = value;
             this._saveRemote();
             this._broadcast();
+        },
+
+        saveCallSounds(value) {
+            this.callSounds = value;
+            fetch('/api/v1/settings/chat/call_sounds', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                body: JSON.stringify({ value: value }),
+            }).catch(function() {});
         },
 
         _broadcast() {

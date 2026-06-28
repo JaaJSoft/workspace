@@ -218,6 +218,35 @@ class BuildDashboardContextTests(TestCase):
         slugs = [m["slug"] for m in context["modules"]]
         self.assertEqual(slugs, ["chat"])
 
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_context_includes_dashboard_apps_with_hidden_flag(
+        self, mock_visible, mock_registry
+    ):
+        mock_visible.return_value = [_mod("chat"), _mod("mail"), _mod("dashboard")]
+        mock_registry.get_pending_action_counts.return_value = {}
+        set_setting(self.user, "dashboard", "hidden_modules", ["mail"])
+
+        context = _build_dashboard_context(self.user)
+
+        apps = {a["slug"]: a for a in context["dashboard_apps"]}
+        self.assertNotIn("dashboard", apps)  # dashboard tile excluded
+        self.assertFalse(apps["chat"]["hidden"])
+        self.assertTrue(apps["mail"]["hidden"])
+        # hidden app still appears in the popover list (unlike the grid)
+        self.assertIn("mail", apps)
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_context_includes_upcoming_toggles(self, mock_visible, mock_registry):
+        mock_visible.return_value = [_mod("chat")]
+        mock_registry.get_pending_action_counts.return_value = {}
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertTrue(context["show_upcoming_events"])  # default
+        self.assertTrue(context["show_upcoming_empty"])  # default
+
 
 # ── _get_activity_context ───────────────────────────────────────
 

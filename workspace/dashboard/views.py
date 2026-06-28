@@ -16,7 +16,7 @@ from workspace.core.services.activity import (
     get_usage_stats,
 )
 from workspace.core.services.module_visibility import visible_modules
-from workspace.users.services.settings import get_setting
+from workspace.users.services.settings import get_module_settings, get_setting
 
 ACTIVITY_LIMIT = 10
 
@@ -77,10 +77,23 @@ def _activity_shell_context(source=None):
 
 def _build_dashboard_context(user, include_activity=True, activity_source=None):
     pending_action_counts = registry.get_pending_action_counts(user)
-    hidden = set(get_setting(user, "dashboard", "hidden_modules", default=[]) or [])
+    dashboard_settings = get_module_settings(user, "dashboard")
+    hidden = set(dashboard_settings.get("hidden_modules") or [])
     modules = []
+    dashboard_apps = []
     for m in visible_modules(user):
-        if m.slug == "dashboard" or m.slug in hidden:
+        if m.slug == "dashboard":
+            continue
+        dashboard_apps.append(
+            {
+                "slug": m.slug,
+                "name": m.name,
+                "icon": m.icon,
+                "color": m.color,
+                "hidden": m.slug in hidden,
+            }
+        )
+        if m.slug in hidden:
             continue
         data = asdict(m)
         data["pending_action_count"] = pending_action_counts.get(m.slug, 0)
@@ -88,9 +101,9 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
 
     context = {
         "modules": modules,
-        "show_upcoming_events": get_setting(
-            user, "dashboard", "show_upcoming_events", default=True
-        ),
+        "dashboard_apps": dashboard_apps,
+        "show_upcoming_events": dashboard_settings.get("show_upcoming_events", True),
+        "show_upcoming_empty": dashboard_settings.get("show_upcoming_empty", True),
         "usage_stats": get_usage_stats(user.id),
         "storage_quota": django_settings.STORAGE_QUOTA_BYTES,
     }

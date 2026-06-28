@@ -31,27 +31,13 @@ class IsMailAIFeatureEnabledTests(TestCase):
         self.assertTrue(is_mail_ai_feature_enabled(self.user, "extract"))
         self.assertTrue(is_mail_ai_feature_enabled(self.user, "manual"))
 
-    def test_legacy_ai_enabled_false_is_inherited_as_default(self):
-        # User turned the single legacy toggle off before the per-feature split.
-        set_setting(self.user, "mail", "ai_enabled", False)
-        for feature in MAIL_AI_FEATURES:
-            self.assertFalse(is_mail_ai_feature_enabled(self.user, feature))
-
-    def test_explicit_feature_setting_overrides_legacy_default(self):
-        set_setting(self.user, "mail", "ai_enabled", False)
-        set_setting(self.user, "mail", "ai_manual", True)
-        # The opted-in feature is enabled, others stay off via the legacy fallback.
-        self.assertTrue(is_mail_ai_feature_enabled(self.user, "manual"))
-        self.assertFalse(is_mail_ai_feature_enabled(self.user, "classify"))
-        self.assertFalse(is_mail_ai_feature_enabled(self.user, "extract"))
-
     def test_unknown_feature_raises(self):
         with self.assertRaises(ValueError):
             is_mail_ai_feature_enabled(self.user, "summarize")
 
     def test_back_to_back_feature_checks_hit_db_once(self):
         # imap_sync probes classify then extract for the same user in a row.
-        # Both checks (plus the legacy ai_enabled fallback) must come from a
+        # Both checks must come from a
         # single mail-module query, not one per key.
         set_setting(self.user, "mail", "ai_classify", False)
         # Cold the cache so reads hit the database.

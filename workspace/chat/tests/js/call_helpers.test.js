@@ -66,3 +66,22 @@ test('chatCallMediaState maps mic/camera/screen flags', () => {
   assert.deepEqual(ctx.chatCallMediaState(true, true, false), { audio: false, video: true, screen: false });
   assert.deepEqual(ctx.chatCallMediaState(false, false, true), { audio: true, video: false, screen: true });
 });
+
+test('shouldDriveIceRestart picks the lower-id peer as the single driver', () => {
+  // Deterministic glare avoidance for mid-call restarts: both peers are
+  // existing participants, so the lower user_id drives. Exactly one side does.
+  assert.equal(ctx.chatCallShouldDriveIceRestart(1, 2), true);
+  assert.equal(ctx.chatCallShouldDriveIceRestart(2, 1), false);
+  assert.equal(ctx.chatCallShouldDriveIceRestart(2, 2), false);
+});
+
+test('iceRestartDelay applies grace on disconnected and backoff by attempt', () => {
+  // failed: immediate first attempt, then exponential backoff 0 -> 2000 -> 4000.
+  assert.equal(ctx.chatCallIceRestartDelay('failed', 0), 0);
+  assert.equal(ctx.chatCallIceRestartDelay('failed', 1), 2000);
+  assert.equal(ctx.chatCallIceRestartDelay('failed', 2), 4000);
+  // disconnected: a 3s grace floor that often lets the state self-recover.
+  assert.equal(ctx.chatCallIceRestartDelay('disconnected', 0), 3000);
+  assert.equal(ctx.chatCallIceRestartDelay('disconnected', 1), 3000);
+  assert.equal(ctx.chatCallIceRestartDelay('disconnected', 2), 4000);
+});

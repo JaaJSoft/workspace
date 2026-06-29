@@ -34,7 +34,7 @@ dependencies = [
     "psycopg[binary,pool]>=3.3.4",
     "python-dotenv>=1.2.1",
     # webdav
-    "wsgidav>=4.3.4",
+    "wsgidav>=4.3.5",
     # server
     "gunicorn>=26.0.0",
     "django-http-compression[brotli]>=1.4.0",

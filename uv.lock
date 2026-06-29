@@ -2295,7 +2295,7 @@ requires-dist = [
     { name = "redis", specifier = ">=8.0.1" },
     { name = "trafilatura", specifier = ">=2.1.0" },
     { name = "whitenoise", specifier = ">=6.11.0" },
-    { name = "wsgidav", specifier = ">=4.3.4" },
+    { name = "wsgidav", specifier = ">=4.3.5" },
     { name = "zipstream-ng", specifier = ">=1.9.2" },
 ]
 
@@ -2309,7 +2309,7 @@ dev = [
 
 [[package]]
 name = "wsgidav"
-version = "4.3.4"
+version = "4.3.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bcrypt" },
@@ -2319,9 +2319,9 @@ dependencies = [
     { name = "passlib" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fb/4e/c1735e63878be360cd13fbb64617a709e25b508ad0f1e79e06113acd051a/wsgidav-4.3.4.tar.gz", hash = "sha256:96c87b43599b3a6f19f5b57e4596f6b5c544351cb5cec28311badf2f537a557f", size = 159915, upload-time = "2026-05-24T11:39:20.106Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/c7/5591a7f0590bf1f9aff6f7cb9256fa5b0f1d132bdc3a38a5f8115e8ce7b4/wsgidav-4.3.5.tar.gz", hash = "sha256:2f2055a949f69db3e8c1f37d787f6ffd076ea29d561dda68918289a2a5d41a93", size = 160942, upload-time = "2026-06-27T07:33:03.467Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/54/00/8919618436890721633dd9f1ad39dbf0e060918d6b8e021a840b0a4ce176/wsgidav-4.3.4-py3-none-any.whl", hash = "sha256:7c3d0614d9603ad33066b02254f0597922497aaa21823e1e3f77ba88fb11d529", size = 169086, upload-time = "2026-05-24T11:58:31.875Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/e2/d70dbfe68aada7735d38a1a0eeda079b39478f0ec993fec00c432cf4dcfc/wsgidav-4.3.5-py3-none-any.whl", hash = "sha256:0985f5cb572e00c151e1c60d00e1ae8cbf74dea2a3286ec0bc040ab482cd5095", size = 168873, upload-time = "2026-06-27T07:33:05.937Z" },
 ]
 
 [[package]]

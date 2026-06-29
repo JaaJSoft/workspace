@@ -1,3 +1,4 @@
+from unittest import mock
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
@@ -121,6 +122,102 @@ class LifecycleTests(TestCase):
             calls.start_or_join_call(self.a, self.conv.uuid)
             with self.assertRaises(calls.CallFull):
                 calls.start_or_join_call(self.b, self.conv.uuid)
+
+
+class FirstJoinRaceTests(TestCase):
+    """Two members starting a call in the same tiny window both pass the
+    "no active call" check. The partial unique constraint lets only one
+    CallSession be created; the loser must recover by joining the winner's
+    freshly created session instead of surfacing the IntegrityError as a 500.
+    """
+
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.a = User.objects.create_user(username="a", password="x")
+        self.b = User.objects.create_user(username="b", password="x")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.a
+        )
+        for u in (self.a, self.b):
+            ConversationMember.objects.create(conversation=self.conv, user=u)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_loser_of_first_join_race_joins_winner_session(self):
+        # a wins the race and commits the only active session.
+        winner, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+
+        # b is the loser: its first locked read still sees "no active call"
+        # (the winner's row was created in a concurrent, not-yet-visible txn),
+        # so it takes the create path and trips one_active_call_per_conversation.
+        real_lookup = calls._active_session_for_update
+        first_read = {"done": False}
+
+        def stale_then_real(conversation_id):
+            if not first_read["done"]:
+                first_read["done"] = True
+                return None
+            return real_lookup(conversation_id)
+
+        with mock.patch.object(
+            calls, "_active_session_for_update", side_effect=stale_then_real
+        ):
+            session, participant, created = calls.start_or_join_call(
+                self.b, self.conv.uuid
+            )
+
+        # Loser recovers into the winner's session, no error, not a new session.
+        self.assertFalse(created)
+        self.assertEqual(session.uuid, winner.uuid)
+        self.assertIsNone(participant.left_at)
+        self.assertEqual(participant.user_id, self.b.id)
+
+        # Invariant intact: still exactly one active session, both members in it.
+        self.assertEqual(
+            CallSession.objects.filter(
+                conversation=self.conv, state=CallSession.State.ACTIVE
+            ).count(),
+            1,
+        )
+        self.assertEqual(len(calls.list_active_participants(winner)), 2)
+
+    def test_compound_race_retries_more_than_once_until_join(self):
+        # A single retry only closes the two-party race. In a compound race the
+        # second attempt can trip the constraint again (the winner ended its call
+        # and a third member started a fresh one in the gap). As long as an active
+        # session keeps existing, the recovery must keep retrying instead of
+        # surfacing the second IntegrityError as a 500.
+        from django.db import IntegrityError
+
+        # A real active session so the race-winner guard passes on every attempt.
+        winner, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        sentinel = (winner, object(), False)
+
+        with mock.patch.object(
+            calls,
+            "_start_or_join_once",
+            side_effect=[IntegrityError("x"), IntegrityError("y"), sentinel],
+        ) as once:
+            result = calls.start_or_join_call(self.b, self.conv.uuid)
+
+        self.assertIs(result, sentinel)
+        self.assertEqual(once.call_count, 3)
+
+    def test_unrelated_integrity_error_propagates_without_retry(self):
+        # The recovery is only for the first-join race, identified by an active
+        # session now existing. An IntegrityError with no active session present
+        # is some other failure and must propagate, not be retried/swallowed.
+        from django.db import IntegrityError
+
+        with mock.patch.object(
+            calls, "_start_or_join_once", side_effect=IntegrityError("boom")
+        ) as once:
+            with self.assertRaises(IntegrityError):
+                calls.start_or_join_call(self.b, self.conv.uuid)
+
+        self.assertEqual(once.call_count, 1)
 
 
 class CleanupTests(TestCase):

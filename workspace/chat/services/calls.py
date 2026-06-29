@@ -8,7 +8,7 @@ reaped without a clean "leave". Lifecycle mutations fan out cache events via
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from workspace.core.sse_registry import notify_sse
@@ -140,15 +140,28 @@ def _render_system_call_body(state, duration_label=None):
     return "Call started"
 
 
-@transaction.atomic
-def start_or_join_call(user, conversation_id):
-    from ..models import CallParticipant, CallSession, Message
+def _active_session_for_update(conversation_id):
+    """Locked read of the conversation's active call session (or None).
 
-    session = (
+    Isolated as a single mockable seam: the first-join race tests simulate the
+    loser's stale "no active call" read by patching this one function. (The
+    retry re-reads because start_or_join_call re-invokes the whole atomic body,
+    not because this lookup is a separate function.)
+    """
+    from ..models import CallSession
+
+    return (
         CallSession.objects.select_for_update()
         .filter(conversation_id=conversation_id, state=CallSession.State.ACTIVE)
         .first()
     )
+
+
+@transaction.atomic
+def _start_or_join_once(user, conversation_id):
+    from ..models import CallParticipant, CallSession, Message
+
+    session = _active_session_for_update(conversation_id)
     created_session = False
     if session is None:
         session = CallSession.objects.create(
@@ -210,6 +223,35 @@ def start_or_join_call(user, conversation_id):
         )
 
     return session, participant, created_session
+
+
+def start_or_join_call(user, conversation_id):
+    from ..models import CallSession
+
+    # Only the first-join race is recoverable: a competing request committed the
+    # active session between our "no active call" read and our INSERT, tripping
+    # the one_active_call_per_conversation partial unique constraint. That race is
+    # identifiable by an active session now existing (our atomic block rolled
+    # back). Any other IntegrityError is a real failure and must propagate rather
+    # than be masked by a blind retry.
+    #
+    # A single retry only closes the two-party race; retry a bounded number of
+    # times so a rarer compound race (the winner ends its call and a third member
+    # starts a fresh one in the gap, re-tripping the constraint) also recovers
+    # instead of surfacing as a 500. The bound guarantees termination.
+    max_attempts = 4
+    for attempt in range(max_attempts):
+        try:
+            return _start_or_join_once(user, conversation_id)
+        except IntegrityError:
+            race_winner_exists = CallSession.objects.filter(
+                conversation_id=conversation_id, state=CallSession.State.ACTIVE
+            ).exists()
+            if not race_winner_exists or attempt == max_attempts - 1:
+                raise
+    # Unreachable: the final iteration either returns or re-raises above. Kept as
+    # a defensive guard so the function never falls through to an implicit None.
+    raise RuntimeError("start_or_join_call exhausted retries without returning")
 
 
 @transaction.atomic

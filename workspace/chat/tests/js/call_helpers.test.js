@@ -85,3 +85,49 @@ test('iceRestartDelay applies grace on disconnected and backoff by attempt', () 
   assert.equal(ctx.chatCallIceRestartDelay('disconnected', 1), 3000);
   assert.equal(ctx.chatCallIceRestartDelay('disconnected', 2), 4000);
 });
+
+// _scheduleIceRestart bookkeeping. The method calls setTimeout/clearTimeout,
+// so the script is loaded with fake timers injected as context globals; the
+// pc is a plain stub (no RTCPeerConnection needed for the scheduling logic).
+function scheduleHarness() {
+  const timers = [];
+  const cleared = [];
+  let nextId = 0;
+  const callCtx = loadScript('workspace/chat/ui/static/chat/ui/js/call.js', {
+    setTimeout: (fn, delay) => { const id = ++nextId; timers.push({ id, fn, delay }); return id; },
+    clearTimeout: (id) => { cleared.push(id); },
+  });
+  const m = callCtx.chatCallMixin();
+  m.currentUserId = 1;             // peer 2 -> currentUserId < peerId -> we drive
+  m._performIceRestart = () => {}; // isolate scheduling from the restart itself
+  m._peers = { 2: { pc: { iceConnectionState: 'disconnected' }, iceRestartAttempts: 0, iceRestartTimer: null } };
+  return { m, timers, cleared };
+}
+
+test('scheduleIceRestart: failed cancels a pending disconnected grace timer and restarts immediately', () => {
+  const { m, timers, cleared } = scheduleHarness();
+  // disconnected -> a 3s grace timer is armed.
+  m._scheduleIceRestart(2);
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].delay, 3000);
+  const graceId = m._peers[2].iceRestartTimer;
+
+  // The connection then fails: the grace timer must be cancelled and an
+  // immediate (0ms) restart scheduled instead of waiting out the grace.
+  m._peers[2].pc.iceConnectionState = 'failed';
+  m._scheduleIceRestart(2);
+  assert.deepStrictEqual(cleared, [graceId]);
+  assert.equal(timers.length, 2);
+  assert.equal(timers[1].delay, 0);
+});
+
+test('scheduleIceRestart: a repeated disconnected keeps the existing timer (debounce)', () => {
+  const { m, timers, cleared } = scheduleHarness();
+  m._scheduleIceRestart(2);
+  const firstId = m._peers[2].iceRestartTimer;
+  // Still disconnected: do not stack a second timer.
+  m._scheduleIceRestart(2);
+  assert.equal(timers.length, 1);
+  assert.deepStrictEqual(cleared, []);
+  assert.equal(m._peers[2].iceRestartTimer, firstId);
+});

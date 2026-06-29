@@ -479,9 +479,17 @@ window.chatCallMixin = function chatCallMixin() {
       // Only the lower-id side initiates; the other side waits for the incoming
       // restart offer and answers it through the existing onCallSignal path.
       if (!window.chatCallShouldDriveIceRestart(this.currentUserId, peerId)) return;
-      if (peer.iceRestartTimer) return;                        // one pending attempt at a time
       if (peer.iceRestartAttempts >= MAX_ICE_RESTARTS) return; // gave up; server reap takes over
-      const delay = window.chatCallIceRestartDelay(peer.pc.iceConnectionState, peer.iceRestartAttempts);
+      const state = peer.pc.iceConnectionState;
+      if (peer.iceRestartTimer) {
+        // A restart is already pending. A repeated 'disconnected' just keeps it
+        // (debounce), but 'failed' is terminal and must not wait out the
+        // remaining 'disconnected' grace: cancel and reschedule immediately.
+        if (state !== 'failed') return;
+        clearTimeout(peer.iceRestartTimer);
+        peer.iceRestartTimer = null;
+      }
+      const delay = window.chatCallIceRestartDelay(state, peer.iceRestartAttempts);
       peer.iceRestartTimer = setTimeout(() => {
         peer.iceRestartTimer = null;
         this._performIceRestart(peerId);

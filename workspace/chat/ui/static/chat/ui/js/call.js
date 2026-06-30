@@ -36,11 +36,37 @@ function chatCallEventForCurrentSession(detail, callSession) {
   return !!callSession && !!detail && detail.session_id === callSession.session_id;
 }
 
+function chatCallShouldDriveIceRestart(selfId, peerId) {
+  // Glare avoidance for a mid-call ICE restart. At join time the existing
+  // participant offers to the newcomer (chatCallShouldOffer), but on failure
+  // both peers are existing participants, so that rule can't pick a side. The
+  // lower user_id drives the restart offer; the other side only answers. Exactly
+  // one side ever initiates, so the two never offer at once.
+  return selfId < peerId;
+}
+
+function chatCallIceRestartDelay(state, attempts) {
+  // Delay (ms) before attempting an ICE restart. 'disconnected' gets a 3s grace
+  // floor because the state frequently self-recovers; 'failed' acts immediately
+  // on the first attempt. Between attempts, exponential backoff 0 -> 2000 -> 4000.
+  const graceFloor = state === 'disconnected' ? 3000 : 0;
+  const backoff = attempts === 0 ? 0 : 2000 * Math.pow(2, attempts - 1);
+  return Math.max(graceFloor, backoff);
+}
+
 window.chatCallShouldOffer = chatCallShouldOffer;
 window.chatCallMergeMediaState = chatCallMergeMediaState;
 window.chatCallMediaState = chatCallMediaState;
 window.chatCallOtherParticipantIds = chatCallOtherParticipantIds;
 window.chatCallEventForCurrentSession = chatCallEventForCurrentSession;
+window.chatCallShouldDriveIceRestart = chatCallShouldDriveIceRestart;
+window.chatCallIceRestartDelay = chatCallIceRestartDelay;
+
+// Per-incident cap on ICE restart attempts. After this many tries fail, the
+// client stops and falls back to the existing server-side reap (heartbeat
+// expiry -> end_stale_calls -> call_participant_left). Reset to 0 on recovery,
+// so the budget is per failure incident, not per call.
+const MAX_ICE_RESTARTS = 3;
 
 window.chatCallMixin = function chatCallMixin() {
   return {
@@ -419,11 +445,22 @@ window.chatCallMixin = function chatCallMixin() {
         if (ev.candidate) this._sendSignal(peerId, { type: 'ice', candidate: ev.candidate });
       };
       pc.oniceconnectionstatechange = () => {
-        if (['failed', 'closed', 'disconnected'].includes(pc.iceConnectionState)) {
-          // Let cleanup / participant_left handle teardown.
+        const peer = this._peers[peerId];
+        if (!peer) return;
+        const state = pc.iceConnectionState;
+        if (state === 'connected' || state === 'completed') {
+          // Recovered: cancel any pending restart and refill the retry budget so
+          // a later, unrelated blip gets a fresh set of attempts.
+          peer.iceRestartAttempts = 0;
+          if (peer.iceRestartTimer) { clearTimeout(peer.iceRestartTimer); peer.iceRestartTimer = null; }
+        } else if (state === 'failed' || state === 'disconnected') {
+          // Attempt a client-side ICE restart instead of waiting on the ~1 min
+          // server reap. Only the deterministic driver actually initiates.
+          this._scheduleIceRestart(peerId);
         }
+        // 'closed': teardown is handled by _closePeer / participant_left.
       };
-      this._peers[peerId] = { pc, audioEl, remoteStream, videoSender };
+      this._peers[peerId] = { pc, audioEl, remoteStream, videoSender, iceRestartAttempts: 0, iceRestartTimer: null };
       if (initiateOffer) {
         pc.createOffer()
           .then((offer) => pc.setLocalDescription(offer)
@@ -432,9 +469,54 @@ window.chatCallMixin = function chatCallMixin() {
       return this._peers[peerId];
     },
 
+    // Drive a client-side ICE restart for a peer whose connection failed or
+    // dropped, instead of waiting on the server reap. Schedules one attempt;
+    // the oniceconnectionstatechange handler re-schedules the next one if the
+    // restart does not recover the connection.
+    _scheduleIceRestart(peerId) {
+      const peer = this._peers[peerId];
+      if (!peer) return;
+      // Only the lower-id side initiates; the other side waits for the incoming
+      // restart offer and answers it through the existing onCallSignal path.
+      if (!window.chatCallShouldDriveIceRestart(this.currentUserId, peerId)) return;
+      if (peer.iceRestartAttempts >= MAX_ICE_RESTARTS) return; // gave up; server reap takes over
+      const state = peer.pc.iceConnectionState;
+      if (peer.iceRestartTimer) {
+        // A restart is already pending. A repeated 'disconnected' just keeps it
+        // (debounce), but 'failed' is terminal and must not wait out the
+        // remaining 'disconnected' grace: cancel and reschedule immediately.
+        if (state !== 'failed') return;
+        clearTimeout(peer.iceRestartTimer);
+        peer.iceRestartTimer = null;
+      }
+      const delay = window.chatCallIceRestartDelay(state, peer.iceRestartAttempts);
+      peer.iceRestartTimer = setTimeout(() => {
+        peer.iceRestartTimer = null;
+        this._performIceRestart(peerId);
+      }, delay);
+    },
+
+    async _performIceRestart(peerId) {
+      const peer = this._peers[peerId];
+      if (!peer) return;
+      const pc = peer.pc;
+      const state = pc.iceConnectionState;
+      // Recovered or torn down while the timer was pending: nothing to do.
+      if (state === 'connected' || state === 'completed' || state === 'closed') return;
+      peer.iceRestartAttempts++;
+      try {
+        const offer = await pc.createOffer({ iceRestart: true });
+        await pc.setLocalDescription(offer);
+        this._sendSignal(peerId, { type: 'offer', sdp: pc.localDescription });
+      } catch (e) {
+        console.warn('ICE restart failed:', e);
+      }
+    },
+
     _closePeer(peerId) {
       const peer = this._peers[peerId];
       if (!peer) return;
+      if (peer.iceRestartTimer) { clearTimeout(peer.iceRestartTimer); peer.iceRestartTimer = null; }
       try { peer.pc.close(); } catch (e) { /* ignore */ }
       if (peer.audioEl && peer.audioEl.parentNode) peer.audioEl.parentNode.removeChild(peer.audioEl);
       const next = Object.assign({}, this.remoteStreams);

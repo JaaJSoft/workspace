@@ -24,6 +24,10 @@ Talk instead of type: start an audio call right inside a conversation. Plus tag 
 - Each mail account can now have its own signature. Set it from the account menu; it is added automatically when you compose, reply, or forward, and swaps when you change the sender account.
 - Picking a folder - whether moving a message or setting up a rule - now uses one consistent list that matches your sidebar's order, icons, and colors, instead of three different pickers.
 
+### AI Assistant
+
+- Ask your assistant about the weather anywhere - "what's it like in Tokyo right now?" or "is it raining in Paris?" - and it reports the current temperature, how it feels, humidity, wind, and sky conditions for any city, region, or country.
+
 ### Onboarding
 
 - The welcome tour is now interactive: it greets you by name, lets you click straight into a module, skip the tour, and move between steps with the arrow keys, with better screen-reader and reduced-motion support.

@@ -1,5 +1,5 @@
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -20,6 +20,7 @@ class ChatToolDefinitionTests(TestCase):
         self.assertIn("delete_memory", names)
         self.assertIn("search_messages", names)
         self.assertIn("get_current_user_info", names)
+        self.assertIn("get_weather", names)
 
 
 class ExecuteToolCallTests(TestCase):
@@ -129,6 +130,49 @@ class ExecuteToolCallTests(TestCase):
         )
 
         self.assertIn("No messages found", result)
+
+    @patch("workspace.ai.services.weather.get_current_weather")
+    def test_get_weather(self, mock_weather):
+        mock_weather.return_value = {
+            "location": "Paris, France",
+            "temperature": 15,
+            "conditions": "Overcast",
+        }
+
+        tool_call = MagicMock()
+        tool_call.id = "call_w1"
+        tool_call.function.name = "get_weather"
+        tool_call.function.arguments = json.dumps({"location": "Paris"})
+
+        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
+
+        data = json.loads(result)
+        self.assertEqual(data["location"], "Paris, France")
+        self.assertEqual(data["conditions"], "Overcast")
+        mock_weather.assert_called_once_with("Paris")
+
+    @patch("workspace.ai.services.weather.get_current_weather")
+    def test_get_weather_not_found(self, mock_weather):
+        mock_weather.return_value = None
+
+        tool_call = MagicMock()
+        tool_call.id = "call_w2"
+        tool_call.function.name = "get_weather"
+        tool_call.function.arguments = json.dumps({"location": "Nowhereville"})
+
+        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
+
+        self.assertIn("Could not find weather", result)
+
+    def test_get_weather_missing_location(self):
+        tool_call = MagicMock()
+        tool_call.id = "call_w3"
+        tool_call.function.name = "get_weather"
+        tool_call.function.arguments = json.dumps({"location": "  "})
+
+        result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
+
+        self.assertIn("Error", result)
 
     def test_get_current_user_info(self):
         self.user.first_name = "Pierre"

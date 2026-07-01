@@ -37,6 +37,13 @@ class ReadWebpageParams(BaseModel):
     url: str = Field(description="The URL of the webpage to read.")
 
 
+class GetWeatherParams(BaseModel):
+    location: str = Field(
+        description="The place to get the weather for — a city, region, or country "
+        "(e.g. 'Paris', 'Tokyo', 'New York')."
+    )
+
+
 class GenerateImageParams(BaseModel):
     prompt: str = Field(description="A detailed description of the image to generate.")
     size: str = Field(
@@ -222,6 +229,33 @@ or found via web_search to get more details."""
         if not text:
             return "Could not extract text content from this page."
         return text
+
+
+class WeatherToolProvider(ToolProvider):
+    """Current weather lookup by place name (Open-Meteo, keyless)."""
+
+    @tool(
+        badge_icon="🌤️",
+        badge_label="Checked the weather",
+        detail_key="location",
+        params=GetWeatherParams,
+    )
+    def get_weather(self, args, user, bot, conversation_id, context):
+        """Get the current weather for a place given its name. \
+Call this when the user asks about the weather, temperature, or conditions somewhere \
+(e.g. "what's the weather in Paris?", "is it raining in Tokyo?"). \
+Returns temperature, feels-like, humidity, wind, and a description of the conditions."""
+        from .services.weather import get_current_weather
+
+        location = args.location.strip()
+        if not location:
+            return "Error: location is required"
+
+        weather = get_current_weather(location)
+        if weather is None:
+            return f'Could not find weather for "{location}".'
+
+        return json.dumps(weather, ensure_ascii=False)
 
 
 class ImageToolProvider(ToolProvider):

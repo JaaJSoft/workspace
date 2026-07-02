@@ -20,7 +20,7 @@ dependencies = [
     # C-accelerated RESP parser; redis-py auto-detects and uses it when present
     "hiredis>=3.0.0",
     # imaging
-    "pillow>=11.0",
+    "pillow>=12.3.0",
     "cairosvg>=2.9.0",
     # mail
     "cryptography>=49.0.0",

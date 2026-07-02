@@ -13,6 +13,15 @@ class SearchEventsParams(BaseModel):
     )
 
 
+class ListUpcomingEventsParams(BaseModel):
+    days_ahead: int = Field(
+        default=7, description="How many days ahead to look (default 7)."
+    )
+    limit: int = Field(
+        default=20, description="Maximum number of events to return (default 20)."
+    )
+
+
 class CheckAvailabilityParams(BaseModel):
     start: str = Field(
         description="Start of the time range to check (ISO datetime, e.g. 2026-03-21T09:00)."
@@ -254,3 +263,55 @@ or when the user asks which calendars they have."""
         if not calendars:
             return "You have no calendars yet."
         return json.dumps(calendars, ensure_ascii=False)
+
+    @tool(
+        badge_icon="📅",
+        badge_label="Checked agenda",
+        params=ListUpcomingEventsParams,
+    )
+    def list_upcoming_events(self, args, user, bot, conversation_id, context):
+        """List the user's upcoming events, including recurring occurrences. \
+Call this when the user asks what is coming up, what they have this week, or \
+about their next events. For a keyword lookup use search_events; to check \
+whether a specific time range is free use check_availability."""
+        from datetime import timedelta
+
+        from dateutil.parser import parse as parse_dt
+        from django.utils import timezone
+
+        from workspace.calendar.queries import visible_calendars
+        from workspace.calendar.upcoming import get_upcoming_page
+        from workspace.users.services.settings import get_user_timezone
+
+        now = timezone.now()
+        limit = max(1, min(args.limit, 100))
+        days_ahead = max(1, args.days_ahead)
+        cutoff = now + timedelta(days=days_ahead)
+
+        events, _ = get_upcoming_page(user, after=now, limit=limit)
+
+        owned, subscribed = visible_calendars(user)
+        cal_names = {str(c.uuid): c.name for c in list(owned) + list(subscribed)}
+
+        user_tz = get_user_timezone(user)
+        results = []
+        for e in events:
+            start_dt = parse_dt(e["start"])
+            if start_dt > cutoff:
+                continue
+            start_local = start_dt.astimezone(user_tz)
+            end_local = parse_dt(e["end"]).astimezone(user_tz) if e.get("end") else None
+            results.append(
+                {
+                    "title": e["title"],
+                    "start": start_local.strftime("%Y-%m-%d %H:%M"),
+                    "end": end_local.strftime("%Y-%m-%d %H:%M") if end_local else "",
+                    "all_day": e["all_day"],
+                    "location": e.get("location", ""),
+                    "calendar": cal_names.get(e.get("calendar_id"), ""),
+                }
+            )
+
+        if not results:
+            return f"No events in the next {days_ahead} day(s)."
+        return json.dumps(results, ensure_ascii=False)

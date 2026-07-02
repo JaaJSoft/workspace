@@ -6,6 +6,8 @@ A self-hosted productivity suite built with Django. Files, chat, email, calendar
 
 From a Raspberry Pi to a Kubernetes cluster. One app, any scale.
 
+📖 Full documentation lives in [`docs/`](docs/).
+
 ![Workspace Dashboard](docs/images/home.png)
 
 ## Features
@@ -35,11 +37,11 @@ Markdown editor with journal mode, folders, tags, favorites, and full-text searc
 
 ![Notes](docs/images/notes_1.png)
 
-### AI Assistants
+### [AI Assistants](docs/ai/)
 Configurable chat bots with system prompts, vision, function calling, extended thinking, image generation, and bot memory. Works with OpenAI API or any compatible provider (Ollama, LM Studio, etc.).
 
 ### And more
-- **Notifications** - In-app + Web Push (VAPID), priority levels, read tracking
+- **[Notifications](docs/notifications/)** - In-app + Web Push (VAPID), priority levels, read tracking
 - **Dashboard** - Storage stats, recent files, conversation and event insights
 - **Unified search** - Cross-module command palette (Ctrl+K) with extensible providers
 - **User profiles** - Avatar upload, presence/status, per-module settings, 12 themes
@@ -81,13 +83,13 @@ Instead of complex multi-tenancy with `tenant_id` columns, Workspace uses **inst
 ## Getting Started
 
 ```bash
-git clone <repository-url>
-cd Workspace
+git clone https://github.com/JaaJSoft/workspace.git
+cd workspace
 
-uv sync                          # Install dependencies
-python manage.py migrate          # Run migrations
-python manage.py createsuperuser  # Create admin account
-python manage.py runserver        # Start dev server
+uv sync                                    # Install dependencies
+uv run python manage.py migrate            # Run migrations
+uv run python manage.py createsuperuser    # Create admin account
+uv run python manage.py runserver          # Start dev server
 ```
 
 Visit `http://localhost:8000`. No webpack, no npm, no build step.
@@ -108,14 +110,18 @@ docker run -d -p 8000:8000 \
   -v workspace-files:/app/files \
   -e SECRET_KEY=your-secret-key-here \
   -e ALLOWED_HOSTS=yourdomain.com \
-  workspace
+  ghcr.io/jaajsoft/workspace:main
 ```
+
+Prefer building the image yourself? Run `docker build -t workspace .` and use the `workspace` tag above.
 
 Add AI by setting `AI_API_KEY` and `AI_MODEL`. Use a self-hosted LLM by pointing `AI_BASE_URL` to Ollama or LM Studio.
 
 See [docs/deployments/](docs/deployments/) for Docker Compose and Kubernetes examples.
 
 ### Environment Variables
+
+The most common variables are listed below. For the full, annotated list - including AI model tiers, web search (SearXNG), OAuth2 mail providers, Web Push (VAPID), and chat call (STUN/TURN) settings - see [`.env.example`](.env.example).
 
 | Variable               | Description                                       | Default                      |
 |------------------------|---------------------------------------------------|------------------------------|

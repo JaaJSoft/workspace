@@ -5,7 +5,11 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.calendar.ai_tools import CalendarToolProvider, ListUpcomingEventsParams
+from workspace.calendar.ai_tools import (
+    CalendarToolProvider,
+    CreateEventParams,
+    ListUpcomingEventsParams,
+)
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.models_external import ExternalCalendar
 
@@ -68,3 +72,60 @@ class CalendarAiToolsTests(TestCase):
             args, user=self.user, bot=None, conversation_id=None, context={}
         )
         self.assertNotIn("BobSecret", result)
+
+    def _future_iso(self, **delta):
+        return (timezone.now() + timedelta(**delta)).strftime("%Y-%m-%dT%H:%M")
+
+    def test_create_event_writes_to_first_owned_calendar(self):
+        Calendar.objects.create(name="Perso", owner=self.user)
+        args = CreateEventParams(title="Dentist", start=self._future_iso(days=1))
+        result = self.provider.create_event(
+            args, user=self.user, bot=None, conversation_id=None, context={}
+        )
+        self.assertIn("Created event", result)
+        ev = Event.objects.get(title="Dentist")
+        self.assertEqual(ev.owner, self.user)
+        self.assertEqual(ev.calendar.name, "Perso")
+
+    def test_create_event_auto_creates_calendar_when_none(self):
+        args = CreateEventParams(title="Solo", start=self._future_iso(days=1))
+        self.provider.create_event(
+            args, user=self.user, bot=None, conversation_id=None, context={}
+        )
+        self.assertTrue(Calendar.objects.filter(owner=self.user, name="Perso").exists())
+        self.assertTrue(Event.objects.filter(title="Solo").exists())
+
+    def test_create_event_rejects_past_start(self):
+        Calendar.objects.create(name="Perso", owner=self.user)
+        args = CreateEventParams(
+            title="Past",
+            start=(timezone.now() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M"),
+        )
+        result = self.provider.create_event(
+            args, user=self.user, bot=None, conversation_id=None, context={}
+        )
+        self.assertIn("future", result)
+        self.assertFalse(Event.objects.filter(title="Past").exists())
+
+    def test_create_event_routes_by_calendar_name(self):
+        Calendar.objects.create(name="Perso", owner=self.user)
+        Calendar.objects.create(name="Boulot", owner=self.user)
+        args = CreateEventParams(
+            title="Standup", start=self._future_iso(days=1), calendar="boulot"
+        )
+        self.provider.create_event(
+            args, user=self.user, bot=None, conversation_id=None, context={}
+        )
+        ev = Event.objects.get(title="Standup")
+        self.assertEqual(ev.calendar.name, "Boulot")
+
+    def test_create_event_unknown_calendar_errors(self):
+        Calendar.objects.create(name="Perso", owner=self.user)
+        args = CreateEventParams(
+            title="X", start=self._future_iso(days=1), calendar="Nope"
+        )
+        result = self.provider.create_event(
+            args, user=self.user, bot=None, conversation_id=None, context={}
+        )
+        self.assertIn("no calendar named", result)
+        self.assertFalse(Event.objects.filter(title="X").exists())

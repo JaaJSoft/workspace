@@ -86,6 +86,7 @@ class CalendarAiToolsTests(TestCase):
         ev = Event.objects.get(title="Dentist")
         self.assertEqual(ev.owner, self.user)
         self.assertEqual(ev.calendar.name, "Perso")
+        self.assertEqual(ev.source, Event.Source.MANUAL)
 
     def test_create_event_auto_creates_calendar_when_none(self):
         args = CreateEventParams(title="Solo", start=self._future_iso(days=1))
@@ -118,6 +119,17 @@ class CalendarAiToolsTests(TestCase):
         )
         ev = Event.objects.get(title="Standup")
         self.assertEqual(ev.calendar.name, "Boulot")
+
+    def test_create_event_all_day_today_allowed(self):
+        Calendar.objects.create(name="Perso", owner=self.user)
+        today = timezone.now().strftime("%Y-%m-%d")
+        args = CreateEventParams(title="Holiday", start=today, all_day=True)
+        result = self.provider.create_event(
+            args, user=self.user, bot=None, conversation_id=None, context={}
+        )
+        self.assertIn("Created event", result)
+        ev = Event.objects.get(title="Holiday")
+        self.assertTrue(ev.all_day)
 
     def test_create_event_unknown_calendar_errors(self):
         Calendar.objects.create(name="Perso", owner=self.user)

@@ -1,9 +1,11 @@
+import json
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
+from pydantic import ValidationError
 
 from workspace.calendar.ai_tools import (
     CalendarToolProvider,
@@ -73,6 +75,50 @@ class CalendarAiToolsTests(TestCase):
         )
         self.assertNotIn("BobSecret", result)
 
+    def test_list_calendars_empty(self):
+        result = self.provider.list_calendars(
+            {}, user=self.user, bot=None, conversation_id=None, context={}
+        )
+        self.assertEqual(result, "You have no calendars yet.")
+
+    def test_list_upcoming_events_clamps_limit(self):
+        cal = Calendar.objects.create(name="Work", owner=self.user)
+        Event.objects.create(
+            calendar=cal,
+            owner=self.user,
+            title="First",
+            start=timezone.now() + timedelta(days=1),
+        )
+        Event.objects.create(
+            calendar=cal,
+            owner=self.user,
+            title="Second",
+            start=timezone.now() + timedelta(days=2),
+        )
+        # limit=0 is clamped up to 1, so exactly the soonest event is returned.
+        args = ListUpcomingEventsParams(days_ahead=7, limit=0)
+        result = self.provider.list_upcoming_events(
+            args, user=self.user, bot=None, conversation_id=None, context={}
+        )
+        data = json.loads(result)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["title"], "First")
+
+    def test_list_upcoming_events_clamps_days_ahead(self):
+        cal = Calendar.objects.create(name="Work", owner=self.user)
+        Event.objects.create(
+            calendar=cal,
+            owner=self.user,
+            title="HalfDay",
+            start=timezone.now() + timedelta(hours=12),
+        )
+        # days_ahead=0 is clamped up to 1, so an event 12h out stays in the window.
+        args = ListUpcomingEventsParams(days_ahead=0, limit=20)
+        result = self.provider.list_upcoming_events(
+            args, user=self.user, bot=None, conversation_id=None, context={}
+        )
+        self.assertIn("HalfDay", result)
+
     def _future_iso(self, **delta):
         return (timezone.now() + timedelta(**delta)).strftime("%Y-%m-%dT%H:%M")
 
@@ -141,3 +187,9 @@ class CalendarAiToolsTests(TestCase):
         )
         self.assertIn("no calendar named", result)
         self.assertFalse(Event.objects.filter(title="X").exists())
+
+    def test_create_event_params_reject_overlong_title(self):
+        # Title over the Event model's max_length (255) is rejected at the
+        # tool-call boundary instead of reaching the database.
+        with self.assertRaises(ValidationError):
+            CreateEventParams(title="x" * 256, start=self._future_iso(days=1))

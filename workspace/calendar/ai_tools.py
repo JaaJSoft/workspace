@@ -36,7 +36,7 @@ class CheckAvailabilityParams(BaseModel):
 
 
 class CreateEventParams(BaseModel):
-    title: str = Field(description="The event title.")
+    title: str = Field(max_length=255, description="The event title.")
     start: str = Field(
         description="Start datetime in ISO 8601 (e.g. 2026-07-05T14:00). "
         "Assumed to be in the user's timezone if no offset is given."
@@ -46,7 +46,7 @@ class CreateEventParams(BaseModel):
         description="End datetime in ISO 8601. Optional.",
     )
     all_day: bool = Field(default=False, description="True for an all-day event.")
-    location: str = Field(default="", description="Optional location.")
+    location: str = Field(default="", max_length=255, description="Optional location.")
     description: str = Field(default="", description="Optional description or notes.")
     calendar: str = Field(
         default="",
@@ -408,7 +408,7 @@ names a calendar, pass it in `calendar`; call list_calendars first if unsure."""
         elif owned_list:
             calendar = owned_list[0]
         else:
-            calendar = Calendar.objects.create(name="Perso", owner=user)
+            calendar, _ = Calendar.objects.get_or_create(owner=user, name="Perso")
 
         event = Event.objects.create(
             calendar=calendar,

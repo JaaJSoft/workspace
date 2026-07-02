@@ -6,8 +6,6 @@ A self-hosted productivity suite built with Django. Files, chat, email, calendar
 
 From a Raspberry Pi to a Kubernetes cluster. One app, any scale.
 
-📖 Full documentation lives in [`docs/`](docs/).
-
 ![Workspace Dashboard](docs/images/home.png)
 
 ## Features
@@ -139,6 +137,10 @@ The most common variables are listed below. For the full, annotated list - inclu
 | `AI_MAX_TOKENS`        | Maximum tokens per AI response                    | `2048`                       |
 | `AI_IMAGE_MODEL`       | Model for image generation                        | `dall-e-3`                   |
 | `AI_IMAGE_BASE_URL`    | Custom image generation base URL                  | *(same as AI_BASE_URL)*      |
+
+## Documentation
+
+Full documentation - per-module guides, deployment recipes, and how-tos - lives in [`docs/`](docs/).
 
 ## API
 

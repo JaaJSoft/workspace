@@ -241,3 +241,16 @@ Call this when the user asks if they are free, available, or have any events dur
             },
             ensure_ascii=False,
         )
+
+    @tool(badge_icon="📅", badge_label="Listed calendars")
+    def list_calendars(self, args, user, bot, conversation_id, context):
+        """List the user's own calendars (the ones you can add events to). \
+Call this before create_event when the user names a specific calendar, \
+or when the user asks which calendars they have."""
+        from workspace.calendar.queries import visible_calendars
+
+        owned, _ = visible_calendars(user)
+        calendars = [{"name": c.name, "color": c.color} for c in owned]
+        if not calendars:
+            return "You have no calendars yet."
+        return json.dumps(calendars, ensure_ascii=False)

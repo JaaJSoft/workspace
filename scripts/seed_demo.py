@@ -68,6 +68,7 @@ from workspace.chat.models import (  # noqa: E402
 )
 from workspace.chat.services import avatar as group_avatar_service  # noqa: E402
 from workspace.chat.services.conversations import get_or_create_dm  # noqa: E402
+from workspace.chat.services.rendering import render_message_body  # noqa: E402
 from workspace.files.models import File, FileEvent  # noqa: E402
 from workspace.files.services import FileService  # noqa: E402
 from workspace.users.models import UserPresence  # noqa: E402
@@ -479,6 +480,9 @@ def _post_messages(conversation, members, min_msgs, max_msgs, history_days):
             conversation=conversation,
             author=author,
             body=body,
+            # The chat UI renders body_html, not body; the real send path fills
+            # it via render_message_body. Skip it and messages show up blank.
+            body_html=render_message_body(body),
         )
         Message.objects.filter(pk=msg.pk).update(created_at=ts)
 

@@ -54,6 +54,7 @@ dependencies = [
     "trafilatura>=2.1.0",
     # streaming ZIP generation for bulk downloads (constant RAM)
     "zipstream-ng>=1.9.2",
+    "faker>=38.0.0",
 ]
 
 [build-system]
@@ -65,7 +66,6 @@ dev = [
     "coverage[toml]>=7.15.0",
     "django-debug-toolbar==7.0.0",
     # Fake data generation for scripts/seed_demo.py (dev/demo seeding only).
-    "faker>=38.0.0",
     # End-to-end / UI tests. Playwright is only needed when E2E=1 is set;
     # otherwise the E2E test cases are skipped (see workspace/common/tests/e2e/).
     "playwright>=1.61.0",

@@ -745,6 +745,18 @@ wheels = [
 ]
 
 [[package]]
+name = "faker"
+version = "40.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cc/2d/3ead106cef42eab305e15f9c089dcc68a40387d5ce04af18585af4ebbb44/faker-40.28.1.tar.gz", hash = "sha256:2a63fb51abab8790636d4030a094cf942404cbccc9c288d1cad70e2e3e9ecd58", size = 2022717, upload-time = "2026-07-01T22:23:43.763Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/92/a6/6111b9f13c1564b0e2f5dbeeb611fd00dc731e6add2336f62b798598c73d/faker-40.28.1-py3-none-any.whl", hash = "sha256:e8d3f5c469100a553d246dce7937c291308068a5ec6c9c3a228d7878b50720be", size = 2061052, upload-time = "2026-07-01T22:23:41.946Z" },
+]
+
+[[package]]
 name = "flatbuffers"
 version = "25.12.19"
 source = { registry = "https://pypi.org/simple" }
@@ -2272,6 +2284,7 @@ dependencies = [
 dev = [
     { name = "coverage" },
     { name = "django-debug-toolbar" },
+    { name = "faker" },
     { name = "playwright" },
     { name = "ruff" },
 ]
@@ -2320,6 +2333,7 @@ requires-dist = [
 dev = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.15.0" },
     { name = "django-debug-toolbar", specifier = "==7.0.0" },
+    { name = "faker", specifier = ">=38.0.0" },
     { name = "playwright", specifier = ">=1.61.0" },
     { name = "ruff", specifier = "==0.15.20" },
 ]

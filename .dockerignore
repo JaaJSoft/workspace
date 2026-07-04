@@ -64,6 +64,3 @@ docs/
 /chat/
 /mail/
 /docs/
-/scripts/
-# but keep the Tailwind build tooling (needed by the css-builder stage)
-!/scripts/tailwind/

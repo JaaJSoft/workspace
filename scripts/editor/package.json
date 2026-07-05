@@ -7,8 +7,8 @@
     "build:editor": "esbuild milkdown-editor.js --bundle --format=esm --splitting --minify --target=es2022 --outdir=../../workspace/files/ui/static/files/ui/js/vendor/milkdown --chunk-names=chunk-[hash]"
   },
   "dependencies": {
-    "@milkdown/crepe": "7.17.3",
-    "@milkdown/plugin-slash": "7.17.3",
+    "@milkdown/crepe": "7.21.2",
+    "@milkdown/plugin-slash": "7.21.2",
     "codemirror": "6.0.1"
   },
   "devDependencies": {

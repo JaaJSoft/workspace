@@ -6,16 +6,31 @@ from .models import Calendar, CalendarSubscription, EventMember
 def visible_calendar_ids(user):
     """Return calendar UUIDs the user can see: owned (incl. external) + subscribed.
 
-    Single query: a disjunction over owner/subscriptions is cheaper than two
-    round-trips and merging the lists in Python. ``.distinct()`` guards the
-    edge case where a user subscribed to their own calendar (yields duplicate
-    rows otherwise because of the JOIN).
+    Built as a UNION of two independently indexed queries rather than
+    ``Q(owner=user) | Q(subscriptions__user=user)``: an OR whose branch
+    crosses a join defeats per-branch index use and degrades to a scan of
+    the whole calendar table, which grows with the user count. UNION also
+    dedups the edge case where a user subscribed to their own calendar
+    (the join form needed ``.distinct()`` for that). The empty
+    ``order_by()`` is required on each branch - ``Calendar`` has a default
+    ``Meta.ordering`` and ORDER BY is invalid inside a compound subquery.
     """
-    return list(
-        Calendar.objects.filter(Q(owner=user) | Q(subscriptions__user=user))
-        .values_list("uuid", flat=True)
-        .distinct()
+    owned = (
+        Calendar.objects.filter(owner=user).order_by().values_list("uuid", flat=True)
     )
+    subscribed = Calendar.objects.filter(subscriptions__user=user).order_by()
+    return list(owned.union(subscribed.values_list("uuid", flat=True)))
+
+
+def member_event_ids(user):
+    """Return ids of events *user* is a member of (invited/added).
+
+    Kept as its own helper so every consumer filters membership through the
+    same subquery (``uuid__in=member_event_ids(user)``) instead of the
+    ``members__user`` join - ORing that join with other conditions blocks
+    index use (see ``visible_calendar_ids``) and fans out duplicate rows.
+    """
+    return EventMember.objects.filter(user=user).values_list("event_id", flat=True)
 
 
 def visible_calendars(user):
@@ -53,11 +68,8 @@ def visible_events_q(user):
     sub_cal_ids = CalendarSubscription.objects.filter(user=user).values_list(
         "calendar_id", flat=True
     )
-    member_event_ids = EventMember.objects.filter(user=user).values_list(
-        "event_id", flat=True
-    )
     return (
         Q(calendar_id__in=owned_cal_ids)
         | Q(calendar_id__in=sub_cal_ids)
-        | Q(uuid__in=member_event_ids)
+        | Q(uuid__in=member_event_ids(user))
     )

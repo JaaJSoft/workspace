@@ -55,7 +55,7 @@ def _parse_changelog():
     # tolerates a missing trailing body without any bounds arithmetic.
     _preamble, *sections = re.split(r"^## +(.+)$", raw, flags=re.MULTILINE)
     md = mistune.create_markdown()
-    for heading, *rest in batched(sections, 2):
+    for heading, *rest in batched(sections, 2, strict=False):
         version, title = _split_version_and_title(heading)
         body = rest[0] if rest else ""
         html = md(body.strip())

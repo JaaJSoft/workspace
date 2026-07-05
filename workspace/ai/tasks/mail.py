@@ -217,7 +217,7 @@ def classify_mail_messages(self, task_id: str):
                 label_names = [lbl.name for lbl in account_labels]
                 label_by_lower = {lbl.name.lower(): lbl for lbl in account_labels}
 
-                for batch in batched(account_msgs, CLASSIFY_BATCH_SIZE):
+                for batch in batched(account_msgs, CLASSIFY_BATCH_SIZE, strict=False):
                     uuid_index = {i + 1: m for i, m in enumerate(batch)}
 
                     emails = []

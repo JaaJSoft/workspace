@@ -156,7 +156,7 @@ def sync_folder_messages(account, folder):
         max_uid = folder.last_sync_uid
         new_message_uuids = []
         # Fetch in batches
-        for batch in batched(uid_list, FETCH_BATCH_SIZE):
+        for batch in batched(uid_list, FETCH_BATCH_SIZE, strict=False):
             uid_set = ",".join(batch)
             status, msg_data = conn.uid("FETCH", uid_set, "(UID FLAGS RFC822)")
             if status != "OK":

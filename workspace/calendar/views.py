@@ -17,7 +17,7 @@ from workspace.notifications.services.notifications import notify, notify_many
 
 from .models import Calendar, Event, EventMember
 from .models_external import ExternalCalendar
-from .queries import visible_calendar_ids, visible_calendars
+from .queries import member_event_ids, visible_calendar_ids, visible_calendars
 from .recurrence import expand_recurring_events, make_virtual_occurrence
 from .serializers import (
     CalendarCreateSerializer,
@@ -311,38 +311,33 @@ class EventListView(CacheControlMixin, APIView):
         else:
             cal_ids = visible_calendar_ids(user)
 
-        cal_or_member = Q(calendar_id__in=cal_ids) | Q(members__user=user)
+        # Membership goes through the id subquery, not the members__user
+        # join: ORing a joined branch with calendar_id__in blocks per-branch
+        # index use, and the join fan-out is what forced distinct() here.
+        cal_or_member = Q(calendar_id__in=cal_ids) | Q(uuid__in=member_event_ids(user))
 
         # Non-recurring events (exclude exceptions)
-        non_recurring = (
-            Event.objects.filter(
-                cal_or_member,
-                recurrence_frequency__isnull=True,
-                recurrence_parent__isnull=True,
-                is_cancelled=False,
-                start__lt=end,
-            )
-            .filter(
-                Q(end__gt=start) | Q(end__isnull=True, start__gte=start),
-            )
-            .distinct()
+        non_recurring = Event.objects.filter(
+            cal_or_member,
+            recurrence_frequency__isnull=True,
+            recurrence_parent__isnull=True,
+            is_cancelled=False,
+            start__lt=end,
+        ).filter(
+            Q(end__gt=start) | Q(end__isnull=True, start__gte=start),
         )
         non_recurring = _prefetch_event(non_recurring).order_by("start")
 
         non_recurring_data = EventSerializer(non_recurring, many=True).data
 
         # Recurring masters overlapping the range
-        masters = (
-            Event.objects.filter(
-                cal_or_member,
-                recurrence_frequency__isnull=False,
-                recurrence_parent__isnull=True,
-                start__lt=end,
-            )
-            .filter(
-                Q(recurrence_end__isnull=True) | Q(recurrence_end__gt=start),
-            )
-            .distinct()
+        masters = Event.objects.filter(
+            cal_or_member,
+            recurrence_frequency__isnull=False,
+            recurrence_parent__isnull=True,
+            start__lt=end,
+        ).filter(
+            Q(recurrence_end__isnull=True) | Q(recurrence_end__gt=start),
         )
         masters = _prefetch_event(masters)
 

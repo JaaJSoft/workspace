@@ -55,6 +55,11 @@ class VisibleCalendarIdsTests(CalendarAuthzMixin, TestCase):
         carol = User.objects.create_user(username="carol", password="pass")
         self.assertEqual(visible_calendar_ids(carol), [])
 
+    def test_no_duplicate_when_subscribed_to_own_calendar(self):
+        CalendarSubscription.objects.create(user=self.alice, calendar=self.alice_cal)
+        ids = visible_calendar_ids(self.alice)
+        self.assertEqual(ids.count(self.alice_cal.pk), 1)
+
 
 # ── visible_calendars ──────────────────────────────────────────
 

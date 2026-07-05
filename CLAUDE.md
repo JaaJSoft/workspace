@@ -396,26 +396,9 @@ with source.content.open('rb') as f:
 
 ### Prefer the standard library over hand-rolled collection plumbing
 
-We target Python **3.14** (`requires-python` in `pyproject.toml`), so the modern `itertools`, `functools`, `collections`, `math`, and `statistics` helpers are all available. **Always reach for a stdlib primitive before writing an index-fiddling loop, an accumulator, or a manual counter/grouper.** Hand-rolled versions are longer, off-by-one prone, and re-encode logic the interpreter already ships in C. Reviewers should flag any of the left-hand patterns below.
+We target Python 3.14, so reach for a stdlib primitive before writing manual loops over lists/sets: `itertools.batched` (chunking), `itertools.pairwise` (adjacent pairs), `itertools.chain.from_iterable` (flattening), `collections.Counter` (counting), `collections.defaultdict` (grouping), `dict.fromkeys` (order-preserving dedup), plus `math.prod` / `itertools.accumulate` / `statistics`.
 
-| Hand-rolled pattern | Use instead |
-|---|---|
-| `for i in range(0, len(xs), n): xs[i:i+n]` | `itertools.batched(xs, n, strict=False)` (3.12+) |
-| `[x for sub in nested for x in sub]`, `sum(lists, [])`, repeated `.extend()` in a loop | `itertools.chain.from_iterable(nested)` |
-| `zip(xs, xs[1:])`, indexing `xs[i]` **and** `xs[i+1]` | `itertools.pairwise(xs)` |
-| `d[k] = d.get(k, 0) + 1`, manual `if k in d`-else counting | `collections.Counter` |
-| `d.setdefault(k, []).append(v)` when building a dict-of-lists in a hot loop | `collections.defaultdict(list)` (or `itertools.groupby` over pre-sorted input) |
-| `seen = set(); out = []; for x: if x not in seen...` (order-preserving dedup) | `list(dict.fromkeys(xs))` |
-| `total = 1; for x: total *= x` | `math.prod(xs)` |
-| running totals accumulated by hand | `itertools.accumulate(xs)` |
-| manual mean/median/stdev loops | the `statistics` module |
-
-**Rules:**
-
-- `itertools.batched` yields **tuples**, not slices — if a downstream call needs a list (e.g. `",".join(batch)`), wrap with `list(...)`/`",".join(...)` at the use site.
-- Always pass an explicit `strict=` to `batched` — ruff enforces this (rule `B911`) and a bare call fails lint. Use `strict=False` when a short final batch is expected (the common case, matching the old slicing), `strict=True` only when the input length must be an exact multiple of `n`.
-- This is about *clarity*, not cleverness: only swap in a helper when it makes the intent **more** obvious. A loop that carries per-iteration side effects (logging, `try/except`, early `continue`, mutation of outer state) is usually clearer left as an explicit loop — don't contort it into a one-liner comprehension just to avoid `.extend()`.
-- These are refactors, so the [Refactoring & Optimization](#refactoring--optimization) rule applies: a test must already cover the touched code (write one first if not), since the change must be behavior-preserving. For `batched`, add or extend a test that crosses **more than one batch** so the chunking boundary is actually exercised.
+Favour clarity, not cleverness: leave a loop explicit when it carries per-iteration side effects, and mind the [Refactoring & Optimization](#refactoring--optimization) rule (a test must cover the code first; the swap must preserve behavior). Two `batched` gotchas: it yields **tuples** (not slices), and ruff (`B911`) requires an explicit `strict=` — use `strict=False` for the usual short-final-batch case.
 
 ## Frontend Conventions
 

@@ -1,6 +1,7 @@
 // Pure, dependency-free helpers for the "[[" wikilink trigger.
-// Kept separate from wikilink_autocomplete.js (which imports Milkdown from a
-// CDN) so these can be unit-tested in a browser with no network.
+// Kept separate from wikilink_autocomplete.js (which needs the Milkdown
+// bundle) so unit tests and the e2e helper check can import it with no
+// editor dependency.
 
 // Matches an open "[[" followed by a query containing no "]" / "[" / newline,
 // anchored to the END of the text before the caret. Returns { query, length }

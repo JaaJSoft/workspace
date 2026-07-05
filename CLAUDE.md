@@ -15,6 +15,10 @@ uv run coverage run manage.py test workspace.<module>     # with coverage
 # Async stack
 uv run celery -A workspace worker -l info
 uv run celery -A workspace beat -l info
+
+# Vendored editor bundle (rebuild after bumping @milkdown/* in scripts/editor/package.json;
+# keep the @milkdown/crepe CSS pins in files/ui/index.html and notes/ui/notes.html in lockstep)
+cd scripts/editor && npm run build:editor
 ```
 
 **CI coverage floors** (`.github/workflows/tests.yml`): each module pins a `min_coverage` (45-95%). Lowering a threshold is forbidden by the workflow's own comment - raise it after adding coverage, never lower it.

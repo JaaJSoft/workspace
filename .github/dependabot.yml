@@ -20,3 +20,15 @@ updates:
     directory: "/" # Dockerfile location
     schedule:
       interval: "daily"
+
+  - package-ecosystem: "npm"
+    directory: "/scripts/editor" # Vendored Milkdown editor bundle
+    schedule:
+      interval: "weekly"
+    versioning-strategy: increase
+    groups:
+      # crepe and plugin-slash share Milkdown/ProseMirror internals and must
+      # move together (single bundle, single module graph).
+      milkdown:
+        patterns:
+          - "@milkdown/*"

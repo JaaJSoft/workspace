@@ -1,6 +1,7 @@
 """Parse CHANGELOG.md into structured version entries with cached HTML."""
 
 import re
+from itertools import batched
 from pathlib import Path
 
 import mistune
@@ -49,11 +50,14 @@ def _parse_changelog():
         return []
 
     entries = []
-    parts = re.split(r"^## +(.+)$", raw, flags=re.MULTILINE)
+    # re.split with a capturing group yields [preamble, heading1, body1, ...],
+    # so dropping the preamble leaves clean (heading, body) pairs. batched
+    # tolerates a missing trailing body without any bounds arithmetic.
+    _preamble, *sections = re.split(r"^## +(.+)$", raw, flags=re.MULTILINE)
     md = mistune.create_markdown()
-    for i in range(1, len(parts), 2):
-        version, title = _split_version_and_title(parts[i])
-        body = parts[i + 1] if i + 1 < len(parts) else ""
+    for heading, *rest in batched(sections, 2):
+        version, title = _split_version_and_title(heading)
+        body = rest[0] if rest else ""
         html = md(body.strip())
         entries.append({"version": version, "title": title, "html": html})
 

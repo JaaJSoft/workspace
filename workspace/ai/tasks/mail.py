@@ -3,6 +3,7 @@
 import logging
 import re
 from collections import defaultdict
+from itertools import batched
 
 import orjson
 from celery import shared_task
@@ -216,10 +217,7 @@ def classify_mail_messages(self, task_id: str):
                 label_names = [lbl.name for lbl in account_labels]
                 label_by_lower = {lbl.name.lower(): lbl for lbl in account_labels}
 
-                for batch_start in range(0, len(account_msgs), CLASSIFY_BATCH_SIZE):
-                    batch = account_msgs[
-                        batch_start : batch_start + CLASSIFY_BATCH_SIZE
-                    ]
+                for batch in batched(account_msgs, CLASSIFY_BATCH_SIZE):
                     uuid_index = {i + 1: m for i, m in enumerate(batch)}
 
                     emails = []

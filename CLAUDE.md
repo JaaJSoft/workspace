@@ -394,6 +394,29 @@ with source.content.open('rb') as f:
 - `ContentFile(source.read(), ...)` happens to be _committed=False so it copies correctly, but it buffers the entire file in memory before re-emitting it. For anything that could grow (>1MB), prefer the `DjangoFile(open_stream, ...)` idiom.
 - Existing precedent in the codebase: `workspace/files/webdav/resources.py:_copy_as` (already correct), `workspace/chat/views_attachments.py:AttachmentSaveToFilesView`, `workspace/mail/views.py:MailAttachmentSaveToFilesView`, `workspace/files/services/_storage_ops.py:copy_node`.
 
+### Prefer the standard library over hand-rolled collection plumbing
+
+We target Python **3.14** (`requires-python` in `pyproject.toml`), so the modern `itertools`, `functools`, `collections`, `math`, and `statistics` helpers are all available. **Always reach for a stdlib primitive before writing an index-fiddling loop, an accumulator, or a manual counter/grouper.** Hand-rolled versions are longer, off-by-one prone, and re-encode logic the interpreter already ships in C. Reviewers should flag any of the left-hand patterns below.
+
+| Hand-rolled pattern | Use instead |
+|---|---|
+| `for i in range(0, len(xs), n): xs[i:i+n]` | `itertools.batched(xs, n)` (3.12+; pass `strict=True` to reject a short final chunk) |
+| `[x for sub in nested for x in sub]`, `sum(lists, [])`, repeated `.extend()` in a loop | `itertools.chain.from_iterable(nested)` |
+| `zip(xs, xs[1:])`, indexing `xs[i]` **and** `xs[i+1]` | `itertools.pairwise(xs)` |
+| `d[k] = d.get(k, 0) + 1`, manual `if k in d`-else counting | `collections.Counter` |
+| `d.setdefault(k, []).append(v)` when building a dict-of-lists in a hot loop | `collections.defaultdict(list)` (or `itertools.groupby` over pre-sorted input) |
+| `seen = set(); out = []; for x: if x not in seen...` (order-preserving dedup) | `list(dict.fromkeys(xs))` |
+| `total = 1; for x: total *= x` | `math.prod(xs)` |
+| running totals accumulated by hand | `itertools.accumulate(xs)` |
+| manual mean/median/stdev loops | the `statistics` module |
+
+**Rules:**
+
+- `itertools.batched` yields **tuples**, not slices — if a downstream call needs a list (e.g. `",".join(batch)`), wrap with `list(...)`/`",".join(...)` at the use site.
+- This is about *clarity*, not cleverness: only swap in a helper when it makes the intent **more** obvious. A loop that carries per-iteration side effects (logging, `try/except`, early `continue`, mutation of outer state) is usually clearer left as an explicit loop — don't contort it into a one-liner comprehension just to avoid `.extend()`.
+- These are refactors, so the [Refactoring & Optimization](#refactoring--optimization) rule applies: a test must already cover the touched code (write one first if not), since the change must be behavior-preserving. For `batched`, add or extend a test that crosses **more than one batch** so the chunking boundary is actually exercised.
+- Existing precedent already in the codebase: `workspace/mail/search.py` uses `collections.Counter` / `defaultdict(Counter)` instead of manual tallies — match that style.
+
 ## Frontend Conventions
 
 ### Alpine `init()` is auto-called - never add `x-init="init()"` on top of it

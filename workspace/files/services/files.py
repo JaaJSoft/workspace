@@ -48,6 +48,34 @@ class FileService:
         )
 
     @staticmethod
+    def accessible_file_ids(user):
+        """Return a values queryset of ids of all files *user* can access.
+
+        Same semantics as ``accessible_files_q`` (owned + group + shared,
+        ``deleted_at`` intentionally not filtered), but built as a UNION of
+        three independently indexed queries. The Q form ORs across a join
+        (``shares__shared_with``), which defeats per-branch index use and
+        forces a full scan of the files table - O(total files) on every
+        call. The UNION stays proportional to what the user can actually
+        see, so hot paths (activity feed) should prefer this helper as a
+        ``pk__in=`` / ``file_id__in=`` source.
+
+        UNION querysets are terminal: no further ``filter()``/``annotate()``
+        is possible. When the access filter must compose with other
+        conditions in the same query, keep using ``accessible_files_q``.
+        The empty ``order_by()`` on each branch is required - ``File`` has a
+        default ``Meta.ordering`` and ORDER BY is invalid inside a compound
+        subquery.
+        """
+        owned = File.objects.filter(owner=user).order_by()
+        grouped = File.objects.filter(group__in=user.groups.all()).order_by()
+        shared = File.objects.filter(shares__shared_with=user).order_by()
+        return owned.values_list("pk", flat=True).union(
+            grouped.values_list("pk", flat=True),
+            shared.values_list("pk", flat=True),
+        )
+
+    @staticmethod
     def user_files_qs(user):
         """Return a queryset of active (non-deleted) personal files owned by the user."""
         return File.objects.filter(

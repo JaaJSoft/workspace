@@ -27,19 +27,16 @@ class NotesActivityProvider(ActivityProvider):
         """IDs of files the viewer can access (owned + group + shared).
 
         Event access follows file access, so visibility is derived from the
-        centralized ``FileService.accessible_files_q`` rather than a local
+        centralized ``FileService.accessible_file_ids`` rather than a local
         reimplementation. That helper does not filter ``deleted_at``, so
         events on trashed notes stay reachable for users who can see them.
         """
         from django.contrib.auth import get_user_model
 
-        from workspace.files.models import File
         from workspace.files.services import FileService
 
         viewer = get_user_model().objects.get(pk=viewer_id)
-        return File.objects.filter(
-            FileService.accessible_files_q(viewer),
-        ).values_list("pk", flat=True)
+        return FileService.accessible_file_ids(viewer)
 
     def _stats_visibility_filter(self, user_id, viewer_id):
         """Restrict the File-level stats queryset to notes visible to viewer."""

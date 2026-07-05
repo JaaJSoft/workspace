@@ -1,0 +1,68 @@
+# Rebuilds the vendored Milkdown editor bundle when its npm manifest changes
+# (typically a Dependabot bump of scripts/editor/package.json). Without this,
+# a dependency PR would update the manifest but leave the committed bundle
+# stale, so CI would silently keep testing the old editor code.
+#
+# The job rebuilds the bundle, syncs the @milkdown/crepe CSS pins in the two
+# templates that load the editor theme from jsdelivr (they must stay in
+# lockstep with the bundled JS version), and pushes a commit to the PR branch
+# if anything changed.
+#
+# Token note: pushes made with the default GITHUB_TOKEN do NOT retrigger CI
+# workflows, so after an auto-rebuild commit the PR's checks must be re-run
+# manually. Create a repo secret EDITOR_REBUILD_TOKEN (a PAT with contents
+# write) to make the rebuilt commit retrigger the full test suite
+# automatically.
+name: Editor bundle
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/editor/**'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    # Same-repo branches only: fork heads cannot be pushed to, and Dependabot
+    # branches live in this repo.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.EDITOR_REBUILD_TOKEN || github.token }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Rebuild vendored bundle
+        run: |
+          cd scripts/editor
+          npm ci
+          npm run build:editor
+
+      - name: Sync crepe CSS pins in templates
+        run: |
+          CREPE=$(node -p "require('./scripts/editor/package.json').dependencies['@milkdown/crepe']")
+          sed -i -E "s|(cdn\.jsdelivr\.net/npm/@milkdown/crepe@)[0-9]+\.[0-9]+\.[0-9]+|\1${CREPE}|g" \
+            workspace/files/ui/templates/files/ui/index.html \
+            workspace/notes/ui/templates/notes/ui/notes.html
+
+      - name: Commit and push if changed
+        run: |
+          git add -A workspace/files/ui/static/files/ui/js/vendor/milkdown \
+            workspace/files/ui/templates/files/ui/index.html \
+            workspace/notes/ui/templates/notes/ui/notes.html
+          if git diff --cached --quiet; then
+            echo "Bundle and CSS pins already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "build(files): rebuild vendored editor bundle"
+          git push

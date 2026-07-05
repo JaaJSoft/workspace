@@ -16,7 +16,8 @@ uv run coverage run manage.py test workspace.<module>     # with coverage
 uv run celery -A workspace worker -l info
 uv run celery -A workspace beat -l info
 
-# Vendored editor bundle (rebuild after bumping @milkdown/* in scripts/editor/package.json)
+# Vendored editor bundle (rebuild after bumping @milkdown/* in scripts/editor/package.json;
+# keep the @milkdown/crepe CSS pins in files/ui/index.html and notes/ui/notes.html in lockstep)
 cd scripts/editor && npm run build:editor
 ```
 

@@ -818,9 +818,7 @@ class ClassifyMailMessagesTests(TestCase):
         from workspace.mail.models import MailMessageLabel
 
         # Two batches -> two LLM calls.
-        self.assertEqual(
-            mock_client.return_value.chat.completions.create.call_count, 2
-        )
+        self.assertEqual(mock_client.return_value.chat.completions.create.call_count, 2)
         # 10th message (last of batch 1) labelled Urgent.
         self.assertTrue(
             MailMessageLabel.objects.filter(

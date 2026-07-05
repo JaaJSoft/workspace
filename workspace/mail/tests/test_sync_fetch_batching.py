@@ -92,6 +92,4 @@ class SyncFetchBatchingTests(TestCase):
 
         fetch_sets = self._fetch_uid_sets(conn)
         self.assertEqual(len(fetch_sets), 1)
-        self.assertEqual(
-            fetch_sets[0], ",".join(str(u) for u in uids)
-        )
+        self.assertEqual(fetch_sets[0], ",".join(str(u) for u in uids))

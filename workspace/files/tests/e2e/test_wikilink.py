@@ -3,29 +3,17 @@
 Split into two classes:
   * WikilinkHelperTests - asserts the pure trigger helpers in a real browser
     with NO third-party network (always runs under E2E=1).
-  * WikilinkEditorTests - drives the real Crepe editor; skips when the esm.sh
-    CDN is unreachable so offline CI stays green.
+  * WikilinkEditorTests - drives the real Crepe editor from the vendored
+    local bundle (no CDN dependency).
 """
 
 from __future__ import annotations
-
-import urllib.request
 
 from django.core.files.base import ContentFile
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.services import FileService
-
-
-def _cdn_reachable() -> bool:
-    try:
-        urllib.request.urlopen(
-            "https://esm.sh/@milkdown/crepe@7.17.3/package.json", timeout=5
-        )
-        return True
-    except Exception:
-        return False
 
 
 # Hardcoded because StaticLiveServerTestCase serves original (unhashed) static
@@ -60,8 +48,6 @@ class WikilinkHelperTests(PlaywrightTestCase):
 class WikilinkEditorTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
-        if not _cdn_reachable():
-            self.skipTest("esm.sh unreachable; skipping CDN-dependent editor E2E")
         self.user = self.create_user(username="wikilink")
         self.login_as(self.user)
         self.alpha = FileService.create_file(

@@ -234,15 +234,19 @@ window.markdownViewerCrepe = function() {
       _lock = window.fileLock(this.fileUuid, getCSRFToken);
 
       try {
-        // No ?bundle: lets the [[ slash plugin share Milkdown/ProseMirror internals.
-        // Pin codemirror so esm.sh resolves its basicSetup export (the ^6.0.1
-        // range otherwise serves a build missing that export).
-        const mod = await import('https://esm.sh/@milkdown/crepe@7.17.3?deps=codemirror@6.0.1');
+        // Vendored bundle (scripts/editor/): imported exactly once, here.
+        // wikilink gets slashFactory/SlashProvider injected from the same
+        // module instance so Milkdown/ProseMirror internals stay shared.
+        const mod = await import('{% static "files/ui/js/vendor/milkdown/milkdown-editor.js" %}');
         const Crepe = mod.Crepe;
         const wikilink = await import('{% static "files/ui/js/wikilink_autocomplete.js" %}');
 
         _crepe = new Crepe({ root: container, defaultValue: self.originalContent });
-        wikilink.createWikilinkSlash({ search: _searchNotes })(_crepe.editor);
+        wikilink.createWikilinkSlash({
+          search: _searchNotes,
+          slashFactory: mod.slashFactory,
+          SlashProvider: mod.SlashProvider,
+        })(_crepe.editor);
         await _crepe.create();
 
         if (!self.canEdit || self.lockOwner) {

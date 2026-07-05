@@ -1,13 +1,15 @@
 // "[[" note-link popup for the Milkdown Crepe editor.
 // Built on @milkdown/plugin-slash's SlashProvider with a "[[" trigger.
-import { slashFactory, SlashProvider } from 'https://esm.sh/@milkdown/plugin-slash@7.17.3';
+// slashFactory/SlashProvider are injected by the caller (from the vendored
+// milkdown bundle) rather than imported here: the bundle must be imported
+// from exactly one place, or prod's manifest-hashed statics would load a
+// second module instance with its own ProseMirror internals.
 import { matchTrigger, replacementRange } from './wikilink_match.js';
 
-const slash = slashFactory('wikilink');
-
 // Returns an applier: call it with the Crepe editor to register the plugin.
-//   createWikilinkSlash({ search })(crepe.editor)
-export function createWikilinkSlash({ search } = {}) {
+//   createWikilinkSlash({ search, slashFactory, SlashProvider })(crepe.editor)
+export function createWikilinkSlash({ search, slashFactory, SlashProvider } = {}) {
+  const slash = slashFactory('wikilink');
   const menu = document.createElement('div');
   menu.className = 'wikilink-menu';
   menu.setAttribute('data-testid', 'wikilink-menu');

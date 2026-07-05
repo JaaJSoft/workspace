@@ -39,13 +39,60 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _access_branches(user):
+        """Return the per-branch filter kwargs for *user*'s accessible files.
+
+        Single source of truth for the three access branches (owned, group,
+        shared), consumed by both ``accessible_files_q`` (ORed into one Q
+        across a join) and ``accessible_file_ids`` (each branch a separately
+        indexed UNION arm). Defining the branches once keeps the two
+        permission paths from drifting - a divergence would mean a leak or a
+        hole in one of them.
+        """
+        return (
+            {"owner": user},
+            {"group__in": user.groups.all()},
+            {"shares__shared_with": user},
+        )
+
+    @staticmethod
     def accessible_files_q(user):
         """Return a Q filter matching all files *user* can access."""
         from django.db.models import Q
 
-        return (
-            Q(owner=user) | Q(group__in=user.groups.all()) | Q(shares__shared_with=user)
-        )
+        # Seed from the first branch rather than an empty Q(): an empty Q in
+        # an OR chain can match everything - a full access leak here.
+        branches = FileService._access_branches(user)
+        q = Q(**branches[0])
+        for branch in branches[1:]:
+            q |= Q(**branch)
+        return q
+
+    @staticmethod
+    def accessible_file_ids(user):
+        """Return a values queryset of ids of all files *user* can access.
+
+        Same semantics as ``accessible_files_q`` (owned + group + shared,
+        ``deleted_at`` intentionally not filtered), but built as a UNION of
+        three independently indexed queries. The Q form ORs across a join
+        (``shares__shared_with``), which defeats per-branch index use and
+        forces a full scan of the files table - O(total files) on every
+        call. The UNION stays proportional to what the user can actually
+        see, so hot paths (activity feed) should prefer this helper as a
+        ``pk__in=`` / ``file_id__in=`` source.
+
+        UNION querysets are terminal: no further ``filter()``/``annotate()``
+        is possible. When the access filter must compose with other
+        conditions in the same query, keep using ``accessible_files_q``.
+        The empty ``order_by()`` on each branch is required - ``File`` has a
+        default ``Meta.ordering`` and ORDER BY is invalid inside a compound
+        subquery.
+        """
+        arms = [
+            File.objects.filter(**branch).order_by().values_list("pk", flat=True)
+            for branch in FileService._access_branches(user)
+        ]
+        return arms[0].union(*arms[1:])
 
     @staticmethod
     def user_files_qs(user):

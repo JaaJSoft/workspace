@@ -9,19 +9,16 @@ class FilesActivityProvider(ActivityProvider):
         """IDs of files the viewer can access (owned + group + shared).
 
         Event access follows file access, so visibility is derived from the
-        centralized ``FileService.accessible_files_q`` rather than a local
+        centralized ``FileService.accessible_file_ids`` rather than a local
         reimplementation. That helper does not filter ``deleted_at``, so
         events on trashed files stay reachable for users who can see them.
         """
         from django.contrib.auth import get_user_model
 
-        from workspace.files.models import File
         from workspace.files.services import FileService
 
         viewer = get_user_model().objects.get(pk=viewer_id)
-        return File.objects.filter(
-            FileService.accessible_files_q(viewer),
-        ).values_list("pk", flat=True)
+        return FileService.accessible_file_ids(viewer)
 
     def _file_visibility_filter(self, user_id, viewer_id):
         """Return a Q filter on the File model restricting to files visible to viewer."""

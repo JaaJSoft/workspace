@@ -92,6 +92,81 @@ class AccessibleFilesQTests(FileAuthzMixin, TestCase):
         self.assertEqual(qs.distinct().count(), 1)
 
 
+# ── accessible_file_ids ────────────────────────────────────────
+
+
+class AccessibleFileIdsTests(FileAuthzMixin, TestCase):
+    """accessible_file_ids must stay equivalent to accessible_files_q.
+
+    It is the UNION-based twin used on hot paths (activity feed); any
+    divergence between the two means a permission leak or a hole in one
+    of them.
+    """
+
+    def _q_ids(self, user):
+        return set(
+            File.objects.filter(FileService.accessible_files_q(user)).values_list(
+                "pk", flat=True
+            )
+        )
+
+    def _union_ids(self, user):
+        return set(FileService.accessible_file_ids(user))
+
+    def test_includes_owned_files(self):
+        f = self._make_file(self.alice)
+        self.assertIn(f.pk, self._union_ids(self.alice))
+
+    def test_excludes_other_users_files(self):
+        f = self._make_file(self.bob)
+        self.assertNotIn(f.pk, self._union_ids(self.alice))
+
+    def test_includes_group_files(self):
+        f = self._make_file(self.bob, group=self.group)
+        self.assertIn(f.pk, self._union_ids(self.alice))
+
+    def test_includes_shared_files(self):
+        f = self._make_file(self.bob)
+        FileShare.objects.create(
+            file=f,
+            shared_by=self.bob,
+            shared_with=self.alice,
+            permission="ro",
+        )
+        self.assertIn(f.pk, self._union_ids(self.alice))
+
+    def test_includes_deleted_files_owned(self):
+        """Like accessible_files_q, deleted_at is NOT filtered."""
+        f = self._make_file(self.alice)
+        f.deleted_at = timezone.now()
+        f.save()
+        self.assertIn(f.pk, self._union_ids(self.alice))
+
+    def test_usable_as_in_subquery(self):
+        f = self._make_file(self.alice)
+        qs = File.objects.filter(pk__in=FileService.accessible_file_ids(self.alice))
+        self.assertIn(f, list(qs))
+
+    def test_equivalent_to_accessible_files_q(self):
+        """Full-scenario equivalence: owned + group + shared + deleted + foreign."""
+        self._make_file(self.alice, name="owned.txt")
+        self._make_file(self.bob, name="group.txt", group=self.group)
+        shared = self._make_file(self.bob, name="shared.txt")
+        FileShare.objects.create(
+            file=shared,
+            shared_by=self.bob,
+            shared_with=self.alice,
+            permission="ro",
+        )
+        trashed = self._make_file(self.alice, name="trashed.txt")
+        trashed.deleted_at = timezone.now()
+        trashed.save()
+        self._make_file(self.bob, name="foreign.txt")
+
+        for user in (self.alice, self.bob):
+            self.assertEqual(self._union_ids(user), self._q_ids(user))
+
+
 # ── user_files_qs ──────────────────────────────────────────────
 
 

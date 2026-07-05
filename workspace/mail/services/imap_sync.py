@@ -2,6 +2,7 @@
 
 import logging
 import re
+from itertools import batched
 
 from django.db import transaction
 from django.utils import timezone as dj_timezone
@@ -155,8 +156,7 @@ def sync_folder_messages(account, folder):
         max_uid = folder.last_sync_uid
         new_message_uuids = []
         # Fetch in batches
-        for i in range(0, len(uid_list), FETCH_BATCH_SIZE):
-            batch = uid_list[i : i + FETCH_BATCH_SIZE]
+        for batch in batched(uid_list, FETCH_BATCH_SIZE):
             uid_set = ",".join(batch)
             status, msg_data = conn.uid("FETCH", uid_set, "(UID FLAGS RFC822)")
             if status != "OK":

@@ -416,7 +416,6 @@ We target Python **3.14** (`requires-python` in `pyproject.toml`), so the modern
 - Always pass an explicit `strict=` to `batched` — ruff enforces this (rule `B911`) and a bare call fails lint. Use `strict=False` when a short final batch is expected (the common case, matching the old slicing), `strict=True` only when the input length must be an exact multiple of `n`.
 - This is about *clarity*, not cleverness: only swap in a helper when it makes the intent **more** obvious. A loop that carries per-iteration side effects (logging, `try/except`, early `continue`, mutation of outer state) is usually clearer left as an explicit loop — don't contort it into a one-liner comprehension just to avoid `.extend()`.
 - These are refactors, so the [Refactoring & Optimization](#refactoring--optimization) rule applies: a test must already cover the touched code (write one first if not), since the change must be behavior-preserving. For `batched`, add or extend a test that crosses **more than one batch** so the chunking boundary is actually exercised.
-- Existing precedent already in the codebase: `workspace/mail/search.py` uses `collections.Counter` / `defaultdict(Counter)` instead of manual tallies — match that style.
 
 ## Frontend Conventions
 

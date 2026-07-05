@@ -1,0 +1,17 @@
+{
+  "name": "workspace-editor",
+  "version": "1.0.0",
+  "description": "esbuild bundle of the Milkdown Crepe editor for the workspace Django project. Replaces the esm.sh runtime imports (build-on-demand CDN, outage-prone) with a local ESM bundle committed to statics and served via whitenoise. Rebuild with `npm run build:editor` after bumping the pinned @milkdown versions.",
+  "private": true,
+  "scripts": {
+    "build:editor": "esbuild milkdown-editor.js --bundle --format=esm --splitting --minify --target=es2022 --outdir=../../workspace/files/ui/static/files/ui/js/vendor/milkdown --chunk-names=chunk-[hash]"
+  },
+  "dependencies": {
+    "@milkdown/crepe": "7.17.3",
+    "@milkdown/plugin-slash": "7.17.3",
+    "codemirror": "6.0.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
+  }
+}

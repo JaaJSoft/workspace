@@ -138,3 +138,9 @@ test_db.sqlite3*
 # a fresh clone has styles immediately - no `npm install` required for
 # devs who only touch Python)
 /scripts/tailwind/node_modules/
+
+# Milkdown editor build (scripts/editor/ holds package.json + milkdown-editor.js;
+# the built ESM bundle at workspace/files/ui/static/files/ui/js/vendor/milkdown/ is
+# committed so a fresh clone has the editor immediately - no `npm install` required
+# for devs who only touch Python)
+/scripts/editor/node_modules/

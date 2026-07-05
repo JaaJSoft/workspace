@@ -166,6 +166,50 @@ class AccessibleFileIdsTests(FileAuthzMixin, TestCase):
         for user in (self.alice, self.bob):
             self.assertEqual(self._union_ids(user), self._q_ids(user))
 
+    def test_include_deleted_false_excludes_trashed_on_every_branch(self):
+        """One live and one trashed file per access branch (owned/group/shared)."""
+        # Group files sit under a folder: only one root node per group is
+        # allowed (unique_group_root_folder).
+        group_root = self._make_folder(self.bob, name="group-root", group=self.group)
+        live_owned = self._make_file(self.alice, name="live-owned.txt")
+        live_group = self._make_file(
+            self.bob, name="live-group.txt", group=self.group, parent=group_root
+        )
+        live_shared = self._make_file(self.bob, name="live-shared.txt")
+        trashed_owned = self._make_file(self.alice, name="dead-owned.txt")
+        trashed_group = self._make_file(
+            self.bob, name="dead-group.txt", group=self.group, parent=group_root
+        )
+        trashed_shared = self._make_file(self.bob, name="dead-shared.txt")
+        for f in (live_shared, trashed_shared):
+            FileShare.objects.create(
+                file=f,
+                shared_by=self.bob,
+                shared_with=self.alice,
+                permission="ro",
+            )
+        for f in (trashed_owned, trashed_group, trashed_shared):
+            f.deleted_at = timezone.now()
+            f.save()
+
+        live_ids = set(
+            FileService.accessible_file_ids(self.alice, include_deleted=False)
+        )
+        self.assertEqual(
+            live_ids,
+            {group_root.pk, live_owned.pk, live_group.pk, live_shared.pk},
+        )
+        # And it must stay equivalent to the Q form + deleted_at filter.
+        self.assertEqual(
+            live_ids,
+            set(
+                File.objects.filter(
+                    FileService.accessible_files_q(self.alice),
+                    deleted_at__isnull=True,
+                ).values_list("pk", flat=True)
+            ),
+        )
+
 
 # ── user_files_qs ──────────────────────────────────────────────
 

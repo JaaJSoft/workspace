@@ -114,6 +114,24 @@ class BuildFileGraphTests(TestCase):
             {"source": str(self.a.uuid), "target": str(d.uuid)}, g["edges"]
         )
 
+    def test_deleted_excluded_in_all_scope(self):
+        # Covers the visibility branches of scope="all": a trashed owned note
+        # and a trashed note shared with the user must both stay out.
+        from workspace.files.models import FileShare
+
+        d_owned = _note(self.user, "d-owned.md", deleted=True)
+        d_shared = _note(self.other, "d-shared.md", deleted=True)
+        FileShare.objects.create(
+            file=d_shared,
+            shared_by=self.other,
+            shared_with=self.user,
+            permission="ro",
+        )
+        g = build_file_graph(self.user, scope="all", file_type="markdown")
+        ids = {n["uuid"] for n in g["nodes"]}
+        self.assertNotIn(str(d_owned.uuid), ids)
+        self.assertNotIn(str(d_shared.uuid), ids)
+
     def test_under_scopes_to_folder_subtree(self):
         # "My notes" = the Notes folder subtree, not every owned note.
         folder = File.objects.create(

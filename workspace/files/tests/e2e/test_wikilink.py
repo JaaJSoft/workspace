@@ -15,7 +15,6 @@ from playwright.sync_api import expect
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.services import FileService
 
-
 # Hardcoded because StaticLiveServerTestCase serves original (unhashed) static
 # paths through the staticfiles finders, regardless of production storage.
 HELPER_MODULE_URL = "/static/files/ui/js/wikilink_match.js"

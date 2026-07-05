@@ -30,10 +30,14 @@ jobs:
     # branches live in this repo.
     if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
+      # persist-credentials: false keeps the token out of .git/config, so the
+      # npm/esbuild steps below never see credentials on disk. Combined with
+      # --ignore-scripts, a malicious install script in a bumped dependency
+      # can neither run nor find a token to exfiltrate.
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ secrets.EDITOR_REBUILD_TOKEN || github.token }}
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -43,7 +47,7 @@ jobs:
       - name: Rebuild vendored bundle
         run: |
           cd scripts/editor
-          npm ci
+          npm ci --ignore-scripts
           npm run build:editor
 
       - name: Sync crepe CSS pins in templates
@@ -53,7 +57,11 @@ jobs:
             workspace/files/ui/templates/files/ui/index.html \
             workspace/notes/ui/templates/notes/ui/notes.html
 
+      # The token is injected only here, after all dependency code has run.
       - name: Commit and push if changed
+        env:
+          PUSH_TOKEN: ${{ secrets.EDITOR_REBUILD_TOKEN || github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           git add -A workspace/files/ui/static/files/ui/js/vendor/milkdown \
             workspace/files/ui/templates/files/ui/index.html \
@@ -65,4 +73,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "build(files): rebuild vendored editor bundle"
-          git push
+          git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${BRANCH}"

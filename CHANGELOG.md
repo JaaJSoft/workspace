@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.29.0 - Video Calls & Smarter Assistant
+
+### Highlights
+
+Calls now carry video and screen sharing, and they recover on their own when the network hiccups. Your assistant can read your calendar, book events, and check the weather anywhere. Plus a tidier dashboard you control and settings that finally live where they belong.
+
+### Chat
+
+- Calls now do video. Turn your camera on or off at any point during a call.
+- Share your screen with everyone on the call. When someone starts sharing, their screen automatically takes the spotlight.
+- Click any participant to blow them up into a large view with everyone else in a thumbnail strip; click again to return to the equal grid.
+- A new connection diagnostic button in the call bar runs an in-call check so you can pinpoint trouble without leaving the call.
+- Calls now heal themselves. If your connection briefly drops (switching Wi-Fi, moving networks), the call reconnects within a few seconds instead of going silent until it times out.
+- Starting a call at the exact same moment as someone else in the same conversation no longer errors out; you both land in the same call.
+
+### Assistant
+
+- Your assistant can now work with your calendar: list your calendars, tell you what is coming up, and create a new event from a plain request like "add lunch with Sam on Friday at noon".
+- Ask your assistant about the weather anywhere. "What's the weather in Tokyo?" or "is it raining in Paris?" now returns temperature, feels-like, humidity, wind, and sky conditions for any city, region, or country.
+
+### Dashboard & Settings
+
+- You can now choose which apps show on your dashboard. Hidden apps disappear from the dashboard grid only; they stay reachable from the navigation bar, search, and their direct links.
+- Settings moved closer to where you use them. The global Settings page now holds only app-wide options (Profile, Appearance, Security, API Tokens, Usage), while each app's own preferences (dashboard layout, chat call sounds, mailbox AI features) now open from a popover on that app's page. The former "Preferences" tab is now "Appearance".
+
+### Fixes
+
+- Presence rings around avatars no longer randomly disappear, including on bot avatars and in dynamically updated lists like chat members and mentions.
+- Your own presence ring now updates instantly when you change your status from the navbar, instead of lagging behind.
+- Evened out the spacing on the notes sidebar folder links.
+
 ## 0.28.0 - Voice Calls & Notes Graph
 
 ### Highlights

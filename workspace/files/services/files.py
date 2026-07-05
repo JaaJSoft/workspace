@@ -69,17 +69,25 @@ class FileService:
         return q
 
     @staticmethod
-    def accessible_file_ids(user):
+    def accessible_file_ids(user, *, include_deleted=True):
         """Return a values queryset of ids of all files *user* can access.
 
         Same semantics as ``accessible_files_q`` (owned + group + shared,
-        ``deleted_at`` intentionally not filtered), but built as a UNION of
+        ``deleted_at`` not filtered by default), but built as a UNION of
         three independently indexed queries. The Q form ORs across a join
         (``shares__shared_with``), which defeats per-branch index use and
         forces a full scan of the files table - O(total files) on every
         call. The UNION stays proportional to what the user can actually
         see, so hot paths (activity feed) should prefer this helper as a
         ``pk__in=`` / ``file_id__in=`` source.
+
+        ``include_deleted=False`` excludes trashed files by filtering
+        ``deleted_at`` inside each UNION arm, where it pairs with the
+        composite indexes (owner/deleted_at, group/deleted_at). Callers must
+        NOT add ``deleted_at__isnull=True`` to the outer query instead:
+        ``deleted_at IS NULL`` matches almost every row, and the planner is
+        prone to driving the whole query from that low-selectivity index -
+        a full-table scan that this helper exists to avoid.
 
         UNION querysets are terminal: no further ``filter()``/``annotate()``
         is possible. When the access filter must compose with other
@@ -88,8 +96,11 @@ class FileService:
         default ``Meta.ordering`` and ORDER BY is invalid inside a compound
         subquery.
         """
+        live = {} if include_deleted else {"deleted_at__isnull": True}
         arms = [
-            File.objects.filter(**branch).order_by().values_list("pk", flat=True)
+            File.objects.filter(**branch, **live)
+            .order_by()
+            .values_list("pk", flat=True)
             for branch in FileService._access_branches(user)
         ]
         return arms[0].union(*arms[1:])

@@ -59,12 +59,14 @@ def build_file_graph(
     + ``exclude_descendants_of=<Journal folder>``).
     """
     if scope == "all":
-        # accessible_files_q ORs owner with a join to shares, so an owned file
-        # with several share rows fans out to duplicate rows; distinct() dedups
-        # (the same guard every other accessible_files_q list query applies).
+        # The UNION helper carries the deleted_at filter inside each access
+        # branch; adding deleted_at__isnull=True out here instead would bait
+        # the planner into scanning the low-selectivity deleted_at index (see
+        # accessible_file_ids docstring). The pk__in form also can't fan out
+        # duplicate rows, unlike the accessible_files_q shares join.
         base = File.objects.filter(
-            FileService.accessible_files_q(user), deleted_at__isnull=True
-        ).distinct()
+            pk__in=FileService.accessible_file_ids(user, include_deleted=False)
+        )
     else:
         base = FileService.user_files_qs(user)
 

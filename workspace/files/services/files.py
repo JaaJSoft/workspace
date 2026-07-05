@@ -39,13 +39,34 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _access_branches(user):
+        """Return the per-branch filter kwargs for *user*'s accessible files.
+
+        Single source of truth for the three access branches (owned, group,
+        shared), consumed by both ``accessible_files_q`` (ORed into one Q
+        across a join) and ``accessible_file_ids`` (each branch a separately
+        indexed UNION arm). Defining the branches once keeps the two
+        permission paths from drifting - a divergence would mean a leak or a
+        hole in one of them.
+        """
+        return (
+            {"owner": user},
+            {"group__in": user.groups.all()},
+            {"shares__shared_with": user},
+        )
+
+    @staticmethod
     def accessible_files_q(user):
         """Return a Q filter matching all files *user* can access."""
         from django.db.models import Q
 
-        return (
-            Q(owner=user) | Q(group__in=user.groups.all()) | Q(shares__shared_with=user)
-        )
+        # Seed from the first branch rather than an empty Q(): an empty Q in
+        # an OR chain can match everything - a full access leak here.
+        branches = FileService._access_branches(user)
+        q = Q(**branches[0])
+        for branch in branches[1:]:
+            q |= Q(**branch)
+        return q
 
     @staticmethod
     def accessible_file_ids(user):
@@ -67,13 +88,11 @@ class FileService:
         default ``Meta.ordering`` and ORDER BY is invalid inside a compound
         subquery.
         """
-        owned = File.objects.filter(owner=user).order_by()
-        grouped = File.objects.filter(group__in=user.groups.all()).order_by()
-        shared = File.objects.filter(shares__shared_with=user).order_by()
-        return owned.values_list("pk", flat=True).union(
-            grouped.values_list("pk", flat=True),
-            shared.values_list("pk", flat=True),
-        )
+        arms = [
+            File.objects.filter(**branch).order_by().values_list("pk", flat=True)
+            for branch in FileService._access_branches(user)
+        ]
+        return arms[0].union(*arms[1:])
 
     @staticmethod
     def user_files_qs(user):

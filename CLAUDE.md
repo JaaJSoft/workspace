@@ -48,7 +48,9 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 ### Git
 
 - Never commit automatically. Only commit when I explicitly ask for it.
-- Do not use git worktrees. Work directly on the current branch.
+- **Never commit to `master`/`main`.** These branches are protected: no direct commits, ever, even when I explicitly ask to commit. If we're on `master`/`main` and a commit is warranted, create a branch first (`type/short-subject`, e.g. `feat/theme-picker`) and commit there. Committing directly is only acceptable when I have already checked out a non-default branch.
+- Committing to a feature branch is fine when we're in a structured flow (a design document, spec, or written plan exists for the work). Absent such a flow, still branch off `master`/`main` rather than committing to it.
+- Do not use git worktrees. Work directly on the current branch (creating a feature branch when the current branch is `master`/`main`, per the rule above).
 - Never mention "Claude", "Claude Code", "CLAUDE.md", or any AI/assistant attribution in commit messages, commit titles, PR titles, or PR descriptions. The user wants commits and PRs to read as if a human wrote them. This includes the trailing "🤖 Generated with [Claude Code]" footer and the "Co-Authored-By: Claude" trailer - omit both. References to project rules should cite the rule itself ("per the no-logic-change refactor contract"), not the file ("per CLAUDE.md").
 - All commit messages **and** PR titles must follow the Conventional Commits format `type(scope): subject` (e.g. `feat(theme): split theme picker into light and dark slots`, `fix(chat): prevent duplicate retry`). Allowed types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `style`, `build`, `ci`, `revert`. Subject is lowercase, imperative mood, no trailing period. This applies to PR titles too - don't pass a free-form title to `gh pr create`, prefix it.
 

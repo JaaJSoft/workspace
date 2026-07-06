@@ -457,27 +457,58 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def get_permission(user, file_obj):
-        """Return the access permission level for *user* on *file_obj*."""
+    def get_permissions_bulk(user, file_objects):
+        """Return ``{file.pk: FilePermission | None}`` for many files at once.
+
+        Same semantics as :meth:`get_permission`, but the group and share
+        lookups are batched: at most two queries for the whole set instead
+        of up to two per file.
+        """
         from workspace.files.models import FileShare
 
-        if file_obj.owner_id == user.id:
-            return FilePermission.MANAGE
-        if file_obj.deleted_at is not None:
-            return None
-        if file_obj.group_id and user.groups.filter(id=file_obj.group_id).exists():
-            return FilePermission.EDIT
-        share = (
-            FileShare.objects.filter(
-                file=file_obj,
-                shared_with=user,
+        permissions = {}
+        group_candidates = []
+        share_candidates = []
+        for file_obj in file_objects:
+            if file_obj.owner_id == user.id:
+                permissions[file_obj.pk] = FilePermission.MANAGE
+            elif file_obj.deleted_at is not None:
+                permissions[file_obj.pk] = None
+            elif file_obj.group_id:
+                group_candidates.append(file_obj)
+            else:
+                share_candidates.append(file_obj)
+
+        if group_candidates:
+            group_ids = set(user.groups.values_list("id", flat=True))
+            for file_obj in group_candidates:
+                if file_obj.group_id in group_ids:
+                    permissions[file_obj.pk] = FilePermission.EDIT
+                else:
+                    share_candidates.append(file_obj)
+
+        if share_candidates:
+            shares = dict(
+                FileShare.objects.filter(
+                    file_id__in=[f.pk for f in share_candidates],
+                    shared_with=user,
+                ).values_list("file_id", "permission")
             )
-            .values_list("permission", flat=True)
-            .first()
-        )
-        if share is None:
-            return None
-        return FilePermission.WRITE if share == "rw" else FilePermission.VIEW
+            for file_obj in share_candidates:
+                share = shares.get(file_obj.pk)
+                if share is None:
+                    permissions[file_obj.pk] = None
+                else:
+                    permissions[file_obj.pk] = (
+                        FilePermission.WRITE if share == "rw" else FilePermission.VIEW
+                    )
+
+        return permissions
+
+    @staticmethod
+    def get_permission(user, file_obj):
+        """Return the access permission level for *user* on *file_obj*."""
+        return FileService.get_permissions_bulk(user, [file_obj])[file_obj.pk]
 
     @staticmethod
     def can_access(user, file_obj):

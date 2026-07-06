@@ -254,3 +254,96 @@ class ApplyRuleToFolderTests(TestCase):
             result = apply_rule_to_folder(rule, self.folder, dry_run=False)
         self.assertEqual(result["matched"], 1)
         self.assertEqual(result["imap_failed"], 1)
+
+
+class EngineBatchingTests(TestCase):
+    """Regression tests for the per-message query/parse fan-out in
+    run_rules_for_messages."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="ebu", password="p")
+        self.account = MailAccount.objects.create(
+            owner=self.user,
+            email="eb@x.com",
+            imap_host="x",
+            smtp_host="x",
+            username="eb@x.com",
+        )
+        self.folder = MailFolder.objects.create(
+            account=self.account,
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
+        )
+        self.label = self.account.labels.first()
+        self.messages = [
+            MailMessage.objects.create(
+                account=self.account,
+                folder=self.folder,
+                imap_uid=i,
+                from_address={"name": "", "email": "newsletter@news.com"},
+                subject=f"News {i}",
+            )
+            for i in range(1, 4)
+        ]
+        self.uuids = [str(m.uuid) for m in self.messages]
+
+    def _rule(self, **kw):
+        kw.setdefault("account", self.account)
+        kw.setdefault("name", "r")
+        kw.setdefault(
+            "conditions",
+            {"field": "from", "op": "contains", "value": "@news.com"},
+        )
+        kw.setdefault(
+            "actions",
+            [{"type": "add_label", "label_id": str(self.label.uuid)}],
+        )
+        return MailRule.objects.create(**kw)
+
+    def test_conditions_parsed_once_per_rule(self):
+        from workspace.mail.services.rules import engine as engine_mod
+
+        self._rule(name="a", position=0)
+        self._rule(name="b", position=1)
+        with patch.object(
+            engine_mod,
+            "parse_conditions",
+            wraps=engine_mod.parse_conditions,
+        ) as mock_parse:
+            run_rules_for_messages(self.account, self.uuids)
+        self.assertEqual(
+            mock_parse.call_count,
+            2,
+            "conditions must be parsed once per rule, not per (rule x message)",
+        )
+
+    def test_logs_and_stats_batched(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        rule = self._rule()
+        with CaptureQueriesContext(connection) as ctx:
+            run_rules_for_messages(self.account, self.uuids)
+
+        log_inserts = [
+            q
+            for q in ctx.captured_queries
+            if "INSERT INTO" in q["sql"] and "mailrulelog" in q["sql"]
+        ]
+        self.assertEqual(len(log_inserts), 1, "rule logs must be bulk-inserted")
+
+        stat_updates = [
+            q
+            for q in ctx.captured_queries
+            if q["sql"].startswith("UPDATE") and "match_count" in q["sql"]
+        ]
+        self.assertEqual(
+            len(stat_updates), 1, "match counts must be updated once per rule"
+        )
+
+        # Aggregation correctness: one log per message, count reflects all.
+        self.assertEqual(MailRuleLog.objects.filter(rule=rule).count(), 3)
+        rule.refresh_from_db()
+        self.assertEqual(rule.match_count, 3)
+        self.assertIsNotNone(rule.last_matched_at)

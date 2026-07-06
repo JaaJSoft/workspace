@@ -162,6 +162,16 @@ def sync_folder_messages(account, folder):
             if status != "OK":
                 continue
 
+            # One existence probe for the whole batch; _parse_message would
+            # otherwise check each message individually (N queries per
+            # batch, paid in full on initial sync and crash re-sync).
+            known_uids = set(
+                MailMessage.objects.filter(
+                    folder=folder,
+                    imap_uid__in=[int(u) for u in batch],
+                ).values_list("imap_uid", flat=True)
+            )
+
             for response_part in msg_data:
                 if not isinstance(response_part, tuple):
                     continue
@@ -177,7 +187,14 @@ def sync_folder_messages(account, folder):
 
                 raw_email = response_part[1]
                 try:
-                    msg = _parse_message(raw_email, account, folder, uid, flags_str)
+                    msg = _parse_message(
+                        raw_email,
+                        account,
+                        folder,
+                        uid,
+                        flags_str,
+                        known_uids=known_uids,
+                    )
                     # Advance max_uid even when msg is None (already present in
                     # DB): otherwise last_sync_uid never moves past UIDs we've
                     # confirmed, and every future sync re-FETCHes the same

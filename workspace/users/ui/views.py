@@ -8,9 +8,9 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from workspace.core.activity_registry import activity_registry
 from workspace.core.services.activity import (
     annotate_time_ago,
+    get_daily_counts,
     get_recent_events,
     get_sources,
     get_usage_stats,
@@ -32,7 +32,7 @@ def _build_heatmap_data(user_id, viewer_id=None):
     date_from = start
     date_to = today
 
-    counts = activity_registry.get_daily_counts(
+    counts = get_daily_counts(
         user_id,
         date_from,
         date_to,

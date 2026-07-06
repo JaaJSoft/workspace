@@ -525,21 +525,17 @@ class SettingDetailView(APIView):
         },
     )
     def get(self, request, module, key):
-        row = (
-            UserSetting.objects.filter(
-                user=request.user,
-                module=module,
-                key=key,
-            )
-            .values("module", "key", "value")
-            .first()
-        )
-        if not row:
+        # Read through the cached module dict (invalidated by set/delete)
+        # instead of querying the row: the context processors already warm
+        # this cache on every page load. Key presence distinguishes a
+        # missing setting from a stored null.
+        settings_map = get_module_settings(request.user, module)
+        if key not in settings_map:
             return Response(
                 {"detail": "Setting not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        return Response(row)
+        return Response({"module": module, "key": key, "value": settings_map[key]})
 
     @extend_schema(
         summary="Create or update a setting",

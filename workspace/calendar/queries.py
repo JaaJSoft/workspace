@@ -63,13 +63,14 @@ def visible_events_q(user):
 
     An event is visible if its calendar is owned/subscribed by the user,
     or if the user is a member of the event.
+
+    The calendar branch goes through ``visible_calendar_ids`` - one
+    indexed UNION query materialized when the Q is built - instead of two
+    separate ``calendar_id__in`` subqueries OR'd together. A single
+    literal ``calendar_id IN (...)`` is a predicate the planner can drive
+    the ``(calendar, ...)`` composite indexes with; the same shape the
+    range view uses.
     """
-    owned_cal_ids = Calendar.objects.filter(owner=user).values_list("uuid", flat=True)
-    sub_cal_ids = CalendarSubscription.objects.filter(user=user).values_list(
-        "calendar_id", flat=True
-    )
-    return (
-        Q(calendar_id__in=owned_cal_ids)
-        | Q(calendar_id__in=sub_cal_ids)
-        | Q(uuid__in=member_event_ids(user))
+    return Q(calendar_id__in=visible_calendar_ids(user)) | Q(
+        uuid__in=member_event_ids(user)
     )

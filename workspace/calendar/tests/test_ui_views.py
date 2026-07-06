@@ -89,3 +89,93 @@ class CalendarIndexViewTests(TestCase):
             '<script id="calendar-prefs-data" type="application/json">',
         )
         self.assertContains(resp, '"defaultView": "agenda"')
+
+
+class EventCardMembersTests(TestCase):
+    """Pins the event card's attendees/invite-status contract and its
+    member query count (regression for the bypassed members prefetch)."""
+
+    def setUp(self):
+        from django.utils import timezone
+
+        from workspace.calendar.models import Event, EventMember
+
+        self.owner = User.objects.create_user(username="cardowner", password="pass123")
+        self.viewer = User.objects.create_user(
+            username="cardviewer", password="pass123"
+        )
+        self.cal = Calendar.objects.create(name="Card Cal", owner=self.owner)
+        self.event = Event.objects.create(
+            calendar=self.cal,
+            title="Board meeting",
+            owner=self.owner,
+            start=timezone.now(),
+            end=timezone.now(),
+        )
+        self.members = []
+        for i in range(6):
+            u = User.objects.create_user(username=f"attendee{i}", password="pass123")
+            self.members.append(
+                EventMember.objects.create(
+                    event=self.event, user=u, status=EventMember.Status.ACCEPTED
+                )
+            )
+        self.declined_user = User.objects.create_user(
+            username="decliner", password="pass123"
+        )
+        EventMember.objects.create(
+            event=self.event,
+            user=self.declined_user,
+            status=EventMember.Status.DECLINED,
+        )
+        from workspace.calendar.models import EventMember as EM
+
+        self.viewer_membership = EM.objects.create(
+            event=self.event, user=self.viewer, status=EM.Status.PENDING
+        )
+
+    def _url(self):
+        return f"/calendar/events/{self.event.pk}/card"
+
+    def test_attendees_exclude_declined_and_cap_at_five(self):
+        self.client.login(username="cardowner", password="pass123")
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200)
+        attendees = resp.context["attendees"]
+        self.assertEqual(len(attendees), 5)
+        self.assertNotIn(self.declined_user.id, [m.user_id for m in attendees])
+
+    def test_invite_status_for_member_viewer(self):
+        from workspace.calendar.models import EventMember
+
+        self.client.login(username="cardviewer", password="pass123")
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["invite_status"], EventMember.Status.PENDING)
+
+    def test_invite_status_none_for_owner(self):
+        self.client.login(username="cardowner", password="pass123")
+        resp = self.client.get(self._url())
+        self.assertIsNone(resp.context["invite_status"])
+
+    def test_members_fetched_in_a_single_query(self):
+        """The card must serve attendees and the viewer's membership from
+        the prefetched member set, not fresh per-need queries."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.client.login(username="cardviewer", password="pass123")
+        with CaptureQueriesContext(connection) as ctx:
+            resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200)
+        member_queries = [
+            q for q in ctx.captured_queries if "calendar_eventmember" in q["sql"]
+        ]
+        # 2 = the event lookup itself (its visibility filter embeds a
+        # membership subquery) + the members prefetch. The attendees list
+        # and the viewer's membership must not add queries of their own.
+        self.assertEqual(
+            len(member_queries),
+            2,
+            f"expected 2 member queries, got {len(member_queries)}",
+        )

@@ -236,6 +236,18 @@ class ApplyRuleToFolderTests(TestCase):
         result = apply_rule_to_folder(rule, self.folder, dry_run=False)
         self.assertEqual(result["applied"], 1)
 
+    def test_stats_not_advanced_when_log_write_fails(self):
+        self._msg(imap_uid=1)
+        rule = self._rule()
+        with patch.object(
+            MailRuleLog.objects, "bulk_create", side_effect=Exception("db down")
+        ):
+            result = apply_rule_to_folder(rule, self.folder, dry_run=False)
+        self.assertEqual(result["applied"], 1)
+        rule.refresh_from_db()
+        self.assertEqual(rule.match_count, 0)
+        self.assertIsNone(rule.last_matched_at)
+
     def test_imap_failure_counted(self):
         self._msg(imap_uid=1)
         target = MailFolder.objects.create(
@@ -347,3 +359,20 @@ class EngineBatchingTests(TestCase):
         rule.refresh_from_db()
         self.assertEqual(rule.match_count, 3)
         self.assertIsNotNone(rule.last_matched_at)
+
+    def test_stats_not_advanced_when_log_write_fails(self):
+        """match_count/last_matched_at must stay consistent with the audit
+        trail: when the MailRuleLog bulk insert fails, the counters must
+        not advance past the logs that were never written."""
+        rule = self._rule()
+        with patch.object(
+            MailRuleLog.objects, "bulk_create", side_effect=Exception("db down")
+        ):
+            summary = run_rules_for_messages(self.account, self.uuids)
+        # Matches are still reported to the caller (actions did run) ...
+        self.assertEqual(len(summary), 3)
+        # ... but neither logs nor counters were persisted.
+        self.assertEqual(MailRuleLog.objects.count(), 0)
+        rule.refresh_from_db()
+        self.assertEqual(rule.match_count, 0)
+        self.assertIsNone(rule.last_matched_at)

@@ -142,12 +142,15 @@ def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
         try:
             MailRuleLog.objects.bulk_create(log_rows)
         except Exception:
+            # Skip the stats update: counters must not advance past the
+            # audit trail that failed to persist.
             logger.exception("failed to write rule logs for account %s", account.uuid)
-    for pk, count in match_counts.items():
-        MailRule.objects.filter(pk=pk).update(
-            match_count=F("match_count") + count,
-            last_matched_at=now,
-        )
+        else:
+            for pk, count in match_counts.items():
+                MailRule.objects.filter(pk=pk).update(
+                    match_count=F("match_count") + count,
+                    last_matched_at=now,
+                )
     return summary
 
 
@@ -223,12 +226,14 @@ def apply_rule_to_folder(rule, folder, *, dry_run: bool, limit: int = 500) -> di
         try:
             MailRuleLog.objects.bulk_create(log_rows)
         except Exception:
+            # Skip the stats update: counters must not advance past the
+            # audit trail that failed to persist.
             logger.exception("failed to write rule logs for rule %s", rule.uuid)
-    if matched_pks:
-        MailRule.objects.filter(pk=rule.pk).update(
-            match_count=F("match_count") + len(matched_pks),
-            last_matched_at=timezone.now(),
-        )
+        else:
+            MailRule.objects.filter(pk=rule.pk).update(
+                match_count=F("match_count") + len(matched_pks),
+                last_matched_at=timezone.now(),
+            )
 
     return {
         "scanned": len(messages),

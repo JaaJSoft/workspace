@@ -4,7 +4,7 @@ import logging
 import re
 from itertools import batched
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone as dj_timezone
 
 from workspace.common.logging import scrub
@@ -203,6 +203,20 @@ def sync_folder_messages(account, folder):
                     max_uid = max(max_uid, uid)
                     if msg:
                         new_message_uuids.append(str(msg.uuid))
+                except IntegrityError:
+                    # Duplicate-insert race with a concurrent sync of this
+                    # folder: the batch existence snapshot above predates
+                    # the other sync's insert, so the (folder, imap_uid)
+                    # unique constraint fires. The message is stored, just
+                    # not by us - skip it and keep the cursor moving.
+                    if MailMessage.objects.filter(folder=folder, imap_uid=uid).exists():
+                        max_uid = max(max_uid, uid)
+                    else:
+                        logger.exception(
+                            "Failed to parse message UID %d in %s",
+                            uid,
+                            scrub(folder.name),
+                        )
                 except Exception:
                     logger.exception(
                         "Failed to parse message UID %d in %s", uid, scrub(folder.name)

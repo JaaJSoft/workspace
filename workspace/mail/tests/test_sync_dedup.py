@@ -1,6 +1,7 @@
 """Sync dedup contract: already-synced UIDs are skipped without
 per-message existence queries (regression for the FETCH-loop N+1)."""
 
+import re
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -83,11 +84,33 @@ class SyncDedupTests(TestCase):
         )
         with CaptureQueriesContext(connection) as ctx:
             self._run_sync([1, 2, 3])
+        # Quote-agnostic on purpose: identifier quoting varies by backend
+        # ("imap_uid", `imap_uid`, bare), and the probe must be caught in
+        # all of them. The batch lookup uses IN (...), which never matches.
         per_message_probes = [
-            q for q in ctx.captured_queries if '"imap_uid" = ' in q["sql"]
+            q
+            for q in ctx.captured_queries
+            if re.search(r'[`"]?imap_uid[`"]?\s*=', q["sql"])
         ]
         self.assertEqual(
             len(per_message_probes),
             0,
             f"per-message UID probes found: {len(per_message_probes)}",
         )
+
+    def test_duplicate_insert_race_skipped_quietly(self):
+        """Concurrent syncs of one folder can both miss a UID in their
+        batch snapshot and race to insert it; the loser hits the
+        (folder, imap_uid) unique constraint. That collision is an
+        expected skip, not a parse failure, so it must not reach the
+        error log. Simulated by repeating a UID inside one FETCH batch:
+        the snapshot predates both copies, the second insert collides."""
+        with self.assertNoLogs("workspace.mail.services.imap_sync", level="ERROR"):
+            self._run_sync([1, 2, 2])
+        self.assertEqual(
+            MailMessage.objects.filter(folder=self.folder, imap_uid=2).count(), 1
+        )
+        # The colliding UID still advances the sync cursor: the message
+        # is in the DB, re-fetching it forever would be the old bug.
+        self.folder.refresh_from_db()
+        self.assertEqual(self.folder.last_sync_uid, 2)

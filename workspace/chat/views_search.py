@@ -195,15 +195,22 @@ class ConversationMediaView(CacheControlMixin, APIView):
             .order_by("-created_at")
         )
 
+        # Mirrors the is_image/is_video model properties: the indexed
+        # category column decides, with a mime-prefix fallback only for
+        # legacy rows that predate category detection. Every OR branch
+        # constrains the indexed column, unlike a bare mime-prefix filter
+        # which forced a scan of all the conversation's attachments.
+        media_q = (
+            Q(category__in=("image", "video"))
+            | Q(category="unknown", mime_type__startswith="image/")
+            | Q(category="unknown", mime_type__startswith="video/")
+        )
+
         media_type = request.query_params.get("type", "images")
         if media_type == "images":
-            qs = qs.filter(
-                Q(mime_type__startswith="image/") | Q(mime_type__startswith="video/")
-            )
+            qs = qs.filter(media_q)
         elif media_type == "files":
-            qs = qs.exclude(mime_type__startswith="image/").exclude(
-                mime_type__startswith="video/"
-            )
+            qs = qs.exclude(media_q)
         elif media_type != "all":
             return Response(
                 {"detail": "Invalid media type."},

@@ -751,3 +751,51 @@ class ExcludeDescendantsOfFilterTests(APITestCase):
         self.assertIn(
             str(self.daily.uuid), self._list(f"&exclude_descendants_of={ghost}")
         )
+
+
+class RecentFilesOrderingTests(APITestCase):
+    """Pins the recent view contract: most recently updated first, capped."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="recentuser",
+            email="recent@example.com",
+            password="testpass123",
+        )
+        self.client.force_authenticate(user=self.user)
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        now = timezone.now()
+        self.files = []
+        for i in range(3):
+            f = File.objects.create(
+                owner=self.user,
+                name=f"doc{i}.txt",
+                node_type=File.NodeType.FILE,
+                mime_type="text/plain",
+            )
+            # updated_at is auto_now; bypass it to control the ordering.
+            File.objects.filter(pk=f.pk).update(updated_at=now - timedelta(hours=3 - i))
+            self.files.append(f)
+
+    def test_recent_orders_by_updated_at_desc(self):
+        resp = self.client.get("/api/v1/files?recent=1")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        names = [f["name"] for f in resp.json()]
+        self.assertEqual(names[:3], ["doc2.txt", "doc1.txt", "doc0.txt"])
+
+    def test_recent_limit_caps_results(self):
+        resp = self.client.get("/api/v1/files?recent=1&recent_limit=2")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        names = [f["name"] for f in resp.json()]
+        self.assertEqual(names, ["doc2.txt", "doc1.txt"])
+
+    def test_recent_excludes_trashed(self):
+        from django.utils import timezone
+
+        File.objects.filter(pk=self.files[2].pk).update(deleted_at=timezone.now())
+        resp = self.client.get("/api/v1/files?recent=1")
+        names = [f["name"] for f in resp.json()]
+        self.assertNotIn("doc2.txt", names)

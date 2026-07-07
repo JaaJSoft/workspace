@@ -3,7 +3,7 @@ import secrets
 
 from django.contrib.auth import get_user_model
 from django.db import models, transaction
-from django.db.models import Q, Value
+from django.db.models import F, Q, Value
 from django.db.models.functions import Concat, Lower, Substr
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
@@ -138,6 +138,19 @@ class File(models.Model):
             ),
             models.Index(
                 fields=["parent", "deleted_at", "name"], name="file_parent_del_name"
+            ),
+            # Serves the "Recent" views: filter (owner, deleted_at IS NULL)
+            # then ORDER BY updated_at DESC, LOWER(name) with a small LIMIT.
+            # The full ORDER BY is in the index (including the tiebreak
+            # expression) so SQLite can early-exit at the limit instead of
+            # sorting every live file the user owns; the API variant that
+            # orders by updated_at alone is served by the same prefix.
+            models.Index(
+                F("owner"),
+                F("deleted_at"),
+                F("updated_at").desc(),
+                Lower("name"),
+                name="file_owner_del_recent",
             ),
             # `text_pattern_ops` makes this index usable for `path__startswith`
             # under non-C UTF-8 collations (PostgreSQL). Silently ignored on SQLite,

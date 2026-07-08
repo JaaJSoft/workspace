@@ -36,12 +36,27 @@ def _load_rules(account):
     )
 
 
-def _matches(rule, message) -> bool:
+def _parse_rule(rule) -> tuple:
+    """Parse ``rule``'s conditions and actions once for a whole run.
+
+    Returns ``(node, actions)``; either is None (with a warning) when the
+    stored JSON is invalid. Parsing here instead of per message keeps the
+    cost proportional to the number of rules, not (rules x messages).
+    """
     try:
         node = parse_conditions(rule.conditions)
     except SchemaError:
         logger.warning("rule %s has invalid conditions, skipping", rule.uuid)
-        return False
+        node = None
+    try:
+        actions = parse_actions(rule.actions)
+    except SchemaError:
+        logger.warning("rule %s has invalid actions, skipping", rule.uuid)
+        actions = None
+    return node, actions
+
+
+def _matches(rule, node, message) -> bool:
     try:
         return evaluate_node(node, message)
     except Exception:
@@ -51,24 +66,14 @@ def _matches(rule, message) -> bool:
         return False
 
 
-def _apply(rule, message) -> tuple[list, bool, bool]:
-    """Apply ``rule.actions`` to ``message``.
+def _apply(actions, message) -> tuple[list, bool]:
+    """Apply pre-parsed ``actions`` to ``message``.
 
-    Returns ``(audit_list, short_circuit, applied)``:
-
-    - ``short_circuit=True`` when an action removed the message from further
-      consideration (currently: ``delete``). The engine uses this to stop
-      evaluating further rules for the same message.
-    - ``applied=False`` when ``rule.actions`` could not be parsed. The
-      engine uses this to skip stat increments and log writes for rules
-      whose actions are broken.
+    Returns ``(audit_list, short_circuit)``; ``short_circuit=True`` when an
+    action removed the message from further consideration (currently:
+    ``delete``). The engine uses this to stop evaluating further rules for
+    the same message.
     """
-    try:
-        actions = parse_actions(rule.actions)
-    except SchemaError:
-        logger.warning("rule %s has invalid actions, skipping", rule.uuid)
-        return [], False, False
-
     audit = []
     short_circuit = False
     for action in actions:
@@ -77,7 +82,7 @@ def _apply(rule, message) -> tuple[list, bool, bool]:
         if isinstance(action, DeleteAction) and result.get("ok"):
             short_circuit = True
             break
-    return audit, short_circuit, True
+    return audit, short_circuit
 
 
 def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
@@ -92,6 +97,7 @@ def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
     rules = _load_rules(account)
     if not rules:
         return {}
+    parsed_rules = [(rule, *_parse_rule(rule)) for rule in rules]
 
     messages = list(
         MailMessage.objects.filter(
@@ -100,40 +106,51 @@ def run_rules_for_messages(account, message_uuids: Iterable[str]) -> dict:
     )
 
     summary: dict = {}
+    log_rows: list[MailRuleLog] = []
+    match_counts: dict = {}
     now = timezone.now()
     for message in messages:
         matched_rules: list[MailRule] = []
-        for rule in rules:
-            if not _matches(rule, message):
+        for rule, node, actions in parsed_rules:
+            if node is None or not _matches(rule, node, message):
                 continue
-            audit, short_circuit, applied = _apply(rule, message)
-            if not applied:
+            if actions is None:
                 # Conditions matched but actions could not be parsed -
                 # skip stats and log so the rule doesn't appear to have
                 # fired when it actually did nothing.
                 continue
+            audit, short_circuit = _apply(actions, message)
             matched_rules.append(rule)
-            try:
-                MailRuleLog.objects.create(
+            log_rows.append(
+                MailRuleLog(
                     rule=rule,
                     rule_name_snapshot=rule.name,
                     message=message,
                     actions_applied=audit,
                 )
-            except Exception:
-                logger.exception(
-                    "failed to write rule log for %s / %s", rule.uuid, message.uuid
-                )
+            )
             if short_circuit:
                 break
             if rule.stop_processing:
                 break
         if matched_rules:
             summary[str(message.uuid)] = [str(r.uuid) for r in matched_rules]
-            MailRule.objects.filter(pk__in=[r.pk for r in matched_rules]).update(
-                match_count=F("match_count") + 1,
-                last_matched_at=now,
-            )
+            for rule in matched_rules:
+                match_counts[rule.pk] = match_counts.get(rule.pk, 0) + 1
+
+    if log_rows:
+        try:
+            MailRuleLog.objects.bulk_create(log_rows)
+        except Exception:
+            # Skip the stats update: counters must not advance past the
+            # audit trail that failed to persist.
+            logger.exception("failed to write rule logs for account %s", account.uuid)
+        else:
+            for pk, count in match_counts.items():
+                MailRule.objects.filter(pk=pk).update(
+                    match_count=F("match_count") + count,
+                    last_matched_at=now,
+                )
     return summary
 
 
@@ -177,39 +194,46 @@ def apply_rule_to_folder(rule, folder, *, dry_run: bool, limit: int = 500) -> di
         )[:limit]
     )
 
+    node, actions = _parse_rule(rule)
+
     matched = 0
     applied = 0
     imap_failed = 0
     matched_pks: list = []
+    log_rows: list[MailRuleLog] = []
     for message in messages:
-        if not _matches(rule, message):
+        if node is None or not _matches(rule, node, message):
             continue
         matched += 1
         if dry_run:
             continue
-        audit, _short_circuit, ok = _apply(rule, message)
-        if not ok:
+        if actions is None:
             continue
+        audit, _short_circuit = _apply(actions, message)
         applied += 1
         imap_failed += _count_imap_failures(audit)
         matched_pks.append(message.pk)
-        try:
-            MailRuleLog.objects.create(
+        log_rows.append(
+            MailRuleLog(
                 rule=rule,
                 rule_name_snapshot=rule.name,
                 message=message,
                 actions_applied=audit,
             )
-        except Exception:
-            logger.exception(
-                "failed to write rule log for %s / %s", rule.uuid, message.uuid
-            )
-
-    if matched_pks:
-        MailRule.objects.filter(pk=rule.pk).update(
-            match_count=F("match_count") + len(matched_pks),
-            last_matched_at=timezone.now(),
         )
+
+    if log_rows:
+        try:
+            MailRuleLog.objects.bulk_create(log_rows)
+        except Exception:
+            # Skip the stats update: counters must not advance past the
+            # audit trail that failed to persist.
+            logger.exception("failed to write rule logs for rule %s", rule.uuid)
+        else:
+            MailRule.objects.filter(pk=rule.pk).update(
+                match_count=F("match_count") + len(matched_pks),
+                last_matched_at=timezone.now(),
+            )
 
     return {
         "scanned": len(messages),

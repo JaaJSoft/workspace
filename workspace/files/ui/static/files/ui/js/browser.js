@@ -1,5 +1,9 @@
 window.fileBrowser = function fileBrowser() {
   return {
+    // Tag CRUD + assignment (tag_manager.html / tag_dialog.html bindings).
+    // The mixin reads/writes `selectedFile`, seeded by the properties partial.
+    ...window.tagsMixin(),
+
     cleaningTrash: false,
 
     // Upload progress state
@@ -29,6 +33,9 @@ window.fileBrowser = function fileBrowser() {
     propertiesNodeType: 'file',
     propertiesLoading: false,
     propertiesError: null,
+    // Current panel target for the tags mixin ({ uuid, tags }), seeded by
+    // the properties partial's x-init when the file is taggable.
+    selectedFile: null,
 
     get currentFolder() {
       const folderEl = document.getElementById('folder-browser');
@@ -47,6 +54,9 @@ window.fileBrowser = function fileBrowser() {
       this.propertiesError = null;
       this.propertiesLoading = true;
       this.showPropertiesPanel = true;
+      // Reset the tags target — the incoming partial reseeds it (taggable
+      // files only), so a previous file's tags can't leak into this one.
+      this.selectedFile = null;
 
       const onError = () => { this.propertiesError = 'Failed to load properties'; };
       const onAfter = () => { this.propertiesLoading = false; };
@@ -59,6 +69,7 @@ window.fileBrowser = function fileBrowser() {
       this.showPropertiesPanel = false;
       this.propertiesUuid = null;
       this.propertiesError = null;
+      this.selectedFile = null;
     },
 
     _initFileActions() {
@@ -1193,6 +1204,7 @@ window.fileBrowser = function fileBrowser() {
       }
 
       this._initFileActions();
+      this.loadTags();
       // Listen for form submissions from dialogs
       window.addEventListener('create-folder', (e) => this.createFolder(e.detail.name));
       window.addEventListener('create-file', (e) => this.createFile(e.detail.name, e.detail.fileType, e.detail.customExt));

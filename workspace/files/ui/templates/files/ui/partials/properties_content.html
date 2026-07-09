@@ -89,6 +89,24 @@ Context:
     </div>
   </div>
 
+  {% if can_tag %}
+  <!-- Tags (chips are client-rendered from `selectedFile.tags` so the
+       tag_manager dropdown checkboxes update them live; the initial
+       state is seeded server-side via json_script) -->
+  {{ file_tags|json_script:"properties-tags-data" }}
+  <div class="divider my-0 text-xs text-base-content/40">Tags</div>
+  <div
+    class="flex flex-wrap items-center gap-1.5"
+    x-init="selectedFile = { uuid: '{{ file.uuid }}', tags: JSON.parse(document.getElementById('properties-tags-data').textContent) }"
+  >
+    <template x-for="t in (selectedFile ? selectedFile.tags : [])" :key="t.uuid">
+      <span class="badge badge-sm" :class="'badge-' + t.color" x-text="t.name"></span>
+    </template>
+    <span class="text-sm text-base-content/40" x-show="!selectedFile || selectedFile.tags.length === 0">No tags</span>
+    {% include "files/ui/partials/tag_manager.html" %}
+  </div>
+  {% endif %}
+
   {% if file.node_type == 'folder' and is_owner %}
   <!-- Customize Icon -->
   <div class="divider my-0 text-xs text-base-content/40">Customize Icon</div>

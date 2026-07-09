@@ -83,6 +83,29 @@ class PropertiesPanelTagsTests(APITestCase):
         # The owner's tags must not leak to the recipient either.
         self.assertNotIn("secret-tag", body)
 
+    def test_write_permission_recipient_gets_no_tag_editor(self):
+        # Visibility is ownership-based, not permission-based: even a
+        # recipient with write access doesn't get the tag editor.
+        tag = Tag.objects.create(owner=self.user, name="secret-tag", color="ghost")
+        FileTag.objects.create(file=self.file, tag=tag)
+        bob = User.objects.create_user(
+            username="bob",
+            email="bob@example.com",
+            password="pass",
+        )
+        FileShare.objects.create(
+            file=self.file,
+            shared_by=self.user,
+            shared_with=bob,
+            permission=FileShare.Permission.READ_WRITE,
+        )
+        self.client.login(username="bob", password="pass")
+
+        body = self._properties_body(self.file)
+
+        self.assertNotIn('id="properties-tags-data"', body)
+        self.assertNotIn("secret-tag", body)
+
     def test_group_file_gets_no_tag_editor(self):
         group = Group.objects.create(name="team")
         self.user.groups.add(group)

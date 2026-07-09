@@ -103,7 +103,9 @@ Context:
       <span class="badge badge-sm" :class="'badge-' + t.color" x-text="t.name"></span>
     </template>
     <span class="text-sm text-base-content/40" x-show="!selectedFile || selectedFile.tags.length === 0">No tags</span>
-    {% include "files/ui/partials/tag_manager.html" %}
+    <div class="ml-auto">
+      {% include "files/ui/partials/tag_manager.html" %}
+    </div>
   </div>
   {% endif %}
 

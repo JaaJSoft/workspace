@@ -15,6 +15,10 @@ from rest_framework.test import APITestCase
 from workspace.mail.ai_tools import MailToolProvider, SearchEmailsParams
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.search import search_contacts, search_mail
+from workspace.mail.serializers import (
+    MailMessageDetailSerializer,
+    MailMessageListSerializer,
+)
 from workspace.mail.services.addresses import derive_recipients_text, sender_columns
 
 User = get_user_model()
@@ -111,6 +115,32 @@ class MailMessageSaveDerivationTests(MailFixtureMixin, TestCase):
         msg.save()
         msg.refresh_from_db()
         self.assertEqual(msg.recipients_text, "Zed <zed@example.com>")
+
+
+class FromAddressSerializerShapeTests(MailFixtureMixin, TestCase):
+    """from_address is an API contract: always a {name, email} dict."""
+
+    def _list_data(self, msg):
+        msg.attachments_count = 0  # normally provided by the view annotation
+        return MailMessageListSerializer(msg).data
+
+    def test_list_serializer_emits_name_email_shape(self):
+        data = self._list_data(self._create_message())
+        self.assertEqual(
+            data["from_address"],
+            {"name": "Alice Wonder", "email": "alice@example.com"},
+        )
+
+    def test_detail_serializer_emits_name_email_shape(self):
+        data = MailMessageDetailSerializer(self._create_message()).data
+        self.assertEqual(
+            data["from_address"],
+            {"name": "Alice Wonder", "email": "alice@example.com"},
+        )
+
+    def test_blank_sender_keeps_the_shape(self):
+        data = self._list_data(self._create_message(from_name="", from_email=""))
+        self.assertEqual(data["from_address"], {"name": "", "email": ""})
 
 
 class SenderSearchUsesFlatColumnsTests(MailFixtureMixin, APITestCase):

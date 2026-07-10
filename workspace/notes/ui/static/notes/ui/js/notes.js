@@ -12,7 +12,6 @@ window._notesPrefsDefaults = {
     showHidden: false,
     defaultFolderUuid: null,
     journalFolderUuid: null,
-    // expandedFolders removed — now stored in URL
 };
 window._notesPrefsCache = { ...window._notesPrefsDefaults };
 

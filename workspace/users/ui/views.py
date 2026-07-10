@@ -162,10 +162,7 @@ def profile_view(request, username=None):
     user_id = profile_user.id
     viewer_id = None if is_own_profile else request.user.id
 
-    # Activity stats
     stats = get_usage_stats(user_id, viewer_id=viewer_id)
-
-    # Heatmap
     heatmap = _build_heatmap_data(user_id, viewer_id=viewer_id)
 
     # Profile fields — single query for all three keys instead of one per get_setting

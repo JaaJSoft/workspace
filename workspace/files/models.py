@@ -690,9 +690,6 @@ class FileEvent(models.Model):
 
     # Single source of truth for the per-action presentation metadata
     # (Lucide icon + category used for grouping in the filter dropdown).
-    # Anything that needed an icon or a label used to keep its own copy of
-    # this table in services/events.py, activity.py and the template — they
-    # now all read from here.
     _ACTION_METADATA = {
         Action.CREATED: ("plus-circle", "Lifecycle"),
         Action.DELETED: ("trash-2", "Lifecycle"),

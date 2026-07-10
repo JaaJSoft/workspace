@@ -100,7 +100,10 @@ Context:
     x-init="selectedFile = { uuid: '{{ file.uuid }}', tags: JSON.parse(document.getElementById('properties-tags-data').textContent) }"
   >
     <template x-for="t in (selectedFile ? selectedFile.tags : [])" :key="t.uuid">
-      <span class="badge badge-sm" :class="'badge-' + t.color" x-text="t.name"></span>
+      {# pb-0.5 optically re-centers the text: the badge's font baseline sits
+         low in the fixed-height pill, so lowercase-only names look ~1.5px
+         below center without it #}
+      <span class="badge badge-sm pb-0.5" :class="'badge-' + t.color" x-text="t.name"></span>
     </template>
     <span class="text-sm text-base-content/40" x-show="!selectedFile || selectedFile.tags.length === 0">No tags</span>
     <div class="ml-auto">

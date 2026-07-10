@@ -68,6 +68,10 @@ Every bug fix must ship with a regression test. Write the test alongside the fix
 
 **Exception - purely visual/CSS fixes don't get a unit test.** This rule targets *behavioral* bugs (backend logic, parsing, permissions, data handling). For a fix that only changes presentation (Tailwind/daisyUI classes, template markup, spacing, alignment, responsive layout) with no change in behavior, **do not** add a test that asserts CSS class strings are present in rendered HTML (`assertIn('h-auto', html)`). Such tests are worthless: they re-encode the template's class list at the same level of abstraction, they pass even when the layout is visually broken (a class string being present proves nothing about how it renders), and they break on any equally-correct restyle. Validate visual fixes by eye (or a real browser/Playwright rendering test that checks computed geometry if a genuine safety net is warranted) - never by class-presence assertions. Recompiling the CSS bundle after class changes is still required.
 
+### Code Comments
+
+Comment only when it helps someone understand the code when re-reading it cold in 6 months - never to explain the change to the PR reviewer. "Now uses X", "moved from Y", "replaces the old Z", justifications of why the change is correct: that context belongs in the commit message and PR description, and becomes noise the moment the PR merges. Always prefer making the code self-explanatory through variable and function names over adding a comment; a comment that paraphrases what the code already says is noise to delete. The comments worth writing state what the code cannot: an invariant, a non-obvious constraint, a gotcha, why the seemingly simpler approach doesn't work.
+
 ### Changelog
 
 `CHANGELOG.md` is written for **end users**, not developers. Each release describes what changed from the user's perspective, in plain language.

@@ -160,8 +160,8 @@ class MailAttachmentSerializer(serializers.ModelSerializer):
 class MailMessageListSerializer(serializers.ModelSerializer):
     attachments_count = serializers.IntegerField(read_only=True)
     labels = serializers.SerializerMethodField()
-    # API-compat: the sender is stored in the flat from_name/from_email
-    # columns but keeps its historical {name, email} shape in responses.
+    # The {name, email} shape is an API contract (mail UI JS reads it),
+    # not a stored field - the model only has from_name/from_email.
     from_address = serializers.SerializerMethodField()
 
     def get_from_address(self, obj):
@@ -233,7 +233,7 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
     labels = serializers.SerializerMethodField()
     ai_summary_html = serializers.SerializerMethodField()
     extractions = serializers.SerializerMethodField()
-    # API-compat: same {name, email} shape as the list serializer.
+    # Same {name, email} API contract as the list serializer.
     from_address = serializers.SerializerMethodField()
 
     def get_from_address(self, obj):

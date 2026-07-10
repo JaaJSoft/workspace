@@ -208,8 +208,8 @@ class MailMessage(models.Model):
     bcc_addresses = models.JSONField(default=list)
     reply_to = models.CharField(max_length=255, blank=True, default="")
 
-    # Search-only flattening of to/cc, recomputed in save(). Search paths
-    # filter on this instead of casting the JSON lists to text per row.
+    # Search-only flattening of to/cc, recomputed in save(); never write
+    # it by hand. The JSON lists above stay the source of truth.
     recipients_text = models.TextField(blank=True, default="")
 
     date = models.DateTimeField(null=True, blank=True)

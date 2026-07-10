@@ -60,7 +60,6 @@ function initLucideIconsAlpineNextTick(alpineContext) {
  */
 function initLucideIconsAfterAlpine() {
   if (typeof Alpine !== 'undefined') {
-    // Use queueMicrotask for the next microtask
     queueMicrotask(() => {
       initLucideIcons();
     });

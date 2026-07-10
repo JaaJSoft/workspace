@@ -100,11 +100,10 @@ window.mailRulesMixin = function mailRulesMixin() {
     },
 
     async rulesMove(rule, delta) {
-      // Use array index, not rule.position: rules created before the
-      // position-on-create fix all sit at position 0, and the server falls
-      // back to created_at for display. The reorder endpoint renumbers
-      // atomically from any starting state, so sending the target index
-      // always converges.
+      // Use array index, not rule.position: legacy rules may all carry
+      // position 0 (the server then falls back to created_at for display).
+      // The reorder endpoint renumbers atomically from any starting state,
+      // so sending the target index always converges.
       const idx = this.rulesList.findIndex(r => r.uuid === rule.uuid);
       const target = idx + delta;
       if (idx === -1 || target < 0 || target >= this.rulesList.length) return;

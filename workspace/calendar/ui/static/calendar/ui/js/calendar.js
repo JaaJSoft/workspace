@@ -322,9 +322,9 @@ window.calendarApp = function calendarApp() {
     },
 
     _buildUrlParams() {
-      // Always emit the current view in the URL, regardless of user preference.
-      // (We used to hide the param when it matched prefs.defaultView, but that
-      // made the URL lie about the current state and was confusing to debug.)
+      // Always emit the current view in the URL, even when it matches
+      // prefs.defaultView: omitting it would make the URL lie about the
+      // current state (shared links, refresh, debugging).
       const params = new URLSearchParams();
       const viewType = this.currentView;
       params.set('view', this._viewToUrl(viewType));

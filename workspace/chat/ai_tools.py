@@ -65,7 +65,6 @@ or references a past discussion."""
         from workspace.chat.models import Message
         from workspace.chat.services.conversations import user_conversation_ids
 
-        # Determine scope
         conv_only = args.conversation_only
         if conv_only and conversation_id:
             conv_ids = [conversation_id]
@@ -78,12 +77,10 @@ or references a past discussion."""
             body__icontains=query,
         ).select_related("author", "conversation")
 
-        # Author filter
         author = args.author.strip()
         if author:
             qs = qs.filter(author__username__iexact=author)
 
-        # Date range filter
         date_range = args.date_range.strip()
         if date_range:
             now = timezone.now()
@@ -94,7 +91,6 @@ or references a past discussion."""
             elif date_range == "30d":
                 qs = qs.filter(created_at__gte=now - timedelta(days=30))
 
-        # Attachment filters
         if args.has_files:
             qs = qs.filter(attachments__isnull=False).distinct()
         if args.has_images:

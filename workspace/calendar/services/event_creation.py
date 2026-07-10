@@ -10,8 +10,7 @@ from workspace.calendar.models import Calendar, Event
 
 def get_or_create_invitation_calendar(account):
     """Return the calendar that hosts mail-sourced events for `account`,
-    creating it on first use. Kept verbatim from the previous ICS-only
-    implementation so behaviour is unchanged."""
+    creating it on first use."""
     calendar = Calendar.objects.filter(mail_account=account).first()
     if calendar:
         expected_name = account.display_name or account.email

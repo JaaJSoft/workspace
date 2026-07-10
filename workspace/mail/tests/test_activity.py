@@ -70,7 +70,8 @@ class MailActivityProviderTests(TestCase):
             imap_uid=1,
             subject="Received 1",
             date=self.ts,
-            from_address={"name": "External", "email": "ext@example.com"},
+            from_name="External",
+            from_email="ext@example.com",
         )
         MailMessage.objects.create(
             account=self.account,
@@ -166,22 +167,22 @@ class MailActivityProviderTests(TestCase):
         self.assertEqual(events[0]["actor"]["id"], self.user.id)
         self.assertEqual(events[0]["actor"]["username"], "alice")
 
-    def test_recent_events_received_actor_uses_from_address(self):
-        """Received mail actor should use the from_address when available."""
+    def test_recent_events_received_actor_uses_sender_name(self):
+        """Received mail actor should use the sender name when available."""
         events = self.provider.get_recent_events(None)
         received_1 = next(e for e in events if e["description"] == "Received 1")
         self.assertEqual(received_1["actor"]["full_name"], "External")
 
-    def test_recent_events_received_actor_falls_back_to_email_key(self):
-        """When from_address has no name, actor must fall back to the 'email'
-        key produced by _parse_address - not a legacy 'address' key."""
+    def test_recent_events_received_actor_falls_back_to_email(self):
+        """When the sender has no name, actor must fall back to from_email."""
         MailMessage.objects.create(
             account=self.account,
             folder=self.inbox,
             imap_uid=10,
             subject="No name sender",
             date=self.ts,
-            from_address={"name": "", "email": "noname@example.com"},
+            from_name="",
+            from_email="noname@example.com",
         )
         events = self.provider.get_recent_events(None)
         evt = next(e for e in events if e["description"] == "No name sender")

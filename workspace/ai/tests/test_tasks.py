@@ -709,7 +709,8 @@ class ClassifyMailMessagesTests(TestCase):
             imap_uid=1,
             subject="Server down!",
             snippet="Production is down",
-            from_address={"name": "Alert", "email": "alert@ops.com"},
+            from_name="Alert",
+            from_email="alert@ops.com",
         )
         self.msg2 = MailMessage.objects.create(
             account=self.account,
@@ -717,7 +718,8 @@ class ClassifyMailMessagesTests(TestCase):
             imap_uid=2,
             subject="Weekly digest",
             snippet="Here is your digest",
-            from_address={"name": "News", "email": "news@co.com"},
+            from_name="News",
+            from_email="news@co.com",
         )
         self.label_urgent = self.account.labels.get(name="Urgent")
         self.label_newsletter = self.account.labels.get(name="Newsletter")
@@ -782,7 +784,8 @@ class ClassifyMailMessagesTests(TestCase):
                 imap_uid=100 + n,
                 subject=f"Message {n}",
                 snippet=f"Body {n}",
-                from_address={"name": "Sender", "email": f"s{n}@co.com"},
+                from_name="Sender",
+                from_email=f"s{n}@co.com",
             )
             for n in range(total)
         ]
@@ -850,7 +853,8 @@ class ClassifyMailMessagesTests(TestCase):
             imap_uid=10,
             subject="Server down!",
             snippet="Production is down",
-            from_address={"name": "Alert", "email": "alert@ops.com"},
+            from_name="Alert",
+            from_email="alert@ops.com",
         )
         msg_b = MailMessage.objects.create(
             uuid="00000000-0000-4000-8000-000000000000",
@@ -859,7 +863,8 @@ class ClassifyMailMessagesTests(TestCase):
             imap_uid=11,
             subject="Weekly digest",
             snippet="Here is your digest",
-            from_address={"name": "News", "email": "news@co.com"},
+            from_name="News",
+            from_email="news@co.com",
         )
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]

@@ -12,7 +12,7 @@ class BuildEventExtractionMessagesTests(TestCase):
         m.subject = subject
         m.body_text = body
         m.body_html = ""
-        m.from_address = {"name": "", "email": frm}
+        m.from_email = frm
         m.date = datetime(2026, 5, 14, 9, 0, tzinfo=UTC)
         return m
 
@@ -90,7 +90,7 @@ class BuildEventExtractionMessagesTests(TestCase):
         msg.subject = "Confirmation RDV"
         msg.body_text = "On se voit demain a 8h"
         msg.body_html = ""
-        msg.from_address = {"name": "", "email": "alice@x.com"}
+        msg.from_email = "alice@x.com"
         msg.date = datetime(2026, 3, 1, 9, 0, tzinfo=UTC)
 
         messages = build_event_extraction_messages(

@@ -10,6 +10,8 @@ import nh3
 from django.core.files.base import ContentFile
 from django.db import transaction
 
+from .addresses import sender_columns
+
 # HTML sanitisation whitelist
 NH3_ALLOWED_TAGS = {
     "a",
@@ -255,7 +257,7 @@ def _parse_message(raw_email, account, folder, uid, flags_str, known_uids=None):
         imap_uid=uid,
         in_reply_to=in_reply_to[:512],
         subject=subject[:1000],
-        from_address=from_addr,
+        **sender_columns(from_addr),
         to_addresses=to_addrs,
         cc_addresses=cc_addrs,
         bcc_addresses=bcc_addrs,

@@ -40,7 +40,8 @@ class EngineTests(TestCase):
             account=self.account,
             folder=self.folder,
             imap_uid=1,
-            from_address={"name": "", "email": "newsletter@news.com"},
+            from_name="",
+            from_email="newsletter@news.com",
             subject="Daily news",
         )
 
@@ -176,7 +177,7 @@ class ApplyRuleToFolderTests(TestCase):
     def _msg(self, **kw):
         kw.setdefault("account", self.account)
         kw.setdefault("folder", self.folder)
-        kw.setdefault("from_address", {"name": "", "email": "newsletter@news.com"})
+        kw.setdefault("from_email", "newsletter@news.com")
         kw.setdefault("subject", "Daily news")
         return MailMessage.objects.create(**kw)
 
@@ -193,7 +194,7 @@ class ApplyRuleToFolderTests(TestCase):
 
     def test_dry_run_counts_without_applying(self):
         self._msg(imap_uid=1)
-        self._msg(imap_uid=2, from_address={"name": "", "email": "x@other.com"})
+        self._msg(imap_uid=2, from_name="", from_email="x@other.com")
         rule = self._rule()
         result = apply_rule_to_folder(rule, self.folder, dry_run=True)
         self.assertEqual(result["matched"], 1)
@@ -293,7 +294,8 @@ class EngineBatchingTests(TestCase):
                 account=self.account,
                 folder=self.folder,
                 imap_uid=i,
-                from_address={"name": "", "email": "newsletter@news.com"},
+                from_name="",
+                from_email="newsletter@news.com",
                 subject=f"News {i}",
             )
             for i in range(1, 4)

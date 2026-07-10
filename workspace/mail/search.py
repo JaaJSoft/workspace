@@ -22,7 +22,8 @@ def search_mail(query, user, limit):
         .filter(
             Q(subject__icontains=query)
             | Q(snippet__icontains=query)
-            | Q(from_address__icontains=query)
+            | Q(from_email__icontains=query)
+            | Q(from_name__icontains=query)
         )
         .order_by("-date")[:limit]
     )
@@ -66,12 +67,12 @@ def search_contacts(query, user, limit):
     messages = (
         MailMessage.objects.filter(account_id__in=account_ids, deleted_at__isnull=True)
         .filter(
-            Q(from_address__icontains=query)
-            | Q(to_addresses__icontains=query)
-            | Q(cc_addresses__icontains=query)
+            Q(from_email__icontains=query)
+            | Q(from_name__icontains=query)
+            | Q(recipients_text__icontains=query)
         )
         .order_by("-date")
-        .only("from_address", "to_addresses", "cc_addresses")[:500]
+        .only("from_email", "from_name", "to_addresses", "cc_addresses")[:500]
     )
 
     q_lower = query.lower()
@@ -80,9 +81,8 @@ def search_contacts(query, user, limit):
 
     for msg in messages:
         addresses = []
-        fa = msg.from_address
-        if isinstance(fa, dict) and fa.get("email"):
-            addresses.append(fa)
+        if msg.from_email:
+            addresses.append({"name": msg.from_name, "email": msg.from_email})
         for field in (msg.to_addresses, msg.cc_addresses):
             if isinstance(field, list):
                 addresses.extend(

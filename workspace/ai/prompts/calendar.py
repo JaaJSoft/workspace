@@ -46,7 +46,7 @@ def build_event_extraction_messages(
     expected by call_llm().
 
     thread_messages is a list of MailMessage instances (or compatible
-    objects with subject, body_text, body_html, from_address, date),
+    objects with subject, body_text, body_html, from_email, date),
     ordered oldest-first. Each body is truncated to MAX_BODY_CHARS.
 
     user_tz is the recipient's local timezone (from get_user_timezone).
@@ -64,8 +64,7 @@ def build_event_extraction_messages(
         body = (m.body_text or m.body_html or "").strip()
         if len(body) > MAX_BODY_CHARS:
             body = body[:MAX_BODY_CHARS] + "... [truncated]"
-        from_addr = m.from_address if isinstance(m.from_address, dict) else {}
-        sender = from_addr.get("email", "") or "(unknown)"
+        sender = m.from_email or "(unknown)"
         date_str = m.date.isoformat() if m.date else ""
         rendered.append(
             f"[Message {i} | {date_str} | From: {sender} | Subject: {m.subject}]\n{body}"

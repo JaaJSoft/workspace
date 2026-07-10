@@ -65,7 +65,7 @@ or when the user asks to read, open, or see the details of a specific email."""
 
         parts = [
             f"Subject: {msg.subject or '(no subject)'}",
-            f"From: {_fmt_addr(msg.from_address)}",
+            f"From: {_fmt_addr({'name': msg.from_name, 'email': msg.from_email})}",
             f"To: {', '.join(_fmt_addr(a) for a in msg.to_addresses)}",
         ]
         if msg.cc_addresses:
@@ -109,7 +109,8 @@ Use read_email with the returned UUID to get the full content."""
             .filter(
                 Q(subject__icontains=query)
                 | Q(snippet__icontains=query)
-                | Q(from_address__icontains=query)
+                | Q(from_email__icontains=query)
+                | Q(from_name__icontains=query)
             )
             .select_related("folder")
         )
@@ -125,18 +126,13 @@ Use read_email with the returned UUID to get the full content."""
         if not matches:
             return f'No emails found matching "{query}".'
 
-        def _sender(addr):
-            if isinstance(addr, dict):
-                return addr.get("name") or addr.get("email", "")
-            return str(addr)
-
         results = []
         for msg in matches:
             results.append(
                 {
                     "uuid": str(msg.uuid),
                     "subject": msg.subject or "(no subject)",
-                    "from": _sender(msg.from_address),
+                    "from": msg.from_name or msg.from_email,
                     "date": msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else "",
                     "folder": msg.folder.display_name if msg.folder else "",
                     "is_read": msg.is_read,

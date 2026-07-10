@@ -188,7 +188,14 @@ def classify_mail_messages(self, task_id: str):
                 for m in MailMessage.objects.filter(
                     uuid__in=message_uuids,
                     account__owner=ai_task.owner,
-                ).only("uuid", "subject", "from_address", "snippet", "account_id")
+                ).only(
+                    "uuid",
+                    "subject",
+                    "from_name",
+                    "from_email",
+                    "snippet",
+                    "account_id",
+                )
             }
             # Preserve the caller's input order. The DB returns rows in
             # PK (uuid) order which is random for v4 UUIDs, so the LLM
@@ -222,14 +229,11 @@ def classify_mail_messages(self, task_id: str):
 
                     emails = []
                     for m in batch:
-                        from_addr = (
-                            m.from_address if isinstance(m.from_address, dict) else {}
-                        )
                         emails.append(
                             {
                                 "subject": m.subject or "",
-                                "from_name": from_addr.get("name", ""),
-                                "from_email": from_addr.get("email", ""),
+                                "from_name": m.from_name,
+                                "from_email": m.from_email,
                                 "snippet": m.snippet or "",
                             }
                         )

@@ -131,7 +131,8 @@ class MailMessageListView(CacheControlMixin, APIView):
             qs = qs.filter(
                 Q(subject__icontains=search)
                 | Q(snippet__icontains=search)
-                | Q(from_address__icontains=search)
+                | Q(from_email__icontains=search)
+                | Q(from_name__icontains=search)
             )
         if is_truthy(request.query_params.get("unread")):
             qs = qs.filter(is_read=False)

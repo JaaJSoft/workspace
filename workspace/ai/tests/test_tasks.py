@@ -709,7 +709,8 @@ class ClassifyMailMessagesTests(TestCase):
             imap_uid=1,
             subject="Server down!",
             snippet="Production is down",
-            from_address={"name": "Alert", "email": "alert@ops.com"},
+            from_name="Alert",
+            from_email="alert@ops.com",
         )
         self.msg2 = MailMessage.objects.create(
             account=self.account,
@@ -717,7 +718,8 @@ class ClassifyMailMessagesTests(TestCase):
             imap_uid=2,
             subject="Weekly digest",
             snippet="Here is your digest",
-            from_address={"name": "News", "email": "news@co.com"},
+            from_name="News",
+            from_email="news@co.com",
         )
         self.label_urgent = self.account.labels.get(name="Urgent")
         self.label_newsletter = self.account.labels.get(name="Newsletter")
@@ -763,6 +765,38 @@ class ClassifyMailMessagesTests(TestCase):
         self.assertEqual(ai_task.status, AITask.Status.COMPLETED)
 
     @patch("workspace.ai.client.get_ai_client")
+    def test_classify_prompt_receives_sender_fields(self, mock_client):
+        """The prompt payload must carry each message's sender columns."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps([])
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = "gpt-4o-mini"
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={"message_uuids": [str(self.msg1.uuid), str(self.msg2.uuid)]},
+        )
+        from workspace.ai.prompts.mail import build_classify_messages
+        from workspace.ai.tasks.mail import classify_mail_messages
+
+        with patch(
+            "workspace.ai.prompts.mail.build_classify_messages",
+            wraps=build_classify_messages,
+        ) as mock_build:
+            classify_mail_messages(str(ai_task.uuid))
+
+        emails = mock_build.call_args[0][0]
+        self.assertEqual(
+            [(e["from_name"], e["from_email"]) for e in emails],
+            [("Alert", "alert@ops.com"), ("News", "news@co.com")],
+        )
+
+    @patch("workspace.ai.client.get_ai_client")
     def test_classifies_across_multiple_batches(self, mock_client):
         """Messages beyond CLASSIFY_BATCH_SIZE must still be classified.
 
@@ -782,7 +816,8 @@ class ClassifyMailMessagesTests(TestCase):
                 imap_uid=100 + n,
                 subject=f"Message {n}",
                 snippet=f"Body {n}",
-                from_address={"name": "Sender", "email": f"s{n}@co.com"},
+                from_name="Sender",
+                from_email=f"s{n}@co.com",
             )
             for n in range(total)
         ]
@@ -850,7 +885,8 @@ class ClassifyMailMessagesTests(TestCase):
             imap_uid=10,
             subject="Server down!",
             snippet="Production is down",
-            from_address={"name": "Alert", "email": "alert@ops.com"},
+            from_name="Alert",
+            from_email="alert@ops.com",
         )
         msg_b = MailMessage.objects.create(
             uuid="00000000-0000-4000-8000-000000000000",
@@ -859,7 +895,8 @@ class ClassifyMailMessagesTests(TestCase):
             imap_uid=11,
             subject="Weekly digest",
             snippet="Here is your digest",
-            from_address={"name": "News", "email": "news@co.com"},
+            from_name="News",
+            from_email="news@co.com",
         )
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]

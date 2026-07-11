@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.30.0 - File Tags & Performance
+
+### Highlights
+
+Tag your files straight from the properties panel, and feel the app get faster across the board: mail search, calendars with recurring events, chat, and the file browser all respond quicker. The note editor also loads reliably now, with no dependence on an external service.
+
+### Files
+
+- You can now see and edit a file's tags in the properties sidebar. Tags show as colored badges, and the same tag picker as in notes lets you add, remove, create, and recolor tags in place, for the files you own.
+- The Recent view opens noticeably faster, even with a large file library.
+- Context menus and action buttons appear faster, especially in group folders and the "Shared with me" view.
+- The graph view (when showing everything you can see) and the activity feed load faster.
+
+### Notes & Editor
+
+- The Markdown editor now ships with the app instead of being fetched from an external service at load time. It opens reliably every time, even when that service is down or you are offline. This fixes the "Failed to load editor" errors some users hit in notes and the files Markdown viewer.
+
+### Mail
+
+- Searching your mail and the recipient autocomplete when composing are much faster, especially on large mailboxes.
+- Mail syncing is lighter and quicker, most visibly on the first sync of an account and when many rules are active.
+
+### Calendar
+
+- Calendars with long-running recurring events (say, a daily meeting created years ago) display much faster. Month, week, and day views, the upcoming widget, and reminders no longer slow down as a series gets older.
+- Event search and activity feeds are quicker, and the event popover opens snappier.
+
+### Chat
+
+- Sending or receiving a message now updates just that conversation in the sidebar instead of redrawing the whole list: less flicker, snappier feel.
+- The media panel (photos, videos, and files shared in a conversation) opens faster in media-heavy conversations.
+
+### Profile
+
+- Your profile page and its activity heatmap load faster.
+
+### Fixes
+
+- The presence ring around avatars no longer disappears for users whose avatar image fails to load and falls back to initials.
+- Removed doubled-up padding in the breadcrumb dropdown menu of the file browser.
+
 ## 0.29.0 - Video Calls & Smarter Assistant
 
 ### Highlights

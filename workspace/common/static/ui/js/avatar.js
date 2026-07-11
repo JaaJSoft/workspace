@@ -1,3 +1,27 @@
+/* -- Deterministic initials-fallback colors ----------------------------------------- */
+
+// Mirrors AVATAR_PALETTE in scripts/seed_demo.py (the Tailwind *-500 RGB
+// values); keep both lists in lockstep so demo-generated avatars and the
+// initials fallback read as one family.
+const AVATAR_COLORS = [
+  'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500',
+  'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-blue-500',
+  'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-pink-500',
+];
+
+/**
+ * Stable background class for a user's initials avatar.
+ *
+ * @param {number|string} userId
+ * @returns {string} one of AVATAR_COLORS, or 'bg-neutral' for invalid input
+ */
+window.userAvatarColorClass = function(userId) {
+  const id = typeof userId === 'number' ? userId : Number.parseInt(userId, 10);
+  if (!Number.isInteger(id)) return 'bg-neutral';
+  const n = AVATAR_COLORS.length;
+  return AVATAR_COLORS[((id % n) + n) % n];
+};
+
 /**
  * Generate avatar HTML for a user.
  * Attempts to load the avatar image; falls back to initials on error.

@@ -1,4 +1,4 @@
-/* -- Deterministic initials-fallback colors ----------------------------------------- */
+/* ── Deterministic initials-fallback colors ───────────────────── */
 
 // Mirrors AVATAR_PALETTE in scripts/seed_demo.py (the Tailwind *-500 RGB
 // values); keep both lists in lockstep so demo-generated avatars and the

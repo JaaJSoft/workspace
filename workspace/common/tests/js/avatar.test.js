@@ -62,3 +62,9 @@ test('userAvatarColorClass falls back to bg-neutral on invalid input', () => {
   assert.equal(ctx.userAvatarColorClass('abc'), 'bg-neutral');
   assert.equal(ctx.userAvatarColorClass(3.5), 'bg-neutral');
 });
+
+test('userAvatarHtml embeds the per-user color class in its onerror fallback', () => {
+  const html = ctx.userAvatarHtml(5, 'Bob', 'w-8 h-8');
+  assert.ok(html.includes(ctx.userAvatarColorClass(5)));
+  assert.ok(html.includes('text-white'));
+});

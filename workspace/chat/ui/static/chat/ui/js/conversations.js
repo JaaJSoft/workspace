@@ -67,6 +67,46 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       this.$ajax('/chat/conversations', { target: 'conversation-list' });
     },
 
+    // Targeted refresh of individual sidebar rows after a message lands in a
+    // conversation. Swaps only the affected `#conv-item-<uuid>` rows via a
+    // dedicated partial endpoint, and falls back to the full-list refresh
+    // when a row isn't in the DOM (brand-new conversation, or filtered out
+    // by the sidebar search).
+    async refreshConversationItems(uuids) {
+      const ids = [...new Set(uuids)].filter(Boolean);
+      if (ids.length === 0) return;
+      if (ids.some(u => !document.getElementById(`conv-item-${u}`))) {
+        this.refreshConversationList();
+        return;
+      }
+      try {
+        const query = ids.map(u => encodeURIComponent(u)).join(',');
+        await this.$ajax(`/chat/conversations/items?uuids=${query}`, {
+          targets: ids.map(u => `conv-item-${u}`),
+        });
+      } catch (e) {
+        // Swap failed (network error, row missing from the response because
+        // membership changed mid-flight): recover with a full-list refresh
+        // so the sidebar can't go stale.
+        this.refreshConversationList();
+        return;
+      }
+      for (const u of ids) this._moveConversationItemToTop(u);
+    },
+
+    // The full list is server-ordered by -updated_at, but a targeted swap
+    // replaces the row in place — reproduce the ordering by moving the
+    // refreshed row to the top of its section. Pinned rows (they carry the
+    // draggable attribute) keep their manual pin order.
+    _moveConversationItemToTop(uuid) {
+      const li = document.getElementById(`conv-item-${uuid}`);
+      if (!li || li.hasAttribute('draggable')) return;
+      const ul = li.parentElement;
+      if (ul && ul.tagName === 'UL' && ul.firstElementChild !== li) {
+        ul.prepend(li);
+      }
+    },
+
     async selectConversationById(uuid, updateUrl = true) {
       let conv = this.conversations.find(c => c.uuid === uuid);
       if (!conv) {

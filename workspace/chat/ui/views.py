@@ -28,22 +28,27 @@ from workspace.files.ui.viewers import ViewerRegistry
 from workspace.users.services.settings import get_setting
 
 
-def _build_conversation_context(user):
-    """Build conversation list with display data for templates."""
+def _build_conversation_context(user, conversation_uuids=None):
+    """Build conversation list with display data for templates.
+
+    ``conversation_uuids`` optionally restricts the build to a subset of the
+    user's conversations (used by the per-item partial refresh). UUIDs the
+    user is not an active member of are silently dropped by the membership
+    filter, so callers can pass untrusted ids.
+    """
     member_convos = user_conversation_ids(user)
 
-    conversations = (
-        Conversation.objects.filter(uuid__in=member_convos)
-        .prefetch_related(
-            Prefetch(
-                "members",
-                queryset=ConversationMember.objects.filter(
-                    left_at__isnull=True,
-                ).select_related("user", "user__bot_profile"),
-            ),
-        )
-        .order_by("-updated_at")
-    )
+    conversations = Conversation.objects.filter(uuid__in=member_convos)
+    if conversation_uuids is not None:
+        conversations = conversations.filter(uuid__in=conversation_uuids)
+    conversations = conversations.prefetch_related(
+        Prefetch(
+            "members",
+            queryset=ConversationMember.objects.filter(
+                left_at__isnull=True,
+            ).select_related("user", "user__bot_profile"),
+        ),
+    ).order_by("-updated_at")
 
     last_msg_subquery = (
         Message.objects.filter(
@@ -255,6 +260,38 @@ def conversation_list_view(request):
             ],
             "search_query": request.GET.get("q", ""),
         },
+    )
+
+
+@login_required
+def conversation_items_view(request):
+    """Partial: individual sidebar conversation rows for targeted swaps.
+
+    Called with ``?uuids=<uuid>,<uuid>`` after a message is sent or received
+    so alpine-ajax only re-renders the affected rows (id="conv-item-<uuid>")
+    instead of the whole conversation list.
+    """
+    raw_parts = [
+        part.strip()
+        for part in (request.GET.get("uuids") or "").split(",")
+        if part.strip()
+    ]
+    if not raw_parts:
+        return HttpResponse(status=400)
+
+    uuids = []
+    for raw in raw_parts:
+        parsed = parse_uuid_or_none(raw)
+        if parsed is None:
+            return HttpResponse(status=400)
+        uuids.append(parsed)
+
+    conv_list = _build_conversation_context(request.user, conversation_uuids=uuids)
+
+    return render(
+        request,
+        "chat/ui/partials/_conversation_items.html",
+        {"conversations": conv_list},
     )
 
 

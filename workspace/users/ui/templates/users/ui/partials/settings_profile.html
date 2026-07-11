@@ -17,7 +17,7 @@
       <div class="flex items-center gap-6 mt-4">
         <div class="avatar" :class="hasAvatar ? '' : 'placeholder'">
           <div class="w-24 h-24 rounded-full ring-2 ring-base-300 ring-offset-2 ring-offset-base-100"
-               :class="hasAvatar ? '' : 'bg-neutral text-neutral-content text-3xl'">
+               :class="hasAvatar ? '' : userAvatarColorClass({{ request.user.id }}) + ' text-white text-3xl'">
             <img x-show="hasAvatar" :src="avatarPreviewUrl" alt="Avatar" class="rounded-full object-cover" x-ref="avatarPreview" />
             <span x-show="!hasAvatar">{{ request.user.username|slice:":1"|upper }}</span>
           </div>

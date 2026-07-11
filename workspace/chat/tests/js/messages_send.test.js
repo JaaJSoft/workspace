@@ -22,6 +22,7 @@ function buildApp({ ok }) {
   });
 
   const counters = { refreshed: 0, removed: 0 };
+  const refreshedWith = [];
   const app = ctx.chatMessagesMixin();
   Object.assign(app, {
     messageBody: 'hello',
@@ -40,18 +41,22 @@ function buildApp({ ok }) {
     scrollToBottom() {},
     _updateConversationLastMessage() {},
     async _refreshCurrentMessages() {},
-    refreshConversationList() { counters.refreshed++; },
+    refreshConversationItems(uuids) {
+      counters.refreshed++;
+      refreshedWith.push(...uuids);
+    },
   });
-  return { app, counters };
+  return { app, counters, refreshedWith };
 }
 
-test('a successful send refreshes the conversation list so the conversation bubbles to the top', async () => {
-  const { app, counters } = buildApp({ ok: true });
+test('a successful send refreshes the conversation sidebar row so it bubbles to the top', async () => {
+  const { app, counters, refreshedWith } = buildApp({ ok: true });
   await app.sendMessage();
-  assert.equal(counters.refreshed, 1, 'sidebar should refresh exactly once after a successful send');
+  assert.equal(counters.refreshed, 1, 'sidebar row should refresh exactly once after a successful send');
+  assert.deepStrictEqual(refreshedWith, ['c1'], 'the active conversation row should be the one refreshed');
 });
 
-test('a failed send does not refresh the conversation list', async () => {
+test('a failed send does not refresh the conversation sidebar row', async () => {
   const { app, counters } = buildApp({ ok: false });
   await app.sendMessage();
   assert.equal(counters.refreshed, 0, 'sidebar should not refresh when the send fails');

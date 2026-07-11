@@ -35,6 +35,7 @@ window.userAvatarHtml = function(userId, username, sizeClass, options) {
   const showPresence = !options || options.presence !== false;
   const initial = (username || '?')[0].toUpperCase();
   const imgUrl = `/api/v1/users/${userId}/avatar`;
+  const colorClass = window.userAvatarColorClass(userId);
 
   // Keep the ring SHAPE static (like the dot below) so the avatar always has
   // a visible ring; only its COLOR comes from the reactive `:class` binding.
@@ -60,7 +61,7 @@ window.userAvatarHtml = function(userId, username, sizeClass, options) {
         `onerror="this.onerror=null;` +
         `let d=this.closest('.avatar');` +
         `d.classList.add('placeholder');` +
-        `d.firstElementChild.classList.add('bg-neutral','text-neutral-content','flex','items-center','justify-center');` +
+        `d.firstElementChild.classList.add('${colorClass}','text-white','flex','items-center','justify-center');` +
         `this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${initial}'}));" />` +
     `</div>` +
     dotHtml +

@@ -29,10 +29,14 @@ window.userAvatarHtml = function(userId, username, sizeClass, options) {
   return `<div class="avatar relative" data-user-id="${userId}">` +
     `<div class="${sizeClass} rounded-full overflow-hidden${ringShape}"${ringAttr}>` +
       `<img src="${imgUrl}" alt="${username}" class="block w-full h-full object-cover" ` +
+        // The initials fallback must ADD classes, never overwrite className:
+        // overwriting would wipe the static ring shape above (and the colour
+        // class Alpine already applied), leaving the presence dot without its
+        // matching ring for every user whose avatar 404s.
         `onerror="this.onerror=null;` +
         `let d=this.closest('.avatar');` +
-        `d.className='avatar placeholder relative';` +
-        `d.firstElementChild.className='${sizeClass} bg-neutral text-neutral-content rounded-full flex items-center justify-center';` +
+        `d.classList.add('placeholder');` +
+        `d.firstElementChild.classList.add('bg-neutral','text-neutral-content','flex','items-center','justify-center');` +
         `this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${initial}'}));" />` +
     `</div>` +
     dotHtml +

@@ -51,7 +51,7 @@
         </div>
         {% else %}
         <div class="avatar placeholder relative -mt-14">
-          <div class="w-24 h-24 text-3xl bg-neutral text-neutral-content rounded-full ring-4 ring-base-100 shadow-lg" :class="'ring-4 ring-offset-base-100 ring-offset-2 ' + $store.presence.ringClass({{ profile_user.id }})">
+          <div class="w-24 h-24 text-3xl text-white rounded-full ring-4 ring-base-100 shadow-lg" :class="'ring-4 ring-offset-base-100 ring-offset-2 ' + $store.presence.ringClass({{ profile_user.id }}) + ' ' + userAvatarColorClass({{ profile_user.id }})">
             <span>{{ profile_user.username|slice:":1"|upper }}</span>
           </div>
           <span class="absolute bottom-1 right-1 block w-4 h-4 rounded-full ring-2 ring-base-100" :class="$store.presence.dotClass({{ profile_user.id }})"></span>

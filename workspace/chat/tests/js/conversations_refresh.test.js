@@ -76,6 +76,19 @@ test('refreshes only the targeted rows and moves them to the top of their list',
   assert.equal(ul.rows[0], rowA, 'the refreshed row should be moved to the top');
 });
 
+test('builds repeated uuids params for multiple rows', async () => {
+  const rowA = fakeRow();
+  const rowB = fakeRow();
+  fakeList([rowA, rowB]);
+  const { app, calls } = buildApp({ 'conv-item-a': rowA, 'conv-item-b': rowB });
+
+  await app.refreshConversationItems(['a', 'b']);
+
+  assert.equal(calls.ajax.length, 1);
+  assert.equal(calls.ajax[0].url, '/chat/conversations/items?uuids=a&uuids=b');
+  assert.deepStrictEqual(Array.from(calls.ajax[0].options.targets), ['conv-item-a', 'conv-item-b']);
+});
+
 test('deduplicates uuids before building the request', async () => {
   const rowA = fakeRow();
   fakeList([rowA]);

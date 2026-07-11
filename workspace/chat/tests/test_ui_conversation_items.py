@@ -28,7 +28,9 @@ class ConversationItemsViewPartialTests(ChatTestMixin, TestCase):
 
     def test_returns_multiple_rows_for_multiple_uuids(self):
         self.client.force_login(self.creator)
-        resp = self.client.get(self.URL, {"uuids": f"{self.group.uuid},{self.dm.uuid}"})
+        resp = self.client.get(
+            self.URL, {"uuids": [str(self.group.uuid), str(self.dm.uuid)]}
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, f'id="conv-item-{self.group.uuid}"')
         self.assertContains(resp, f'id="conv-item-{self.dm.uuid}"')
@@ -40,12 +42,14 @@ class ConversationItemsViewPartialTests(ChatTestMixin, TestCase):
 
     def test_blank_uuids_param_returns_400(self):
         self.client.force_login(self.creator)
-        resp = self.client.get(self.URL, {"uuids": " , "})
+        resp = self.client.get(self.URL, {"uuids": ""})
         self.assertEqual(resp.status_code, 400)
 
     def test_malformed_uuid_returns_400(self):
         self.client.force_login(self.creator)
-        resp = self.client.get(self.URL, {"uuids": f"{self.group.uuid},not-a-uuid"})
+        resp = self.client.get(
+            self.URL, {"uuids": [str(self.group.uuid), "not-a-uuid"]}
+        )
         self.assertEqual(resp.status_code, 400)
 
     def test_non_member_conversation_is_silently_dropped(self):
@@ -57,7 +61,9 @@ class ConversationItemsViewPartialTests(ChatTestMixin, TestCase):
         ConversationMember.objects.create(conversation=other, user=self.outsider)
 
         self.client.force_login(self.creator)
-        resp = self.client.get(self.URL, {"uuids": f"{self.group.uuid},{other.uuid}"})
+        resp = self.client.get(
+            self.URL, {"uuids": [str(self.group.uuid), str(other.uuid)]}
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, f'id="conv-item-{self.group.uuid}"')
         self.assertNotContains(resp, f'id="conv-item-{other.uuid}"')

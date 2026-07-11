@@ -80,8 +80,8 @@ window.chatConversationsMixin = function chatConversationsMixin() {
         return;
       }
       try {
-        const query = ids.map(u => encodeURIComponent(u)).join(',');
-        await this.$ajax(`/chat/conversations/items?uuids=${query}`, {
+        const query = ids.map(u => `uuids=${encodeURIComponent(u)}`).join('&');
+        await this.$ajax(`/chat/conversations/items?${query}`, {
           targets: ids.map(u => `conv-item-${u}`),
         });
       } catch (e) {

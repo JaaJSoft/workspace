@@ -267,24 +267,17 @@ def conversation_list_view(request):
 def conversation_items_view(request):
     """Partial: individual sidebar conversation rows for targeted swaps.
 
-    Called with ``?uuids=<uuid>,<uuid>`` after a message is sent or received
-    so alpine-ajax only re-renders the affected rows (id="conv-item-<uuid>")
-    instead of the whole conversation list.
+    Called with ``?uuids=<uuid>&uuids=<uuid>`` after a message is sent or
+    received so alpine-ajax only re-renders the affected rows
+    (id="conv-item-<uuid>") instead of the whole conversation list.
     """
-    raw_parts = [
-        part.strip()
-        for part in (request.GET.get("uuids") or "").split(",")
-        if part.strip()
-    ]
-    if not raw_parts:
+    raw_uuids = request.GET.getlist("uuids")
+    if not raw_uuids:
         return HttpResponse(status=400)
 
-    uuids = []
-    for raw in raw_parts:
-        parsed = parse_uuid_or_none(raw)
-        if parsed is None:
-            return HttpResponse(status=400)
-        uuids.append(parsed)
+    uuids = [parse_uuid_or_none(raw) for raw in raw_uuids]
+    if None in uuids:
+        return HttpResponse(status=400)
 
     conv_list = _build_conversation_context(request.user, conversation_uuids=uuids)
 

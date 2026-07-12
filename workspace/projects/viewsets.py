@@ -10,10 +10,12 @@ from rest_framework.response import Response
 from .models import Project, ProjectMember
 from .queries import get_project_role, user_project_ids
 from .serializers import (
+    LabelSerializer,
     MemberRoleSerializer,
     MemberSerializer,
     MemberWriteSerializer,
     ProjectSerializer,
+    TaskStatusSerializer,
 )
 from .services.members import (
     ProjectRuleError,
@@ -193,3 +195,43 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         except ProjectRuleError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
+    serializer_class = LabelSerializer
+    lookup_field = "uuid"
+    pagination_class = None
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        return self.project.labels.order_by("name")
+
+    def perform_create(self, serializer):
+        serializer.save(project=self.project)
+
+    def create(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        return super().create(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        return super().destroy(request, *args, **kwargs)
+
+
+class StatusViewSet(ProjectContextMixin, viewsets.GenericViewSet):
+    serializer_class = TaskStatusSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return self.project.statuses.order_by("position", "created_at")
+
+    def list(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_queryset(), many=True)
+        return Response(serializer.data)

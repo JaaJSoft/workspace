@@ -1,7 +1,7 @@
 from django.contrib.auth.models import Group
 from rest_framework import serializers
 
-from .models import Project, ProjectMember
+from .models import Label, Project, ProjectMember, TaskStatus
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -70,3 +70,26 @@ class MemberWriteSerializer(serializers.Serializer):
 
 class MemberRoleSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=ProjectMember.Role.choices)
+
+
+class LabelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Label
+        fields = ["uuid", "name", "color"]
+
+    def validate_name(self, value):
+        project = self.context["project"]
+        existing = project.labels.filter(name=value)
+        if self.instance is not None:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise serializers.ValidationError(
+                "A label with this name already exists in this project."
+            )
+        return value
+
+
+class TaskStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskStatus
+        fields = ["uuid", "name", "category", "color", "position"]

@@ -4,8 +4,10 @@ from django.http import Http404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
+
+from workspace.common.uuids import parse_uuid_or_none
 
 from .models import Project, ProjectMember
 from .queries import get_project_role, user_project_ids
@@ -15,6 +17,7 @@ from .serializers import (
     MemberSerializer,
     MemberWriteSerializer,
     ProjectSerializer,
+    TaskSerializer,
     TaskStatusSerializer,
 )
 from .services.members import (
@@ -24,6 +27,7 @@ from .services.members import (
     remove_member,
 )
 from .services.projects import create_project
+from .services.tasks import apply_status_change, create_task
 
 User = get_user_model()
 
@@ -235,3 +239,64 @@ class StatusViewSet(ProjectContextMixin, viewsets.GenericViewSet):
     def list(self, request, *args, **kwargs):
         serializer = self.get_serializer(self.get_queryset(), many=True)
         return Response(serializer.data)
+
+
+class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
+    serializer_class = TaskSerializer
+    lookup_field = "uuid"
+    lookup_url_kwarg = "task_uuid"
+    pagination_class = None
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        qs = (
+            self.project.tasks.select_related("status")
+            .prefetch_related("assignees", "labels")
+            .order_by("position", "created_at")
+        )
+        if self.action != "list":
+            return qs
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            parsed = parse_uuid_or_none(status_param)
+            if parsed is None:
+                raise ValidationError({"status": "Malformed UUID."})
+            qs = qs.filter(status_id=parsed)
+        assignee_param = self.request.query_params.get("assignee")
+        if assignee_param:
+            try:
+                user_id = int(assignee_param)
+            except (ValueError, TypeError) as exc:
+                raise ValidationError({"assignee": "Invalid user ID."}) from exc
+            qs = qs.filter(assignees=user_id)
+        label_param = self.request.query_params.get("label")
+        if label_param:
+            parsed = parse_uuid_or_none(label_param)
+            if parsed is None:
+                raise ValidationError({"label": "Malformed UUID."})
+            qs = qs.filter(labels=parsed)
+        query = self.request.query_params.get("q")
+        if query:
+            qs = qs.filter(title__icontains=query)
+        return qs.distinct()
+
+    def create(self, request, *args, **kwargs):
+        self._require_writable()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        task = create_task(self.project, request.user, **serializer.validated_data)
+        return Response(self.get_serializer(task).data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        self._require_writable()
+        return super().partial_update(request, *args, **kwargs)
+
+    def perform_update(self, serializer):
+        old_status_id = serializer.instance.status_id
+        task = serializer.save()
+        if task.status_id != old_status_id:
+            apply_status_change(task)
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_writable()
+        return super().destroy(request, *args, **kwargs)

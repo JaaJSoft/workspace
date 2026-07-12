@@ -1,7 +1,11 @@
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from rest_framework import serializers
 
-from .models import Label, Project, ProjectMember, TaskStatus
+from .models import Label, Project, ProjectMember, Task, TaskStatus
+from .queries import get_project_role
+
+User = get_user_model()
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -93,3 +97,58 @@ class TaskStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskStatus
         fields = ["uuid", "name", "category", "color", "position"]
+
+
+class TaskSerializer(serializers.ModelSerializer):
+    status = serializers.PrimaryKeyRelatedField(
+        queryset=TaskStatus.objects.none(), required=False
+    )
+    status_category = serializers.CharField(source="status.category", read_only=True)
+    assignees = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), many=True, required=False
+    )
+    labels = serializers.PrimaryKeyRelatedField(
+        queryset=Label.objects.none(), many=True, required=False
+    )
+    created_by = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = Task
+        fields = [
+            "uuid",
+            "title",
+            "description",
+            "status",
+            "status_category",
+            "priority",
+            "due_date",
+            "assignees",
+            "labels",
+            "position",
+            "completed_at",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "position",
+            "completed_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        project = self.context.get("project")
+        if project is not None:
+            self.fields["status"].queryset = project.statuses.all()
+            self.fields["labels"].child_relation.queryset = project.labels.all()
+
+    def validate_assignees(self, users):
+        project = self.context["project"]
+        for user in users:
+            if get_project_role(user, project) is None:
+                raise serializers.ValidationError(
+                    f"{user.username} is not a member of this project."
+                )
+        return users

@@ -1,7 +1,13 @@
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from .viewsets import LabelViewSet, MemberViewSet, ProjectViewSet, StatusViewSet
+from .viewsets import (
+    LabelViewSet,
+    MemberViewSet,
+    ProjectViewSet,
+    StatusViewSet,
+    TaskViewSet,
+)
 
 router = SimpleRouter(trailing_slash=False)
 router.register(r"projects", ProjectViewSet, basename="project")
@@ -11,6 +17,10 @@ member_detail = MemberViewSet.as_view({"patch": "partial_update", "delete": "des
 label_list = LabelViewSet.as_view({"get": "list", "post": "create"})
 label_detail = LabelViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 status_list = StatusViewSet.as_view({"get": "list"})
+task_list = TaskViewSet.as_view({"get": "list", "post": "create"})
+task_detail = TaskViewSet.as_view(
+    {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
+)
 
 urlpatterns = [
     path(
@@ -37,6 +47,16 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/statuses",
         status_list,
         name="project-statuses",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks",
+        task_list,
+        name="project-tasks",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>",
+        task_detail,
+        name="project-task-detail",
     ),
     path("api/v1/", include(router.urls)),
 ]

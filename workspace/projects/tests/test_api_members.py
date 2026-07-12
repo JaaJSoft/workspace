@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -46,11 +47,21 @@ class MemberCreateTests(ProjectTestMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_unknown_user_is_400(self):
+    def test_nonexistent_user_is_400(self):
         self.client.force_authenticate(self.admin)
         response = self.client.post(
             f"/api/v1/projects/{self.project.uuid}/members",
-            {"user": "00000000-0000-0000-0000-000000000000"},
+            {"user": 999999},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["detail"], "User not found.")
+
+    def test_malformed_user_id_is_400(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            f"/api/v1/projects/{self.project.uuid}/members",
+            {"user": "not-an-id"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -106,3 +117,27 @@ class MemberUpdateDeleteTests(ProjectTestMixin, APITestCase):
             f"/api/v1/projects/{self.project.uuid}/members/{self.admin_membership.uuid}"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ArchivedProjectMemberTests(ProjectTestMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.project.archived_at = timezone.now()
+        self.project.save(update_fields=["archived_at"])
+
+    def test_mutations_blocked_while_archived(self):
+        self.client.force_authenticate(self.admin)
+        base = f"/api/v1/projects/{self.project.uuid}/members"
+        response = self.client.post(base, {"user": self.outsider.pk}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        response = self.client.patch(
+            f"{base}/{self.membership.uuid}", {"role": "admin"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        response = self.client.delete(f"{base}/{self.admin_membership.uuid}")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_list_still_allowed_while_archived(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.get(f"/api/v1/projects/{self.project.uuid}/members")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

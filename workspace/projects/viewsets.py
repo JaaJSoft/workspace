@@ -167,7 +167,9 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
             )
         except ProjectRuleError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(MemberSerializer(member).data, status=status.HTTP_201_CREATED)
+        return Response(
+            self.get_serializer(member).data, status=status.HTTP_201_CREATED
+        )
 
     def partial_update(self, request, *args, **kwargs):
         self._require_admin()
@@ -179,7 +181,7 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
             member = change_member_role(member, serializer.validated_data["role"])
         except ProjectRuleError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(MemberSerializer(member).data)
+        return Response(self.get_serializer(member).data)
 
     def destroy(self, request, *args, **kwargs):
         member = self.get_object()

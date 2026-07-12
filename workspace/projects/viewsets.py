@@ -17,6 +17,7 @@ from .serializers import (
     MemberSerializer,
     MemberWriteSerializer,
     ProjectSerializer,
+    TaskReorderSerializer,
     TaskSerializer,
     TaskStatusSerializer,
 )
@@ -27,7 +28,7 @@ from .services.members import (
     remove_member,
 )
 from .services.projects import create_project
-from .services.tasks import apply_status_change, create_task
+from .services.tasks import apply_status_change, create_task, reorder_tasks
 
 User = get_user_model()
 
@@ -300,3 +301,20 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         self._require_writable()
         return super().destroy(request, *args, **kwargs)
+
+    def reorder(self, request, *args, **kwargs):
+        """Single drag-and-drop endpoint: backlog sort, in-column sort and
+        cross-column moves. Idempotent (safe with optimistic UI retries)."""
+        self._require_writable()
+        serializer = TaskReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        status_obj = self.project.statuses.filter(
+            uuid=serializer.validated_data["status"]
+        ).first()
+        if status_obj is None:
+            return Response(
+                {"detail": "Unknown status for this project."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reorder_tasks(self.project, status_obj, serializer.validated_data["order"])
+        return Response({"success": True})

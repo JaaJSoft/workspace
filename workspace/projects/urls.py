@@ -18,6 +18,7 @@ label_list = LabelViewSet.as_view({"get": "list", "post": "create"})
 label_detail = LabelViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 status_list = StatusViewSet.as_view({"get": "list"})
 task_list = TaskViewSet.as_view({"get": "list", "post": "create"})
+task_reorder = TaskViewSet.as_view({"post": "reorder"})
 task_detail = TaskViewSet.as_view(
     {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
 )
@@ -52,6 +53,11 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/tasks",
         task_list,
         name="project-tasks",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/reorder",
+        task_reorder,
+        name="project-tasks-reorder",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>",

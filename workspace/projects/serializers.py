@@ -152,3 +152,31 @@ class TaskSerializer(serializers.ModelSerializer):
                     f"{user.username} is not a member of this project."
                 )
         return users
+
+
+class TaskReorderSerializer(serializers.Serializer):
+    """Validate the reorder payload.
+
+    Manual UUID parsing in validate_order instead of
+    ListField(child=UUIDField): the orjson renderer used project-wide
+    cannot serialize the int-keyed error dicts that per-item child
+    validation produces (PinnedReorderSerializer precedent).
+    """
+
+    status = serializers.UUIDField()
+    order = serializers.ListField()
+
+    def validate_order(self, value):
+        import uuid as uuid_module
+
+        parsed = []
+        for item in value:
+            if not isinstance(item, str):
+                raise serializers.ValidationError("order items must be UUID strings.")
+            try:
+                parsed.append(uuid_module.UUID(item))
+            except ValueError:
+                raise serializers.ValidationError(f"Invalid UUID: {item}") from None
+        if len(set(parsed)) != len(parsed):
+            raise serializers.ValidationError("Duplicate UUIDs in order.")
+        return parsed

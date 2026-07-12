@@ -38,11 +38,11 @@
         }).catch((e) => { error = e.message; }).finally(() => { creating = false; });
       ">
         <label class="form-control w-full">
-          <span class="label-text">Name</span>
+          <div class="label"><span class="label-text">Name</span></div>
           <input type="text" class="input input-bordered w-full" x-model="name" required maxlength="255">
         </label>
         <label class="form-control w-full mt-2">
-          <span class="label-text">Description</span>
+          <div class="label"><span class="label-text">Description</span></div>
           <textarea class="textarea textarea-bordered w-full" x-model="description" rows="2"></textarea>
         </label>
         <div class="modal-action">

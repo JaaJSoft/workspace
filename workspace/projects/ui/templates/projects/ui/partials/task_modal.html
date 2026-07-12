@@ -8,18 +8,18 @@
     </template>
     <form @submit.prevent="saveTask()">
       <label class="form-control w-full">
-        <span class="label-text">Title</span>
+        <div class="label"><span class="label-text">Title</span></div>
         <input type="text" class="input input-bordered w-full" x-model="form.title"
                required maxlength="255" :disabled="form.uuid && !can('edit')">
       </label>
       <label class="form-control w-full mt-2">
-        <span class="label-text">Description</span>
+        <div class="label"><span class="label-text">Description</span></div>
         <textarea class="textarea textarea-bordered w-full" rows="4" x-model="form.description"
                   :disabled="form.uuid && !can('edit')" placeholder="Markdown supported"></textarea>
       </label>
       <div class="grid grid-cols-2 gap-2 mt-2">
         <label class="form-control">
-          <span class="label-text">Status</span>
+          <div class="label"><span class="label-text">Status</span></div>
           <select class="select select-bordered select-sm" x-model="form.status"
                   :disabled="form.uuid && !can('move')">
             <template x-for="s in statuses" :key="s.uuid">
@@ -28,7 +28,7 @@
           </select>
         </label>
         <label class="form-control">
-          <span class="label-text">Priority</span>
+          <div class="label"><span class="label-text">Priority</span></div>
           <select class="select select-bordered select-sm" x-model="form.priority"
                   :disabled="form.uuid && !can('edit')">
             <option value="low">Low</option>
@@ -38,13 +38,13 @@
           </select>
         </label>
         <label class="form-control">
-          <span class="label-text">Due date</span>
+          <div class="label"><span class="label-text">Due date</span></div>
           <input type="date" class="input input-bordered input-sm" x-model="form.due_date"
                  :disabled="form.uuid && !can('set_due')">
         </label>
       </div>
       <div class="mt-2" x-show="members.length">
-        <span class="label-text">Assignees</span>
+        <div class="label"><span class="label-text">Assignees</span></div>
         <div class="flex flex-wrap gap-3 mt-1">
           <template x-for="m in members" :key="m.uuid">
             <label class="label cursor-pointer gap-1 p-0">
@@ -56,7 +56,7 @@
         </div>
       </div>
       <div class="mt-2" x-show="labels.length">
-        <span class="label-text">Labels</span>
+        <div class="label"><span class="label-text">Labels</span></div>
         <div class="flex flex-wrap gap-3 mt-1">
           <template x-for="l in labels" :key="l.uuid">
             <label class="label cursor-pointer gap-1 p-0">

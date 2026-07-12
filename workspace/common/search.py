@@ -45,6 +45,8 @@ def apply_fulltext(qs, query, *, pg_column, sqlite_fts_table, fallback_fields):
     """Filter qs to rows matching query, annotating `search_rank`
     (float, higher = more relevant). The caller applies the final order_by.
     """
+    if not query or not query.strip():
+        return qs.none().annotate(search_rank=Value(0.0, output_field=FloatField()))
     vendor = connection.vendor
     if vendor == "postgresql":
         return _pg_filter(qs, query, pg_column)  # pragma: no cover

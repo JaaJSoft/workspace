@@ -53,6 +53,24 @@ class FallbackBranchTests(TestCase):
         self.assertEqual([r.username for r in rows], ["a"])
         self.assertEqual(rows[0].search_rank, 0.0)
 
+    def test_blank_query_returns_no_rows_on_fallback(self):
+        # An empty query would make icontains="" match every row; a
+        # whitespace-only query strips to empty. Both must yield no rows.
+        orig = fts.fts5_available
+        fts.fts5_available = lambda: False
+        try:
+            for blank in ("", "   "):
+                qs = fts.apply_fulltext(
+                    User.objects.all(),
+                    blank,
+                    pg_column="unused",
+                    sqlite_fts_table="unused",
+                    fallback_fields=("first_name", "username"),
+                )
+                self.assertEqual(list(qs), [], f"blank query {blank!r} matched rows")
+        finally:
+            fts.fts5_available = orig
+
 
 class SqliteFtsBranchTests(TestCase):
     """Exercise the real SQLite FTS5 branch against an ephemeral FTS table."""

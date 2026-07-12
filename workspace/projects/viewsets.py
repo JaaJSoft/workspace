@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.db.models import OuterRef, Subquery
 from django.http import Http404
 from django.utils import timezone
@@ -217,12 +218,26 @@ class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         self._require_admin()
         self._require_writable()
-        return super().create(request, *args, **kwargs)
+        try:
+            with transaction.atomic():
+                return super().create(request, *args, **kwargs)
+        except IntegrityError:
+            return Response(
+                {"name": ["A label with this name already exists in this project."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     def partial_update(self, request, *args, **kwargs):
         self._require_admin()
         self._require_writable()
-        return super().partial_update(request, *args, **kwargs)
+        try:
+            with transaction.atomic():
+                return super().partial_update(request, *args, **kwargs)
+        except IntegrityError:
+            return Response(
+                {"name": ["A label with this name already exists in this project."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     def destroy(self, request, *args, **kwargs):
         self._require_admin()

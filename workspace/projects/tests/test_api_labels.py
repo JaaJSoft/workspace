@@ -41,6 +41,22 @@ class LabelApiTests(ProjectTestMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_duplicate_name_race_returns_400(self):
+        from unittest.mock import patch
+
+        self.project.labels.create(name="bug", color="#ff0000")
+        self.client.force_authenticate(self.admin)
+        with patch(
+            "workspace.projects.serializers.LabelSerializer.validate_name",
+            side_effect=lambda value: value,
+        ):
+            response = self.client.post(
+                f"/api/v1/projects/{self.project.uuid}/labels",
+                {"name": "bug"},
+                format="json",
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_admin_updates_and_deletes_label(self):
         label = self.project.labels.create(name="bug", color="#ff0000")
         self.client.force_authenticate(self.admin)

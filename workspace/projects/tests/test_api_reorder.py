@@ -80,3 +80,24 @@ class ReorderApiTests(ProjectTestMixin, APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_duplicate_uuid_in_order_is_400(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(
+            self.url,
+            {
+                "status": str(self.backlog.uuid),
+                "order": [str(self.t1.uuid), str(self.t1.uuid)],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_non_string_order_item_is_400(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(
+            self.url,
+            {"status": str(self.backlog.uuid), "order": [42]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

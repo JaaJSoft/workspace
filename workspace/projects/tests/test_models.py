@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
-from django.db.models import ProtectedError
+from django.db.models import RestrictedError
 from django.test import TestCase
 
 from workspace.projects.models import Label, Project, Task, TaskStatus
@@ -48,9 +48,9 @@ class TaskStatusModelTests(TestCase):
             project=self.project, name="To do", category=TaskStatus.Category.ACTIVE
         )
 
-    def test_status_with_tasks_is_protected(self):
+    def test_status_with_tasks_is_restricted(self):
         Task.objects.create(project=self.project, title="t", status=self.status)
-        with self.assertRaises(ProtectedError):
+        with self.assertRaises(RestrictedError):
             self.status.delete()
 
     def test_unique_name_per_project(self):

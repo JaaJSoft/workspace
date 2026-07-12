@@ -89,6 +89,15 @@ class ProjectDetailTests(ProjectTestMixin, APITestCase):
         response = self.client.delete(f"/api/v1/projects/{self.project.uuid}")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_admin_deletes_project_containing_tasks(self):
+        from workspace.projects.services.tasks import create_task
+
+        create_task(self.project, self.admin, title="t")
+        self.client.force_authenticate(self.admin)
+        response = self.client.delete(f"/api/v1/projects/{self.project.uuid}")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Project.objects.filter(uuid=self.project.uuid).exists())
+
     def test_personal_project_cannot_be_deleted_or_archived(self):
         personal = get_or_create_personal_project(self.admin)
         self.client.force_authenticate(self.admin)

@@ -158,7 +158,7 @@ class Task(models.Model):
     description = models.TextField(blank=True, default="")
     status = models.ForeignKey(
         TaskStatus,
-        on_delete=models.PROTECT,
+        on_delete=models.RESTRICT,
         related_name="tasks",
     )
     priority = models.CharField(

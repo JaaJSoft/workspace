@@ -124,6 +124,8 @@ INSTALLED_APPS = [
     "workspace.files.ui",
     "workspace.notes",
     "workspace.notes.ui",
+    "workspace.projects",
+    "workspace.projects.ui",
     "workspace.dashboard",
     "workspace.users",
     "workspace.users.ui",
@@ -375,6 +377,10 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Notifications",
             "description": "User notifications and push subscriptions.",
+        },
+        {
+            "name": "Projects",
+            "description": "Collaborative projects with kanban boards and backlogs.",
         },
         {
             "name": "Search",

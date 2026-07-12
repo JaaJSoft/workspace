@@ -1,0 +1,22 @@
+<div id="backlog" class="max-w-3xl"
+     {% if backlog_status %}
+     data-status-uuid="{{ backlog_status.uuid }}"
+     @dragover.prevent="onDragOver($event)"
+     @drop.prevent="onDrop($event, '{{ backlog_status.uuid }}')"
+     {% endif %}>
+  {% if writable and backlog_status %}
+    <button class="btn btn-ghost btn-sm mb-2" @click="newTask('{{ backlog_status.uuid }}')">
+      <i data-lucide="plus" class="w-4 h-4"></i>
+      New task
+    </button>
+  {% endif %}
+  <ul class="flex flex-col gap-2 min-h-8" data-backlog-list>
+    {% for task in backlog_tasks %}
+      {% include "projects/ui/partials/task_card.html" with show_send_to_board=True %}
+    {% empty %}
+      <li>
+        {% include "ui/partials/inline_alert.html" with type="info" message="The backlog is empty." %}
+      </li>
+    {% endfor %}
+  </ul>
+</div>

@@ -1,0 +1,43 @@
+{% extends "base_with_navbar.html" %}
+{% load static %}
+
+{% block title %}{{ project.name }}{% endblock %}
+
+{% block content %}
+{{ statuses_data|json_script:"statuses-data" }}
+{{ members_data|json_script:"members-data" }}
+{{ labels_data|json_script:"labels-data" }}
+<div class="p-4 flex flex-col gap-4 w-full"
+     x-data="projectBoard({
+       apiBase: '/api/v1/projects/{{ project.uuid }}',
+       pageUrl: '{% url 'projects_ui:project' project.uuid %}',
+       writable: {{ writable|yesno:'true,false' }},
+     })">
+  <div class="flex items-center justify-between flex-wrap gap-2">
+    <div class="flex items-center gap-3 min-w-0">
+      <a href="{% url 'projects_ui:index' %}" class="btn btn-ghost btn-sm btn-square" title="All projects">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+      </a>
+      <h1 class="text-xl font-semibold truncate">{{ project.name }}</h1>
+      {% if project.archived_at %}<span class="badge badge-ghost">Archived</span>{% endif %}
+    </div>
+    <div role="tablist" class="tabs tabs-boxed">
+      <a role="tab" class="tab" :class="tab === 'board' && 'tab-active'" @click="tab = 'board'">Board</a>
+      <a role="tab" class="tab" :class="tab === 'backlog' && 'tab-active'" @click="tab = 'backlog'">
+        Backlog
+        <span class="badge badge-ghost badge-sm ml-1">{{ backlog_tasks|length }}</span>
+      </a>
+    </div>
+  </div>
+
+  <div x-show="tab === 'board'">
+    {% include "projects/ui/partials/board.html" %}
+  </div>
+  <div x-show="tab === 'backlog'" x-cloak>
+    {% include "projects/ui/partials/backlog.html" %}
+  </div>
+
+  {% include "projects/ui/partials/task_modal.html" %}
+</div>
+<script src="{% static 'projects/ui/js/board.js' %}"></script>
+{% endblock %}

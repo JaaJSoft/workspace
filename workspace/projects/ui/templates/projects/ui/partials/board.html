@@ -1,0 +1,26 @@
+<div id="board" class="flex gap-4 overflow-x-auto items-start pb-4">
+  {% for column in columns %}
+    <section class="w-72 shrink-0 rounded-box bg-base-200 p-3"
+             data-status-uuid="{{ column.status.uuid }}"
+             @dragover.prevent="onDragOver($event)"
+             @drop.prevent="onDrop($event, '{{ column.status.uuid }}')">
+      <header class="flex items-center justify-between mb-2">
+        <h3 class="text-sm font-medium">{{ column.status.name }}</h3>
+        <div class="flex items-center gap-1">
+          <span class="badge badge-ghost badge-sm">{{ column.tasks|length }}</span>
+          {% if writable %}
+            <button class="btn btn-ghost btn-xs btn-square" title="New task"
+                    @click="newTask('{{ column.status.uuid }}')">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            </button>
+          {% endif %}
+        </div>
+      </header>
+      <ul class="flex flex-col gap-2 min-h-8" data-column-list>
+        {% for task in column.tasks %}
+          {% include "projects/ui/partials/task_card.html" %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endfor %}
+</div>

@@ -187,29 +187,35 @@ function projectBoard(config) {
     },
 
     async saveTask() {
+      if (this.saving) return;
       if (this.form.uuid && !this.can('edit')) return;
       const url = this.form.uuid
         ? config.apiBase + '/tasks/' + this.form.uuid
         : config.apiBase + '/tasks';
-      const resp = await fetch(url, {
-        method: this.form.uuid ? 'PATCH' : 'POST',
-        headers: this.headers(),
-        body: JSON.stringify({
-          title: this.form.title,
-          description: this.form.description,
-          status: this.form.status,
-          priority: this.form.priority,
-          due_date: this.form.due_date || null,
-          assignees: this.form.assignees,
-          labels: this.form.labels,
-        }),
-      });
-      if (!resp.ok) {
-        this.formError = 'Could not save the task.';
-        return;
+      this.saving = true;
+      try {
+        const resp = await fetch(url, {
+          method: this.form.uuid ? 'PATCH' : 'POST',
+          headers: this.headers(),
+          body: JSON.stringify({
+            title: this.form.title,
+            description: this.form.description,
+            status: this.form.status,
+            priority: this.form.priority,
+            due_date: this.form.due_date || null,
+            assignees: this.form.assignees,
+            labels: this.form.labels,
+          }),
+        });
+        if (!resp.ok) {
+          this.formError = 'Could not save the task.';
+          return;
+        }
+        this.$refs.taskDialog.close();
+        this.refreshAll();
+      } finally {
+        this.saving = false;
       }
-      this.$refs.taskDialog.close();
-      this.refreshAll();
     },
 
     async deleteTask() {

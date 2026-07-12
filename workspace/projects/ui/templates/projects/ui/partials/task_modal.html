@@ -72,7 +72,7 @@
                 :disabled="!can('delete')" @click="deleteTask()">Delete</button>
         <button type="button" class="btn btn-ghost btn-sm" @click="$refs.taskDialog.close()">Cancel</button>
         <button type="submit" class="btn btn-primary btn-sm"
-                :disabled="!form.title.trim() || (form.uuid && !can('edit'))">Save</button>
+                :disabled="saving || !form.title.trim() || (form.uuid && !can('edit'))">Save</button>
       </div>
     </form>
   </div>

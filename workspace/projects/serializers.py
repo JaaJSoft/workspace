@@ -50,3 +50,23 @@ class ProjectSerializer(serializers.ModelSerializer):
                 {"group": "Personal projects cannot be attached to a group."}
             )
         return attrs
+
+
+class MemberSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    username = serializers.CharField(source="user.username", read_only=True)
+
+    class Meta:
+        model = ProjectMember
+        fields = ["uuid", "user", "username", "role", "joined_at"]
+
+
+class MemberWriteSerializer(serializers.Serializer):
+    user = serializers.IntegerField()
+    role = serializers.ChoiceField(
+        choices=ProjectMember.Role.choices, default=ProjectMember.Role.MEMBER
+    )
+
+
+class MemberRoleSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=ProjectMember.Role.choices)

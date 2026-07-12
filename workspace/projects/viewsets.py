@@ -1,4 +1,6 @@
+from django.contrib.auth import get_user_model
 from django.db.models import OuterRef, Subquery
+from django.http import Http404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -7,8 +9,21 @@ from rest_framework.response import Response
 
 from .models import Project, ProjectMember
 from .queries import get_project_role, user_project_ids
-from .serializers import ProjectSerializer
+from .serializers import (
+    MemberRoleSerializer,
+    MemberSerializer,
+    MemberWriteSerializer,
+    ProjectSerializer,
+)
+from .services.members import (
+    ProjectRuleError,
+    add_member,
+    change_member_role,
+    remove_member,
+)
 from .services.projects import create_project
+
+User = get_user_model()
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -84,3 +99,95 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def _require_admin(self, project):
         if get_project_role(self.request.user, project) != ProjectMember.Role.ADMIN:
             raise PermissionDenied("Admin role required.")
+
+
+class ProjectContextMixin:
+    """Resolve the project from the URL kwarg and the caller's role, once.
+
+    404 both when the project does not exist and when the user has no
+    access, so existence is never leaked. Mutating endpoints must call
+    _require_admin/_require_writable explicitly on top.
+    """
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        try:
+            project = Project.objects.get(uuid=kwargs["project_uuid"])
+        except Project.DoesNotExist:
+            raise Http404 from None
+        role = get_project_role(request.user, project)
+        if role is None:
+            raise Http404
+        self.project = project
+        self.role = role
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["project"] = self.project
+        return context
+
+    def _require_admin(self):
+        if self.role != ProjectMember.Role.ADMIN:
+            raise PermissionDenied("Admin role required.")
+
+    def _require_writable(self):
+        if self.project.is_archived:
+            raise PermissionDenied("Project is archived.")
+
+
+class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
+    serializer_class = MemberSerializer
+    lookup_field = "uuid"
+    pagination_class = None
+
+    def get_queryset(self):
+        return (
+            self.project.members.filter(left_at__isnull=True)
+            .select_related("user")
+            .order_by("joined_at")
+        )
+
+    def list(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_queryset(), many=True)
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        serializer = MemberWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = User.objects.filter(pk=serializer.validated_data["user"]).first()
+        if user is None:
+            return Response(
+                {"detail": "User not found."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            member = add_member(
+                self.project, user, role=serializer.validated_data["role"]
+            )
+        except ProjectRuleError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(MemberSerializer(member).data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        member = self.get_object()
+        serializer = MemberRoleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            member = change_member_role(member, serializer.validated_data["role"])
+        except ProjectRuleError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(MemberSerializer(member).data)
+
+    def destroy(self, request, *args, **kwargs):
+        member = self.get_object()
+        if member.user_id != request.user.pk:
+            self._require_admin()
+        self._require_writable()
+        try:
+            remove_member(member)
+        except ProjectRuleError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)

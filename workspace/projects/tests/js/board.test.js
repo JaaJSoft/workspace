@@ -5,26 +5,23 @@ const { loadScript } = require('../../../common/tests/js/loader');
 
 const ctx = loadScript('workspace/projects/ui/static/projects/ui/js/board.js');
 
-test('moveUuid moves an item to a later index', () => {
+function fakeList(uuids) {
+  return {
+    querySelectorAll: (selector) => {
+      assert.equal(selector, '[data-task-uuid]');
+      return uuids.map((uuid) => ({ dataset: { taskUuid: uuid } }));
+    },
+  };
+}
+
+test('listOrder reads task uuids in DOM order', () => {
   const result = Array.from(
-    ctx.projectBoardHelpers.moveUuid(['a', 'b', 'c'], 'a', 2)
+    ctx.projectBoardHelpers.listOrder(fakeList(['a', 'b', 'c']))
   );
-  assert.deepStrictEqual(result, ['b', 'c', 'a']);
+  assert.deepStrictEqual(result, ['a', 'b', 'c']);
 });
 
-test('moveUuid moves an item to the front', () => {
-  const result = Array.from(
-    ctx.projectBoardHelpers.moveUuid(['a', 'b', 'c'], 'c', 0)
-  );
-  assert.deepStrictEqual(result, ['c', 'a', 'b']);
-});
-
-test('moveUuid inserts a foreign uuid (cross-column drop)', () => {
-  const result = Array.from(ctx.projectBoardHelpers.moveUuid(['a', 'b'], 'x', 1));
-  assert.deepStrictEqual(result, ['a', 'x', 'b']);
-});
-
-test('moveUuid clamps out-of-range indexes', () => {
-  const result = Array.from(ctx.projectBoardHelpers.moveUuid(['a', 'b'], 'a', 99));
-  assert.deepStrictEqual(result, ['b', 'a']);
+test('listOrder returns an empty order for an empty column', () => {
+  const result = Array.from(ctx.projectBoardHelpers.listOrder(fakeList([])));
+  assert.deepStrictEqual(result, []);
 });

@@ -1,13 +1,6 @@
 // Kanban board and backlog interactions for the projects module.
 // Pure list helpers are exported on window.projectBoardHelpers for unit tests.
 
-function moveUuid(order, uuid, targetIndex) {
-  const without = order.filter((item) => item !== uuid);
-  const index = Math.max(0, Math.min(targetIndex, without.length));
-  without.splice(index, 0, uuid);
-  return without;
-}
-
 function listOrder(listEl) {
   return Array.from(listEl.querySelectorAll('[data-task-uuid]')).map(
     (el) => el.dataset.taskUuid
@@ -146,9 +139,15 @@ function projectBoard(config) {
 
     async openTask(uuid) {
       const generation = ++this._actionsGeneration;
-      const resp = await fetch(config.apiBase + '/tasks/' + uuid);
-      if (!resp.ok) return;
-      const data = await resp.json();
+      let data;
+      try {
+        const resp = await fetch(config.apiBase + '/tasks/' + uuid);
+        if (!resp.ok) return;
+        data = await resp.json();
+      } catch (e) {
+        // Modal is not open yet: nothing to display, silently keep the board.
+        return;
+      }
       if (generation !== this._actionsGeneration) return;
       this.form = {
         uuid: data.uuid,
@@ -213,6 +212,8 @@ function projectBoard(config) {
         }
         this.$refs.taskDialog.close();
         this.refreshAll();
+      } catch (e) {
+        this.formError = 'Could not save the task.';
       } finally {
         this.saving = false;
       }
@@ -220,17 +221,23 @@ function projectBoard(config) {
 
     async deleteTask() {
       if (!this.form.uuid || !this.can('delete')) return;
-      const resp = await fetch(config.apiBase + '/tasks/' + this.form.uuid, {
-        method: 'DELETE',
-        headers: this.headers(),
-      });
-      if (resp.ok) {
+      try {
+        const resp = await fetch(config.apiBase + '/tasks/' + this.form.uuid, {
+          method: 'DELETE',
+          headers: this.headers(),
+        });
+        if (!resp.ok) {
+          this.formError = 'Could not delete the task.';
+          return;
+        }
         this.$refs.taskDialog.close();
         this.refreshAll();
+      } catch (e) {
+        this.formError = 'Could not delete the task.';
       }
     },
   };
 }
 
 window.projectBoard = projectBoard;
-window.projectBoardHelpers = { moveUuid: moveUuid, listOrder: listOrder };
+window.projectBoardHelpers = { listOrder: listOrder };

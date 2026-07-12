@@ -48,7 +48,7 @@
         <div class="flex flex-wrap gap-3 mt-1">
           <template x-for="m in members" :key="m.id">
             <label class="label cursor-pointer gap-1 p-0">
-              <input type="checkbox" class="checkbox checkbox-xs" :value="m.id"
+              <input type="checkbox" class="checkbox checkbox-accent checkbox-xs" :value="m.id"
                      x-model="form.assignees" :disabled="form.uuid && !can('assign')">
               <span class="label-text text-xs" x-text="m.username"></span>
             </label>
@@ -60,7 +60,7 @@
         <div class="flex flex-wrap gap-3 mt-1">
           <template x-for="l in labels" :key="l.uuid">
             <label class="label cursor-pointer gap-1 p-0">
-              <input type="checkbox" class="checkbox checkbox-xs" :value="l.uuid"
+              <input type="checkbox" class="checkbox checkbox-accent checkbox-xs" :value="l.uuid"
                      x-model="form.labels" :disabled="form.uuid && !can('set_labels')">
               <span class="label-text text-xs" x-text="l.name"></span>
             </label>
@@ -71,7 +71,7 @@
         <button type="button" class="btn btn-error btn-outline btn-sm mr-auto" x-show="form.uuid"
                 :disabled="!can('delete')" @click="deleteTask()">Delete</button>
         <button type="button" class="btn btn-ghost btn-sm" @click="$refs.taskDialog.close()">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-sm"
+        <button type="submit" class="btn btn-accent btn-sm"
                 :disabled="saving || !form.title.trim() || (form.uuid && !can('edit'))">Save</button>
       </div>
     </form>

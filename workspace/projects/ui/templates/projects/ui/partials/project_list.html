@@ -5,7 +5,7 @@
       <div class="card-body p-4 gap-1">
         <div class="flex items-center gap-2">
           <i data-lucide="{% if p.type == 'personal' %}circle-user{% else %}square-kanban{% endif %}"
-             class="w-4 h-4 text-info shrink-0"></i>
+             class="w-4 h-4 text-accent shrink-0"></i>
           <h2 class="card-title text-base">{{ p.name }}</h2>
           {% if p.archived_at %}<span class="badge badge-ghost badge-sm">Archived</span>{% endif %}
         </div>

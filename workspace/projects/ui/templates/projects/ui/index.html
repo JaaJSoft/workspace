@@ -7,7 +7,7 @@
      x-data="{ creating: false, name: '', description: '', error: '' }">
   <div class="flex items-center justify-between">
     <h1 class="text-xl font-semibold">Projects</h1>
-    <button class="btn btn-primary btn-sm" @click="$refs.newProjectDialog.showModal()">
+    <button class="btn btn-accent btn-sm" @click="$refs.newProjectDialog.showModal()">
       <i data-lucide="plus" class="w-4 h-4"></i>
       New project
     </button>
@@ -47,7 +47,7 @@
         </label>
         <div class="modal-action">
           <button type="button" class="btn btn-ghost btn-sm" @click="$refs.newProjectDialog.close()">Cancel</button>
-          <button type="submit" class="btn btn-primary btn-sm" :disabled="creating || !name.trim()">Create</button>
+          <button type="submit" class="btn btn-accent btn-sm" :disabled="creating || !name.trim()">Create</button>
         </div>
       </form>
     </div>

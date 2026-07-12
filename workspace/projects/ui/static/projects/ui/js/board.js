@@ -105,8 +105,9 @@ function projectBoard(config) {
         });
         if (!resp.ok) throw new Error('Reorder failed');
       } catch (e) {
-        this.refreshAll();
+        // On failure, refreshAll in finally restores server truth
       } finally {
+        this.refreshAll();
         this.saving = false;
       }
     },
@@ -120,12 +121,18 @@ function projectBoard(config) {
       if (!config.writable) return;
       const firstActive = this.statuses.find((s) => s.category === 'active');
       if (!firstActive) return;
-      await fetch(config.apiBase + '/tasks/' + uuid, {
-        method: 'PATCH',
-        headers: this.headers(),
-        body: JSON.stringify({ status: firstActive.uuid }),
-      });
-      this.refreshAll();
+      try {
+        const resp = await fetch(config.apiBase + '/tasks/' + uuid, {
+          method: 'PATCH',
+          headers: this.headers(),
+          body: JSON.stringify({ status: firstActive.uuid }),
+        });
+        if (!resp.ok) throw new Error('Send to board failed');
+      } catch (e) {
+        // Swallow: the finally refresh restores server truth, card stays in backlog
+      } finally {
+        this.refreshAll();
+      }
     },
 
     newTask(statusUuid) {

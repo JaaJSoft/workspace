@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import Max, Q
 from django.utils import timezone
 
 from ..models import Task, TaskStatus
@@ -30,23 +30,24 @@ def create_task(
             .order_by("position", "created_at")
             .first()
         ) or project.statuses.order_by("position", "created_at").first()
-    task = Task.objects.create(
-        project=project,
-        title=title,
-        description=description,
-        status=status,
-        priority=priority,
-        due_date=due_date,
-        created_by=user,
-        position=next_position(project, status),
-    )
-    if assignees:
-        task.assignees.set(assignees)
-    if labels:
-        task.labels.set(labels)
-    if status.category == TaskStatus.Category.DONE:
-        task.completed_at = timezone.now()
-        task.save(update_fields=["completed_at"])
+    with transaction.atomic():
+        task = Task.objects.create(
+            project=project,
+            title=title,
+            description=description,
+            status=status,
+            priority=priority,
+            due_date=due_date,
+            created_by=user,
+            position=next_position(project, status),
+        )
+        if assignees:
+            task.assignees.set(assignees)
+        if labels:
+            task.labels.set(labels)
+        if status.category == TaskStatus.Category.DONE:
+            task.completed_at = timezone.now()
+            task.save(update_fields=["completed_at"])
     return task
 
 
@@ -75,15 +76,19 @@ def reorder_tasks(project, status, ordered_uuids):
     skipped. Idempotent: replaying the same payload yields the same state.
     """
     with transaction.atomic():
-        in_status = list(
-            project.tasks.select_for_update()
-            .filter(status=status)
-            .order_by("position", "created_at")
+        # One locking query for both the column and the listed tasks: two
+        # separate SELECT FOR UPDATE passes would leave a window between
+        # them where a concurrent reorder locks the other half first.
+        tasks = list(
+            project.tasks.select_for_update().filter(
+                Q(status=status) | Q(uuid__in=ordered_uuids)
+            )
         )
-        listed = list(project.tasks.select_for_update().filter(uuid__in=ordered_uuids))
-        by_uuid = {t.uuid: t for t in listed}
-        for t in in_status:
-            by_uuid.setdefault(t.uuid, t)
+        in_status = sorted(
+            (t for t in tasks if t.status_id == status.pk),
+            key=lambda t: (t.position, t.created_at),
+        )
+        by_uuid = {t.uuid: t for t in tasks}
 
         sequence = []
         seen = set()

@@ -1,6 +1,20 @@
-<li class="card bg-base-100 shadow-sm" data-task-uuid="{{ task.uuid }}">
+<li class="card bg-base-100 shadow-sm select-none {% if writable %}cursor-grab{% endif %}"
+    :class="dragging === '{{ task.uuid }}' && 'opacity-50'"
+    {% if writable %}draggable="true"{% endif %}
+    data-task-uuid="{{ task.uuid }}"
+    @dragstart="onDragStart($event, '{{ task.uuid }}')"
+    @dragend="onDragEnd()"
+    @click="openTask('{{ task.uuid }}')">
   <div class="card-body p-3 gap-1.5">
-    <span class="text-sm font-medium leading-snug">{{ task.title }}</span>
+    <span class="flex items-start justify-between gap-2">
+      <span class="text-sm font-medium leading-snug">{{ task.title }}</span>
+      {% if show_send_to_board and writable %}
+        <button class="btn btn-ghost btn-xs shrink-0" title="Send to board"
+                @click.stop="sendToBoard('{{ task.uuid }}')">
+          <i data-lucide="arrow-right-circle" class="w-3.5 h-3.5"></i>
+        </button>
+      {% endif %}
+    </span>
     {% if task.labels.all %}
       <span class="flex flex-wrap gap-1">
         {% for label in task.labels.all %}

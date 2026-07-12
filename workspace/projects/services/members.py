@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.utils import timezone
 
 from ..models import Project, ProjectMember
@@ -11,12 +12,25 @@ class LastAdminError(ProjectRuleError):
     """A project must always keep at least one active admin."""
 
 
-def _other_active_admins(member):
-    return ProjectMember.objects.filter(
-        project_id=member.project_id,
-        role=ProjectMember.Role.ADMIN,
-        left_at__isnull=True,
-    ).exclude(pk=member.pk)
+def _other_active_admins_locked(member):
+    """Lock the project's active-admin rows, then report whether another
+    active admin exists.
+
+    Locking the full set (member's own row included) is what serializes two
+    concurrent demotions/removals targeting each other: both transactions
+    contend on the same rows, so the loser re-reads the winner's result
+    instead of acting on a stale snapshot. Requires an open transaction.
+    """
+    admin_pks = list(
+        ProjectMember.objects.select_for_update()
+        .filter(
+            project_id=member.project_id,
+            role=ProjectMember.Role.ADMIN,
+            left_at__isnull=True,
+        )
+        .values_list("pk", flat=True)
+    )
+    return any(pk != member.pk for pk in admin_pks)
 
 
 def add_member(project, user, *, role=ProjectMember.Role.MEMBER):
@@ -47,28 +61,30 @@ def add_member(project, user, *, role=ProjectMember.Role.MEMBER):
 
 
 def change_member_role(member, new_role):
-    if (
-        member.role == ProjectMember.Role.ADMIN
-        and new_role != ProjectMember.Role.ADMIN
-        and not _other_active_admins(member).exists()
-    ):
-        raise LastAdminError("Cannot demote the last admin of a project.")
-    member.role = new_role
-    member.save(update_fields=["role"])
+    with transaction.atomic():
+        if (
+            member.role == ProjectMember.Role.ADMIN
+            and new_role != ProjectMember.Role.ADMIN
+            and not _other_active_admins_locked(member)
+        ):
+            raise LastAdminError("Cannot demote the last admin of a project.")
+        member.role = new_role
+        member.save(update_fields=["role"])
     return member
 
 
 def remove_member(member):
     """Deactivate a membership (sets left_at); also used for self-leave."""
-    if (
-        member.role == ProjectMember.Role.ADMIN
-        and member.left_at is None
-        and not _other_active_admins(member).exists()
-    ):
-        raise LastAdminError(
-            "Cannot remove the last admin of a project. "
-            "Promote another admin first or delete the project."
-        )
-    member.left_at = timezone.now()
-    member.save(update_fields=["left_at"])
+    with transaction.atomic():
+        if (
+            member.role == ProjectMember.Role.ADMIN
+            and member.left_at is None
+            and not _other_active_admins_locked(member)
+        ):
+            raise LastAdminError(
+                "Cannot remove the last admin of a project. "
+                "Promote another admin first or delete the project."
+            )
+        member.left_at = timezone.now()
+        member.save(update_fields=["left_at"])
     return member

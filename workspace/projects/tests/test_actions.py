@@ -52,6 +52,18 @@ class ProjectActionTests(ProjectTestMixin, TestCase):
         self.assertEqual(set(ids), {"rename", "manage_labels"})
 
 
+class RegistryTests(TestCase):
+    def test_delete_action_registered_for_both_target_types(self):
+        by_target = {
+            target: [
+                a.id for a in ProjectActionRegistry.all() if target in a.target_types
+            ]
+            for target in ("project", "task")
+        }
+        self.assertIn("delete", by_target["project"])
+        self.assertIn("delete", by_target["task"])
+
+
 class TaskActionTests(ProjectTestMixin, TestCase):
     def setUp(self):
         super().setUp()

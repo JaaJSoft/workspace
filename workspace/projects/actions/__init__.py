@@ -5,7 +5,6 @@ from .base import ActionCategory, BaseProjectAction, NotOnPersonalProjectMixin
 
 class ProjectActionRegistry:
     _actions: list[BaseProjectAction] = []
-    _by_id: dict[str, BaseProjectAction] = {}
     _loaded = False
 
     @classmethod
@@ -13,13 +12,7 @@ class ProjectActionRegistry:
         """Class decorator - instantiates and stores an action."""
         instance = action_cls()
         cls._actions.append(instance)
-        cls._by_id[instance.id] = instance
         return action_cls
-
-    @classmethod
-    def get(cls, action_id):
-        cls._ensure_loaded()
-        return cls._by_id.get(action_id)
 
     @classmethod
     def get_available_actions(cls, user, obj, *, role, archived):
@@ -55,7 +48,6 @@ class ProjectActionRegistry:
     def _reset(cls):
         """Reset registry state - only for tests."""
         cls._actions = []
-        cls._by_id = {}
         cls._loaded = False
 
 

@@ -1,6 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
+from .views_actions import ProjectActionsView
 from .viewsets import (
     LabelViewSet,
     MemberViewSet,
@@ -24,6 +25,11 @@ task_detail = TaskViewSet.as_view(
 )
 
 urlpatterns = [
+    path(
+        "api/v1/projects/actions",
+        ProjectActionsView.as_view(),
+        name="project-actions",
+    ),
     path(
         "api/v1/projects/<uuid:project_uuid>/members",
         member_list,

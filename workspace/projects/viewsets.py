@@ -194,7 +194,7 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         member = self.get_object()
         if member.user_id != request.user.pk:
             self._require_admin()
-        self._require_writable()
+            self._require_writable()
         try:
             remove_member(member)
         except ProjectRuleError as exc:

@@ -134,10 +134,17 @@ class ArchivedProjectMemberTests(ProjectTestMixin, APITestCase):
             f"{base}/{self.membership.uuid}", {"role": "admin"}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        response = self.client.delete(f"{base}/{self.admin_membership.uuid}")
+        response = self.client.delete(f"{base}/{self.membership.uuid}")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_list_still_allowed_while_archived(self):
         self.client.force_authenticate(self.member)
         response = self.client.get(f"/api/v1/projects/{self.project.uuid}/members")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_member_can_leave_archived_project(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.delete(
+            f"/api/v1/projects/{self.project.uuid}/members/{self.membership.uuid}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)

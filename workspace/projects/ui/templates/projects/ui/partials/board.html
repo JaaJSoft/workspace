@@ -1,0 +1,16 @@
+<div id="board" class="flex gap-4 overflow-x-auto items-start pb-4">
+  {% for column in columns %}
+    <section class="w-72 shrink-0 rounded-box bg-base-200 p-3"
+             data-status-uuid="{{ column.status.uuid }}">
+      <header class="flex items-center justify-between mb-2">
+        <h3 class="text-sm font-medium">{{ column.status.name }}</h3>
+        <span class="badge badge-ghost badge-sm">{{ column.tasks|length }}</span>
+      </header>
+      <ul class="flex flex-col gap-2 min-h-8" data-column-list>
+        {% for task in column.tasks %}
+          {% include "projects/ui/partials/task_card.html" %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endfor %}
+</div>

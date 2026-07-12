@@ -125,6 +125,7 @@ INSTALLED_APPS = [
     "workspace.notes",
     "workspace.notes.ui",
     "workspace.projects",
+    "workspace.projects.ui",
     "workspace.dashboard",
     "workspace.users",
     "workspace.users.ui",

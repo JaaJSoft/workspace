@@ -1,0 +1,12 @@
+<div id="backlog" class="max-w-3xl"
+     {% if backlog_status %}data-status-uuid="{{ backlog_status.uuid }}"{% endif %}>
+  <ul class="flex flex-col gap-2 min-h-8" data-backlog-list>
+    {% for task in backlog_tasks %}
+      {% include "projects/ui/partials/task_card.html" %}
+    {% empty %}
+      <li>
+        {% include "ui/partials/inline_alert.html" with type="info" message="The backlog is empty." %}
+      </li>
+    {% endfor %}
+  </ul>
+</div>

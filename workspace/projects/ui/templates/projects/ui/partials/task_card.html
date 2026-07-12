@@ -1,0 +1,23 @@
+<li class="card bg-base-100 shadow-sm" data-task-uuid="{{ task.uuid }}">
+  <div class="card-body p-3 gap-1.5">
+    <span class="text-sm font-medium leading-snug">{{ task.title }}</span>
+    {% if task.labels.all %}
+      <span class="flex flex-wrap gap-1">
+        {% for label in task.labels.all %}
+          <span class="badge badge-sm badge-outline">{{ label.name }}</span>
+        {% endfor %}
+      </span>
+    {% endif %}
+    <span class="flex items-center gap-2 text-xs text-base-content/60">
+      <span class="badge badge-ghost badge-xs">{{ task.get_priority_display }}</span>
+      {% if task.due_date %}
+        <span class="flex items-center gap-1">
+          <i data-lucide="calendar" class="w-3 h-3"></i>{{ task.due_date|date:"M j" }}
+        </span>
+      {% endif %}
+      {% for assignee in task.assignees.all %}
+        <span class="badge badge-ghost badge-xs">{{ assignee.username }}</span>
+      {% endfor %}
+    </span>
+  </div>
+</li>

@@ -35,6 +35,11 @@ from .services.tasks import apply_status_change, create_task, reorder_tasks
 User = get_user_model()
 
 
+def _rule_error_response(exc):
+    """Map a ProjectRuleError to a 400 with its curated detail message."""
+    return Response({"detail": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
+
+
 @extend_schema(tags=["Projects"])
 class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
@@ -181,7 +186,7 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
                 self.project, user, role=serializer.validated_data["role"]
             )
         except ProjectRuleError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            return _rule_error_response(exc)
         return Response(
             self.get_serializer(member).data, status=status.HTTP_201_CREATED
         )
@@ -195,7 +200,7 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         try:
             member = change_member_role(member, serializer.validated_data["role"])
         except ProjectRuleError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            return _rule_error_response(exc)
         return Response(self.get_serializer(member).data)
 
     def destroy(self, request, *args, **kwargs):
@@ -206,7 +211,7 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         try:
             remove_member(member)
         except ProjectRuleError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            return _rule_error_response(exc)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

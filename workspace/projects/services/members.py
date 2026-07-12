@@ -5,7 +5,15 @@ from ..models import Project, ProjectMember
 
 
 class ProjectRuleError(Exception):
-    """Violation of a project business rule; the API maps it to HTTP 400."""
+    """Violation of a project business rule; the API maps it to HTTP 400.
+
+    ``detail`` is a curated, user-facing message built from constant strings
+    (never from user input or tracebacks), safe to return in API responses.
+    """
+
+    def __init__(self, detail):
+        super().__init__(detail)
+        self.detail = detail
 
 
 class LastAdminError(ProjectRuleError):

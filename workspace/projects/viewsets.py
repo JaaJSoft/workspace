@@ -3,6 +3,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import OuterRef, Subquery
 from django.http import Http404
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -10,7 +11,7 @@ from rest_framework.response import Response
 
 from workspace.common.uuids import parse_uuid_or_none
 
-from .models import Project, ProjectMember
+from .models import Label, Project, ProjectMember, Task, TaskStatus
 from .queries import get_project_role, user_project_ids
 from .serializers import (
     LabelSerializer,
@@ -34,6 +35,7 @@ from .services.tasks import apply_status_change, create_task, reorder_tasks
 User = get_user_model()
 
 
+@extend_schema(tags=["Projects"])
 class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
     lookup_field = "uuid"
@@ -41,6 +43,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Project.objects.none()
         my_role = ProjectMember.objects.filter(
             project=OuterRef("pk"),
             user=self.request.user,
@@ -143,12 +147,15 @@ class ProjectContextMixin:
             raise PermissionDenied("Project is archived.")
 
 
+@extend_schema(tags=["Projects"])
 class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
     serializer_class = MemberSerializer
     lookup_field = "uuid"
     pagination_class = None
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return ProjectMember.objects.none()
         return (
             self.project.members.filter(left_at__isnull=True)
             .select_related("user")
@@ -203,6 +210,7 @@ class MemberViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+@extend_schema(tags=["Projects"])
 class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     serializer_class = LabelSerializer
     lookup_field = "uuid"
@@ -210,6 +218,8 @@ class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Label.objects.none()
         return self.project.labels.order_by("name")
 
     def perform_create(self, serializer):
@@ -245,11 +255,14 @@ class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
+@extend_schema(tags=["Projects"])
 class StatusViewSet(ProjectContextMixin, viewsets.GenericViewSet):
     serializer_class = TaskStatusSerializer
     pagination_class = None
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return TaskStatus.objects.none()
         return self.project.statuses.order_by("position", "created_at")
 
     def list(self, request, *args, **kwargs):
@@ -257,6 +270,7 @@ class StatusViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return Response(serializer.data)
 
 
+@extend_schema(tags=["Projects"])
 class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     lookup_field = "uuid"
@@ -265,6 +279,8 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Task.objects.none()
         qs = (
             self.project.tasks.select_related("status")
             .prefetch_related("assignees", "labels")

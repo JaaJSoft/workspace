@@ -379,6 +379,10 @@ SPECTACULAR_SETTINGS = {
             "description": "User notifications and push subscriptions.",
         },
         {
+            "name": "Projects",
+            "description": "Collaborative projects with kanban boards and backlogs.",
+        },
+        {
             "name": "Search",
             "description": "Unified search across workspace modules.",
         },

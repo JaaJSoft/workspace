@@ -1,3 +1,5 @@
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -9,6 +11,36 @@ from .models import Project, Task
 from .queries import get_project_role
 
 
+@extend_schema(
+    tags=["Projects"],
+    summary="Get available actions for projects and tasks",
+    description=(
+        "Return available actions for a list of project/task UUIDs. "
+        "Returns a map keyed by UUID, each value being the list of "
+        "available actions for that item."
+    ),
+    request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "uuids": {
+                    "type": "array",
+                    "items": {"type": "string", "format": "uuid"},
+                    "description": "List of project/task UUIDs",
+                },
+            },
+            "required": ["uuids"],
+        },
+    },
+    responses={
+        200: OpenApiResponse(
+            response=OpenApiTypes.OBJECT,
+            description="Map of UUID to list of available actions.",
+        ),
+        400: OpenApiResponse(description="Invalid request."),
+        404: OpenApiResponse(description="One or more UUIDs not found."),
+    },
+)
 class ProjectActionsView(APIView):
     """Bulk action availability for projects and tasks (mixed UUIDs)."""
 

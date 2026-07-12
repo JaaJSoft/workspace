@@ -29,7 +29,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["type", "archived_at", "created_at", "updated_at"]
 
-    def get_my_role(self, obj):
+    def get_my_role(self, obj) -> str:
         # Set by the queryset annotation; group-only access has no
         # membership row and always means plain member.
         return getattr(obj, "_my_role", None) or ProjectMember.Role.MEMBER

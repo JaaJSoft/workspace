@@ -76,8 +76,7 @@ def project_view(request, project_uuid):
         ],
     }
     context["members_data"] = [
-        {"uuid": str(m.user_id), "username": m.user.username}
-        for m in context["members"]
+        {"id": str(m.user_id), "username": m.user.username} for m in context["members"]
     ]
     partial = request.GET.get("partial", "")
     if request.headers.get("X-Alpine-Request") and partial in ("board", "backlog"):

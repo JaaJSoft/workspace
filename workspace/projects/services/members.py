@@ -82,12 +82,16 @@ def change_member_role(member, new_role):
 
 
 def remove_member(member):
-    """Deactivate a membership (sets left_at); also used for self-leave."""
+    """Deactivate a membership (sets left_at); also used for self-leave.
+
+    No-op on already-departed rows: the original departure timestamp is
+    kept instead of being overwritten by the replay.
+    """
+    if member.left_at is not None:
+        return member
     with transaction.atomic():
-        if (
-            member.role == ProjectMember.Role.ADMIN
-            and member.left_at is None
-            and not _other_active_admins_locked(member)
+        if member.role == ProjectMember.Role.ADMIN and not _other_active_admins_locked(
+            member
         ):
             raise LastAdminError(
                 "Cannot remove the last admin of a project. "

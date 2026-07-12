@@ -115,6 +115,22 @@ class ReorderTasksTests(TaskServiceMixin, TestCase):
         self.assertIsNone(self.t1.completed_at)
         self.assertEqual(self.t1.status, self.backlog)
 
+    def test_reorder_refreshes_updated_at_on_moved_tasks(self):
+        before = self.t3.updated_at
+        reorder_tasks(
+            self.project, self.backlog, [self.t3.uuid, self.t1.uuid, self.t2.uuid]
+        )
+        self.t3.refresh_from_db()
+        self.assertGreater(self.t3.updated_at, before)
+
+    def test_reorder_leaves_unchanged_tasks_untouched(self):
+        before = self.t1.updated_at
+        reorder_tasks(
+            self.project, self.backlog, [self.t1.uuid, self.t2.uuid, self.t3.uuid]
+        )
+        self.t1.refresh_from_db()
+        self.assertEqual(self.t1.updated_at, before)
+
     def test_unknown_uuids_silently_skipped(self):
         import uuid as uuid_module
 

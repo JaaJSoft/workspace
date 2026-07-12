@@ -61,6 +61,14 @@ class UserProjectIdsTests(TestCase):
         self.project.save(update_fields=["archived_at"])
         self.assertIn(self.project.uuid, list(user_project_ids(self.member)))
 
+    def test_departed_member_with_group_access_still_sees_project(self):
+        group = Group.objects.create(name="devs")
+        self.member.groups.add(group)
+        self.project.group = group
+        self.project.save(update_fields=["group"])
+        ProjectMember.objects.filter(user=self.member).update(left_at=timezone.now())
+        self.assertIn(self.project.uuid, list(user_project_ids(self.member)))
+
 
 class GetProjectRoleTests(TestCase):
     def setUp(self):
@@ -94,6 +102,17 @@ class GetProjectRoleTests(TestCase):
         self.project.group = group
         self.project.save(update_fields=["group"])
         self.assertEqual(get_project_role(self.outsider, self.project), "member")
+
+    def test_departed_member_with_group_access_keeps_member_role(self):
+        # Group access is independent of membership rows: leaving a project
+        # does not revoke the access granted by the attached auth.Group
+        # (files precedent).
+        group = Group.objects.create(name="devs")
+        self.member.groups.add(group)
+        self.project.group = group
+        self.project.save(update_fields=["group"])
+        ProjectMember.objects.filter(user=self.member).update(left_at=timezone.now())
+        self.assertEqual(get_project_role(self.member, self.project), "member")
 
     def test_membership_row_wins_over_group(self):
         group = Group.objects.create(name="devs")

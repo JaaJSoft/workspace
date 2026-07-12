@@ -41,6 +41,14 @@ class ProjectViewTests(ProjectTestMixin, TestCase):
         self.assertContains(response, "Done")
         self.assertContains(response, "Fix the login flow")
 
+    def test_members_data_exposes_user_ids(self):
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}")
+        self.assertIn(
+            {"id": str(self.member.pk), "username": "member1"},
+            response.context["members_data"],
+        )
+
     def test_outsider_gets_404(self):
         self.client.force_login(self.outsider)
         response = self.client.get(f"/projects/{self.project.uuid}")

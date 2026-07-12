@@ -118,6 +118,11 @@ def reorder_tasks(project, status, ordered_uuids):
                 task.position = i
                 changed = True
             if changed:
+                # bulk_update bypasses save(), so auto_now would leave
+                # updated_at stale; stamp it by hand.
+                task.updated_at = now
                 to_update.append(task)
         if to_update:
-            Task.objects.bulk_update(to_update, ["status", "position", "completed_at"])
+            Task.objects.bulk_update(
+                to_update, ["status", "position", "completed_at", "updated_at"]
+            )

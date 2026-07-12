@@ -25,3 +25,59 @@ test('listOrder returns an empty order for an empty column', () => {
   const result = Array.from(ctx.projectBoardHelpers.listOrder(fakeList([])));
   assert.deepStrictEqual(result, []);
 });
+
+function deletableBoard(calls) {
+  ctx.getCSRFToken = () => 'token';
+  const board = ctx.projectBoard({ apiBase: '/api', writable: true });
+  board.form.uuid = 'u1';
+  board.form.title = 'Task one';
+  board.taskActions = ['delete'];
+  board.$refs = {
+    taskDialog: {
+      close() {
+        calls.push('close');
+      },
+    },
+  };
+  board.refreshAll = () => calls.push('refresh');
+  return board;
+}
+
+test('deleteTask aborts without a request when confirmation is declined', async () => {
+  const calls = [];
+  ctx.AppDialog = {
+    confirm: async () => {
+      calls.push('confirm');
+      return false;
+    },
+  };
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url);
+    return { ok: true };
+  };
+  const board = deletableBoard(calls);
+  await board.deleteTask();
+  assert.deepStrictEqual(Array.from(calls), ['confirm']);
+});
+
+test('deleteTask deletes and refreshes once confirmed', async () => {
+  const calls = [];
+  ctx.AppDialog = {
+    confirm: async () => {
+      calls.push('confirm');
+      return true;
+    },
+  };
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url);
+    return { ok: true };
+  };
+  const board = deletableBoard(calls);
+  await board.deleteTask();
+  assert.deepStrictEqual(Array.from(calls), [
+    'confirm',
+    'DELETE /api/tasks/u1',
+    'close',
+    'refresh',
+  ]);
+});

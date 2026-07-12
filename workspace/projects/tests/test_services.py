@@ -88,6 +88,14 @@ class MembershipGuardTests(ProjectTestMixin, TestCase):
         removed = remove_member(self.membership)
         self.assertIsNotNone(removed.left_at)
 
+    def test_remove_member_on_departed_row_preserves_left_at(self):
+        remove_member(self.membership)
+        self.membership.refresh_from_db()
+        original_left_at = self.membership.left_at
+        remove_member(self.membership)
+        self.membership.refresh_from_db()
+        self.assertEqual(self.membership.left_at, original_left_at)
+
     def test_add_member_on_active_last_admin_cannot_demote(self):
         with self.assertRaises(LastAdminError):
             add_member(self.project, self.admin, role=ProjectMember.Role.MEMBER)

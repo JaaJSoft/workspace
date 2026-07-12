@@ -46,9 +46,9 @@
       <div class="mt-2" x-show="members.length">
         <div class="label"><span class="label-text">Assignees</span></div>
         <div class="flex flex-wrap gap-3 mt-1">
-          <template x-for="m in members" :key="m.uuid">
+          <template x-for="m in members" :key="m.id">
             <label class="label cursor-pointer gap-1 p-0">
-              <input type="checkbox" class="checkbox checkbox-xs" :value="m.uuid"
+              <input type="checkbox" class="checkbox checkbox-xs" :value="m.id"
                      x-model="form.assignees" :disabled="form.uuid && !can('assign')">
               <span class="label-text text-xs" x-text="m.username"></span>
             </label>

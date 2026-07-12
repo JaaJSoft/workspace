@@ -221,6 +221,15 @@ function projectBoard(config) {
 
     async deleteTask() {
       if (!this.form.uuid || !this.can('delete')) return;
+      const ok = await AppDialog.confirm({
+        title: 'Delete task',
+        message: 'Are you sure you want to delete "' + this.form.title + '"?',
+        okLabel: 'Delete',
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!ok) return;
       try {
         const resp = await fetch(config.apiBase + '/tasks/' + this.form.uuid, {
           method: 'DELETE',

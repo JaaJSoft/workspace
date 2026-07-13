@@ -4,18 +4,18 @@ from django.db.models.signals import post_migrate
 
 _SQLITE_FTS_TRIGGERS = """
 CREATE TRIGGER IF NOT EXISTS mail_message_fts_ai AFTER INSERT ON mail_mailmessage BEGIN
-  INSERT INTO mail_message_fts(rowid, subject, snippet, from_email, from_name)
-  VALUES (new.rowid, new.subject, new.snippet, new.from_email, new.from_name);
+  INSERT INTO mail_message_fts(rowid, subject, snippet, from_email, from_name, body_text)
+  VALUES (new.rowid, new.subject, new.snippet, new.from_email, new.from_name, new.body_text);
 END;
 CREATE TRIGGER IF NOT EXISTS mail_message_fts_ad AFTER DELETE ON mail_mailmessage BEGIN
-  INSERT INTO mail_message_fts(mail_message_fts, rowid, subject, snippet, from_email, from_name)
-  VALUES ('delete', old.rowid, old.subject, old.snippet, old.from_email, old.from_name);
+  INSERT INTO mail_message_fts(mail_message_fts, rowid, subject, snippet, from_email, from_name, body_text)
+  VALUES ('delete', old.rowid, old.subject, old.snippet, old.from_email, old.from_name, old.body_text);
 END;
 CREATE TRIGGER IF NOT EXISTS mail_message_fts_au AFTER UPDATE ON mail_mailmessage BEGIN
-  INSERT INTO mail_message_fts(mail_message_fts, rowid, subject, snippet, from_email, from_name)
-  VALUES ('delete', old.rowid, old.subject, old.snippet, old.from_email, old.from_name);
-  INSERT INTO mail_message_fts(rowid, subject, snippet, from_email, from_name)
-  VALUES (new.rowid, new.subject, new.snippet, new.from_email, new.from_name);
+  INSERT INTO mail_message_fts(mail_message_fts, rowid, subject, snippet, from_email, from_name, body_text)
+  VALUES ('delete', old.rowid, old.subject, old.snippet, old.from_email, old.from_name, old.body_text);
+  INSERT INTO mail_message_fts(rowid, subject, snippet, from_email, from_name, body_text)
+  VALUES (new.rowid, new.subject, new.snippet, new.from_email, new.from_name, new.body_text);
 END;
 INSERT INTO mail_message_fts(mail_message_fts) VALUES ('rebuild');
 """

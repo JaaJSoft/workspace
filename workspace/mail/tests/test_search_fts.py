@@ -96,6 +96,24 @@ class SearchMailBehaviorTests(TestCase):
             subject="Lunch plans",
             snippet="pizza",
         )
+        cls.m3 = MailMessage.objects.create(
+            account=cls.account,
+            folder=cls.folder,
+            imap_uid=3,
+            subject="Weekly digest",
+            snippet="misc news",
+            body_text=(
+                "The forecast is attached. This forecast replaces the "
+                "previous forecast; please review the forecast before Friday."
+            ),
+        )
+        cls.m4 = MailMessage.objects.create(
+            account=cls.account,
+            folder=cls.folder,
+            imap_uid=4,
+            subject="Forecast review meeting",
+            snippet="agenda",
+        )
 
     def test_finds_by_subject(self):
         hits = search_mail("lunch", self.user, limit=10)
@@ -106,6 +124,22 @@ class SearchMailBehaviorTests(TestCase):
             self.skipTest("SQLite + FTS5 required for the accent path")
         hits = search_mail("resume", self.user, limit=10)  # query without accent
         self.assertIn(str(self.m1.uuid), [h.uuid for h in hits])
+
+    def test_finds_by_body(self):
+        # "forecast" appears only in m3's body (and m4's subject), never in
+        # m3's subject or snippet.
+        hits = search_mail("forecast", self.user, limit=10)
+        self.assertIn(str(self.m3.uuid), [h.uuid for h in hits])
+
+    def test_subject_match_ranks_above_body_match(self):
+        if connection.vendor != "sqlite" or not fts5_available():
+            self.skipTest("ranking is only asserted on the FTS5 path")
+        # m3 mentions "forecast" four times in the body; m4 once in the
+        # subject. Field weighting must beat raw term frequency, otherwise
+        # chatty bodies drown out on-topic subjects.
+        hits = search_mail("forecast", self.user, limit=10)
+        uuids = [h.uuid for h in hits]
+        self.assertLess(uuids.index(str(self.m4.uuid)), uuids.index(str(self.m3.uuid)))
 
     def test_malformed_query_does_not_crash(self):
         # A lone quote/dash would raise fts5 syntax error if unsanitized.
@@ -159,6 +193,11 @@ class TriggerRebuildTests(TransactionTestCase):
             imap_uid=1,
             subject="Reindexed subject",
             snippet="x",
+            body_text="the postmigration keyword lives only in the body",
         )
         hits = search_mail("reindexed", user, limit=10)
+        self.assertIn(str(msg.uuid), [h.uuid for h in hits])
+        # The rebuilt triggers must index the body too, not only the
+        # 0025-era column list.
+        hits = search_mail("postmigration", user, limit=10)
         self.assertIn(str(msg.uuid), [h.uuid for h in hits])

@@ -30,6 +30,9 @@ SEED_USERS = [
 SEED_MAIL_EMAIL = "smoke@example.com"
 SEED_CUSTOM_LABEL = "SmokeCustom"
 SEED_MAIL_SUBJECT = "Résumé du projet Alpha"
+# "prévisionnel" appears ONLY in the body, never in subject/snippet/from,
+# so finding it proves the body is part of the index.
+SEED_MAIL_BODY = "Le budget prévisionnel est joint pour relecture."
 
 
 class Command(BaseCommand):
@@ -85,6 +88,7 @@ class Command(BaseCommand):
             imap_uid=1,
             subject=SEED_MAIL_SUBJECT,
             snippet="notes de réunion",
+            body_text=SEED_MAIL_BODY,
         )
 
         cal = Calendar.objects.create(owner=alice, name="Smoke Cal")
@@ -169,4 +173,17 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(self.style.SUCCESS("  FTS accent-insensitive search OK"))
+
+        # Same message, but through a word that exists only in the body
+        # (accent-insensitive too): proves body_text made it into the
+        # generated tsvector on PostgreSQL.
+        hits = search_mail("previsionnel", alice, limit=10)
+        subjects = [h.name for h in hits]
+        if SEED_MAIL_SUBJECT not in subjects:
+            raise CommandError(
+                "FTS verify failed: body-only word not found via full-text "
+                f"search on PostgreSQL. Got: {subjects}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS body search OK"))
         self.stdout.write(self.style.SUCCESS("PostgreSQL migration smoke test OK"))

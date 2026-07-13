@@ -9,7 +9,7 @@ from workspace.core.module_registry import SearchResult, SearchTag
 from .models import MailMessage
 from .queries import user_account_ids
 
-_FTS_FALLBACK_FIELDS = ("subject", "snippet", "from_email", "from_name")
+_FTS_FALLBACK_FIELDS = ("subject", "snippet", "from_email", "from_name", "body_text")
 
 
 def fts_messages(qs, query):

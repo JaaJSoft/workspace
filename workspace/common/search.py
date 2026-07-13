@@ -1,15 +1,10 @@
 import re
 
 from django.db import connection
-from django.db.models import BooleanField, Case, FloatField, Q, Value, When
+from django.db.models import BooleanField, FloatField, Q, Value
 from django.db.models.expressions import RawSQL
 
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
-
-# SQLite is dev/test only; a generous bound keeps the Case/When mapping sane
-# without starving a user (access control is applied on the queryset afterwards,
-# never as a pre-filter cap).
-_SQLITE_SAFETY_LIMIT = 2000
 
 _fts5_available_cache = None
 
@@ -75,32 +70,25 @@ def _pg_filter(qs, query, pg_column):  # pragma: no cover
 
 def _sqlite_filter(qs, query, fts_table):
     match = to_fts5_match(query)
-    empty = qs.none().annotate(search_rank=Value(0.0, output_field=FloatField()))
     if not match:
-        return empty
+        return qs.none().annotate(search_rank=Value(0.0, output_field=FloatField()))
 
     db_table = qs.model._meta.db_table
-    pk_col = qs.model._meta.pk.column
-    with connection.cursor() as c:
-        # fts_table is a trusted constant supplied by the caller, never user input.
-        # -f.rank flips FTS5's bm25 (lower = better) into "higher = better".
-        c.execute(
-            f'SELECT m."{pk_col}", -f.rank '
-            f'FROM "{fts_table}" f '
-            f'JOIN "{db_table}" m ON m.rowid = f.rowid '
-            f'WHERE "{fts_table}" MATCH %s '
-            f"ORDER BY f.rank LIMIT %s",
-            (match, _SQLITE_SAFETY_LIMIT),
+    # Correlated subquery so the FTS match runs INSIDE the caller's queryset:
+    # its filters (access control included) and the match apply in the same
+    # SQL, with no intermediate result cap that could drop a caller's rows.
+    # fts_table is a trusted constant supplied by the caller, never user input.
+    # -rank flips FTS5's bm25 (lower = better) into "higher = better";
+    # the subquery yields NULL for non-matching rows, filtered out below.
+    return qs.annotate(
+        search_rank=RawSQL(
+            f'(SELECT -rank FROM "{fts_table}" '
+            f'WHERE "{fts_table}".rowid = "{db_table}".rowid '
+            f'AND "{fts_table}" MATCH %s)',
+            (match,),
+            output_field=FloatField(),
         )
-        rows = c.fetchall()
-
-    if not rows:
-        return empty
-
-    whens = [When(pk=pk, then=Value(rank)) for pk, rank in rows]
-    return qs.filter(pk__in=[pk for pk, _ in rows]).annotate(
-        search_rank=Case(*whens, default=Value(0.0), output_field=FloatField())
-    )
+    ).filter(search_rank__isnull=False)
 
 
 def _fallback_filter(qs, query, fields):

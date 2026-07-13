@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import TestCase
@@ -107,6 +109,36 @@ class SqliteFtsBranchTests(TestCase):
         rows = list(qs)
         self.assertEqual([r.username for r in rows], ["alpha"])
         self.assertIsInstance(rows[0].search_rank, float)
+
+    def test_queryset_filters_apply_before_any_result_cap(self):
+        # SQLite serves small production environments, so a queryset's
+        # access-control filters must apply INSIDE the FTS query. A global
+        # top-N cap taken before those filters can starve a user out of
+        # their own matches when other rows rank higher. The cap is patched
+        # tiny (create=True keeps the patch valid once the cap is gone) to
+        # reproduce that starvation without thousands of rows.
+        for i in range(3):
+            User.objects.create_user(
+                username=f"noisy{i}",
+                email=f"n{i}@x.io",
+                first_name="starve starve starve starve",
+            )
+        target = User.objects.create_user(
+            username="target", email="t@x.io", first_name="starve"
+        )
+        with connection.cursor() as c:
+            c.execute("INSERT INTO tmp_user_fts(tmp_user_fts) VALUES('rebuild')")
+
+        restricted = User.objects.filter(pk=target.pk)
+        with mock.patch.object(fts, "_SQLITE_SAFETY_LIMIT", 2, create=True):
+            qs = fts.apply_fulltext(
+                restricted,
+                "starve",
+                pg_column="unused",
+                sqlite_fts_table="tmp_user_fts",
+                fallback_fields=("first_name",),
+            )
+            self.assertEqual([u.username for u in qs], ["target"])
 
     def test_no_match_returns_empty(self):
         qs = fts.apply_fulltext(

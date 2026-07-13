@@ -1,5 +1,5 @@
 {# concentric radius: board column is rounded-box with p-3, so inner radius = rounded-box - 0.75rem #}
-<li class="card rounded-[calc(var(--rounded-box)_-_0.75rem)] bg-base-100 shadow-sm select-none {% if writable %}cursor-grab{% endif %}"
+<li class="card rounded-[max(0px,calc(var(--rounded-box)_-_0.75rem))] bg-base-100 shadow-sm select-none {% if writable %}cursor-grab{% endif %}"
     :class="dragging === '{{ task.uuid }}' && 'opacity-50'"
     {% if writable %}draggable="true"{% endif %}
     data-task-uuid="{{ task.uuid }}"

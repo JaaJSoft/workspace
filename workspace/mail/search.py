@@ -3,30 +3,39 @@ from collections import Counter, defaultdict
 
 from django.db.models import Q
 
+from workspace.common.search import apply_fulltext
 from workspace.core.module_registry import SearchResult, SearchTag
 
 from .models import MailMessage
 from .queries import user_account_ids
 
+_FTS_FALLBACK_FIELDS = ("subject", "snippet", "from_email", "from_name")
+
+
+def fts_messages(qs, query):
+    """Apply mail full-text search to a MailMessage queryset.
+
+    Single source of the mail FTS schema names; returns qs filtered to
+    matches and annotated with `search_rank`. Caller applies order_by.
+    """
+    return apply_fulltext(
+        qs,
+        query,
+        pg_column="search_tsv",
+        sqlite_fts_table="mail_message_fts",
+        fallback_fields=_FTS_FALLBACK_FIELDS,
+    )
+
 
 def search_mail(query, user, limit):
     account_ids = user_account_ids(user)
 
-    messages = (
+    base = (
         MailMessage.objects.select_related("folder")
-        .filter(
-            account_id__in=account_ids,
-            deleted_at__isnull=True,
-        )
+        .filter(account_id__in=account_ids, deleted_at__isnull=True)
         .exclude(folder__is_hidden=True)
-        .filter(
-            Q(subject__icontains=query)
-            | Q(snippet__icontains=query)
-            | Q(from_email__icontains=query)
-            | Q(from_name__icontains=query)
-        )
-        .order_by("-date")[:limit]
     )
+    messages = fts_messages(base, query).order_by("-search_rank", "-date")[:limit]
 
     return [
         SearchResult(

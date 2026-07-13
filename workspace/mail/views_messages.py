@@ -1,7 +1,7 @@
 import logging
 
 from django.db import transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, Prefetch
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
@@ -128,12 +128,9 @@ class MailMessageListView(CacheControlMixin, APIView):
         # Apply optional filters
         search = request.query_params.get("search", "").strip()
         if search:
-            qs = qs.filter(
-                Q(subject__icontains=search)
-                | Q(snippet__icontains=search)
-                | Q(from_email__icontains=search)
-                | Q(from_name__icontains=search)
-            )
+            from workspace.mail.search import fts_messages
+
+            qs = fts_messages(qs, search)
         if is_truthy(request.query_params.get("unread")):
             qs = qs.filter(is_read=False)
         if is_truthy(request.query_params.get("starred")):
@@ -142,6 +139,7 @@ class MailMessageListView(CacheControlMixin, APIView):
             qs = qs.filter(has_attachments=True)
 
         total = qs.count()
+        order_fields = ("-search_rank", "-date") if search else ("-date",)
         messages = (
             qs.annotate(attachments_count=Count("attachments"))
             .prefetch_related(
@@ -152,7 +150,7 @@ class MailMessageListView(CacheControlMixin, APIView):
                     ),
                 )
             )
-            .order_by("-date")[offset : offset + page_size]
+            .order_by(*order_fields)[offset : offset + page_size]
         )
 
         return Response(

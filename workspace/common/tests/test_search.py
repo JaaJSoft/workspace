@@ -5,25 +5,24 @@ from django.db import connection
 from django.test import TestCase
 
 from workspace.common import search as fts
+from workspace.common.search.sqlite import to_fts5_match
 
 User = get_user_model()
 
 
 class Fts5MatchSanitizerTests(TestCase):
     def test_plain_words_are_quoted_and_anded(self):
-        self.assertEqual(fts.to_fts5_match("hello world"), '"hello" "world"')
+        self.assertEqual(to_fts5_match("hello world"), '"hello" "world"')
 
     def test_stray_operators_are_neutralized(self):
         # A lone quote or dash would raise "fts5: syntax error" if passed raw.
-        self.assertEqual(
-            fts.to_fts5_match('quarterly" -report'), '"quarterly" "report"'
-        )
+        self.assertEqual(to_fts5_match('quarterly" -report'), '"quarterly" "report"')
 
     def test_empty_query_yields_empty_string(self):
-        self.assertEqual(fts.to_fts5_match("   "), "")
+        self.assertEqual(to_fts5_match("   "), "")
 
     def test_unicode_word_characters_are_kept(self):
-        self.assertEqual(fts.to_fts5_match("café réunion"), '"café" "réunion"')
+        self.assertEqual(to_fts5_match("café réunion"), '"café" "réunion"')
 
 
 class FallbackBranchTests(TestCase):

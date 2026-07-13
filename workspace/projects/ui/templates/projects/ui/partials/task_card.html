@@ -22,16 +22,20 @@
         {% endfor %}
       </span>
     {% endif %}
-    <span class="flex items-center gap-2 text-xs text-base-content/60">
+    <div class="flex items-center gap-2 text-xs text-base-content/60">
       <span class="badge badge-ghost badge-xs">{{ task.get_priority_display }}</span>
       {% if task.due_date %}
         <span class="flex items-center gap-1">
           <i data-lucide="calendar" class="w-3 h-3"></i>{{ task.due_date|date:"M j" }}
         </span>
       {% endif %}
-      {% for assignee in task.assignees.all %}
-        <span class="badge badge-ghost badge-xs">{{ assignee.username }}</span>
-      {% endfor %}
-    </span>
+      {% if task.assignees.all %}
+        <div class="flex -space-x-2 ml-auto">
+          {% for assignee in task.assignees.all %}
+            {% include "ui/partials/user_avatar.html" with user=assignee size="2xs" show_presence=False show_card=True %}
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
   </div>
 </li>

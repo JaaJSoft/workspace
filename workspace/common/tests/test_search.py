@@ -25,6 +25,22 @@ class Fts5MatchSanitizerTests(TestCase):
         self.assertEqual(to_fts5_match("café réunion"), '"café" "réunion"')
 
 
+class Fts5ProbeTests(TestCase):
+    def test_probe_failure_is_not_cached(self):
+        # A transient error (locked db, dropped connection) must not pin the
+        # degraded fallback for the whole process lifetime; only a real
+        # probe result may be cached.
+        orig_cache = fts._fts5_available_cache
+        fts._fts5_available_cache = None
+        try:
+            with mock.patch("workspace.common.search.connection") as conn:
+                conn.cursor.side_effect = RuntimeError("boom")
+                self.assertFalse(fts.fts5_available())
+            self.assertIsNone(fts._fts5_available_cache)
+        finally:
+            fts._fts5_available_cache = orig_cache
+
+
 class FallbackBranchTests(TestCase):
     """When FTS5 is unavailable, apply_fulltext degrades to icontains."""
 
@@ -53,6 +69,23 @@ class FallbackBranchTests(TestCase):
             fts.fts5_available = orig
         self.assertEqual([r.username for r in rows], ["a"])
         self.assertEqual(rows[0].search_rank, 0.0)
+
+    def test_empty_fallback_fields_return_no_rows(self):
+        # An empty Q() matches every row; an empty field tuple must fail
+        # safe (no rows), consistent with the blank-query contract.
+        orig = fts.fts5_available
+        fts.fts5_available = lambda: False
+        try:
+            qs = fts.apply_fulltext(
+                User.objects.all(),
+                "ada",
+                pg_column="unused",
+                sqlite_fts_table="unused",
+                fallback_fields=(),
+            )
+            self.assertEqual(list(qs), [])
+        finally:
+            fts.fts5_available = orig
 
     def test_blank_query_returns_no_rows_on_fallback(self):
         # An empty query would make icontains="" match every row; a

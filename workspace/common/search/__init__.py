@@ -1,9 +1,13 @@
+import logging
+
 from django.db import connection
 from django.db.models import FloatField, Value
 
 from .fallback import IcontainsFulltext
 from .postgres import PostgresFulltext
 from .sqlite import SqliteFtsFulltext
+
+logger = logging.getLogger(__name__)
 
 _fts5_available_cache = None
 
@@ -20,7 +24,11 @@ def fts5_available():
                 )
                 _fts5_available_cache = c.fetchone() is not None
         except Exception:
-            _fts5_available_cache = False
+            # A transient failure (locked db, dropped connection) must not
+            # pin the degraded fallback for the process lifetime; only a
+            # real probe result is cached.
+            logger.exception("FTS5 availability probe failed; will retry")
+            return False
     return _fts5_available_cache
 
 

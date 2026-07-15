@@ -1,0 +1,175 @@
+from django.contrib.auth import get_user_model
+from django.db import connection
+from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
+
+from workspace.chat.models import Conversation, ConversationMember, Message
+from workspace.chat.services.message_search import search_messages_qs
+from workspace.common.search import fts5_available
+
+User = get_user_model()
+
+
+def make_conversation(owner, *members, kind="group", title="Room"):
+    conv = Conversation.objects.create(kind=kind, title=title, created_by=owner)
+    for user in (owner, *members):
+        ConversationMember.objects.create(conversation=conv, user=user)
+    return conv
+
+
+class FtsSchemaTests(TestCase):
+    def test_sqlite_fts_table_exists(self):
+        if connection.vendor != "sqlite":
+            self.skipTest("SQLite-only schema check")
+        with connection.cursor() as c:
+            c.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type='table' AND name='chat_message_fts'"
+            )
+            self.assertIsNotNone(c.fetchone())
+
+    def test_sqlite_triggers_track_insert_update_delete(self):
+        if connection.vendor != "sqlite":
+            self.skipTest("SQLite-only trigger check")
+        alice = User.objects.create_user(username="a", email="a@x.io")
+        conv = make_conversation(alice)
+        msg = Message.objects.create(
+            conversation=conv, author=alice, body="the zanzibar report"
+        )
+
+        def match(term):
+            with connection.cursor() as c:
+                c.execute(
+                    "SELECT rowid FROM chat_message_fts "
+                    "WHERE chat_message_fts MATCH %s",
+                    (f'"{term}"',),
+                )
+                return c.fetchone()
+
+        self.assertIsNotNone(match("zanzibar"))
+
+        msg.body = "the yokohama report"
+        msg.save(update_fields=["body"])
+        self.assertIsNone(match("zanzibar"))
+        self.assertIsNotNone(match("yokohama"))
+
+        msg.delete()
+        self.assertIsNone(match("yokohama"))
+
+
+class SearchServiceTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(username="alice", email="al@x.io")
+        cls.bob = User.objects.create_user(username="bob", email="bo@x.io")
+        cls.conv_shared = make_conversation(cls.alice, cls.bob, title="Shared")
+        cls.conv_bob_only = make_conversation(cls.bob, title="Private")
+        cls.m_shared = Message.objects.create(
+            conversation=cls.conv_shared,
+            author=cls.bob,
+            body="the quarterly kumquat budget is ready",
+        )
+        cls.m_private = Message.objects.create(
+            conversation=cls.conv_bob_only,
+            author=cls.bob,
+            body="secret kumquat plans nobody else may read",
+        )
+
+    def test_finds_by_body(self):
+        hits = list(search_messages_qs(self.alice, "kumquat"))
+        self.assertEqual([m.uuid for m in hits], [self.m_shared.uuid])
+
+    def test_access_control_excludes_non_member_conversations(self):
+        # Bob sees both, Alice only the shared one - even though the term
+        # matches in both conversations.
+        self.assertEqual(len(list(search_messages_qs(self.bob, "kumquat"))), 2)
+        self.assertEqual(len(list(search_messages_qs(self.alice, "kumquat"))), 1)
+
+    def test_left_member_loses_access(self):
+        membership = ConversationMember.objects.get(
+            conversation=self.conv_shared, user=self.alice
+        )
+        membership.left_at = timezone.now()
+        membership.save(update_fields=["left_at"])
+        self.assertEqual(list(search_messages_qs(self.alice, "kumquat")), [])
+
+    def test_conversation_scope(self):
+        hits = list(
+            search_messages_qs(
+                self.bob, "kumquat", conversation_id=self.conv_bob_only.uuid
+            )
+        )
+        self.assertEqual([m.uuid for m in hits], [self.m_private.uuid])
+
+    def test_deleted_messages_excluded(self):
+        Message.objects.filter(pk=self.m_shared.pk).update(deleted_at=timezone.now())
+        self.assertEqual(list(search_messages_qs(self.alice, "kumquat")), [])
+
+    def test_accent_insensitive(self):
+        if connection.vendor != "sqlite" or not fts5_available():
+            self.skipTest("SQLite + FTS5 required for the accent path")
+        Message.objects.create(
+            conversation=self.conv_shared,
+            author=self.alice,
+            body="la réunion est décalée",
+        )
+        hits = list(search_messages_qs(self.alice, "reunion"))
+        self.assertEqual(len(hits), 1)
+
+    def test_term_frequency_ranks_higher(self):
+        if connection.vendor != "sqlite" or not fts5_available():
+            self.skipTest("ranking asserted on the FTS5 path only")
+        twice = Message.objects.create(
+            conversation=self.conv_shared,
+            author=self.alice,
+            body="pretzel pretzel discussion about snacks",
+        )
+        once = Message.objects.create(
+            conversation=self.conv_shared,
+            author=self.alice,
+            body="pretzel mention in passing here too",
+        )
+        hits = [m.uuid for m in search_messages_qs(self.alice, "pretzel")]
+        self.assertLess(hits.index(twice.uuid), hits.index(once.uuid))
+
+    def test_equal_rank_falls_back_to_newest_first(self):
+        older = Message.objects.create(
+            conversation=self.conv_shared, author=self.alice, body="same walrus text"
+        )
+        newer = Message.objects.create(
+            conversation=self.conv_shared, author=self.alice, body="same walrus text"
+        )
+        hits = [m.uuid for m in search_messages_qs(self.alice, "walrus")]
+        self.assertEqual(hits, [newer.uuid, older.uuid])
+
+    def test_malformed_query_does_not_crash(self):
+        hits = list(search_messages_qs(self.alice, 'kumquat" -budget'))
+        self.assertIsInstance(hits, list)
+
+    def test_blank_query_returns_no_rows(self):
+        self.assertEqual(list(search_messages_qs(self.alice, "   ")), [])
+
+
+class TriggerRebuildTests(TransactionTestCase):
+    """TransactionTestCase: executescript commits implicitly, which would
+    break plain TestCase rollback isolation."""
+
+    def test_rebuild_after_triggers_dropped(self):
+        if connection.vendor != "sqlite":
+            self.skipTest("SQLite-only resilience path")
+        from workspace.common.search.schema import rebuild_sqlite_fts_indexes
+
+        alice = User.objects.create_user(username="r", email="r@x.io")
+        conv = make_conversation(alice)
+        with connection.cursor() as c:
+            c.execute("DROP TRIGGER IF EXISTS chat_message_fts_ai")
+            c.execute("DROP TRIGGER IF EXISTS chat_message_fts_ad")
+            c.execute("DROP TRIGGER IF EXISTS chat_message_fts_au")
+
+        rebuild_sqlite_fts_indexes(sender=None, using=connection.alias)
+
+        msg = Message.objects.create(
+            conversation=conv, author=alice, body="postrebuild keyword present"
+        )
+        hits = [m.uuid for m in search_messages_qs(alice, "postrebuild")]
+        self.assertIn(msg.uuid, hits)

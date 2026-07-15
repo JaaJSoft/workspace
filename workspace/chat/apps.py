@@ -6,6 +6,11 @@ class ChatConfig(AppConfig):
     name = "workspace.chat"
 
     def ready(self):
+        from workspace.chat.services.message_search import CHAT_FTS
+        from workspace.common.search.schema import register_fulltext_index
+
+        register_fulltext_index(CHAT_FTS)
+
         from workspace.chat.search import search_conversations
         from workspace.chat.sse_provider import ChatSSEProvider
         from workspace.core.module_registry import (

@@ -9,6 +9,9 @@ exercise the cross-DB code paths fixed in the migration command:
   signal must respect ``raw=True`` during loaddata, otherwise the labels
   duplicate)
 * one custom ``MailLabel`` (verifies fixture-loaded rows survive)
+* a ``MailMessage`` with an accented subject (verifies the generated
+  ``search_tsv`` column populates during loaddata and ``f_unaccent`` makes
+  the GIN index accent-insensitive)
 * a couple of files + a calendar event (sanity-check UUID PKs)
 
 Run on the target ``DATABASE_URL`` (``--verify``) after
@@ -26,6 +29,10 @@ SEED_USERS = [
 ]
 SEED_MAIL_EMAIL = "smoke@example.com"
 SEED_CUSTOM_LABEL = "SmokeCustom"
+SEED_MAIL_SUBJECT = "Résumé du projet Alpha"
+# "prévisionnel" appears ONLY in the body, never in subject/snippet/from,
+# so finding it proves the body is part of the index.
+SEED_MAIL_BODY = "Le budget prévisionnel est joint pour relecture."
 
 
 class Command(BaseCommand):
@@ -47,7 +54,12 @@ class Command(BaseCommand):
     def _seed(self):
         from workspace.calendar.models import Calendar, Event
         from workspace.files.models import File
-        from workspace.mail.models import MailAccount, MailLabel
+        from workspace.mail.models import (
+            MailAccount,
+            MailFolder,
+            MailLabel,
+            MailMessage,
+        )
         from workspace.users.models import UserPresence
 
         User = get_user_model()
@@ -63,6 +75,21 @@ class Command(BaseCommand):
             username=SEED_MAIL_EMAIL,
         )
         MailLabel.objects.create(account=account, name=SEED_CUSTOM_LABEL, color="info")
+
+        inbox = MailFolder.objects.create(
+            account=account,
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
+        )
+        MailMessage.objects.create(
+            account=account,
+            folder=inbox,
+            imap_uid=1,
+            subject=SEED_MAIL_SUBJECT,
+            snippet="notes de réunion",
+            body_text=SEED_MAIL_BODY,
+        )
 
         cal = Calendar.objects.create(owner=alice, name="Smoke Cal")
         Event.objects.create(
@@ -83,7 +110,8 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"Seeded users={User.objects.count()}, "
                 f"mail_account={MailAccount.objects.count()}, "
-                f"labels={MailLabel.objects.count()}"
+                f"labels={MailLabel.objects.count()}, "
+                f"messages={MailMessage.objects.count()}"
             )
         )
 
@@ -131,4 +159,31 @@ class Command(BaseCommand):
                 f"({max(alice.pk, bob.pk)}); sequence not reset"
             )
 
+        from workspace.mail.search import search_mail
+
+        # Query without the accent must still match "Résumé" via f_unaccent,
+        # proving the generated tsvector column populated during loaddata and
+        # the GIN index answers the query.
+        hits = search_mail("resume", alice, limit=10)
+        subjects = [h.name for h in hits]
+        if SEED_MAIL_SUBJECT not in subjects:
+            raise CommandError(
+                "FTS verify failed: seeded accented message not found via "
+                f"full-text search on PostgreSQL. Got: {subjects}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS accent-insensitive search OK"))
+
+        # Same message, but through a word that exists only in the body
+        # (accent-insensitive too): proves body_text made it into the
+        # generated tsvector on PostgreSQL.
+        hits = search_mail("previsionnel", alice, limit=10)
+        subjects = [h.name for h in hits]
+        if SEED_MAIL_SUBJECT not in subjects:
+            raise CommandError(
+                "FTS verify failed: body-only word not found via full-text "
+                f"search on PostgreSQL. Got: {subjects}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS body search OK"))
         self.stdout.write(self.style.SUCCESS("PostgreSQL migration smoke test OK"))

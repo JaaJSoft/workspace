@@ -95,34 +95,26 @@ Use read_email with the returned UUID to get the full content."""
         if not query:
             return "Error: query is required"
 
-        from django.db.models import Q
-
         from workspace.mail.models import MailMessage
         from workspace.mail.queries import user_account_ids
+        from workspace.mail.search import fts_messages
 
         account_ids = user_account_ids(user)
-        qs = (
+        base = (
             MailMessage.objects.filter(
                 account_id__in=account_ids, deleted_at__isnull=True
             )
             .exclude(folder__is_hidden=True)
-            .filter(
-                Q(subject__icontains=query)
-                | Q(snippet__icontains=query)
-                | Q(from_email__icontains=query)
-                | Q(from_name__icontains=query)
-            )
             .select_related("folder")
         )
-
         if args.unread_only:
-            qs = qs.filter(is_read=False)
+            base = base.filter(is_read=False)
         if args.starred_only:
-            qs = qs.filter(is_starred=True)
+            base = base.filter(is_starred=True)
         if args.has_attachments:
-            qs = qs.filter(has_attachments=True)
+            base = base.filter(has_attachments=True)
 
-        matches = qs.order_by("-date")[:20]
+        matches = fts_messages(base, query).order_by("-search_rank", "-date")[:20]
         if not matches:
             return f'No emails found matching "{query}".'
 

@@ -13,8 +13,6 @@ post_migrate trigger-rebuild handler consumes the live declarations.
 
 from dataclasses import dataclass
 
-from django.db import connections
-
 PG_TSV_COLUMN = "search_tsv"
 
 _FTS5_TOKENIZER = "unicode61 remove_diacritics 2"

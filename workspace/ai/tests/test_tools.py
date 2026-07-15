@@ -2,11 +2,13 @@ import json
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import TestCase
 
 from workspace.ai.models import BotProfile, UserMemory
 from workspace.ai.tool_registry import tool_registry
 from workspace.chat.models import Conversation, ConversationMember, Message
+from workspace.common.search import fts5_available
 
 User = get_user_model()
 
@@ -120,6 +122,8 @@ class ExecuteToolCallTests(TestCase):
     def test_search_messages_ranked_by_relevance(self):
         # top is created first (older) but far more relevant; a plain
         # -created_at ordering would incorrectly rank it second.
+        if connection.vendor == "sqlite" and not fts5_available():
+            self.skipTest("relevance ranking needs FTS5 on SQLite")
         conv = Conversation.objects.create(created_by=self.user)
         ConversationMember.objects.create(conversation=conv, user=self.user)
         Message.objects.create(

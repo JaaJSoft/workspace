@@ -199,6 +199,20 @@ class GlobalMessageProviderTests(TestCase):
         self.assertIn("flamingo", r.matched_value)
         self.assertEqual(r.module_slug, "chat")
 
+    def test_untitled_group_result_named_after_author(self):
+        # Only DMs borrow the other member's name; an untitled group must
+        # fall back to the message author, not an arbitrary member.
+        from workspace.chat.search import search_chat_messages
+
+        group = make_conversation(self.alice, self.bob, title="")
+        Message.objects.create(
+            conversation=group,
+            author=self.alice,
+            body="the heron budget needs a look",
+        )
+        results = search_chat_messages("heron", self.alice, 10)
+        self.assertEqual(results[0].name, "galice")
+
     def test_excerpt_is_truncated(self):
         from workspace.chat.search import search_chat_messages
 

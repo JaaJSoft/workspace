@@ -106,8 +106,10 @@ def search_chat_messages(query, user, limit):
         author = msg.author.get_full_name() or msg.author.username
         if conv.title:
             name = conv.title
-        else:
+        elif conv.kind == Conversation.Kind.DM:
             name = _other_member_display_name(conv, user) or author
+        else:
+            name = author
         results.append(
             SearchResult(
                 uuid=str(msg.uuid),

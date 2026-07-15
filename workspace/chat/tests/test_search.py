@@ -99,15 +99,17 @@ class ConversationMessageSearchTests(ChatTestMixin, APITestCase):
         self.assertEqual(resp.data["results"], [])
 
     def test_results_ordered_newest_first(self):
+        # Identical bodies -> equal bm25 rank on the FTS path, so the
+        # -created_at tiebreak is what actually orders these newest-first.
         msg1 = Message.objects.create(
             conversation=self.group,
             author=self.creator,
-            body="first hello",
+            body="notice hello",
         )
         msg2 = Message.objects.create(
             conversation=self.group,
             author=self.member,
-            body="second hello",
+            body="notice hello",
         )
 
         self.client.force_authenticate(self.member)
@@ -117,6 +119,26 @@ class ConversationMessageSearchTests(ChatTestMixin, APITestCase):
         # Newest first
         self.assertEqual(resp.data["results"][0]["uuid"], str(msg2.uuid))
         self.assertEqual(resp.data["results"][1]["uuid"], str(msg1.uuid))
+
+    def test_query_results_ranked_by_relevance_then_date(self):
+        # top is created first (older) but far more relevant; a plain
+        # -created_at ordering would incorrectly rank it second.
+        top = Message.objects.create(
+            conversation=self.group,
+            author=self.creator,
+            body="duckling duckling duckling",
+        )
+        Message.objects.create(
+            conversation=self.group,
+            author=self.creator,
+            body="duckling",
+        )
+
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(self.url(self.group.uuid), {"q": "duckling"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        uuids = [r["uuid"] for r in resp.data["results"]]
+        self.assertEqual(uuids[0], str(top.uuid))
 
     # -- Filter: author --------------------------------------
 

@@ -80,21 +80,38 @@ def search_conversations(query, user, limit):
     return results[:limit]
 
 
+def _other_member_display_name(conv, user):
+    """Display name of the other active member of a titleless (DM)
+    conversation, or None if there isn't one (degenerate self-DM)."""
+    for member in conv.members.all():
+        if member.user_id == user.pk or member.left_at is not None:
+            continue
+        full_name = member.user.get_full_name()
+        return full_name or member.user.username
+    return None
+
+
 def search_chat_messages(query, user, limit):
     from workspace.chat.services.message_search import search_messages_qs
 
-    messages = search_messages_qs(user, query).select_related("author", "conversation")[
-        :limit
-    ]
+    messages = (
+        search_messages_qs(user, query)
+        .select_related("author", "conversation")
+        .prefetch_related("conversation__members__user")[:limit]
+    )
 
     results = []
     for msg in messages:
         conv = msg.conversation
         author = msg.author.get_full_name() or msg.author.username
+        if conv.title:
+            name = conv.title
+        else:
+            name = _other_member_display_name(conv, user) or author
         results.append(
             SearchResult(
                 uuid=str(msg.uuid),
-                name=conv.title or author,
+                name=name,
                 url=f"/chat/{msg.conversation_id}",
                 matched_value=msg.body[:120],
                 match_type="message",

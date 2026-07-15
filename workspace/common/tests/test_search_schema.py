@@ -60,6 +60,29 @@ class SqlGenerationTests(SimpleTestCase):
             ),
         )
 
+    def test_pg_forward_two_column_exact_string(self):
+        idx = FulltextIndex(
+            table="t",
+            columns=(Col("a", weight="A"), Col("b", weight="B", cap=50)),
+        )
+        self.assertEqual(
+            idx.pg_forward_sql(),
+            (
+                "DROP INDEX IF EXISTS t_tsv_gin;\n"
+                "ALTER TABLE t DROP COLUMN IF EXISTS search_tsv;\n"
+                "\n"
+                "ALTER TABLE t ADD COLUMN search_tsv tsvector\n"
+                "  GENERATED ALWAYS AS (\n"
+                "    setweight(to_tsvector('simple', f_unaccent("
+                "coalesce(a, ''))), 'A') ||\n"
+                "    setweight(to_tsvector('simple', f_unaccent("
+                "left(coalesce(b, ''), 50))), 'B')\n"
+                "  ) STORED;\n"
+                "\n"
+                "CREATE INDEX t_tsv_gin ON t USING gin (search_tsv);"
+            ),
+        )
+
     def test_pg_reverse_drops_index_and_column(self):
         self.assertEqual(
             CHAT_LIKE.pg_reverse_sql(),

@@ -210,6 +210,35 @@ class GlobalMessageProviderTests(TestCase):
         results = search_chat_messages("pelican", self.alice, 10)
         self.assertLessEqual(len(results[0].matched_value), 120)
 
+    def test_dm_result_named_after_other_member_not_searcher(self):
+        from workspace.chat.search import search_chat_messages
+
+        dm = make_conversation(self.alice, self.bob, kind="dm", title="")
+        Message.objects.create(
+            conversation=dm,
+            author=self.alice,
+            body="the aardvark schedule is confirmed",
+        )
+
+        results = search_chat_messages("aardvark", self.alice, 10)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].name, "gbob")
+
+    def test_dm_result_falls_back_to_author_when_no_other_member(self):
+        from workspace.chat.search import search_chat_messages
+
+        solo = Conversation.objects.create(kind="dm", title="", created_by=self.alice)
+        ConversationMember.objects.create(conversation=solo, user=self.alice)
+        Message.objects.create(
+            conversation=solo,
+            author=self.alice,
+            body="the narwhal reminder to self",
+        )
+
+        results = search_chat_messages("narwhal", self.alice, 10)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].name, "galice")
+
     def test_provider_is_registered(self):
         # ModuleRegistry has no public listing accessor for search
         # providers (only register_search_provider/search); the apps.py

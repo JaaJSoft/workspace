@@ -13,6 +13,8 @@ post_migrate trigger-rebuild handler consumes the live declarations.
 
 from dataclasses import dataclass
 
+from django.db import connections
+
 PG_TSV_COLUMN = "search_tsv"
 
 _FTS5_TOKENIZER = "unicode61 remove_diacritics 2"
@@ -146,3 +148,40 @@ class FulltextIndex:
             f"INSERT INTO {self.fts_table}({self.fts_table}, rank)\n"
             f"  VALUES ('rank', 'bm25({weights})');"
         )
+
+
+_registered = {}
+
+
+def register_fulltext_index(index):
+    """Register a declaration for the post_migrate trigger rebuild.
+
+    Call from AppConfig.ready(). Keyed by table so a repeated ready() run
+    replaces instead of duplicating.
+    """
+    _registered[index.table] = index
+
+
+def registered_fulltext_indexes():
+    return tuple(_registered.values())
+
+
+def rebuild_sqlite_fts_indexes(sender, using, **kwargs):
+    """Recreate FTS triggers and reindex after a migration.
+
+    Django's SQLite schema changes recreate tables (create-copy-drop-rename),
+    which silently drops attached triggers. This restores them idempotently
+    for every registered index whose FTS table exists.
+    """
+    conn = connections[using]
+    if conn.vendor != "sqlite":
+        return
+    with conn.cursor() as cursor:
+        for index in registered_fulltext_indexes():
+            cursor.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=%s",
+                [index.fts_table],
+            )
+            if cursor.fetchone() is None:
+                continue
+            cursor.executescript(index.sqlite_triggers_sql())

@@ -1,5 +1,10 @@
-from django.test import SimpleTestCase
+from unittest import mock
 
+from django.contrib.auth import get_user_model
+from django.db import connection
+from django.test import SimpleTestCase, TransactionTestCase
+
+from workspace.common.search import fts5_available, schema
 from workspace.common.search.schema import PG_TSV_COLUMN, Col, FulltextIndex
 
 # Module-level so the fts_sql command test (and humans) can import them.
@@ -138,3 +143,55 @@ class SqlGenerationTests(SimpleTestCase):
         self.assertIn("VALUES ('rebuild')", sql)
         self.assertIn("'bm25(10.0)'", sql)
         self.assertNotIn("DROP TABLE", sql)
+
+
+class RegistryTests(SimpleTestCase):
+    def test_register_and_list(self):
+        idx = FulltextIndex(table="reg_test_table", columns=("a",))
+        with mock.patch.dict(schema._registered, {}, clear=True):
+            schema.register_fulltext_index(idx)
+            self.assertEqual(schema.registered_fulltext_indexes(), (idx,))
+            # Re-registering the same table replaces, not duplicates
+            # (ready() can run more than once in some test setups).
+            schema.register_fulltext_index(idx)
+            self.assertEqual(len(schema.registered_fulltext_indexes()), 1)
+
+
+class RebuildHandlerTests(TransactionTestCase):
+    """TransactionTestCase: executescript issues an implicit COMMIT which
+    breaks TestCase's rollback isolation."""
+
+    USER_IDX = FulltextIndex(table="auth_user", columns=("first_name",))
+
+    def setUp(self):
+        if connection.vendor != "sqlite" or not fts5_available():
+            self.skipTest("SQLite + FTS5 required")
+        with connection.cursor() as c:
+            c.executescript(self.USER_IDX.sqlite_forward_sql())
+
+    def tearDown(self):
+        with connection.cursor() as c:
+            c.executescript(self.USER_IDX.sqlite_reverse_sql())
+
+    def test_handler_restores_dropped_triggers(self):
+        with connection.cursor() as c:
+            c.execute("DROP TRIGGER IF EXISTS auth_user_fts_ai")
+        with mock.patch.dict(
+            schema._registered, {"auth_user": self.USER_IDX}, clear=True
+        ):
+            schema.rebuild_sqlite_fts_indexes(sender=None, using=connection.alias)
+        get_user_model().objects.create_user(
+            username="fts-reg", email="f@x.io", first_name="reindexable"
+        )
+        with connection.cursor() as c:
+            c.execute(
+                "SELECT rowid FROM auth_user_fts WHERE auth_user_fts MATCH %s",
+                ('"reindexable"',),
+            )
+            self.assertIsNotNone(c.fetchone())
+
+    def test_handler_skips_missing_fts_table(self):
+        ghost = FulltextIndex(table="no_such_table", columns=("a",))
+        with mock.patch.dict(schema._registered, {"no_such_table": ghost}, clear=True):
+            # Must not raise even though no_such_table_fts does not exist.
+            schema.rebuild_sqlite_fts_indexes(sender=None, using=connection.alias)

@@ -13,13 +13,6 @@ from .queries import user_account_ids
 # Column order is frozen into the applied bm25 config
 # bm25(10.0, 2.0, 4.0, 4.0, 1.0): subject A, snippet C, from_email B,
 # from_name B, body_text D. Do not reorder without a migration.
-#
-# Note: this declaration is not a byte-faithful mirror of the applied 0026
-# PG column. 0026 merges from_email/from_name into a single weight-B
-# setweight, while this emits two separate B setweights - semantically
-# identical for ts_rank, since setweight is additive per weight class. The
-# PG column is never rebuilt from the live declaration; only the SQLite
-# triggers are (see rebuild_sqlite_fts_indexes).
 MAIL_FTS = FulltextIndex(
     table="mail_mailmessage",
     columns=(

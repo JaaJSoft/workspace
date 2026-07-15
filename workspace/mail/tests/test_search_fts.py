@@ -14,7 +14,7 @@ class FtsSchemaTests(TestCase):
         with connection.cursor() as c:
             c.execute(
                 "SELECT 1 FROM sqlite_master "
-                "WHERE type='table' AND name='mail_message_fts'"
+                "WHERE type='table' AND name='mail_mailmessage_fts'"
             )
             self.assertIsNotNone(c.fetchone())
 
@@ -47,7 +47,8 @@ class FtsSchemaTests(TestCase):
         )
         with connection.cursor() as c:
             c.execute(
-                "SELECT rowid FROM mail_message_fts WHERE mail_message_fts MATCH %s",
+                "SELECT rowid FROM mail_mailmessage_fts "
+                "WHERE mail_mailmessage_fts MATCH %s",
                 ('"synergy"',),
             )
             hit = c.fetchone()
@@ -164,7 +165,7 @@ class TriggerRebuildTests(TransactionTestCase):
             self.skipTest("SQLite-only resilience path")
         from django.contrib.auth import get_user_model
 
-        from workspace.mail.apps import rebuild_sqlite_fts
+        from workspace.common.search.schema import rebuild_sqlite_fts_indexes
         from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
         user = get_user_model().objects.create_user(username="r", email="r@x.io")
@@ -181,11 +182,11 @@ class TriggerRebuildTests(TransactionTestCase):
             display_name="Inbox",
         )
         with connection.cursor() as c:
-            c.execute("DROP TRIGGER IF EXISTS mail_message_fts_ai")
-            c.execute("DROP TRIGGER IF EXISTS mail_message_fts_ad")
-            c.execute("DROP TRIGGER IF EXISTS mail_message_fts_au")
+            c.execute("DROP TRIGGER IF EXISTS mail_mailmessage_fts_ai")
+            c.execute("DROP TRIGGER IF EXISTS mail_mailmessage_fts_ad")
+            c.execute("DROP TRIGGER IF EXISTS mail_mailmessage_fts_au")
 
-        rebuild_sqlite_fts(sender=None, using=connection.alias)
+        rebuild_sqlite_fts_indexes(sender=None, using=connection.alias)
 
         msg = MailMessage.objects.create(
             account=account,

@@ -5,9 +5,16 @@ from django.db import connection
 from django.test import TestCase
 
 from workspace.common import search as fts
+from workspace.common.search.fallback import IcontainsFulltext
+from workspace.common.search.schema import FulltextIndex
 from workspace.common.search.sqlite import to_fts5_match
 
 User = get_user_model()
+
+# fts_table derives to auth_user_fts; the SQLite branch tests create that
+# exact table so the derived name resolves.
+USER_FTS = FulltextIndex(table="auth_user", columns=("first_name", "username"))
+USER_NAME_FTS = FulltextIndex(table="auth_user", columns=("first_name",))
 
 
 class Fts5MatchSanitizerTests(TestCase):
@@ -57,13 +64,7 @@ class FallbackBranchTests(TestCase):
         orig = fts.fts5_available
         fts.fts5_available = lambda: False
         try:
-            qs = fts.apply_fulltext(
-                User.objects.all(),
-                "ada",
-                pg_column="unused",
-                sqlite_fts_table="unused",
-                fallback_fields=("first_name", "username"),
-            )
+            qs = fts.apply_fulltext(User.objects.all(), "ada", index=USER_FTS)
             rows = list(qs.order_by("-search_rank", "username"))
         finally:
             fts.fts5_available = orig
@@ -71,21 +72,10 @@ class FallbackBranchTests(TestCase):
         self.assertEqual(rows[0].search_rank, 0.0)
 
     def test_empty_fallback_fields_return_no_rows(self):
-        # An empty Q() matches every row; an empty field tuple must fail
-        # safe (no rows), consistent with the blank-query contract.
-        orig = fts.fts5_available
-        fts.fts5_available = lambda: False
-        try:
-            qs = fts.apply_fulltext(
-                User.objects.all(),
-                "ada",
-                pg_column="unused",
-                sqlite_fts_table="unused",
-                fallback_fields=(),
-            )
-            self.assertEqual(list(qs), [])
-        finally:
-            fts.fts5_available = orig
+        # A FulltextIndex rejects empty columns, but the strategy keeps its
+        # own fail-safe: an empty Q() would match every row.
+        qs = IcontainsFulltext().apply(User.objects.all(), "ada", fallback_fields=())
+        self.assertEqual(list(qs), [])
 
     def test_blank_query_returns_no_rows_on_fallback(self):
         # An empty query would make icontains="" match every row; a
@@ -94,13 +84,7 @@ class FallbackBranchTests(TestCase):
         fts.fts5_available = lambda: False
         try:
             for blank in ("", "   "):
-                qs = fts.apply_fulltext(
-                    User.objects.all(),
-                    blank,
-                    pg_column="unused",
-                    sqlite_fts_table="unused",
-                    fallback_fields=("first_name", "username"),
-                )
+                qs = fts.apply_fulltext(User.objects.all(), blank, index=USER_FTS)
                 self.assertEqual(list(qs), [], f"blank query {blank!r} matched rows")
         finally:
             fts.fts5_available = orig
@@ -120,23 +104,21 @@ class SqliteFtsBranchTests(TestCase):
         )
         with connection.cursor() as c:
             c.execute(
-                "CREATE VIRTUAL TABLE tmp_user_fts USING fts5("
+                "CREATE VIRTUAL TABLE auth_user_fts USING fts5("
                 "first_name, content='auth_user', content_rowid='id', "
                 "tokenize='unicode61 remove_diacritics 2')"
             )
-            c.execute("INSERT INTO tmp_user_fts(tmp_user_fts) VALUES('rebuild')")
+            c.execute("INSERT INTO auth_user_fts(auth_user_fts) VALUES('rebuild')")
 
     def tearDown(self):
         with connection.cursor() as c:
-            c.execute("DROP TABLE IF EXISTS tmp_user_fts")
+            c.execute("DROP TABLE IF EXISTS auth_user_fts")
 
     def test_match_is_accent_insensitive_and_ranked(self):
         qs = fts.apply_fulltext(
             User.objects.all(),
             "resume",  # no accent; must still match "Résumé"
-            pg_column="unused",
-            sqlite_fts_table="tmp_user_fts",
-            fallback_fields=("first_name",),
+            index=USER_NAME_FTS,
         ).order_by("-search_rank")
         rows = list(qs)
         self.assertEqual([r.username for r in rows], ["alpha"])
@@ -159,25 +141,13 @@ class SqliteFtsBranchTests(TestCase):
             username="target", email="t@x.io", first_name="starve"
         )
         with connection.cursor() as c:
-            c.execute("INSERT INTO tmp_user_fts(tmp_user_fts) VALUES('rebuild')")
+            c.execute("INSERT INTO auth_user_fts(auth_user_fts) VALUES('rebuild')")
 
         restricted = User.objects.filter(pk=target.pk)
         with mock.patch.object(fts, "_SQLITE_SAFETY_LIMIT", 2, create=True):
-            qs = fts.apply_fulltext(
-                restricted,
-                "starve",
-                pg_column="unused",
-                sqlite_fts_table="tmp_user_fts",
-                fallback_fields=("first_name",),
-            )
+            qs = fts.apply_fulltext(restricted, "starve", index=USER_NAME_FTS)
             self.assertEqual([u.username for u in qs], ["target"])
 
     def test_no_match_returns_empty(self):
-        qs = fts.apply_fulltext(
-            User.objects.all(),
-            "zzzznomatch",
-            pg_column="unused",
-            sqlite_fts_table="tmp_user_fts",
-            fallback_fields=("first_name",),
-        )
+        qs = fts.apply_fulltext(User.objects.all(), "zzzznomatch", index=USER_NAME_FTS)
         self.assertEqual(list(qs), [])

@@ -62,20 +62,14 @@ or references a past discussion."""
 
         from django.utils import timezone
 
-        from workspace.chat.models import Message
-        from workspace.chat.services.conversations import user_conversation_ids
+        from workspace.chat.services.message_search import search_messages_qs
 
         conv_only = args.conversation_only
         if conv_only and conversation_id:
-            conv_ids = [conversation_id]
+            qs = search_messages_qs(user, query, conversation_id=conversation_id)
         else:
-            conv_ids = list(user_conversation_ids(user))
-
-        qs = Message.objects.filter(
-            conversation_id__in=conv_ids,
-            deleted_at__isnull=True,
-            body__icontains=query,
-        ).select_related("author", "conversation")
+            qs = search_messages_qs(user, query)
+        qs = qs.select_related("author", "conversation")
 
         author = args.author.strip()
         if author:
@@ -96,7 +90,7 @@ or references a past discussion."""
         if args.has_images:
             qs = qs.filter(attachments__mime_type__startswith="image/").distinct()
 
-        matches = qs.order_by("-created_at")[:20]
+        matches = qs[:20]
         if not matches:
             return f'No messages found matching "{query}".'
 

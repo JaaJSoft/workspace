@@ -117,6 +117,28 @@ class ExecuteToolCallTests(TestCase):
         self.assertIn("Goodbye world", result)
         self.assertNotIn("Nothing here", result)
 
+    def test_search_messages_ranked_by_relevance(self):
+        # top is created first (older) but far more relevant; a plain
+        # -created_at ordering would incorrectly rank it second.
+        conv = Conversation.objects.create(created_by=self.user)
+        ConversationMember.objects.create(conversation=conv, user=self.user)
+        Message.objects.create(
+            conversation=conv, author=self.user, body="duckling duckling duckling"
+        )
+        Message.objects.create(conversation=conv, author=self.user, body="duckling")
+
+        tool_call = MagicMock()
+        tool_call.id = "call_6b"
+        tool_call.function.name = "search_messages"
+        tool_call.function.arguments = json.dumps({"query": "duckling"})
+
+        result = tool_registry.execute(
+            tool_call, user=self.user, bot=self.bot_user, conversation_id=str(conv.pk)
+        )
+
+        data = json.loads(result)
+        self.assertEqual(data[0]["body"], "duckling duckling duckling")
+
     def test_search_messages_no_results(self):
         conv = Conversation.objects.create(created_by=self.user)
 

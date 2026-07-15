@@ -173,3 +173,56 @@ class TriggerRebuildTests(TransactionTestCase):
         )
         hits = [m.uuid for m in search_messages_qs(alice, "postrebuild")]
         self.assertIn(msg.uuid, hits)
+
+
+class GlobalMessageProviderTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(username="galice", email="ga@x.io")
+        cls.bob = User.objects.create_user(username="gbob", email="gb@x.io")
+        cls.conv = make_conversation(cls.alice, cls.bob, title="Design room")
+        cls.msg = Message.objects.create(
+            conversation=cls.conv,
+            author=cls.bob,
+            body="the flamingo mockups are ready for review",
+        )
+
+    def test_returns_search_results_for_matching_messages(self):
+        from workspace.chat.search import search_chat_messages
+
+        results = search_chat_messages("flamingo", self.alice, 10)
+        self.assertEqual(len(results), 1)
+        r = results[0]
+        self.assertEqual(r.uuid, str(self.msg.uuid))
+        self.assertEqual(r.name, "Design room")
+        self.assertEqual(r.url, f"/chat/{self.conv.uuid}")
+        self.assertIn("flamingo", r.matched_value)
+        self.assertEqual(r.module_slug, "chat")
+
+    def test_excerpt_is_truncated(self):
+        from workspace.chat.search import search_chat_messages
+
+        Message.objects.create(
+            conversation=self.conv,
+            author=self.bob,
+            body="pelican " + "x" * 500,
+        )
+        results = search_chat_messages("pelican", self.alice, 10)
+        self.assertLessEqual(len(results[0].matched_value), 120)
+
+    def test_provider_is_registered(self):
+        # ModuleRegistry has no public listing accessor for search
+        # providers (only register_search_provider/search); the apps.py
+        # ready() registration already ran when Django loaded the app
+        # registry, so re-registering the same slug raising is proof
+        # "chat-messages" is registered.
+        from workspace.core.module_registry import SearchProviderInfo, registry
+
+        with self.assertRaises(ValueError):
+            registry.register_search_provider(
+                SearchProviderInfo(
+                    slug="chat-messages",
+                    module_slug="chat",
+                    search_fn=lambda q, u, limit: [],
+                )
+            )

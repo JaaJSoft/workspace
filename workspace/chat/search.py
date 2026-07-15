@@ -78,3 +78,30 @@ def search_conversations(query, user, limit):
     # Sort combined results by relevance isn't trivial here,
     # just return up to limit
     return results[:limit]
+
+
+def search_chat_messages(query, user, limit):
+    from workspace.chat.services.message_search import search_messages_qs
+
+    messages = search_messages_qs(user, query).select_related("author", "conversation")[
+        :limit
+    ]
+
+    results = []
+    for msg in messages:
+        conv = msg.conversation
+        author = msg.author.get_full_name() or msg.author.username
+        results.append(
+            SearchResult(
+                uuid=str(msg.uuid),
+                name=conv.title or author,
+                url=f"/chat/{msg.conversation_id}",
+                matched_value=msg.body[:120],
+                match_type="message",
+                type_icon="message-square",
+                module_slug="chat",
+                module_color="info",
+                tags=(SearchTag("Message", "info"),),
+            )
+        )
+    return results

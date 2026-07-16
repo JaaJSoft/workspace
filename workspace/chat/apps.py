@@ -6,7 +6,12 @@ class ChatConfig(AppConfig):
     name = "workspace.chat"
 
     def ready(self):
-        from workspace.chat.search import search_conversations
+        from workspace.chat.services.message_search import CHAT_FTS
+        from workspace.common.search.schema import register_fulltext_index
+
+        register_fulltext_index(CHAT_FTS)
+
+        from workspace.chat.search import search_chat_messages, search_conversations
         from workspace.chat.sse_provider import ChatSSEProvider
         from workspace.core.module_registry import (
             CommandInfo,
@@ -34,6 +39,14 @@ class ChatConfig(AppConfig):
                 slug="chat",
                 module_slug="chat",
                 search_fn=search_conversations,
+            )
+        )
+
+        registry.register_search_provider(
+            SearchProviderInfo(
+                slug="chat-messages",
+                module_slug="chat",
+                search_fn=search_chat_messages,
             )
         )
 

@@ -1,42 +1,4 @@
 from django.apps import AppConfig
-from django.db import connections
-from django.db.models.signals import post_migrate
-
-_SQLITE_FTS_TRIGGERS = """
-CREATE TRIGGER IF NOT EXISTS mail_message_fts_ai AFTER INSERT ON mail_mailmessage BEGIN
-  INSERT INTO mail_message_fts(rowid, subject, snippet, from_email, from_name, body_text)
-  VALUES (new.rowid, new.subject, new.snippet, new.from_email, new.from_name, new.body_text);
-END;
-CREATE TRIGGER IF NOT EXISTS mail_message_fts_ad AFTER DELETE ON mail_mailmessage BEGIN
-  INSERT INTO mail_message_fts(mail_message_fts, rowid, subject, snippet, from_email, from_name, body_text)
-  VALUES ('delete', old.rowid, old.subject, old.snippet, old.from_email, old.from_name, old.body_text);
-END;
-CREATE TRIGGER IF NOT EXISTS mail_message_fts_au AFTER UPDATE ON mail_mailmessage BEGIN
-  INSERT INTO mail_message_fts(mail_message_fts, rowid, subject, snippet, from_email, from_name, body_text)
-  VALUES ('delete', old.rowid, old.subject, old.snippet, old.from_email, old.from_name, old.body_text);
-  INSERT INTO mail_message_fts(rowid, subject, snippet, from_email, from_name, body_text)
-  VALUES (new.rowid, new.subject, new.snippet, new.from_email, new.from_name, new.body_text);
-END;
-INSERT INTO mail_message_fts(mail_message_fts) VALUES ('rebuild');
-"""
-
-
-def rebuild_sqlite_fts(sender, using, **kwargs):
-    """Recreate FTS triggers and reindex after a migration.
-
-    Django's SQLite schema changes recreate tables (create-copy-drop-rename),
-    which silently drops attached triggers. This restores them idempotently.
-    """
-    conn = connections[using]
-    if conn.vendor != "sqlite":
-        return
-    with conn.cursor() as cursor:
-        cursor.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='mail_message_fts'"
-        )
-        if cursor.fetchone() is None:
-            return
-        cursor.executescript(_SQLITE_FTS_TRIGGERS)
 
 
 class MailConfig(AppConfig):
@@ -45,7 +7,10 @@ class MailConfig(AppConfig):
     label = "mail"
 
     def ready(self):
-        post_migrate.connect(rebuild_sqlite_fts, sender=self)
+        from workspace.common.search.schema import register_fulltext_index
+        from workspace.mail.search import MAIL_FTS, search_contacts, search_mail
+
+        register_fulltext_index(MAIL_FTS)
 
         from workspace.core.module_registry import (
             CommandInfo,
@@ -54,7 +19,6 @@ class MailConfig(AppConfig):
             SearchProviderInfo,
             registry,
         )
-        from workspace.mail.search import search_contacts, search_mail
 
         registry.register(
             ModuleInfo(

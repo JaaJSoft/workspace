@@ -5,6 +5,7 @@ from django.db.models import FloatField, Value
 
 from .fallback import IcontainsFulltext
 from .postgres import PostgresFulltext
+from .schema import PG_TSV_COLUMN
 from .sqlite import SqliteFtsFulltext
 
 logger = logging.getLogger(__name__)
@@ -32,18 +33,21 @@ def fts5_available():
     return _fts5_available_cache
 
 
-def apply_fulltext(qs, query, *, pg_column, sqlite_fts_table, fallback_fields):
+def apply_fulltext(qs, query, *, index):
     """Filter qs to rows matching query, annotating `search_rank`
     (float, higher = more relevant). The caller applies the final order_by.
+
+    `index` is the model's FulltextIndex declaration; all schema names are
+    derived from it.
     """
     if not query or not query.strip():
         return qs.none().annotate(search_rank=Value(0.0, output_field=FloatField()))
     return _active_backend().apply(
         qs,
         query,
-        pg_column=pg_column,
-        sqlite_fts_table=sqlite_fts_table,
-        fallback_fields=fallback_fields,
+        pg_column=PG_TSV_COLUMN,
+        sqlite_fts_table=index.fts_table,
+        fallback_fields=index.fallback_fields,
     )
 
 

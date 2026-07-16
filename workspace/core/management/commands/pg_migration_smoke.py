@@ -12,6 +12,8 @@ exercise the cross-DB code paths fixed in the migration command:
 * a ``MailMessage`` with an accented subject (verifies the generated
   ``search_tsv`` column populates during loaddata and ``f_unaccent`` makes
   the GIN index accent-insensitive)
+* a chat ``Message`` with an accented body (verifies the chat generated
+  tsvector column also populates during loaddata)
 * a couple of files + a calendar event (sanity-check UUID PKs)
 
 Run on the target ``DATABASE_URL`` (``--verify``) after
@@ -33,6 +35,9 @@ SEED_MAIL_SUBJECT = "Résumé du projet Alpha"
 # "prévisionnel" appears ONLY in the body, never in subject/snippet/from,
 # so finding it proves the body is part of the index.
 SEED_MAIL_BODY = "Le budget prévisionnel est joint pour relecture."
+# "déploiement" appears ONLY in this chat body across all seeds, so an
+# accent-less hit proves the chat tsvector populated during loaddata.
+SEED_CHAT_BODY = "Le déploiement de vendredi est confirmé."
 
 
 class Command(BaseCommand):
@@ -90,6 +95,14 @@ class Command(BaseCommand):
             snippet="notes de réunion",
             body_text=SEED_MAIL_BODY,
         )
+
+        from workspace.chat.models import Conversation, ConversationMember, Message
+
+        conv = Conversation.objects.create(
+            kind="group", title="Smoke Chat", created_by=alice
+        )
+        ConversationMember.objects.create(conversation=conv, user=alice)
+        Message.objects.create(conversation=conv, author=alice, body=SEED_CHAT_BODY)
 
         cal = Calendar.objects.create(owner=alice, name="Smoke Cal")
         Event.objects.create(
@@ -186,4 +199,15 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(self.style.SUCCESS("  FTS body search OK"))
+
+        from workspace.chat.search import search_chat_messages
+
+        hits = search_chat_messages("deploiement", alice, 10)
+        if not any("déploiement" in h.matched_value for h in hits):
+            raise CommandError(
+                "FTS verify failed: chat body word not found via full-text "
+                f"search on PostgreSQL. Got: {[h.matched_value for h in hits]}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS chat body search OK"))
         self.stdout.write(self.style.SUCCESS("PostgreSQL migration smoke test OK"))

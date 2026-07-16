@@ -13,6 +13,7 @@ from workspace.common.mixins import CacheControlMixin
 
 from .models import Message, MessageAttachment, Reaction
 from .services.conversations import get_active_membership
+from .services.message_search import search_messages_qs
 
 logger = logging.getLogger(__name__)
 
@@ -77,13 +78,15 @@ class ConversationMessageSearchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        qs = Message.objects.filter(
-            conversation_id=conversation_id,
-            deleted_at__isnull=True,
-        )
-
         if query:
-            qs = qs.filter(body__icontains=query)
+            qs = search_messages_qs(
+                request.user, query, conversation_id=conversation_id
+            )
+        else:
+            qs = Message.objects.filter(
+                conversation_id=conversation_id,
+                deleted_at__isnull=True,
+            )
 
         if author_id:
             try:
@@ -135,7 +138,8 @@ class ConversationMessageSearchView(APIView):
         if has_images:
             qs = qs.filter(attachments__mime_type__startswith="image/")
 
-        messages = qs.select_related("author").order_by("-created_at").distinct()[:50]
+        order = ("-search_rank", "-created_at") if query else ("-created_at",)
+        messages = qs.select_related("author").order_by(*order).distinct()[:50]
 
         results = [
             {

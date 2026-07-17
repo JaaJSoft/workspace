@@ -20,3 +20,9 @@ class ProjectsConfig(AppConfig):
                 preview=True,
             )
         )
+
+        from workspace.common.search.schema import register_fulltext_index
+        from workspace.projects.services.search import PROJECT_FTS, TASK_FTS
+
+        register_fulltext_index(PROJECT_FTS)
+        register_fulltext_index(TASK_FTS)

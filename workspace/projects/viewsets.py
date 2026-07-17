@@ -30,6 +30,7 @@ from .services.members import (
     remove_member,
 )
 from .services.projects import create_project
+from .services.search import fts_tasks
 from .services.tasks import apply_status_change, create_task, reorder_tasks
 
 User = get_user_model()
@@ -314,7 +315,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             qs = qs.filter(labels=parsed)
         query = self.request.query_params.get("q")
         if query:
-            qs = qs.filter(title__icontains=query)
+            qs = fts_tasks(qs, query)
         return qs.distinct()
 
     def create(self, request, *args, **kwargs):

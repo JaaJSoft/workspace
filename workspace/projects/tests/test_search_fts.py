@@ -180,3 +180,59 @@ class TaskSearchServiceTests(TestCase):
         in_title = make_task(self.shared, "Flamingo cleanup")
         hits = [t.uuid for t in search_tasks_qs(self.alice, "flamingo")]
         self.assertLess(hits.index(in_title.uuid), hits.index(in_description.uuid))
+
+
+class GlobalSearchProviderTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(username="galice", email="ga@x.io")
+        cls.project = make_project(
+            cls.alice, name="Flamingo redesign", description="new brand colors"
+        )
+        cls.task = make_task(
+            cls.project, "Pick the flamingo palette", "warm tones only"
+        )
+
+    def test_project_results(self):
+        from workspace.projects.search import search_projects
+
+        results = search_projects("flamingo", self.alice, 10)
+        self.assertEqual(len(results), 1)
+        r = results[0]
+        self.assertEqual(r.uuid, str(self.project.uuid))
+        self.assertEqual(r.name, "Flamingo redesign")
+        self.assertEqual(r.url, f"/projects/{self.project.uuid}")
+        self.assertEqual(r.module_slug, "projects")
+
+    def test_task_results_link_to_their_board(self):
+        from workspace.projects.search import search_project_tasks
+
+        results = search_project_tasks("palette", self.alice, 10)
+        self.assertEqual(len(results), 1)
+        r = results[0]
+        self.assertEqual(r.uuid, str(self.task.uuid))
+        self.assertEqual(r.name, "Pick the flamingo palette")
+        self.assertEqual(r.url, f"/projects/{self.project.uuid}")
+        self.assertEqual(r.tags[0].label, "Flamingo redesign")
+
+    def test_limit_respected(self):
+        from workspace.projects.search import search_project_tasks
+
+        for i in range(4):
+            make_task(self.project, f"heron chore {i}")
+        results = search_project_tasks("heron", self.alice, 2)
+        self.assertEqual(len(results), 2)
+
+    def test_providers_are_registered(self):
+        # Re-registering an existing slug raises: proof ready() registered it.
+        from workspace.core.module_registry import SearchProviderInfo, registry
+
+        for slug in ("projects", "project-tasks"):
+            with self.assertRaises(ValueError):
+                registry.register_search_provider(
+                    SearchProviderInfo(
+                        slug=slug,
+                        module_slug="projects",
+                        search_fn=lambda q, u, limit: [],
+                    )
+                )

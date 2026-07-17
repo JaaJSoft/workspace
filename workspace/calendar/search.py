@@ -1,21 +1,11 @@
 from workspace.core.module_registry import SearchResult, SearchTag
 
-from .models import Event, Poll
-from .queries import visible_events_q
+from .models import Poll
+from .services.event_search import search_events_qs
 
 
 def search_events(query, user, limit):
-    events = (
-        Event.objects.select_related("calendar")
-        .filter(
-            visible_events_q(user),
-            title__icontains=query,
-            recurrence_parent__isnull=True,
-            is_cancelled=False,
-        )
-        .distinct()
-        .order_by("-start")[:limit]
-    )
+    events = search_events_qs(user, query).select_related("calendar")[:limit]
 
     return [
         SearchResult(

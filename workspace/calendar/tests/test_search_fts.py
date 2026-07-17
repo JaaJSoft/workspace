@@ -147,3 +147,38 @@ class EventSearchServiceTests(TestCase):
     def test_malformed_query_does_not_crash(self):
         hits = list(search_events_qs(self.alice, 'kumquat" -sync'))
         self.assertIsInstance(hits, list)
+
+
+class ProviderAndToolTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(username="palice", email="pa@x.io")
+        cls.cal = Calendar.objects.create(name="Work", owner=cls.alice)
+        cls.event = make_event(
+            cls.cal,
+            "Sprint review",
+            description="bring the flamingo mockups",
+            location="Dock B",
+        )
+
+    def test_provider_matches_description(self):
+        # The provider used to be a title-only icontains; a word that only
+        # appears in the description must now match.
+        from workspace.calendar.search import search_events
+
+        results = search_events("flamingo", self.alice, 10)
+        self.assertEqual(len(results), 1)
+        r = results[0]
+        self.assertEqual(r.uuid, str(self.event.uuid))
+        self.assertEqual(r.name, "Sprint review")
+        self.assertEqual(r.tags[0].label, "Work")
+
+    def test_ai_tool_matches_location(self):
+        from workspace.calendar.ai_tools import CalendarToolProvider, SearchEventsParams
+
+        provider = CalendarToolProvider()
+        args = SearchEventsParams(query="Dock B")
+        result = provider.search_events(
+            args, user=self.alice, bot=None, conversation_id=None, context={}
+        )
+        self.assertIn("Sprint review", result)

@@ -70,21 +70,11 @@ Call this when the user asks about upcoming events, meetings, or scheduling poll
         if not query:
             return "Error: query is required"
 
-        from workspace.calendar.models import Event, Poll
-        from workspace.calendar.queries import visible_events_q
+        from workspace.calendar.models import Poll
+        from workspace.calendar.services.event_search import search_events_qs
 
         # Events the user can see
-        events = (
-            Event.objects.filter(
-                visible_events_q(user),
-                title__icontains=query,
-                recurrence_parent__isnull=True,
-                is_cancelled=False,
-            )
-            .select_related("calendar")
-            .distinct()
-            .order_by("-start")[:20]
-        )
+        events = search_events_qs(user, query).select_related("calendar")[:20]
 
         # Polls created by user
         polls = Poll.objects.filter(created_by=user, title__icontains=query).order_by(

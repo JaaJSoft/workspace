@@ -14,6 +14,8 @@ exercise the cross-DB code paths fixed in the migration command:
   the GIN index accent-insensitive)
 * a chat ``Message`` with an accented body (verifies the chat generated
   tsvector column also populates during loaddata)
+* a ``Task`` and an accented-title ``Event`` (verify the projects and
+  calendar generated tsvector columns also populate during loaddata)
 * a couple of files + a calendar event (sanity-check UUID PKs)
 
 Run on the target ``DATABASE_URL`` (``--verify``) after
@@ -38,6 +40,9 @@ SEED_MAIL_BODY = "Le budget prévisionnel est joint pour relecture."
 # "déploiement" appears ONLY in this chat body across all seeds, so an
 # accent-less hit proves the chat tsvector populated during loaddata.
 SEED_CHAT_BODY = "Le déploiement de vendredi est confirmé."
+SEED_PROJECT_NAME = "Refonte du tableau de bord"
+SEED_TASK_TITLE = "Préparer la maquette"
+SEED_EVENT_TITLE = "Réunion de lancement"
 
 
 class Command(BaseCommand):
@@ -103,6 +108,27 @@ class Command(BaseCommand):
         )
         ConversationMember.objects.create(conversation=conv, user=alice)
         Message.objects.create(conversation=conv, author=alice, body=SEED_CHAT_BODY)
+
+        from workspace.projects.models import Project, ProjectMember, Task, TaskStatus
+
+        project = Project.objects.create(name=SEED_PROJECT_NAME, created_by=alice)
+        ProjectMember.objects.create(
+            project=project, user=alice, role=ProjectMember.Role.ADMIN
+        )
+        task_status = TaskStatus.objects.create(
+            project=project, name="Todo", category=TaskStatus.Category.BACKLOG
+        )
+        Task.objects.create(
+            project=project, title=SEED_TASK_TITLE, status=task_status, created_by=alice
+        )
+
+        smoke_cal = Calendar.objects.create(name="Smoke", owner=alice)
+        Event.objects.create(
+            calendar=smoke_cal,
+            owner=alice,
+            title=SEED_EVENT_TITLE,
+            start=timezone.now(),
+        )
 
         cal = Calendar.objects.create(owner=alice, name="Smoke Cal")
         Event.objects.create(
@@ -210,4 +236,29 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(self.style.SUCCESS("  FTS chat body search OK"))
+
+        from workspace.projects.services.search import search_tasks_qs
+
+        task_hits = [t.title for t in search_tasks_qs(alice, "maquette")]
+        if SEED_TASK_TITLE not in task_hits:
+            raise CommandError(
+                "FTS verify failed: seeded task not found via full-text "
+                f"search on PostgreSQL. Got: {task_hits}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS task search OK"))
+
+        from workspace.calendar.services.event_search import search_events_qs
+
+        # Query without the accent must still match "Réunion" via
+        # f_unaccent, proving the generated tsvector column populated
+        # during loaddata and the GIN index answers the query.
+        event_hits = [e.title for e in search_events_qs(alice, "reunion")]
+        if SEED_EVENT_TITLE not in event_hits:
+            raise CommandError(
+                "FTS verify failed: accented event title not found via "
+                f"full-text search on PostgreSQL. Got: {event_hits}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS event search OK"))
         self.stdout.write(self.style.SUCCESS("PostgreSQL migration smoke test OK"))

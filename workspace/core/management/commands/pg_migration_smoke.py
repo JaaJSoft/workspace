@@ -237,9 +237,14 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("  FTS chat body search OK"))
 
-        from workspace.projects.services.search import search_tasks_qs
+        from workspace.projects.services.search import (
+            search_projects_qs,
+            search_tasks_qs,
+        )
 
-        task_hits = [t.title for t in search_tasks_qs(alice, "maquette")]
+        # Query without the accent must still match "Préparer" via f_unaccent,
+        # proving the projects_task tsvector populated during loaddata.
+        task_hits = [t.title for t in search_tasks_qs(alice, "preparer")]
         if SEED_TASK_TITLE not in task_hits:
             raise CommandError(
                 "FTS verify failed: seeded task not found via full-text "
@@ -247,6 +252,15 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(self.style.SUCCESS("  FTS task search OK"))
+
+        project_hits = [p.name for p in search_projects_qs(alice, "tableau")]
+        if SEED_PROJECT_NAME not in project_hits:
+            raise CommandError(
+                "FTS verify failed: seeded project not found via full-text "
+                f"search on PostgreSQL. Got: {project_hits}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS project search OK"))
 
         from workspace.calendar.services.event_search import search_events_qs
 

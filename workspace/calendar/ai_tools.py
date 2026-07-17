@@ -75,13 +75,14 @@ scheduling polls."""
         from workspace.calendar.models import Poll
         from workspace.calendar.services.event_search import search_events_qs
 
-        # Events the user can see
-        events = search_events_qs(user, query).select_related("calendar")[:20]
+        # Cap the combined event+poll payload at the documented 20 matches,
+        # giving events priority and letting polls fill the remaining budget.
+        events = list(search_events_qs(user, query).select_related("calendar")[:20])
 
-        # Polls created by user
+        poll_limit = min(10, 20 - len(events))
         polls = Poll.objects.filter(created_by=user, title__icontains=query).order_by(
             "-created_at"
-        )[:10]
+        )[:poll_limit]
 
         results = []
         for e in events:

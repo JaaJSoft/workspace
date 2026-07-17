@@ -182,3 +182,49 @@ class ProviderAndToolTests(TestCase):
             args, user=self.alice, bot=None, conversation_id=None, context={}
         )
         self.assertIn("Sprint review", result)
+
+    def test_ai_tool_caps_combined_results_at_twenty(self):
+        # The tool documents "up to 20 matches"; events and polls were sliced
+        # independently (20 + 10), so a busy query could return up to 30.
+        import json
+
+        from workspace.calendar.ai_tools import CalendarToolProvider, SearchEventsParams
+        from workspace.calendar.models import Poll
+
+        for i in range(20):
+            make_event(self.cal, f"budget sync {i}")
+        for i in range(3):
+            Poll.objects.create(created_by=self.alice, title=f"budget poll {i}")
+
+        provider = CalendarToolProvider()
+        args = SearchEventsParams(query="budget")
+        result = provider.search_events(
+            args, user=self.alice, bot=None, conversation_id=None, context={}
+        )
+        data = json.loads(result)
+        self.assertEqual(len(data), 20)
+        self.assertTrue(all(entry["type"] == "event" for entry in data))
+
+    def test_description_match_reports_description_not_title(self):
+        # A word only in the description must be reported as a description
+        # match with its snippet, not mislabeled as a title match.
+        from workspace.calendar.search import search_events
+
+        r = search_events("flamingo", self.alice, 10)[0]
+        self.assertEqual(r.match_type, "description")
+        self.assertIn("flamingo", r.matched_value)
+        self.assertNotEqual(r.matched_value, r.name)
+
+    def test_location_match_reports_location(self):
+        from workspace.calendar.search import search_events
+
+        r = search_events("Dock B", self.alice, 10)[0]
+        self.assertEqual(r.match_type, "location")
+        self.assertEqual(r.matched_value, "Dock B")
+
+    def test_title_match_still_reports_title(self):
+        from workspace.calendar.search import search_events
+
+        r = search_events("Sprint", self.alice, 10)[0]
+        self.assertEqual(r.match_type, "title")
+        self.assertEqual(r.matched_value, "Sprint review")

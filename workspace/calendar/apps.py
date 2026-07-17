@@ -122,3 +122,8 @@ class CalendarConfig(AppConfig):
                 provider_cls=CalendarActivityProvider,
             )
         )
+
+        from workspace.calendar.services.event_search import EVENT_FTS
+        from workspace.common.search.schema import register_fulltext_index
+
+        register_fulltext_index(EVENT_FTS)

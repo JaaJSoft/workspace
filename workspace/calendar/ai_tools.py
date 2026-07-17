@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 class SearchEventsParams(BaseModel):
     query: str = Field(
-        description="The search term to look for in event and poll titles."
+        description="The search term to look for in event title, description "
+        "and location, and in poll titles."
     )
 
 
@@ -63,9 +64,10 @@ class CalendarToolProvider(ToolProvider):
         params=SearchEventsParams,
     )
     def search_events(self, args, user, bot, conversation_id, context):
-        """Search through your calendar events and scheduling polls by title. \
-Returns up to 20 matches with title, date, calendar, and location. \
-Call this when the user asks about upcoming events, meetings, or scheduling polls."""
+        """Search your calendar events by title, description or location, and \
+scheduling polls by title. Returns up to 20 matches with title, date, calendar, \
+and location. Call this when the user asks about upcoming events, meetings, or \
+scheduling polls."""
         query = args.query.strip()
         if not query:
             return "Error: query is required"

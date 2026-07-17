@@ -1,36 +1,60 @@
+import unicodedata
+
 from workspace.core.module_registry import SearchResult, SearchTag
 
-from .models import Event, Poll
-from .queries import visible_events_q
+from .models import Poll
+from .services.event_search import search_events_qs
+
+
+def _fold(text):
+    """Lowercase and strip diacritics, mirroring the FTS `remove_diacritics`
+    tokenizer closely enough to locate which field a hit came from."""
+    stripped = "".join(
+        c
+        for c in unicodedata.normalize("NFKD", text or "")
+        if not unicodedata.combining(c)
+    )
+    return stripped.casefold()
+
+
+def _event_match_display(event, query):
+    """Pick the field a full-text hit most likely matched, for display.
+
+    Events are indexed across title, description and location, but a result
+    row shows one snippet. Prefer the title (title hits keep their existing
+    display), then location, then a description excerpt, falling back to the
+    title so a hit never renders an empty or misleading snippet.
+    """
+    folded = _fold(query)
+    if folded and folded in _fold(event.title):
+        return event.title, "title"
+    if folded and event.location and folded in _fold(event.location):
+        return event.location, "location"
+    if folded and event.description and folded in _fold(event.description):
+        return event.description[:120], "description"
+    return event.title, "title"
 
 
 def search_events(query, user, limit):
-    events = (
-        Event.objects.select_related("calendar")
-        .filter(
-            visible_events_q(user),
-            title__icontains=query,
-            recurrence_parent__isnull=True,
-            is_cancelled=False,
-        )
-        .distinct()
-        .order_by("-start")[:limit]
-    )
+    events = search_events_qs(user, query).select_related("calendar")[:limit]
 
-    return [
-        SearchResult(
-            uuid=str(e.uuid),
-            name=e.title,
-            url=f"/calendar?event={e.uuid}",
-            matched_value=e.title,
-            match_type="title",
-            type_icon="calendar",
-            module_slug="calendar",
-            module_color="accent",
-            tags=(SearchTag(e.calendar.name, "accent"),) if e.calendar else (),
+    results = []
+    for e in events:
+        matched_value, match_type = _event_match_display(e, query)
+        results.append(
+            SearchResult(
+                uuid=str(e.uuid),
+                name=e.title,
+                url=f"/calendar?event={e.uuid}",
+                matched_value=matched_value,
+                match_type=match_type,
+                type_icon="calendar",
+                module_slug="calendar",
+                module_color="accent",
+                tags=(SearchTag(e.calendar.name, "accent"),) if e.calendar else (),
+            )
         )
-        for e in events
-    ]
+    return results
 
 
 def search_polls(query, user, limit):

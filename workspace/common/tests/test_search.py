@@ -6,6 +6,7 @@ from django.test import TestCase
 
 from workspace.common import search as fts
 from workspace.common.search.fallback import IcontainsFulltext
+from workspace.common.search.postgres import PostgresFulltext
 from workspace.common.search.schema import FulltextIndex
 from workspace.common.search.sqlite import to_fts5_match
 
@@ -46,6 +47,22 @@ class Fts5ProbeTests(TestCase):
             self.assertIsNone(fts._fts5_available_cache)
         finally:
             fts._fts5_available_cache = orig_cache
+
+
+class PostgresBackendTests(TestCase):
+    """The PG backend runs only on PostgreSQL (selected by vendor), so these
+    assert on the emitted SQL rather than executing it - inspectable on any
+    backend."""
+
+    def test_tsvector_column_is_qualified_by_the_base_table(self):
+        # An unqualified `search_tsv` becomes "column reference is ambiguous"
+        # the moment the queryset joins a second FTS-indexed table that also
+        # carries a search_tsv column (e.g. tasks joined to projects). The
+        # column must be qualified with the base model's table.
+        qs = PostgresFulltext().apply(User.objects.all(), "ada", pg_column="search_tsv")
+        sql = str(qs.query)
+        self.assertIn('"auth_user".search_tsv', sql)
+        self.assertNotIn("ts_rank(search_tsv", sql)
 
 
 class FallbackBranchTests(TestCase):

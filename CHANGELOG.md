@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.31.0 - Search Everywhere
+
+### Highlights
+
+One search, everywhere: mail, chat, and calendar now share the same smarter search, and chat messages finally show up in the global search.
+
+### Search
+
+- Mail search now understands what you mean: matching is accent-insensitive ("cafe" finds "café"), works on whole words, and the most relevant messages come first instead of a raw date-ordered dump. It also stays fast on very large mailboxes. The same smarter matching applies in the mail app's search box, the global search, and when you ask the assistant to find a message.
+- You can now find chat messages from the global search: results show the conversation they belong to, and direct messages are labeled with the other person's name. Searching inside a conversation and asking the assistant to search your messages use the same improved matching, with results ranked by relevance and recency.
+- Calendar search now looks beyond event titles: a word from an event's description or its location is enough to find it, in the global search and when asking the assistant.
+
+### Profile & UI
+
+- People without a profile picture now get initials on a color of their own instead of a uniform grey circle. Each person keeps the same color everywhere - chat, mail, calendar, member lists - so they become recognizable at a glance.
+
 ## 0.30.0 - File Tags & Performance
 
 ### Highlights

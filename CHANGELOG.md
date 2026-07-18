@@ -16,6 +16,8 @@ One search, everywhere: mail, chat, and calendar now share the same smarter sear
 
 - People without a profile picture now get initials on a color of their own instead of a uniform grey circle. Each person keeps the same color everywhere - chat, mail, calendar, member lists - so they become recognizable at a glance.
 
+## 0.30.0 - File Tags & Performance
+
 ### Highlights
 
 Tag your files straight from the properties panel, and feel the app get faster across the board: mail search, calendars with recurring events, chat, and the file browser all respond quicker. The note editor also loads reliably now, with no dependence on an external service.

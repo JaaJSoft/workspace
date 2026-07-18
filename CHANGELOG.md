@@ -4,7 +4,7 @@
 
 ### Highlights
 
-Search just got a lot smarter across the app: mail, chat, and calendar now ignore accents, match whole words, and put the most relevant results first - and chat messages finally show up in the global search.
+One search, everywhere: mail, chat, and calendar now share the same smarter search, and chat messages finally show up in the global search.
 
 ### Search
 

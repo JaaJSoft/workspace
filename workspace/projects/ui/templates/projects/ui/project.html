@@ -52,7 +52,7 @@ x-data="projectBoard({
           <i data-lucide="chevrons-up-down" class="w-4 h-4 shrink-0 opacity-60"></i>
         </button>
         <ul tabindex="0"
-            class="dropdown-content menu z-50 mt-1 w-full bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2">
+            class="dropdown-content menu z-50 mt-1 w-full bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2 gap-1">
           {% for p in projects %}
             <li>
               <a href="{% url 'projects_ui:project' p.uuid %}"

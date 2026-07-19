@@ -42,10 +42,10 @@ x-data="projectBoard({
     <div class="px-3 pt-3" x-show="!sidebarCollapsed()" x-transition>
       <div class="dropdown w-full">
         <button type="button" tabindex="0"
-                class="btn btn-ghost btn-sm w-full justify-between border border-base-300 font-normal">
+                class="btn btn-ghost h-10 min-h-10 w-full justify-between border border-base-300 font-normal text-base">
           <span class="flex items-center gap-2 min-w-0">
             <i data-lucide="{% if project.type == 'personal' %}circle-user{% else %}square-kanban{% endif %}"
-               class="w-4 h-4 text-accent shrink-0"></i>
+               class="w-5 h-5 text-accent shrink-0"></i>
             <span class="truncate">{{ project.name }}</span>
             {% if project.archived_at %}<span class="badge badge-ghost badge-sm">Archived</span>{% endif %}
           </span>

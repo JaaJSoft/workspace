@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from django.contrib.auth.decorators import login_required
 from django.db.models import Case, Count, IntegerField, Q, Value, When
 from django.http import Http404
@@ -77,9 +79,6 @@ def _base_context(request, project, role, view):
         "role": role,
         "view": view,
         "writable": not project.is_archived,
-        "backlog_count": project.tasks.filter(
-            status__category=TaskStatus.Category.BACKLOG
-        ).count(),
         "statuses": statuses,
         "members": members,
         "statuses_data": [
@@ -116,14 +115,20 @@ def board(request, project_uuid):
     project, role = _get_project_or_404(request.user, project_uuid)
     _record_visit(request.user, project_uuid, VIEW_BOARD)
     context = _base_context(request, project, role, VIEW_BOARD)
+    context["backlog_count"] = project.tasks.filter(
+        status__category=TaskStatus.Category.BACKLOG
+    ).count()
     tasks = list(
         project.tasks.exclude(status__category=TaskStatus.Category.BACKLOG)
         .select_related("status")
         .prefetch_related("assignees", "labels")
         .order_by("position", "created_at")
     )
+    tasks_by_status = defaultdict(list)
+    for task in tasks:
+        tasks_by_status[task.status_id].append(task)
     context["columns"] = [
-        {"status": s, "tasks": [t for t in tasks if t.status_id == s.pk]}
+        {"status": s, "tasks": tasks_by_status[s.pk]}
         for s in context["statuses"]
         if s.category != TaskStatus.Category.BACKLOG
     ]
@@ -146,4 +151,5 @@ def backlog(request, project_uuid):
         .prefetch_related("assignees", "labels")
         .order_by("position", "created_at")
     )
+    context["backlog_count"] = len(context["backlog_tasks"])
     return _render_project_view(request, context)

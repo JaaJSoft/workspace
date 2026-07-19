@@ -127,9 +127,7 @@ x-data="projectBoard({
          x-data="{ creating: false, name: '', description: '', error: '' }">
       <h2 class="font-semibold mb-3">New project</h2>
       <template x-if="error">
-        <div class="mb-2">
-          <div class="alert alert-error text-sm" x-text="error"></div>
-        </div>
+        {% include "ui/partials/inline_alert.html" with type="error" class="mb-2" slot='<span x-text="error"></span>' %}
       </template>
       <form @submit.prevent="
         creating = true; error = '';

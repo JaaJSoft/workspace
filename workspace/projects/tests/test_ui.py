@@ -2,6 +2,7 @@ from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.projects.models import Project
+from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.tasks import create_task
 from workspace.users.services.settings import get_setting, set_setting
 
@@ -163,3 +164,33 @@ class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.outsider)
         response = self.client.get(f"/projects/{self.project.uuid}/backlog")
         self.assertEqual(response.status_code, 404)
+
+
+class SidebarTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    def test_switcher_lists_only_accessible_projects(self):
+        personal = get_or_create_personal_project(self.member)
+        other = Project.objects.create(
+            name="Admin only", created_by=self.admin, type=Project.Type.KANBAN
+        )
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertContains(response, "Website")
+        self.assertContains(response, personal.name)
+        self.assertNotContains(response, "Admin only")
+        sidebar_uuids = [p.uuid for p in response.context["projects"]]
+        self.assertNotIn(other.uuid, sidebar_uuids)
+        self.assertEqual(sidebar_uuids[0], personal.uuid)
+
+    def test_sidebar_links_to_project_views(self):
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertContains(response, f"/projects/{self.project.uuid}/backlog")
+        self.assertContains(response, f"/projects/{self.project.uuid}/board")
+
+    def test_partial_response_has_no_sidebar(self):
+        self.client.force_login(self.member)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/board", HTTP_X_ALPINE_REQUEST="1"
+        )
+        self.assertNotContains(response, "drawer-side")
+        self.assertNotIn("projects", response.context)

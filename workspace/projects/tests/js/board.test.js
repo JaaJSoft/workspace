@@ -28,6 +28,7 @@ test('listOrder returns an empty order for an empty column', () => {
 
 function deletableBoard(calls) {
   ctx.getCSRFToken = () => 'token';
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
   const board = ctx.projectBoard({ apiBase: '/api', writable: true });
   board.form.uuid = 'u1';
   board.form.title = 'Task one';
@@ -39,7 +40,7 @@ function deletableBoard(calls) {
       },
     },
   };
-  board.refreshAll = () => calls.push('refresh');
+  board.refresh = () => calls.push('refresh');
   return board;
 }
 

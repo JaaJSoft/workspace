@@ -22,7 +22,8 @@ function emptyTaskForm() {
 
 function projectBoard(config) {
   return {
-    tab: 'board',
+    currentView: config.view || 'board',
+    collapsed: localStorage.getItem('projectsSidebarCollapsed') === 'true',
     dragging: null,
     saving: false,
     statuses: [],
@@ -43,6 +44,20 @@ function projectBoard(config) {
       this.labels = JSON.parse(
         document.getElementById('labels-data').textContent
       );
+    },
+
+    isMobile() {
+      return window.matchMedia('(max-width: 1023px)').matches;
+    },
+
+    sidebarCollapsed() {
+      return this.isMobile() ? false : this.collapsed;
+    },
+
+    toggleCollapse() {
+      if (this.isMobile()) return;
+      this.collapsed = !this.collapsed;
+      localStorage.setItem('projectsSidebarCollapsed', this.collapsed);
     },
 
     headers() {
@@ -98,16 +113,16 @@ function projectBoard(config) {
         });
         if (!resp.ok) throw new Error('Reorder failed');
       } catch (e) {
-        // On failure, refreshAll in finally restores server truth
+        // On failure, refresh in finally restores server truth
       } finally {
-        this.refreshAll();
+        this.refresh();
         this.saving = false;
       }
     },
 
-    refreshAll() {
-      this.$ajax(config.pageUrl + '?partial=board', { target: 'board' });
-      this.$ajax(config.pageUrl + '?partial=backlog', { target: 'backlog' });
+    refresh() {
+      const view = this.currentView === 'backlog' ? 'backlog' : 'board';
+      this.$ajax(config.projectBase + '/' + view, { target: 'project-content' });
     },
 
     async sendToBoard(uuid) {
@@ -124,7 +139,7 @@ function projectBoard(config) {
       } catch (e) {
         // Swallow: the finally refresh restores server truth, card stays in backlog
       } finally {
-        this.refreshAll();
+        this.refresh();
       }
     },
 
@@ -211,7 +226,7 @@ function projectBoard(config) {
           return;
         }
         this.$refs.taskDialog.close();
-        this.refreshAll();
+        this.refresh();
       } catch (e) {
         this.formError = 'Could not save the task.';
       } finally {
@@ -240,7 +255,7 @@ function projectBoard(config) {
           return;
         }
         this.$refs.taskDialog.close();
-        this.refreshAll();
+        this.refresh();
       } catch (e) {
         this.formError = 'Could not delete the task.';
       }

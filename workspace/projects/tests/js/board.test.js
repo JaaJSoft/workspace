@@ -28,6 +28,7 @@ test('listOrder returns an empty order for an empty column', () => {
 
 function deletableBoard(calls) {
   ctx.getCSRFToken = () => 'token';
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
   const board = ctx.projectBoard({ apiBase: '/api', writable: true });
   board.form.uuid = 'u1';
   board.form.title = 'Task one';
@@ -39,7 +40,7 @@ function deletableBoard(calls) {
       },
     },
   };
-  board.refreshAll = () => calls.push('refresh');
+  board.refresh = () => calls.push('refresh');
   return board;
 }
 
@@ -80,4 +81,36 @@ test('deleteTask deletes and refreshes once confirmed', async () => {
     'close',
     'refresh',
   ]);
+});
+
+test('_closeDrawerOnMobile unchecks drawer when on mobile', () => {
+  ctx.getCSRFToken = () => 'token';
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  const checkboxState = { checked: true };
+  ctx.document = {
+    getElementById: (id) => {
+      if (id === 'projects-drawer') return checkboxState;
+      return null;
+    },
+  };
+  const board = ctx.projectBoard({ apiBase: '/api', writable: true });
+  board.isMobile = () => true;
+  board._closeDrawerOnMobile();
+  assert.equal(checkboxState.checked, false);
+});
+
+test('_closeDrawerOnMobile does nothing when not on mobile', () => {
+  ctx.getCSRFToken = () => 'token';
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  const checkboxState = { checked: true };
+  ctx.document = {
+    getElementById: (id) => {
+      if (id === 'projects-drawer') return checkboxState;
+      return null;
+    },
+  };
+  const board = ctx.projectBoard({ apiBase: '/api', writable: true });
+  board.isMobile = () => false;
+  board._closeDrawerOnMobile();
+  assert.equal(checkboxState.checked, true);
 });

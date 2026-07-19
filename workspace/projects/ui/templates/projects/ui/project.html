@@ -91,9 +91,9 @@ x-data="projectBoard({
     <div class="flex-1 overflow-y-auto py-2 px-3">
       <ul class="menu p-0 gap-1">
         {% url 'projects_ui:board' project.uuid as board_url %}
-        {% include "ui/partials/drawer_item.html" with href=board_url icon="square-kanban" label="Board" color="accent" active_binding="currentView === 'board'" x_target="project-content" x_target_history="push" onclick="currentView = 'board'" collapse_expr="sidebarCollapsed()" tooltip="Board" %}
+        {% include "ui/partials/drawer_item.html" with href=board_url icon="square-kanban" label="Board" color="accent" active_binding="currentView === 'board'" x_target="project-content" x_target_history="push" onclick="currentView = 'board'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Board" %}
         {% url 'projects_ui:backlog' project.uuid as backlog_url %}
-        {% include "ui/partials/drawer_item.html" with href=backlog_url icon="list-todo" label="Backlog" color="accent" active_binding="currentView === 'backlog'" x_target="project-content" x_target_history="push" onclick="currentView = 'backlog'" collapse_expr="sidebarCollapsed()" tooltip="Backlog" badge=backlog_count %}
+        {% include "ui/partials/drawer_item.html" with href=backlog_url icon="list-todo" label="Backlog" color="accent" active_binding="currentView === 'backlog'" x_target="project-content" x_target_history="push" onclick="currentView = 'backlog'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Backlog" badge=backlog_count %}
       </ul>
     </div>
 

@@ -82,3 +82,35 @@ test('deleteTask deletes and refreshes once confirmed', async () => {
     'refresh',
   ]);
 });
+
+test('_closeDrawerOnMobile unchecks drawer when on mobile', () => {
+  ctx.getCSRFToken = () => 'token';
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  const checkboxState = { checked: true };
+  ctx.document = {
+    getElementById: (id) => {
+      if (id === 'projects-drawer') return checkboxState;
+      return null;
+    },
+  };
+  const board = ctx.projectBoard({ apiBase: '/api', writable: true });
+  board.isMobile = () => true;
+  board._closeDrawerOnMobile();
+  assert.equal(checkboxState.checked, false);
+});
+
+test('_closeDrawerOnMobile does nothing when not on mobile', () => {
+  ctx.getCSRFToken = () => 'token';
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  const checkboxState = { checked: true };
+  ctx.document = {
+    getElementById: (id) => {
+      if (id === 'projects-drawer') return checkboxState;
+      return null;
+    },
+  };
+  const board = ctx.projectBoard({ apiBase: '/api', writable: true });
+  board.isMobile = () => false;
+  board._closeDrawerOnMobile();
+  assert.equal(checkboxState.checked, true);
+});

@@ -60,6 +60,13 @@ function projectBoard(config) {
       localStorage.setItem('projectsSidebarCollapsed', this.collapsed);
     },
 
+    _closeDrawerOnMobile() {
+      if (this.isMobile()) {
+        const toggle = document.getElementById('projects-drawer');
+        if (toggle) toggle.checked = false;
+      }
+    },
+
     headers() {
       return {
         'Content-Type': 'application/json',

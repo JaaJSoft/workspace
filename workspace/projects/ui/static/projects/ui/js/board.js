@@ -128,8 +128,10 @@ function projectBoard(config) {
     },
 
     refresh() {
-      const view = this.currentView === 'backlog' ? 'backlog' : 'board';
-      this.$ajax(config.projectBase + '/' + view, { target: 'project-content' });
+      let url = config.projectBase;
+      if (this.currentView === 'backlog') url += '/backlog';
+      else if (this.currentView !== 'overview') url += '/board';
+      this.$ajax(url, { target: 'project-content' });
     },
 
     async sendToBoard(uuid) {

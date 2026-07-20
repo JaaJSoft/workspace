@@ -1,0 +1,67 @@
+<div id="overview" class="max-w-3xl flex flex-col gap-6">
+  <section>
+    {% if project.description %}
+      <p class="text-base-content/80 whitespace-pre-line">{{ project.description }}</p>
+    {% else %}
+      <p class="text-base-content/50 italic">No description yet.</p>
+    {% endif %}
+    <p class="text-sm text-base-content/60 mt-2 flex items-center gap-1.5">
+      <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+      Created {{ project.created_at|date:"DATE_FORMAT" }}{% if project.created_by %} by {{ project.created_by.username }}{% endif %}
+    </p>
+  </section>
+
+  <div class="stats stats-vertical sm:stats-horizontal bg-base-200 shadow-sm">
+    <div class="stat">
+      <div class="stat-figure text-accent">
+        <i data-lucide="square-kanban" class="w-6 h-6"></i>
+      </div>
+      <div class="stat-title">On the board</div>
+      <div class="stat-value text-2xl">{{ board_count }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-figure text-accent">
+        <i data-lucide="list-todo" class="w-6 h-6"></i>
+      </div>
+      <div class="stat-title">In backlog</div>
+      <div class="stat-value text-2xl">{{ backlog_count }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-figure text-success">
+        <i data-lucide="circle-check" class="w-6 h-6"></i>
+      </div>
+      <div class="stat-title">Done</div>
+      <div class="stat-value text-2xl">{{ done_count }}</div>
+    </div>
+  </div>
+
+  <section>
+    <h2 class="font-semibold mb-2 flex items-center gap-2">
+      <i data-lucide="users" class="w-4 h-4 text-accent"></i>
+      Members
+    </h2>
+    <ul class="flex flex-col gap-2">
+      {% for m in members %}
+        <li class="flex items-center gap-2">
+          {% include "ui/partials/user_avatar.html" with user=m.user size="xs" %}
+          <span class="text-sm">{{ m.user.username }}</span>
+          {% if m.role == "admin" %}<span class="badge badge-ghost badge-sm">Admin</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  {% if labels_data %}
+    <section>
+      <h2 class="font-semibold mb-2 flex items-center gap-2">
+        <i data-lucide="tags" class="w-4 h-4 text-accent"></i>
+        Labels
+      </h2>
+      <div class="flex flex-wrap gap-1.5">
+        {% for label in labels_data %}
+          <span class="badge badge-outline">{{ label.name }}</span>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+</div>

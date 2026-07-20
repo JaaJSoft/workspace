@@ -94,6 +94,8 @@ x-data="projectBoard({
         {% include "ui/partials/drawer_item.html" with href=board_url icon="square-kanban" label="Board" color="accent" active_binding="currentView === 'board'" x_target="project-content" x_target_history="push" onclick="currentView = 'board'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Board" %}
         {% url 'projects_ui:backlog' project.uuid as backlog_url %}
         {% include "ui/partials/drawer_item.html" with href=backlog_url icon="list-todo" label="Backlog" color="accent" active_binding="currentView === 'backlog'" x_target="project-content" x_target_history="push" onclick="currentView = 'backlog'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Backlog" badge=backlog_count %}
+        {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label="Analytics" disabled=True badge="Soon" collapse_expr="sidebarCollapsed()" %}
+        {% include "ui/partials/drawer_item.html" with icon="settings" label="Settings" disabled=True badge="Soon" collapse_expr="sidebarCollapsed()" %}
       </ul>
     </div>
 

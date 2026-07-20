@@ -12,12 +12,12 @@ This file is the forward-looking roadmap and idea backlog, sorted by priority. S
 
 ## Priorities at a glance
 
-| Priority | Structural projects | Quick wins |
-|---|---|---|
-| **P1 - Now** | Full-text search everywhere; Tasks module MVP | Perf audit fixes, calendar reminders, recent files widget, clickable breadcrumb, drag-to-resize events |
-| **P2 - Next** | Tasks integrations (mail/chat/calendar/AI); Contacts module; i18n (FR) | Mail snooze, scheduled send, undo send, email digest, per-module notification preferences |
-| **P3 - Later** | File versioning + quotas; Trust (2FA, SSO, teams, audit log); "ask your workspace" | Duplicate detection, chat voice messages, note templates, notes PDF export |
-| **Someday** | Bookmarks, Photos & Gallery, RSS/Feeds, cross-module automations, CalDAV sync | Module backlogs below |
+| Priority       | Structural projects                                                                | Quick wins                                                                                             |
+|----------------|------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------|
+| **P1 - Now**   | Full-text search everywhere; Tasks module MVP                                      | Perf audit fixes, calendar reminders, recent files widget, clickable breadcrumb, drag-to-resize events |
+| **P2 - Next**  | Tasks integrations (mail/chat/calendar/AI); Contacts module; i18n (FR)             | Mail snooze, scheduled send, undo send, email digest, per-module notification preferences              |
+| **P3 - Later** | File versioning + quotas; Trust (2FA, SSO, teams, audit log); "ask your workspace" | Duplicate detection, chat voice messages, note templates, notes PDF export                             |
+| **Someday**    | Bookmarks, Photos & Gallery, RSS/Feeds, cross-module automations, CalDAV sync      | Module backlogs below                                                                                  |
 
 ---
 

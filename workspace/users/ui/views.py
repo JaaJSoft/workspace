@@ -213,7 +213,7 @@ def profile_activity_feed(request, username):
     search = request.GET.get("q", "").strip() or None
     try:
         offset = int(request.GET.get("offset", 0))
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         offset = 0
 
     activity_ctx = _get_profile_activity_context(

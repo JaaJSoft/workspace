@@ -54,7 +54,7 @@ class GenerateThumbnailOutputTests(TestCase):
         try:
             if default_storage.exists(path):
                 default_storage.delete(path)
-        except PermissionError, OSError:
+        except (PermissionError, OSError):
             # Thumbnail cleanup is best-effort: a blocked or unavailable
             # delete (e.g. Windows file lock) must not fail the test run.
             logger.debug("could not delete test thumbnail %s", uuid)

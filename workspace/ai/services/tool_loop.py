@@ -20,7 +20,7 @@ def _track_tool_usage(tool_call, tool_result, used_tools):
     name = tool_call.function.name
     try:
         args = json.loads(tool_call.function.arguments)
-    except json.JSONDecodeError, AttributeError:
+    except (json.JSONDecodeError, AttributeError):
         args = {}
     used_tools.append((name, tool_registry.get_detail(name, args)))
 

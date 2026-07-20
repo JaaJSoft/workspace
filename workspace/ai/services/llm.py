@@ -68,7 +68,7 @@ def truncate_tool_result(text, max_len=2000):
         parsed = json.loads(text)
         if isinstance(parsed, dict) and parsed.get("type") == "image":
             return json.dumps({"type": "image", "data": "[stripped]"})
-    except json.JSONDecodeError, TypeError:
+    except (json.JSONDecodeError, TypeError):
         # Not an image payload (most tool results are plain text JSON or raw
         # strings) - fall through to plain length-based truncation.
         pass
@@ -91,7 +91,7 @@ def build_tool_content(tool_result: str):
                     "image_url": {"url": f"data:{mime};base64,{data}"},
                 },
             ]
-    except json.JSONDecodeError, KeyError:
+    except (json.JSONDecodeError, KeyError):
         # Non-image tool result (the common case) - return the raw text.
         pass
     return tool_result

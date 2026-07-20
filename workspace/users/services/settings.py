@@ -32,7 +32,7 @@ def get_user_timezone(user) -> ZoneInfo:
         return UTC
     try:
         return ZoneInfo(tz_name)
-    except ZoneInfoNotFoundError, KeyError:
+    except (ZoneInfoNotFoundError, KeyError):
         return UTC
 
 

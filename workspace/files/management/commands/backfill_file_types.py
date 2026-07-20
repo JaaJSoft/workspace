@@ -55,7 +55,7 @@ class Command(BaseCommand):
                         try:
                             content = file_obj.content.read()
                             detection = detect_from_bytes(content)
-                        except FileNotFoundError, OSError:
+                        except (FileNotFoundError, OSError):
                             detection = detect_from_name(file_obj.name)
                         finally:
                             file_obj.content.close()
@@ -121,7 +121,7 @@ class Command(BaseCommand):
                         try:
                             content = att.file.read()
                             detection = detect_from_bytes(content)
-                        except FileNotFoundError, OSError:
+                        except (FileNotFoundError, OSError):
                             detection = detect_from_name(att.original_name)
                         finally:
                             att.file.close()

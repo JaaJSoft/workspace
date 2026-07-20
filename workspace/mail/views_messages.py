@@ -120,7 +120,7 @@ class MailMessageListView(CacheControlMixin, APIView):
             page = int(request.query_params.get("page", 1))
             if page < 1:
                 page = 1
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             page = 1
         page_size = 50
         offset = (page - 1) * page_size

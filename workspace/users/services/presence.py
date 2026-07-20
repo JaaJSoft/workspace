@@ -117,7 +117,7 @@ def get_status(user_id: int) -> str:
         return "offline"
     try:
         last = datetime.fromisoformat(raw)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return "offline"
     delta = timezone.now() - last
     if delta < ONLINE_THRESHOLD:
@@ -178,7 +178,7 @@ def get_statuses(user_ids: list[int]) -> dict[int, str]:
             continue
         try:
             delta = now - datetime.fromisoformat(raw)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             result[uid] = "offline"
             continue
         if delta < ONLINE_THRESHOLD:
@@ -220,7 +220,7 @@ def is_active(user_id: int) -> bool:
         return False
     try:
         delta = timezone.now() - datetime.fromisoformat(raw)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return False
     return delta < timedelta(seconds=30)
 
@@ -239,7 +239,7 @@ def get_last_seen(user_id: int) -> datetime | None:
     if raw is not None:
         try:
             return datetime.fromisoformat(raw)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             pass
     from workspace.users.models import UserPresence
 

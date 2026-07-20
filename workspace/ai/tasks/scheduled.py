@@ -143,7 +143,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
         bot_user = User.objects.get(pk=schedule.bot_id)
         bot_profile = BotProfile.objects.get(user=bot_user)
         conversation = Conversation.objects.get(pk=schedule.conversation_id)
-    except User.DoesNotExist, BotProfile.DoesNotExist, Conversation.DoesNotExist:
+    except (User.DoesNotExist, BotProfile.DoesNotExist, Conversation.DoesNotExist):
         logger.error(
             "Scheduled response failed: schedule=%s - bot or conversation not found",
             scrub(schedule_id),

@@ -61,7 +61,7 @@ class MessageListView(CacheControlMixin, APIView):
 
         try:
             limit = min(max(int(request.query_params.get("limit", 50)), 1), 100)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             limit = 50
         before = request.query_params.get("before")
 

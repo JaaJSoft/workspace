@@ -83,7 +83,7 @@ class UserSearchView(CacheControlMixin, APIView):
 
         try:
             limit = int(request.query_params.get("limit", 10))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             limit = 10
         limit = min(max(limit, 1), 50)
 
@@ -363,7 +363,7 @@ class UserAvatarUploadView(APIView):
             crop_y = float(request.data.get("crop_y", 0))
             crop_w = float(request.data.get("crop_w", 0))
             crop_h = float(request.data.get("crop_h", 0))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return Response(
                 {"errors": ["Invalid crop coordinates."]},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -384,7 +384,7 @@ class UserAvatarUploadView(APIView):
                 crop_w,
                 crop_h,
             )
-        except ValueError, OSError:
+        except (ValueError, OSError):
             # PIL raises UnidentifiedImageError (OSError) on unrecognised
             # bytes and OSError on truncated files; ValueError covers
             # crop coordinates that produce a zero-size region. Map them
@@ -717,7 +717,7 @@ class APITokenListCreateView(APIView):
                 expiry_days = int(expiry_days)
                 if expiry_days < 1:
                     raise ValueError
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 return Response(
                     {"errors": ["expiry_days must be a positive integer."]},
                     status=status.HTTP_400_BAD_REQUEST,

@@ -67,7 +67,7 @@ class MailSendView(APIView):
                     handle.name = ws_file.name
                     ws_file_handles.append(handle)
                     attachments.append(handle)
-                except FileNotFoundError, OSError:
+                except (FileNotFoundError, OSError):
                     close_all(ws_file_handles)
                     return Response(
                         {"detail": f'File "{ws_file.name}" content is unavailable.'},

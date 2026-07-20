@@ -92,7 +92,7 @@ class GroupAvatarUploadView(APIView):
             crop_y = float(request.data.get("crop_y", 0))
             crop_w = float(request.data.get("crop_w", 0))
             crop_h = float(request.data.get("crop_h", 0))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return Response(
                 {"errors": ["Invalid crop coordinates."]},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -113,7 +113,7 @@ class GroupAvatarUploadView(APIView):
                 crop_w,
                 crop_h,
             )
-        except ValueError, OSError:
+        except (ValueError, OSError):
             # PIL raises UnidentifiedImageError (OSError) on unrecognised
             # bytes and OSError on truncated files; ValueError covers
             # crop coordinates that produce a zero-size region. Map them
@@ -195,7 +195,7 @@ class GroupAvatarRetrieveView(CacheControlMixin, APIView):
         # avoids a TOCTOU race between exists() and open().
         try:
             avatar_file = default_storage.open(path, "rb")
-        except FileNotFoundError, OSError:
+        except (FileNotFoundError, OSError):
             return HttpResponse(status=404)
         response = FileResponse(avatar_file, content_type="image/webp")
         if etag:

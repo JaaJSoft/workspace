@@ -208,7 +208,7 @@ class ActionsMixin:
                 # and bad padding instead of silently producing garbage bytes
                 # that would otherwise be sent to the paid AI service.
                 source_data = base64.b64decode(source_b64, validate=True)
-            except binascii.Error, ValueError, TypeError:
+            except (binascii.Error, ValueError, TypeError):
                 return Response(
                     {"error": "invalid base64 in source_image"},
                     status=status.HTTP_400_BAD_REQUEST,

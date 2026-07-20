@@ -325,7 +325,7 @@ def copy_node(node, parent, owner, _sibling_names=None):
         # without that misleading log line.
         try:
             src = node.content.open("rb")
-        except FileNotFoundError, OSError:
+        except (FileNotFoundError, OSError):
             logger.warning(
                 "Source blob missing while copying %s",
                 scrub(node.content.name),

@@ -74,7 +74,7 @@ class AttachmentDownloadView(APIView):
             )
         try:
             fh = default_storage.open(meta["file"], "rb")
-        except FileNotFoundError, OSError:
+        except (FileNotFoundError, OSError):
             invalidate_tags(f"att:{attachment_id}")
             return Response(
                 {"detail": "Attachment not found."},
@@ -168,7 +168,7 @@ class AttachmentSaveToFilesView(APIView):
         # rewritten to a 404 that hides the real problem.
         try:
             src = attachment.file.open("rb")
-        except FileNotFoundError, OSError:
+        except (FileNotFoundError, OSError):
             logger.warning(
                 "Chat attachment blob missing for %s", scrub(attachment.file.name)
             )

@@ -54,7 +54,7 @@ class UnifiedSearchView(CacheControlMixin, APIView):
 
         try:
             limit = int(request.query_params.get("limit", 10))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             limit = 10
         limit = max(1, min(limit, 50))
 

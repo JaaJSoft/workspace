@@ -62,7 +62,7 @@ def _check_password_access(link, request):
         value = SIGNER.unsign(access_token, max_age=ACCESS_TOKEN_MAX_AGE)
         if value != link.token:
             raise signing.BadSignature
-    except signing.BadSignature, signing.SignatureExpired:
+    except (signing.BadSignature, signing.SignatureExpired):
         return Response(
             {"detail": "Invalid or expired access token."},
             status=status.HTTP_403_FORBIDDEN,

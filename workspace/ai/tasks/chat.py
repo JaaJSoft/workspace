@@ -47,7 +47,7 @@ def generate_chat_response(
         bot_user = User.objects.get(pk=bot_user_id)
         bot_profile = BotProfile.objects.get(user=bot_user)
         conversation = Conversation.objects.get(pk=conversation_id)
-    except User.DoesNotExist, BotProfile.DoesNotExist, Conversation.DoesNotExist:
+    except (User.DoesNotExist, BotProfile.DoesNotExist, Conversation.DoesNotExist):
         logger.error(
             "Bot response failed: conversation=%s bot=%s not found",
             scrub(conversation_id),

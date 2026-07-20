@@ -334,7 +334,7 @@ class FileViewSet(
             return RECENT_FILES_LIMIT
         try:
             limit = int(value)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return RECENT_FILES_LIMIT
         if limit <= 0:
             return RECENT_FILES_LIMIT

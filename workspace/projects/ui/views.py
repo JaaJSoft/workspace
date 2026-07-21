@@ -9,6 +9,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.projects.models import Project, TaskStatus
 from workspace.projects.queries import get_project_role, user_project_ids
+from workspace.projects.services.events import events_for_project
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.users.services.settings import get_setting, set_setting
 
@@ -45,6 +46,7 @@ def overview(request, project_uuid):
         done_count=Count("uuid", filter=Q(status__category=TaskStatus.Category.DONE)),
     )
     context.update(counts)
+    context["recent_events"] = events_for_project(project)
     return _render_project_view(request, context)
 
 

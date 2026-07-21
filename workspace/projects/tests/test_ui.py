@@ -169,6 +169,22 @@ class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class OverviewActivityTests(ProjectTestMixin, TestCase):
+    def test_overview_shows_recent_events(self):
+        create_task(self.project, self.admin, title="Paint the shed")
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Recent activity")
+        self.assertContains(resp, "Task created")
+        self.assertContains(resp, "Paint the shed")
+
+    def test_overview_empty_activity_state(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}")
+        self.assertContains(resp, "No activity yet.")
+
+
 class SidebarTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
     def test_switcher_lists_only_accessible_projects(self):
         personal = get_or_create_personal_project(self.member)

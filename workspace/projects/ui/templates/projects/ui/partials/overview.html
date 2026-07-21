@@ -24,7 +24,8 @@
   </div>
 
   <div class="grid gap-4 items-start lg:grid-cols-3">
-    <section class="rounded-box bg-base-200 p-4 lg:col-span-2">
+    <div class="flex flex-col gap-4 lg:col-span-2">
+    <section class="rounded-box bg-base-200 p-4">
       <h2 class="font-semibold mb-2 flex items-center gap-2">
         <i data-lucide="info" class="w-4 h-4 text-accent"></i>
         About
@@ -39,6 +40,32 @@
         Created {{ project.created_at|date:"DATE_FORMAT" }}{% if project.created_by %} by {{ project.created_by.username }}{% endif %}
       </p>
     </section>
+
+    <section class="rounded-box bg-base-200 p-4">
+      <h2 class="font-semibold mb-2 flex items-center gap-2">
+        <i data-lucide="history" class="w-4 h-4 text-accent"></i>
+        Recent activity
+      </h2>
+      <ul class="flex flex-col gap-3">
+        {% for ev in recent_events %}
+          <li class="flex items-start gap-2.5">
+            <i data-lucide="{{ ev.icon }}" class="w-4 h-4 mt-0.5 shrink-0 text-base-content/60"></i>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm truncate">
+                <span class="font-medium">{{ ev.short_label }}</span>
+                <span class="text-base-content/70">- {{ ev.task_title }}</span>
+              </p>
+              <p class="text-xs text-base-content/50">
+                {% if ev.actor %}{{ ev.actor.username }} &middot; {% endif %}{{ ev.created_at|timesince }} ago
+              </p>
+            </div>
+          </li>
+        {% empty %}
+          <li class="text-sm text-base-content/50 italic">No activity yet.</li>
+        {% endfor %}
+      </ul>
+    </section>
+    </div>
 
     <div class="flex flex-col gap-4">
       <section class="rounded-box bg-base-200 p-4">

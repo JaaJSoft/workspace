@@ -93,3 +93,22 @@ class RecordTaskEventTests(ProjectTestMixin, TestCase):
         events = list(events_for_project(self.project, limit=2))
         self.assertEqual(len(events), 2)
         self.assertTrue(all(e.project_id == self.project.uuid for e in events))
+
+
+class CreateTaskEventTests(ProjectTestMixin, TestCase):
+    def test_create_task_records_created_event(self):
+        task = create_task(self.project, self.admin, title="New landing page")
+        event = TaskEvent.objects.get(task=task)
+        self.assertEqual(event.type, TaskEvent.Type.CREATED)
+        self.assertEqual(event.actor, self.admin)
+        self.assertEqual(event.task_title, "New landing page")
+        self.assertEqual(event.to_status, "Backlog")
+        self.assertEqual(event.from_status, "")
+
+    def test_create_directly_in_done_still_records_created(self):
+        done = self.project.statuses.get(name="Done")
+        task = create_task(self.project, self.admin, title="Hotfix", status=done)
+        event = TaskEvent.objects.get(task=task)
+        self.assertEqual(event.type, TaskEvent.Type.CREATED)
+        self.assertEqual(event.to_status, "Done")
+        self.assertIsNotNone(task.completed_at)

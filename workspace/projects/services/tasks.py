@@ -2,7 +2,8 @@ from django.db import transaction
 from django.db.models import Max, Q
 from django.utils import timezone
 
-from ..models import Task, TaskStatus
+from .events import record_task_event
+from ..models import Task, TaskEvent, TaskStatus
 
 
 def next_position(project, status):
@@ -48,6 +49,9 @@ def create_task(
         if status.category == TaskStatus.Category.DONE:
             task.completed_at = timezone.now()
             task.save(update_fields=["completed_at"])
+        record_task_event(
+            task, type=TaskEvent.Type.CREATED, actor=user, to_status=status
+        )
     return task
 
 

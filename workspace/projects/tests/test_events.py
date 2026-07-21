@@ -1,7 +1,6 @@
 from django.test import TestCase
 
 from workspace.projects.models import TaskEvent
-from workspace.projects.tests.base import ProjectTestMixin
 from workspace.projects.services.events import (
     events_for_project,
     move_event_type,
@@ -13,6 +12,7 @@ from workspace.projects.services.tasks import (
     delete_task,
     reorder_tasks,
 )
+from workspace.projects.tests.base import ProjectTestMixin
 
 
 class TaskEventModelTests(ProjectTestMixin, TestCase):
@@ -91,7 +91,7 @@ class RecordTaskEventTests(ProjectTestMixin, TestCase):
         other = create_project(self.admin, name="Other")
         other_task = create_task(other, self.admin, title="Elsewhere")
         TaskEvent.objects.all().delete()
-        for i in range(3):
+        for _ in range(3):
             record_task_event(self.task, type=TaskEvent.Type.MOVED, actor=None)
         record_task_event(other_task, type=TaskEvent.Type.CREATED, actor=None)
 

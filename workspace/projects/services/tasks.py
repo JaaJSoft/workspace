@@ -2,8 +2,8 @@ from django.db import transaction
 from django.db.models import Max, Q
 from django.utils import timezone
 
-from .events import move_event_type, record_task_event
 from ..models import Task, TaskEvent, TaskStatus
+from .events import move_event_type, record_task_event
 
 
 def next_position(project, status):

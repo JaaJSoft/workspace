@@ -44,3 +44,19 @@ class ProjectsConfig(AppConfig):
                 search_fn=search_project_tasks,
             )
         )
+
+        from workspace.core.activity_registry import (
+            ActivityProviderInfo,
+            activity_registry,
+        )
+        from workspace.projects.activity import ProjectsActivityProvider
+
+        activity_registry.register(
+            ActivityProviderInfo(
+                slug="projects",
+                label="Projects",
+                icon="square-kanban",
+                color="accent",
+                provider_cls=ProjectsActivityProvider,
+            )
+        )

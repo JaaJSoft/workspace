@@ -54,7 +54,7 @@ dependencies = [
     "trafilatura>=2.1.0",
     # streaming ZIP generation for bulk downloads (constant RAM)
     "zipstream-ng>=1.9.2",
-    "faker>=40.31.0",
+    "faker>=40.32.0",
 ]
 
 [build-system]

@@ -256,6 +256,12 @@ class TaskEvent(models.Model):
                 fields=["project", "-created_at"],
                 name="taskevent_project_recent",
             ),
+            # Serves the global activity feed, which filters by actor and
+            # orders by recency with no project scoping.
+            models.Index(
+                fields=["actor", "-created_at"],
+                name="taskevent_actor_recent",
+            ),
         ]
 
     def __str__(self):

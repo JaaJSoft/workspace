@@ -31,7 +31,7 @@ from .services.members import (
 )
 from .services.projects import create_project
 from .services.search import fts_tasks
-from .services.tasks import apply_status_change, create_task, reorder_tasks
+from .services.tasks import apply_status_change, create_task, delete_task, reorder_tasks
 
 User = get_user_model()
 
@@ -338,6 +338,9 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         self._require_writable()
         return super().destroy(request, *args, **kwargs)
+
+    def perform_destroy(self, instance):
+        delete_task(instance, actor=self.request.user)
 
     def reorder(self, request, *args, **kwargs):
         """Single drag-and-drop endpoint: backlog sort, in-column sort and

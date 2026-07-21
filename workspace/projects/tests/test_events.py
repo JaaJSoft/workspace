@@ -7,7 +7,11 @@ from workspace.projects.services.events import (
     move_event_type,
     record_task_event,
 )
-from workspace.projects.services.tasks import apply_status_change, create_task
+from workspace.projects.services.tasks import (
+    apply_status_change,
+    create_task,
+    delete_task,
+)
 
 
 class TaskEventModelTests(ProjectTestMixin, TestCase):
@@ -154,3 +158,28 @@ class StatusChangeEventTests(ProjectTestMixin, TestCase):
         self.assertEqual(event.type, TaskEvent.Type.COMPLETED)
         self.assertEqual(event.actor, self.member)
         self.assertEqual(event.from_status, "To do")
+
+
+class DeleteTaskEventTests(ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.task = create_task(self.project, self.admin, title="Old idea")
+        TaskEvent.objects.all().delete()
+
+    def test_delete_task_records_event_with_surviving_snapshot(self):
+        delete_task(self.task, actor=self.admin)
+        event = TaskEvent.objects.get()
+        self.assertEqual(event.type, TaskEvent.Type.DELETED)
+        self.assertIsNone(event.task)  # FK nulled by the delete
+        self.assertEqual(event.task_title, "Old idea")
+        self.assertEqual(event.actor, self.admin)
+
+    def test_api_delete_records_event(self):
+        self.client.force_login(self.admin)
+        resp = self.client.delete(
+            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}"
+        )
+        self.assertEqual(resp.status_code, 204)
+        event = TaskEvent.objects.get()
+        self.assertEqual(event.type, TaskEvent.Type.DELETED)
+        self.assertEqual(event.actor, self.admin)

@@ -78,6 +78,17 @@ def apply_status_change(task, *, actor=None, old_status=None):
     )
 
 
+def delete_task(task, actor=None):
+    """Delete *task*, leaving a DELETED event whose title snapshot survives.
+
+    The event is written first: the task FK on the event is then nulled by
+    the delete (SET_NULL), which is exactly the wanted end state.
+    """
+    with transaction.atomic():
+        record_task_event(task, type=TaskEvent.Type.DELETED, actor=actor)
+        task.delete()
+
+
 def reorder_tasks(project, status, ordered_uuids):
     """Apply a manual order to *status*'s column.
 

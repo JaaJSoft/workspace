@@ -7,7 +7,7 @@ from workspace.projects.services.events import (
     move_event_type,
     record_task_event,
 )
-from workspace.projects.services.tasks import create_task
+from workspace.projects.services.tasks import apply_status_change, create_task
 
 
 class TaskEventModelTests(ProjectTestMixin, TestCase):
@@ -112,3 +112,45 @@ class CreateTaskEventTests(ProjectTestMixin, TestCase):
         self.assertEqual(event.type, TaskEvent.Type.CREATED)
         self.assertEqual(event.to_status, "Done")
         self.assertIsNotNone(task.completed_at)
+
+
+class StatusChangeEventTests(ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.todo = self.project.statuses.get(name="To do")
+        self.done = self.project.statuses.get(name="Done")
+        self.task = create_task(
+            self.project, self.admin, title="Ship it", status=self.todo
+        )
+        TaskEvent.objects.all().delete()
+
+    def test_move_to_active_column_records_moved(self):
+        in_progress = self.project.statuses.get(name="In progress")
+        old_status = self.task.status
+        self.task.status = in_progress
+        apply_status_change(self.task, actor=self.member, old_status=old_status)
+        event = TaskEvent.objects.get()
+        self.assertEqual(event.type, TaskEvent.Type.MOVED)
+        self.assertEqual(event.actor, self.member)
+        self.assertEqual(event.from_status, "To do")
+        self.assertEqual(event.to_status, "In progress")
+
+    def test_move_to_done_records_completed(self):
+        old_status = self.task.status
+        self.task.status = self.done
+        apply_status_change(self.task, actor=self.admin, old_status=old_status)
+        event = TaskEvent.objects.get()
+        self.assertEqual(event.type, TaskEvent.Type.COMPLETED)
+
+    def test_api_status_patch_records_event_with_actor(self):
+        self.client.force_login(self.member)
+        resp = self.client.patch(
+            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}",
+            {"status": str(self.done.uuid)},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        event = TaskEvent.objects.get()
+        self.assertEqual(event.type, TaskEvent.Type.COMPLETED)
+        self.assertEqual(event.actor, self.member)
+        self.assertEqual(event.from_status, "To do")

@@ -2,7 +2,7 @@ from django.db import transaction
 from django.db.models import Max, Q
 from django.utils import timezone
 
-from .events import record_task_event
+from .events import move_event_type, record_task_event
 from ..models import Task, TaskEvent, TaskStatus
 
 
@@ -55,11 +55,12 @@ def create_task(
     return task
 
 
-def apply_status_change(task):
+def apply_status_change(task, *, actor=None, old_status=None):
     """Side effects after ``task.status`` was reassigned.
 
-    Appends the task to the end of its new column and maintains
-    ``completed_at`` from the status category. Saves the task.
+    Appends the task to the end of its new column, maintains
+    ``completed_at`` from the status category and records the move event.
+    Saves the task.
     """
     task.position = next_position(task.project, task.status)
     if task.status.category == TaskStatus.Category.DONE:
@@ -68,6 +69,13 @@ def apply_status_change(task):
     else:
         task.completed_at = None
     task.save(update_fields=["status", "position", "completed_at", "updated_at"])
+    record_task_event(
+        task,
+        type=move_event_type(task.status),
+        actor=actor,
+        from_status=old_status,
+        to_status=task.status,
+    )
 
 
 def reorder_tasks(project, status, ordered_uuids):

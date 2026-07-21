@@ -330,10 +330,10 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return super().partial_update(request, *args, **kwargs)
 
     def perform_update(self, serializer):
-        old_status_id = serializer.instance.status_id
+        old_status = serializer.instance.status
         task = serializer.save()
-        if task.status_id != old_status_id:
-            apply_status_change(task)
+        if task.status_id != old_status.pk:
+            apply_status_change(task, actor=self.request.user, old_status=old_status)
 
     def destroy(self, request, *args, **kwargs):
         self._require_writable()

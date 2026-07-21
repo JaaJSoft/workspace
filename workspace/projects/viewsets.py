@@ -356,5 +356,10 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 {"detail": "Unknown status for this project."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        reorder_tasks(self.project, status_obj, serializer.validated_data["order"])
+        reorder_tasks(
+            self.project,
+            status_obj,
+            serializer.validated_data["order"],
+            actor=request.user,
+        )
         return Response({"success": True})

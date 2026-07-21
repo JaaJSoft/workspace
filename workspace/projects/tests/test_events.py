@@ -11,6 +11,7 @@ from workspace.projects.services.tasks import (
     apply_status_change,
     create_task,
     delete_task,
+    reorder_tasks,
 )
 
 
@@ -183,3 +184,40 @@ class DeleteTaskEventTests(ProjectTestMixin, TestCase):
         event = TaskEvent.objects.get()
         self.assertEqual(event.type, TaskEvent.Type.DELETED)
         self.assertEqual(event.actor, self.admin)
+
+
+class ReorderEventTests(ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.todo = self.project.statuses.get(name="To do")
+        self.done = self.project.statuses.get(name="Done")
+        self.task = create_task(
+            self.project, self.admin, title="Drag me", status=self.todo
+        )
+        TaskEvent.objects.all().delete()
+
+    def test_cross_column_drop_records_completed(self):
+        reorder_tasks(self.project, self.done, [self.task.uuid], actor=self.member)
+        event = TaskEvent.objects.get()
+        self.assertEqual(event.type, TaskEvent.Type.COMPLETED)
+        self.assertEqual(event.actor, self.member)
+        self.assertEqual(event.from_status, "To do")
+        self.assertEqual(event.to_status, "Done")
+
+    def test_in_column_shuffle_records_nothing(self):
+        other = create_task(
+            self.project, self.admin, title="Neighbor", status=self.todo
+        )
+        TaskEvent.objects.all().delete()
+        reorder_tasks(
+            self.project,
+            self.todo,
+            [other.uuid, self.task.uuid],
+            actor=self.admin,
+        )
+        self.assertEqual(TaskEvent.objects.count(), 0)
+
+    def test_replay_is_idempotent_for_events(self):
+        reorder_tasks(self.project, self.done, [self.task.uuid], actor=self.admin)
+        reorder_tasks(self.project, self.done, [self.task.uuid], actor=self.admin)
+        self.assertEqual(TaskEvent.objects.count(), 1)

@@ -89,7 +89,7 @@ def delete_task(task, actor=None):
         task.delete()
 
 
-def reorder_tasks(project, status, ordered_uuids):
+def reorder_tasks(project, status, ordered_uuids, *, actor=None):
     """Apply a manual order to *status*'s column.
 
     Listed tasks from other statuses move into *status* (kanban cross-column
@@ -127,9 +127,11 @@ def reorder_tasks(project, status, ordered_uuids):
 
         now = timezone.now()
         to_update = []
+        moved = []
         for i, task in enumerate(sequence):
             changed = False
             if task.status_id != status.pk:
+                moved.append((task, task.status))
                 task.status = status
                 if status.category == TaskStatus.Category.DONE:
                     if task.completed_at is None:
@@ -148,4 +150,12 @@ def reorder_tasks(project, status, ordered_uuids):
         if to_update:
             Task.objects.bulk_update(
                 to_update, ["status", "position", "completed_at", "updated_at"]
+            )
+        for task, old_status in moved:
+            record_task_event(
+                task,
+                type=move_event_type(status),
+                actor=actor,
+                from_status=old_status,
+                to_status=status,
             )

@@ -78,8 +78,7 @@ class ProjectsActivityProvider(ActivityProvider):
         qs = Task.objects.all()
         if user_id is not None:
             qs = qs.filter(created_by_id=user_id)
-        if viewer_id is not None and viewer_id != user_id:
-            qs = qs.filter(project_id__in=self._viewer_project_ids(viewer_id))
+        qs = qs.filter(self._visibility_filter(user_id, viewer_id))
         agg = qs.aggregate(
             total_tasks=Count("pk"),
             completed_tasks=Count("pk", filter=Q(completed_at__isnull=False)),

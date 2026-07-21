@@ -160,6 +160,16 @@ class StatusChangeEventTests(ProjectTestMixin, TestCase):
         self.assertEqual(event.actor, self.member)
         self.assertEqual(event.from_status, "To do")
 
+    def test_patch_without_status_change_records_nothing(self):
+        self.client.force_login(self.member)
+        resp = self.client.patch(
+            f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}",
+            {"title": "Ship it soon"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(TaskEvent.objects.count(), 0)
+
 
 class DeleteTaskEventTests(ProjectTestMixin, TestCase):
     def setUp(self):

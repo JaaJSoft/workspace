@@ -68,14 +68,15 @@ def apply_status_change(task, *, actor=None, old_status=None):
             task.completed_at = timezone.now()
     else:
         task.completed_at = None
-    task.save(update_fields=["status", "position", "completed_at", "updated_at"])
-    record_task_event(
-        task,
-        type=move_event_type(task.status),
-        actor=actor,
-        from_status=old_status,
-        to_status=task.status,
-    )
+    with transaction.atomic():
+        task.save(update_fields=["status", "position", "completed_at", "updated_at"])
+        record_task_event(
+            task,
+            type=move_event_type(task.status),
+            actor=actor,
+            from_status=old_status,
+            to_status=task.status,
+        )
 
 
 def delete_task(task, actor=None):

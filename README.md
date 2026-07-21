@@ -35,6 +35,11 @@ Markdown editor with journal mode, folders, tags, favorites, and full-text searc
 
 ![Notes](docs/images/notes_1.png)
 
+### Projects
+Kanban boards for tracking tasks, solo or as a team. Drag & drop cards between columns, prioritize with labels, priorities, due dates, and assignees, and park future work in a dedicated backlog view. Every user gets a personal board out of the box, and group projects support member roles and archiving.
+
+![Projects](docs/images/projects_1.png)
+
 ### [AI Assistants](docs/ai/)
 Configurable chat bots with system prompts, vision, function calling, extended thinking, image generation, and bot memory. Works with OpenAI API or any compatible provider (Ollama, LM Studio, etc.).
 
@@ -180,7 +185,6 @@ Your module automatically appears in the sidebar, dashboard, and search results.
 
 See [IDEAS.md](IDEAS.md) for the full roadmap. Planned modules include:
 
-- **Tasks & Projects** - Kanban boards, sprints, time tracking
 - **Contacts & CRM** - Contact management with interaction history
 - **Bookmarks** - Save and organize links with automatic previews
 - **Password Manager** - Encrypted vault with TOTP support

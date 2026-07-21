@@ -41,7 +41,7 @@ def _parse_dt(value):
         if dt.tzinfo is None:
             dt = timezone.make_aware(dt)
         return dt
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -264,7 +264,7 @@ class EventListView(CacheControlMixin, APIView):
 
         try:
             limit = int(request.query_params.get("limit", 20))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             limit = 20
         limit = max(1, min(limit, 100))
 

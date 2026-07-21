@@ -52,7 +52,7 @@ class MessageInteractionAnswerView(APIView):
             )
         try:
             option_index = int(raw)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return Response(
                 {"detail": "option_index must be an integer"},
                 status=status.HTTP_400_BAD_REQUEST,

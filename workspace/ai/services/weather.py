@@ -58,7 +58,7 @@ def describe_weather_code(code) -> str:
     """Return a human-readable description for a WMO weather code."""
     try:
         return _WEATHER_CODES.get(int(code), "Unknown conditions")
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return "Unknown conditions"
 
 

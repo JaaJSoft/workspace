@@ -48,7 +48,7 @@ def _get_video_duration(video_path):
             check=True,
         )
         return float(result.stdout.strip())
-    except (subprocess.SubprocessError, OSError, ValueError):
+    except subprocess.SubprocessError, OSError, ValueError:
         # SubprocessError covers TimeoutExpired + CalledProcessError; ValueError
         # covers malformed/empty stdout that float() rejects. Any failure here
         # falls back to the default fps=1 in extract_video_frames().
@@ -128,7 +128,7 @@ def extract_video_frames(att):
                         "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
                     }
                 )
-    except (subprocess.SubprocessError, OSError):
+    except subprocess.SubprocessError, OSError:
         # SubprocessError catches CalledProcessError (non-zero exit) and
         # TimeoutExpired (>120s). OSError catches file read/write failures
         # on the temp directory. Either way the response degrades to "no

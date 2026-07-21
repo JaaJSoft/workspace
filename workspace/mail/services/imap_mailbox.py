@@ -92,7 +92,7 @@ def _display_name(name):
     if "&" in name and "-" in name:
         try:
             name = _decode_mutf7(name)
-        except (ValueError, UnicodeDecodeError):
+        except ValueError, UnicodeDecodeError:
             # Malformed mUTF-7 shouldn't break display: keep the raw value.
             pass
     return name

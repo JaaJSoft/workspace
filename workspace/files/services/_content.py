@@ -13,7 +13,7 @@ def read_text_content(file_obj, *, max_bytes=32_768):
         with file_obj.content.open("rb") as fh:
             raw = fh.read(max_bytes)
         return raw.decode("utf-8")
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         return None
 
 

@@ -44,7 +44,7 @@ def run_handlers(event_uuid) -> None:
 
     try:
         event = FileEvent.objects.select_related("file", "actor").get(uuid=event_uuid)
-    except (FileEvent.DoesNotExist, ValidationError, ValueError, TypeError):
+    except FileEvent.DoesNotExist, ValidationError, ValueError, TypeError:
         # Unknown or malformed event id (e.g. a non-UUID string): nothing to run.
         return
 

@@ -225,7 +225,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
         try:
             offset = max(int(request.query_params.get("offset", 0)), 0)
             limit = min(max(int(request.query_params.get("limit", 24)), 0), 100)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return Response(
                 {"detail": "Invalid pagination parameters."},
                 status=status.HTTP_400_BAD_REQUEST,

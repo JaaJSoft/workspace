@@ -518,7 +518,7 @@ def events(request, uuid):
 
     try:
         events_limit = int(request.GET.get("limit", INITIAL_EVENTS_LIMIT))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         events_limit = INITIAL_EVENTS_LIMIT
     events_limit = max(INITIAL_EVENTS_LIMIT, min(events_limit, MAX_EVENTS_LIMIT))
 
@@ -754,7 +754,7 @@ def shared_file_view(request, token):
         try:
             value = signer.unsign(access_token, max_age=3600)
             password_verified = value == link.token
-        except (signing.BadSignature, signing.SignatureExpired):
+        except signing.BadSignature, signing.SignatureExpired:
             # Invalid or expired access token: leave password_verified
             # False so the password prompt is rendered again.
             pass

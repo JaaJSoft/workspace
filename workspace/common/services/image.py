@@ -67,7 +67,7 @@ def get_image_etag(path: str) -> str | None:
     """Return an HMAC-SHA256 ETag based on the file's modification time, or *None*."""
     try:
         mtime = default_storage.get_modified_time(path).timestamp()
-    except (FileNotFoundError, OSError):
+    except FileNotFoundError, OSError:
         return None
     raw = f"{path}-{mtime}"
     return hmac.new(_ETAG_SECRET, raw.encode(), "sha256").hexdigest()

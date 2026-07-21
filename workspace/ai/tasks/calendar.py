@@ -112,7 +112,7 @@ def _extract_one_message(msg: MailMessage, event_ct: ContentType) -> dict:
     raw_content = _FENCE_RE.sub("", (result.get("content") or "").strip())
     try:
         items = orjson.loads(raw_content)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         logger.warning("Extract: malformed JSON for message %s", scrub(str(msg.pk)))
         return {
             "count": 0,

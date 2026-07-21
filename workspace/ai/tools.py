@@ -312,7 +312,7 @@ Do NOT use this to modify an existing image — use edit_image instead."""
         b64 = data[0].b64_json if data else None
         try:
             image_data = base64.b64decode(b64) if b64 else b""
-        except (binascii.Error, ValueError):
+        except binascii.Error, ValueError:
             image_data = b""
         if not image_data:
             AI_IMAGE_REQUESTS.labels(
@@ -489,7 +489,7 @@ schedules with a similar prompt — update or cancel the old one instead of crea
             try:
                 parts = at_time_str.split(":")
                 recurrence_time = time(int(parts[0]), int(parts[1]))
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 return f'Error: could not parse time "{at_time_str}". Use HH:MM format (24h)'
 
         recurrence_day = None

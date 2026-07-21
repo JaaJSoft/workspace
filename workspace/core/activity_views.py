@@ -37,13 +37,13 @@ class ActivityRecentView(APIView):
 
         try:
             limit = int(request.query_params.get("limit", 10))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             limit = 10
         limit = max(1, min(limit, 50))
 
         try:
             offset = int(request.query_params.get("offset", 0))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             offset = 0
         offset = max(0, offset)
 

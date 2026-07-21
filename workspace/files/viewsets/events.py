@@ -56,11 +56,11 @@ class EventsMixin:
 
         try:
             limit = int(request.query_params.get("limit", DEFAULT_EVENTS_LIMIT))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             limit = DEFAULT_EVENTS_LIMIT
         try:
             offset = int(request.query_params.get("offset", 0))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             offset = 0
         limit = max(1, min(limit, MAX_EVENTS_LIMIT))
         offset = max(0, offset)

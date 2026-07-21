@@ -78,7 +78,7 @@ class ShareMixin:
 
         try:
             shared_with_id = int(shared_with_id)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return Response(
                 {"detail": "shared_with must be a valid user id."},
                 status=status.HTTP_400_BAD_REQUEST,

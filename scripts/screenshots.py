@@ -14,10 +14,11 @@ Requirements: the ``dev`` dependency group (Playwright) and a Chromium
 install (``uv run playwright install chromium``, or set
 ``SCREENSHOTS_CHROMIUM`` to an existing Chromium binary).
 
-The CDN scripts used by base.html (Alpine, lucide, ...) are cached under
-``scripts/.screenshot-assets/`` and served to the browser from disk, so
-captures are deterministic and work offline. The cache is filled from
-the CDN when reachable, falling back to registry.npmjs.org tarballs.
+By default the browser loads the CDN assets used by base.html (Alpine,
+lucide, ...) directly, like any normal page view. ``--offline`` serves
+them from a local cache (``scripts/.screenshot-assets/``, filled from
+the CDN or from registry.npmjs.org tarballs) for environments without
+CDN egress, e.g. a locked-down CI.
 """
 
 import argparse
@@ -46,11 +47,10 @@ VIEWPORT = {"width": 1280, "height": 900}
 USERNAME = "alex"
 PASSWORD = "screenshots-demo"
 
-# npm CDN URLs (jsdelivr / unpkg) are intercepted and served from a
-# local cache, so captures are deterministic and work offline. On a
-# cache miss the file is fetched from the CDN when reachable, else from
-# the registry.npmjs.org tarball (the registry stays reachable in
-# sandboxes where the CDNs are not).
+# --offline only: npm CDN URLs (jsdelivr / unpkg) are intercepted and
+# served from a local cache. On a cache miss the file is fetched from
+# the CDN when reachable, else from the registry.npmjs.org tarball (the
+# registry often stays reachable where the CDNs are not).
 CDN_URL_RE = re.compile(
     r"^https://(?:cdn\.jsdelivr\.net/npm|unpkg\.com)/"
     r"(?P<package>@[^/@]+/[^/@]+|[^/@]+)@(?P<spec>[^/]+)/(?P<path>.+)$"
@@ -201,7 +201,7 @@ def chromium_path():
     return None  # let Playwright resolve its own managed install
 
 
-def capture(base_url, context, only=None):
+def capture(base_url, context, only=None, offline=False):
     from playwright.sync_api import sync_playwright
 
     from scripts._screenshot_seed import SHOTS
@@ -211,12 +211,15 @@ def capture(base_url, context, only=None):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=chromium_path())
-        # The service worker would bypass our CDN routes; block it.
-        ctx = browser.new_context(viewport=VIEWPORT, service_workers="block")
-        ctx.route("https://cdn.jsdelivr.net/**", _serve_cdn_asset)
-        ctx.route("https://unpkg.com/**", _serve_cdn_asset)
-        for pattern in BLOCKED_URL_PATTERNS:
-            ctx.route(pattern, lambda route: route.abort())
+        if offline:
+            # The service worker would bypass our CDN routes; block it.
+            ctx = browser.new_context(viewport=VIEWPORT, service_workers="block")
+            ctx.route("https://cdn.jsdelivr.net/**", _serve_cdn_asset)
+            ctx.route("https://unpkg.com/**", _serve_cdn_asset)
+            for pattern in BLOCKED_URL_PATTERNS:
+                ctx.route(pattern, lambda route: route.abort())
+        else:
+            ctx = browser.new_context(viewport=VIEWPORT)
         page = ctx.new_page()
 
         page.goto(f"{base_url}/login")
@@ -281,6 +284,13 @@ def main():
     parser.add_argument(
         "--list", action="store_true", help="list available screenshot names"
     )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="serve npm CDN assets from a local cache (registry.npmjs.org "
+        "fallback) instead of letting the browser hit the CDNs; for "
+        "environments without CDN egress",
+    )
     args = parser.parse_args()
 
     sys.path.insert(0, str(REPO_ROOT))
@@ -295,7 +305,12 @@ def main():
 
     with demo_environment() as (base_url, context):
         print(f"Capturing to {OUTPUT_DIR}/ ...")
-        capture(base_url, context, only=set(args.only) if args.only else None)
+        capture(
+            base_url,
+            context,
+            only=set(args.only) if args.only else None,
+            offline=args.offline,
+        )
     print("Done.")
 
 

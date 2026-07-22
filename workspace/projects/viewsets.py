@@ -31,7 +31,7 @@ from .services.members import (
 )
 from .services.projects import create_project
 from .services.search import fts_tasks
-from .services.tasks import apply_status_change, create_task, reorder_tasks
+from .services.tasks import apply_status_change, create_task, delete_task, reorder_tasks
 
 User = get_user_model()
 
@@ -330,14 +330,17 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         return super().partial_update(request, *args, **kwargs)
 
     def perform_update(self, serializer):
-        old_status_id = serializer.instance.status_id
+        old_status = serializer.instance.status
         task = serializer.save()
-        if task.status_id != old_status_id:
-            apply_status_change(task)
+        if task.status_id != old_status.pk:
+            apply_status_change(task, actor=self.request.user, old_status=old_status)
 
     def destroy(self, request, *args, **kwargs):
         self._require_writable()
         return super().destroy(request, *args, **kwargs)
+
+    def perform_destroy(self, instance):
+        delete_task(instance, actor=self.request.user)
 
     def reorder(self, request, *args, **kwargs):
         """Single drag-and-drop endpoint: backlog sort, in-column sort and
@@ -353,5 +356,10 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 {"detail": "Unknown status for this project."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        reorder_tasks(self.project, status_obj, serializer.validated_data["order"])
+        reorder_tasks(
+            self.project,
+            status_obj,
+            serializer.validated_data["order"],
+            actor=request.user,
+        )
         return Response({"success": True})

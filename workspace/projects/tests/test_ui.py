@@ -22,17 +22,13 @@ class IndexRedirectTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         personal = Project.objects.get(
             created_by=self.member, type=Project.Type.PERSONAL
         )
-        self.assertRedirects(
-            response, f"/projects/{personal.uuid}", target_status_code=302
-        )
+        self.assertRedirects(response, f"/projects/{personal.uuid}")
 
     def test_redirects_to_last_opened_project(self):
         set_setting(self.member, "projects", "last_project", str(self.project.uuid))
         self.client.force_login(self.member)
         response = self.client.get("/projects")
-        self.assertRedirects(
-            response, f"/projects/{self.project.uuid}", target_status_code=302
-        )
+        self.assertRedirects(response, f"/projects/{self.project.uuid}")
 
     def test_inaccessible_last_project_falls_back_to_personal(self):
         set_setting(self.outsider, "projects", "last_project", str(self.project.uuid))
@@ -41,9 +37,7 @@ class IndexRedirectTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         personal = Project.objects.get(
             created_by=self.outsider, type=Project.Type.PERSONAL
         )
-        self.assertRedirects(
-            response, f"/projects/{personal.uuid}", target_status_code=302
-        )
+        self.assertRedirects(response, f"/projects/{personal.uuid}")
 
     def test_malformed_last_project_falls_back_to_personal(self):
         set_setting(self.member, "projects", "last_project", "not-a-uuid")
@@ -52,9 +46,7 @@ class IndexRedirectTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         personal = Project.objects.get(
             created_by=self.member, type=Project.Type.PERSONAL
         )
-        self.assertRedirects(
-            response, f"/projects/{personal.uuid}", target_status_code=302
-        )
+        self.assertRedirects(response, f"/projects/{personal.uuid}")
 
     def test_anonymous_redirected_to_login(self):
         response = self.client.get("/projects")
@@ -62,25 +54,48 @@ class IndexRedirectTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertIn("login", response["Location"])
 
 
-class ProjectRootRedirectTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
-    def test_defaults_to_board(self):
+class OverviewViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    def test_renders_overview_with_task_counts(self):
+        todo_status = self.project.statuses.get(name="To do")
+        backlog_status = self.project.statuses.get(name="Backlog")
+        done_status = self.project.statuses.get(name="Done")
+        create_task(self.project, self.admin, title="Active", status=todo_status)
+        create_task(self.project, self.admin, title="Queued", status=backlog_status)
+        create_task(self.project, self.admin, title="Shipped", status=done_status)
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}")
-        self.assertRedirects(response, f"/projects/{self.project.uuid}/board")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "projects/ui/project.html")
+        self.assertEqual(response.context["view"], "overview")
+        self.assertEqual(response.context["board_count"], 1)
+        self.assertEqual(response.context["backlog_count"], 1)
+        self.assertEqual(response.context["done_count"], 1)
+        self.assertContains(response, "Members")
+        self.assertContains(response, "member1")
+        self.assertContains(response, "admin1")
 
-    def test_redirects_to_last_view(self):
-        set_setting(
-            self.member, "projects", f"last_view:{self.project.uuid}", "backlog"
+    def test_records_last_project(self):
+        self.client.force_login(self.member)
+        self.client.get(f"/projects/{self.project.uuid}")
+        self.assertEqual(
+            get_setting(self.member, "projects", "last_project"),
+            str(self.project.uuid),
         )
-        self.client.force_login(self.member)
-        response = self.client.get(f"/projects/{self.project.uuid}")
-        self.assertRedirects(response, f"/projects/{self.project.uuid}/backlog")
 
-    def test_unknown_last_view_falls_back_to_board(self):
-        set_setting(self.member, "projects", f"last_view:{self.project.uuid}", "gantt")
+    def test_partial_returns_content_wrapper(self):
         self.client.force_login(self.member)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}", HTTP_X_ALPINE_REQUEST="1"
+        )
+        self.assertTemplateUsed(response, "projects/ui/partials/_content.html")
+        self.assertTemplateNotUsed(response, "projects/ui/project.html")
+        self.assertContains(response, 'id="project-content"')
+        self.assertContains(response, 'id="overview"')
+
+    def test_outsider_gets_404(self):
+        self.client.force_login(self.outsider)
         response = self.client.get(f"/projects/{self.project.uuid}")
-        self.assertRedirects(response, f"/projects/{self.project.uuid}/board")
+        self.assertEqual(response.status_code, 404)
 
 
 class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
@@ -101,19 +116,15 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertNotIn("Backlog", column_names)
         self.assertEqual(response.context["view"], "board")
 
-    def test_records_last_project_and_view(self):
+    def test_records_last_project(self):
         self.client.force_login(self.member)
         self.client.get(f"/projects/{self.project.uuid}/board")
         self.assertEqual(
             get_setting(self.member, "projects", "last_project"),
             str(self.project.uuid),
         )
-        self.assertEqual(
-            get_setting(self.member, "projects", f"last_view:{self.project.uuid}"),
-            "board",
-        )
 
-    def test_partial_returns_content_wrapper_and_records_view(self):
+    def test_partial_returns_content_wrapper(self):
         self.client.force_login(self.member)
         response = self.client.get(
             f"/projects/{self.project.uuid}/board", HTTP_X_ALPINE_REQUEST="1"
@@ -121,10 +132,6 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertTemplateUsed(response, "projects/ui/partials/_content.html")
         self.assertTemplateNotUsed(response, "projects/ui/project.html")
         self.assertContains(response, 'id="project-content"')
-        self.assertEqual(
-            get_setting(self.member, "projects", f"last_view:{self.project.uuid}"),
-            "board",
-        )
 
     def test_members_data_exposes_user_ids(self):
         self.client.force_login(self.member)
@@ -141,16 +148,12 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
 
 
 class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
-    def test_renders_backlog_and_records_view(self):
+    def test_renders_backlog(self):
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}/backlog")
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "projects/ui/project.html")
         self.assertEqual(response.context["view"], "backlog")
-        self.assertEqual(
-            get_setting(self.member, "projects", f"last_view:{self.project.uuid}"),
-            "backlog",
-        )
 
     def test_partial_returns_content_wrapper(self):
         self.client.force_login(self.member)
@@ -164,6 +167,22 @@ class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.outsider)
         response = self.client.get(f"/projects/{self.project.uuid}/backlog")
         self.assertEqual(response.status_code, 404)
+
+
+class OverviewActivityTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    def test_overview_shows_recent_events(self):
+        create_task(self.project, self.admin, title="Paint the shed")
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Recent activity")
+        self.assertContains(resp, "Task created")
+        self.assertContains(resp, "Paint the shed")
+
+    def test_overview_empty_activity_state(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}")
+        self.assertContains(resp, "No activity yet.")
 
 
 class SidebarTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):

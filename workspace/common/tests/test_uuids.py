@@ -3,7 +3,7 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
-from workspace.common.uuids import uuid_v7_or_v4
+from workspace.common.uuids import parse_uuid_or_none, uuid_v7_or_v4
 
 
 class UuidV7OrV4Tests(SimpleTestCase):
@@ -62,3 +62,22 @@ class UuidV7OrV4Tests(SimpleTestCase):
         failing.assert_called_once()
         mocked_uuid.uuid4.assert_called_once()
         self.assertEqual(result, fallback)
+
+
+class ParseUuidOrNoneTests(SimpleTestCase):
+    def test_parses_valid_string(self):
+        value = "018f8a0f-7b5d-7a1e-9c4b-0123456789ab"
+        self.assertEqual(parse_uuid_or_none(value), uuid.UUID(value))
+
+    def test_accepts_uuid_instance(self):
+        value = uuid.uuid4()
+        self.assertEqual(parse_uuid_or_none(value), value)
+
+    def test_returns_none_for_malformed_string(self):
+        self.assertIsNone(parse_uuid_or_none("not-a-uuid"))
+
+    def test_returns_none_for_none(self):
+        self.assertIsNone(parse_uuid_or_none(None))
+
+    def test_returns_none_for_non_uuid_number(self):
+        self.assertIsNone(parse_uuid_or_none(123))

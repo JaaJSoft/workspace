@@ -197,3 +197,80 @@ class Task(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class TaskEvent(models.Model):
+    class Type(models.TextChoices):
+        CREATED = "created", "Created"
+        MOVED = "moved", "Moved"
+        COMPLETED = "completed", "Completed"
+        DELETED = "deleted", "Deleted"
+
+    _ICONS = {
+        Type.CREATED: "plus",
+        Type.MOVED: "move-right",
+        Type.COMPLETED: "circle-check",
+        Type.DELETED: "trash-2",
+    }
+    _LABELS = {
+        Type.CREATED: "Task created",
+        Type.MOVED: "Task moved",
+        Type.COMPLETED: "Task completed",
+        Type.DELETED: "Task deleted",
+    }
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="task_events",
+    )
+    # Nullable so the event outlives its task; task_title is the display
+    # fallback once the row is gone.
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="events",
+    )
+    task_title = models.CharField(max_length=255)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    type = models.CharField(max_length=9, choices=Type.choices)
+    # Status *names* snapshotted at write time: statuses are renamable and
+    # deletable, a FK would rewrite history.
+    from_status = models.CharField(max_length=100, blank=True, default="")
+    to_status = models.CharField(max_length=100, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-uuid"]
+        indexes = [
+            models.Index(
+                fields=["project", "-created_at"],
+                name="taskevent_project_recent",
+            ),
+            # Serves the global activity feed, which filters by actor and
+            # orders by recency with no project scoping.
+            models.Index(
+                fields=["actor", "-created_at"],
+                name="taskevent_actor_recent",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.type}: {self.task_title}"
+
+    @property
+    def icon(self):
+        return self._ICONS.get(self.type, "square-kanban")
+
+    @property
+    def short_label(self):
+        return self._LABELS.get(self.type, "Task updated")

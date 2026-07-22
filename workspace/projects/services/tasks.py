@@ -2,7 +2,8 @@ from django.db import transaction
 from django.db.models import Max, Q
 from django.utils import timezone
 
-from ..models import Task, TaskStatus
+from ..models import Task, TaskEvent, TaskStatus
+from .events import move_event_type, record_task_event
 
 
 def next_position(project, status):
@@ -48,14 +49,18 @@ def create_task(
         if status.category == TaskStatus.Category.DONE:
             task.completed_at = timezone.now()
             task.save(update_fields=["completed_at"])
+        record_task_event(
+            task, type=TaskEvent.Type.CREATED, actor=user, to_status=status
+        )
     return task
 
 
-def apply_status_change(task):
+def apply_status_change(task, *, actor=None, old_status=None):
     """Side effects after ``task.status`` was reassigned.
 
-    Appends the task to the end of its new column and maintains
-    ``completed_at`` from the status category. Saves the task.
+    Appends the task to the end of its new column, maintains
+    ``completed_at`` from the status category and records the move event.
+    Saves the task.
     """
     task.position = next_position(task.project, task.status)
     if task.status.category == TaskStatus.Category.DONE:
@@ -63,10 +68,29 @@ def apply_status_change(task):
             task.completed_at = timezone.now()
     else:
         task.completed_at = None
-    task.save(update_fields=["status", "position", "completed_at", "updated_at"])
+    with transaction.atomic():
+        task.save(update_fields=["status", "position", "completed_at", "updated_at"])
+        record_task_event(
+            task,
+            type=move_event_type(task.status),
+            actor=actor,
+            from_status=old_status,
+            to_status=task.status,
+        )
 
 
-def reorder_tasks(project, status, ordered_uuids):
+def delete_task(task, actor=None):
+    """Delete *task*, leaving a DELETED event whose title snapshot survives.
+
+    The event is written first: the task FK on the event is then nulled by
+    the delete (SET_NULL), which is exactly the wanted end state.
+    """
+    with transaction.atomic():
+        record_task_event(task, type=TaskEvent.Type.DELETED, actor=actor)
+        task.delete()
+
+
+def reorder_tasks(project, status, ordered_uuids, *, actor=None):
     """Apply a manual order to *status*'s column.
 
     Listed tasks from other statuses move into *status* (kanban cross-column
@@ -104,9 +128,11 @@ def reorder_tasks(project, status, ordered_uuids):
 
         now = timezone.now()
         to_update = []
+        moved = []
         for i, task in enumerate(sequence):
             changed = False
             if task.status_id != status.pk:
+                moved.append((task, task.status))
                 task.status = status
                 if status.category == TaskStatus.Category.DONE:
                     if task.completed_at is None:
@@ -125,4 +151,12 @@ def reorder_tasks(project, status, ordered_uuids):
         if to_update:
             Task.objects.bulk_update(
                 to_update, ["status", "position", "completed_at", "updated_at"]
+            )
+        for task, old_status in moved:
+            record_task_event(
+                task,
+                type=move_event_type(status),
+                actor=actor,
+                from_status=old_status,
+                to_status=status,
             )

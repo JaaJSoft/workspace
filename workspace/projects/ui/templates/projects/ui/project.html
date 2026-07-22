@@ -19,7 +19,7 @@ x-data="projectBoard({
   writable: {{ writable|yesno:'true,false' }},
   view: '{{ view }}',
 })"
-@popstate.window="currentView = window.location.pathname.endsWith('/backlog') ? 'backlog' : 'board'"
+@popstate.window="currentView = window.location.pathname.endsWith('/backlog') ? 'backlog' : (window.location.pathname.endsWith('/board') ? 'board' : 'overview')"
 {% endblock %}
 
 {% block drawer_sidebar %}
@@ -90,6 +90,8 @@ x-data="projectBoard({
     <!-- Project navigation -->
     <div class="flex-1 overflow-y-auto py-2 px-3">
       <ul class="menu p-0 gap-1">
+        {% url 'projects_ui:project' project.uuid as overview_url %}
+        {% include "ui/partials/drawer_item.html" with href=overview_url icon="layout-dashboard" label="Overview" color="accent" active_binding="currentView === 'overview'" x_target="project-content" x_target_history="push" onclick="currentView = 'overview'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Overview" %}
         {% url 'projects_ui:board' project.uuid as board_url %}
         {% include "ui/partials/drawer_item.html" with href=board_url icon="square-kanban" label="Board" color="accent" active_binding="currentView === 'board'" x_target="project-content" x_target_history="push" onclick="currentView = 'board'; _closeDrawerOnMobile()" collapse_expr="sidebarCollapsed()" tooltip="Board" %}
         {% url 'projects_ui:backlog' project.uuid as backlog_url %}

@@ -1,6 +1,8 @@
 <div id="project-content" class="flex-1 min-h-0 overflow-y-auto">
   {% if view == "backlog" %}
     {% include "projects/ui/partials/backlog.html" %}
+  {% elif view == "overview" %}
+    {% include "projects/ui/partials/overview.html" %}
   {% else %}
     {% include "projects/ui/partials/board.html" %}
   {% endif %}

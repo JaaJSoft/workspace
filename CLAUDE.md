@@ -404,6 +404,22 @@ We target Python 3.14, so reach for a stdlib primitive before writing manual loo
 
 Favour clarity, not cleverness: leave a loop explicit when it carries per-iteration side effects, and mind the [Refactoring & Optimization](#refactoring--optimization) rule (a test must cover the code first; the swap must preserve behavior). Two `batched` gotchas: it yields **tuples** (not slices), and ruff (`B911`) requires an explicit `strict=` — use `strict=False` for the usual short-final-batch case.
 
+### Multi-type except clauses - unparenthesized is the house style (PEP 758)
+
+We target Python 3.14, where PEP 758 makes `except ValueError, TypeError:` valid without parentheses (as long as there is no `as` capture). The codebase uses that form everywhere:
+
+```python
+try:
+    return uuid.UUID(str(value))
+except ValueError, TypeError:          # ✅ house style (no `as`)
+    return None
+
+except (ValueError, TypeError) as exc: # ✅ parentheses still MANDATORY with `as`
+    ...
+```
+
+**Never rewrite these into `except (ValueError, TypeError):`.** If the code raises `SyntaxError` at import, you are running Python <= 3.13 (an old venv, a sandbox): that is an environment problem, fix the interpreter, not the code. A blanket parenthesization "fix" touches 40+ files of pure noise and has already been reverted once.
+
 ## Frontend Conventions
 
 ### Alpine `init()` is auto-called - never add `x-init="init()"` on top of it

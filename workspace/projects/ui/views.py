@@ -9,9 +9,11 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.projects.models import Project, TaskStatus
 from workspace.projects.queries import get_project_role, user_project_ids
+from workspace.projects.services.events import events_for_project
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.users.services.settings import get_setting, set_setting
 
+VIEW_OVERVIEW = "overview"
 VIEW_BOARD = "board"
 VIEW_BACKLOG = "backlog"
 
@@ -29,18 +31,23 @@ def index(request):
 
 
 @login_required
-def project_root(request, project_uuid):
-    """Land on the project's last-opened view.
-
-    Reserved for a future project overview page; until then it only
-    dispatches. Access is checked by the target view, not here.
-    """
-    last_view = get_setting(
-        request.user, "projects", f"last_view:{project_uuid}", default=VIEW_BOARD
+@ensure_csrf_cookie
+def overview(request, project_uuid):
+    project, role = _get_project_or_404(request.user, project_uuid)
+    _record_visit(request.user, project_uuid)
+    context = _base_context(request, project, role, VIEW_OVERVIEW)
+    counts = project.tasks.aggregate(
+        board_count=Count(
+            "uuid", filter=Q(status__category=TaskStatus.Category.ACTIVE)
+        ),
+        backlog_count=Count(
+            "uuid", filter=Q(status__category=TaskStatus.Category.BACKLOG)
+        ),
+        done_count=Count("uuid", filter=Q(status__category=TaskStatus.Category.DONE)),
     )
-    if last_view not in (VIEW_BOARD, VIEW_BACKLOG):
-        last_view = VIEW_BOARD
-    return redirect(f"projects_ui:{last_view}", project_uuid=project_uuid)
+    context.update(counts)
+    context["recent_events"] = events_for_project(project)
+    return _render_project_view(request, context)
 
 
 def _get_project_or_404(user, project_uuid):
@@ -98,9 +105,8 @@ def _base_context(request, project, role, view):
     return context
 
 
-def _record_visit(user, project_uuid, view):
+def _record_visit(user, project_uuid):
     set_setting(user, "projects", "last_project", str(project_uuid))
-    set_setting(user, "projects", f"last_view:{project_uuid}", view)
 
 
 def _render_project_view(request, context):
@@ -113,7 +119,7 @@ def _render_project_view(request, context):
 @ensure_csrf_cookie
 def board(request, project_uuid):
     project, role = _get_project_or_404(request.user, project_uuid)
-    _record_visit(request.user, project_uuid, VIEW_BOARD)
+    _record_visit(request.user, project_uuid)
     context = _base_context(request, project, role, VIEW_BOARD)
     context["backlog_count"] = project.tasks.filter(
         status__category=TaskStatus.Category.BACKLOG
@@ -139,7 +145,7 @@ def board(request, project_uuid):
 @ensure_csrf_cookie
 def backlog(request, project_uuid):
     project, role = _get_project_or_404(request.user, project_uuid)
-    _record_visit(request.user, project_uuid, VIEW_BACKLOG)
+    _record_visit(request.user, project_uuid)
     context = _base_context(request, project, role, VIEW_BACKLOG)
     backlog_statuses = [
         s for s in context["statuses"] if s.category == TaskStatus.Category.BACKLOG

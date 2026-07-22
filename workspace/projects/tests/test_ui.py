@@ -169,7 +169,7 @@ class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertEqual(response.status_code, 404)
 
 
-class OverviewActivityTests(ProjectTestMixin, TestCase):
+class OverviewActivityTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
     def test_overview_shows_recent_events(self):
         create_task(self.project, self.admin, title="Paint the shed")
         self.client.force_login(self.admin)

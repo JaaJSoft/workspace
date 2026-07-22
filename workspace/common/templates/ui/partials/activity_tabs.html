@@ -1,24 +1,33 @@
-<div class="tabs tabs-boxed overflow-x-auto flex-nowrap">
+{% comment %}
+Stacked tabs: icon on top, label underneath, every tab at the same fixed
+width, so the whole source row fits on one line. daisyUI has no built-in
+variant for this; .tab is overridden with h-auto/w-16 + flex-col (utilities
+win over the component layer). daisyUI's .tabs is a CSS grid whose columns shrink
+under pressure - auto-cols-max keeps each tab at its natural width and lets
+the row overflow into the horizontal scroll instead; min-w-0 lets the block
+shrink inside the header flex row rather than squeezing the card title.
+{% endcomment %}
+<div class="tabs tabs-boxed grid-flow-col auto-cols-max overflow-x-auto min-w-0">
   <a
     :href="feedUrl.replace(/source=[^&]*/g, '').replace(/[?&]$/, '')"
-    class="tab gap-1.5 sm:!px-3 !px-2.5"
+    class="tab h-auto w-16 flex-col flex-nowrap gap-0.5 py-1.5 !px-1"
     :class="activityTab === 'all' ? 'tab-active' : ''"
     @click="activityTab = 'all'"
     x-target="{{ activity_prefix }}"
   >
-    <i data-lucide="layers" class="w-3.5 h-3.5 shrink-0"></i>
-    <span class="hidden sm:inline">All</span>
+    <i data-lucide="layers" class="w-4 h-4 shrink-0"></i>
+    <span class="text-xs leading-none max-w-full truncate">All</span>
   </a>
   {% for src in activity_sources %}
   <a
     :href="feedUrl.includes('source=') ? feedUrl.replace(/source=[^&]*/, 'source={{ src.slug }}') : feedUrl + (feedUrl.includes('?') ? '&' : '?') + 'source={{ src.slug }}'"
-    class="tab gap-1.5 sm:!px-3 !px-2.5"
+    class="tab h-auto w-16 flex-col flex-nowrap gap-0.5 py-1.5 !px-1"
     :class="activityTab === '{{ src.slug }}' ? 'tab-active' : ''"
     @click="activityTab = '{{ src.slug }}'"
     x-target="{{ activity_prefix }}"
   >
-    <i data-lucide="{{ src.icon }}" class="w-3.5 h-3.5 shrink-0"></i>
-    <span class="hidden sm:inline">{{ src.label }}</span>
+    <i data-lucide="{{ src.icon }}" class="w-4 h-4 shrink-0"></i>
+    <span class="text-xs leading-none max-w-full truncate">{{ src.label }}</span>
   </a>
   {% endfor %}
 </div>

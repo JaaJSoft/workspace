@@ -116,9 +116,13 @@ def _build_heatmap_data(user_id, viewer_id=None):
 
 
 def _get_profile_activity_context(
-    username, user_id, viewer_id=None, source=None, offset=0, search=None
+    username, user_id, viewer=None, viewer_id=None, source=None, offset=0, search=None
 ):
-    """Build activity feed context for the profile page."""
+    """Build activity feed context for the profile page.
+
+    ``viewer`` is the requesting user; module visibility (preview modules
+    hidden from non-staff) follows them, not the profile owner.
+    """
     events = get_recent_events(
         user_id=user_id,
         viewer_id=viewer_id,
@@ -126,6 +130,7 @@ def _get_profile_activity_context(
         search=search,
         limit=ACTIVITY_LIMIT + 1,
         offset=offset,
+        visible_to=viewer,
     )
 
     has_more = len(events) > ACTIVITY_LIMIT
@@ -134,7 +139,7 @@ def _get_profile_activity_context(
 
     return {
         "activity_events": events,
-        "activity_sources": get_sources(),
+        "activity_sources": get_sources(viewer),
         "activity_source": source,
         "activity_search": search or "",
         "activity_has_more": has_more,
@@ -185,7 +190,7 @@ def profile_view(request, username=None):
         # Activity feed shell only - the feed itself loads asynchronously (see
         # profile_activity_feed) so the initial render skips the per-provider
         # fan-out. get_sources() is in-memory, so this adds no DB cost.
-        "activity_sources": get_sources(),
+        "activity_sources": get_sources(request.user),
         "activity_source": None,
         "activity_search": "",
         "activity_prefix": "profile-activity",
@@ -219,6 +224,7 @@ def profile_activity_feed(request, username):
     activity_ctx = _get_profile_activity_context(
         username,
         profile_user.id,
+        viewer=request.user,
         viewer_id=viewer_id,
         source=source,
         offset=offset,

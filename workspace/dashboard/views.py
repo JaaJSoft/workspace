@@ -40,6 +40,7 @@ def _get_activity_context(user, source=None, offset=0, search=None):
         search=search,
         limit=ACTIVITY_LIMIT + 1,
         offset=offset,
+        visible_to=user,
     )
 
     has_more = len(events) > ACTIVITY_LIMIT
@@ -48,7 +49,7 @@ def _get_activity_context(user, source=None, offset=0, search=None):
 
     return {
         "activity_events": events,
-        "activity_sources": get_sources(),
+        "activity_sources": get_sources(user),
         "activity_source": source,
         "activity_search": search or "",
         "activity_has_more": has_more,
@@ -58,7 +59,7 @@ def _get_activity_context(user, source=None, offset=0, search=None):
     }
 
 
-def _activity_shell_context(source=None):
+def _activity_shell_context(user, source=None):
     """Cheap activity context for the dashboard shell - no feed query.
 
     The feed itself is fetched asynchronously (see ``activity_feed``); the
@@ -67,7 +68,7 @@ def _activity_shell_context(source=None):
     this adds no database cost to the page load.
     """
     return {
-        "activity_sources": get_sources(),
+        "activity_sources": get_sources(user),
         "activity_source": source,
         "activity_search": "",
         "activity_prefix": "dashboard-activity",
@@ -133,7 +134,7 @@ def index(request):
     paints immediately.
     """
     context = _build_dashboard_context(request.user, include_activity=False)
-    context.update(_activity_shell_context())
+    context.update(_activity_shell_context(request.user))
     context["activity_tab"] = "all"
     return render(request, "dashboard/index.html", context)
 
@@ -193,6 +194,6 @@ def activity_feed(request):
 
     # Direct full-page navigation: render the shell; the feed loads async.
     context = _build_dashboard_context(request.user, include_activity=False)
-    context.update(_activity_shell_context(source=source))
+    context.update(_activity_shell_context(request.user, source=source))
     context["activity_tab"] = tab
     return render(request, "dashboard/index.html", context)

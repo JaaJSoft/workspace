@@ -8,6 +8,8 @@ from django.utils import timezone
 from workspace.common.cache import cached
 from workspace.core.activity_registry import activity_registry
 
+from .module_visibility import hidden_module_slugs
+
 # Usage stats are aggregate counts (file totals, message counts, ...) that
 # change slowly and are purely informational. The dashboard and profile views
 # read them on every page load, where they otherwise trigger a query fan-out
@@ -16,11 +18,21 @@ from workspace.core.activity_registry import activity_registry
 _USAGE_STATS_TTL = 60  # seconds
 
 
-def get_sources():
-    """Return list of available activity sources with metadata."""
+def get_sources(user=None):
+    """Return list of available activity sources with metadata.
+
+    With *user*, sources whose module is hidden from that user (preview
+    modules restricted by ``PREVIEW_VISIBILITY``) are omitted - UI callers
+    pass the viewing user so the tabs match the nav. Without it, the full
+    list is returned.
+    """
+    infos = activity_registry.get_all().values()
+    if user is not None:
+        hidden = hidden_module_slugs(user)
+        infos = [info for info in infos if info.slug not in hidden]
     return [
         {"slug": info.slug, "label": info.label, "icon": info.icon, "color": info.color}
-        for info in activity_registry.get_all().values()
+        for info in infos
     ]
 
 
@@ -68,6 +80,7 @@ def get_recent_events(
     search=None,
     limit=10,
     offset=0,
+    visible_to=None,
 ):
     """Fetch recent activity events with optional filtering.
 
@@ -79,7 +92,20 @@ def get_recent_events(
         search: Text to filter events by (matches description, label, actor).
         limit: Max events to return.
         offset: Skip this many events.
+        visible_to: User whose module visibility gates the sources - UI
+            callers pass the viewing user so preview modules hidden from
+            them contribute no events (and an explicitly requested hidden
+            source yields an empty feed).
     """
+    allowed_sources = None
+    if visible_to is not None:
+        hidden = hidden_module_slugs(visible_to)
+        if source is not None:
+            if source in hidden:
+                return []
+        else:
+            allowed_sources = set(activity_registry.get_all()) - hidden
+
     needs_post_filter = exclude_user_id is not None or search
     if needs_post_filter:
         fetch_limit = limit + offset + 50
@@ -93,6 +119,7 @@ def get_recent_events(
         viewer_id=viewer_id,
         source=source,
         exclude_actor_id=exclude_user_id,
+        allowed_sources=allowed_sources,
     )
 
     if exclude_user_id is not None:

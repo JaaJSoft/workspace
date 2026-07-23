@@ -1,7 +1,7 @@
 from datetime import date
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from workspace.core.activity_registry import (
     ActivityProvider,
@@ -436,6 +436,205 @@ class ActivityRegistryTests(TestCase):
         self.assertEqual(events, [])
         stats = self.registry.get_stats(1)
         self.assertEqual(stats, {"fail": {}})
+
+
+class ActivityRegistryAllowedSourcesTests(TestCase):
+    def setUp(self):
+        self.registry = ActivityRegistry()
+
+        from datetime import datetime
+
+        from django.utils import timezone
+
+        ts = timezone.make_aware(datetime(2026, 3, 1, 10, 0))
+
+        class ProviderA(StubProvider):
+            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+                return [{"label": "from_a", "timestamp": ts}]
+
+        class ProviderB(StubProvider):
+            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+                return [{"label": "from_b", "timestamp": ts}]
+
+        self.registry.register(
+            ActivityProviderInfo(
+                slug="a",
+                label="A",
+                icon="a",
+                color="primary",
+                provider_cls=ProviderA,
+            )
+        )
+        self.registry.register(
+            ActivityProviderInfo(
+                slug="b",
+                label="B",
+                icon="b",
+                color="info",
+                provider_cls=ProviderB,
+            )
+        )
+
+    def test_allowed_sources_limits_all_mode_fanout(self):
+        events = self.registry.get_recent_events(1, limit=10, allowed_sources={"a"})
+        self.assertEqual([e["label"] for e in events], ["from_a"])
+
+    def test_allowed_sources_none_keeps_every_provider(self):
+        events = self.registry.get_recent_events(1, limit=10, allowed_sources=None)
+        self.assertEqual({e["label"] for e in events}, {"from_a", "from_b"})
+
+
+class ActivityModuleVisibilityTests(TestCase):
+    """Preview-module activity must stay hidden from users who cannot see the
+    module itself (dashboard and profile UI: source tabs and the ALL feed)."""
+
+    def setUp(self):
+        from datetime import datetime
+
+        from django.utils import timezone
+
+        self.normal = User.objects.create_user(username="vis-n", password="x")
+        self.staff = User.objects.create_user(
+            username="vis-s", password="x", is_staff=True
+        )
+
+        ts = timezone.make_aware(datetime(2026, 3, 1, 10, 0))
+
+        class FilesProvider(StubProvider):
+            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+                return [{"label": "files-event", "timestamp": ts}]
+
+        class LabProvider(StubProvider):
+            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+                return [{"label": "lab-event", "timestamp": ts}]
+
+        self.activity_registry = ActivityRegistry()
+        self.activity_registry.register(
+            ActivityProviderInfo(
+                slug="files",
+                label="Files",
+                icon="f",
+                color="primary",
+                provider_cls=FilesProvider,
+            )
+        )
+        self.activity_registry.register(
+            ActivityProviderInfo(
+                slug="lab",
+                label="Lab",
+                icon="l",
+                color="info",
+                provider_cls=LabProvider,
+            )
+        )
+
+        from workspace.core.module_registry import ModuleInfo
+
+        def _module(slug, preview=False):
+            return ModuleInfo(
+                name=slug.title(),
+                slug=slug,
+                description="",
+                icon="i",
+                color="c",
+                url=f"/{slug}",
+                active=True,
+                preview=preview,
+            )
+
+        self._modules = {
+            "files": _module("files"),
+            "lab": _module("lab", preview=True),
+        }
+
+    def _patched(self):
+        from contextlib import ExitStack
+        from unittest.mock import patch
+
+        from workspace.core.services import activity as activity_service
+
+        stack = ExitStack()
+        stack.enter_context(
+            patch.object(activity_service, "activity_registry", self.activity_registry)
+        )
+        mock_mod_registry = stack.enter_context(
+            patch("workspace.core.services.module_visibility.registry")
+        )
+        mock_mod_registry.get_all.return_value = list(self._modules.values())
+        mock_mod_registry.get.side_effect = self._modules.get
+        return stack
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_get_sources_hides_preview_module_from_normal_user(self):
+        from workspace.core.services import activity as activity_service
+
+        with self._patched():
+            slugs = [s["slug"] for s in activity_service.get_sources(self.normal)]
+        self.assertEqual(slugs, ["files"])
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_get_sources_keeps_preview_module_for_staff(self):
+        from workspace.core.services import activity as activity_service
+
+        with self._patched():
+            slugs = [s["slug"] for s in activity_service.get_sources(self.staff)]
+        self.assertEqual(slugs, ["files", "lab"])
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_get_sources_without_user_keeps_all(self):
+        from workspace.core.services import activity as activity_service
+
+        with self._patched():
+            slugs = [s["slug"] for s in activity_service.get_sources()]
+        self.assertEqual(slugs, ["files", "lab"])
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_all_feed_excludes_hidden_module_events_for_normal_user(self):
+        from workspace.core.services import activity as activity_service
+
+        with self._patched():
+            events = activity_service.get_recent_events(
+                viewer_id=self.normal.id,
+                visible_to=self.normal,
+                limit=10,
+            )
+        self.assertEqual([e["label"] for e in events], ["files-event"])
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_all_feed_keeps_hidden_module_events_for_staff(self):
+        from workspace.core.services import activity as activity_service
+
+        with self._patched():
+            events = activity_service.get_recent_events(
+                viewer_id=self.staff.id,
+                visible_to=self.staff,
+                limit=10,
+            )
+        self.assertEqual({e["label"] for e in events}, {"files-event", "lab-event"})
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_explicit_hidden_source_returns_empty_for_normal_user(self):
+        from workspace.core.services import activity as activity_service
+
+        with self._patched():
+            events = activity_service.get_recent_events(
+                viewer_id=self.normal.id,
+                visible_to=self.normal,
+                source="lab",
+                limit=10,
+            )
+        self.assertEqual(events, [])
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_without_visible_to_all_events_survive(self):
+        from workspace.core.services import activity as activity_service
+
+        with self._patched():
+            events = activity_service.get_recent_events(
+                viewer_id=self.normal.id,
+                limit=10,
+            )
+        self.assertEqual({e["label"] for e in events}, {"files-event", "lab-event"})
 
 
 class ActivityServiceTests(TestCase):

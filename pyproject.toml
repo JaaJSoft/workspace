@@ -38,7 +38,7 @@ dependencies = [
     # server
     "gunicorn>=26.0.0",
     "django-http-compression[brotli]>=1.4.0",
-    "gevent>=26.5.0",
+    "gevent>=26.7.0",
     "django-prometheus>=2.5.0",
     # push notifications
     "pywebpush>=2.3.0",

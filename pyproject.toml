@@ -71,7 +71,7 @@ dev = [
     "playwright>=1.61.0",
     # Exact pin: the ruff-action CI job auto-discovers this version from
     # pyproject.toml, keeping CI and local runs on the same ruff release.
-    "ruff==0.15.22",
+    "ruff==0.16.0",
 ]
 
 [tool.ruff]

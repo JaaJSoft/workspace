@@ -1,6 +1,6 @@
 <div id="board" class="flex gap-4 overflow-x-auto items-start pb-4">
   {% for column in columns %}
-    <section class="w-72 shrink-0 rounded-box bg-base-200 p-3"
+    <section class="flex-1 min-w-72 rounded-box bg-base-200 p-3"
              data-status-uuid="{{ column.status.uuid }}"
              @dragover.prevent="onDragOver($event)"
              @drop.prevent="onDrop($event, '{{ column.status.uuid }}')">

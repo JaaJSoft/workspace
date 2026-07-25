@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.32.0 - Sync & Reliability
+
+### Highlights
+
+Background syncing got a lot lighter. Several mailboxes now refresh side by side instead of queueing behind each other, one slow account no longer holds up the rest, and the same sync never runs twice over the same data.
+
+### Mail
+
+- Mailboxes now refresh in parallel. If you have several accounts, new mail shows up sooner, and an account that is slow, unreachable, or misconfigured no longer delays every other account behind it.
+- An account that is still syncing is no longer synced a second time on top of itself. A long pass (a first sync, or a very large mailbox) used to be restarted from the top while the first one was still working, which slowed the whole mailbox down for no benefit.
+
+### Files
+
+- Files added outside the app, over WebDAV or dropped straight into your folder on the server, now show up more reliably. The background scan that picks them up used to fall behind and pile up on itself on large libraries; it now keeps up.
+
+### Fixes
+
+- The recent activity feed on your dashboard and profile no longer lists entries, or filter tabs, from apps you do not have access to.
+
 ## 0.31.0 - Search Everywhere
 
 ### Highlights

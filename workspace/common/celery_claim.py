@@ -36,22 +36,23 @@ bugs. This module hides those details.
 Pattern usage
 -------------
 
-Dispatcher::
+Dispatcher - use :func:`dispatch_due`, which is the whole loop::
 
-    for row in due_queryset.only('pk', 'uuid', 'claim_field'):
-        token = cas_claim(
-            Model, row.pk, claim_field='next_run_at',
-            observed_value=row.next_run_at,
-            extra_where={'is_active': True},
-        )
-        if token is None:
-            continue
-        try:
-            worker_task.delay(str(row.uuid), token.isoformat())
-        except Exception:
-            cas_rollback(Model, row.pk, 'next_run_at', row.next_run_at)
-            logger.exception(...)
-            continue
+    outcome = dispatch_due(
+        ScheduledMessage.objects.filter(
+            is_active=True, next_run_at__lte=timezone.now()
+        ).only('pk', 'next_run_at'),
+        generate_scheduled_response,
+        claim_field='next_run_at',
+        extra_where={'is_active': True},
+        label='scheduled message',
+        log=logger,
+    )
+
+Only the *due predicate* stays in the calling module, because only that
+module knows what "due" means for its rows. Everything after it - the
+claim, the rollback on broker failure, continuing past one bad row - is
+identical everywhere and lives here.
 
 Worker::
 
@@ -67,9 +68,15 @@ A ``claim_token`` of ``None`` makes ``cas_finalize`` skip the CAS check
 absent and there is no token to verify.
 """
 
+import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from django.utils import timezone
+
+from workspace.common.logging import scrub
+
+logger = logging.getLogger(__name__)
 
 # How far forward the dispatcher pushes the claim field when it claims a
 # row. Any worker that fails to finalize its claim within this window
@@ -151,3 +158,89 @@ def cas_finalize(
     if extra_where:
         where.update(extra_where)
     return model.objects.filter(pk=pk, **where).update(**updates) == 1
+
+
+@dataclass(frozen=True)
+class DispatchOutcome:
+    """What one dispatcher pass did.
+
+    ``already_claimed`` counts rows that looked due in the SELECT but whose
+    CAS lost - a competing dispatcher got there first, or the row stopped
+    matching ``extra_where`` in between. It is normally zero; a persistently
+    non-zero value means dispatcher passes are overlapping.
+    """
+
+    dispatched: int = 0
+    already_claimed: int = 0
+
+    def as_dict(self):
+        """Celery-serialisable form, for tasks that return their outcome."""
+        return {
+            "dispatched": self.dispatched,
+            "already_claimed": self.already_claimed,
+        }
+
+
+def dispatch_due(
+    due,
+    worker,
+    *,
+    claim_field,
+    extra_where=None,
+    lock_horizon=DISPATCH_LOCK_HORIZON,
+    label=None,
+    log=None,
+):
+    """Claim each row of *due* and enqueue *worker* for it.
+
+    This is the dispatcher half of the pattern this module documents. It was
+    reimplemented per module before, and the copies drifted: some counted
+    what they dispatched, some did not, and the rollback-on-broker-failure
+    branch is the kind of detail that is easy to omit in the fourth copy.
+
+    *due* is a queryset the caller builds, because the due predicate is
+    domain knowledge (``next_run_at <= now`` is not ``last_sync_at`` being
+    stale). Restrict it with ``.only('pk', <claim_field>)``: those are the
+    only attributes read here, and leaving the claim field deferred would
+    cost a query per row.
+
+    *worker* is a Celery task called as ``worker.delay(str(row.pk), token)``.
+    Every model that uses this pattern has its UUID as its primary key, so
+    ``pk`` is the UUID the worker looks itself up by.
+
+    Returns a :class:`DispatchOutcome`. Never raises for a single row: a
+    broker error rolls that row's claim back so it stays due for the next
+    pass, and the loop continues so one bad row cannot cost every later row
+    its turn.
+    """
+    model = due.model
+    log = log or logger
+    label = label or model.__name__
+    dispatched = 0
+    already_claimed = 0
+
+    for row in due:
+        original = getattr(row, claim_field)
+        token = cas_claim(
+            model,
+            row.pk,
+            claim_field=claim_field,
+            observed_value=original,
+            extra_where=extra_where,
+            lock_horizon=lock_horizon,
+        )
+        if token is None:
+            already_claimed += 1
+            continue
+        try:
+            worker.delay(str(row.pk), token.isoformat())
+        except Exception:
+            # Roll the claim back so the row stays due and re-fires on the
+            # next pass, instead of sitting parked at the token for the whole
+            # lock horizon. Keep looping: the remaining rows are unaffected.
+            cas_rollback(model, row.pk, claim_field, original)
+            log.exception("Failed to enqueue %s: row=%s", label, scrub(str(row.pk)))
+            continue
+        dispatched += 1
+
+    return DispatchOutcome(dispatched=dispatched, already_claimed=already_claimed)

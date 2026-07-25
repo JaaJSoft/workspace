@@ -50,7 +50,7 @@ class SyncAllAccountsDispatchTests(TestCase):
         with mock.patch.object(mail_tasks.sync_single_account, "delay") as delay:
             result = mail_tasks.sync_all_accounts.run()
 
-        self.assertEqual(result["accounts_dispatched"], 2)
+        self.assertEqual(result["dispatched"], 2)
         dispatched = {call.args[0] for call in delay.call_args_list}
         self.assertEqual(dispatched, {str(a1.uuid), str(a2.uuid)})
 
@@ -73,7 +73,7 @@ class SyncAllAccountsDispatchTests(TestCase):
             result = mail_tasks.sync_all_accounts.run()
 
         delay.assert_not_called()
-        self.assertEqual(result["accounts_dispatched"], 0)
+        self.assertEqual(result["dispatched"], 0)
 
     @override_settings(MAIL_SYNC_INTERVAL=300)
     def test_account_synced_longer_ago_than_the_interval_is_dispatched(self):
@@ -109,7 +109,7 @@ class SyncAllAccountsDispatchTests(TestCase):
 
         self.assertEqual(first.call_count, 1)
         second.assert_not_called()
-        self.assertEqual(result["accounts_dispatched"], 0)
+        self.assertEqual(result["dispatched"], 0)
 
     def test_claim_token_is_passed_to_the_worker(self):
         account = _make_account(self.alice)
@@ -133,7 +133,7 @@ class SyncAllAccountsDispatchTests(TestCase):
 
         account.refresh_from_db()
         self.assertIsNone(account.last_sync_at)
-        self.assertEqual(result["accounts_dispatched"], 0)
+        self.assertEqual(result["dispatched"], 0)
 
     def test_broker_failure_for_one_account_does_not_abort_the_others(self):
         a1 = _make_account(self.alice)
@@ -149,7 +149,7 @@ class SyncAllAccountsDispatchTests(TestCase):
             result = mail_tasks.sync_all_accounts.run()
 
         self.assertEqual(delay.call_count, 2)
-        self.assertEqual(result["accounts_dispatched"], 1)
+        self.assertEqual(result["dispatched"], 1)
 
     @override_settings(MAIL_SYNC_INTERVAL=300)
     def test_claim_parks_the_account_for_a_horizon_scaled_to_the_interval(self):
@@ -177,25 +177,16 @@ class SyncAllAccountsDispatchTests(TestCase):
             "becomes due again while its worker is only just starting",
         )
 
-    def test_losing_the_claim_race_does_not_enqueue(self):
-        # The due filter normally hides this branch: it only fires when a
-        # competing dispatcher claims the row between our SELECT and UPDATE.
-        # Forcing cas_claim to lose is the only way to reach it.
-        _make_account(self.alice)
-
-        with mock.patch("workspace.mail.tasks.cas_claim", return_value=None):
-            with mock.patch.object(mail_tasks.sync_single_account, "delay") as delay:
-                result = mail_tasks.sync_all_accounts.run()
-
-        delay.assert_not_called()
-        self.assertEqual(result["accounts_dispatched"], 0)
-        self.assertEqual(result["already_claimed"], 1)
+    # Losing the claim race is covered by
+    # workspace.common.tests.test_celery_claim.DispatchDueTests, which owns
+    # that branch now: reaching it requires forcing cas_claim to lose, and
+    # cas_claim is no longer called from this module.
 
     def test_empty_account_list_returns_zero(self):
         with mock.patch.object(mail_tasks.sync_single_account, "delay") as delay:
             result = mail_tasks.sync_all_accounts.run()
 
-        self.assertEqual(result["accounts_dispatched"], 0)
+        self.assertEqual(result["dispatched"], 0)
         delay.assert_not_called()
 
 

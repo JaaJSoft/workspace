@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.utils import timezone
 
-from workspace.common.celery_claim import cas_claim, cas_finalize, cas_rollback
+from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -78,44 +78,22 @@ def sync_all_accounts(self):
     due = MailAccount.objects.filter(
         Q(last_sync_at__lt=threshold) | Q(last_sync_at__isnull=True),
         is_active=True,
-    ).only("pk", "uuid", "last_sync_at")
-
-    dispatched = 0
-    skipped = 0
-
-    for account in due:
-        original = account.last_sync_at
-        token = cas_claim(
-            MailAccount,
-            account.pk,
-            claim_field="last_sync_at",
-            observed_value=original,
-            extra_where={"is_active": True},
-            lock_horizon=_lock_horizon(),
-        )
-        if token is None:
-            # Another dispatcher claimed this account, or it was
-            # deactivated between the SELECT and the UPDATE.
-            skipped += 1
-            continue
-        try:
-            sync_single_account.delay(str(account.uuid), token.isoformat())
-        except Exception:
-            # Broker errors etc. - roll back the claim so the account stays
-            # due and re-fires on the next pass instead of being parked at
-            # the token for the lock horizon. Keep looping so the other due
-            # accounts still get their chance.
-            cas_rollback(MailAccount, account.pk, "last_sync_at", original)
-            logger.exception(
-                "Failed to enqueue mail sync: account=%s", scrub(str(account.pk))
-            )
-            continue
-        dispatched += 1
-
-    logger.info(
-        "Mail sync dispatched: %d account(s), %d already claimed", dispatched, skipped
+    ).only("pk", "last_sync_at")
+    outcome = dispatch_due(
+        due,
+        sync_single_account,
+        claim_field="last_sync_at",
+        extra_where={"is_active": True},
+        lock_horizon=_lock_horizon(),
+        label="mail sync",
+        log=logger,
     )
-    return {"accounts_dispatched": dispatched, "already_claimed": skipped}
+    logger.info(
+        "Mail sync dispatched: %d account(s), %d already claimed",
+        outcome.dispatched,
+        outcome.already_claimed,
+    )
+    return outcome.as_dict()
 
 
 @shared_task(name="mail.sync_account", bind=True, max_retries=0)

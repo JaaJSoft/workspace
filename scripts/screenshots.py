@@ -47,6 +47,16 @@ VIEWPORT = {"width": 1280, "height": 900}
 USERNAME = "alex"
 PASSWORD = "screenshots-demo"
 
+# Pinned, not inherited from the host: pages format dates client-side with
+# toLocaleDateString(undefined, ...), so an unpinned context captures the
+# machine's locale (a French host writes "samedi 25 juillet"). The timezone
+# matches settings.TIME_ZONE so client-rendered times agree with server ones.
+CONTEXT_OPTIONS = {
+    "viewport": VIEWPORT,
+    "locale": "en-US",
+    "timezone_id": "UTC",
+}
+
 # --offline only: npm CDN URLs (jsdelivr / unpkg) are intercepted and
 # served from a local cache. On a cache miss the file is fetched from
 # the CDN when reachable, else from the registry.npmjs.org tarball (the
@@ -213,13 +223,13 @@ def capture(base_url, context, only=None, offline=False):
         browser = p.chromium.launch(executable_path=chromium_path())
         if offline:
             # The service worker would bypass our CDN routes; block it.
-            ctx = browser.new_context(viewport=VIEWPORT, service_workers="block")
+            ctx = browser.new_context(**CONTEXT_OPTIONS, service_workers="block")
             ctx.route("https://cdn.jsdelivr.net/**", _serve_cdn_asset)
             ctx.route("https://unpkg.com/**", _serve_cdn_asset)
             for pattern in BLOCKED_URL_PATTERNS:
                 ctx.route(pattern, lambda route: route.abort())
         else:
-            ctx = browser.new_context(viewport=VIEWPORT)
+            ctx = browser.new_context(**CONTEXT_OPTIONS)
         page = ctx.new_page()
 
         page.goto(f"{base_url}/login")

@@ -230,7 +230,7 @@ def _seed_notes(alex, now):
         (
             journal_folder,
             f"{now:%Y-%m-%d}.md",
-            f"# {now:%A, %B %-d}\n\nSketched the new hero section this morning, "
+            f"# {now:%A, %B} {now.day}\n\nSketched the new hero section this morning, "
             "then paired with Sam on the palette. Feeling good about the direction.\n",
             2,
         ),

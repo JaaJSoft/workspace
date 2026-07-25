@@ -16,10 +16,30 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+def _sync_interval():
+    return getattr(settings, "MAIL_SYNC_INTERVAL", 300)
+
+
 def _due_threshold():
     """Accounts not synced since this instant are due for another pass."""
-    interval = getattr(settings, "MAIL_SYNC_INTERVAL", 300)
-    return timezone.now() - timedelta(seconds=interval)
+    return timezone.now() - timedelta(seconds=_sync_interval())
+
+
+def _lock_horizon():
+    """How long a claim parks an account before it becomes due again.
+
+    This is the self-healing window for a claim that is never finalised -
+    the task was enqueued but no worker ever ran it (pool down, message
+    dropped, queue misrouted). Until it elapses, the account does not sync.
+
+    It only has to cover the time from enqueue to finalise (broker latency
+    plus queue wait), not the sync itself, because the worker finalises
+    before it opens any connection. The shared 1h default in
+    ``celery_claim`` is sized for a 900s cadence; against this module's
+    300s it would turn a dropped message into an hour of silence, so scale
+    it to the interval instead.
+    """
+    return timedelta(seconds=_sync_interval() * 4)
 
 
 @shared_task(name="mail.sync_all_accounts", bind=True, max_retries=0)
@@ -35,8 +55,16 @@ def sync_all_accounts(self):
     threshold (see :mod:`workspace.common.celery_claim`), so only the
     dispatcher whose UPDATE affected a row enqueues its worker. Concurrent
     dispatcher runs race on the same predicate and the database guarantees
-    exactly one winner per account - which is also what stops an
-    overrunning sync from being started a second time.
+    exactly one winner per account.
+
+    Note what the claim does and does not bound. It stops two dispatchers
+    from enqueueing the same account, and it stops an account from being
+    re-enqueued for one interval. It does *not* track in-flight syncs: the
+    worker finalises its claim before connecting, so a pass that outlives
+    ``MAIL_SYNC_INTERVAL`` can be enqueued a second time while the first is
+    still running. That is wasted IMAP work rather than duplicated
+    messages - ``UniqueConstraint(folder, imap_uid)`` and the IntegrityError
+    guard in ``imap_sync`` already cover a concurrent sync of one folder.
     """
     from workspace.mail.models import MailAccount
 
@@ -57,6 +85,7 @@ def sync_all_accounts(self):
             claim_field="last_sync_at",
             observed_value=original,
             extra_where={"is_active": True},
+            lock_horizon=_lock_horizon(),
         )
         if token is None:
             # Another dispatcher claimed this account, or it was
@@ -104,7 +133,11 @@ def sync_single_account(self, account_uuid, claim_token=None):
     from workspace.mail.services.imap_sync import sync_account
 
     try:
-        account = MailAccount.objects.get(uuid=account_uuid, is_active=True)
+        # select_related('owner'): the sync path reads account.owner to gate
+        # the per-user AI classify/extract features once new messages land.
+        account = MailAccount.objects.select_related("owner").get(
+            uuid=account_uuid, is_active=True
+        )
     except MailAccount.DoesNotExist:
         logger.warning("Account %s not found or inactive", scrub(str(account_uuid)))
         return {"status": "not_found"}

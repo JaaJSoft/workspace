@@ -150,6 +150,32 @@ class SyncAllAccountsDispatchTests(TestCase):
         self.assertEqual(delay.call_count, 2)
         self.assertEqual(result["accounts_dispatched"], 1)
 
+    @override_settings(MAIL_SYNC_INTERVAL=300)
+    def test_claim_parks_the_account_for_a_horizon_scaled_to_the_interval(self):
+        # A claim that is never finalised (task enqueued, no worker ever ran
+        # it) keeps the account from syncing until the horizon elapses. The
+        # shared 1h default is sized for a 900s cadence; against 300s it would
+        # turn a dropped message into an hour of silence.
+        account = _make_account(self.alice)
+
+        with mock.patch.object(mail_tasks.sync_single_account, "delay"):
+            mail_tasks.sync_all_accounts.run()
+
+        account.refresh_from_db()
+        parked_for = account.last_sync_at - timezone.now()
+        self.assertLess(
+            parked_for,
+            timedelta(minutes=30),
+            "a dropped message must not silence the account for the shared 1h "
+            f"default; this claim parked it for {parked_for}",
+        )
+        self.assertGreater(
+            parked_for,
+            timedelta(seconds=300),
+            "the horizon must still exceed one interval, otherwise the row "
+            "becomes due again while its worker is only just starting",
+        )
+
     def test_losing_the_claim_race_does_not_enqueue(self):
         # The due filter normally hides this branch: it only fires when a
         # competing dispatcher claims the row between our SELECT and UPDATE.
@@ -212,6 +238,18 @@ class SyncSingleAccountTaskTests(TestCase):
         account.refresh_from_db()
         self.assertEqual(account.last_sync_error, "bad credentials")
 
+    def test_owner_is_fetched_with_the_account(self):
+        # The sync path reads account.owner to gate the per-user AI features;
+        # without select_related that is an extra query per account.
+        account = _make_account(self.alice)
+
+        with mock.patch("workspace.mail.services.imap_sync.sync_account") as sync_mock:
+            mail_tasks.sync_single_account.run(str(account.uuid))
+
+        passed = sync_mock.call_args.args[0]
+        with self.assertNumQueries(0):
+            _ = passed.owner
+
     def test_valid_claim_token_is_finalised_and_the_sync_runs(self):
         token = timezone.now() + timedelta(hours=1)
         account = _make_account(self.alice, last_sync_at=token)
@@ -259,8 +297,9 @@ class SyncSingleAccountTaskTests(TestCase):
         sync_mock.assert_not_called()
 
     def test_manual_call_without_a_token_skips_the_cas(self):
-        # The refresh button and management paths call this directly; they have
-        # no dispatcher window and must not be gated on a claim.
+        # `mail.sync_account` is a named task, so it can be invoked by hand
+        # (celery call, shell, a future caller). Those invocations have no
+        # dispatcher window to pin against and must not be gated on a claim.
         account = _make_account(self.alice, last_sync_at=timezone.now())
 
         with mock.patch("workspace.mail.services.imap_sync.sync_account") as sync_mock:

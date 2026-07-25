@@ -13,7 +13,7 @@ from workspace.ai.services.llm import (
 )
 from workspace.ai.services.responses import handle_generation_error, post_bot_message
 from workspace.ai.services.tool_loop import retry_final_completion, run_tool_loop
-from workspace.common.celery_claim import cas_claim, cas_finalize, cas_rollback
+from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -23,57 +23,27 @@ logger = logging.getLogger(__name__)
 def dispatch_scheduled_messages():
     """Find due scheduled messages and dispatch a generation task for each.
 
-    Each row is CAS-claimed by advancing ``next_run_at`` past the due
-    window (see :mod:`workspace.common.celery_claim`). Only the
-    dispatcher whose UPDATE affected a row enqueues the worker;
-    concurrent dispatcher runs (or beat-fired duplicates) race on the
-    same predicate and the database guarantees one winner per row. The
-    token is passed to the worker so its own CAS can pin against the
-    exact value we just wrote.
+    The claim-and-enqueue loop lives in
+    :func:`workspace.common.celery_claim.dispatch_due`; what stays here is
+    the definition of "due", which is the only part specific to this model.
     """
     from workspace.ai.models import ScheduledMessage
 
-    now = timezone.now()
     due = ScheduledMessage.objects.filter(
         is_active=True,
-        next_run_at__lte=now,
+        next_run_at__lte=timezone.now(),
     ).only("pk", "next_run_at")
-    count = 0
-    for schedule in due:
-        original_next_run_at = schedule.next_run_at
-        token = cas_claim(
-            ScheduledMessage,
-            schedule.pk,
-            claim_field="next_run_at",
-            observed_value=original_next_run_at,
-            extra_where={"is_active": True},
-        )
-        if token is None:
-            continue
-        try:
-            generate_scheduled_response.delay(
-                str(schedule.uuid),
-                token.isoformat(),
-            )
-        except Exception:
-            # Broker errors etc. - roll back the claim so the row stays
-            # due and re-fires on the next dispatcher pass instead of
-            # being parked at the token for the lock horizon. Keep
-            # looping so other due rows still get a chance.
-            cas_rollback(
-                ScheduledMessage,
-                schedule.pk,
-                "next_run_at",
-                original_next_run_at,
-            )
-            logger.exception(
-                "Failed to enqueue scheduled response: schedule=%s",
-                scrub(str(schedule.pk)),
-            )
-            continue
-        count += 1
-    if count:
-        logger.info("Dispatched %d scheduled message(s)", count)
+    outcome = dispatch_due(
+        due,
+        generate_scheduled_response,
+        claim_field="next_run_at",
+        extra_where={"is_active": True},
+        label="scheduled response",
+        log=logger,
+    )
+    if outcome.dispatched:
+        logger.info("Dispatched %d scheduled message(s)", outcome.dispatched)
+    return outcome.as_dict()
 
 
 @shared_task(name="ai.generate_scheduled_response", bind=True, max_retries=0)

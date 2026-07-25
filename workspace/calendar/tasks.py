@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from celery import shared_task
 
-from workspace.common.celery_claim import cas_claim, cas_finalize, cas_rollback
+from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -120,11 +120,9 @@ def sync_external_calendar_task(external_calendar_uuid, claim_token=None):
 def sync_all_external_calendars():
     """Dispatch sync tasks for active external calendars due for sync.
 
-    Each row is CAS-claimed by advancing ``last_synced_at`` past the due
-    threshold (see :mod:`workspace.common.celery_claim`). Only the
-    dispatcher whose UPDATE affected a row enqueues the worker;
-    concurrent dispatcher runs race on the same predicate and the
-    database guarantees exactly one winner per row.
+    The claim-and-enqueue loop lives in
+    :func:`workspace.common.celery_claim.dispatch_due`; what stays here is
+    the definition of "due", which is the only part specific to this model.
 
     Filters on ``last_synced_at`` so the ``(is_active, last_synced_at)``
     composite index is used end-to-end. The 900s threshold matches the
@@ -142,28 +140,12 @@ def sync_all_external_calendars():
     due = ExternalCalendar.objects.filter(
         Q(last_synced_at__lt=threshold) | Q(last_synced_at__isnull=True),
         is_active=True,
-    ).only("pk", "uuid", "last_synced_at")
-    for ext in due:
-        original = ext.last_synced_at
-        token = cas_claim(
-            ExternalCalendar,
-            ext.pk,
-            claim_field="last_synced_at",
-            observed_value=original,
-            extra_where={"is_active": True},
-        )
-        if token is None:
-            continue
-        try:
-            sync_external_calendar_task.delay(str(ext.uuid), token.isoformat())
-        except Exception:
-            # Broker errors etc. - roll back the claim so the row stays
-            # due and re-fires on the next dispatcher pass instead of
-            # being parked at the token for the lock horizon. Keep
-            # looping so other due rows still get a chance.
-            cas_rollback(ExternalCalendar, ext.pk, "last_synced_at", original)
-            logger.exception(
-                "Failed to enqueue external calendar sync: ext=%s",
-                scrub(str(ext.pk)),
-            )
-            continue
+    ).only("pk", "last_synced_at")
+    return dispatch_due(
+        due,
+        sync_external_calendar_task,
+        claim_field="last_synced_at",
+        extra_where={"is_active": True},
+        label="external calendar sync",
+        log=logger,
+    ).as_dict()

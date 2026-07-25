@@ -14,33 +14,80 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+# Derived from the beat interval rather than fixed, so tuning
+# FILES_SYNC_INTERVAL cannot leave the TTL shorter than the period: a lock
+# that expires mid-walk lets the next tick start a second concurrent walk
+# for the same user, and two walks racing phase 1 can both decide the same
+# disk entry is missing and create a row for it. The floor keeps the
+# guard meaningful under a very short configured interval; a healthy run
+# releases the lock on exit, so the TTL only bounds recovery after a
+# worker is killed outright.
+SYNC_USER_LOCK_TTL = max(int(2 * getattr(settings, "FILES_SYNC_INTERVAL", 1800)), 1800)
+
+
 @shared_task(name="files.sync_all_users", bind=True, max_retries=0)
 def sync_all_users(self):
-    """Full recursive sync for all active users. Scheduled via Celery Beat."""
+    """Dispatch a per-user sync task for every active user.
+
+    Fanning out (rather than walking every user in this task) lets the
+    walks run in parallel across workers, keeps one user's huge tree or
+    unreadable mount from delaying everyone behind it, and confines a
+    failure to the user that caused it.
+    """
+    dispatched = 0
+    failed = 0
+
+    user_ids = User.objects.filter(is_active=True).values_list("pk", flat=True)
+    for user_id in user_ids.iterator():
+        try:
+            sync_user_files.delay(user_id)
+            dispatched += 1
+        except Exception:
+            # Broker refusal for one user must not abort the whole fan-out.
+            logger.exception("Failed to enqueue file sync for user %s", user_id)
+            failed += 1
+
+    logger.info(
+        "File sync dispatched: %d users, %d failed to enqueue", dispatched, failed
+    )
+    return {"users_dispatched": dispatched, "enqueue_failures": failed}
+
+
+@shared_task(name="files.sync_user_files", bind=True, max_retries=0)
+def sync_user_files(self, user_id):
+    """Full recursive disk <-> DB sync for a single user.
+
+    Guarded by an advisory lock: successive beat ticks would otherwise
+    stack redundant walks for the same user whenever one run outlives the
+    schedule period.
+    """
+    from workspace.common.task_locks import task_lock
     from workspace.files.sync import FileSyncService
 
-    service = FileSyncService(log=logger)
-    total = {
-        "users_processed": 0,
-        "files_created": 0,
-        "folders_created": 0,
-        "files_soft_deleted": 0,
-        "folders_soft_deleted": 0,
-        "errors": [],
-    }
+    try:
+        user = User.objects.get(pk=user_id, is_active=True)
+    except User.DoesNotExist:
+        logger.warning("Sync skipped: user %s not found or inactive", user_id)
+        return {"status": "not_found"}
 
-    for user in User.objects.filter(is_active=True).iterator():
+    with task_lock(f"files:sync:user:{user_id}", SYNC_USER_LOCK_TTL) as acquired:
+        if not acquired:
+            logger.info(
+                "Sync already running for user %s, skipping", scrub(user.username)
+            )
+            return {"status": "skipped", "reason": "already_running"}
+
         logger.info("Syncing files for user: %s", scrub(user.username))
-        result = service.sync_user_recursive(user)
-        total["users_processed"] += 1
-        total["files_created"] += result.files_created
-        total["folders_created"] += result.folders_created
-        total["files_soft_deleted"] += result.files_soft_deleted
-        total["folders_soft_deleted"] += result.folders_soft_deleted
-        total["errors"].extend(result.errors)
+        result = FileSyncService(log=logger).sync_user_recursive(user)
 
-    logger.info("Full sync complete: %s", total)
-    return total
+    return {
+        "status": "ok",
+        "files_created": result.files_created,
+        "folders_created": result.folders_created,
+        "files_soft_deleted": result.files_soft_deleted,
+        "folders_soft_deleted": result.folders_soft_deleted,
+        "errors": result.errors,
+    }
 
 
 @shared_task(name="files.purge_trash", bind=True, max_retries=0)

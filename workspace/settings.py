@@ -718,6 +718,13 @@ from celery.schedules import crontab
 # - the trade-off is how long such a change stays invisible in the UI.
 FILES_SYNC_INTERVAL = float(os.getenv("FILES_SYNC_INTERVAL", "1800"))
 
+# How stale an account's last successful sync must be before the dispatcher
+# claims it again. Doubles as the beat cadence: the dispatcher runs on this
+# period and only picks up accounts whose last_sync_at is older than it, so
+# raising it lengthens the polling delay for new mail on instances where the
+# IMAP round trips are the bottleneck.
+MAIL_SYNC_INTERVAL = float(os.getenv("MAIL_SYNC_INTERVAL", "300"))
+
 CELERY_BEAT_SCHEDULE = {
     "sync-all-user-files": {
         "task": "files.sync_all_users",
@@ -740,7 +747,11 @@ CELERY_BEAT_SCHEDULE = {
     },
     "sync-all-mail-accounts": {
         "task": "mail.sync_all_accounts",
-        "schedule": 300.0,  # Every 5 minutes
+        "schedule": MAIL_SYNC_INTERVAL,
+        # The dispatcher is cheap and idempotent (accounts are CAS-claimed),
+        # but a tick that has not started by the next one has nothing left to
+        # contribute - drop it rather than let stale fan-outs accumulate.
+        "options": {"expires": MAIL_SYNC_INTERVAL},
     },
     "dispatch-scheduled-messages": {
         "task": "ai.dispatch_scheduled_messages",

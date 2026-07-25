@@ -60,6 +60,14 @@ class MailAccount(models.Model):
 
     class Meta:
         ordering = ["email"]
+        indexes = [
+            # Serves the sync dispatcher, which selects active accounts whose
+            # last_sync_at is past the due threshold. Without it the periodic
+            # scan reads every account row on every tick.
+            models.Index(
+                fields=["is_active", "last_sync_at"], name="mail_active_synced"
+            ),
+        ]
 
     def __str__(self):
         return self.email

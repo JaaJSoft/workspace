@@ -46,10 +46,21 @@ def _avatar_png(initials, color):
     return buf.getvalue()
 
 
-def _photo_png(color):
+def _photo_png(start, end):
+    """A diagonal two-tone gradient, standing in for a photograph.
+
+    Flat fills read as placeholders in a thumbnail grid; a gradient gives
+    the mosaic capture the texture a real photo library would have.
+    """
     from PIL import Image
 
-    img = Image.new("RGB", (800, 600), color)
+    vertical = Image.linear_gradient("L")
+    diagonal = Image.blend(vertical, vertical.transpose(Image.Transpose.ROTATE_90), 0.5)
+    img = Image.composite(
+        Image.new("RGB", diagonal.size, end),
+        Image.new("RGB", diagonal.size, start),
+        diagonal,
+    ).resize((800, 600), Image.Resampling.BICUBIC)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
@@ -121,7 +132,7 @@ def seed(username, password):
         user.groups.add(design_team)
 
     context = {}
-    _seed_files(alex, sam, design_team, now)
+    context["photos_uuid"] = _seed_files(alex, sam, design_team, now)
     _seed_notes(alex, now)
     context["conversation_uuid"] = _seed_chat(alex, sam, jordan, now)
     _seed_calendar(alex, sam, jordan, now)
@@ -135,6 +146,12 @@ def _seed_files(alex, sam, group, now):
 
     from workspace.files.models import FileEvent, FileFavorite, PinnedFolder
     from workspace.files.services import FileService
+    from workspace.users.services.settings import set_setting
+
+    # Tile size 2 (140px) instead of the 3 (180px) default: the mosaic
+    # capture is 990px wide, so the smaller tiles fill it with two dense
+    # rows instead of two sparse ones.
+    set_setting(alex, "files", "preferences", {"mosaicTileSize": 2})
 
     def backdate_file(f, ts):
         _backdate(f, ts)
@@ -151,6 +168,22 @@ def _seed_files(alex, sam, group, now):
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
         '<circle cx="32" cy="32" r="28" fill="#6366f1"/></svg>'
     )
+    # The mosaic shot is taken inside Photos: a thumbnail grid is what the
+    # view exists for, so it needs enough images to actually fill a grid.
+    pictures = [
+        ("product-shot.png", (16, 185, 129), (5, 150, 105), 2),
+        ("team-offsite.png", (59, 130, 246), (14, 165, 233), 3),
+        ("keynote-stage.png", (99, 102, 241), (139, 92, 246), 4),
+        ("office-tour.png", (245, 158, 11), (249, 115, 22), 6),
+        ("conference-booth.png", (236, 72, 153), (219, 39, 119), 7),
+        ("workshop.png", (20, 184, 166), (6, 182, 212), 9),
+        ("launch-party.png", (168, 85, 247), (217, 70, 239), 11),
+        ("hero-banner.png", (239, 68, 68), (249, 115, 22), 13),
+        ("city-skyline.png", (30, 64, 175), (67, 56, 202), 15),
+        ("desk-setup.png", (100, 116, 139), (71, 85, 105), 17),
+        ("whiteboard.png", (34, 197, 94), (132, 204, 22), 19),
+        ("meetup-crowd.png", (2, 132, 199), (56, 189, 248), 22),
+    ]
     files = [
         (documents, "Quarterly report.pdf", _MINIMAL_PDF, "application/pdf", 26),
         (documents, "budget-2026.csv", csv.encode(), "text/csv", 20),
@@ -162,8 +195,9 @@ def _seed_files(alex, sam, group, now):
             8,
         ),
         (None, "logo.svg", svg.encode(), "image/svg+xml", 5),
-        (photos, "team-offsite.png", _photo_png((59, 130, 246)), "image/png", 3),
-        (photos, "product-shot.png", _photo_png((16, 185, 129)), "image/png", 2),
+    ] + [
+        (photos, name, _photo_png(start, end), "image/png", days_ago)
+        for name, start, end, days_ago in pictures
     ]
     report = None
     for parent, name, data, mime, days_ago in files:
@@ -188,7 +222,7 @@ def _seed_files(alex, sam, group, now):
             "text/markdown",
             26,
         ),
-        ("banner.png", _photo_png((245, 158, 11)), "image/png", 4),
+        ("banner.png", _photo_png((245, 158, 11), (249, 115, 22)), "image/png", 4),
     ]:
         f = FileService.create_file(
             sam,
@@ -199,6 +233,8 @@ def _seed_files(alex, sam, group, now):
             group=group,
         )
         backdate_file(f, now - timedelta(hours=hours_ago))
+
+    return str(photos.uuid)
 
 
 def _seed_notes(alex, now):
@@ -456,7 +492,7 @@ def _seed_mail(alex, now):
             subject=subject,
             from_name=from_name,
             from_email=from_email,
-            to_addresses=["alex@workspace.dev"],
+            to_addresses=[{"name": alex.get_full_name(), "email": account.email}],
             date=now - timedelta(hours=hours_ago),
             snippet=body,
             body_text=body,
@@ -537,6 +573,9 @@ def _files_view(mode):
     # choice persists per user, so each files shot sets its own view.
     def prep(page):
         page.evaluate(f"document.querySelector('[title=\"{mode} view\"]').click()")
+        # Park the cursor: whatever sits under the viewport centre would
+        # otherwise be captured hovered (selection ring, row menu).
+        page.mouse.move(5, 5)
         page.wait_for_timeout(600)
 
     return prep
@@ -567,7 +606,11 @@ def _open_first_note(page):
 
 SHOTS = [
     {"name": "home", "path": "/"},
-    {"name": "files_1", "path": "/files", "prep": _files_view("Mosaic")},
+    {
+        "name": "files_1",
+        "path": "/files/{photos_uuid}",
+        "prep": _files_view("Mosaic"),
+    },
     {"name": "files_2", "path": "/files", "prep": _files_view("List")},
     {"name": "chat_1", "path": "/chat/{conversation_uuid}"},
     {"name": "calendar_1", "path": "/calendar", "settle_ms": 3000},

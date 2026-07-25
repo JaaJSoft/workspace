@@ -71,13 +71,19 @@ dev = [
     "playwright>=1.61.0",
     # Exact pin: the ruff-action CI job auto-discovers this version from
     # pyproject.toml, keeping CI and local runs on the same ruff release.
-    "ruff==0.15.22",
+    "ruff==0.16.0",
 ]
 
 [tool.ruff]
 target-version = "py314"
 # Django auto-generated code - never linted nor formatted.
 extend-exclude = ["**/migrations/**"]
+
+[tool.ruff.format]
+# Since 0.16 ruff formats Python code blocks inside Markdown. Our docs rely on
+# hand-aligned trailing comments and deliberately invalid snippets to contrast
+# correct and incorrect usage, both of which the formatter rewrites.
+exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = [

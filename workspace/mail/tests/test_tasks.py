@@ -14,6 +14,7 @@ from unittest import mock
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -203,6 +204,11 @@ class SyncSingleAccountTaskTests(TestCase):
     def setUpTestData(cls):
         cls.alice = User.objects.create_user(username="alice", password="pass")
 
+    def tearDown(self):
+        # The in-flight lock lives in the cache, and LocMemCache is
+        # process-global: a leaked key would make later tests skip their sync.
+        cache.clear()
+
     def test_not_found_when_account_missing(self):
         with mock.patch("workspace.mail.services.imap_sync.sync_account") as sync_mock:
             result = mail_tasks.sync_single_account.run(account_uuid=str(uuid4()))
@@ -237,6 +243,80 @@ class SyncSingleAccountTaskTests(TestCase):
         self.assertEqual(result, {"status": "error", "error": "bad credentials"})
         account.refresh_from_db()
         self.assertEqual(account.last_sync_error, "bad credentials")
+
+    def test_a_second_worker_does_not_sync_while_one_is_in_flight(self):
+        # The claim cannot cover this: the worker finalises before connecting,
+        # so last_sync_at records the sync's start and says nothing about
+        # whether it is still running. A pass outliving the interval therefore
+        # gets a second task legitimately enqueued, and without the lock that
+        # second task repeats the whole IMAP pass.
+        account = _make_account(self.alice)
+        seen = []
+
+        def _slow_sync(acct):
+            # Re-enter once, from inside the first sync, the way a second
+            # worker would while the first pass is still running. Guarded so
+            # that an unguarded second pass surfaces as one extra sync rather
+            # than as unbounded recursion.
+            if seen:
+                return
+            seen.append(None)
+            seen[0] = mail_tasks.sync_single_account.run(str(account.uuid))["status"]
+
+        with mock.patch(
+            "workspace.mail.services.imap_sync.sync_account", side_effect=_slow_sync
+        ) as sync_mock:
+            outer = mail_tasks.sync_single_account.run(str(account.uuid))
+
+        self.assertEqual(outer["status"], "ok")
+        self.assertEqual(seen, ["skipped"])
+        self.assertEqual(
+            sync_mock.call_count,
+            1,
+            f"the account was synced {sync_mock.call_count} times concurrently; "
+            "the second worker must bail before opening a connection",
+        )
+
+    def test_lock_is_released_so_the_next_scheduled_sync_runs(self):
+        account = _make_account(self.alice)
+
+        with mock.patch("workspace.mail.services.imap_sync.sync_account") as sync_mock:
+            mail_tasks.sync_single_account.run(str(account.uuid))
+            second = mail_tasks.sync_single_account.run(str(account.uuid))
+
+        self.assertEqual(second["status"], "ok")
+        self.assertEqual(sync_mock.call_count, 2)
+
+    def test_lock_is_released_when_the_sync_raises(self):
+        # A failed pass must not lock the account out until the TTL expires.
+        account = _make_account(self.alice)
+
+        with mock.patch(
+            "workspace.mail.services.imap_sync.sync_account",
+            side_effect=RuntimeError("IMAP offline"),
+        ):
+            mail_tasks.sync_single_account.run(str(account.uuid))
+
+        self.assertIsNone(cache.get(f"mail:sync:account:{account.pk}"))
+
+    def test_in_flight_skip_does_not_consume_the_claim(self):
+        # The skipped worker must leave last_sync_at alone: the in-flight pass
+        # owns it and writes the completion time when it finishes, which is
+        # what makes the next sync due one interval after completion.
+        account = _make_account(self.alice)
+        token = timezone.now() + timedelta(minutes=20)
+        MailAccount.objects.filter(pk=account.pk).update(last_sync_at=token)
+        cache.add(f"mail:sync:account:{account.pk}", "locked", 60)
+
+        with mock.patch("workspace.mail.services.imap_sync.sync_account") as sync_mock:
+            result = mail_tasks.sync_single_account.run(
+                str(account.uuid), token.isoformat()
+            )
+
+        self.assertEqual(result["reason"], "already_running")
+        sync_mock.assert_not_called()
+        account.refresh_from_db()
+        self.assertEqual(account.last_sync_at, token)
 
     def test_owner_is_fetched_with_the_account(self):
         # The sync path reads account.owner to gate the per-user AI features;

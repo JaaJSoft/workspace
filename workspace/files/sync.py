@@ -22,6 +22,84 @@ class SyncResult:
     errors: list[str] = field(default_factory=list)
 
 
+# Columns the walk actually touches. ``path`` is required by
+# ``File.soft_delete`` (it builds the descendant filter from it); the rest
+# drive the name/type matching against disk entries. ``parent`` selects the
+# FK column only - the walk reads ``record.parent_id`` and never traverses
+# to the related object, which would be a query per row.
+_WALK_FIELDS = ("uuid", "name", "node_type", "parent", "path", "deleted_at")
+
+
+class _NodeIndex:
+    """Name/type lookup of a user's file rows, grouped by parent.
+
+    The walk compares each directory level against the DB by name and node
+    type. Querying per level costs a round trip per folder, which multiplies
+    by (active users x folders) under the beat schedule; loading the rows
+    once and grouping them in memory makes the whole walk a constant number
+    of queries regardless of tree size or depth.
+
+    Trashed rows are held separately and only as keys: they exist to stop
+    phase 1 from creating a live duplicate next to a node the user deleted,
+    never as candidates to recurse into.
+    """
+
+    def __init__(self):
+        self._live = {}  # parent_id -> {(name, node_type): File}
+        self._trashed = {}  # parent_id -> {(name, node_type)}
+
+    @classmethod
+    def for_subtree(cls, user):
+        """Index every personal row the user owns, live and trashed."""
+        index = cls()
+        live = FileService.user_files_qs(user).only(*_WALK_FIELDS)
+        trashed = File.objects.filter(owner=user, deleted_at__isnull=False).values_list(
+            "name", "node_type", "parent_id"
+        )
+        index._absorb(live, trashed)
+        return index
+
+    @classmethod
+    def for_level(cls, user, parent_db):
+        """Index a single directory level - the shallow, on-demand path."""
+        index = cls()
+        live = (
+            FileService.user_files_qs(user).filter(parent=parent_db).only(*_WALK_FIELDS)
+        )
+        trashed = File.objects.filter(
+            owner=user, parent=parent_db, deleted_at__isnull=False
+        ).values_list("name", "node_type", "parent_id")
+        index._absorb(live, trashed)
+        return index
+
+    def _absorb(self, live_qs, trashed_values):
+        for record in live_qs:
+            bucket = self._live.setdefault(record.parent_id, {})
+            bucket[(record.name, record.node_type)] = record
+        for name, node_type, parent_id in trashed_values:
+            self._trashed.setdefault(parent_id, set()).add((name, node_type))
+
+    @staticmethod
+    def _key(parent_db):
+        return parent_db.pk if parent_db is not None else None
+
+    def live_at(self, parent_db):
+        """Return ``{(name, node_type): File}`` for one level."""
+        return self._live.get(self._key(parent_db), {})
+
+    def is_trashed(self, parent_db, name, node_type):
+        return (name, node_type) in self._trashed.get(self._key(parent_db), set())
+
+    def add(self, file_obj):
+        """Register a row the walk just created.
+
+        Phase 1 creates folders that the recursion must then descend into,
+        so a freshly created node has to be visible to the same walk.
+        """
+        bucket = self._live.setdefault(file_obj.parent_id, {})
+        bucket[(file_obj.name, file_obj.node_type)] = file_obj
+
+
 class FileSyncService:
     """Synchronize files between disk storage and database.
 
@@ -50,6 +128,7 @@ class FileSyncService:
             parent_db=None,
             storage_prefix=f"files/users/{user.username}",
             result=result,
+            index=_NodeIndex.for_subtree(user),
         )
         return result
 
@@ -77,45 +156,45 @@ class FileSyncService:
         if not os.path.isdir(disk_path):
             return result
 
-        self._sync_one_level(user, disk_path, parent_db, storage_prefix, result)
+        self._sync_one_level(
+            user,
+            disk_path,
+            parent_db,
+            storage_prefix,
+            result,
+            _NodeIndex.for_level(user, parent_db),
+        )
         return result
 
+    def _scan(self, disk_path, result):
+        """Read a directory, recording (not raising) an unreadable path."""
+        try:
+            return list(os.scandir(disk_path))
+        except OSError as e:
+            result.errors.append(f"Cannot read {disk_path}: {e}")
+            return None
+
     def _sync_directory_recursive(
-        self, user, disk_path, parent_db, storage_prefix, result
+        self, user, disk_path, parent_db, storage_prefix, result, index
     ):
         """Sync one directory level, then recurse into subdirectories."""
-        self._sync_one_level(user, disk_path, parent_db, storage_prefix, result)
-
-        try:
-            entries = list(os.scandir(disk_path))
-        except OSError as e:
-            result.errors.append(f"Cannot scan {disk_path}: {e}")
+        entries = self._scan(disk_path, result)
+        if entries is None:
             return
 
+        self._sync_one_level(
+            user, disk_path, parent_db, storage_prefix, result, index, entries=entries
+        )
+
+        live_here = index.live_at(parent_db)
         for entry in entries:
             if not entry.is_dir(follow_symlinks=False):
                 continue
 
-            # Skip folders that are in the trash
-            if File.objects.filter(
-                owner=user,
-                parent=parent_db,
-                name=entry.name,
-                node_type=File.NodeType.FOLDER,
-                deleted_at__isnull=False,
-            ).exists():
+            if index.is_trashed(parent_db, entry.name, File.NodeType.FOLDER):
                 continue
 
-            folder_db = (
-                FileService.user_files_qs(user)
-                .filter(
-                    parent=parent_db,
-                    name=entry.name,
-                    node_type=File.NodeType.FOLDER,
-                )
-                .first()
-            )
-
+            folder_db = live_here.get((entry.name, File.NodeType.FOLDER))
             if folder_db:
                 self._sync_directory_recursive(
                     user=user,
@@ -123,39 +202,26 @@ class FileSyncService:
                     parent_db=folder_db,
                     storage_prefix=f"{storage_prefix}/{entry.name}",
                     result=result,
+                    index=index,
                 )
 
-    def _sync_one_level(self, user, disk_path, parent_db, storage_prefix, result):
+    def _sync_one_level(
+        self, user, disk_path, parent_db, storage_prefix, result, index, entries=None
+    ):
         """Bidirectional sync of immediate children at one directory level."""
         now = timezone.now()
 
         # --- Read disk entries ---
-        try:
-            disk_entries = list(os.scandir(disk_path))
-        except OSError as e:
-            result.errors.append(f"Cannot read {disk_path}: {e}")
-            return
+        if entries is None:
+            entries = self._scan(disk_path, result)
+            if entries is None:
+                return
 
         disk_names = {}  # name -> DirEntry
-        for entry in disk_entries:
+        for entry in entries:
             disk_names[entry.name] = entry
 
-        # --- Read DB entries (non-deleted) at this level ---
-        db_records = FileService.user_files_qs(user).filter(
-            parent=parent_db,
-        )
-        db_by_name = {}  # (name, node_type) -> File
-        for rec in db_records:
-            db_by_name[(rec.name, rec.node_type)] = rec
-
-        # --- Read trashed DB entries to avoid creating duplicates ---
-        trashed_names = set(
-            File.objects.filter(
-                owner=user,
-                parent=parent_db,
-                deleted_at__isnull=False,
-            ).values_list("name", "node_type")
-        )
+        db_by_name = index.live_at(parent_db)
 
         # --- Phase 1: Disk -> DB (create missing) ---
         for entry_name, entry in disk_names.items():
@@ -170,7 +236,7 @@ class FileSyncService:
             if (entry_name, node_type) in db_by_name:
                 continue  # already tracked
 
-            if (entry_name, node_type) in trashed_names:
+            if index.is_trashed(parent_db, entry_name, node_type):
                 continue  # in trash, don't create a duplicate
 
             if self.dry_run:
@@ -183,9 +249,10 @@ class FileSyncService:
 
             try:
                 if is_dir:
-                    FileService.create_folder(
+                    created = FileService.create_folder(
                         user, entry_name, parent_db, acting_user=user
                     )
+                    index.add(created)
                     result.folders_created += 1
                     self.log.info("Created folder: %s", entry_name)
                 else:
@@ -196,7 +263,7 @@ class FileSyncService:
                     except OSError:
                         size = None
 
-                    FileService.register_disk_file(
+                    created = FileService.register_disk_file(
                         user,
                         entry_name,
                         parent_db,
@@ -204,6 +271,7 @@ class FileSyncService:
                         size=size,
                         acting_user=user,
                     )
+                    index.add(created)
                     result.files_created += 1
                     self.log.info("Created file: %s (%s bytes)", entry_name, size)
 
@@ -212,7 +280,11 @@ class FileSyncService:
                 self.log.warning("Error creating %s: %s", entry_name, e)
 
         # --- Phase 2: DB -> Disk (soft-delete orphans) ---
-        for (name, node_type), db_record in db_by_name.items():
+        # Iterate a snapshot: phase 1 may have registered new rows into this
+        # same mapping via the index. They are known-present on disk, so they
+        # fall through the match below either way - the copy just keeps the
+        # loop independent of whether phase 1 touched the bucket.
+        for (name, node_type), db_record in list(db_by_name.items()):
             if name in disk_names:
                 disk_entry = disk_names[name]
                 is_dir = disk_entry.is_dir(follow_symlinks=False)

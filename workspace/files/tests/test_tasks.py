@@ -1,8 +1,8 @@
 """Tests for workspace.files.tasks Celery entry points.
 
-sync_all_users and sync_folder delegate the actual disk work to
+sync_user_files and sync_folder delegate the actual disk work to
 FileSyncService, which we mock. The tests focus on real orchestration
-logic: active-user filtering, SyncResult aggregation, access control
+logic: active-user filtering, fan-out and its lock guard, access control
 via FileService.user_files_qs, and argument passing.
 
 purge_trash is not mocked at all — it runs the real ORM filter against
@@ -18,6 +18,7 @@ from datetime import timedelta
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -28,12 +29,14 @@ from workspace.files.sync import SyncResult
 User = get_user_model()
 
 
-class SyncAllUsersTaskTests(TestCase):
+class SyncAllUsersDispatchTests(TestCase):
+    """The beat entry point only fans out - one task per active user."""
+
     @classmethod
     def setUpTestData(cls):
         # Data migrations can seed extra active users (the AI assistant bot
         # from ai.0002_create_default_bot when AI_API_KEY is configured).
-        # sync_all_users iterates every active user, so deactivate any
+        # sync_all_users dispatches for every active user, so deactivate any
         # pre-existing ones to keep the task's input deterministic.
         User.objects.update(is_active=False)
         cls.alice = User.objects.create_user(username="alice", password="pass")
@@ -44,55 +47,134 @@ class SyncAllUsersTaskTests(TestCase):
             is_active=False,
         )
 
-    def test_aggregates_results_across_active_users(self):
-        per_user_results = {
-            self.alice.pk: SyncResult(
-                files_created=2,
-                folders_created=1,
-                files_soft_deleted=0,
-                folders_soft_deleted=0,
-                errors=["boom-alice"],
-            ),
-            self.bob.pk: SyncResult(
-                files_created=3,
-                folders_created=0,
-                files_soft_deleted=1,
-                folders_soft_deleted=2,
-                errors=[],
-            ),
-        }
-
-        def _fake_sync(user):
-            return per_user_results[user.pk]
-
-        fake_service = mock.Mock()
-        fake_service.sync_user_recursive.side_effect = _fake_sync
-
-        with mock.patch(
-            "workspace.files.sync.FileSyncService",
-            return_value=fake_service,
-        ) as service_cls:
+    def test_dispatches_one_task_per_active_user(self):
+        with mock.patch.object(files_tasks.sync_user_files, "delay") as delay:
             result = files_tasks.sync_all_users.run()
 
-        self.assertEqual(result["users_processed"], 2)
-        self.assertEqual(result["files_created"], 5)
+        self.assertEqual(result["users_dispatched"], 2)
+        self.assertEqual(result["enqueue_failures"], 0)
+        dispatched = {call.args[0] for call in delay.call_args_list}
+        self.assertEqual(dispatched, {self.alice.pk, self.bob.pk})
+
+    def test_does_not_dispatch_for_inactive_users(self):
+        with mock.patch.object(files_tasks.sync_user_files, "delay") as delay:
+            files_tasks.sync_all_users.run()
+
+        dispatched = {call.args[0] for call in delay.call_args_list}
+        self.assertNotIn(self.inactive.pk, dispatched)
+
+    def test_broker_failure_for_one_user_does_not_abort_the_fan_out(self):
+        # A refusal on the first enqueue must not cost every later user their
+        # sync - the dispatcher is the single point of failure for all of them.
+        def _flaky(user_id):
+            if user_id == self.alice.pk:
+                raise RuntimeError("broker down")
+
+        with mock.patch.object(
+            files_tasks.sync_user_files, "delay", side_effect=_flaky
+        ) as delay:
+            result = files_tasks.sync_all_users.run()
+
+        self.assertEqual(delay.call_count, 2)
+        self.assertEqual(result["users_dispatched"], 1)
+        self.assertEqual(result["enqueue_failures"], 1)
+
+
+class SyncUserFilesTaskTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="walker", password="pass")
+
+    def tearDown(self):
+        cache.clear()
+
+    def _fake_service(self, result=None):
+        fake = mock.Mock()
+        fake.sync_user_recursive.return_value = result or SyncResult(
+            files_created=2,
+            folders_created=1,
+            files_soft_deleted=3,
+            folders_soft_deleted=4,
+            errors=["boom"],
+        )
+        return fake
+
+    def test_returns_the_walk_result(self):
+        fake = self._fake_service()
+        with mock.patch("workspace.files.sync.FileSyncService", return_value=fake):
+            result = files_tasks.sync_user_files.run(self.user.pk)
+
+        fake.sync_user_recursive.assert_called_once()
+        self.assertEqual(fake.sync_user_recursive.call_args.args[0].pk, self.user.pk)
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["files_created"], 2)
         self.assertEqual(result["folders_created"], 1)
-        self.assertEqual(result["files_soft_deleted"], 1)
-        self.assertEqual(result["folders_soft_deleted"], 2)
-        self.assertEqual(result["errors"], ["boom-alice"])
-        service_cls.assert_called_once()
-        # Inactive user must be skipped.
-        synced_pks = {
-            call.args[0].pk for call in fake_service.sync_user_recursive.call_args_list
-        }
-        self.assertEqual(synced_pks, {self.alice.pk, self.bob.pk})
+        self.assertEqual(result["files_soft_deleted"], 3)
+        self.assertEqual(result["folders_soft_deleted"], 4)
+        self.assertEqual(result["errors"], ["boom"])
+
+    def test_skips_when_a_sync_is_already_running_for_that_user(self):
+        # Overlap guard: beat fires on a fixed period, so a walk that outlives
+        # the period would otherwise have a second copy stacked on top of it.
+        cache.add(
+            f"files:sync:user:{self.user.pk}",
+            "locked",
+            files_tasks.SYNC_USER_LOCK_TTL,
+        )
+
+        fake = self._fake_service()
+        with mock.patch("workspace.files.sync.FileSyncService", return_value=fake):
+            result = files_tasks.sync_user_files.run(self.user.pk)
+
+        fake.sync_user_recursive.assert_not_called()
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "already_running")
+
+    def test_releases_the_lock_after_a_successful_run(self):
+        fake = self._fake_service()
+        with mock.patch("workspace.files.sync.FileSyncService", return_value=fake):
+            files_tasks.sync_user_files.run(self.user.pk)
+            files_tasks.sync_user_files.run(self.user.pk)
+
+        # A lock leaked by the first run would make the second a no-op and
+        # stall the user's sync until the TTL expired.
+        self.assertEqual(fake.sync_user_recursive.call_count, 2)
+
+    def test_releases_the_lock_when_the_walk_raises(self):
+        fake = mock.Mock()
+        fake.sync_user_recursive.side_effect = OSError("mount vanished")
+
+        with mock.patch("workspace.files.sync.FileSyncService", return_value=fake):
+            with self.assertRaises(OSError):
+                files_tasks.sync_user_files.run(self.user.pk)
+
+        self.assertIsNone(cache.get(f"files:sync:user:{self.user.pk}"))
+
+    def test_inactive_user_is_not_synced(self):
+        self.user.is_active = False
+        self.user.save(update_fields=["is_active"])
+
+        fake = self._fake_service()
+        with mock.patch("workspace.files.sync.FileSyncService", return_value=fake):
+            result = files_tasks.sync_user_files.run(self.user.pk)
+
+        fake.sync_user_recursive.assert_not_called()
+        self.assertEqual(result["status"], "not_found")
+
+    def test_missing_user_is_reported_not_raised(self):
+        # The dispatcher enqueues by pk; a user deleted in between must not
+        # turn into a retrying/erroring task.
+        fake = self._fake_service()
+        with mock.patch("workspace.files.sync.FileSyncService", return_value=fake):
+            result = files_tasks.sync_user_files.run(999_999)
+
+        self.assertEqual(result["status"], "not_found")
 
     def test_malicious_username_cannot_forge_log_lines(self):
         # A username carrying CR/LF must not be able to inject a second
-        # (forged) log line — it has to be flattened before logging
+        # (forged) log line - it has to be flattened before logging
         # (CWE-117 log injection).
-        User.objects.update(is_active=False)
-        User.objects.create_user(
+        evil = User.objects.create_user(
             username="evil\r\nINFO:root:forged admin login",
             password="pass",
         )
@@ -105,7 +187,7 @@ class SyncAllUsersTaskTests(TestCase):
             return_value=fake_service,
         ):
             with self.assertLogs("workspace.files.tasks", level="INFO") as cm:
-                files_tasks.sync_all_users.run()
+                files_tasks.sync_user_files.run(evil.pk)
 
         per_user_lines = [m for m in cm.output if "Syncing files for user" in m]
         self.assertEqual(len(per_user_lines), 1)
@@ -114,6 +196,21 @@ class SyncAllUsersTaskTests(TestCase):
         self.assertNotIn("\n", line)
         # The username content is preserved, just flattened onto one line.
         self.assertIn("forged admin login", line)
+
+    def test_skip_log_line_also_scrubs_the_username(self):
+        evil = User.objects.create_user(
+            username="skip\r\nINFO:root:forged",
+            password="pass",
+        )
+        cache.add(f"files:sync:user:{evil.pk}", "locked", 60)
+
+        with self.assertLogs("workspace.files.tasks", level="INFO") as cm:
+            files_tasks.sync_user_files.run(evil.pk)
+
+        skip_lines = [m for m in cm.output if "already running" in m]
+        self.assertEqual(len(skip_lines), 1)
+        self.assertNotIn("\r", skip_lines[0])
+        self.assertNotIn("\n", skip_lines[0])
 
 
 class PurgeTrashTaskTests(TestCase):

@@ -711,10 +711,20 @@ CHAT_CALL_PRESENCE_TTL = int(os.getenv("CHAT_CALL_PRESENCE_TTL", "12"))
 # Celery Beat schedule for periodic tasks
 from celery.schedules import crontab
 
+# Disk <-> DB reconciliation cadence. Every in-app write (upload, rename,
+# move, WebDAV, notes) persists its row synchronously, and the UI can sync
+# a folder on demand, so this walk only catches out-of-band disk changes
+# (rsync, restore, direct SSH copy). Large deployments can widen it further
+# - the trade-off is how long such a change stays invisible in the UI.
+FILES_SYNC_INTERVAL = float(os.getenv("FILES_SYNC_INTERVAL", "1800"))
+
 CELERY_BEAT_SCHEDULE = {
     "sync-all-user-files": {
         "task": "files.sync_all_users",
-        "schedule": 600.0,  # Every 10 minutes
+        "schedule": FILES_SYNC_INTERVAL,
+        # Drop a tick that has not started by the time the next one fires,
+        # so a backed-up broker cannot accumulate stale fan-outs.
+        "options": {"expires": FILES_SYNC_INTERVAL},
     },
     "generate-thumbnails": {
         "task": "files.generate_thumbnails",

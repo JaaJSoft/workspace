@@ -79,6 +79,12 @@ target-version = "py314"
 # Django auto-generated code - never linted nor formatted.
 extend-exclude = ["**/migrations/**"]
 
+[tool.ruff.format]
+# Since 0.16 ruff formats Python code blocks inside Markdown. Our docs rely on
+# hand-aligned trailing comments and deliberately invalid snippets to contrast
+# correct and incorrect usage, both of which the formatter rewrites.
+exclude = ["*.md"]
+
 [tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors

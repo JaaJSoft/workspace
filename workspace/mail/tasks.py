@@ -25,29 +25,21 @@ def _due_threshold():
     return timezone.now() - timedelta(seconds=_sync_interval())
 
 
-def _lock_horizon_seconds():
-    """Self-healing window shared by the claim and the in-flight lock.
-
-    Both are recoveries from a worker that stopped existing rather than
-    finishing, and both fail in the same direction (the account does not sync
-    until the window elapses), so they get one number rather than two knobs
-    to keep consistent.
-
-    For the **claim** it has to cover enqueue-to-finalise (broker latency plus
-    queue wait), not the sync itself, since the worker finalises before it
-    connects. For the **lock** it has to cover a whole sync, but overshooting
-    a long one only degrades to the duplicate IMAP pass this guard exists to
-    avoid, whereas overshooting on the recovery side means real silence.
-
-    The shared 1h default in ``celery_claim`` is sized for a 900s cadence;
-    against this module's 300s it would turn a dropped message into an hour of
-    silence, so scale to the interval instead.
-    """
-    return _sync_interval() * 4
-
-
 def _lock_horizon():
-    return timedelta(seconds=_lock_horizon_seconds())
+    """How long a claim parks an account before it becomes due again.
+
+    This is the self-healing window for a claim that is never finalised -
+    the task was enqueued but no worker ever ran it (pool down, message
+    dropped, queue misrouted). Until it elapses, the account does not sync.
+
+    It only has to cover the time from enqueue to finalise (broker latency
+    plus queue wait), not the sync itself, because the worker finalises
+    before it opens any connection. The shared 1h default in
+    ``celery_claim`` is sized for a 900s cadence; against this module's
+    300s it would turn a dropped message into an hour of silence, so scale
+    it to the interval instead.
+    """
+    return timedelta(seconds=_sync_interval() * 4)
 
 
 @shared_task(name="mail.sync_all_accounts", bind=True, max_retries=0)
@@ -65,12 +57,14 @@ def sync_all_accounts(self):
     dispatcher runs race on the same predicate and the database guarantees
     exactly one winner per account.
 
-    The claim does not track in-flight syncs: the worker finalises before
-    connecting, so a pass outliving ``MAIL_SYNC_INTERVAL`` can still be
-    enqueued a second time. Dropping that duplicate is the worker's job (it
-    holds a lock for the duration of the sync), not the dispatcher's, so this
-    task can stay a cheap dispatch loop and does not need to reason about
-    which syncs are still running.
+    Note what the claim does and does not bound. It stops two dispatchers
+    from enqueueing the same account, and it stops an account from being
+    re-enqueued for one interval. It does *not* track in-flight syncs: the
+    worker finalises its claim before connecting, so a pass that outlives
+    ``MAIL_SYNC_INTERVAL`` can be enqueued a second time while the first is
+    still running. That is wasted IMAP work rather than duplicated
+    messages - ``UniqueConstraint(folder, imap_uid)`` and the IntegrityError
+    guard in ``imap_sync`` already cover a concurrent sync of one folder.
     """
     from workspace.mail.models import MailAccount
 
@@ -122,32 +116,19 @@ def sync_all_accounts(self):
 def sync_single_account(self, account_uuid, claim_token=None):
     """Sync a single mail account.
 
-    Two guards, covering two different races, neither sufficient alone:
-
-    - The **lock** covers a *different* token: a second dispatcher legitimately
-      claimed the account because the first pass outlived the interval. The
-      claim cannot see that, because the worker finalises before it connects,
-      so ``last_sync_at`` records the sync's start and says nothing about
-      whether it is still running.
-    - The **CAS** covers the *same* token redelivered by Celery (worker killed
-      before its ack). The lock cannot see that either: the redelivery may
-      arrive long after the original released.
-
-    Both exit before opening a connection, which is the point - the cost being
-    avoided is a duplicate IMAP pass, not a duplicate row.
-
     ``claim_token`` is the value the dispatcher CAS-wrote into
-    ``last_sync_at``. Calls without a token skip the CAS: there is no
-    dispatcher window to pin against, and the caller is asserting it does not
-    need the protection. They still take the lock.
+    ``last_sync_at``. The worker finalises its claim by CAS-pinning that
+    exact value, so a duplicate Celery delivery whose row was already
+    finalised by the winning worker matches zero rows and bails before
+    opening an IMAP connection. Calls without a token skip the CAS: there
+    is no dispatcher window to pin against, and the caller is asserting it
+    does not need the protection.
 
     Note that the UI's per-account refresh does not come through here - it
-    calls ``sync_account`` inline in the request (``MailAccountSyncView``), so
-    it takes neither guard. A manual refresh can therefore overlap a
-    background pass; that is pre-existing and absorbed by
-    ``UniqueConstraint(folder, imap_uid)``.
+    calls ``sync_account`` inline in the request (``MailAccountSyncView``).
+    It still moves ``last_sync_at`` forward, so a manual sync correctly
+    makes the account undue for the next interval.
     """
-    from workspace.common.task_locks import task_lock
     from workspace.mail.models import MailAccount
     from workspace.mail.services.imap_sync import sync_account
 
@@ -161,35 +142,27 @@ def sync_single_account(self, account_uuid, claim_token=None):
         logger.warning("Account %s not found or inactive", scrub(str(account_uuid)))
         return {"status": "not_found"}
 
-    with task_lock(f"mail:sync:account:{account.pk}", _lock_horizon_seconds()) as held:
-        if not held:
-            logger.info(
-                "Mail sync skipped (already running): account=%s",
-                scrub(str(account.pk)),
-            )
-            return {"status": "skipped", "reason": "already_running"}
+    if claim_token and not cas_finalize(
+        MailAccount,
+        account.pk,
+        claim_field="last_sync_at",
+        claim_token=claim_token,
+        updates={"last_sync_at": timezone.now()},
+        extra_where={"is_active": True},
+    ):
+        logger.info(
+            "Mail sync skipped (claimed by another worker): account=%s",
+            scrub(str(account.pk)),
+        )
+        return {"status": "skipped", "reason": "already_claimed"}
+    if claim_token:
+        account.refresh_from_db(fields=["last_sync_at"])
 
-        if claim_token and not cas_finalize(
-            MailAccount,
-            account.pk,
-            claim_field="last_sync_at",
-            claim_token=claim_token,
-            updates={"last_sync_at": timezone.now()},
-            extra_where={"is_active": True},
-        ):
-            logger.info(
-                "Mail sync skipped (claimed by another worker): account=%s",
-                scrub(str(account.pk)),
-            )
-            return {"status": "skipped", "reason": "already_claimed"}
-        if claim_token:
-            account.refresh_from_db(fields=["last_sync_at"])
-
-        try:
-            sync_account(account)
-            return {"status": "ok", "email": account.email}
-        except Exception as e:
-            logger.exception("Failed to sync account %s", scrub(account.email))
-            account.last_sync_error = str(e)
-            account.save(update_fields=["last_sync_error", "updated_at"])
-            return {"status": "error", "error": str(e)}
+    try:
+        sync_account(account)
+        return {"status": "ok", "email": account.email}
+    except Exception as e:
+        logger.exception("Failed to sync account %s", scrub(account.email))
+        account.last_sync_error = str(e)
+        account.save(update_fields=["last_sync_error", "updated_at"])
+        return {"status": "error", "error": str(e)}

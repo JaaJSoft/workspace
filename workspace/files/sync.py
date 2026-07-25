@@ -24,8 +24,10 @@ class SyncResult:
 
 # Columns the walk actually touches. ``path`` is required by
 # ``File.soft_delete`` (it builds the descendant filter from it); the rest
-# drive the name/type matching against disk entries.
-_WALK_FIELDS = ("uuid", "name", "node_type", "parent_id", "path", "deleted_at")
+# drive the name/type matching against disk entries. ``parent`` selects the
+# FK column only - the walk reads ``record.parent_id`` and never traverses
+# to the related object, which would be a query per row.
+_WALK_FIELDS = ("uuid", "name", "node_type", "parent", "path", "deleted_at")
 
 
 class _NodeIndex:

@@ -216,7 +216,6 @@ class MailFolderUpdateView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        # Clear selection if this folder was selected
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

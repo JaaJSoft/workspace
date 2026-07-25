@@ -42,7 +42,7 @@ def _addr_strings(addr_list: Iterable[Any]) -> list:
 def _text_field_values(message, field: str) -> list:
     """Return the list of strings to search for a given text field."""
     if field == "from":
-        return _addr_strings([message.from_address])
+        return [s for s in (message.from_email, message.from_name) if s]
     if field == "to":
         return _addr_strings(message.to_addresses)
     if field == "cc":

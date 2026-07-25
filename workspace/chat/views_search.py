@@ -13,6 +13,7 @@ from workspace.common.mixins import CacheControlMixin
 
 from .models import Message, MessageAttachment, Reaction
 from .services.conversations import get_active_membership
+from .services.message_search import search_messages_qs
 
 logger = logging.getLogger(__name__)
 
@@ -77,13 +78,15 @@ class ConversationMessageSearchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        qs = Message.objects.filter(
-            conversation_id=conversation_id,
-            deleted_at__isnull=True,
-        )
-
         if query:
-            qs = qs.filter(body__icontains=query)
+            qs = search_messages_qs(
+                request.user, query, conversation_id=conversation_id
+            )
+        else:
+            qs = Message.objects.filter(
+                conversation_id=conversation_id,
+                deleted_at__isnull=True,
+            )
 
         if author_id:
             try:
@@ -135,7 +138,8 @@ class ConversationMessageSearchView(APIView):
         if has_images:
             qs = qs.filter(attachments__mime_type__startswith="image/")
 
-        messages = qs.select_related("author").order_by("-created_at").distinct()[:50]
+        order = ("-search_rank", "-created_at") if query else ("-created_at",)
+        messages = qs.select_related("author").order_by(*order).distinct()[:50]
 
         results = [
             {
@@ -195,15 +199,22 @@ class ConversationMediaView(CacheControlMixin, APIView):
             .order_by("-created_at")
         )
 
+        # Mirrors the is_image/is_video model properties: the indexed
+        # category column decides, with a mime-prefix fallback only for
+        # legacy rows that predate category detection. Every OR branch
+        # constrains the indexed column, unlike a bare mime-prefix filter
+        # which forced a scan of all the conversation's attachments.
+        media_q = (
+            Q(category__in=("image", "video"))
+            | Q(category="unknown", mime_type__startswith="image/")
+            | Q(category="unknown", mime_type__startswith="video/")
+        )
+
         media_type = request.query_params.get("type", "images")
         if media_type == "images":
-            qs = qs.filter(
-                Q(mime_type__startswith="image/") | Q(mime_type__startswith="video/")
-            )
+            qs = qs.filter(media_q)
         elif media_type == "files":
-            qs = qs.exclude(mime_type__startswith="image/").exclude(
-                mime_type__startswith="video/"
-            )
+            qs = qs.exclude(media_q)
         elif media_type != "all":
             return Response(
                 {"detail": "Invalid media type."},

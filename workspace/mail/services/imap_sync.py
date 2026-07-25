@@ -2,8 +2,9 @@
 
 import logging
 import re
+from itertools import batched
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone as dj_timezone
 
 from workspace.common.logging import scrub
@@ -155,12 +156,21 @@ def sync_folder_messages(account, folder):
         max_uid = folder.last_sync_uid
         new_message_uuids = []
         # Fetch in batches
-        for i in range(0, len(uid_list), FETCH_BATCH_SIZE):
-            batch = uid_list[i : i + FETCH_BATCH_SIZE]
+        for batch in batched(uid_list, FETCH_BATCH_SIZE, strict=False):
             uid_set = ",".join(batch)
             status, msg_data = conn.uid("FETCH", uid_set, "(UID FLAGS RFC822)")
             if status != "OK":
                 continue
+
+            # One existence probe for the whole batch; _parse_message would
+            # otherwise check each message individually (N queries per
+            # batch, paid in full on initial sync and crash re-sync).
+            known_uids = set(
+                MailMessage.objects.filter(
+                    folder=folder,
+                    imap_uid__in=[int(u) for u in batch],
+                ).values_list("imap_uid", flat=True)
+            )
 
             for response_part in msg_data:
                 if not isinstance(response_part, tuple):
@@ -177,7 +187,14 @@ def sync_folder_messages(account, folder):
 
                 raw_email = response_part[1]
                 try:
-                    msg = _parse_message(raw_email, account, folder, uid, flags_str)
+                    msg = _parse_message(
+                        raw_email,
+                        account,
+                        folder,
+                        uid,
+                        flags_str,
+                        known_uids=known_uids,
+                    )
                     # Advance max_uid even when msg is None (already present in
                     # DB): otherwise last_sync_uid never moves past UIDs we've
                     # confirmed, and every future sync re-FETCHes the same
@@ -186,6 +203,20 @@ def sync_folder_messages(account, folder):
                     max_uid = max(max_uid, uid)
                     if msg:
                         new_message_uuids.append(str(msg.uuid))
+                except IntegrityError:
+                    # Duplicate-insert race with a concurrent sync of this
+                    # folder: the batch existence snapshot above predates
+                    # the other sync's insert, so the (folder, imap_uid)
+                    # unique constraint fires. The message is stored, just
+                    # not by us - skip it and keep the cursor moving.
+                    if MailMessage.objects.filter(folder=folder, imap_uid=uid).exists():
+                        max_uid = max(max_uid, uid)
+                    else:
+                        logger.exception(
+                            "Failed to parse message UID %d in %s",
+                            uid,
+                            scrub(folder.name),
+                        )
                 except Exception:
                     logger.exception(
                         "Failed to parse message UID %d in %s", uid, scrub(folder.name)

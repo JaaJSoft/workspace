@@ -1,0 +1,16 @@
+{% comment %}
+Conversation Items Partial
+==========================
+Bare conversation <li> entries (no list wrapper), served by
+/chat/conversations/items?uuids=... so alpine-ajax can swap individual
+sidebar rows (targets: ["conv-item-<uuid>", ...]) after a message is sent
+or received, instead of re-rendering the whole list. The full-list wrapper
+lives in conversation_list.html.
+
+Expects in context:
+  - conversations: Conversation objects annotated by
+    _build_conversation_context (display_name, is_pinned, time_ago, ...)
+{% endcomment %}
+{% for conv in conversations %}
+  {% include "chat/ui/partials/_conversation_item.html" with conv=conv pinned=conv.is_pinned %}
+{% endfor %}

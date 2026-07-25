@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from dateutil.rrule import DAILY, MONTHLY, WEEKLY, YEARLY, rrule
 
 FREQ_MAP = {
@@ -6,6 +8,34 @@ FREQ_MAP = {
     "monthly": MONTHLY,
     "yearly": YEARLY,
 }
+
+
+_FIXED_STEP = {
+    "daily": timedelta(days=1),
+    "weekly": timedelta(weeks=1),
+}
+
+
+def _anchored_dtstart(master, floor):
+    """Return ``master.start`` advanced to the last in-phase occurrence at
+    or before *floor*.
+
+    Iterating an rrule walks the series occurrence by occurrence from
+    dtstart, so a years-old daily master costs hundreds of discarded
+    iterations per expansion. For fixed-step frequencies the phase is plain
+    timedelta arithmetic (datetimes are stored in UTC, so there is no DST
+    wall-clock adjustment to preserve): re-anchoring dtstart keeps the
+    exact same occurrence stream while skipping the pre-window walk.
+    Monthly/yearly steps are calendar-dependent (day-31 or Feb-29 masters
+    skip periods), so those keep the true start - they are bounded to at
+    most 12 iterations per year of series age.
+    """
+    dtstart = master.start
+    fixed_step = _FIXED_STEP.get(master.recurrence_frequency)
+    if fixed_step and dtstart < floor:
+        step = fixed_step * master.recurrence_interval
+        dtstart += ((floor - dtstart) // step) * step
+    return dtstart
 
 
 def _build_rrule(master, range_start, range_end):
@@ -18,26 +48,27 @@ def _build_rrule(master, range_start, range_end):
     if master.recurrence_end and master.recurrence_end < until:
         until = master.recurrence_end
 
+    duration = (master.end - master.start) if master.end else None
+
+    # First occurrence start that could still overlap the window: with a
+    # duration, an occurrence starting before range_start can spill into
+    # the window, so back the threshold up by the duration.
+    window_floor = (range_start - duration) if duration else range_start
+
     rule = rrule(
         freq,
         interval=master.recurrence_interval,
-        dtstart=master.start,
+        dtstart=_anchored_dtstart(master, window_floor),
         until=until,
     )
 
     for dt in rule:
         if dt >= range_end:
             break
-        # Compute occurrence end to check overlap with range
-        if master.end:
-            duration = master.end - master.start
-            occ_end = dt + duration
-        else:
-            occ_end = dt
-
-        # Only yield if the occurrence overlaps the query range
-        if master.end:
-            if occ_end > range_start:
+        # Only yield if the occurrence overlaps the query range (strict:
+        # an occurrence ending exactly at range_start does not overlap).
+        if duration:
+            if dt + duration > range_start:
                 yield dt
         else:
             if dt >= range_start:
@@ -64,7 +95,9 @@ def next_occurrences_after(master, after, limit=None):
     rule = rrule(
         freq,
         interval=master.recurrence_interval,
-        dtstart=master.start,
+        # xafter still walks the series from dtstart before yielding, so
+        # jump the anchor to just before `after` (see _anchored_dtstart).
+        dtstart=_anchored_dtstart(master, after),
         until=master.recurrence_end,  # None → unbounded
     )
     yield from rule.xafter(after, count=limit, inc=True)

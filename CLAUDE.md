@@ -68,6 +68,10 @@ Every bug fix must ship with a regression test. Write the test alongside the fix
 
 **Exception - purely visual/CSS fixes don't get a unit test.** This rule targets *behavioral* bugs (backend logic, parsing, permissions, data handling). For a fix that only changes presentation (Tailwind/daisyUI classes, template markup, spacing, alignment, responsive layout) with no change in behavior, **do not** add a test that asserts CSS class strings are present in rendered HTML (`assertIn('h-auto', html)`). Such tests are worthless: they re-encode the template's class list at the same level of abstraction, they pass even when the layout is visually broken (a class string being present proves nothing about how it renders), and they break on any equally-correct restyle. Validate visual fixes by eye (or a real browser/Playwright rendering test that checks computed geometry if a genuine safety net is warranted) - never by class-presence assertions. Recompiling the CSS bundle after class changes is still required.
 
+### Code Comments
+
+Comment only when it helps someone understand the code when re-reading it cold in 6 months - never to explain the change to the PR reviewer. "Now uses X", "moved from Y", "replaces the old Z", justifications of why the change is correct: that context belongs in the commit message and PR description, and becomes noise the moment the PR merges. Always prefer making the code self-explanatory through variable and function names over adding a comment; a comment that paraphrases what the code already says is noise to delete. The comments worth writing state what the code cannot: an invariant, a non-obvious constraint, a gotcha, why the seemingly simpler approach doesn't work.
+
 ### Changelog
 
 `CHANGELOG.md` is written for **end users**, not developers. Each release describes what changed from the user's perspective, in plain language.
@@ -393,6 +397,28 @@ with source.content.open('rb') as f:
 - Wrap the open + save in `try/except (FileNotFoundError, OSError)` whenever copying user-uploaded content. A vanished blob otherwise surfaces as a bare 500 with no breadcrumbs. Mirror the response code of the closest read endpoint (404 for chat / mail attachment paths) and log the path through `scrub()` before re-raising or returning.
 - `ContentFile(source.read(), ...)` happens to be _committed=False so it copies correctly, but it buffers the entire file in memory before re-emitting it. For anything that could grow (>1MB), prefer the `DjangoFile(open_stream, ...)` idiom.
 - Existing precedent in the codebase: `workspace/files/webdav/resources.py:_copy_as` (already correct), `workspace/chat/views_attachments.py:AttachmentSaveToFilesView`, `workspace/mail/views.py:MailAttachmentSaveToFilesView`, `workspace/files/services/_storage_ops.py:copy_node`.
+
+### Prefer the standard library over hand-rolled collection plumbing
+
+We target Python 3.14, so reach for a stdlib primitive before writing manual loops over lists/sets: `itertools.batched` (chunking), `itertools.pairwise` (adjacent pairs), `itertools.chain.from_iterable` (flattening), `collections.Counter` (counting), `collections.defaultdict` (grouping), `dict.fromkeys` (order-preserving dedup), plus `math.prod` / `itertools.accumulate` / `statistics`.
+
+Favour clarity, not cleverness: leave a loop explicit when it carries per-iteration side effects, and mind the [Refactoring & Optimization](#refactoring--optimization) rule (a test must cover the code first; the swap must preserve behavior). Two `batched` gotchas: it yields **tuples** (not slices), and ruff (`B911`) requires an explicit `strict=` — use `strict=False` for the usual short-final-batch case.
+
+### Multi-type except clauses - unparenthesized is the house style (PEP 758)
+
+We target Python 3.14, where PEP 758 makes `except ValueError, TypeError:` valid without parentheses (as long as there is no `as` capture). The codebase uses that form everywhere:
+
+```python
+try:
+    return uuid.UUID(str(value))
+except ValueError, TypeError:          # ✅ house style (no `as`)
+    return None
+
+except (ValueError, TypeError) as exc: # ✅ parentheses still MANDATORY with `as`
+    ...
+```
+
+**Never rewrite these into `except (ValueError, TypeError):`.** If the code raises `SyntaxError` at import, you are running Python <= 3.13 (an old venv, a sandbox): that is an environment problem, fix the interpreter, not the code. A blanket parenthesization "fix" touches 40+ files of pure noise and has already been reverted once.
 
 ## Frontend Conventions
 

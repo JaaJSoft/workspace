@@ -124,6 +124,7 @@ class ActivityRegistry:
         viewer_id: int | None = None,
         source: str | None = None,
         exclude_actor_id: int | None = None,
+        allowed_sources: set[str] | None = None,
     ) -> list[dict]:
         if source is not None:
             info = self._providers.get(source)
@@ -150,6 +151,8 @@ class ActivityRegistry:
         fetch_count = limit + offset
         all_events: list[dict] = []
         for info in self._providers.values():
+            if allowed_sources is not None and info.slug not in allowed_sources:
+                continue
             try:
                 provider = info.provider_cls()
                 events = provider.get_recent_events(

@@ -62,28 +62,19 @@ or references a past discussion."""
 
         from django.utils import timezone
 
-        from workspace.chat.models import Message
-        from workspace.chat.services.conversations import user_conversation_ids
+        from workspace.chat.services.message_search import search_messages_qs
 
-        # Determine scope
         conv_only = args.conversation_only
         if conv_only and conversation_id:
-            conv_ids = [conversation_id]
+            qs = search_messages_qs(user, query, conversation_id=conversation_id)
         else:
-            conv_ids = list(user_conversation_ids(user))
+            qs = search_messages_qs(user, query)
+        qs = qs.select_related("author", "conversation")
 
-        qs = Message.objects.filter(
-            conversation_id__in=conv_ids,
-            deleted_at__isnull=True,
-            body__icontains=query,
-        ).select_related("author", "conversation")
-
-        # Author filter
         author = args.author.strip()
         if author:
             qs = qs.filter(author__username__iexact=author)
 
-        # Date range filter
         date_range = args.date_range.strip()
         if date_range:
             now = timezone.now()
@@ -94,13 +85,12 @@ or references a past discussion."""
             elif date_range == "30d":
                 qs = qs.filter(created_at__gte=now - timedelta(days=30))
 
-        # Attachment filters
         if args.has_files:
             qs = qs.filter(attachments__isnull=False).distinct()
         if args.has_images:
             qs = qs.filter(attachments__mime_type__startswith="image/").distinct()
 
-        matches = qs.order_by("-created_at")[:20]
+        matches = qs[:20]
         if not matches:
             return f'No messages found matching "{query}".'
 

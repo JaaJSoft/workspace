@@ -45,8 +45,7 @@ def sync_external_calendar(external_calendar):
     # no-op syncs: feeds that don't support ETag/If-None-Match return
     # 200 on every poll, and without this check ``update_or_create``
     # would rewrite every row (and advance ``updated_at``) every 15 min
-    # even when the upstream content is unchanged. Mirrors the
-    # skip-write-when-unchanged pattern from set_setting (PR #179).
+    # even when the upstream content is unchanged.
     existing_by_uid = {
         e.ical_uid: e
         for e in Event.objects.filter(

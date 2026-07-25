@@ -106,6 +106,66 @@ class BuildRruleTests(TestCase):
         for occ in occs:
             self.assertGreaterEqual(occ, range_start)
 
+    def test_old_master_narrow_window_exact_occurrences(self):
+        """A years-old daily master expanded over a narrow window yields
+        exactly the in-window occurrences."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        start = now - timedelta(days=730)
+        master = self._make_master("daily", start=start)
+        range_start = now
+        range_end = now + timedelta(days=3)
+        occs = list(_build_rrule(master, range_start, range_end))
+        self.assertEqual(occs, [now, now + timedelta(days=1), now + timedelta(days=2)])
+
+    def test_old_master_with_interval_keeps_series_phase(self):
+        """The window jump must not re-anchor the series: occurrences of an
+        every-3-days master stay aligned to the master's start."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        # 100 days ago; 100 % 3 == 1, so the next in-phase occurrence
+        # after `now` is now + 2 days.
+        start = now - timedelta(days=100)
+        master = self._make_master("daily", start=start, interval=3)
+        range_start = now
+        range_end = now + timedelta(days=7)
+        occs = list(_build_rrule(master, range_start, range_end))
+        self.assertEqual(occs, [now + timedelta(days=2), now + timedelta(days=5)])
+
+    def test_occurrence_ending_exactly_at_range_start_excluded(self):
+        """Overlap is strict: an occurrence ending exactly at range_start
+        does not overlap the window."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        start = now - timedelta(hours=2)
+        master = self._make_master("daily", start=start, end=now)
+        range_start = now
+        range_end = now + timedelta(days=1)
+        occs = list(_build_rrule(master, range_start, range_end))
+        # Day 0 ends exactly at range_start (excluded); day 1 overlaps.
+        self.assertEqual(occs, [start + timedelta(days=1)])
+
+    def test_old_master_with_duration_overlap_at_window_edge(self):
+        """An old master whose in-progress occurrence straddles range_start
+        is still yielded after the window jump."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        start = now - timedelta(days=365, hours=2)
+        end = start + timedelta(hours=3)  # daily 3h event, straddles `now`
+        master = self._make_master("daily", start=start, end=end)
+        range_start = now
+        range_end = now + timedelta(days=1)
+        occs = list(_build_rrule(master, range_start, range_end))
+        # The occurrence that started 2h ago (ends in 1h) plus tomorrow's
+        # occurrence starting at now+22h, which is inside the window.
+        self.assertEqual(
+            occs,
+            [now - timedelta(hours=2), now + timedelta(hours=22)],
+        )
+
+    def test_occurrence_starting_at_range_start_included(self):
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        start = now - timedelta(days=5)
+        master = self._make_master("daily", start=start)
+        occs = list(_build_rrule(master, now, now + timedelta(days=1)))
+        self.assertEqual(occs, [now])
+
 
 class MakeVirtualOccurrenceTests(TestCase):
     def setUp(self):
@@ -192,6 +252,29 @@ class NextOccurrencesAfterTests(TestCase):
         self.assertEqual(len(occs), 20)
         for occ in occs:
             self.assertGreaterEqual(occ, now)
+
+    def test_past_master_keeps_series_phase(self):
+        """Skipping past occurrences must not re-anchor the series."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        # 100 days ago, every 3 days; 100 % 3 == 1, so the next in-phase
+        # occurrence at or after `now` is now + 2 days.
+        master = self._make_master("daily", start=now - timedelta(days=100), interval=3)
+        occs = list(next_occurrences_after(master, after=now, limit=3))
+        self.assertEqual(
+            occs,
+            [
+                now + timedelta(days=2),
+                now + timedelta(days=5),
+                now + timedelta(days=8),
+            ],
+        )
+
+    def test_past_master_occurrence_exactly_at_after_included(self):
+        """`after` is inclusive: an in-phase occurrence at `after` is yielded."""
+        now = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        master = self._make_master("daily", start=now - timedelta(days=30))
+        occs = list(next_occurrences_after(master, after=now, limit=2))
+        self.assertEqual(occs, [now, now + timedelta(days=1)])
 
     def test_limit_respected(self):
         """limit=5 → exactly 5 occurrences."""

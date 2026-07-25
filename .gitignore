@@ -144,3 +144,7 @@ test_db.sqlite3*
 # committed so a fresh clone has the editor immediately - no `npm install` required
 # for devs who only touch Python)
 /scripts/editor/node_modules/
+
+# Screenshot capture asset cache (scripts/screenshots.py downloads the CDN
+# scripts here so captures are deterministic and work offline)
+/scripts/.screenshot-assets/

@@ -1,3 +1,27 @@
+/* ── Deterministic initials-fallback colors ───────────────────── */
+
+// Mirrors AVATAR_PALETTE in scripts/seed_demo.py (the Tailwind *-500 RGB
+// values); keep both lists in lockstep so demo-generated avatars and the
+// initials fallback read as one family.
+const AVATAR_COLORS = [
+  'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500',
+  'bg-emerald-500', 'bg-cyan-500', 'bg-blue-500', 'bg-indigo-500',
+  'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500',
+];
+
+/**
+ * Stable background class for a user's initials avatar.
+ *
+ * @param {number|string} userId
+ * @returns {string} one of AVATAR_COLORS, or 'bg-neutral' for invalid input
+ */
+window.userAvatarColorClass = function(userId) {
+  const id = typeof userId === 'number' ? userId : Number.parseInt(userId, 10);
+  if (!Number.isInteger(id)) return 'bg-neutral';
+  const n = AVATAR_COLORS.length;
+  return AVATAR_COLORS[((id % n) + n) % n];
+};
+
 /**
  * Generate avatar HTML for a user.
  * Attempts to load the avatar image; falls back to initials on error.
@@ -11,6 +35,7 @@ window.userAvatarHtml = function(userId, username, sizeClass, options) {
   const showPresence = !options || options.presence !== false;
   const initial = (username || '?')[0].toUpperCase();
   const imgUrl = `/api/v1/users/${userId}/avatar`;
+  const colorClass = window.userAvatarColorClass(userId);
 
   // Keep the ring SHAPE static (like the dot below) so the avatar always has
   // a visible ring; only its COLOR comes from the reactive `:class` binding.
@@ -29,10 +54,14 @@ window.userAvatarHtml = function(userId, username, sizeClass, options) {
   return `<div class="avatar relative" data-user-id="${userId}">` +
     `<div class="${sizeClass} rounded-full overflow-hidden${ringShape}"${ringAttr}>` +
       `<img src="${imgUrl}" alt="${username}" class="block w-full h-full object-cover" ` +
+        // The initials fallback must ADD classes, never overwrite className:
+        // overwriting would wipe the static ring shape above (and the colour
+        // class Alpine already applied), leaving the presence dot without its
+        // matching ring for every user whose avatar 404s.
         `onerror="this.onerror=null;` +
         `let d=this.closest('.avatar');` +
-        `d.className='avatar placeholder relative';` +
-        `d.firstElementChild.className='${sizeClass} bg-neutral text-neutral-content rounded-full flex items-center justify-center';` +
+        `d.classList.add('placeholder');` +
+        `d.firstElementChild.classList.add('${colorClass}','text-white','flex','items-center','justify-center');` +
         `this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${initial}'}));" />` +
     `</div>` +
     dotHtml +

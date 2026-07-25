@@ -89,19 +89,32 @@ def update_pyproject(version: str) -> None:
     print(f"  pyproject.toml -> {version}")
 
 
+def sub_or_die(pattern: str, repl: str, content: str, filename: str) -> str:
+    # A pattern that no longer matches (e.g. after a wording change in the
+    # target file) must abort the release, not silently skip the update.
+    content, count = re.subn(pattern, repl, content)
+    if count == 0:
+        print(f"Error: pattern not found in {filename}: {pattern}")
+        print(f"The {filename} wording changed; update scripts/release.py to match.")
+        sys.exit(1)
+    return content
+
+
 def update_license(version: str, change_date: str) -> None:
     path = ROOT / "LICENSE"
     content = path.read_text(encoding="utf-8")
 
-    content = re.sub(
+    content = sub_or_die(
         r"(Licensed Work:\s+JaaJSoft Workspace version )\S+",
         rf"\g<1>{version}.",
         content,
+        "LICENSE",
     )
-    content = re.sub(
+    content = sub_or_die(
         r"(Change Date:\s+)\S+",
         rf"\g<1>{change_date}",
         content,
+        "LICENSE",
     )
 
     path.write_text(content, encoding="utf-8")
@@ -112,10 +125,11 @@ def update_readme(change_date: str) -> None:
     path = ROOT / "README.md"
     content = path.read_text(encoding="utf-8")
 
-    content = re.sub(
-        r"(under the MIT License on )\d{4}-\d{2}-\d{2}",
+    content = sub_or_die(
+        r"(to MIT License on )\d{4}-\d{2}-\d{2}",
         rf"\g<1>{change_date}",
         content,
+        "README.md",
     )
 
     path.write_text(content, encoding="utf-8")

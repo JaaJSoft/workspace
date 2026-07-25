@@ -65,7 +65,7 @@ or when the user asks to read, open, or see the details of a specific email."""
 
         parts = [
             f"Subject: {msg.subject or '(no subject)'}",
-            f"From: {_fmt_addr(msg.from_address)}",
+            f"From: {_fmt_addr({'name': msg.from_name, 'email': msg.from_email})}",
             f"To: {', '.join(_fmt_addr(a) for a in msg.to_addresses)}",
         ]
         if msg.cc_addresses:
@@ -95,40 +95,28 @@ Use read_email with the returned UUID to get the full content."""
         if not query:
             return "Error: query is required"
 
-        from django.db.models import Q
-
         from workspace.mail.models import MailMessage
         from workspace.mail.queries import user_account_ids
+        from workspace.mail.search import fts_messages
 
         account_ids = user_account_ids(user)
-        qs = (
+        base = (
             MailMessage.objects.filter(
                 account_id__in=account_ids, deleted_at__isnull=True
             )
             .exclude(folder__is_hidden=True)
-            .filter(
-                Q(subject__icontains=query)
-                | Q(snippet__icontains=query)
-                | Q(from_address__icontains=query)
-            )
             .select_related("folder")
         )
-
         if args.unread_only:
-            qs = qs.filter(is_read=False)
+            base = base.filter(is_read=False)
         if args.starred_only:
-            qs = qs.filter(is_starred=True)
+            base = base.filter(is_starred=True)
         if args.has_attachments:
-            qs = qs.filter(has_attachments=True)
+            base = base.filter(has_attachments=True)
 
-        matches = qs.order_by("-date")[:20]
+        matches = fts_messages(base, query).order_by("-search_rank", "-date")[:20]
         if not matches:
             return f'No emails found matching "{query}".'
-
-        def _sender(addr):
-            if isinstance(addr, dict):
-                return addr.get("name") or addr.get("email", "")
-            return str(addr)
 
         results = []
         for msg in matches:
@@ -136,7 +124,7 @@ Use read_email with the returned UUID to get the full content."""
                 {
                     "uuid": str(msg.uuid),
                     "subject": msg.subject or "(no subject)",
-                    "from": _sender(msg.from_address),
+                    "from": msg.from_name or msg.from_email,
                     "date": msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else "",
                     "folder": msg.folder.display_name if msg.folder else "",
                     "is_read": msg.is_read,

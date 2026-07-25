@@ -1,6 +1,10 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.core.files.base import ContentFile
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -576,6 +580,38 @@ class FilesActionsEndpointTests(APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_group_file_actions(self):
+        """A group member gets EDIT-level actions on a group file."""
+        group = Group.objects.create(name="bulkteam")
+        self.other.groups.add(group)
+        root = File.objects.create(
+            owner=self.owner,
+            name="Team",
+            node_type=File.NodeType.FOLDER,
+            group=group,
+        )
+        f = File.objects.create(
+            owner=self.owner,
+            name="team.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            content=ContentFile(b"t", name="team.txt"),
+            group=group,
+            parent=root,
+        )
+        self.client.force_authenticate(user=self.other)
+        resp = self.client.post(
+            "/api/v1/files/actions",
+            {"uuids": [str(f.uuid)]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        action_ids = [a["id"] for a in resp.json()[str(f.uuid)]]
+        # EDIT level: full CRUD, unlike a read-only share
+        self.assertIn("delete", action_ids)
+        self.assertIn("rename", action_ids)
+        self.assertIn("download", action_ids)
+
     def test_shared_file_restricted_actions(self):
         f = File.objects.create(
             owner=self.owner,
@@ -602,3 +638,92 @@ class FilesActionsEndpointTests(APITestCase):
         self.assertIn("download", action_ids)
         self.assertNotIn("cut", action_ids)
         self.assertNotIn("delete", action_ids)
+
+
+class FilesActionsQueryCountTests(APITestCase):
+    """POST /api/v1/files/actions must not query per file (regression for
+    the per-file get_permission N+1)."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="qcowner",
+            email="qcowner@example.com",
+            password="pass123",
+        )
+        self.member = User.objects.create_user(
+            username="qcmember",
+            email="qcmember@example.com",
+            password="pass123",
+        )
+
+    def tearDown(self):
+        # is_journal_note reads a cached user setting; LocMemCache is
+        # process-global and would leak into other tests otherwise.
+        cache.clear()
+
+    def _query_count(self, uuids):
+        with CaptureQueriesContext(connection) as ctx:
+            resp = self.client.post(
+                "/api/v1/files/actions",
+                {"uuids": uuids},
+                format="json",
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        return len(ctx.captured_queries)
+
+    def _assert_constant_queries(self, files):
+        uuids = [str(f.uuid) for f in files]
+        self.client.force_authenticate(user=self.member)
+        # Warm the settings cache (is_journal_note) so both measured
+        # requests see the same cache state.
+        self._query_count(uuids)
+        single = self._query_count(uuids[:1])
+        batch = self._query_count(uuids)
+        self.assertEqual(
+            single,
+            batch,
+            f"query count grew with file count: {single} for 1 file, "
+            f"{batch} for {len(files)} files",
+        )
+
+    def test_constant_queries_for_shared_files(self):
+        files = []
+        for i in range(4):
+            f = File.objects.create(
+                owner=self.owner,
+                name=f"s{i}.txt",
+                node_type=File.NodeType.FILE,
+                mime_type="text/plain",
+                content=ContentFile(b"s", name=f"s{i}.txt"),
+            )
+            FileShare.objects.create(
+                file=f,
+                shared_by=self.owner,
+                shared_with=self.member,
+                permission=FileShare.Permission.READ_ONLY,
+            )
+            files.append(f)
+        self._assert_constant_queries(files)
+
+    def test_constant_queries_for_group_files(self):
+        group = Group.objects.create(name="qcteam")
+        self.member.groups.add(group)
+        root = File.objects.create(
+            owner=self.owner,
+            name="Team",
+            node_type=File.NodeType.FOLDER,
+            group=group,
+        )
+        files = [
+            File.objects.create(
+                owner=self.owner,
+                name=f"g{i}.txt",
+                node_type=File.NodeType.FILE,
+                mime_type="text/plain",
+                content=ContentFile(b"g", name=f"g{i}.txt"),
+                group=group,
+                parent=root,
+            )
+            for i in range(4)
+        ]
+        self._assert_constant_queries(files)

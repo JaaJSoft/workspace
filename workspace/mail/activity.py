@@ -72,12 +72,9 @@ class MailActivityProvider(ActivityProvider):
             if is_sent:
                 actor_name = msg.account.owner.get_full_name()
             else:
-                actor_name = ""
-                if msg.from_address:
-                    actor_name = msg.from_address.get("name") or msg.from_address.get(
-                        "email", ""
-                    )
-                actor_name = actor_name or msg.account.owner.get_full_name()
+                actor_name = (
+                    msg.from_name or msg.from_email or msg.account.owner.get_full_name()
+                )
 
             events.append(
                 {

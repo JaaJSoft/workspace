@@ -3,29 +3,46 @@ from collections import Counter, defaultdict
 
 from django.db.models import Q
 
+from workspace.common.search import apply_fulltext
+from workspace.common.search.schema import Col, FulltextIndex
 from workspace.core.module_registry import SearchResult, SearchTag
 
 from .models import MailMessage
 from .queries import user_account_ids
 
+# Column order is frozen into the applied bm25 config
+# bm25(10.0, 2.0, 4.0, 4.0, 1.0): subject A, snippet C, from_email B,
+# from_name B, body_text D. Do not reorder without a migration.
+MAIL_FTS = FulltextIndex(
+    table="mail_mailmessage",
+    columns=(
+        Col("subject", weight="A"),
+        Col("snippet", weight="C"),
+        Col("from_email", weight="B"),
+        Col("from_name", weight="B"),
+        Col("body_text", weight="D", cap=100_000),
+    ),
+)
+
+
+def fts_messages(qs, query):
+    """Apply mail full-text search to a MailMessage queryset.
+
+    Returns qs filtered to matches and annotated with `search_rank`.
+    Caller applies order_by.
+    """
+    return apply_fulltext(qs, query, index=MAIL_FTS)
+
 
 def search_mail(query, user, limit):
     account_ids = user_account_ids(user)
 
-    messages = (
+    base = (
         MailMessage.objects.select_related("folder")
-        .filter(
-            account_id__in=account_ids,
-            deleted_at__isnull=True,
-        )
+        .filter(account_id__in=account_ids, deleted_at__isnull=True)
         .exclude(folder__is_hidden=True)
-        .filter(
-            Q(subject__icontains=query)
-            | Q(snippet__icontains=query)
-            | Q(from_address__icontains=query)
-        )
-        .order_by("-date")[:limit]
     )
+    messages = fts_messages(base, query).order_by("-search_rank", "-date")[:limit]
 
     return [
         SearchResult(
@@ -66,12 +83,12 @@ def search_contacts(query, user, limit):
     messages = (
         MailMessage.objects.filter(account_id__in=account_ids, deleted_at__isnull=True)
         .filter(
-            Q(from_address__icontains=query)
-            | Q(to_addresses__icontains=query)
-            | Q(cc_addresses__icontains=query)
+            Q(from_email__icontains=query)
+            | Q(from_name__icontains=query)
+            | Q(recipients_text__icontains=query)
         )
         .order_by("-date")
-        .only("from_address", "to_addresses", "cc_addresses")[:500]
+        .only("from_email", "from_name", "to_addresses", "cc_addresses")[:500]
     )
 
     q_lower = query.lower()
@@ -80,9 +97,8 @@ def search_contacts(query, user, limit):
 
     for msg in messages:
         addresses = []
-        fa = msg.from_address
-        if isinstance(fa, dict) and fa.get("email"):
-            addresses.append(fa)
+        if msg.from_email:
+            addresses.append({"name": msg.from_name, "email": msg.from_email})
         for field in (msg.to_addresses, msg.cc_addresses):
             if isinstance(field, list):
                 addresses.extend(

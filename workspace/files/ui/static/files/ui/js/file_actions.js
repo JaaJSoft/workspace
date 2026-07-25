@@ -72,10 +72,6 @@ window.fileActions = {
     },
 
     /**
-     * Rename a file/folder. Resolves with the updated object, rejects on error.
-     * Closes the dialog on success.
-     */
-    /**
      * Create a group folder. Resolves with the created object, rejects on error.
      * Closes the dialog on success.
      */

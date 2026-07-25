@@ -57,12 +57,12 @@ class ContactAutocompleteView(CacheControlMixin, APIView):
         rows = (
             MailMessage.objects.filter(account_filter, deleted_at__isnull=True)
             .filter(
-                Q(from_address__icontains=q)
-                | Q(to_addresses__icontains=q)
-                | Q(cc_addresses__icontains=q)
+                Q(from_email__icontains=q)
+                | Q(from_name__icontains=q)
+                | Q(recipients_text__icontains=q)
             )
             .order_by("-date")
-            .values("from_address", "to_addresses", "cc_addresses")[:500]
+            .values("from_email", "from_name", "to_addresses", "cc_addresses")[:500]
         )
 
         # Extract all addresses and count frequency
@@ -71,9 +71,8 @@ class ContactAutocompleteView(CacheControlMixin, APIView):
 
         for row in rows:
             addresses = []
-            fa = row["from_address"]
-            if isinstance(fa, dict) and fa.get("email"):
-                addresses.append(fa)
+            if row["from_email"]:
+                addresses.append({"name": row["from_name"], "email": row["from_email"]})
             for field in (row["to_addresses"], row["cc_addresses"]):
                 if isinstance(field, list):
                     addresses.extend(

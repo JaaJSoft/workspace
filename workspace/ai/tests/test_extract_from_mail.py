@@ -54,7 +54,7 @@ class ExtractFromMailTests(TestCase):
             date=dj_tz.now(),
             subject="Train",
             body_text="Confirmed for tomorrow 8am.",
-            from_address={"email": "sncf@x.com"},
+            from_email="sncf@x.com",
         )
         self.ai_task = AITask.objects.create(
             owner=self.user,

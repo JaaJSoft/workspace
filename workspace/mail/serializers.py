@@ -160,6 +160,12 @@ class MailAttachmentSerializer(serializers.ModelSerializer):
 class MailMessageListSerializer(serializers.ModelSerializer):
     attachments_count = serializers.IntegerField(read_only=True)
     labels = serializers.SerializerMethodField()
+    # The {name, email} shape is an API contract (mail UI JS reads it),
+    # not a stored field - the model only has from_name/from_email.
+    from_address = serializers.SerializerMethodField()
+
+    def get_from_address(self, obj):
+        return {"name": obj.from_name, "email": obj.from_email}
 
     class Meta:
         model = MailMessage
@@ -227,6 +233,11 @@ class MailMessageDetailSerializer(serializers.ModelSerializer):
     labels = serializers.SerializerMethodField()
     ai_summary_html = serializers.SerializerMethodField()
     extractions = serializers.SerializerMethodField()
+    # Same {name, email} API contract as the list serializer.
+    from_address = serializers.SerializerMethodField()
+
+    def get_from_address(self, obj):
+        return {"name": obj.from_name, "email": obj.from_email}
 
     class Meta:
         model = MailMessage

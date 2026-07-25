@@ -13,9 +13,13 @@ Expects in context:
 
 Used by:
   - chat/ui/partials/conversation_list.html (Pinned section + merged list)
+  - chat/ui/partials/_conversation_items.html (targeted alpine-ajax swaps)
+
+The id="conv-item-<uuid>" is the alpine-ajax target for per-conversation
+refreshes (refreshConversationItems in conversations.js) — keep it stable.
 {% endcomment %}
 
-<li class="list-none group/conv"
+<li id="conv-item-{{ conv.uuid }}" class="list-none group/conv"
     {% if pinned %}
     draggable="true"
     data-conversation-uuid="{{ conv.uuid }}"

@@ -40,6 +40,17 @@ def visible_modules(user):
     return [m for m in registry.get_active() if user_can_see_module(user, m)]
 
 
+def hidden_module_slugs(user) -> set[str]:
+    """Slugs of registered modules *user* may NOT see.
+
+    The complement of a "visible slugs" set on purpose: slugs that are not
+    registered modules (e.g. an activity source without a module) are absent
+    from this set and therefore stay visible, matching
+    ``is_module_slug_visible``.
+    """
+    return {m.slug for m in registry.get_all() if not user_can_see_module(user, m)}
+
+
 def filter_visible_commands(user, commands):
     """Keep only commands whose owning module is visible to *user*."""
     return [cmd for cmd in commands if is_module_slug_visible(user, cmd.module_slug)]

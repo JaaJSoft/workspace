@@ -292,7 +292,8 @@ class MailSearchTests(TestCase):
             imap_uid=1,
             subject="Invoice #1234",
             snippet="Please pay",
-            from_address={"email": "billing@corp.com", "name": "Billing"},
+            from_name="Billing",
+            from_email="billing@corp.com",
             date=timezone.now(),
         )
 

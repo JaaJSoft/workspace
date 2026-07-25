@@ -40,3 +40,31 @@ test('rounds down to the largest whole unit at each boundary', () => {
   assert.equal(_formatTimeAgo(90 * 60), '1 hour ago');
   assert.equal(_formatTimeAgo(36 * 3600), '1 day ago');
 });
+
+test('userAvatarColorClass is deterministic and covers a 12-color palette', () => {
+  assert.equal(ctx.userAvatarColorClass(7), ctx.userAvatarColorClass(7));
+  const palette = new Set();
+  for (let id = 0; id < 12; id++) palette.add(ctx.userAvatarColorClass(id));
+  assert.equal(palette.size, 12);
+  for (const cls of palette) assert.match(cls, /^bg-[a-z]+-500$/);
+});
+
+test('userAvatarColorClass wraps around the palette and accepts numeric strings', () => {
+  assert.equal(ctx.userAvatarColorClass(12), ctx.userAvatarColorClass(0));
+  assert.equal(ctx.userAvatarColorClass(25), ctx.userAvatarColorClass(1));
+  assert.equal(ctx.userAvatarColorClass('5'), ctx.userAvatarColorClass(5));
+});
+
+test('userAvatarColorClass falls back to bg-neutral on invalid input', () => {
+  assert.equal(ctx.userAvatarColorClass(undefined), 'bg-neutral');
+  assert.equal(ctx.userAvatarColorClass(null), 'bg-neutral');
+  assert.equal(ctx.userAvatarColorClass(''), 'bg-neutral');
+  assert.equal(ctx.userAvatarColorClass('abc'), 'bg-neutral');
+  assert.equal(ctx.userAvatarColorClass(3.5), 'bg-neutral');
+});
+
+test('userAvatarHtml embeds the per-user color class in its onerror fallback', () => {
+  const html = ctx.userAvatarHtml(5, 'Bob', 'w-8 h-8');
+  assert.ok(html.includes(ctx.userAvatarColorClass(5)));
+  assert.ok(html.includes('text-white'));
+});

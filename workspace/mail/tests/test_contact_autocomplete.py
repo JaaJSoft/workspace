@@ -75,7 +75,8 @@ class AutocompleteTestMixin:
         folder = folder or self.inbox
         account = account or self.account
         defaults = {
-            "from_address": {"name": "Sender", "email": "sender@example.com"},
+            "from_name": "Sender",
+            "from_email": "sender@example.com",
             "to_addresses": [{"name": "Me", "email": "me@example.com"}],
             "cc_addresses": [],
             "subject": "Test",
@@ -131,9 +132,10 @@ class BasicSearchTests(AutocompleteTestMixin, APITestCase):
         super().setUp()
         self.client.force_authenticate(self.user)
 
-    def test_match_from_address_email(self):
+    def test_match_sender_email(self):
         self._create_message(
-            from_address={"name": "Alice", "email": "alice@example.com"},
+            from_name="Alice",
+            from_email="alice@example.com",
         )
         resp = self.client.get(URL, {"q": "alice"})
         data = resp.json()
@@ -161,7 +163,8 @@ class BasicSearchTests(AutocompleteTestMixin, APITestCase):
 
     def test_match_by_name(self):
         self._create_message(
-            from_address={"name": "Jean-Pierre Dupont", "email": "jp@example.com"},
+            from_name="Jean-Pierre Dupont",
+            from_email="jp@example.com",
         )
         resp = self.client.get(URL, {"q": "dupont"})
         data = resp.json()
@@ -171,7 +174,8 @@ class BasicSearchTests(AutocompleteTestMixin, APITestCase):
 
     def test_case_insensitive(self):
         self._create_message(
-            from_address={"name": "Alice", "email": "Alice@Example.COM"},
+            from_name="Alice",
+            from_email="Alice@Example.COM",
         )
         resp = self.client.get(URL, {"q": "alice"})
         data = resp.json()
@@ -180,7 +184,8 @@ class BasicSearchTests(AutocompleteTestMixin, APITestCase):
 
     def test_no_match_returns_empty(self):
         self._create_message(
-            from_address={"name": "Alice", "email": "alice@example.com"},
+            from_name="Alice",
+            from_email="alice@example.com",
         )
         resp = self.client.get(URL, {"q": "zzz"})
         self.assertEqual(resp.json(), [])
@@ -196,7 +201,8 @@ class DeduplicationTests(AutocompleteTestMixin, APITestCase):
         for i in range(5):
             self._create_message(
                 imap_uid=100 + i,
-                from_address={"name": "Alice", "email": "alice@example.com"},
+                from_name="Alice",
+                from_email="alice@example.com",
             )
         resp = self.client.get(URL, {"q": "alice"})
         data = resp.json()
@@ -207,11 +213,13 @@ class DeduplicationTests(AutocompleteTestMixin, APITestCase):
         """alice@example.com and Alice@Example.COM should be the same contact."""
         self._create_message(
             imap_uid=1,
-            from_address={"name": "Alice", "email": "alice@example.com"},
+            from_name="Alice",
+            from_email="alice@example.com",
         )
         self._create_message(
             imap_uid=2,
-            from_address={"name": "Alice", "email": "Alice@Example.COM"},
+            from_name="Alice",
+            from_email="Alice@Example.COM",
         )
         resp = self.client.get(URL, {"q": "alice"})
         data = resp.json()
@@ -222,15 +230,18 @@ class DeduplicationTests(AutocompleteTestMixin, APITestCase):
         """When same email has different names, keep the most frequent one."""
         self._create_message(
             imap_uid=1,
-            from_address={"name": "A. Smith", "email": "alex@example.com"},
+            from_name="A. Smith",
+            from_email="alex@example.com",
         )
         self._create_message(
             imap_uid=2,
-            from_address={"name": "Alex Smith", "email": "alex@example.com"},
+            from_name="Alex Smith",
+            from_email="alex@example.com",
         )
         self._create_message(
             imap_uid=3,
-            from_address={"name": "Alex Smith", "email": "alex@example.com"},
+            from_name="Alex Smith",
+            from_email="alex@example.com",
         )
         resp = self.client.get(URL, {"q": "alex"})
         data = resp.json()
@@ -240,7 +251,8 @@ class DeduplicationTests(AutocompleteTestMixin, APITestCase):
     def test_no_name_fallback(self):
         """Contacts with no name should have empty string."""
         self._create_message(
-            from_address={"name": "", "email": "noname@example.com"},
+            from_name="",
+            from_email="noname@example.com",
         )
         resp = self.client.get(URL, {"q": "noname"})
         data = resp.json()
@@ -276,7 +288,8 @@ class FrequencySortTests(AutocompleteTestMixin, APITestCase):
         for i in range(20):
             self._create_message(
                 imap_uid=100 + i,
-                from_address={"name": f"User {i}", "email": f"user{i}@search.com"},
+                from_name=f"User {i}",
+                from_email=f"user{i}@search.com",
             )
         resp = self.client.get(URL, {"q": "search.com"})
         data = resp.json()
@@ -293,13 +306,15 @@ class AccountFilterTests(AutocompleteTestMixin, APITestCase):
             imap_uid=1,
             account=self.account,
             folder=self.inbox,
-            from_address={"name": "Alice", "email": "alice@filter.com"},
+            from_name="Alice",
+            from_email="alice@filter.com",
         )
         self._create_message(
             imap_uid=2,
             account=self.account2,
             folder=self.inbox2,
-            from_address={"name": "Bob", "email": "bob@filter.com"},
+            from_name="Bob",
+            from_email="bob@filter.com",
         )
 
         # Without filter: both appear
@@ -327,7 +342,8 @@ class AccountFilterTests(AutocompleteTestMixin, APITestCase):
             imap_uid=1,
             account=self.other_account,
             folder=self.other_inbox,
-            from_address={"name": "Secret", "email": "secret@hidden.com"},
+            from_name="Secret",
+            from_email="secret@hidden.com",
         )
         resp = self.client.get(URL, {"q": "secret"})
         self.assertEqual(resp.json(), [])
@@ -342,7 +358,8 @@ class DeletedMessageTests(AutocompleteTestMixin, APITestCase):
         from django.utils import timezone
 
         self._create_message(
-            from_address={"name": "Deleted", "email": "deleted@example.com"},
+            from_name="Deleted",
+            from_email="deleted@example.com",
             deleted_at=timezone.now(),
         )
         resp = self.client.get(URL, {"q": "deleted"})
@@ -358,7 +375,8 @@ class MultipleFieldMatchTests(AutocompleteTestMixin, APITestCase):
 
     def test_matches_across_fields(self):
         self._create_message(
-            from_address={"name": "From User", "email": "from@multi.com"},
+            from_name="From User",
+            from_email="from@multi.com",
             to_addresses=[{"name": "To User", "email": "to@multi.com"}],
             cc_addresses=[{"name": "Cc User", "email": "cc@multi.com"}],
         )
@@ -367,10 +385,11 @@ class MultipleFieldMatchTests(AutocompleteTestMixin, APITestCase):
         self.assertEqual(emails, {"from@multi.com", "to@multi.com", "cc@multi.com"})
 
     def test_post_filter_excludes_non_matching_contacts(self):
-        """If a message matches via from_address, to_addresses contacts that
+        """If a message matches via its sender, to_addresses contacts that
         don't match the query themselves should not appear."""
         self._create_message(
-            from_address={"name": "Alice Target", "email": "alice@example.com"},
+            from_name="Alice Target",
+            from_email="alice@example.com",
             to_addresses=[{"name": "Unrelated", "email": "nobody@other.com"}],
         )
         resp = self.client.get(URL, {"q": "alice"})
@@ -387,7 +406,8 @@ class ResponseFormatTests(AutocompleteTestMixin, APITestCase):
 
     def test_response_fields(self):
         self._create_message(
-            from_address={"name": "Test User", "email": "test@format.com"},
+            from_name="Test User",
+            from_email="test@format.com",
         )
         resp = self.client.get(URL, {"q": "test@format"})
         data = resp.json()

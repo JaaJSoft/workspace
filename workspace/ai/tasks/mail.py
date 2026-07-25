@@ -3,6 +3,7 @@
 import logging
 import re
 from collections import defaultdict
+from itertools import batched
 
 import orjson
 from celery import shared_task
@@ -187,7 +188,14 @@ def classify_mail_messages(self, task_id: str):
                 for m in MailMessage.objects.filter(
                     uuid__in=message_uuids,
                     account__owner=ai_task.owner,
-                ).only("uuid", "subject", "from_address", "snippet", "account_id")
+                ).only(
+                    "uuid",
+                    "subject",
+                    "from_name",
+                    "from_email",
+                    "snippet",
+                    "account_id",
+                )
             }
             # Preserve the caller's input order. The DB returns rows in
             # PK (uuid) order which is random for v4 UUIDs, so the LLM
@@ -216,22 +224,16 @@ def classify_mail_messages(self, task_id: str):
                 label_names = [lbl.name for lbl in account_labels]
                 label_by_lower = {lbl.name.lower(): lbl for lbl in account_labels}
 
-                for batch_start in range(0, len(account_msgs), CLASSIFY_BATCH_SIZE):
-                    batch = account_msgs[
-                        batch_start : batch_start + CLASSIFY_BATCH_SIZE
-                    ]
+                for batch in batched(account_msgs, CLASSIFY_BATCH_SIZE, strict=False):
                     uuid_index = {i + 1: m for i, m in enumerate(batch)}
 
                     emails = []
                     for m in batch:
-                        from_addr = (
-                            m.from_address if isinstance(m.from_address, dict) else {}
-                        )
                         emails.append(
                             {
                                 "subject": m.subject or "",
-                                "from_name": from_addr.get("name", ""),
-                                "from_email": from_addr.get("email", ""),
+                                "from_name": m.from_name,
+                                "from_email": m.from_email,
                                 "snippet": m.snippet or "",
                             }
                         )

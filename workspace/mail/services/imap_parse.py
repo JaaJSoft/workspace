@@ -10,6 +10,8 @@ import nh3
 from django.core.files.base import ContentFile
 from django.db import transaction
 
+from .addresses import sender_columns
+
 # HTML sanitisation whitelist
 NH3_ALLOWED_TAGS = {
     "a",
@@ -127,12 +129,21 @@ def _collect_attachment(part, attachments_data, is_inline=False):
 
 
 @transaction.atomic
-def _parse_message(raw_email, account, folder, uid, flags_str):
-    """Parse a raw email and save it as a MailMessage."""
+def _parse_message(raw_email, account, folder, uid, flags_str, known_uids=None):
+    """Parse a raw email and save it as a MailMessage.
+
+    ``known_uids`` is the set of IMAP UIDs already present in this folder,
+    preloaded by the sync loop for its whole FETCH batch; membership then
+    replaces the per-message existence query. Callers without a batch at
+    hand can omit it and keep the single-row check.
+    """
     from ..models import MailAttachment, MailMessage
 
     # Check if already exists
-    if MailMessage.objects.filter(folder=folder, imap_uid=uid).exists():
+    if known_uids is not None:
+        if uid in known_uids:
+            return None
+    elif MailMessage.objects.filter(folder=folder, imap_uid=uid).exists():
         return None
 
     msg = email.message_from_bytes(raw_email)
@@ -246,7 +257,7 @@ def _parse_message(raw_email, account, folder, uid, flags_str):
         imap_uid=uid,
         in_reply_to=in_reply_to[:512],
         subject=subject[:1000],
-        from_address=from_addr,
+        **sender_columns(from_addr),
         to_addresses=to_addrs,
         cc_addresses=cc_addrs,
         bcc_addresses=bcc_addrs,

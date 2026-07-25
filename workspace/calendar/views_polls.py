@@ -309,7 +309,6 @@ class PollFinalizeView(APIView):
                 color="primary",
             )
 
-        # Create event
         event = Event.objects.create(
             calendar=calendar,
             title=poll.title,
@@ -337,7 +336,6 @@ class PollFinalizeView(APIView):
             ]
         )
 
-        # Close poll
         poll.status = Poll.Status.CLOSED
         poll.chosen_slot = slot
         poll.event = event

@@ -8,6 +8,7 @@ from workspace.core.context_processors import workspace_modules
 from workspace.core.module_registry import CommandInfo, ModuleInfo
 from workspace.core.services.module_visibility import (
     filter_visible_commands,
+    hidden_module_slugs,
     is_module_slug_visible,
     user_can_see_module,
     visible_modules,
@@ -100,6 +101,21 @@ class VisibleModulesTests(TestCase):
         self.assertFalse(is_module_slug_visible(self.normal, "lab"))
         # unknown slug -> treated as visible (not a registered module)
         self.assertTrue(is_module_slug_visible(self.normal, "ghost"))
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    @patch("workspace.core.services.module_visibility.registry")
+    def test_hidden_module_slugs_lists_restricted_previews(self, mock_registry):
+        mods = [_module("files"), _module("lab", preview=True)]
+        mock_registry.get_all.return_value = mods
+        self.assertEqual(hidden_module_slugs(self.normal), {"lab"})
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    @patch("workspace.core.services.module_visibility.registry")
+    def test_hidden_module_slugs_empty_for_staff(self, mock_registry):
+        staff = User.objects.create_user(username="hs", password="x", is_staff=True)
+        mods = [_module("files"), _module("lab", preview=True)]
+        mock_registry.get_all.return_value = mods
+        self.assertEqual(hidden_module_slugs(staff), set())
 
     @override_settings(PREVIEW_VISIBILITY="staff")
     @patch("workspace.core.services.module_visibility.registry")

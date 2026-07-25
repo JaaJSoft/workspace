@@ -24,7 +24,7 @@
               <button tabindex="0" class="flex items-center hover:opacity-70 cursor-pointer">
                 <i data-lucide="ellipsis" class="w-4 h-4"></i>
               </button>
-              <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-200 rounded-box z-50 p-1 shadow-lg whitespace-nowrap">
+              <ul tabindex="0" class="dropdown-content menu menu-sm bg-base-200 rounded-box z-50 shadow-lg whitespace-nowrap">
                 {% for mid_item in breadcrumbs %}
                   {% if not forloop.first and forloop.revcounter > 2 %}
                     <li>

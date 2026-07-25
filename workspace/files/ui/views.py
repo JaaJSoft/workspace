@@ -454,6 +454,23 @@ def properties(request, uuid):
             FileShareLink.objects.filter(file=file_obj).order_by("-created_at")
         )
 
+    # Tags — only personal files can be tagged (FileTagView scopes writes to
+    # user_files_qs), so shared/group items don't get the tag editor.
+    can_tag = file_obj.owner_id == request.user.id and file_obj.group_id is None
+    file_tags = []
+    if can_tag:
+        file_tags = [
+            {
+                "uuid": str(ft.tag.uuid),
+                "name": ft.tag.name,
+                "icon": ft.tag.icon,
+                "color": ft.tag.color,
+            }
+            for ft in file_obj.file_tags.select_related("tag").order_by(
+                Lower("tag__name")
+            )
+        ]
+
     PERMISSION_LABELS = {
         FilePermission.VIEW: ("Read only", False),
         FilePermission.WRITE: ("Read & write", True),
@@ -475,6 +492,8 @@ def properties(request, uuid):
             "permission_label": perm_label,
             "permission_is_write": perm_is_write,
             "share_links": share_links,
+            "can_tag": can_tag,
+            "file_tags": file_tags,
         },
     )
 

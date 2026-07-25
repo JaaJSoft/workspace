@@ -9,6 +9,13 @@ exercise the cross-DB code paths fixed in the migration command:
   signal must respect ``raw=True`` during loaddata, otherwise the labels
   duplicate)
 * one custom ``MailLabel`` (verifies fixture-loaded rows survive)
+* a ``MailMessage`` with an accented subject (verifies the generated
+  ``search_tsv`` column populates during loaddata and ``f_unaccent`` makes
+  the GIN index accent-insensitive)
+* a chat ``Message`` with an accented body (verifies the chat generated
+  tsvector column also populates during loaddata)
+* a ``Task`` and an accented-title ``Event`` (verify the projects and
+  calendar generated tsvector columns also populate during loaddata)
 * a couple of files + a calendar event (sanity-check UUID PKs)
 
 Run on the target ``DATABASE_URL`` (``--verify``) after
@@ -26,6 +33,16 @@ SEED_USERS = [
 ]
 SEED_MAIL_EMAIL = "smoke@example.com"
 SEED_CUSTOM_LABEL = "SmokeCustom"
+SEED_MAIL_SUBJECT = "Résumé du projet Alpha"
+# "prévisionnel" appears ONLY in the body, never in subject/snippet/from,
+# so finding it proves the body is part of the index.
+SEED_MAIL_BODY = "Le budget prévisionnel est joint pour relecture."
+# "déploiement" appears ONLY in this chat body across all seeds, so an
+# accent-less hit proves the chat tsvector populated during loaddata.
+SEED_CHAT_BODY = "Le déploiement de vendredi est confirmé."
+SEED_PROJECT_NAME = "Refonte du tableau de bord"
+SEED_TASK_TITLE = "Préparer la maquette"
+SEED_EVENT_TITLE = "Réunion de lancement"
 
 
 class Command(BaseCommand):
@@ -47,7 +64,12 @@ class Command(BaseCommand):
     def _seed(self):
         from workspace.calendar.models import Calendar, Event
         from workspace.files.models import File
-        from workspace.mail.models import MailAccount, MailLabel
+        from workspace.mail.models import (
+            MailAccount,
+            MailFolder,
+            MailLabel,
+            MailMessage,
+        )
         from workspace.users.models import UserPresence
 
         User = get_user_model()
@@ -63,6 +85,50 @@ class Command(BaseCommand):
             username=SEED_MAIL_EMAIL,
         )
         MailLabel.objects.create(account=account, name=SEED_CUSTOM_LABEL, color="info")
+
+        inbox = MailFolder.objects.create(
+            account=account,
+            name="INBOX",
+            display_name="Inbox",
+            folder_type="inbox",
+        )
+        MailMessage.objects.create(
+            account=account,
+            folder=inbox,
+            imap_uid=1,
+            subject=SEED_MAIL_SUBJECT,
+            snippet="notes de réunion",
+            body_text=SEED_MAIL_BODY,
+        )
+
+        from workspace.chat.models import Conversation, ConversationMember, Message
+
+        conv = Conversation.objects.create(
+            kind="group", title="Smoke Chat", created_by=alice
+        )
+        ConversationMember.objects.create(conversation=conv, user=alice)
+        Message.objects.create(conversation=conv, author=alice, body=SEED_CHAT_BODY)
+
+        from workspace.projects.models import Project, ProjectMember, Task, TaskStatus
+
+        project = Project.objects.create(name=SEED_PROJECT_NAME, created_by=alice)
+        ProjectMember.objects.create(
+            project=project, user=alice, role=ProjectMember.Role.ADMIN
+        )
+        task_status = TaskStatus.objects.create(
+            project=project, name="Todo", category=TaskStatus.Category.BACKLOG
+        )
+        Task.objects.create(
+            project=project, title=SEED_TASK_TITLE, status=task_status, created_by=alice
+        )
+
+        smoke_cal = Calendar.objects.create(name="Smoke", owner=alice)
+        Event.objects.create(
+            calendar=smoke_cal,
+            owner=alice,
+            title=SEED_EVENT_TITLE,
+            start=timezone.now(),
+        )
 
         cal = Calendar.objects.create(owner=alice, name="Smoke Cal")
         Event.objects.create(
@@ -83,7 +149,8 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"Seeded users={User.objects.count()}, "
                 f"mail_account={MailAccount.objects.count()}, "
-                f"labels={MailLabel.objects.count()}"
+                f"labels={MailLabel.objects.count()}, "
+                f"messages={MailMessage.objects.count()}"
             )
         )
 
@@ -131,4 +198,81 @@ class Command(BaseCommand):
                 f"({max(alice.pk, bob.pk)}); sequence not reset"
             )
 
+        from workspace.mail.search import search_mail
+
+        # Query without the accent must still match "Résumé" via f_unaccent,
+        # proving the generated tsvector column populated during loaddata and
+        # the GIN index answers the query.
+        hits = search_mail("resume", alice, limit=10)
+        subjects = [h.name for h in hits]
+        if SEED_MAIL_SUBJECT not in subjects:
+            raise CommandError(
+                "FTS verify failed: seeded accented message not found via "
+                f"full-text search on PostgreSQL. Got: {subjects}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS accent-insensitive search OK"))
+
+        # Same message, but through a word that exists only in the body
+        # (accent-insensitive too): proves body_text made it into the
+        # generated tsvector on PostgreSQL.
+        hits = search_mail("previsionnel", alice, limit=10)
+        subjects = [h.name for h in hits]
+        if SEED_MAIL_SUBJECT not in subjects:
+            raise CommandError(
+                "FTS verify failed: body-only word not found via full-text "
+                f"search on PostgreSQL. Got: {subjects}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS body search OK"))
+
+        from workspace.chat.search import search_chat_messages
+
+        hits = search_chat_messages("deploiement", alice, 10)
+        if not any("déploiement" in h.matched_value for h in hits):
+            raise CommandError(
+                "FTS verify failed: chat body word not found via full-text "
+                f"search on PostgreSQL. Got: {[h.matched_value for h in hits]}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS chat body search OK"))
+
+        from workspace.projects.services.search import (
+            search_projects_qs,
+            search_tasks_qs,
+        )
+
+        # Query without the accent must still match "Préparer" via f_unaccent,
+        # proving the projects_task tsvector populated during loaddata.
+        task_hits = [t.title for t in search_tasks_qs(alice, "preparer")]
+        if SEED_TASK_TITLE not in task_hits:
+            raise CommandError(
+                "FTS verify failed: seeded task not found via full-text "
+                f"search on PostgreSQL. Got: {task_hits}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS task search OK"))
+
+        project_hits = [p.name for p in search_projects_qs(alice, "tableau")]
+        if SEED_PROJECT_NAME not in project_hits:
+            raise CommandError(
+                "FTS verify failed: seeded project not found via full-text "
+                f"search on PostgreSQL. Got: {project_hits}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS project search OK"))
+
+        from workspace.calendar.services.event_search import search_events_qs
+
+        # Query without the accent must still match "Réunion" via
+        # f_unaccent, proving the generated tsvector column populated
+        # during loaddata and the GIN index answers the query.
+        event_hits = [e.title for e in search_events_qs(alice, "reunion")]
+        if SEED_EVENT_TITLE not in event_hits:
+            raise CommandError(
+                "FTS verify failed: accented event title not found via "
+                f"full-text search on PostgreSQL. Got: {event_hits}"
+            )
+
+        self.stdout.write(self.style.SUCCESS("  FTS event search OK"))
         self.stdout.write(self.style.SUCCESS("PostgreSQL migration smoke test OK"))

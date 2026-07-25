@@ -576,6 +576,30 @@ class SettingDetailTests(UserTestMixin, APITestCase):
         resp = self.client.get(self._url("core", "theme"))
         self.assertEqual(resp.status_code, 404)
 
+    def test_get_stored_null_value_returns_200(self):
+        """A stored null is a present setting, not a missing one."""
+        resp = self.client.put(
+            self._url("core", "flag"), {"value": None}, format="json"
+        )
+        self.assertEqual(resp.status_code, 200)
+        resp = self.client.get(self._url("core", "flag"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.data["value"])
+
+    def test_get_sees_fresh_value_after_put(self):
+        self.client.get(self._url("core", "theme"))  # warm any cache (404 path)
+        self.client.put(self._url("core", "theme"), {"value": "dark"}, format="json")
+        resp = self.client.get(self._url("core", "theme"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["value"], "dark")
+
+    def test_get_returns_404_after_delete(self):
+        self.client.put(self._url("core", "theme"), {"value": "dark"}, format="json")
+        self.client.get(self._url("core", "theme"))  # warm any cache
+        self.client.delete(self._url("core", "theme"))
+        resp = self.client.get(self._url("core", "theme"))
+        self.assertEqual(resp.status_code, 404)
+
     def test_put_invalidates_cache_so_get_setting_sees_fresh_value(self):
         # Prime the cache with the default-miss sentinel.
         self.assertEqual(

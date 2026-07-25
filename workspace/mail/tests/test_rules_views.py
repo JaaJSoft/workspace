@@ -190,7 +190,7 @@ class MailRuleTestEndpointTests(_Base):
             account=self.account,
             folder=self.folder,
             imap_uid=1,
-            from_address={"email": "a@news.com"},
+            from_email="a@news.com",
             subject="News",
         )
 
@@ -351,7 +351,8 @@ class MailRuleApplyTests(_Base):
             account=self.account,
             folder=self.folder,
             imap_uid=1,
-            from_address={"name": "", "email": "n@news.com"},
+            from_name="",
+            from_email="n@news.com",
             subject="hi",
         )
 

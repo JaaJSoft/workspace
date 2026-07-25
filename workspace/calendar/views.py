@@ -437,10 +437,8 @@ class EventDetailView(APIView):
         if original_start_str and event.is_recurring:
             original_start = _parse_dt(original_start_str)
             if original_start:
-                # Materialized exception lookup goes straight through
-                # _prefetch_event — avoids the previous fetch-then-refetch
-                # pattern (bare lookup by (parent, original_start), then a
-                # second query to attach the prefetch).
+                # Single prefetched query: the serializer below needs the
+                # members/calendar relations _prefetch_event attaches.
                 exc = _prefetch_event(
                     Event.objects.filter(
                         recurrence_parent=event,

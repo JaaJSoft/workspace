@@ -4,6 +4,8 @@ from django.db import models
 
 from workspace.common.uuids import uuid_v7_or_v4
 
+from .services.addresses import derive_recipients_text
+
 
 class MailAccount(models.Model):
     """IMAP/SMTP mail account linked to a user."""
@@ -199,11 +201,16 @@ class MailMessage(models.Model):
     imap_uid = models.BigIntegerField()
     subject = models.CharField(max_length=1000, blank=True, default="")
 
-    from_address = models.JSONField(default=dict)
+    from_email = models.CharField(max_length=254, blank=True, default="")
+    from_name = models.CharField(max_length=255, blank=True, default="")
     to_addresses = models.JSONField(default=list)
     cc_addresses = models.JSONField(default=list)
     bcc_addresses = models.JSONField(default=list)
     reply_to = models.CharField(max_length=255, blank=True, default="")
+
+    # Search-only flattening of to/cc, recomputed in save(); never write
+    # it by hand. The JSON lists above stay the source of truth.
+    recipients_text = models.TextField(blank=True, default="")
 
     date = models.DateTimeField(null=True, blank=True)
     snippet = models.CharField(max_length=300, blank=True, default="")
@@ -243,6 +250,12 @@ class MailMessage(models.Model):
 
     def __str__(self):
         return self.subject or "(no subject)"
+
+    def save(self, *args, **kwargs):
+        self.recipients_text = derive_recipients_text(
+            self.to_addresses, self.cc_addresses
+        )
+        super().save(*args, **kwargs)
 
 
 class MailMessageLabel(models.Model):

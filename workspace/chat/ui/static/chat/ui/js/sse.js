@@ -23,7 +23,7 @@ window.chatSseMixin = function chatSseMixin() {
       if (!isViewing) {
         this._bumpConversationUnread(detail.conversation_id);
       }
-      this.refreshConversationList();
+      this.refreshConversationItems([detail.conversation_id]);
     },
 
     handleSSEMessageEdited(detail) {

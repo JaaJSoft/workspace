@@ -75,10 +75,6 @@ class ActionsMixin:
             owner=request.user,
             folder_id=OuterRef("pk"),
         )
-        user_share_subquery = FileShare.objects.filter(
-            file_id=OuterRef("pk"),
-            shared_with=request.user,
-        ).values("permission")[:1]
 
         file_objects = list(
             File.objects.filter(
@@ -88,7 +84,6 @@ class ActionsMixin:
             .annotate(
                 is_favorite=Exists(favorite_subquery),
                 is_pinned=Exists(pinned_subquery),
-                user_share_permission=Subquery(user_share_subquery),
             )
             .distinct()
         )
@@ -99,13 +94,14 @@ class ActionsMixin:
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        permissions = FileService.get_permissions_bulk(request.user, file_objects)
+
         result = {}
         for file_obj in file_objects:
-            perm = FileService.get_permission(request.user, file_obj)
             result[str(file_obj.uuid)] = ActionRegistry.get_available_actions(
                 request.user,
                 file_obj,
-                permission=perm,
+                permission=permissions[file_obj.pk],
             )
         return Response(result)
 

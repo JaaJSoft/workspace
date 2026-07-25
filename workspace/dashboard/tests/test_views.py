@@ -3,7 +3,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
 from workspace.core.module_registry import ModuleInfo
@@ -382,6 +382,70 @@ class GetActivityContextTests(TestCase):
 
         call_kwargs = mock_events.call_args.kwargs
         self.assertEqual(call_kwargs["exclude_user_id"], self.user.id)
+
+    @patch("workspace.dashboard.views.get_sources")
+    @patch("workspace.dashboard.views.annotate_time_ago")
+    @patch("workspace.dashboard.views.get_recent_events")
+    def test_module_visibility_user_forwarded_to_service(
+        self, mock_events, mock_annotate, mock_sources
+    ):
+        mock_events.return_value = []
+        mock_sources.return_value = []
+
+        _get_activity_context(self.user)
+
+        self.assertEqual(mock_events.call_args.kwargs["visible_to"], self.user)
+        mock_sources.assert_called_once_with(self.user)
+
+
+# ── preview-module visibility in the activity feed ──────────────
+
+
+class ActivityPreviewVisibilityTests(TestCase):
+    """The activity source tabs must not expose modules the user cannot see
+    (preview modules restricted to staff/admin). Uses the real registries:
+    the projects module is registered with preview=True."""
+
+    def setUp(self):
+        self.normal = User.objects.create_user(
+            username="actnormal",
+            password="pass123",
+        )
+        self.staff = User.objects.create_user(
+            username="actstaff",
+            password="pass123",
+            is_staff=True,
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def _source_slugs(self, resp):
+        return [s["slug"] for s in resp.context["activity_sources"]]
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_preview_tab_hidden_from_normal_user_on_dashboard(self):
+        self.client.login(username="actnormal", password="pass123")
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn("projects", self._source_slugs(resp))
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_preview_tab_visible_to_staff_on_dashboard(self):
+        self.client.login(username="actstaff", password="pass123")
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("projects", self._source_slugs(resp))
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_preview_tab_hidden_in_feed_partial(self):
+        self.client.login(username="actnormal", password="pass123")
+        resp = self.client.get(
+            "/dashboard/activity",
+            HTTP_X_ALPINE_REQUEST="true",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn("projects", self._source_slugs(resp))
 
 
 # ── _get_upcoming_events ────────────────────────────────────────

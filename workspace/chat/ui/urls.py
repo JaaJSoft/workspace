@@ -9,6 +9,11 @@ urlpatterns = [
     path("/<uuid:conversation_uuid>", views.chat_view, name="conversation"),
     path("/conversations", views.conversation_list_view, name="conversation_list"),
     path(
+        "/conversations/items",
+        views.conversation_items_view,
+        name="conversation_items",
+    ),
+    path(
         "/<uuid:conversation_uuid>/messages",
         views.conversation_messages_view,
         name="conversation_messages",

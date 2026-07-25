@@ -86,11 +86,11 @@ def event_card(request, event_id):
     )
     if not event:
         raise Http404
-    attendees = list(
-        event.members.select_related("user").exclude(
-            status=EventMember.Status.DECLINED,
-        )[:5]
-    )
+    # Both the attendee list and the viewer's membership below read from
+    # the members prefetch; building fresh querysets here would bypass the
+    # cache and issue one query each.
+    members = list(event.members.all())
+    attendees = [m for m in members if m.status != EventMember.Status.DECLINED][:5]
 
     # For recurring occurrences, override start/end with the occurrence's actual times
     occ_start = None
@@ -104,7 +104,7 @@ def event_card(request, event_id):
 
     is_owner = event.owner_id == request.user.id
     is_external = hasattr(event.calendar, "external_source")
-    membership = event.members.filter(user=request.user).first()
+    membership = next((m for m in members if m.user_id == request.user.id), None)
     invite_status = membership.status if membership and not is_owner else None
 
     return render(

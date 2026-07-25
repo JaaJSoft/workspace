@@ -1,0 +1,116 @@
+from django.db import migrations
+
+# Renames the legacy mail_message_fts to the derived name
+# mail_mailmessage_fts. The FTS table is derived data, so SQLite drops and
+# rebuilds it under the new name (one-time reindex). PostgreSQL only renames
+# the GIN index; the generated search_tsv column is untouched.
+
+PG_FORWARD = """
+ALTER INDEX IF EXISTS mail_message_tsv_gin RENAME TO mail_mailmessage_tsv_gin;
+"""
+
+PG_REVERSE = """
+ALTER INDEX IF EXISTS mail_mailmessage_tsv_gin RENAME TO mail_message_tsv_gin;
+"""
+
+SQLITE_FORWARD = """
+DROP TRIGGER IF EXISTS mail_message_fts_ai;
+DROP TRIGGER IF EXISTS mail_message_fts_ad;
+DROP TRIGGER IF EXISTS mail_message_fts_au;
+DROP TABLE IF EXISTS mail_message_fts;
+
+DROP TRIGGER IF EXISTS mail_mailmessage_fts_ai;
+DROP TRIGGER IF EXISTS mail_mailmessage_fts_ad;
+DROP TRIGGER IF EXISTS mail_mailmessage_fts_au;
+DROP TABLE IF EXISTS mail_mailmessage_fts;
+
+CREATE VIRTUAL TABLE mail_mailmessage_fts USING fts5(
+  subject, snippet, from_email, from_name, body_text,
+  content='mail_mailmessage', content_rowid='rowid',
+  tokenize='unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER mail_mailmessage_fts_ai AFTER INSERT ON mail_mailmessage BEGIN
+  INSERT INTO mail_mailmessage_fts(rowid, subject, snippet, from_email, from_name, body_text)
+  VALUES (new.rowid, new.subject, new.snippet, new.from_email, new.from_name, new.body_text);
+END;
+
+CREATE TRIGGER mail_mailmessage_fts_ad AFTER DELETE ON mail_mailmessage BEGIN
+  INSERT INTO mail_mailmessage_fts(mail_mailmessage_fts, rowid, subject, snippet, from_email, from_name, body_text)
+  VALUES ('delete', old.rowid, old.subject, old.snippet, old.from_email, old.from_name, old.body_text);
+END;
+
+CREATE TRIGGER mail_mailmessage_fts_au AFTER UPDATE ON mail_mailmessage BEGIN
+  INSERT INTO mail_mailmessage_fts(mail_mailmessage_fts, rowid, subject, snippet, from_email, from_name, body_text)
+  VALUES ('delete', old.rowid, old.subject, old.snippet, old.from_email, old.from_name, old.body_text);
+  INSERT INTO mail_mailmessage_fts(rowid, subject, snippet, from_email, from_name, body_text)
+  VALUES (new.rowid, new.subject, new.snippet, new.from_email, new.from_name, new.body_text);
+END;
+
+INSERT INTO mail_mailmessage_fts(mail_mailmessage_fts) VALUES ('rebuild');
+INSERT INTO mail_mailmessage_fts(mail_mailmessage_fts, rank)
+  VALUES ('rank', 'bm25(10.0, 2.0, 4.0, 4.0, 1.0)');
+"""
+
+# Restores the exact 0026 state (legacy names, same 5 columns and weights).
+SQLITE_REVERSE = """
+DROP TRIGGER IF EXISTS mail_mailmessage_fts_ai;
+DROP TRIGGER IF EXISTS mail_mailmessage_fts_ad;
+DROP TRIGGER IF EXISTS mail_mailmessage_fts_au;
+DROP TABLE IF EXISTS mail_mailmessage_fts;
+
+CREATE VIRTUAL TABLE mail_message_fts USING fts5(
+  subject, snippet, from_email, from_name, body_text,
+  content='mail_mailmessage', content_rowid='rowid',
+  tokenize='unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER mail_message_fts_ai AFTER INSERT ON mail_mailmessage BEGIN
+  INSERT INTO mail_message_fts(rowid, subject, snippet, from_email, from_name, body_text)
+  VALUES (new.rowid, new.subject, new.snippet, new.from_email, new.from_name, new.body_text);
+END;
+
+CREATE TRIGGER mail_message_fts_ad AFTER DELETE ON mail_mailmessage BEGIN
+  INSERT INTO mail_message_fts(mail_message_fts, rowid, subject, snippet, from_email, from_name, body_text)
+  VALUES ('delete', old.rowid, old.subject, old.snippet, old.from_email, old.from_name, old.body_text);
+END;
+
+CREATE TRIGGER mail_message_fts_au AFTER UPDATE ON mail_mailmessage BEGIN
+  INSERT INTO mail_message_fts(mail_message_fts, rowid, subject, snippet, from_email, from_name, body_text)
+  VALUES ('delete', old.rowid, old.subject, old.snippet, old.from_email, old.from_name, old.body_text);
+  INSERT INTO mail_message_fts(rowid, subject, snippet, from_email, from_name, body_text)
+  VALUES (new.rowid, new.subject, new.snippet, new.from_email, new.from_name, new.body_text);
+END;
+
+INSERT INTO mail_message_fts(mail_message_fts) VALUES ('rebuild');
+INSERT INTO mail_message_fts(mail_message_fts, rank)
+  VALUES ('rank', 'bm25(10.0, 2.0, 4.0, 4.0, 1.0)');
+"""
+
+
+def forward(apps, schema_editor):
+    vendor = schema_editor.connection.vendor
+    if vendor == "postgresql":
+        schema_editor.execute(PG_FORWARD)
+    elif vendor == "sqlite":
+        with schema_editor.connection.cursor() as cursor:
+            cursor.executescript(SQLITE_FORWARD)
+
+
+def reverse(apps, schema_editor):
+    vendor = schema_editor.connection.vendor
+    if vendor == "postgresql":
+        schema_editor.execute(PG_REVERSE)
+    elif vendor == "sqlite":
+        with schema_editor.connection.cursor() as cursor:
+            cursor.executescript(SQLITE_REVERSE)
+
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ("mail", "0026_mail_fulltext_index_body"),
+    ]
+
+    operations = [
+        migrations.RunPython(forward, reverse),
+    ]

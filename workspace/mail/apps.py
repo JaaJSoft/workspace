@@ -7,6 +7,11 @@ class MailConfig(AppConfig):
     label = "mail"
 
     def ready(self):
+        from workspace.common.search.schema import register_fulltext_index
+        from workspace.mail.search import MAIL_FTS, search_contacts, search_mail
+
+        register_fulltext_index(MAIL_FTS)
+
         from workspace.core.module_registry import (
             CommandInfo,
             ModuleInfo,
@@ -14,7 +19,6 @@ class MailConfig(AppConfig):
             SearchProviderInfo,
             registry,
         )
-        from workspace.mail.search import search_contacts, search_mail
 
         registry.register(
             ModuleInfo(

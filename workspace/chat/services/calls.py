@@ -359,9 +359,9 @@ def end_stale_calls():
     from ..models import CallSession
 
     ended = 0
-    for session in CallSession.objects.filter(
-        state=CallSession.State.ACTIVE
-    ).select_related("system_message"):
+    for session in CallSession.objects.filter(state=CallSession.State.ACTIVE).only(
+        "pk"
+    ):
         if cleanup_stale_participants(session):
             ended += 1
     return ended

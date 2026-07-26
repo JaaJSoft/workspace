@@ -1,7 +1,7 @@
 from django.core.cache import cache
 from django.test import TestCase
 
-from workspace.projects.models import Project
+from workspace.projects.models import Project, TaskEvent
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.tasks import create_task
 from workspace.users.services.settings import get_setting, set_setting
@@ -183,6 +183,36 @@ class OverviewActivityTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.admin)
         resp = self.client.get(f"/projects/{self.project.uuid}")
         self.assertContains(resp, "No activity yet.")
+
+    def test_overview_activity_links_to_task(self):
+        task = create_task(self.project, self.admin, title="Paint the shed")
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}")
+        self.assertContains(resp, f"openTask('{task.uuid}')")
+
+    def test_overview_activity_deleted_task_is_not_clickable(self):
+        task = create_task(self.project, self.admin, title="Paint the shed")
+        task_uuid = task.uuid
+        task.delete()
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}")
+        self.assertContains(resp, "Paint the shed")
+        self.assertNotContains(resp, f"openTask('{task_uuid}')")
+
+    def test_overview_activity_shows_status_transition(self):
+        task = create_task(self.project, self.admin, title="Paint the shed")
+        TaskEvent.objects.create(
+            project=self.project,
+            task=task,
+            task_title=task.title,
+            actor=self.admin,
+            type=TaskEvent.Type.MOVED,
+            from_status="Backlog",
+            to_status="In progress",
+        )
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}")
+        self.assertContains(resp, "Backlog &rarr; In progress")
 
 
 class SidebarTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):

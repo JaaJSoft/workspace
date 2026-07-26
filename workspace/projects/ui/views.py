@@ -7,10 +7,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.uuids import parse_uuid_or_none
+from workspace.core.services.activity import annotate_time_ago
+from workspace.projects.actions import ProjectActionRegistry
 from workspace.projects.models import Project, ProjectMember, TaskStatus
 from workspace.projects.queries import get_project_role, user_project_ids
-from workspace.projects.services.events import events_for_project
+from workspace.projects.services.events import events_for_project, serialize_task_event
 from workspace.projects.services.projects import get_or_create_personal_project
+from workspace.projects.services.rendering import render_task_description
 from workspace.users.services.settings import get_setting, set_setting
 
 VIEW_OVERVIEW = "overview"
@@ -79,6 +82,22 @@ def _sidebar_projects(user):
     )
 
 
+def _deep_link_panel(request, project, role):
+    """Panel context for a valid ?task= deep link, else empty."""
+    task_uuid = parse_uuid_or_none(request.GET.get("task") or "")
+    if task_uuid is None:
+        return {}
+    task = (
+        project.tasks.select_related("status", "created_by")
+        .prefetch_related("assignees", "labels")
+        .filter(uuid=task_uuid)
+        .first()
+    )
+    if task is None:
+        return {}
+    return _task_panel_context(request.user, project, role, task)
+
+
 def _base_context(request, project, role, view):
     statuses = list(project.statuses.order_by("position", "created_at"))
     members = project.members.filter(left_at__isnull=True).select_related("user")
@@ -103,6 +122,7 @@ def _base_context(request, project, role, view):
     }
     if not request.headers.get("X-Alpine-Request"):
         context["projects"] = _sidebar_projects(request.user)
+        context.update(_deep_link_panel(request, project, role))
     return context
 
 
@@ -114,6 +134,62 @@ def _render_project_view(request, context):
     if request.headers.get("X-Alpine-Request"):
         return render(request, "projects/ui/partials/_content.html", context)
     return render(request, "projects/ui/project.html", context)
+
+
+def _task_panel_context(user, project, role, task):
+    events = [
+        serialize_task_event(ev) for ev in task.events.select_related("actor")[:20]
+    ]
+    for event in events:
+        # Same color as the registered projects activity provider.
+        event["source_color"] = "accent"
+    annotate_time_ago(events)
+    action_ids = [
+        action["id"]
+        for action in ProjectActionRegistry.get_available_actions(
+            user, task, role=role, archived=project.is_archived
+        )
+    ]
+    return {
+        "panel_task": task,
+        "panel_events": events,
+        "panel_action_ids": action_ids,
+        "panel_description_html": render_task_description(task.description),
+        "panel_task_data": {
+            "uuid": str(task.uuid),
+            "title": task.title,
+            "description": task.description,
+            "status": str(task.status_id),
+            "priority": task.priority,
+            "due_date": task.due_date.isoformat() if task.due_date else "",
+            "assignees": [str(u.pk) for u in task.assignees.all()],
+            "labels": [str(label.uuid) for label in task.labels.all()],
+        },
+    }
+
+
+@login_required
+def task_panel(request, project_uuid, task_uuid):
+    project, role = _get_project_or_404(request.user, project_uuid)
+    task = get_object_or_404(
+        project.tasks.select_related("status", "created_by").prefetch_related(
+            "assignees", "labels"
+        ),
+        uuid=task_uuid,
+    )
+    context = {
+        "project": project,
+        "role": role,
+        "writable": not project.is_archived,
+        "statuses": list(project.statuses.order_by("position", "created_at")),
+        "members": project.members.filter(left_at__isnull=True).select_related("user"),
+        "labels_data": [
+            {"uuid": str(label.uuid), "name": label.name, "color": label.color}
+            for label in project.labels.all()
+        ],
+    }
+    context.update(_task_panel_context(request.user, project, role, task))
+    return render(request, "projects/ui/partials/task_panel.html", context)
 
 
 @login_required

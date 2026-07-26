@@ -55,6 +55,37 @@ def create_task(
     return task
 
 
+_UPDATE_EVENT_FIELDS = (
+    "title",
+    "description",
+    "priority",
+    "due_date",
+    "assignees",
+    "labels",
+)
+
+
+def has_field_updates(task, validated_data):
+    """True when *validated_data* would change a non-status field of *task*.
+
+    Status changes are excluded on purpose: they get their own MOVED or
+    COMPLETED event via apply_status_change, and a no-op PATCH must not
+    pollute the activity feed.
+    """
+    for field in _UPDATE_EVENT_FIELDS:
+        if field not in validated_data:
+            continue
+        new = validated_data[field]
+        if field in ("assignees", "labels"):
+            if {obj.pk for obj in new} != {
+                obj.pk for obj in getattr(task, field).all()
+            }:
+                return True
+        elif getattr(task, field) != new:
+            return True
+    return False
+
+
 def apply_status_change(task, *, actor=None, old_status=None):
     """Side effects after ``task.status`` was reassigned.
 

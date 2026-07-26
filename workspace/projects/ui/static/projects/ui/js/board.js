@@ -7,9 +7,33 @@ function listOrder(listEl) {
   );
 }
 
+function taskParamUrl(href, uuid) {
+  const url = new URL(href);
+  if (uuid) {
+    if (url.searchParams.get('task') === uuid) return null;
+    url.searchParams.set('task', uuid);
+  } else {
+    if (!url.searchParams.has('task')) return null;
+    url.searchParams.delete('task');
+  }
+  return url.pathname + url.search;
+}
+
+function fieldAction(field) {
+  const map = {
+    title: 'edit',
+    description: 'edit',
+    priority: 'edit',
+    status: 'move',
+    due_date: 'set_due',
+    assignees: 'assign',
+    labels: 'set_labels',
+  };
+  return map[field] || 'edit';
+}
+
 function emptyTaskForm() {
   return {
-    uuid: null,
     title: '',
     description: '',
     status: '',
@@ -31,8 +55,8 @@ function projectBoard(config) {
     labels: [],
     form: emptyTaskForm(),
     formError: '',
-    taskActions: [],
-    _actionsGeneration: 0,
+    panelTaskUuid: config.initialTask || null,
+    _panelGeneration: 0,
 
     init() {
       this.statuses = JSON.parse(
@@ -130,8 +154,13 @@ function projectBoard(config) {
     refresh() {
       let url = config.projectBase;
       if (this.currentView === 'backlog') url += '/backlog';
+      else if (this.currentView === 'settings') url += '/settings';
       else if (this.currentView !== 'overview') url += '/board';
       this.$ajax(url, { target: 'project-content' });
+      // Board-level changes (drag moves, send-to-board, field edits) also
+      // change the open task's panel content: reload it alongside so its
+      // status, activity and metadata stay in sync with the cards.
+      if (this.panelTaskUuid) this._loadPanel(this.panelTaskUuid);
     },
 
     async sendToBoard(uuid) {
@@ -157,68 +186,117 @@ function projectBoard(config) {
       this.form = emptyTaskForm();
       this.form.status = statusUuid;
       this.formError = '';
-      this.taskActions = ['edit', 'move', 'assign', 'set_due', 'set_labels'];
       this.$refs.taskDialog.showModal();
     },
 
     async openTask(uuid) {
-      const generation = ++this._actionsGeneration;
-      let data;
-      try {
-        const resp = await fetch(config.apiBase + '/tasks/' + uuid);
-        if (!resp.ok) return;
-        data = await resp.json();
-      } catch (e) {
-        // Modal is not open yet: nothing to display, silently keep the board.
-        return;
-      }
-      if (generation !== this._actionsGeneration) return;
-      this.form = {
-        uuid: data.uuid,
-        title: data.title,
-        description: data.description,
-        status: data.status,
-        priority: data.priority,
-        due_date: data.due_date || '',
-        assignees: data.assignees.map(String),
-        labels: data.labels.map(String),
-      };
-      this.formError = '';
-      this.taskActions = [];
-      this.$refs.taskDialog.showModal();
-      this.fetchActions(uuid, generation);
+      this.panelTaskUuid = uuid;
+      const next = taskParamUrl(window.location.href, uuid);
+      if (next) history.pushState(null, '', next);
+      await this._loadPanel(uuid);
     },
 
-    async fetchActions(uuid, generation) {
+    async _loadPanel(uuid) {
+      // On network failure $ajax rejects outright. On a 4xx it resolves and fires
+      // ajax:error, then throws a RenderError because the error page has no
+      // #task-panel target, which is what lands us in this catch. Pinned to
+      // alpine-ajax 0.12.6; a custom 404 template containing that id would
+      // silently break this path.
+      const generation = ++this._panelGeneration;
       try {
-        const resp = await fetch('/api/v1/projects/actions', {
-          method: 'POST',
-          headers: this.headers(),
-          body: JSON.stringify({ uuids: [uuid] }),
+        await this.$ajax(config.projectBase + '/tasks/' + uuid + '/panel', {
+          target: 'task-panel',
         });
-        if (!resp.ok) return;
-        const data = await resp.json();
-        if (generation !== this._actionsGeneration) return;
-        this.taskActions = (data[uuid] || []).map((a) => a.id);
       } catch (e) {
-        // Leave taskActions empty: buttons stay disabled (fail-safe).
+        // A load the user has already navigated away from must not alert
+        // nor close the panel it lost the race to.
+        if (generation !== this._panelGeneration) return;
+        if (window.AppAlert) AppAlert.error('Could not load the task.');
+        this.closePanel();
       }
     },
 
-    can(actionId) {
-      return this.taskActions.includes(actionId);
+    closePanel() {
+      this.panelTaskUuid = null;
+      const next = taskParamUrl(window.location.href, null);
+      if (next) history.replaceState(null, '', next);
+    },
+
+    onPopState() {
+      const path = window.location.pathname;
+      this.currentView = path.endsWith('/backlog')
+        ? 'backlog'
+        : path.endsWith('/board')
+          ? 'board'
+          : path.endsWith('/settings')
+            ? 'settings'
+            : 'overview';
+      const task = new URL(window.location.href).searchParams.get('task');
+      if (task && task !== this.panelTaskUuid) {
+        this.panelTaskUuid = task;
+        this._loadPanel(task);
+      } else if (!task) {
+        this.panelTaskUuid = null;
+      }
+    },
+
+    ensureTaskParam() {
+      // View-switch navigations push a URL without ?task=; restore it so
+      // refresh and shared links keep pointing at the open panel.
+      if (!this.panelTaskUuid) return;
+      const next = taskParamUrl(window.location.href, this.panelTaskUuid);
+      if (next) history.replaceState(null, '', next);
+    },
+
+    async patchTask(uuid, patch) {
+      try {
+        const resp = await fetch(config.apiBase + '/tasks/' + uuid, {
+          method: 'PATCH',
+          headers: this.headers(),
+          body: JSON.stringify(patch),
+        });
+        if (!resp.ok) throw new Error('Save failed');
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not save the task.');
+      } finally {
+        // Success or failure, re-render server truth: refresh swaps the
+        // board cards and reloads whatever panel is open now (nothing if
+        // the user closed it meanwhile). If the task vanished, _loadPanel
+        // closes the panel (task-deleted-while-open case).
+        this.refresh();
+      }
+    },
+
+    async deletePanelTask(uuid, title) {
+      const ok = await AppDialog.confirm({
+        title: 'Delete task',
+        message: 'Are you sure you want to delete "' + title + '"?',
+        okLabel: 'Delete',
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!ok) return;
+      try {
+        const resp = await fetch(config.apiBase + '/tasks/' + uuid, {
+          method: 'DELETE',
+          headers: this.headers(),
+        });
+        if (!resp.ok) throw new Error('Delete failed');
+        this.closePanel();
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not delete the task.');
+      } finally {
+        this.refresh();
+      }
     },
 
     async saveTask() {
       if (this.saving) return;
-      if (this.form.uuid && !this.can('edit')) return;
-      const url = this.form.uuid
-        ? config.apiBase + '/tasks/' + this.form.uuid
-        : config.apiBase + '/tasks';
       this.saving = true;
       try {
-        const resp = await fetch(url, {
-          method: this.form.uuid ? 'PATCH' : 'POST',
+        const resp = await fetch(config.apiBase + '/tasks', {
+          method: 'POST',
           headers: this.headers(),
           body: JSON.stringify({
             title: this.form.title,
@@ -242,35 +320,81 @@ function projectBoard(config) {
         this.saving = false;
       }
     },
+  };
+}
 
-    async deleteTask() {
-      if (!this.form.uuid || !this.can('delete')) return;
-      const ok = await AppDialog.confirm({
-        title: 'Delete task',
-        message: 'Are you sure you want to delete "' + this.form.title + '"?',
-        okLabel: 'Delete',
-        okClass: 'btn-error',
-        icon: 'trash-2',
-        iconClass: 'bg-error/10 text-error',
-      });
-      if (!ok) return;
-      try {
-        const resp = await fetch(config.apiBase + '/tasks/' + this.form.uuid, {
-          method: 'DELETE',
-          headers: this.headers(),
-        });
-        if (!resp.ok) {
-          this.formError = 'Could not delete the task.';
-          return;
-        }
-        this.$refs.taskDialog.close();
-        this.refresh();
-      } catch (e) {
-        this.formError = 'Could not delete the task.';
-      }
+function taskPanel() {
+  return {
+    data: {
+      uuid: null,
+      title: '',
+      description: '',
+      status: '',
+      priority: 'medium',
+      due_date: '',
+      assignees: [],
+      labels: [],
+    },
+    editing: null,
+    draft: '',
+    actions: [],
+
+    init() {
+      this.data = JSON.parse(
+        document.getElementById('task-panel-data').textContent
+      );
+      this.actions = JSON.parse(
+        document.getElementById('task-panel-actions').textContent
+      );
+    },
+
+    can(actionId) {
+      return this.actions.includes(actionId);
+    },
+
+    startEdit(field, value) {
+      if (!this.can(fieldAction(field))) return;
+      this.editing = field;
+      this.draft = value;
+    },
+
+    cancelEdit() {
+      this.editing = null;
+    },
+
+    commitDraft(field) {
+      // Escape sets editing to null before blur fires; the guard makes
+      // the trailing blur commit a no-op instead of an accidental save.
+      if (this.editing !== field) return;
+      this.editing = null;
+      const value = this.draft;
+      if (value === this.data[field]) return;
+      if (field === 'title' && !value.trim()) return;
+      this.commitField(field, value);
+    },
+
+    commitField(field, value) {
+      if (!this.can(fieldAction(field))) return;
+      this.patchTask(this.data.uuid, { [field]: value });
+    },
+
+    toggleMulti(field, id, checked) {
+      const next = this.data[field].filter((v) => v !== id);
+      if (checked) next.push(id);
+      this.commitField(field, next);
+    },
+
+    removeTask() {
+      if (!this.can('delete')) return;
+      this.deletePanelTask(this.data.uuid, this.data.title);
     },
   };
 }
 
 window.projectBoard = projectBoard;
-window.projectBoardHelpers = { listOrder: listOrder };
+window.taskPanel = taskPanel;
+window.projectBoardHelpers = {
+  listOrder: listOrder,
+  taskParamUrl: taskParamUrl,
+  fieldAction: fieldAction,
+};

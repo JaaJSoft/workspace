@@ -1,7 +1,7 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.projects.models import Task
+from workspace.projects.models import Task, TaskEvent
 from workspace.projects.services.tasks import create_task
 
 from .base import ProjectTestMixin
@@ -141,3 +141,61 @@ class TaskDetailTests(TaskApiMixin, APITestCase):
         self.client.force_authenticate(self.outsider)
         response = self.client.get(self.detail_url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class TaskUpdateEventTests(TaskApiMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.task = create_task(
+            self.project, self.admin, title="Original", status=self.todo
+        )
+        self.task_url = f"{self.tasks_url}/{self.task.uuid}"
+
+    def _updated_events(self):
+        return TaskEvent.objects.filter(task=self.task, type=TaskEvent.Type.UPDATED)
+
+    def test_field_edit_records_updated_event(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(self.task_url, {"title": "Renamed"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        event = self._updated_events().get()
+        self.assertEqual(event.actor, self.member)
+        self.assertEqual(event.task_title, "Renamed")
+
+    def test_status_only_change_records_move_not_update(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            self.task_url, {"status": str(self.done.uuid)}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._updated_events().count(), 0)
+        self.assertTrue(
+            TaskEvent.objects.filter(
+                task=self.task, type=TaskEvent.Type.COMPLETED
+            ).exists()
+        )
+
+    def test_noop_edit_records_nothing(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            self.task_url, {"title": "Original"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._updated_events().count(), 0)
+
+    def test_m2m_edit_records_updated_event(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            self.task_url, {"assignees": [str(self.admin.pk)]}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._updated_events().count(), 1)
+
+    def test_same_m2m_set_records_nothing(self):
+        self.task.assignees.set([self.admin])
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            self.task_url, {"assignees": [str(self.admin.pk)]}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._updated_events().count(), 0)

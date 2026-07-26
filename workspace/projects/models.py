@@ -202,18 +202,21 @@ class Task(models.Model):
 class TaskEvent(models.Model):
     class Type(models.TextChoices):
         CREATED = "created", "Created"
+        UPDATED = "updated", "Updated"
         MOVED = "moved", "Moved"
         COMPLETED = "completed", "Completed"
         DELETED = "deleted", "Deleted"
 
     _ICONS = {
         Type.CREATED: "plus",
+        Type.UPDATED: "pencil",
         Type.MOVED: "move-right",
         Type.COMPLETED: "circle-check",
         Type.DELETED: "trash-2",
     }
     _LABELS = {
         Type.CREATED: "Task created",
+        Type.UPDATED: "Task updated",
         Type.MOVED: "Task moved",
         Type.COMPLETED: "Task completed",
         Type.DELETED: "Task deleted",

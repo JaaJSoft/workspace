@@ -2,7 +2,6 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.projects.models import TaskStatus
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.tasks import create_task
 

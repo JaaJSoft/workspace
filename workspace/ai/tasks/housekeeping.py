@@ -29,18 +29,19 @@ def purge_ai_tasks(self):
         status__in=terminal_statuses,
         completed_at__lte=cutoff,
     )
-    count = qs.count()
+    # Nothing has a cascade FK pointing at AITask, so the per-model count
+    # from delete() is exactly the number of tasks removed - no need for a
+    # separate count() pass beforehand.
+    _, deleted_by_model = qs.delete()
+    count = deleted_by_model.get("ai.AITask", 0)
 
     if not count:
         logger.info("AI task purge: nothing to delete.")
         return {"deleted": 0, "retention_days": retention_days}
 
     logger.info(
-        "AI task purge: deleting %d terminal tasks completed more than %d days ago",
+        "AI task purge: deleted %d terminal tasks completed more than %d days ago",
         count,
         retention_days,
     )
-    qs.delete()
-
-    logger.info("AI task purge complete.")
     return {"deleted": count, "retention_days": retention_days}

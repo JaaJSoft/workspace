@@ -135,6 +135,12 @@ class AITask(models.Model):
             models.Index(
                 fields=["owner", "status", "-created_at"], name="aitask_owner_status"
             ),
+            # Serves the daily purge, which filters terminal tasks by
+            # completed_at with no owner. The owner-led index above cannot
+            # help that predicate, so without this the purge full-scans.
+            models.Index(
+                fields=["status", "completed_at"], name="aitask_status_completed"
+            ),
         ]
 
     def __str__(self):

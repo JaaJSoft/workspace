@@ -19,7 +19,9 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from workspace.files import tasks as files_tasks
@@ -251,6 +253,23 @@ class PurgeTrashTaskTests(TestCase):
         self.assertFalse(File.objects.filter(pk=old_folder.pk).exists())
         self.assertTrue(File.objects.filter(pk=recent_file.pk).exists())
         self.assertTrue(File.objects.filter(pk=live_file.pk).exists())
+
+    @override_settings(TRASH_RETENTION_DAYS=30)
+    def test_files_and_folders_counted_in_a_single_pass(self):
+        """The files/folders breakdown comes from one aggregate query, not a
+        separate count() per node type. The cascade delete that follows is
+        intrinsic to File.delete() and left unmeasured here - only the
+        counting pass is pinned."""
+        self._make_file("old.txt", File.NodeType.FILE, deleted_days_ago=45)
+        self._make_file("old-dir", File.NodeType.FOLDER, deleted_days_ago=60)
+
+        with CaptureQueriesContext(connection) as ctx:
+            result = files_tasks.purge_trash.run()
+
+        self.assertEqual(result["files_deleted"], 1)
+        self.assertEqual(result["folders_deleted"], 1)
+        count_queries = [q for q in ctx.captured_queries if "COUNT" in q["sql"].upper()]
+        self.assertEqual(len(count_queries), 1)
 
     @override_settings(TRASH_RETENTION_DAYS=30)
     def test_noop_when_trash_empty(self):

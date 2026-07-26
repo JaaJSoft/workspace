@@ -6,6 +6,7 @@ from datetime import timedelta
 from celery import shared_task
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from workspace.common.logging import scrub
@@ -99,8 +100,15 @@ def purge_trash(self):
     cutoff = timezone.now() - timedelta(days=retention_days)
 
     qs = File.objects.filter(deleted_at__lte=cutoff)
-    files_count = qs.filter(node_type=File.NodeType.FILE).count()
-    folders_count = qs.filter(node_type=File.NodeType.FOLDER).count()
+    # Both breakdowns in one pass. delete()'s own per-model total can't
+    # substitute here: it lumps files and folders together and is inflated
+    # by cascade deletions (tags, shares, child files, ...).
+    counts = qs.aggregate(
+        files=Count("pk", filter=Q(node_type=File.NodeType.FILE)),
+        folders=Count("pk", filter=Q(node_type=File.NodeType.FOLDER)),
+    )
+    files_count = counts["files"]
+    folders_count = counts["folders"]
 
     if not (files_count + folders_count):
         logger.info("Trash purge: nothing to delete.")

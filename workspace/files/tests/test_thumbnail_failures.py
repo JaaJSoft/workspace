@@ -113,3 +113,145 @@ class ThumbnailFailureModelTests(ThumbnailFailureTestCase):
         f.delete(hard=True)
 
         self.assertEqual(ThumbnailFailure.objects.count(), 0)
+
+
+class RecordFailureTests(ThumbnailFailureTestCase):
+    def test_first_failure_creates_a_row_with_one_attempt(self):
+        from workspace.files.services.thumbnail_failures import record_failure
+
+        f = self._make_broken_image()
+
+        attempts = record_failure(f, ValueError("boom"))
+
+        self.assertEqual(attempts, 1)
+        row = ThumbnailFailure.objects.get(file=f)
+        self.assertEqual(row.attempts, 1)
+        self.assertEqual(row.last_error, "boom")
+
+    def test_repeated_failures_increment_the_same_row(self):
+        from workspace.files.services.thumbnail_failures import record_failure
+
+        f = self._make_broken_image()
+
+        record_failure(f, ValueError("first"))
+        attempts = record_failure(f, ValueError("second"))
+
+        self.assertEqual(attempts, 2)
+        self.assertEqual(ThumbnailFailure.objects.filter(file=f).count(), 1)
+        row = ThumbnailFailure.objects.get(file=f)
+        self.assertEqual(row.attempts, 2)
+        self.assertEqual(row.last_error, "second")
+
+    def test_last_attempt_at_moves_forward_on_each_failure(self):
+        # Pins the "no auto_now" decision: auto_now never fires on a queryset
+        # .update(), so the timestamp would freeze at the first attempt.
+        from workspace.files.services.thumbnail_failures import record_failure
+
+        f = self._make_broken_image()
+        record_failure(f, ValueError("first"))
+        first_seen = ThumbnailFailure.objects.get(file=f).last_attempt_at
+
+        record_failure(f, ValueError("second"))
+
+        self.assertGreater(
+            ThumbnailFailure.objects.get(file=f).last_attempt_at, first_seen
+        )
+
+    def test_long_error_is_truncated_to_the_column_width(self):
+        from workspace.files.services.thumbnail_failures import record_failure
+
+        f = self._make_broken_image()
+
+        record_failure(f, ValueError("x" * 500))
+
+        self.assertEqual(len(ThumbnailFailure.objects.get(file=f).last_error), 200)
+
+    def test_clear_failure_removes_the_row(self):
+        from workspace.files.services.thumbnail_failures import (
+            clear_failure,
+            record_failure,
+        )
+
+        f = self._make_broken_image()
+        record_failure(f, ValueError("boom"))
+
+        clear_failure(f)
+
+        self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
+
+    def test_clear_failure_is_a_noop_without_a_row(self):
+        from workspace.files.services.thumbnail_failures import clear_failure
+
+        f = self._make_valid_image()
+
+        clear_failure(f)  # must not raise
+
+        self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
+
+    def test_parked_file_ids_holds_only_files_at_the_budget(self):
+        from workspace.files.services.thumbnail_failures import (
+            MAX_THUMBNAIL_ATTEMPTS,
+            parked_file_ids,
+        )
+
+        still_trying = self._make_broken_image("a.jpg")
+        parked = self._make_broken_image("b.jpg")
+        ThumbnailFailure.objects.create(
+            file=still_trying,
+            attempts=MAX_THUMBNAIL_ATTEMPTS - 1,
+            last_attempt_at=timezone.now(),
+        )
+        ThumbnailFailure.objects.create(
+            file=parked,
+            attempts=MAX_THUMBNAIL_ATTEMPTS,
+            last_attempt_at=timezone.now(),
+        )
+
+        ids = [row["file_id"] for row in parked_file_ids()]
+
+        self.assertEqual(ids, [parked.uuid])
+
+    def test_count_parked_since_ignores_older_rows_and_unfinished_budgets(self):
+        from datetime import timedelta
+
+        from workspace.files.services.thumbnail_failures import (
+            MAX_THUMBNAIL_ATTEMPTS,
+            count_parked_since,
+        )
+
+        now = timezone.now()
+        cutoff = now - timedelta(minutes=5)
+        # At the budget but touched before the cutoff.
+        ThumbnailFailure.objects.create(
+            file=self._make_broken_image("old.jpg"),
+            attempts=MAX_THUMBNAIL_ATTEMPTS,
+            last_attempt_at=cutoff - timedelta(minutes=1),
+        )
+        # Touched after the cutoff but still has budget left.
+        ThumbnailFailure.objects.create(
+            file=self._make_broken_image("young.jpg"),
+            attempts=MAX_THUMBNAIL_ATTEMPTS - 1,
+            last_attempt_at=now,
+        )
+        # Both: parked during the window.
+        ThumbnailFailure.objects.create(
+            file=self._make_broken_image("parked.jpg"),
+            attempts=MAX_THUMBNAIL_ATTEMPTS,
+            last_attempt_at=now,
+        )
+
+        self.assertEqual(count_parked_since(cutoff), 1)
+
+    def test_clear_all_failures_purges_every_row(self):
+        from workspace.files.services.thumbnail_failures import (
+            clear_all_failures,
+            record_failure,
+        )
+
+        record_failure(self._make_broken_image("a.jpg"), ValueError("boom"))
+        record_failure(self._make_broken_image("b.jpg"), ValueError("boom"))
+
+        deleted = clear_all_failures()
+
+        self.assertEqual(deleted, 2)
+        self.assertEqual(ThumbnailFailure.objects.count(), 0)

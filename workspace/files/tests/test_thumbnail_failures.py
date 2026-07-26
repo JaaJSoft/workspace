@@ -312,6 +312,37 @@ class GenerateThumbnailBookkeepingTests(ThumbnailFailureTestCase):
 
         self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
 
+    def test_bookkeeping_error_does_not_abort_a_failed_generation(self):
+        # The file can be hard-deleted between the backfill's chunk fetch and
+        # this write, making the FK insert fail. Escaping here would kill the
+        # whole hourly pass, which runs with max_retries=0.
+        from unittest.mock import patch
+
+        from workspace.files.services.thumbnails import generate_thumbnail
+
+        f = self._make_broken_image()
+
+        with patch(
+            "workspace.files.services.thumbnail_failures.record_failure",
+            side_effect=IntegrityError("the file row is gone"),
+        ):
+            self.assertFalse(generate_thumbnail(f))
+
+    def test_bookkeeping_error_does_not_sink_a_successful_generation(self):
+        from unittest.mock import patch
+
+        from workspace.files.services.thumbnails import generate_thumbnail
+
+        f = self._make_valid_image()
+
+        with patch(
+            "workspace.files.services.thumbnail_failures.clear_failure",
+            side_effect=IntegrityError("the file row is gone"),
+        ):
+            self.assertTrue(generate_thumbnail(f))
+
+        self.assertTrue(default_storage.exists(get_thumbnail_path(f.uuid)))
+
 
 class BackfillParkingTests(ThumbnailFailureTestCase):
     def test_permanently_failing_file_is_not_retried_forever(self):
@@ -512,7 +543,15 @@ class RetryFailedTests(ThumbnailFailureTestCase):
         stats = generate_missing_thumbnails(retry_failed=True)
 
         self.assertEqual(stats["generated"], 1)
+        self.assertEqual(stats["unparked"], 1, "the purge must be reported")
         self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
+
+    def test_a_pass_that_purges_nothing_reports_no_unparking(self):
+        from workspace.files.services.thumbnails import generate_missing_thumbnails
+
+        self._make_valid_image()
+
+        self.assertEqual(generate_missing_thumbnails()["unparked"], 0)
 
     def test_default_pass_still_respects_the_parking(self):
         from workspace.files.services.thumbnails import generate_missing_thumbnails

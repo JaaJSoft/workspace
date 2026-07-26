@@ -357,3 +357,90 @@ class BackfillParkingTests(ThumbnailFailureTestCase):
 
         self.assertEqual(stats["generated"], 1)
         self.assertEqual(stats["parked"], 0)
+
+
+class ContentReplacementResetsBudgetTests(ThumbnailFailureTestCase):
+    def test_update_content_clears_the_failure_row(self):
+        from workspace.files.services.thumbnail_failures import (
+            MAX_THUMBNAIL_ATTEMPTS,
+            record_failure,
+        )
+
+        f = self._make_broken_image()
+        for _ in range(MAX_THUMBNAIL_ATTEMPTS):
+            record_failure(f, ValueError("boom"))
+
+        FileService.update_content(
+            f,
+            ContentFile(_image_bytes(), name="broken.jpg"),
+            name="broken.jpg",
+            mime_type="image/jpeg",
+        )
+
+        self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
+
+    def test_replace_content_storage_clears_the_failure_row(self):
+        # The WebDAV PUT path. Pinned separately because it is a distinct
+        # method, not a wrapper around update_content.
+        from workspace.files.services.thumbnail_failures import record_failure
+
+        f = self._make_broken_image()
+        record_failure(f, ValueError("boom"))
+
+        FileService.replace_content_storage(
+            f, storage_path=f.content.name, size=f.size or 1
+        )
+
+        self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
+
+    def test_parked_file_is_scanned_again_after_its_content_is_replaced(self):
+        from workspace.files.services.thumbnail_failures import (
+            MAX_THUMBNAIL_ATTEMPTS,
+            record_failure,
+        )
+        from workspace.files.services.thumbnails import generate_missing_thumbnails
+
+        f = self._make_broken_image()
+        for _ in range(MAX_THUMBNAIL_ATTEMPTS):
+            record_failure(f, ValueError("boom"))
+        self.assertEqual(generate_missing_thumbnails()["total"], 0)
+
+        FileService.update_content(
+            f,
+            ContentFile(_image_bytes(), name="broken.jpg"),
+            name="broken.jpg",
+            mime_type="image/jpeg",
+        )
+
+        stats = generate_missing_thumbnails()
+        self.assertEqual(stats["generated"], 1)
+
+
+class ContentReplacementViaApiTests(ThumbnailFailureAPITestCase):
+    """The unit tests above, backed by one pass through the real REST entry point."""
+
+    def test_patching_a_parked_file_makes_it_eligible_again(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from rest_framework import status
+
+        from workspace.files.services.thumbnail_failures import (
+            MAX_THUMBNAIL_ATTEMPTS,
+            record_failure,
+        )
+
+        f = self._make_broken_image()
+        for _ in range(MAX_THUMBNAIL_ATTEMPTS):
+            record_failure(f, ValueError("boom"))
+
+        resp = self.client.patch(
+            f"/api/v1/files/{f.uuid}",
+            {
+                "content": SimpleUploadedFile(
+                    "broken.jpg", _image_bytes(), content_type="image/jpeg"
+                )
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())

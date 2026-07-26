@@ -17,6 +17,7 @@ from . import _content as _content_helpers
 from . import _names as _name_helpers
 from . import _storage_ops as _storage
 from .events import record_event
+from .thumbnail_failures import clear_failure
 
 
 class FilePermission(enum.IntEnum):
@@ -374,6 +375,7 @@ class FileService:
         file_obj.type = refine_with_name(detection.label, name or file_obj.name)
         file_obj.category = detection.group or "unknown"
         file_obj.has_thumbnail = False
+        clear_failure(file_obj)
         file_obj.content = content
         file_obj.save()
         if file_obj.size:
@@ -392,6 +394,7 @@ class FileService:
         file_obj.type = detection.label
         file_obj.category = detection.group or "unknown"
         file_obj.has_thumbnail = False
+        clear_failure(file_obj)
         file_obj.content.name = storage_path
         file_obj.save()
         if size:

@@ -256,6 +256,11 @@ window.notesApp = function notesApp(config) {
                 if (oldSort !== this.notePrefs.sortBy && this.activeView && this.activeView !== 'journal') {
                     this.setView(this.activeView, this.activeId, this.viewTitle, true);
                 }
+                // Unhiding folders re-creates their sidebar rows (flat x-for),
+                // so the icons must be re-rendered.
+                this.$nextTick(function() {
+                    if (window.lucide) window.lucide.createIcons();
+                });
             }.bind(this));
 
             // Load tags for the editor dropdown
@@ -432,6 +437,25 @@ window.notesApp = function notesApp(config) {
                 if (found) return found;
             }
             return null;
+        },
+
+        // Preorder walk of the loaded tree, pruned at collapsed folders and
+        // (unless showHidden) at hidden subtrees. The sidebar renders these
+        // rows as one flat list indented by `depth`, so nesting is unbounded.
+        visibleFolderRows(list) {
+            const rows = [];
+            const showHidden = this.notePrefs.showHidden;
+            const walk = (nodes) => {
+                for (const node of nodes || []) {
+                    if (!showHidden && this.isHidden(node.uuid)) continue;
+                    rows.push(node);
+                    if (this.expandedFolders.indexOf(node.uuid) !== -1 && node.children) {
+                        walk(node.children);
+                    }
+                }
+            };
+            walk(list);
+            return rows;
         },
 
         async _loadChildren(folder) {
@@ -1201,6 +1225,11 @@ window.notesApp = function notesApp(config) {
                 });
             }
             this._writeExpandedToUrl();
+            // Collapsed rows leave the DOM (flat x-for), so re-expanding
+            // re-creates their elements and the icons must be re-rendered.
+            this.$nextTick(function() {
+                if (window.lucide) window.lucide.createIcons();
+            });
         },
 
         _getDescendantUuids(uuid) {

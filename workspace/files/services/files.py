@@ -17,6 +17,7 @@ from . import _content as _content_helpers
 from . import _names as _name_helpers
 from . import _storage_ops as _storage
 from .events import record_event
+from .thumbnails.failures import clear_failure
 
 
 class FilePermission(enum.IntEnum):
@@ -376,6 +377,13 @@ class FileService:
         file_obj.has_thumbnail = False
         file_obj.content = content
         file_obj.save()
+        # Ordering is load-bearing: after the save (nothing here is atomic, so a
+        # fresh budget must not outlive a failed write) and before record_event,
+        # whose dispatch re-runs generation and spends that budget on commit.
+        # Unguarded on purpose, unlike the generator's ledger writes: on a request
+        # path a failed delete must surface rather than leave repaired bytes
+        # silently parked.
+        clear_failure(file_obj)
         if file_obj.size:
             FILES_UPLOAD_BYTES.inc(file_obj.size)
         record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED)
@@ -394,6 +402,9 @@ class FileService:
         file_obj.has_thumbnail = False
         file_obj.content.name = storage_path
         file_obj.save()
+        # Same ordering constraint, and the same deliberate lack of a guard, as
+        # update_content.
+        clear_failure(file_obj)
         if size:
             FILES_UPLOAD_BYTES.inc(size)
         record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED)

@@ -518,7 +518,7 @@ def delete_file_on_delete(sender, instance, **kwargs):
     logger = logging.getLogger(__name__)
 
     if instance.node_type == File.NodeType.FILE and instance.has_thumbnail:
-        from workspace.files.services.thumbnails import delete_thumbnail
+        from workspace.files.services.thumbnails.generation import delete_thumbnail
 
         delete_thumbnail(instance.uuid)
 
@@ -794,3 +794,36 @@ class FileLink(models.Model):
 
     def __str__(self):
         return f"{self.source_id} -> {self.target_id}"
+
+
+class ThumbnailFailure(models.Model):
+    """An image file whose thumbnail generation failed.
+
+    A row exists only while the file is failing: it is dropped as soon as
+    generation succeeds or the file's content is replaced, so ``attempts``
+    counts attempts against the file's current bytes. The exception is a
+    backfill already decoding when the content is replaced, which records
+    against the old bytes after the row was cleared and costs the new content
+    an attempt or two. Parking expires within PARKED_RETRY_AFTER regardless,
+    so the row carries no content revision to guard against that.
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
+    # Must stay non-nullable: parked_file_ids() feeds a NOT IN subquery, where a
+    # single NULL makes the predicate UNKNOWN for every row and silently reduces
+    # the backfill to zero files.
+    file = models.OneToOneField(
+        File,
+        on_delete=models.CASCADE,
+        related_name="thumbnail_failure",
+    )
+    attempts = models.PositiveSmallIntegerField(default=0)
+    # Set explicitly by the service: the counter is bumped through a queryset
+    # .update() for atomicity, and auto_now only fires inside Model.save().
+    last_attempt_at = models.DateTimeField()
+    last_error = models.CharField(max_length=200, blank=True)
+
+    def __str__(self):
+        return f"{self.file}: {self.attempts} failed thumbnail attempt(s)"

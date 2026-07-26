@@ -5,8 +5,15 @@ from io import BytesIO
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.utils import timezone
 
-from ..metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
+from ...metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
+
+# Imported as a module, not as bare names: the ledger writes then resolve at
+# call time, so patching them at their definition site actually reaches this
+# call site. Narrowing this to `from .failures import ...` would make the
+# bookkeeping-robustness tests pass without exercising anything.
+from . import failures
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +66,41 @@ def _rasterize_svg(svg_data):
     return Image.open(BytesIO(png_data))
 
 
+def _bookkeep_failure(file_obj, exc):
+    """Record a failed attempt without letting the write decide the outcome.
+
+    The ledger is an optimisation, not the product. A file hard-deleted between
+    the backfill's chunk fetch and this write breaks the foreign key, and an
+    escaping IntegrityError would abandon the rest of an hourly pass that runs
+    with max_retries=0.
+    """
+    try:
+        failures.record_failure(file_obj, exc)
+    except Exception:
+        logger.warning(
+            "Could not record the failed thumbnail attempt for %s",
+            file_obj.uuid,
+            exc_info=True,
+        )
+
+
+def _bookkeep_success(file_obj):
+    """Drop any failure row, without letting the write undo a real success."""
+    try:
+        failures.clear_failure(file_obj)
+    except Exception:
+        logger.warning(
+            "Could not clear the thumbnail failure row for %s",
+            file_obj.uuid,
+            exc_info=True,
+        )
+
+
 def generate_thumbnail(file_obj):
     """Generate a WebP thumbnail for the given File instance.
+
+    Also maintains the file's attempt ledger: a failed attempt is recorded, a
+    successful one drops any row the file had accumulated.
 
     Returns True if the thumbnail was successfully created, False otherwise.
     """
@@ -124,12 +164,12 @@ def generate_thumbnail(file_obj):
             default_storage.save(thumb_path, ContentFile(buf.read()))
 
         FILES_THUMBNAIL_RESULT.labels(result="success").inc()
-        return True
-    except Exception:
+    except Exception as exc:
         logger.warning(
             "Failed to generate thumbnail for %s", file_obj.uuid, exc_info=True
         )
         FILES_THUMBNAIL_RESULT.labels(result="failed").inc()
+        _bookkeep_failure(file_obj, exc)
         return False
     finally:
         # Best-effort cleanup: a close() that fails after the body has been
@@ -138,6 +178,12 @@ def generate_thumbnail(file_obj):
             file_obj.content.close()
         except Exception:
             logger.debug("Failed to close content for %s", file_obj.uuid, exc_info=True)
+
+    # Outside the try: the thumbnail is already in storage and the success
+    # counter already incremented, so a bookkeeping error here must not be
+    # reported as a generation failure.
+    _bookkeep_success(file_obj)
+    return True
 
 
 def delete_thumbnail(uuid):
@@ -150,12 +196,24 @@ def delete_thumbnail(uuid):
         logger.warning("Failed to delete thumbnail for %s", uuid, exc_info=True)
 
 
-def generate_missing_thumbnails():
+def generate_missing_thumbnails(*, retry_failed=False):
     """Generate thumbnails for all image files that don't have one yet.
+
+    Files that burned their attempt budget are skipped until PARKED_RETRY_AFTER
+    has elapsed. Passing *retry_failed* purges the whole ledger instead - the
+    operational escape hatch for when the cause of the failures (a broken
+    dependency, an unreachable storage backend) has been fixed and waiting out
+    the window is not acceptable. The whole ledger means every row, including
+    files still under the budget: their counters restart, so a file that had
+    already failed once needs the full budget again before it parks.
 
     Returns a dict with generation statistics.
     """
     from workspace.files.models import File
+
+    unparked = failures.clear_all_failures() if retry_failed else 0
+
+    started_at = timezone.now()
 
     qs = (
         File.objects.filter(
@@ -166,9 +224,16 @@ def generate_missing_thumbnails():
         )
         .exclude(content="")
         .exclude(content__isnull=True)
+        .exclude(uuid__in=failures.parked_file_ids())
     )
 
-    stats = {"generated": 0, "failed": 0, "total": 0}
+    stats = {
+        "generated": 0,
+        "failed": 0,
+        "parked": 0,
+        "unparked": unparked,
+        "total": 0,
+    }
 
     for file_obj in qs.iterator():
         stats["total"] += 1
@@ -178,5 +243,10 @@ def generate_missing_thumbnails():
             stats["generated"] += 1
         else:
             stats["failed"] += 1
+
+    # Files at the attempt budget whose row was touched during this pass. The
+    # count is global, so a file parked concurrently by the event handler lands
+    # in it too.
+    stats["parked"] = failures.count_parked_since(started_at)
 
     return stats

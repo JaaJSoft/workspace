@@ -83,7 +83,7 @@ class ThumbnailMetricsTests(TestCase):
         cls.user = User.objects.create_user(username="thumb", password="p")
 
     def test_skipped_for_non_image_increments_skipped_counter(self):
-        from workspace.files.services.thumbnails import generate_thumbnail
+        from workspace.files.services.thumbnails.generation import generate_thumbnail
 
         f = FileService.create_file(
             owner=self.user,
@@ -99,7 +99,7 @@ class ThumbnailMetricsTests(TestCase):
         )
 
     def test_failed_generation_increments_failed_counter(self):
-        from workspace.files.services.thumbnails import generate_thumbnail
+        from workspace.files.services.thumbnails.generation import generate_thumbnail
 
         # Force type='jpeg' so we pass can_generate_thumbnail, but the
         # bytes are garbage so Pillow will raise - that's the failure path.

@@ -1,22 +1,72 @@
-<div id="backlog" class="w-full max-w-5xl mx-auto"
+<div id="backlog" class="w-full flex flex-col gap-3"
      {% if backlog_status %}
      data-status-uuid="{{ backlog_status.uuid }}"
      @dragover.prevent="onDragOver($event)"
      @drop.prevent="onDrop($event, '{{ backlog_status.uuid }}')"
      {% endif %}>
-  {% if writable and backlog_status %}
-    <button class="btn btn-ghost btn-sm mb-2" @click="newTask('{{ backlog_status.uuid }}')">
-      <i data-lucide="plus" class="w-4 h-4"></i>
-      New task
-    </button>
+  <div class="flex flex-wrap items-center gap-2">
+    {% include "projects/ui/partials/_task_filters.html" %}
+    {% if writable and backlog_status %}
+      <div class="ms-auto flex items-center gap-2">
+        <div class="flex items-center gap-2" x-show="selected.length" x-cloak>
+          <span class="text-sm text-base-content/70" x-text="selected.length + ' selected'"></span>
+          <button type="button" class="btn btn-ghost btn-sm" @click="clearSelection()">Clear</button>
+          <div class="join">
+            <button type="button" class="btn btn-accent btn-sm join-item" @click="sendSelected()">
+              <i data-lucide="arrow-right-circle" class="w-4 h-4"></i>
+              Send to board
+            </button>
+            <div class="dropdown dropdown-end">
+              <button type="button" tabindex="0" class="btn btn-accent btn-sm join-item px-1.5"
+                      title="Send to a specific column" aria-label="Send to a specific column">
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>
+              </button>
+              <ul tabindex="0"
+                  class="dropdown-content menu z-50 mt-1 w-52 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2">
+                <template x-for="s in boardStatuses()" :key="s.uuid">
+                  <li>
+                    <button type="button" x-text="s.name"
+                            @click="sendSelected(s.uuid); document.activeElement.blur()"></button>
+                  </li>
+                </template>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-accent btn-sm" x-show="!selected.length"
+                @click="newTask('{{ backlog_status.uuid }}')">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          New task
+        </button>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if backlog_tasks %}
+    <div class="rounded-box border border-base-300 bg-base-100 overflow-hidden">
+      {# Column widths must stay in sync with _backlog_row.html. #}
+      <div class="flex items-center gap-3 px-3 py-2 border-b border-base-300 bg-base-200/60 text-xs font-medium uppercase tracking-wide text-base-content/60">
+        {% if writable %}
+          <input type="checkbox" class="checkbox checkbox-sm shrink-0" aria-label="Select all tasks"
+                 :checked="allVisibleSelected()" @change="toggleSelectAll()">
+        {% endif %}
+        <span class="flex-1">Task</span>
+        <span class="w-24 hidden sm:block shrink-0">Priority</span>
+        <span class="w-24 hidden md:block shrink-0">Due</span>
+        <span class="w-24 hidden md:block shrink-0 text-right">Assignees</span>
+        {% if writable %}<span class="w-8 shrink-0"></span>{% endif %}
+      </div>
+      <ul class="divide-y divide-base-200 min-h-8" data-backlog-list>
+        {% for task in backlog_tasks %}
+          {% include "projects/ui/partials/_backlog_row.html" %}
+        {% endfor %}
+      </ul>
+      <div x-show="filtersActive() && backlogVisibleCount() === 0" x-cloak
+           class="px-3 py-8 text-center text-sm text-base-content/60">
+        No tasks match the current filters.
+      </div>
+    </div>
+  {% else %}
+    {% include "ui/partials/inline_alert.html" with type="info" message="The backlog is empty." %}
   {% endif %}
-  <ul class="flex flex-col gap-2 min-h-8" data-backlog-list>
-    {% for task in backlog_tasks %}
-      {% include "projects/ui/partials/task_card.html" with show_send_to_board=True %}
-    {% empty %}
-      <li>
-        {% include "ui/partials/inline_alert.html" with type="info" message="The backlog is empty." %}
-      </li>
-    {% endfor %}
-  </ul>
 </div>

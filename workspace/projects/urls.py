@@ -22,6 +22,7 @@ status_reorder = StatusViewSet.as_view({"post": "reorder"})
 status_detail = StatusViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 task_list = TaskViewSet.as_view({"get": "list", "post": "create"})
 task_reorder = TaskViewSet.as_view({"post": "reorder"})
+task_move = TaskViewSet.as_view({"post": "move"})
 task_detail = TaskViewSet.as_view(
     {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
 )
@@ -76,6 +77,11 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/tasks/reorder",
         task_reorder,
         name="project-tasks-reorder",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/move",
+        task_move,
+        name="project-tasks-move",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>",

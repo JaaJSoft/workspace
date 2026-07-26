@@ -32,6 +32,31 @@ function fieldAction(field) {
   return map[field] || 'edit';
 }
 
+function emptyTaskFilters() {
+  return { q: '', assignee: '', label: '', priority: '' };
+}
+
+function taskMatchesFilters(dataset, filters) {
+  const query = (filters.q || '').trim().toLowerCase();
+  if (query && !(dataset.search || '').includes(query)) return false;
+  if (filters.priority && dataset.priority !== filters.priority) return false;
+  if (
+    filters.label &&
+    !(dataset.labels || '').split(' ').includes(filters.label)
+  ) {
+    return false;
+  }
+  if (filters.assignee) {
+    const ids = (dataset.assignees || '').split(' ').filter(Boolean);
+    if (filters.assignee === 'none') {
+      if (ids.length) return false;
+    } else if (!ids.includes(filters.assignee)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function emptyTaskForm() {
   return {
     title: '',
@@ -57,6 +82,8 @@ function projectBoard(config) {
     formError: '',
     panelTaskUuid: config.initialTask || null,
     _panelGeneration: 0,
+    filters: emptyTaskFilters(),
+    selected: [],
 
     init() {
       this.statuses = JSON.parse(
@@ -163,22 +190,100 @@ function projectBoard(config) {
       if (this.panelTaskUuid) this._loadPanel(this.panelTaskUuid);
     },
 
-    async sendToBoard(uuid) {
-      if (!config.writable) return;
-      const firstActive = this.statuses.find((s) => s.category === 'active');
-      if (!firstActive) return;
+    taskVisible(dataset) {
+      return taskMatchesFilters(dataset, this.filters);
+    },
+
+    filtersActive() {
+      return Boolean(
+        this.filters.q.trim() ||
+          this.filters.assignee ||
+          this.filters.label ||
+          this.filters.priority
+      );
+    },
+
+    clearFilters() {
+      this.filters = emptyTaskFilters();
+    },
+
+    _visibleTaskEls(scope) {
+      return Array.from(
+        document.querySelectorAll(scope + ' [data-task-uuid]')
+      ).filter((el) => taskMatchesFilters(el.dataset, this.filters));
+    },
+
+    columnCount(statusUuid, total) {
+      if (!this.filtersActive()) return total;
+      return this._visibleTaskEls('[data-status-uuid="' + statusUuid + '"]')
+        .length;
+    },
+
+    backlogVisibleCount() {
+      return this._visibleTaskEls('#backlog').length;
+    },
+
+    visibleBacklogUuids() {
+      return this._visibleTaskEls('#backlog').map((el) => el.dataset.taskUuid);
+    },
+
+    isSelected(uuid) {
+      return this.selected.includes(uuid);
+    },
+
+    toggleSelect(uuid) {
+      this.selected = this.isSelected(uuid)
+        ? this.selected.filter((u) => u !== uuid)
+        : this.selected.concat(uuid);
+    },
+
+    clearSelection() {
+      this.selected = [];
+    },
+
+    allVisibleSelected() {
+      const visible = this.visibleBacklogUuids();
+      return visible.length > 0 && visible.every((u) => this.isSelected(u));
+    },
+
+    toggleSelectAll() {
+      this.selected = this.allVisibleSelected() ? [] : this.visibleBacklogUuids();
+    },
+
+    boardStatuses() {
+      return this.statuses.filter((s) => s.category !== 'backlog');
+    },
+
+    async moveTasks(uuids, statusUuid) {
+      if (!config.writable || !uuids.length || !statusUuid) return;
       try {
-        const resp = await fetch(config.apiBase + '/tasks/' + uuid, {
-          method: 'PATCH',
+        const resp = await fetch(config.apiBase + '/tasks/move', {
+          method: 'POST',
           headers: this.headers(),
-          body: JSON.stringify({ status: firstActive.uuid }),
+          body: JSON.stringify({ status: statusUuid, tasks: uuids }),
         });
-        if (!resp.ok) throw new Error('Send to board failed');
+        if (!resp.ok) throw new Error('Move failed');
+        this.selected = this.selected.filter((u) => !uuids.includes(u));
       } catch (e) {
-        // Swallow: the finally refresh restores server truth, card stays in backlog
+        if (window.AppAlert) AppAlert.error('Could not move the tasks.');
       } finally {
         this.refresh();
       }
+    },
+
+    sendToBoard(uuid) {
+      const firstActive = this.statuses.find((s) => s.category === 'active');
+      if (!firstActive) return Promise.resolve();
+      return this.moveTasks([uuid], firstActive.uuid);
+    },
+
+    sendSelected(statusUuid) {
+      let target = statusUuid;
+      if (!target) {
+        const firstActive = this.statuses.find((s) => s.category === 'active');
+        target = firstActive && firstActive.uuid;
+      }
+      return this.moveTasks(this.selected.slice(), target);
     },
 
     newTask(statusUuid) {
@@ -397,4 +502,5 @@ window.projectBoardHelpers = {
   listOrder: listOrder,
   taskParamUrl: taskParamUrl,
   fieldAction: fieldAction,
+  taskMatchesFilters: taskMatchesFilters,
 };

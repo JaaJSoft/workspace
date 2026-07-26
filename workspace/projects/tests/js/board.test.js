@@ -148,6 +148,215 @@ test('taskParamUrl removes the task param when uuid is null', () => {
   );
 });
 
+test('taskMatchesFilters matches everything with empty filters', () => {
+  const match = ctx.projectBoardHelpers.taskMatchesFilters;
+  const empty = { q: '', assignee: '', label: '', priority: '' };
+  assert.equal(match({}, empty), true);
+  assert.equal(match({ search: 'fix login', priority: 'high' }, empty), true);
+});
+
+test('taskMatchesFilters searches case-insensitively', () => {
+  const match = ctx.projectBoardHelpers.taskMatchesFilters;
+  const dataset = { search: 'fix the login flow bug' };
+  assert.equal(match(dataset, { q: 'LOGIN' }), true);
+  assert.equal(match(dataset, { q: '  bug ' }), true);
+  assert.equal(match(dataset, { q: 'payment' }), false);
+});
+
+test('taskMatchesFilters filters by priority, label and assignee', () => {
+  const match = ctx.projectBoardHelpers.taskMatchesFilters;
+  const dataset = { priority: 'high', labels: 'l1 l2', assignees: '7 9' };
+  assert.equal(match(dataset, { priority: 'high' }), true);
+  assert.equal(match(dataset, { priority: 'low' }), false);
+  assert.equal(match(dataset, { label: 'l2' }), true);
+  assert.equal(match(dataset, { label: 'l3' }), false);
+  assert.equal(match(dataset, { assignee: '9' }), true);
+  assert.equal(match(dataset, { assignee: '8' }), false);
+});
+
+test('taskMatchesFilters assignee "none" matches only unassigned tasks', () => {
+  const match = ctx.projectBoardHelpers.taskMatchesFilters;
+  assert.equal(match({ assignees: '' }, { assignee: 'none' }), true);
+  assert.equal(match({}, { assignee: 'none' }), true);
+  assert.equal(match({ assignees: '7' }, { assignee: 'none' }), false);
+});
+
+test('taskMatchesFilters requires every active filter to match', () => {
+  const match = ctx.projectBoardHelpers.taskMatchesFilters;
+  const dataset = { search: 'fix login', priority: 'high', labels: 'l1' };
+  assert.equal(match(dataset, { q: 'login', priority: 'high' }), true);
+  assert.equal(match(dataset, { q: 'login', priority: 'low' }), false);
+});
+
+test('filtersActive and clearFilters track filter state', () => {
+  const board = panelBoard();
+  assert.equal(board.filtersActive(), false);
+  board.filters.q = '   ';
+  assert.equal(board.filtersActive(), false);
+  board.filters.q = 'bug';
+  assert.equal(board.filtersActive(), true);
+  board.clearFilters();
+  assert.equal(board.filtersActive(), false);
+  board.filters.assignee = 'none';
+  assert.equal(board.filtersActive(), true);
+});
+
+test('toggleSelect adds then removes a uuid', () => {
+  const board = panelBoard();
+  board.toggleSelect('u1');
+  board.toggleSelect('u2');
+  assert.deepStrictEqual(Array.from(board.selected), ['u1', 'u2']);
+  assert.equal(board.isSelected('u1'), true);
+  board.toggleSelect('u1');
+  assert.deepStrictEqual(Array.from(board.selected), ['u2']);
+  board.clearSelection();
+  assert.deepStrictEqual(Array.from(board.selected), []);
+});
+
+function backlogDom(rows) {
+  return {
+    querySelectorAll: (selector) => {
+      assert.equal(selector, '#backlog [data-task-uuid]');
+      return rows.map(([uuid, dataset]) => ({
+        dataset: { taskUuid: uuid, ...dataset },
+      }));
+    },
+  };
+}
+
+test('toggleSelectAll selects only the rows matching the filters', () => {
+  ctx.document = backlogDom([
+    ['u1', { priority: 'high' }],
+    ['u2', { priority: 'low' }],
+    ['u3', { priority: 'high' }],
+  ]);
+  const board = panelBoard();
+  board.filters.priority = 'high';
+  board.toggleSelectAll();
+  assert.deepStrictEqual(Array.from(board.selected), ['u1', 'u3']);
+  assert.equal(board.allVisibleSelected(), true);
+  board.toggleSelectAll();
+  assert.deepStrictEqual(Array.from(board.selected), []);
+});
+
+test('columnCount returns the server total when no filter is active', () => {
+  const board = panelBoard();
+  assert.equal(board.columnCount('s1', 5), 5);
+});
+
+test('columnCount counts only matching cards when filtering', () => {
+  ctx.document = {
+    querySelectorAll: (selector) => {
+      assert.equal(selector, '[data-status-uuid="s1"] [data-task-uuid]');
+      return [
+        { dataset: { taskUuid: 'u1', priority: 'high' } },
+        { dataset: { taskUuid: 'u2', priority: 'low' } },
+      ];
+    },
+  };
+  const board = panelBoard();
+  board.filters.priority = 'high';
+  assert.equal(board.columnCount('s1', 2), 1);
+});
+
+test('moveTasks posts to the bulk endpoint and prunes the selection', async () => {
+  const calls = [];
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url + ' ' + opts.body);
+    return { ok: true };
+  };
+  const board = panelBoard();
+  board.refresh = () => calls.push('refresh');
+  board.selected = ['u1', 'u2', 'u3'];
+  await board.moveTasks(['u1', 'u3'], 's-active');
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/tasks/move {"status":"s-active","tasks":["u1","u3"]}',
+    'refresh',
+  ]);
+  assert.deepStrictEqual(Array.from(board.selected), ['u2']);
+});
+
+test('moveTasks keeps the selection and alerts on failure', async () => {
+  const alerts = [];
+  ctx.AppAlert = { error: (message) => alerts.push(message) };
+  ctx.fetch = async () => ({ ok: false });
+  const board = panelBoard();
+  const refreshes = [];
+  board.refresh = () => refreshes.push(1);
+  board.selected = ['u1'];
+  await board.moveTasks(['u1'], 's-active');
+  assert.deepStrictEqual(Array.from(board.selected), ['u1']);
+  assert.deepStrictEqual(Array.from(alerts), ['Could not move the tasks.']);
+  assert.equal(refreshes.length, 1);
+});
+
+test('sendToBoard moves the single task to the first active status', async () => {
+  const calls = [];
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url + ' ' + opts.body);
+    return { ok: true };
+  };
+  const board = panelBoard();
+  board.refresh = () => {};
+  board.statuses = [
+    { uuid: 's-backlog', category: 'backlog' },
+    { uuid: 's-todo', category: 'active' },
+    { uuid: 's-done', category: 'done' },
+  ];
+  await board.sendToBoard('u1');
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/tasks/move {"status":"s-todo","tasks":["u1"]}',
+  ]);
+});
+
+test('sendSelected defaults to the first active status', async () => {
+  const calls = [];
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url + ' ' + opts.body);
+    return { ok: true };
+  };
+  const board = panelBoard();
+  board.refresh = () => {};
+  board.statuses = [
+    { uuid: 's-backlog', category: 'backlog' },
+    { uuid: 's-todo', category: 'active' },
+  ];
+  board.selected = ['u1', 'u2'];
+  await board.sendSelected();
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/tasks/move {"status":"s-todo","tasks":["u1","u2"]}',
+  ]);
+  assert.deepStrictEqual(Array.from(board.selected), []);
+});
+
+test('sendSelected honours an explicit target status', async () => {
+  const calls = [];
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url + ' ' + opts.body);
+    return { ok: true };
+  };
+  const board = panelBoard();
+  board.refresh = () => {};
+  board.selected = ['u1'];
+  await board.sendSelected('s-done');
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/tasks/move {"status":"s-done","tasks":["u1"]}',
+  ]);
+});
+
+test('boardStatuses excludes backlog columns', () => {
+  const board = panelBoard();
+  board.statuses = [
+    { uuid: 's-backlog', category: 'backlog' },
+    { uuid: 's-todo', category: 'active' },
+    { uuid: 's-done', category: 'done' },
+  ];
+  assert.deepStrictEqual(
+    Array.from(board.boardStatuses()).map((s) => s.uuid),
+    ['s-todo', 's-done']
+  );
+});
+
 test('fieldAction maps each editable field to its action id', () => {
   const cases = {
     title: 'edit',

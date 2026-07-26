@@ -20,6 +20,7 @@ from .serializers import (
     MemberWriteSerializer,
     ProjectSerializer,
     StatusReorderSerializer,
+    TaskMoveSerializer,
     TaskReorderSerializer,
     TaskSerializer,
     TaskStatusSerializer,
@@ -39,6 +40,7 @@ from .services.tasks import (
     create_task,
     delete_task,
     has_field_updates,
+    move_tasks,
     reorder_tasks,
 )
 
@@ -426,9 +428,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         self._require_writable()
         serializer = TaskReorderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        status_obj = self.project.statuses.filter(
-            uuid=serializer.validated_data["status"]
-        ).first()
+        status_obj = self._resolve_status(serializer.validated_data["status"])
         if status_obj is None:
             return Response(
                 {"detail": "Unknown status for this project."},
@@ -441,3 +441,26 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
             actor=request.user,
         )
         return Response({"success": True})
+
+    def move(self, request, *args, **kwargs):
+        """Bulk move (backlog multi-select "send to board"): appends the
+        listed tasks to the end of the target column. Idempotent."""
+        self._require_writable()
+        serializer = TaskMoveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        status_obj = self._resolve_status(serializer.validated_data["status"])
+        if status_obj is None:
+            return Response(
+                {"detail": "Unknown status for this project."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        moved = move_tasks(
+            self.project,
+            status_obj,
+            serializer.validated_data["tasks"],
+            actor=request.user,
+        )
+        return Response({"success": True, "moved": len(moved)})
+
+    def _resolve_status(self, status_uuid):
+        return self.project.statuses.filter(uuid=status_uuid).first()

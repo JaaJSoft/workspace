@@ -1,26 +1,35 @@
-<div id="board" class="flex gap-4 overflow-x-auto items-start pb-4">
-  {% for column in columns %}
-    <section class="flex-1 min-w-72 rounded-box bg-base-200 p-3"
-             data-status-uuid="{{ column.status.uuid }}"
-             @dragover.prevent="onDragOver($event)"
-             @drop.prevent="onDrop($event, '{{ column.status.uuid }}')">
-      <header class="flex items-center justify-between mb-2">
-        <h3 class="text-sm font-medium">{{ column.status.name }}</h3>
-        <div class="flex items-center gap-1">
-          <span class="badge badge-ghost badge-sm">{{ column.tasks|length }}</span>
-          {% if writable %}
-            <button class="btn btn-ghost btn-xs btn-square" title="New task"
-                    @click="newTask('{{ column.status.uuid }}')">
-              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-            </button>
-          {% endif %}
-        </div>
-      </header>
-      <ul class="flex flex-col gap-2 min-h-8" data-column-list>
-        {% for task in column.tasks %}
-          {% include "projects/ui/partials/task_card.html" %}
-        {% endfor %}
-      </ul>
-    </section>
-  {% endfor %}
+<div id="board" class="flex flex-col gap-3 min-h-0">
+  {% include "projects/ui/partials/_task_filters.html" %}
+  <div class="flex gap-4 overflow-x-auto items-start pb-4">
+    {% for column in columns %}
+      <section class="flex-1 min-w-72 rounded-box bg-base-200 p-3"
+               data-status-uuid="{{ column.status.uuid }}"
+               @dragover.prevent="onDragOver($event)"
+               @drop.prevent="onDrop($event, '{{ column.status.uuid }}')">
+        <header class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-medium flex items-center gap-2">
+            {% if column.status.color %}
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: {{ column.status.color }}"></span>
+            {% endif %}
+            {{ column.status.name }}
+          </h3>
+          <div class="flex items-center gap-1">
+            <span class="badge badge-ghost badge-sm"
+                  x-text="columnCount('{{ column.status.uuid }}', {{ column.tasks|length }})">{{ column.tasks|length }}</span>
+            {% if writable %}
+              <button class="btn btn-ghost btn-xs btn-square" title="New task"
+                      @click="newTask('{{ column.status.uuid }}')">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              </button>
+            {% endif %}
+          </div>
+        </header>
+        <ul class="flex flex-col gap-2 min-h-8" data-column-list>
+          {% for task in column.tasks %}
+            {% include "projects/ui/partials/task_card.html" %}
+          {% endfor %}
+        </ul>
+      </section>
+    {% endfor %}
+  </div>
 </div>

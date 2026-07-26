@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Case, Count, IntegerField, Q, Value, When
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.uuids import parse_uuid_or_none
@@ -106,6 +107,7 @@ def _base_context(request, project, role, view):
         "role": role,
         "view": view,
         "writable": not project.is_archived,
+        "today": timezone.localdate(),
         "statuses": statuses,
         "members": members,
         "statuses_data": [

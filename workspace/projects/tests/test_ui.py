@@ -133,6 +133,12 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertTemplateNotUsed(response, "projects/ui/project.html")
         self.assertContains(response, 'id="project-content"')
 
+    def test_board_has_shared_filter_bar(self):
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertContains(response, 'id="task-filters"')
+        self.assertContains(response, 'x-model="filters.q"')
+
     def test_members_data_exposes_user_ids(self):
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}/board")
@@ -154,6 +160,54 @@ class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "projects/ui/project.html")
         self.assertEqual(response.context["view"], "backlog")
+
+    def test_backlog_has_filter_bar_and_bulk_toolbar(self):
+        create_task(self.project, self.admin, title="Queued work")
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/backlog")
+        self.assertContains(response, 'id="task-filters"')
+        self.assertContains(response, "Send to board")
+        self.assertContains(response, 'x-model="filters.q"')
+        self.assertContains(response, "toggleSelectAll()")
+
+    def test_backlog_rows_expose_filter_metadata(self):
+        label = self.project.labels.create(name="Bug", color="#ff0000")
+        task = create_task(
+            self.project,
+            self.admin,
+            title="Fix Login",
+            assignees=[self.member],
+            labels=[label],
+        )
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/backlog")
+        self.assertContains(response, f'data-task-uuid="{task.uuid}"')
+        self.assertContains(response, 'data-priority="medium"')
+        self.assertContains(response, "fix login bug")
+        self.assertContains(response, f'data-assignees="{self.member.pk} "')
+        self.assertContains(response, f'data-labels="{label.uuid} "')
+
+    def test_backlog_filter_options_come_from_project_data(self):
+        self.project.labels.create(name="Bug", color="#ff0000")
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/backlog")
+        self.assertContains(
+            response, f'<option value="{self.member.pk}">member1</option>'
+        )
+        self.assertContains(response, "All labels")
+        self.assertContains(response, "Unassigned")
+
+    def test_archived_project_backlog_has_no_bulk_controls(self):
+        from django.utils import timezone
+
+        create_task(self.project, self.admin, title="Queued work")
+        self.project.archived_at = timezone.now()
+        self.project.save(update_fields=["archived_at"])
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/backlog")
+        self.assertNotContains(response, "Send to board")
+        self.assertNotContains(response, "toggleSelectAll()")
+        self.assertContains(response, 'id="task-filters"')
 
     def test_partial_returns_content_wrapper(self):
         self.client.force_login(self.member)

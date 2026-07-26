@@ -171,50 +171,46 @@ class TaskSerializer(serializers.ModelSerializer):
         return users
 
 
+def _parse_uuid_list(value, field_name):
+    """Manual UUID parsing instead of ListField(child=UUIDField): the orjson
+    renderer used project-wide cannot serialize the int-keyed error dicts
+    that per-item child validation produces (PinnedReorderSerializer
+    precedent)."""
+    import uuid as uuid_module
+
+    parsed = []
+    for item in value:
+        if not isinstance(item, str):
+            raise serializers.ValidationError(
+                f"{field_name} items must be UUID strings."
+            )
+        try:
+            parsed.append(uuid_module.UUID(item))
+        except ValueError:
+            raise serializers.ValidationError(f"Invalid UUID: {item}") from None
+    if len(set(parsed)) != len(parsed):
+        raise serializers.ValidationError(f"Duplicate UUIDs in {field_name}.")
+    return parsed
+
+
 class TaskReorderSerializer(serializers.Serializer):
-    """Validate the reorder payload.
-
-    Manual UUID parsing in validate_order instead of
-    ListField(child=UUIDField): the orjson renderer used project-wide
-    cannot serialize the int-keyed error dicts that per-item child
-    validation produces (PinnedReorderSerializer precedent).
-    """
-
     status = serializers.UUIDField()
     order = serializers.ListField()
 
     def validate_order(self, value):
-        import uuid as uuid_module
+        return _parse_uuid_list(value, "order")
 
-        parsed = []
-        for item in value:
-            if not isinstance(item, str):
-                raise serializers.ValidationError("order items must be UUID strings.")
-            try:
-                parsed.append(uuid_module.UUID(item))
-            except ValueError:
-                raise serializers.ValidationError(f"Invalid UUID: {item}") from None
-        if len(set(parsed)) != len(parsed):
-            raise serializers.ValidationError("Duplicate UUIDs in order.")
-        return parsed
+
+class TaskMoveSerializer(serializers.Serializer):
+    status = serializers.UUIDField()
+    tasks = serializers.ListField(allow_empty=False)
+
+    def validate_tasks(self, value):
+        return _parse_uuid_list(value, "tasks")
 
 
 class StatusReorderSerializer(serializers.Serializer):
-    """Same manual UUID parsing rationale as TaskReorderSerializer."""
-
     order = serializers.ListField()
 
     def validate_order(self, value):
-        import uuid as uuid_module
-
-        parsed = []
-        for item in value:
-            if not isinstance(item, str):
-                raise serializers.ValidationError("order items must be UUID strings.")
-            try:
-                parsed.append(uuid_module.UUID(item))
-            except ValueError:
-                raise serializers.ValidationError(f"Invalid UUID: {item}") from None
-        if len(set(parsed)) != len(parsed):
-            raise serializers.ValidationError("Duplicate UUIDs in order.")
-        return parsed
+        return _parse_uuid_list(value, "order")

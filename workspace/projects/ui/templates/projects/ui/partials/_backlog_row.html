@@ -1,0 +1,46 @@
+{# Column widths must stay in sync with the header row in backlog.html. #}
+<li class="flex items-center gap-3 px-3 py-2 hover:bg-base-200/60 select-none {% if writable %}cursor-grab{% endif %}"
+    :class="dragging === '{{ task.uuid }}' && 'opacity-50'"
+    x-show="taskVisible($el.dataset)"
+    data-task-uuid="{{ task.uuid }}"
+    data-search="{{ task.title|lower }} {% for label in task.labels.all %}{{ label.name|lower }} {% endfor %}"
+    data-priority="{{ task.priority }}"
+    data-assignees="{% for assignee in task.assignees.all %}{{ assignee.pk }} {% endfor %}"
+    data-labels="{% for label in task.labels.all %}{{ label.uuid }} {% endfor %}"
+    {% if writable %}draggable="true"{% endif %}
+    @dragstart="onDragStart($event, '{{ task.uuid }}')"
+    @dragend="onDragEnd()"
+    @click="openTask('{{ task.uuid }}')">
+  {% if writable %}
+    <input type="checkbox" class="checkbox checkbox-sm shrink-0" @click.stop
+           aria-label="Select task"
+           :checked="isSelected('{{ task.uuid }}')"
+           @change="toggleSelect('{{ task.uuid }}')">
+  {% endif %}
+  <span class="flex-1 min-w-0 flex items-center gap-2">
+    <span class="text-sm font-medium truncate">{{ task.title }}</span>
+    {% for label in task.labels.all %}
+      <span class="badge badge-sm badge-outline shrink-0 hidden lg:inline-flex"
+            {% if label.color %}style="border-color: {{ label.color }}; color: {{ label.color }}"{% endif %}>{{ label.name }}</span>
+    {% endfor %}
+  </span>
+  <span class="w-24 hidden sm:block shrink-0">
+    {% include "projects/ui/partials/_priority_badge.html" %}
+  </span>
+  <span class="w-24 hidden md:flex items-center gap-1 shrink-0 text-xs {% if task.due_date and task.due_date < today %}text-error font-medium{% else %}text-base-content/60{% endif %}">
+    {% if task.due_date %}
+      <i data-lucide="calendar" class="w-3 h-3"></i>{{ task.due_date|date:"M j" }}
+    {% endif %}
+  </span>
+  <span class="w-24 hidden md:flex justify-end -space-x-2 shrink-0">
+    {% for assignee in task.assignees.all %}
+      {% include "ui/partials/user_avatar.html" with user=assignee size="2xs" show_presence=False show_card=True %}
+    {% endfor %}
+  </span>
+  {% if writable %}
+    <button class="btn btn-ghost btn-sm btn-square shrink-0" title="Send to board"
+            @click.stop="sendToBoard('{{ task.uuid }}')">
+      <i data-lucide="arrow-right-circle" class="w-5 h-5"></i>
+    </button>
+  {% endif %}
+</li>

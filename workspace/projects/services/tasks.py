@@ -121,6 +121,54 @@ def delete_task(task, actor=None):
         task.delete()
 
 
+def move_tasks(project, status, task_uuids, *, actor=None):
+    """Move the listed tasks to the end of *status*, in their current order.
+
+    Backlog bulk "send to board": unlike reorder_tasks this appends after
+    the column's existing tasks instead of prepending. Tasks already in
+    *status* and unknown UUIDs are skipped. Maintains ``completed_at`` from
+    the status category and records one move event per moved task.
+    Returns the moved tasks.
+    """
+    with transaction.atomic():
+        tasks = sorted(
+            project.tasks.select_for_update().filter(uuid__in=task_uuids),
+            key=lambda t: (t.position, t.created_at),
+        )
+        position = next_position(project, status)
+        now = timezone.now()
+        moved = []
+        for task in tasks:
+            if task.status_id == status.pk:
+                continue
+            moved.append((task, task.status))
+            task.status = status
+            task.position = position
+            position += 1
+            if status.category == TaskStatus.Category.DONE:
+                if task.completed_at is None:
+                    task.completed_at = now
+            else:
+                task.completed_at = None
+            # bulk_update bypasses save(), so auto_now would leave
+            # updated_at stale; stamp it by hand.
+            task.updated_at = now
+        if moved:
+            Task.objects.bulk_update(
+                [task for task, _ in moved],
+                ["status", "position", "completed_at", "updated_at"],
+            )
+        for task, old_status in moved:
+            record_task_event(
+                task,
+                type=move_event_type(status),
+                actor=actor,
+                from_status=old_status,
+                to_status=status,
+            )
+    return [task for task, _ in moved]
+
+
 def reorder_tasks(project, status, ordered_uuids, *, actor=None):
     """Apply a manual order to *status*'s column.
 

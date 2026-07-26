@@ -1,0 +1,39 @@
+{% comment %}
+Shared board/backlog filter bar. Filter state lives on the root
+projectBoard component (not in this partial), so it survives the
+alpine-ajax content swaps when switching between board and backlog.
+Matching is client-side against the data-* attributes on each task
+card/row (see taskMatchesFilters in board.js).
+{% endcomment %}
+<div id="task-filters" class="flex flex-wrap items-center gap-2">
+  <label class="input input-bordered input-sm flex items-center gap-2 w-full sm:w-56">
+    <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+    <input type="search" class="grow" placeholder="Search tasks" x-model="filters.q">
+  </label>
+  <select class="select select-bordered select-sm" x-model="filters.assignee" aria-label="Filter by assignee">
+    <option value="">All assignees</option>
+    <option value="none">Unassigned</option>
+    {% for m in members %}
+      <option value="{{ m.user_id }}">{{ m.user.username }}</option>
+    {% endfor %}
+  </select>
+  {% if labels_data %}
+    <select class="select select-bordered select-sm" x-model="filters.label" aria-label="Filter by label">
+      <option value="">All labels</option>
+      {% for label in labels_data %}
+        <option value="{{ label.uuid }}">{{ label.name }}</option>
+      {% endfor %}
+    </select>
+  {% endif %}
+  <select class="select select-bordered select-sm" x-model="filters.priority" aria-label="Filter by priority">
+    <option value="">All priorities</option>
+    <option value="urgent">Urgent</option>
+    <option value="high">High</option>
+    <option value="medium">Medium</option>
+    <option value="low">Low</option>
+  </select>
+  <button type="button" class="btn btn-ghost btn-sm" x-show="filtersActive()" x-cloak @click="clearFilters()">
+    <i data-lucide="x" class="w-4 h-4"></i>
+    Clear
+  </button>
+</div>

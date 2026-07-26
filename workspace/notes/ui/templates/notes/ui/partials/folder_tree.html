@@ -1,0 +1,41 @@
+{% comment %}
+  Folder tree rows for the notes sidebar (personal and group trees).
+  Alpine's <template x-for> cannot recurse, so the tree renders as one
+  flat list over visibleFolderRows(): each row's `depth` drives the
+  indentation and guide lines, which makes the nesting depth unbounded.
+  Parameters:
+    rows      - name of the Alpine root folder list (e.g. "sidebarFolders")
+    view_type - "folder" (personal) or "group_folder"
+{% endcomment %}
+<template x-for="row in visibleFolderRows({{ rows }})" :key="row.uuid">
+  <li class="relative" :style="row.depth ? 'padding-left:' + row.depth + 'rem' : ''">
+    {# `hidden` because daisyUI's `.menu :where(li > *)` styles every direct #}
+    {# child of a li - including this inert template placeholder, which would #}
+    {# otherwise render as an empty 8px menu item above the row. #}
+    <template x-for="lvl in row.depth" :key="lvl" class="hidden">
+      {# With the item's pl-2, the parent icon centre sits 1rem into its row #}
+      {# (0.5rem padding + half the 1rem icon) - one indent step, so guides #}
+      {# align under the icons. Pulled 2px left so the innermost guide stays #}
+      {# in the gutter instead of touching the row's hover pill. #}
+      <span class="absolute inset-y-0 w-px p-0 pointer-events-none bg-base-content/10"
+            :style="'left:' + (lvl - 0.125) + 'rem'" aria-hidden="true"></span>
+    </template>
+    <a class="pl-2 pr-1" @click="setView('{{ view_type }}', row.uuid, row.name)"
+       @contextmenu="openCtxMenu($event, '{{ view_type }}', row)"
+       :class="activeView === '{{ view_type }}' && activeId === row.uuid ? 'group bg-success/10 text-success' : 'group'">
+      <i :data-lucide="row.icon || 'folder'" class="w-4 h-4" :class="row.color || ''"></i>
+      <span class="truncate flex-1" x-text="row.name"></span>
+      <button type="button" class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:!opacity-100"
+              @click.stop="openCtxMenu($event, '{{ view_type }}', row)">
+        <i data-lucide="ellipsis-vertical" class="w-3.5 h-3.5"></i>
+      </button>
+      <span x-show="loadingChildren.indexOf(row.uuid) !== -1" class="loading loading-spinner loading-xs" x-cloak></span>
+      <button x-show="row.has_children && loadingChildren.indexOf(row.uuid) === -1" type="button"
+              class="btn btn-ghost btn-xs btn-square opacity-40 hover:!opacity-100"
+              :class="expandedFolders.indexOf(row.uuid) !== -1 ? '' : '[&>svg]:-rotate-90'"
+              @click.stop="toggleFolderExpand(row.uuid)">
+        <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform duration-200"></i>
+      </button>
+    </a>
+  </li>
+</template>

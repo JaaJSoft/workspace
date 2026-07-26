@@ -24,13 +24,13 @@ from .serializers import (
     TaskSerializer,
     TaskStatusSerializer,
 )
+from .services.events import record_task_event
 from .services.members import (
     ProjectRuleError,
     add_member,
     change_member_role,
     remove_member,
 )
-from .services.events import record_task_event
 from .services.projects import create_project
 from .services.search import fts_tasks
 from .services.statuses import create_status, delete_status, reorder_statuses

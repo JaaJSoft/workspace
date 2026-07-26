@@ -160,7 +160,7 @@ class StatusChangeEventTests(ProjectTestMixin, TestCase):
         self.assertEqual(event.actor, self.member)
         self.assertEqual(event.from_status, "To do")
 
-    def test_patch_without_status_change_records_nothing(self):
+    def test_patch_without_status_change_records_update_not_move(self):
         self.client.force_login(self.member)
         resp = self.client.patch(
             f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}",
@@ -168,7 +168,9 @@ class StatusChangeEventTests(ProjectTestMixin, TestCase):
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(TaskEvent.objects.count(), 0)
+        event = TaskEvent.objects.get()
+        self.assertEqual(event.type, TaskEvent.Type.UPDATED)
+        self.assertEqual(event.actor, self.member)
 
 
 class DeleteTaskEventTests(ProjectTestMixin, TestCase):

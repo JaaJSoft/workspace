@@ -25,3 +25,29 @@ def move_event_type(to_status):
 def events_for_project(project, limit=15):
     """Newest-first events for the project overview card."""
     return project.task_events.select_related("actor")[:limit]
+
+
+def serialize_task_event(ev):
+    """Normalize a TaskEvent into the activity-feed event dict shape.
+
+    Shared between the activity provider and the task detail panel so both
+    render through dashboard/partials/activity_item.html.
+    """
+    if ev.actor is not None:
+        actor = {
+            "id": ev.actor.pk,
+            "username": ev.actor.username,
+            "full_name": ev.actor.get_full_name(),
+        }
+    else:
+        # Null actor means a system-driven write; never attribute it to
+        # a real user (same convention as the files provider).
+        actor = None
+    return {
+        "icon": ev.icon,
+        "label": ev.short_label,
+        "description": ev.task_title,
+        "timestamp": ev.created_at,
+        "url": f"/projects/{ev.project_id}",
+        "actor": actor,
+    }

@@ -48,29 +48,9 @@ class ProjectsActivityProvider(ActivityProvider):
             .select_related("actor")
             .order_by("-created_at")[offset : offset + limit]
         )
-        events = []
-        for ev in qs:
-            # Null actor means a system-driven write; never attribute it to
-            # a real user (same convention as the files provider).
-            if ev.actor is not None:
-                actor_data = {
-                    "id": ev.actor.pk,
-                    "username": ev.actor.username,
-                    "full_name": ev.actor.get_full_name(),
-                }
-            else:
-                actor_data = None
-            events.append(
-                {
-                    "icon": ev.icon,
-                    "label": ev.short_label,
-                    "description": ev.task_title,
-                    "timestamp": ev.created_at,
-                    "url": f"/projects/{ev.project_id}",
-                    "actor": actor_data,
-                }
-            )
-        return events
+        from workspace.projects.services.events import serialize_task_event
+
+        return [serialize_task_event(ev) for ev in qs]
 
     def get_stats(self, user_id, *, viewer_id=None):
         from workspace.projects.models import Task

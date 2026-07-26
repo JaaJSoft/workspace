@@ -18,8 +18,10 @@ x-data="projectBoard({
   projectBase: '{% url 'projects_ui:project' project.uuid %}',
   writable: {{ writable|yesno:'true,false' }},
   view: '{{ view }}',
+  initialTask: '{{ panel_task.uuid }}',
 })"
-@popstate.window="currentView = window.location.pathname.endsWith('/backlog') ? 'backlog' : (window.location.pathname.endsWith('/board') ? 'board' : (window.location.pathname.endsWith('/settings') ? 'settings' : 'overview'))"
+@popstate.window="onPopState()"
+@ajax:after="ensureTaskParam()"
 {% endblock %}
 
 {% block drawer_sidebar %}
@@ -118,54 +120,67 @@ x-data="projectBoard({
 {{ statuses_data|json_script:"statuses-data" }}
 {{ members_data|json_script:"members-data" }}
 {{ labels_data|json_script:"labels-data" }}
-<div class="p-4 flex flex-col gap-4 h-full min-h-0">
-  <div class="flex items-center gap-3 min-w-0">
-    {% include "ui/partials/drawer_toggle.html" with drawer_id="projects-drawer" class="lg:hidden" %}
-    <h1 class="text-xl font-semibold truncate">{{ project.name }}</h1>
-    {% if project.archived_at %}<span class="badge badge-ghost">Archived</span>{% endif %}
+<div class="flex h-full min-h-0">
+  <div class="p-4 flex flex-col gap-4 flex-1 min-w-0"
+       :class="panelTaskUuid && isMobile() ? 'hidden' : ''">
+    <div class="flex items-center gap-3 min-w-0">
+      {% include "ui/partials/drawer_toggle.html" with drawer_id="projects-drawer" class="lg:hidden" %}
+      <h1 class="text-xl font-semibold truncate">{{ project.name }}</h1>
+      {% if project.archived_at %}<span class="badge badge-ghost">Archived</span>{% endif %}
+    </div>
+
+    {% include "projects/ui/partials/_content.html" %}
   </div>
 
-  {% include "projects/ui/partials/_content.html" %}
-
-  {% include "projects/ui/partials/task_modal.html" %}
-
-  <dialog id="new-project-dialog" class="modal">
-    <div class="modal-box max-w-sm"
-         x-data="{ creating: false, name: '', description: '', error: '' }">
-      <h2 class="font-semibold mb-3">New project</h2>
-      <template x-if="error">
-        {% include "ui/partials/inline_alert.html" with type="error" class="mb-2" slot='<span x-text="error"></span>' %}
-      </template>
-      <form @submit.prevent="
-        creating = true; error = '';
-        fetch('/api/v1/projects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ name: name, description: description }),
-        }).then(async (resp) => {
-          if (!resp.ok) throw new Error('Could not create the project.');
-          const data = await resp.json();
-          window.location.href = '/projects/' + data.uuid;
-        }).catch((e) => { error = e.message; }).finally(() => { creating = false; });
-      ">
-        <label class="form-control w-full">
-          <div class="label"><span class="label-text">Name</span></div>
-          <input type="text" class="input input-bordered w-full" x-model="name" required maxlength="255">
-        </label>
-        <label class="form-control w-full mt-2">
-          <div class="label"><span class="label-text">Description</span></div>
-          <textarea class="textarea textarea-bordered w-full" x-model="description" rows="2"></textarea>
-        </label>
-        <div class="modal-action">
-          <button type="button" class="btn btn-ghost btn-sm"
-                  @click="document.getElementById('new-project-dialog').close()">Cancel</button>
-          <button type="submit" class="btn btn-accent btn-sm" :disabled="creating || !name.trim()">Create</button>
-        </div>
-      </form>
-    </div>
-    <form method="dialog" class="modal-backdrop"><button>close</button></form>
-  </dialog>
+  <!-- Task detail panel region (full-screen on mobile, right sidebar on desktop) -->
+  <div x-show="panelTaskUuid" x-cloak
+       class="w-full lg:w-96 shrink-0 lg:border-l border-base-300 bg-base-100 flex flex-col min-h-0 overflow-hidden">
+    {% if panel_task %}
+      {% include "projects/ui/partials/task_panel.html" %}
+    {% else %}
+      <div id="task-panel" class="flex-1 min-h-0"></div>
+    {% endif %}
+  </div>
 </div>
+
+{% include "projects/ui/partials/task_modal.html" %}
+
+<dialog id="new-project-dialog" class="modal">
+  <div class="modal-box max-w-sm"
+       x-data="{ creating: false, name: '', description: '', error: '' }">
+    <h2 class="font-semibold mb-3">New project</h2>
+    <template x-if="error">
+      {% include "ui/partials/inline_alert.html" with type="error" class="mb-2" slot='<span x-text="error"></span>' %}
+    </template>
+    <form @submit.prevent="
+      creating = true; error = '';
+      fetch('/api/v1/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ name: name, description: description }),
+      }).then(async (resp) => {
+        if (!resp.ok) throw new Error('Could not create the project.');
+        const data = await resp.json();
+        window.location.href = '/projects/' + data.uuid;
+      }).catch((e) => { error = e.message; }).finally(() => { creating = false; });
+    ">
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Name</span></div>
+        <input type="text" class="input input-bordered w-full" x-model="name" required maxlength="255">
+      </label>
+      <label class="form-control w-full mt-2">
+        <div class="label"><span class="label-text">Description</span></div>
+        <textarea class="textarea textarea-bordered w-full" x-model="description" rows="2"></textarea>
+      </label>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost btn-sm"
+                @click="document.getElementById('new-project-dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-accent btn-sm" :disabled="creating || !name.trim()">Create</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 <script src="{% static 'projects/ui/js/board.js' %}"></script>
 <script src="{% static 'projects/ui/js/settings.js' %}"></script>
 {% endblock %}

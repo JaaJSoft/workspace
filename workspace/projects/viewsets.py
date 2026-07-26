@@ -11,7 +11,7 @@ from rest_framework.response import Response
 
 from workspace.common.uuids import parse_uuid_or_none
 
-from .models import Label, Project, ProjectMember, Task, TaskStatus
+from .models import Label, Project, ProjectMember, Task, TaskEvent, TaskStatus
 from .queries import get_project_role, user_project_ids
 from .serializers import (
     LabelSerializer,
@@ -30,10 +30,17 @@ from .services.members import (
     change_member_role,
     remove_member,
 )
+from .services.events import record_task_event
 from .services.projects import create_project
 from .services.search import fts_tasks
 from .services.statuses import create_status, delete_status, reorder_statuses
-from .services.tasks import apply_status_change, create_task, delete_task, reorder_tasks
+from .services.tasks import (
+    apply_status_change,
+    create_task,
+    delete_task,
+    has_field_updates,
+    reorder_tasks,
+)
 
 User = get_user_model()
 
@@ -393,9 +400,18 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         old_status = serializer.instance.status
+        # Compared before save: afterwards the instance already carries the
+        # new values and every edit would look like a no-op.
+        fields_updated = has_field_updates(
+            serializer.instance, serializer.validated_data
+        )
         task = serializer.save()
         if task.status_id != old_status.pk:
             apply_status_change(task, actor=self.request.user, old_status=old_status)
+        if fields_updated:
+            record_task_event(
+                task, type=TaskEvent.Type.UPDATED, actor=self.request.user
+            )
 
     def destroy(self, request, *args, **kwargs):
         self._require_writable()

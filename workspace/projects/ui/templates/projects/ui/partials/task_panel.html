@@ -1,0 +1,149 @@
+{# Task detail panel: read view with per-field inline editing (Jira-style). #}
+{# Swapped via alpine-ajax (target id "task-panel"); also included by #}
+{# project.html on ?task= deep links. Action availability is rendered #}
+{# server-side from the ActionRegistry; taskPanel() re-checks it in JS. #}
+<div id="task-panel" class="flex flex-col min-h-0 h-full" x-data="taskPanel()">
+  {{ panel_task_data|json_script:"task-panel-data" }}
+  {{ panel_action_ids|json_script:"task-panel-actions" }}
+
+  <div class="flex items-start gap-2 p-4 pb-3 border-b border-base-300">
+    <button type="button" class="btn btn-sm btn-square btn-ghost lg:hidden -mt-1 -ml-1"
+            @click="closePanel()" aria-label="Back to board">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i>
+    </button>
+    <div class="flex-1 min-w-0">
+      <template x-if="editing !== 'title'">
+        <h2 class="font-semibold text-lg leading-tight break-words"
+            :class="can('edit') && 'cursor-text hover:bg-base-200 rounded px-1 -mx-1'"
+            @click="startEdit('title', data.title)">{{ panel_task.title }}</h2>
+      </template>
+      <template x-if="editing === 'title'">
+        <input type="text" class="input input-bordered input-sm w-full" x-model="draft"
+               maxlength="255" x-init="$el.focus()"
+               @keydown.enter.prevent="$el.blur()" @keydown.escape="cancelEdit()"
+               @blur="commitDraft('title')">
+      </template>
+    </div>
+    <button type="button" class="btn btn-sm btn-square btn-ghost hidden lg:inline-flex -mt-1 -mr-1"
+            @click="closePanel()" aria-label="Close panel">
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
+  </div>
+
+  <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+    <div class="grid grid-cols-2 gap-2">
+      <label class="form-control">
+        <div class="label py-1"><span class="label-text text-xs">Status</span></div>
+        <select class="select select-bordered select-sm" x-model="data.status"
+                @change="commitField('status', data.status)"
+                {% if "move" not in panel_action_ids %}disabled{% endif %}>
+          {% for s in statuses %}
+            <option value="{{ s.uuid }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="form-control">
+        <div class="label py-1"><span class="label-text text-xs">Priority</span></div>
+        <select class="select select-bordered select-sm" x-model="data.priority"
+                @change="commitField('priority', data.priority)"
+                {% if "edit" not in panel_action_ids %}disabled{% endif %}>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </label>
+      <label class="form-control col-span-2">
+        <div class="label py-1"><span class="label-text text-xs">Due date</span></div>
+        <input type="date" class="input input-bordered input-sm" x-model="data.due_date"
+               @change="commitField('due_date', data.due_date || null)"
+               {% if "set_due" not in panel_action_ids %}disabled{% endif %}>
+      </label>
+    </div>
+
+    <section>
+      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Description</h3>
+      <template x-if="editing !== 'description'">
+        <div :class="can('edit') && 'cursor-text hover:bg-base-200 rounded p-1 -m-1'"
+             @click="startEdit('description', data.description)">
+          {% if panel_description_html %}
+            <div class="prose prose-sm max-w-none">{{ panel_description_html|safe }}</div>
+          {% else %}
+            <p class="text-sm text-base-content/50 italic">No description.</p>
+          {% endif %}
+        </div>
+      </template>
+      <template x-if="editing === 'description'">
+        <div>
+          <textarea class="textarea textarea-bordered w-full text-sm" rows="6"
+                    x-model="draft" placeholder="Markdown supported"
+                    x-init="$el.focus()" @keydown.escape="cancelEdit()"></textarea>
+          <div class="flex justify-end gap-2 mt-1">
+            <button type="button" class="btn btn-ghost btn-xs" @click="cancelEdit()">Cancel</button>
+            <button type="button" class="btn btn-accent btn-xs" @click="commitDraft('description')">Save</button>
+          </div>
+        </div>
+      </template>
+    </section>
+
+    {% if members %}
+    <section>
+      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Assignees</h3>
+      <div class="flex flex-wrap gap-3">
+        {% for m in members %}
+          <label class="label cursor-pointer gap-1.5 p-0">
+            <input type="checkbox" class="checkbox checkbox-accent checkbox-xs"
+                   value="{{ m.user_id }}"
+                   :checked="data.assignees.includes('{{ m.user_id }}')"
+                   @change="toggleMulti('assignees', '{{ m.user_id }}', $event.target.checked)"
+                   {% if "assign" not in panel_action_ids %}disabled{% endif %}>
+            <span class="label-text text-xs">{{ m.user.username }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if labels_data %}
+    <section>
+      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Labels</h3>
+      <div class="flex flex-wrap gap-3">
+        {% for label in labels_data %}
+          <label class="label cursor-pointer gap-1.5 p-0">
+            <input type="checkbox" class="checkbox checkbox-accent checkbox-xs"
+                   value="{{ label.uuid }}"
+                   :checked="data.labels.includes('{{ label.uuid }}')"
+                   @change="toggleMulti('labels', '{{ label.uuid }}', $event.target.checked)"
+                   {% if "set_labels" not in panel_action_ids %}disabled{% endif %}>
+            <span class="label-text text-xs">{{ label.name }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <section>
+      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Activity</h3>
+      <ul class="divide-y divide-base-200">
+        {% for event in panel_events %}
+          {% include "dashboard/partials/activity_item.html" with activity_hide_view=True %}
+        {% empty %}
+          <li class="py-2 text-sm text-base-content/50 italic">No activity yet.</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="text-xs text-base-content/50 flex flex-col gap-0.5 border-t border-base-200 pt-3">
+      <span>Created {{ panel_task.created_at|date:"DATE_FORMAT" }}{% if panel_task.created_by %} by {{ panel_task.created_by.username }}{% endif %}</span>
+      <span>Updated {{ panel_task.updated_at|date:"DATE_FORMAT" }}</span>
+      {% if panel_task.completed_at %}<span>Completed {{ panel_task.completed_at|date:"DATE_FORMAT" }}</span>{% endif %}
+    </section>
+
+    {% if "delete" in panel_action_ids %}
+      <button type="button" class="btn btn-error btn-outline btn-sm self-start"
+              @click="removeTask()">
+        <i data-lucide="trash-2" class="w-4 h-4"></i> Delete task
+      </button>
+    {% endif %}
+  </div>
+</div>

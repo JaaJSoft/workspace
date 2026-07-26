@@ -214,6 +214,24 @@ class RecordFailureTests(ThumbnailFailureTestCase):
 
         self.assertEqual(ids, [parked.uuid])
 
+    def test_parked_file_ids_releases_a_file_once_the_retry_window_lapses(self):
+        from datetime import timedelta
+
+        from workspace.files.services.thumbnail_failures import (
+            MAX_THUMBNAIL_ATTEMPTS,
+            PARKED_RETRY_AFTER,
+            parked_file_ids,
+        )
+
+        stale = self._make_broken_image("stale.jpg")
+        ThumbnailFailure.objects.create(
+            file=stale,
+            attempts=MAX_THUMBNAIL_ATTEMPTS,
+            last_attempt_at=timezone.now() - PARKED_RETRY_AFTER - timedelta(minutes=1),
+        )
+
+        self.assertEqual(list(parked_file_ids()), [])
+
     def test_count_parked_since_ignores_older_rows_and_unfinished_budgets(self):
         from datetime import timedelta
 
@@ -312,14 +330,39 @@ class BackfillParkingTests(ThumbnailFailureTestCase):
             self.assertEqual(stats["total"], 1, f"pass {attempt} should attempt it")
             self.assertEqual(stats["failed"], 1, f"pass {attempt} should fail")
 
+        # Created only now: an image present from the start would have been
+        # given its thumbnail by pass 1 and stopped being a candidate.
+        self._make_valid_image()
+
         stats = generate_missing_thumbnails()
 
-        self.assertEqual(
-            stats["total"], 0, "a parked file must never be attempted again"
-        )
+        self.assertEqual(stats["total"], 1, "only the healthy file may be attempted")
+        self.assertEqual(stats["generated"], 1)
         self.assertEqual(
             ThumbnailFailure.objects.get(file=f).attempts, MAX_THUMBNAIL_ATTEMPTS
         )
+
+    def test_file_parked_longer_than_the_retry_window_is_attempted_again(self):
+        from datetime import timedelta
+
+        from workspace.files.services.thumbnail_failures import (
+            MAX_THUMBNAIL_ATTEMPTS,
+            PARKED_RETRY_AFTER,
+        )
+        from workspace.files.services.thumbnails import generate_missing_thumbnails
+
+        f = self._make_valid_image()
+        ThumbnailFailure.objects.create(
+            file=f,
+            attempts=MAX_THUMBNAIL_ATTEMPTS,
+            last_attempt_at=timezone.now() - PARKED_RETRY_AFTER - timedelta(minutes=1),
+        )
+
+        stats = generate_missing_thumbnails()
+
+        self.assertEqual(stats["total"], 1, "a stale parking must not be permanent")
+        self.assertEqual(stats["generated"], 1)
+        self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
 
     def test_transient_failure_is_retried_and_then_forgotten(self):
         from workspace.files.services.thumbnail_failures import record_failure

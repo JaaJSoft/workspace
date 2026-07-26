@@ -807,6 +807,9 @@ class ThumbnailFailure(models.Model):
     uuid = models.UUIDField(
         primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
     )
+    # Must stay non-nullable: parked_file_ids() feeds a NOT IN subquery, where a
+    # single NULL makes the predicate UNKNOWN for every row and silently reduces
+    # the backfill to zero files.
     file = models.OneToOneField(
         File,
         on_delete=models.CASCADE,

@@ -190,7 +190,11 @@ function projectColumns(config) {
         const resp = await this.request(config.apiBase + '/statuses', {
           method: 'POST',
           headers: settingsHeaders(),
-          body: JSON.stringify(this.addForm),
+          body: JSON.stringify({
+            name: this.addForm.name.trim(),
+            category: this.addForm.category,
+            color: this.addForm.color,
+          }),
         });
         const created = await resp.json();
         created.task_count = 0;
@@ -210,7 +214,8 @@ function projectColumns(config) {
 
     async saveEdit(column) {
       if (this.editing !== column.uuid) return;
-      if (!this.editName.trim() || this.editName === column.name) {
+      const name = this.editName.trim();
+      if (!name || name === column.name) {
         this.editing = null;
         return;
       }
@@ -218,9 +223,9 @@ function projectColumns(config) {
         await this.request(config.apiBase + '/statuses/' + column.uuid, {
           method: 'PATCH',
           headers: settingsHeaders(),
-          body: JSON.stringify({ name: this.editName }),
+          body: JSON.stringify({ name: name }),
         });
-        column.name = this.editName;
+        column.name = name;
         this.editing = null;
         this.syncBoardStatuses();
       } catch (e) {
@@ -283,6 +288,10 @@ function projectColumns(config) {
         const others = this.columns.filter(function (c) {
           return c.uuid !== column.uuid;
         });
+        if (!others.length) {
+          this.error = 'The last column cannot be deleted while it holds tasks.';
+          return;
+        }
         moveTarget = await AppDialog.select({
           title: 'Delete column',
           message:
@@ -299,7 +308,7 @@ function projectColumns(config) {
           icon: 'trash-2',
           iconClass: 'bg-error/10 text-error',
         });
-        if (moveTarget === null) return;
+        if (!moveTarget) return;
       } else {
         const ok = await AppDialog.confirm({
           title: 'Delete column',
@@ -385,7 +394,10 @@ function projectLabels(config) {
         const resp = await this.request(config.apiBase + '/labels', {
           method: 'POST',
           headers: settingsHeaders(),
-          body: JSON.stringify(this.addForm),
+          body: JSON.stringify({
+            name: this.addForm.name.trim(),
+            color: this.addForm.color,
+          }),
         });
         this.items.push(await resp.json());
         this.adding = false;
@@ -403,7 +415,8 @@ function projectLabels(config) {
 
     async saveEdit(label) {
       if (this.editing !== label.uuid) return;
-      if (!this.editName.trim() || this.editName === label.name) {
+      const name = this.editName.trim();
+      if (!name || name === label.name) {
         this.editing = null;
         return;
       }
@@ -411,9 +424,9 @@ function projectLabels(config) {
         await this.request(config.apiBase + '/labels/' + label.uuid, {
           method: 'PATCH',
           headers: settingsHeaders(),
-          body: JSON.stringify({ name: this.editName }),
+          body: JSON.stringify({ name: name }),
         });
-        label.name = this.editName;
+        label.name = name;
         this.editing = null;
         this.syncBoardLabels();
       } catch (e) {

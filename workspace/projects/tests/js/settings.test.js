@@ -60,3 +60,27 @@ test('projectLabels.saveEdit is a no-op when editing was cancelled', async () =>
   await c.saveEdit({ uuid: 'l1', name: 'bug' });
   assert.equal(called, false);
 });
+
+test('projectColumns.saveEdit trims the name before saving', async () => {
+  const c = ctx().projectColumns({ apiBase: '/x' });
+  const column = { uuid: 'a', name: 'To do' };
+  c.editing = 'a';
+  c.editName = '  Doing  ';
+  let body = null;
+  c.request = async (url, options) => { body = JSON.parse(options.body); };
+  await c.saveEdit(column);
+  assert.equal(body.name, 'Doing');
+  assert.equal(column.name, 'Doing');
+});
+
+test('projectColumns.saveEdit treats a whitespace-padded same name as unchanged', async () => {
+  const c = ctx().projectColumns({ apiBase: '/x' });
+  const column = { uuid: 'a', name: 'To do' };
+  c.editing = 'a';
+  c.editName = ' To do ';
+  let called = false;
+  c.request = async () => { called = true; };
+  await c.saveEdit(column);
+  assert.equal(called, false);
+  assert.equal(c.editing, null);
+});

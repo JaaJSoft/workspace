@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.uuids import parse_uuid_or_none
-from workspace.projects.models import Project, TaskStatus
+from workspace.projects.models import Project, ProjectMember, TaskStatus
 from workspace.projects.queries import get_project_role, user_project_ids
 from workspace.projects.services.events import events_for_project
 from workspace.projects.services.projects import get_or_create_personal_project
@@ -16,6 +16,7 @@ from workspace.users.services.settings import get_setting, set_setting
 VIEW_OVERVIEW = "overview"
 VIEW_BOARD = "board"
 VIEW_BACKLOG = "backlog"
+VIEW_SETTINGS = "settings"
 
 
 @login_required
@@ -158,4 +159,38 @@ def backlog(request, project_uuid):
         .order_by("position", "created_at")
     )
     context["backlog_count"] = len(context["backlog_tasks"])
+    return _render_project_view(request, context)
+
+
+@login_required
+@ensure_csrf_cookie
+def settings_view(request, project_uuid):
+    """Admin-only settings; 404 for everyone else so nothing leaks."""
+    project, role = _get_project_or_404(request.user, project_uuid)
+    if role != ProjectMember.Role.ADMIN:
+        raise Http404
+    _record_visit(request.user, project_uuid)
+    context = _base_context(request, project, role, VIEW_SETTINGS)
+    counts = dict(
+        project.tasks.values_list("status_id")
+        .annotate(n=Count("uuid"))
+        .values_list("status_id", "n")
+    )
+    context["columns_data"] = [
+        {
+            "uuid": str(s.uuid),
+            "name": s.name,
+            "category": s.category,
+            "color": s.color,
+            "task_count": counts.get(s.pk, 0),
+        }
+        for s in context["statuses"]
+    ]
+    context["project_data"] = {
+        "name": project.name,
+        "description": project.description,
+        "group": project.group_id,
+        "type": project.type,
+        "archived": project.is_archived,
+    }
     return _render_project_view(request, context)

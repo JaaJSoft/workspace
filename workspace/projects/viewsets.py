@@ -19,6 +19,7 @@ from .serializers import (
     MemberSerializer,
     MemberWriteSerializer,
     ProjectSerializer,
+    StatusReorderSerializer,
     TaskReorderSerializer,
     TaskSerializer,
     TaskStatusSerializer,
@@ -31,6 +32,7 @@ from .services.members import (
 )
 from .services.projects import create_project
 from .services.search import fts_tasks
+from .services.statuses import create_status, delete_status, reorder_statuses
 from .services.tasks import apply_status_change, create_task, delete_task, reorder_tasks
 
 User = get_user_model()
@@ -262,18 +264,78 @@ class LabelViewSet(ProjectContextMixin, viewsets.ModelViewSet):
 
 
 @extend_schema(tags=["Projects"])
-class StatusViewSet(ProjectContextMixin, viewsets.GenericViewSet):
+class StatusViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     serializer_class = TaskStatusSerializer
+    lookup_field = "uuid"
     pagination_class = None
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return TaskStatus.objects.none()
         return self.project.statuses.order_by("position", "created_at")
 
-    def list(self, request, *args, **kwargs):
-        serializer = self.get_serializer(self.get_queryset(), many=True)
-        return Response(serializer.data)
+    def create(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                status_obj = create_status(self.project, **serializer.validated_data)
+        except IntegrityError:
+            return Response(
+                {"name": ["A column with this name already exists in this project."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(
+            self.get_serializer(status_obj).data, status=status.HTTP_201_CREATED
+        )
+
+    def partial_update(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        try:
+            with transaction.atomic():
+                return super().partial_update(request, *args, **kwargs)
+        except IntegrityError:
+            return Response(
+                {"name": ["A column with this name already exists in this project."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        status_obj = self.get_object()
+        move_to = None
+        move_to_param = request.query_params.get("move_to")
+        if move_to_param:
+            parsed = parse_uuid_or_none(move_to_param)
+            if parsed is None:
+                return Response(
+                    {"detail": "Malformed move_to UUID."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            move_to = self.project.statuses.filter(uuid=parsed).first()
+            if move_to is None:
+                return Response(
+                    {"detail": "Unknown target column for this project."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        try:
+            delete_status(status_obj, move_to=move_to, actor=request.user)
+        except ProjectRuleError as exc:
+            return _rule_error_response(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def reorder(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        serializer = StatusReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reorder_statuses(self.project, serializer.validated_data["order"])
+        return Response({"success": True})
 
 
 @extend_schema(tags=["Projects"])

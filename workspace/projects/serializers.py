@@ -97,6 +97,23 @@ class TaskStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskStatus
         fields = ["uuid", "name", "category", "color", "position"]
+        read_only_fields = ["position"]
+
+    def validate_name(self, value):
+        project = self.context["project"]
+        existing = project.statuses.filter(name=value)
+        if self.instance is not None:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise serializers.ValidationError(
+                "A column with this name already exists in this project."
+            )
+        return value
+
+    def validate_category(self, value):
+        if self.instance is not None and value != self.instance.category:
+            raise serializers.ValidationError("Category cannot be changed.")
+        return value
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -164,6 +181,27 @@ class TaskReorderSerializer(serializers.Serializer):
     """
 
     status = serializers.UUIDField()
+    order = serializers.ListField()
+
+    def validate_order(self, value):
+        import uuid as uuid_module
+
+        parsed = []
+        for item in value:
+            if not isinstance(item, str):
+                raise serializers.ValidationError("order items must be UUID strings.")
+            try:
+                parsed.append(uuid_module.UUID(item))
+            except ValueError:
+                raise serializers.ValidationError(f"Invalid UUID: {item}") from None
+        if len(set(parsed)) != len(parsed):
+            raise serializers.ValidationError("Duplicate UUIDs in order.")
+        return parsed
+
+
+class StatusReorderSerializer(serializers.Serializer):
+    """Same manual UUID parsing rationale as TaskReorderSerializer."""
+
     order = serializers.ListField()
 
     def validate_order(self, value):

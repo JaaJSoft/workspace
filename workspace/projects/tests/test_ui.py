@@ -213,3 +213,98 @@ class SidebarTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         )
         self.assertNotContains(response, "drawer-side")
         self.assertNotIn("projects", response.context)
+
+
+class SettingsViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    def test_admin_gets_settings_page(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "projects/ui/project.html")
+        self.assertEqual(response.context["view"], "settings")
+
+    def test_member_gets_404(self):
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertEqual(response.status_code, 404)
+
+    def test_outsider_gets_404(self):
+        self.client.force_login(self.outsider)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertEqual(response.status_code, 404)
+
+    def test_partial_returns_content_wrapper(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/settings", HTTP_X_ALPINE_REQUEST="1"
+        )
+        self.assertTemplateUsed(response, "projects/ui/partials/_content.html")
+        self.assertContains(response, 'id="project-content"')
+
+    def test_columns_data_includes_task_counts(self):
+        todo = self.project.statuses.get(name="To do")
+        create_task(self.project, self.admin, title="A", status=todo)
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        by_name = {c["name"]: c for c in response.context["columns_data"]}
+        self.assertEqual(by_name["To do"]["task_count"], 1)
+        self.assertEqual(by_name["Done"]["task_count"], 0)
+
+    def test_sidebar_shows_settings_entry_for_admin_only(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertContains(response, f"/projects/{self.project.uuid}/settings")
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertNotContains(response, f"/projects/{self.project.uuid}/settings")
+
+    def test_archived_project_settings_reachable(self):
+        from django.utils import timezone
+
+        self.project.archived_at = timezone.now()
+        self.project.save(update_fields=["archived_at"])
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertEqual(response.status_code, 200)
+
+    def test_settings_page_has_general_and_danger_sections(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertContains(response, 'id="settings-general"')
+        self.assertContains(response, 'id="settings-danger"')
+        self.assertContains(response, "writable: true")
+
+    def test_personal_project_hides_danger_zone_and_group(self):
+        personal = get_or_create_personal_project(self.admin)
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{personal.uuid}/settings")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'id="settings-danger"')
+        self.assertNotContains(response, 'id="settings-group"')
+
+    def test_archived_project_passes_writable_false_to_general(self):
+        from django.utils import timezone
+
+        self.project.archived_at = timezone.now()
+        self.project.save(update_fields=["archived_at"])
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertContains(response, "writable: false")
+
+    def test_settings_page_has_columns_section(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertContains(response, 'id="settings-columns"')
+
+    def test_settings_page_has_labels_and_members_sections(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertContains(response, 'id="settings-labels"')
+        self.assertContains(response, 'id="settings-members"')
+
+    def test_personal_project_hides_members_section(self):
+        personal = get_or_create_personal_project(self.admin)
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{personal.uuid}/settings")
+        self.assertContains(response, 'id="settings-labels"')
+        self.assertNotContains(response, 'id="settings-members"')

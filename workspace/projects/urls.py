@@ -17,7 +17,9 @@ member_list = MemberViewSet.as_view({"get": "list", "post": "create"})
 member_detail = MemberViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 label_list = LabelViewSet.as_view({"get": "list", "post": "create"})
 label_detail = LabelViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
-status_list = StatusViewSet.as_view({"get": "list"})
+status_list = StatusViewSet.as_view({"get": "list", "post": "create"})
+status_reorder = StatusViewSet.as_view({"post": "reorder"})
+status_detail = StatusViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 task_list = TaskViewSet.as_view({"get": "list", "post": "create"})
 task_reorder = TaskViewSet.as_view({"post": "reorder"})
 task_detail = TaskViewSet.as_view(
@@ -54,6 +56,16 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/statuses",
         status_list,
         name="project-statuses",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/statuses/reorder",
+        status_reorder,
+        name="project-statuses-reorder",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/statuses/<uuid:uuid>",
+        status_detail,
+        name="project-status-detail",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/tasks",

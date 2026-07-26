@@ -25,7 +25,7 @@ MAX_THUMBNAIL_ATTEMPTS = 3
 # not stranding a file whose failure was transient.
 PARKED_RETRY_AFTER = timedelta(days=1)
 
-_MAX_ERROR_LENGTH = 200
+_MAX_ERROR_LENGTH = ThumbnailFailure._meta.get_field("last_error").max_length
 
 
 def record_failure(file_obj, error):

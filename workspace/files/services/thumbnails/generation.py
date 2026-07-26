@@ -203,7 +203,9 @@ def generate_missing_thumbnails(*, retry_failed=False):
     has elapsed. Passing *retry_failed* purges the whole ledger instead - the
     operational escape hatch for when the cause of the failures (a broken
     dependency, an unreachable storage backend) has been fixed and waiting out
-    the window is not acceptable.
+    the window is not acceptable. The whole ledger means every row, including
+    files still under the budget: their counters restart, so a file that had
+    already failed once needs the full budget again before it parks.
 
     Returns a dict with generation statistics.
     """

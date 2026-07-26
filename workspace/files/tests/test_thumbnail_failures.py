@@ -47,6 +47,9 @@ class ThumbnailFileMixin:
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(username="thumbfail", password="p")
+        cls.staff = User.objects.create_user(
+            username="thumbstaff", password="p", is_staff=True
+        )
 
     def _make_file(self, name, data, ftype, mime):
         f = FileService.create_file(
@@ -477,10 +480,12 @@ class RetryFailedTests(ThumbnailFailureTestCase):
 
 
 class RetryFailedEndpointTests(ThumbnailFailureAPITestCase):
-    def test_endpoint_forwards_the_flag_to_the_task(self):
+    def test_staff_caller_forwards_the_flag_to_the_task(self):
         from unittest.mock import patch
 
         from rest_framework import status
+
+        self.client.force_authenticate(user=self.staff)
 
         with patch("workspace.files.tasks.generate_thumbnails.delay") as delay:
             delay.return_value.id = "task-1"
@@ -492,6 +497,36 @@ class RetryFailedEndpointTests(ThumbnailFailureAPITestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
         delay.assert_called_once_with(retry_failed=True)
+
+    def test_non_staff_caller_may_not_unpark(self):
+        # clear_all_failures() is global and cross-tenant: without this gate any
+        # authenticated user could force a full re-decode of every known-broken
+        # image in the deployment.
+        from unittest.mock import patch
+
+        from rest_framework import status
+
+        with patch("workspace.files.tasks.generate_thumbnails.delay") as delay:
+            resp = self.client.post(
+                "/api/v1/thumbnails/generate",
+                {"retry_failed": True},
+                format="json",
+            )
+
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        delay.assert_not_called()
+
+    def test_non_staff_caller_may_still_trigger_a_plain_pass(self):
+        from unittest.mock import patch
+
+        from rest_framework import status
+
+        with patch("workspace.files.tasks.generate_thumbnails.delay") as delay:
+            delay.return_value.id = "task-1"
+            resp = self.client.post("/api/v1/thumbnails/generate", {}, format="json")
+
+        self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
+        delay.assert_called_once_with(retry_failed=False)
 
     def test_endpoint_reads_the_string_form_of_the_flag(self):
         # Pins the is_truthy requirement: "false" is a non-empty string and

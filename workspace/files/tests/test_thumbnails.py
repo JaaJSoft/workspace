@@ -15,7 +15,7 @@ from django.test import TestCase
 from PIL import Image
 
 from workspace.files.services import FileService
-from workspace.files.services.thumbnails import (
+from workspace.files.services.thumbnails.generation import (
     THUMBNAIL_MAX_SIZE,
     generate_thumbnail,
     get_thumbnail_path,

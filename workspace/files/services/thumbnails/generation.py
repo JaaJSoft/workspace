@@ -7,13 +7,13 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.utils import timezone
 
-from ..metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
+from ...metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
 
 # Imported as a module, not as bare names: the ledger writes then resolve at
 # call time, so patching them at their definition site actually reaches this
-# call site. Narrowing this to `from .thumbnail_failures import ...` would make
-# the bookkeeping-robustness tests pass without exercising anything.
-from . import thumbnail_failures
+# call site. Narrowing this to `from .failures import ...` would make the
+# bookkeeping-robustness tests pass without exercising anything.
+from . import failures
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def _bookkeep_failure(file_obj, exc):
     with max_retries=0.
     """
     try:
-        thumbnail_failures.record_failure(file_obj, exc)
+        failures.record_failure(file_obj, exc)
     except Exception:
         logger.warning(
             "Could not record the failed thumbnail attempt for %s",
@@ -87,7 +87,7 @@ def _bookkeep_failure(file_obj, exc):
 def _bookkeep_success(file_obj):
     """Drop any failure row, without letting the write undo a real success."""
     try:
-        thumbnail_failures.clear_failure(file_obj)
+        failures.clear_failure(file_obj)
     except Exception:
         logger.warning(
             "Could not clear the thumbnail failure row for %s",
@@ -209,7 +209,7 @@ def generate_missing_thumbnails(*, retry_failed=False):
     """
     from workspace.files.models import File
 
-    unparked = thumbnail_failures.clear_all_failures() if retry_failed else 0
+    unparked = failures.clear_all_failures() if retry_failed else 0
 
     started_at = timezone.now()
 
@@ -222,7 +222,7 @@ def generate_missing_thumbnails(*, retry_failed=False):
         )
         .exclude(content="")
         .exclude(content__isnull=True)
-        .exclude(uuid__in=thumbnail_failures.parked_file_ids())
+        .exclude(uuid__in=failures.parked_file_ids())
     )
 
     stats = {
@@ -245,6 +245,6 @@ def generate_missing_thumbnails(*, retry_failed=False):
     # Files at the attempt budget whose row was touched during this pass. The
     # count is global, so a file parked concurrently by the event handler lands
     # in it too.
-    stats["parked"] = thumbnail_failures.count_parked_since(started_at)
+    stats["parked"] = failures.count_parked_since(started_at)
 
     return stats

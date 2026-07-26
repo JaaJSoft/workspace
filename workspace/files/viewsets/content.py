@@ -184,7 +184,7 @@ class ContentMixin:
         from django.core.files.storage import default_storage
         from django.http import FileResponse
 
-        from workspace.files.services.thumbnails import get_thumbnail_path
+        from workspace.files.services.thumbnails.generation import get_thumbnail_path
 
         try:
             file_obj, perm = self._resolve_file_with_access(uuid)

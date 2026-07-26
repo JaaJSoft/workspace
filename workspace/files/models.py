@@ -518,7 +518,7 @@ def delete_file_on_delete(sender, instance, **kwargs):
     logger = logging.getLogger(__name__)
 
     if instance.node_type == File.NodeType.FILE and instance.has_thumbnail:
-        from workspace.files.services.thumbnails import delete_thumbnail
+        from workspace.files.services.thumbnails.generation import delete_thumbnail
 
         delete_thumbnail(instance.uuid)
 

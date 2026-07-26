@@ -8,8 +8,8 @@ from PIL import Image
 
 from workspace.files.models import FileEvent
 from workspace.files.services import FileService
-from workspace.files.services.thumbnail_events import generate_thumbnail_for_event
-from workspace.files.services.thumbnails import get_thumbnail_path
+from workspace.files.services.thumbnails.generation import get_thumbnail_path
+from workspace.files.services.thumbnails.handlers import generate_thumbnail_for_event
 
 User = get_user_model()
 

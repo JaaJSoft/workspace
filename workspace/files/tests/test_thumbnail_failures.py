@@ -19,7 +19,7 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import ThumbnailFailure
 from workspace.files.services import FileService
-from workspace.files.services.thumbnails import get_thumbnail_path
+from workspace.files.services.thumbnails.generation import get_thumbnail_path
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -120,7 +120,7 @@ class ThumbnailFailureModelTests(ThumbnailFailureTestCase):
 
 class RecordFailureTests(ThumbnailFailureTestCase):
     def test_first_failure_creates_a_row_with_one_attempt(self):
-        from workspace.files.services.thumbnail_failures import record_failure
+        from workspace.files.services.thumbnails.failures import record_failure
 
         f = self._make_broken_image()
 
@@ -131,7 +131,7 @@ class RecordFailureTests(ThumbnailFailureTestCase):
         self.assertEqual(row.last_error, "boom")
 
     def test_repeated_failures_increment_the_same_row(self):
-        from workspace.files.services.thumbnail_failures import record_failure
+        from workspace.files.services.thumbnails.failures import record_failure
 
         f = self._make_broken_image()
 
@@ -146,7 +146,7 @@ class RecordFailureTests(ThumbnailFailureTestCase):
     def test_last_attempt_at_moves_forward_on_each_failure(self):
         # Pins the "no auto_now" decision: auto_now never fires on a queryset
         # .update(), so the timestamp would freeze at the first attempt.
-        from workspace.files.services.thumbnail_failures import record_failure
+        from workspace.files.services.thumbnails.failures import record_failure
 
         f = self._make_broken_image()
         record_failure(f, ValueError("first"))
@@ -159,7 +159,7 @@ class RecordFailureTests(ThumbnailFailureTestCase):
         )
 
     def test_long_error_is_truncated_to_the_column_width(self):
-        from workspace.files.services.thumbnail_failures import record_failure
+        from workspace.files.services.thumbnails.failures import record_failure
 
         f = self._make_broken_image()
 
@@ -168,7 +168,7 @@ class RecordFailureTests(ThumbnailFailureTestCase):
         self.assertEqual(len(ThumbnailFailure.objects.get(file=f).last_error), 200)
 
     def test_clear_failure_removes_the_row(self):
-        from workspace.files.services.thumbnail_failures import (
+        from workspace.files.services.thumbnails.failures import (
             clear_failure,
             record_failure,
         )
@@ -181,7 +181,7 @@ class RecordFailureTests(ThumbnailFailureTestCase):
         self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
 
     def test_clear_failure_is_a_noop_without_a_row(self):
-        from workspace.files.services.thumbnail_failures import clear_failure
+        from workspace.files.services.thumbnails.failures import clear_failure
 
         f = self._make_valid_image()
 
@@ -190,7 +190,7 @@ class RecordFailureTests(ThumbnailFailureTestCase):
         self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
 
     def test_parked_file_ids_holds_only_files_at_the_budget(self):
-        from workspace.files.services.thumbnail_failures import (
+        from workspace.files.services.thumbnails.failures import (
             MAX_THUMBNAIL_ATTEMPTS,
             parked_file_ids,
         )
@@ -215,7 +215,7 @@ class RecordFailureTests(ThumbnailFailureTestCase):
     def test_parked_file_ids_releases_a_file_once_the_retry_window_lapses(self):
         from datetime import timedelta
 
-        from workspace.files.services.thumbnail_failures import (
+        from workspace.files.services.thumbnails.failures import (
             MAX_THUMBNAIL_ATTEMPTS,
             PARKED_RETRY_AFTER,
             parked_file_ids,
@@ -233,7 +233,7 @@ class RecordFailureTests(ThumbnailFailureTestCase):
     def test_count_parked_since_ignores_older_rows_and_unfinished_budgets(self):
         from datetime import timedelta
 
-        from workspace.files.services.thumbnail_failures import (
+        from workspace.files.services.thumbnails.failures import (
             MAX_THUMBNAIL_ATTEMPTS,
             count_parked_since,
         )
@@ -262,7 +262,7 @@ class RecordFailureTests(ThumbnailFailureTestCase):
         self.assertEqual(count_parked_since(cutoff), 1)
 
     def test_clear_all_failures_purges_every_row(self):
-        from workspace.files.services.thumbnail_failures import (
+        from workspace.files.services.thumbnails.failures import (
             clear_all_failures,
             record_failure,
         )
@@ -278,7 +278,7 @@ class RecordFailureTests(ThumbnailFailureTestCase):
 
 class GenerateThumbnailBookkeepingTests(ThumbnailFailureTestCase):
     def test_failed_generation_records_an_attempt(self):
-        from workspace.files.services.thumbnails import generate_thumbnail
+        from workspace.files.services.thumbnails.generation import generate_thumbnail
 
         f = self._make_broken_image()
 
@@ -289,8 +289,8 @@ class GenerateThumbnailBookkeepingTests(ThumbnailFailureTestCase):
         self.assertTrue(row.last_error, "the decoder error should be recorded")
 
     def test_successful_generation_clears_a_previous_failure(self):
-        from workspace.files.services.thumbnail_failures import record_failure
-        from workspace.files.services.thumbnails import generate_thumbnail
+        from workspace.files.services.thumbnails.failures import record_failure
+        from workspace.files.services.thumbnails.generation import generate_thumbnail
 
         f = self._make_valid_image()
         record_failure(f, ValueError("a previous transient failure"))
@@ -302,7 +302,7 @@ class GenerateThumbnailBookkeepingTests(ThumbnailFailureTestCase):
     def test_skipped_generation_records_nothing(self):
         # A type outside THUMBNAIL_LABELS returns False without ever decoding.
         # That is not a failure and must not consume an attempt.
-        from workspace.files.services.thumbnails import generate_thumbnail
+        from workspace.files.services.thumbnails.generation import generate_thumbnail
 
         f = self._make_file("doc.pdf", b"%PDF-1.4", "pdf", "application/pdf")
 
@@ -316,12 +316,12 @@ class GenerateThumbnailBookkeepingTests(ThumbnailFailureTestCase):
         # whole hourly pass, which runs with max_retries=0.
         from unittest.mock import patch
 
-        from workspace.files.services.thumbnails import generate_thumbnail
+        from workspace.files.services.thumbnails.generation import generate_thumbnail
 
         f = self._make_broken_image()
 
         with patch(
-            "workspace.files.services.thumbnail_failures.record_failure",
+            "workspace.files.services.thumbnails.failures.record_failure",
             side_effect=IntegrityError("the file row is gone"),
         ):
             self.assertFalse(generate_thumbnail(f))
@@ -329,12 +329,12 @@ class GenerateThumbnailBookkeepingTests(ThumbnailFailureTestCase):
     def test_bookkeeping_error_does_not_sink_a_successful_generation(self):
         from unittest.mock import patch
 
-        from workspace.files.services.thumbnails import generate_thumbnail
+        from workspace.files.services.thumbnails.generation import generate_thumbnail
 
         f = self._make_valid_image()
 
         with patch(
-            "workspace.files.services.thumbnail_failures.clear_failure",
+            "workspace.files.services.thumbnails.failures.clear_failure",
             side_effect=IntegrityError("the file row is gone"),
         ):
             self.assertTrue(generate_thumbnail(f))
@@ -349,8 +349,10 @@ class BackfillParkingTests(ThumbnailFailureTestCase):
         Against the pre-fix code, pass 4 attempts the file again and
         stats['total'] is 1 - which is the whole bug.
         """
-        from workspace.files.services.thumbnail_failures import MAX_THUMBNAIL_ATTEMPTS
-        from workspace.files.services.thumbnails import generate_missing_thumbnails
+        from workspace.files.services.thumbnails.failures import MAX_THUMBNAIL_ATTEMPTS
+        from workspace.files.services.thumbnails.generation import (
+            generate_missing_thumbnails,
+        )
 
         f = self._make_broken_image()
 
@@ -374,11 +376,13 @@ class BackfillParkingTests(ThumbnailFailureTestCase):
     def test_file_parked_longer_than_the_retry_window_is_attempted_again(self):
         from datetime import timedelta
 
-        from workspace.files.services.thumbnail_failures import (
+        from workspace.files.services.thumbnails.failures import (
             MAX_THUMBNAIL_ATTEMPTS,
             PARKED_RETRY_AFTER,
         )
-        from workspace.files.services.thumbnails import generate_missing_thumbnails
+        from workspace.files.services.thumbnails.generation import (
+            generate_missing_thumbnails,
+        )
 
         f = self._make_valid_image()
         ThumbnailFailure.objects.create(
@@ -394,8 +398,10 @@ class BackfillParkingTests(ThumbnailFailureTestCase):
         self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
 
     def test_transient_failure_is_retried_and_then_forgotten(self):
-        from workspace.files.services.thumbnail_failures import record_failure
-        from workspace.files.services.thumbnails import generate_missing_thumbnails
+        from workspace.files.services.thumbnails.failures import record_failure
+        from workspace.files.services.thumbnails.generation import (
+            generate_missing_thumbnails,
+        )
 
         f = self._make_valid_image()
         record_failure(f, OSError("storage was briefly unreachable"))
@@ -408,8 +414,10 @@ class BackfillParkingTests(ThumbnailFailureTestCase):
         self.assertTrue(f.has_thumbnail)
 
     def test_parked_counter_reports_files_that_burned_their_budget_this_pass(self):
-        from workspace.files.services.thumbnail_failures import MAX_THUMBNAIL_ATTEMPTS
-        from workspace.files.services.thumbnails import generate_missing_thumbnails
+        from workspace.files.services.thumbnails.failures import MAX_THUMBNAIL_ATTEMPTS
+        from workspace.files.services.thumbnails.generation import (
+            generate_missing_thumbnails,
+        )
 
         f = self._make_broken_image()
         ThumbnailFailure.objects.create(
@@ -424,7 +432,9 @@ class BackfillParkingTests(ThumbnailFailureTestCase):
         self.assertEqual(stats["parked"], 1)
 
     def test_pass_that_parks_nothing_reports_zero(self):
-        from workspace.files.services.thumbnails import generate_missing_thumbnails
+        from workspace.files.services.thumbnails.generation import (
+            generate_missing_thumbnails,
+        )
 
         self._make_valid_image()
 
@@ -443,11 +453,13 @@ class EventPathBudgetTests(ThumbnailFailureTestCase):
 
     def test_handler_failure_spends_one_attempt_of_the_budget(self):
         from workspace.files.models import FileEvent
-        from workspace.files.services.thumbnail_events import (
+        from workspace.files.services.thumbnails.failures import MAX_THUMBNAIL_ATTEMPTS
+        from workspace.files.services.thumbnails.generation import (
+            generate_missing_thumbnails,
+        )
+        from workspace.files.services.thumbnails.handlers import (
             generate_thumbnail_for_event,
         )
-        from workspace.files.services.thumbnail_failures import MAX_THUMBNAIL_ATTEMPTS
-        from workspace.files.services.thumbnails import generate_missing_thumbnails
 
         f = self._make_broken_image()
         event = FileEvent.objects.create(
@@ -468,7 +480,7 @@ class EventPathBudgetTests(ThumbnailFailureTestCase):
 
 class ContentReplacementResetsBudgetTests(ThumbnailFailureTestCase):
     def test_update_content_clears_the_failure_row(self):
-        from workspace.files.services.thumbnail_failures import (
+        from workspace.files.services.thumbnails.failures import (
             MAX_THUMBNAIL_ATTEMPTS,
             record_failure,
         )
@@ -489,7 +501,7 @@ class ContentReplacementResetsBudgetTests(ThumbnailFailureTestCase):
     def test_replace_content_storage_clears_the_failure_row(self):
         # The WebDAV PUT path. Pinned separately because it is a distinct
         # method, not a wrapper around update_content.
-        from workspace.files.services.thumbnail_failures import record_failure
+        from workspace.files.services.thumbnails.failures import record_failure
 
         f = self._make_broken_image()
         record_failure(f, ValueError("boom"))
@@ -501,11 +513,13 @@ class ContentReplacementResetsBudgetTests(ThumbnailFailureTestCase):
         self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
 
     def test_parked_file_is_scanned_again_after_its_content_is_replaced(self):
-        from workspace.files.services.thumbnail_failures import (
+        from workspace.files.services.thumbnails.failures import (
             MAX_THUMBNAIL_ATTEMPTS,
             record_failure,
         )
-        from workspace.files.services.thumbnails import generate_missing_thumbnails
+        from workspace.files.services.thumbnails.generation import (
+            generate_missing_thumbnails,
+        )
 
         f = self._make_broken_image()
         for _ in range(MAX_THUMBNAIL_ATTEMPTS):
@@ -530,7 +544,7 @@ class ContentReplacementViaApiTests(ThumbnailFailureAPITestCase):
         from django.core.files.uploadedfile import SimpleUploadedFile
         from rest_framework import status
 
-        from workspace.files.services.thumbnail_failures import (
+        from workspace.files.services.thumbnails.failures import (
             MAX_THUMBNAIL_ATTEMPTS,
             record_failure,
         )
@@ -555,7 +569,7 @@ class ContentReplacementViaApiTests(ThumbnailFailureAPITestCase):
 
 class RetryFailedTests(ThumbnailFailureTestCase):
     def _park(self, file_obj):
-        from workspace.files.services.thumbnail_failures import (
+        from workspace.files.services.thumbnails.failures import (
             MAX_THUMBNAIL_ATTEMPTS,
             record_failure,
         )
@@ -564,7 +578,9 @@ class RetryFailedTests(ThumbnailFailureTestCase):
             record_failure(file_obj, ValueError("boom"))
 
     def test_retry_failed_purges_the_rows_and_rescans(self):
-        from workspace.files.services.thumbnails import generate_missing_thumbnails
+        from workspace.files.services.thumbnails.generation import (
+            generate_missing_thumbnails,
+        )
 
         f = self._make_valid_image()
         self._park(f)
@@ -577,14 +593,18 @@ class RetryFailedTests(ThumbnailFailureTestCase):
         self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
 
     def test_a_pass_that_purges_nothing_reports_no_unparking(self):
-        from workspace.files.services.thumbnails import generate_missing_thumbnails
+        from workspace.files.services.thumbnails.generation import (
+            generate_missing_thumbnails,
+        )
 
         self._make_valid_image()
 
         self.assertEqual(generate_missing_thumbnails()["unparked"], 0)
 
     def test_default_pass_still_respects_the_parking(self):
-        from workspace.files.services.thumbnails import generate_missing_thumbnails
+        from workspace.files.services.thumbnails.generation import (
+            generate_missing_thumbnails,
+        )
 
         self._park(self._make_valid_image())
 

@@ -4,7 +4,7 @@ from django.core.files.storage import default_storage
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
-from workspace.files.services.thumbnails import get_thumbnail_path
+from workspace.files.services.thumbnails.generation import get_thumbnail_path
 
 User = get_user_model()
 

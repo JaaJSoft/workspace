@@ -17,7 +17,7 @@ from . import _content as _content_helpers
 from . import _names as _name_helpers
 from . import _storage_ops as _storage
 from .events import record_event
-from .thumbnail_failures import clear_failure
+from .thumbnails.failures import clear_failure
 
 
 class FilePermission(enum.IntEnum):

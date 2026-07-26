@@ -14,7 +14,7 @@ from datetime import timedelta
 from django.db.models import F
 from django.utils import timezone
 
-from ..models import ThumbnailFailure
+from ...models import ThumbnailFailure
 
 MAX_THUMBNAIL_ATTEMPTS = 3
 

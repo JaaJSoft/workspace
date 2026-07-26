@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from workspace.files.models import FileEvent
 from workspace.files.services.event_dispatch import on_file_event
-from workspace.files.services.thumbnails import (
+from workspace.files.services.thumbnails.generation import (
     can_generate_thumbnail,
     generate_thumbnail,
 )

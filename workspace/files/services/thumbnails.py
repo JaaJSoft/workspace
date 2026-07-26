@@ -5,9 +5,15 @@ from io import BytesIO
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.utils import timezone
 
 from ..metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
-from .thumbnail_failures import clear_failure, record_failure
+from .thumbnail_failures import (
+    clear_failure,
+    count_parked_since,
+    parked_file_ids,
+    record_failure,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -156,9 +162,14 @@ def delete_thumbnail(uuid):
 def generate_missing_thumbnails():
     """Generate thumbnails for all image files that don't have one yet.
 
+    Files that burned their attempt budget are skipped: see
+    ``thumbnail_failures.MAX_THUMBNAIL_ATTEMPTS``.
+
     Returns a dict with generation statistics.
     """
     from workspace.files.models import File
+
+    started_at = timezone.now()
 
     qs = (
         File.objects.filter(
@@ -169,9 +180,10 @@ def generate_missing_thumbnails():
         )
         .exclude(content="")
         .exclude(content__isnull=True)
+        .exclude(uuid__in=parked_file_ids())
     )
 
-    stats = {"generated": 0, "failed": 0, "total": 0}
+    stats = {"generated": 0, "failed": 0, "parked": 0, "total": 0}
 
     for file_obj in qs.iterator():
         stats["total"] += 1
@@ -181,5 +193,9 @@ def generate_missing_thumbnails():
             stats["generated"] += 1
         else:
             stats["failed"] += 1
+
+    # Files whose budget ran out during this pass. Rows already at the budget
+    # are excluded from the scan above, so nothing older can be touched here.
+    stats["parked"] = count_parked_since(started_at)
 
     return stats

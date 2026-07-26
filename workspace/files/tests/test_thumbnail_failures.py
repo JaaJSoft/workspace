@@ -290,3 +290,70 @@ class GenerateThumbnailBookkeepingTests(ThumbnailFailureTestCase):
         self.assertFalse(generate_thumbnail(f))
 
         self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
+
+
+class BackfillParkingTests(ThumbnailFailureTestCase):
+    def test_permanently_failing_file_is_not_retried_forever(self):
+        """The regression test for issue #426.
+
+        Against the pre-fix code, pass 4 attempts the file again and
+        stats['total'] is 1 - which is the whole bug.
+        """
+        from workspace.files.services.thumbnail_failures import MAX_THUMBNAIL_ATTEMPTS
+        from workspace.files.services.thumbnails import generate_missing_thumbnails
+
+        f = self._make_broken_image()
+
+        for attempt in range(1, MAX_THUMBNAIL_ATTEMPTS + 1):
+            stats = generate_missing_thumbnails()
+            self.assertEqual(stats["total"], 1, f"pass {attempt} should attempt it")
+            self.assertEqual(stats["failed"], 1, f"pass {attempt} should fail")
+
+        stats = generate_missing_thumbnails()
+
+        self.assertEqual(
+            stats["total"], 0, "a parked file must never be attempted again"
+        )
+        self.assertEqual(
+            ThumbnailFailure.objects.get(file=f).attempts, MAX_THUMBNAIL_ATTEMPTS
+        )
+
+    def test_transient_failure_is_retried_and_then_forgotten(self):
+        from workspace.files.services.thumbnail_failures import record_failure
+        from workspace.files.services.thumbnails import generate_missing_thumbnails
+
+        f = self._make_valid_image()
+        record_failure(f, OSError("storage was briefly unreachable"))
+
+        stats = generate_missing_thumbnails()
+
+        self.assertEqual(stats["generated"], 1)
+        self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
+        f.refresh_from_db()
+        self.assertTrue(f.has_thumbnail)
+
+    def test_parked_counter_reports_files_that_burned_their_budget_this_pass(self):
+        from workspace.files.services.thumbnail_failures import MAX_THUMBNAIL_ATTEMPTS
+        from workspace.files.services.thumbnails import generate_missing_thumbnails
+
+        f = self._make_broken_image()
+        ThumbnailFailure.objects.create(
+            file=f,
+            attempts=MAX_THUMBNAIL_ATTEMPTS - 1,
+            last_attempt_at=timezone.now(),
+        )
+
+        stats = generate_missing_thumbnails()
+
+        self.assertEqual(stats["failed"], 1)
+        self.assertEqual(stats["parked"], 1)
+
+    def test_pass_that_parks_nothing_reports_zero(self):
+        from workspace.files.services.thumbnails import generate_missing_thumbnails
+
+        self._make_valid_image()
+
+        stats = generate_missing_thumbnails()
+
+        self.assertEqual(stats["generated"], 1)
+        self.assertEqual(stats["parked"], 0)

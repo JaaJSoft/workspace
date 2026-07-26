@@ -482,10 +482,20 @@ function taskPanel() {
       // the trailing blur commit a no-op instead of an accidental save.
       if (this.editing !== field) return;
       this.editing = null;
-      const value = this.draft;
+      let value = this.draft;
+      // The title editor is a textarea (it has to wrap like the read
+      // view), so pasted newlines are possible; the title itself is
+      // single-line.
+      if (field === 'title') value = value.replace(/\s*[\r\n]+\s*/g, ' ');
       if (value === this.data[field]) return;
       if (field === 'title' && !value.trim()) return;
       this.commitField(field, value);
+    },
+
+    autoGrowTitle(el) {
+      el.style.height = 'auto';
+      // scrollHeight excludes the borders, which border-box height includes.
+      el.style.height = el.scrollHeight + el.offsetHeight - el.clientHeight + 'px';
     },
 
     commitField(field, value) {

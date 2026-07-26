@@ -17,11 +17,18 @@
             :class="can('edit') && 'cursor-text hover:bg-base-200 rounded px-1 -mx-1'"
             @click="startEdit('title', data.title)">{{ panel_task.title }}</h2>
       </template>
+      {# Textarea (not input): it must wrap and keep the h2's typography so #}
+      {# entering edit mode doesn't reflow the header. Height follows content #}
+      {# via autoGrowTitle; commitDraft flattens any pasted newlines. #}
       <template x-if="editing === 'title'">
-        <input type="text" class="input input-bordered input-sm w-full" x-model="draft"
-               maxlength="255" x-init="$el.focus()"
-               @keydown.enter.prevent="$el.blur()" @keydown.escape="cancelEdit()"
-               @blur="commitDraft('title')">
+        <textarea rows="1" maxlength="255"
+                  class="textarea textarea-bordered block w-full resize-none overflow-hidden min-h-0 rounded p-1 -m-1 font-semibold text-lg leading-tight"
+                  {# $nextTick: x-init runs before x-model fills the value, #}
+                  {# so sizing must wait for the draft to land in the field. #}
+                  x-model="draft" x-init="$nextTick(() => { $el.focus(); autoGrowTitle($el) })"
+                  @input="autoGrowTitle($el)"
+                  @keydown.enter.prevent="$el.blur()" @keydown.escape="cancelEdit()"
+                  @blur="commitDraft('title')"></textarea>
       </template>
     </div>
     <button type="button" class="btn btn-sm btn-square btn-ghost hidden lg:inline-flex -mt-1 -mr-1"

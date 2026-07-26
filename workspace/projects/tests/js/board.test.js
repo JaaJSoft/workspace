@@ -442,6 +442,18 @@ test('commitDraft patches only when the value changed', () => {
   assert.equal(calls.length, 1);
 });
 
+test('commitDraft flattens newlines pasted into the title', () => {
+  const calls = [];
+  const panel = panelWithActions(['edit'], calls);
+  panel.startEdit('title', panel.data.title);
+  panel.draft = 'Line one\nLine two\r\n  Line three';
+  panel.commitDraft('title');
+  assert.deepStrictEqual(
+    [calls[0][0], { ...calls[0][1] }],
+    ['u1', { title: 'Line one Line two Line three' }]
+  );
+});
+
 test('commitDraft refuses an empty title', () => {
   const calls = [];
   const panel = panelWithActions(['edit'], calls);

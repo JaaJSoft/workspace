@@ -3,7 +3,9 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from workspace.ai.models import AITask
@@ -92,6 +94,24 @@ class PurgeAiTasksTests(TestCase):
         result = purge_ai_tasks()
         self.assertEqual(result["deleted"], 0)
         self.assertTrue(AITask.objects.filter(pk=recent.pk).exists())
+
+    def test_delete_is_the_only_pass_no_separate_count(self):
+        """The purge reads the deleted-row total from delete()'s own return
+        rather than a preceding count(). Nothing cascades onto AITask, so a
+        standalone COUNT query would be pure waste - guard against one
+        creeping back in."""
+        self._make_task(
+            status=AITask.Status.COMPLETED,
+            completed_at=self.old,
+            created_at=self.old,
+        )
+
+        with CaptureQueriesContext(connection) as ctx:
+            result = purge_ai_tasks()
+
+        self.assertEqual(result["deleted"], 1)
+        count_queries = [q for q in ctx.captured_queries if "COUNT" in q["sql"].upper()]
+        self.assertEqual(count_queries, [])
 
     def test_purges_only_terminal_old_tasks_in_mixed_set(self):
         """End-to-end: in a queryset that mixes terminal/non-terminal and

@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import File, FileComment, FileFavorite, FileShare, PinnedFolder
+from .models import (
+    File,
+    FileComment,
+    FileFavorite,
+    FileShare,
+    PinnedFolder,
+    ThumbnailFailure,
+)
 
 
 @admin.register(FileComment)
@@ -48,3 +55,14 @@ class PinnedFolderAdmin(admin.ModelAdmin):
     list_display = ("uuid", "owner", "folder", "position", "created_at")
     search_fields = ("owner__username", "folder__name")
     raw_id_fields = ("owner", "folder")
+
+
+@admin.register(ThumbnailFailure)
+class ThumbnailFailureAdmin(admin.ModelAdmin):
+    """Read the recorded errors, and unpark a single file by deleting its row."""
+
+    list_display = ("file", "attempts", "last_attempt_at", "last_error")
+    list_filter = ("last_attempt_at",)
+    list_select_related = ("file",)
+    search_fields = ("file__name", "last_error")
+    raw_id_fields = ("file",)

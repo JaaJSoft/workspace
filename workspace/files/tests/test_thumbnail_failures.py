@@ -124,9 +124,8 @@ class RecordFailureTests(ThumbnailFailureTestCase):
 
         f = self._make_broken_image()
 
-        attempts = record_failure(f, ValueError("boom"))
+        record_failure(f, ValueError("boom"))
 
-        self.assertEqual(attempts, 1)
         row = ThumbnailFailure.objects.get(file=f)
         self.assertEqual(row.attempts, 1)
         self.assertEqual(row.last_error, "boom")
@@ -137,9 +136,8 @@ class RecordFailureTests(ThumbnailFailureTestCase):
         f = self._make_broken_image()
 
         record_failure(f, ValueError("first"))
-        attempts = record_failure(f, ValueError("second"))
+        record_failure(f, ValueError("second"))
 
-        self.assertEqual(attempts, 2)
         self.assertEqual(ThumbnailFailure.objects.filter(file=f).count(), 1)
         row = ThumbnailFailure.objects.get(file=f)
         self.assertEqual(row.attempts, 2)
@@ -434,6 +432,38 @@ class BackfillParkingTests(ThumbnailFailureTestCase):
 
         self.assertEqual(stats["generated"], 1)
         self.assertEqual(stats["parked"], 0)
+
+
+class EventPathBudgetTests(ThumbnailFailureTestCase):
+    """The create/replace handler is the first consumer of the budget in prod.
+
+    Calling the handler directly is deliberate: the real dispatch is wrapped in
+    transaction.on_commit, which never runs under TestCase.
+    """
+
+    def test_handler_failure_spends_one_attempt_of_the_budget(self):
+        from workspace.files.models import FileEvent
+        from workspace.files.services.thumbnail_events import (
+            generate_thumbnail_for_event,
+        )
+        from workspace.files.services.thumbnail_failures import MAX_THUMBNAIL_ATTEMPTS
+        from workspace.files.services.thumbnails import generate_missing_thumbnails
+
+        f = self._make_broken_image()
+        event = FileEvent.objects.create(
+            file=f, actor=self.user, action=FileEvent.Action.CREATED
+        )
+
+        generate_thumbnail_for_event(event)
+
+        self.assertEqual(ThumbnailFailure.objects.get(file=f).attempts, 1)
+
+        self.assertEqual(generate_missing_thumbnails()["total"], 1, "attempt 2 of 3")
+        self.assertEqual(generate_missing_thumbnails()["total"], 1, "attempt 3 of 3")
+        self.assertEqual(generate_missing_thumbnails()["total"], 0, "budget spent")
+        self.assertEqual(
+            ThumbnailFailure.objects.get(file=f).attempts, MAX_THUMBNAIL_ATTEMPTS
+        )
 
 
 class ContentReplacementResetsBudgetTests(ThumbnailFailureTestCase):

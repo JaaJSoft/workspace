@@ -37,18 +37,12 @@ def record_failure(file_obj, error):
         file=file_obj,
         defaults={"attempts": 1, "last_attempt_at": now, "last_error": message},
     )
-    if created:
-        return 1
-
-    ThumbnailFailure.objects.filter(pk=row.pk).update(
-        attempts=F("attempts") + 1,
-        last_attempt_at=now,
-        last_error=message,
-    )
-    # The database performs the authoritative atomic increment. The returned
-    # value is derived rather than re-read: it is informational only, so a
-    # concurrent bump making it stale by one is not worth an extra query.
-    return row.attempts + 1
+    if not created:
+        ThumbnailFailure.objects.filter(pk=row.pk).update(
+            attempts=F("attempts") + 1,
+            last_attempt_at=now,
+            last_error=message,
+        )
 
 
 def clear_failure(file_obj):

@@ -375,9 +375,12 @@ class FileService:
         file_obj.type = refine_with_name(detection.label, name or file_obj.name)
         file_obj.category = detection.group or "unknown"
         file_obj.has_thumbnail = False
-        clear_failure(file_obj)
         file_obj.content = content
         file_obj.save()
+        # Ordering is load-bearing: after the save (nothing here is atomic, so a
+        # fresh budget must not outlive a failed write) and before record_event,
+        # whose dispatch re-runs generation and spends that budget on commit.
+        clear_failure(file_obj)
         if file_obj.size:
             FILES_UPLOAD_BYTES.inc(file_obj.size)
         record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED)
@@ -394,9 +397,10 @@ class FileService:
         file_obj.type = detection.label
         file_obj.category = detection.group or "unknown"
         file_obj.has_thumbnail = False
-        clear_failure(file_obj)
         file_obj.content.name = storage_path
         file_obj.save()
+        # Same ordering constraint as update_content.
+        clear_failure(file_obj)
         if size:
             FILES_UPLOAD_BYTES.inc(size)
         record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED)

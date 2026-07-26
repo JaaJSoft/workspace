@@ -7,6 +7,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
 from ..metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
+from .thumbnail_failures import clear_failure, record_failure
 
 logger = logging.getLogger(__name__)
 
@@ -124,12 +125,14 @@ def generate_thumbnail(file_obj):
             default_storage.save(thumb_path, ContentFile(buf.read()))
 
         FILES_THUMBNAIL_RESULT.labels(result="success").inc()
+        clear_failure(file_obj)
         return True
-    except Exception:
+    except Exception as exc:
         logger.warning(
             "Failed to generate thumbnail for %s", file_obj.uuid, exc_info=True
         )
         FILES_THUMBNAIL_RESULT.labels(result="failed").inc()
+        record_failure(file_obj, exc)
         return False
     finally:
         # Best-effort cleanup: a close() that fails after the body has been

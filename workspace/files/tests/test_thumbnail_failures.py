@@ -255,3 +255,38 @@ class RecordFailureTests(ThumbnailFailureTestCase):
 
         self.assertEqual(deleted, 2)
         self.assertEqual(ThumbnailFailure.objects.count(), 0)
+
+
+class GenerateThumbnailBookkeepingTests(ThumbnailFailureTestCase):
+    def test_failed_generation_records_an_attempt(self):
+        from workspace.files.services.thumbnails import generate_thumbnail
+
+        f = self._make_broken_image()
+
+        self.assertFalse(generate_thumbnail(f))
+
+        row = ThumbnailFailure.objects.get(file=f)
+        self.assertEqual(row.attempts, 1)
+        self.assertTrue(row.last_error, "the decoder error should be recorded")
+
+    def test_successful_generation_clears_a_previous_failure(self):
+        from workspace.files.services.thumbnail_failures import record_failure
+        from workspace.files.services.thumbnails import generate_thumbnail
+
+        f = self._make_valid_image()
+        record_failure(f, ValueError("a previous transient failure"))
+
+        self.assertTrue(generate_thumbnail(f))
+
+        self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
+
+    def test_skipped_generation_records_nothing(self):
+        # A type outside THUMBNAIL_LABELS returns False without ever decoding.
+        # That is not a failure and must not consume an attempt.
+        from workspace.files.services.thumbnails import generate_thumbnail
+
+        f = self._make_file("doc.pdf", b"%PDF-1.4", "pdf", "application/pdf")
+
+        self.assertFalse(generate_thumbnail(f))
+
+        self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())

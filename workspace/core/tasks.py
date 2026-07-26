@@ -21,7 +21,7 @@ def _db_path():
 def _run_maintenance(skip_vacuum=False, skip_integrity_check=False):
     """Run SQLite maintenance operations. Returns a result dict."""
     if not _is_sqlite():
-        msg = "Database backend is not SQLite — skipping maintenance."
+        msg = "Database backend is not SQLite - skipping maintenance."
         logger.info(msg)
         return {"skipped": True, "reason": msg}
 
@@ -118,15 +118,21 @@ def _run_maintenance(skip_vacuum=False, skip_integrity_check=False):
 
 
 @shared_task(name="core.db_maintenance", bind=True, max_retries=0)
-def db_maintenance(self):
-    """Run SQLite maintenance: optimize, WAL checkpoint, VACUUM, integrity check."""
+def db_maintenance(self, skip_vacuum=False, skip_integrity_check=False):
+    """Run SQLite maintenance: optimize, WAL checkpoint, VACUUM, integrity check.
+
+    The daily beat passes skip_vacuum/skip_integrity_check so only the cheap
+    operations run; a weekly beat calls with both false for the full pass.
+    """
     if not _is_sqlite():
-        logger.info("Database backend is not SQLite — skipping maintenance.")
+        logger.info("Database backend is not SQLite - skipping maintenance.")
         return {"skipped": True, "reason": "not SQLite"}
 
     logger.info("Starting SQLite maintenance task")
     t0 = time.monotonic()
-    result = _run_maintenance()
+    result = _run_maintenance(
+        skip_vacuum=skip_vacuum, skip_integrity_check=skip_integrity_check
+    )
     result["total_ms"] = round((time.monotonic() - t0) * 1000, 1)
     logger.info("SQLite maintenance finished in %s ms", result["total_ms"])
     return result

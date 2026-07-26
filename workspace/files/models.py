@@ -801,7 +801,11 @@ class ThumbnailFailure(models.Model):
 
     A row exists only while the file is failing: it is dropped as soon as
     generation succeeds or the file's content is replaced, so ``attempts``
-    always counts attempts against the file's current bytes.
+    counts attempts against the file's current bytes. The exception is a
+    backfill already decoding when the content is replaced, which records
+    against the old bytes after the row was cleared and costs the new content
+    an attempt or two. Parking expires within PARKED_RETRY_AFTER regardless,
+    so the row carries no content revision to guard against that.
     """
 
     uuid = models.UUIDField(

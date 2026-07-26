@@ -1,8 +1,10 @@
 from django.test import TestCase
 
+from workspace.projects.models import TaskEvent
 from workspace.projects.services.tasks import (
     apply_status_change,
     create_task,
+    move_tasks,
     reorder_tasks,
 )
 
@@ -136,3 +138,72 @@ class ReorderTasksTests(TaskServiceMixin, TestCase):
 
         reorder_tasks(self.project, self.backlog, [uuid_module.uuid4(), self.t2.uuid])
         self.assertEqual(self._backlog_titles(), ["t2", "t1", "t3"])
+
+
+class MoveTasksTests(TaskServiceMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.t1 = create_task(self.project, self.admin, title="t1")
+        self.t2 = create_task(self.project, self.admin, title="t2")
+        self.t3 = create_task(self.project, self.admin, title="t3")
+
+    def _titles(self, status):
+        return [
+            t.title
+            for t in self.project.tasks.filter(status=status).order_by(
+                "position", "created_at"
+            )
+        ]
+
+    def test_appends_to_target_preserving_relative_order(self):
+        existing = create_task(
+            self.project, self.admin, title="already there", status=self.todo
+        )
+        moved = move_tasks(
+            self.project, self.todo, [self.t3.uuid, self.t1.uuid], actor=self.admin
+        )
+        self.assertEqual(self._titles(self.todo), ["already there", "t1", "t3"])
+        self.assertEqual({t.uuid for t in moved}, {self.t1.uuid, self.t3.uuid})
+        existing.refresh_from_db()
+        self.assertEqual(existing.position, 0)
+
+    def test_tasks_already_in_target_are_skipped(self):
+        in_todo = create_task(
+            self.project, self.admin, title="in todo", status=self.todo
+        )
+        before = in_todo.updated_at
+        moved = move_tasks(self.project, self.todo, [in_todo.uuid, self.t1.uuid])
+        in_todo.refresh_from_db()
+        self.assertEqual(in_todo.updated_at, before)
+        self.assertEqual([t.uuid for t in moved], [self.t1.uuid])
+        self.assertEqual(TaskEvent.objects.filter(type=TaskEvent.Type.MOVED).count(), 1)
+
+    def test_unknown_uuids_silently_skipped(self):
+        import uuid as uuid_module
+
+        moved = move_tasks(self.project, self.todo, [uuid_module.uuid4(), self.t2.uuid])
+        self.assertEqual([t.uuid for t in moved], [self.t2.uuid])
+        self.assertEqual(self._titles(self.todo), ["t2"])
+
+    def test_move_to_done_completes_and_records_completed_events(self):
+        move_tasks(
+            self.project, self.done, [self.t1.uuid, self.t2.uuid], actor=self.admin
+        )
+        self.t1.refresh_from_db()
+        self.assertIsNotNone(self.t1.completed_at)
+        events = TaskEvent.objects.filter(type=TaskEvent.Type.COMPLETED)
+        self.assertEqual(events.count(), 2)
+        self.assertEqual(events.first().to_status, "Done")
+
+    def test_move_out_of_done_clears_completed_at(self):
+        move_tasks(self.project, self.done, [self.t1.uuid])
+        move_tasks(self.project, self.todo, [self.t1.uuid])
+        self.t1.refresh_from_db()
+        self.assertIsNone(self.t1.completed_at)
+
+    def test_records_moved_event_with_status_names(self):
+        move_tasks(self.project, self.todo, [self.t1.uuid], actor=self.member)
+        event = TaskEvent.objects.filter(type=TaskEvent.Type.MOVED).get()
+        self.assertEqual(event.from_status, "Backlog")
+        self.assertEqual(event.to_status, "To do")
+        self.assertEqual(event.actor, self.member)

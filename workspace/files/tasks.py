@@ -129,12 +129,12 @@ def purge_trash(self):
 
 
 @shared_task(name="files.generate_thumbnails", bind=True, max_retries=0)
-def generate_thumbnails(self):
+def generate_thumbnails(self, retry_failed=False):
     """Generate thumbnails for image files that don't have one yet."""
     from workspace.files.services.thumbnails import generate_missing_thumbnails
 
-    logger.info("Starting thumbnail generation...")
-    stats = generate_missing_thumbnails()
+    logger.info("Starting thumbnail generation (retry_failed=%s)...", retry_failed)
+    stats = generate_missing_thumbnails(retry_failed=retry_failed)
     logger.info("Thumbnail generation complete: %s", stats)
     return stats
 

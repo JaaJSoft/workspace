@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from ..metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
 from .thumbnail_failures import (
+    clear_all_failures,
     clear_failure,
     count_parked_since,
     parked_file_ids,
@@ -159,15 +160,19 @@ def delete_thumbnail(uuid):
         logger.warning("Failed to delete thumbnail for %s", uuid, exc_info=True)
 
 
-def generate_missing_thumbnails():
+def generate_missing_thumbnails(*, retry_failed=False):
     """Generate thumbnails for all image files that don't have one yet.
 
-    Files that burned their attempt budget are skipped: see
-    ``thumbnail_failures.MAX_THUMBNAIL_ATTEMPTS``.
+    Files that burned their attempt budget are skipped, unless *retry_failed*
+    is set - the operational escape hatch for when the cause of the failures
+    (a broken dependency, an unreachable storage backend) has been fixed.
 
     Returns a dict with generation statistics.
     """
     from workspace.files.models import File
+
+    if retry_failed:
+        clear_all_failures()
 
     started_at = timezone.now()
 

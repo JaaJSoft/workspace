@@ -444,3 +444,79 @@ class ContentReplacementViaApiTests(ThumbnailFailureAPITestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
+
+
+class RetryFailedTests(ThumbnailFailureTestCase):
+    def _park(self, file_obj):
+        from workspace.files.services.thumbnail_failures import (
+            MAX_THUMBNAIL_ATTEMPTS,
+            record_failure,
+        )
+
+        for _ in range(MAX_THUMBNAIL_ATTEMPTS):
+            record_failure(file_obj, ValueError("boom"))
+
+    def test_retry_failed_purges_the_rows_and_rescans(self):
+        from workspace.files.services.thumbnails import generate_missing_thumbnails
+
+        f = self._make_valid_image()
+        self._park(f)
+        self.assertEqual(generate_missing_thumbnails()["total"], 0)
+
+        stats = generate_missing_thumbnails(retry_failed=True)
+
+        self.assertEqual(stats["generated"], 1)
+        self.assertFalse(ThumbnailFailure.objects.filter(file=f).exists())
+
+    def test_default_pass_still_respects_the_parking(self):
+        from workspace.files.services.thumbnails import generate_missing_thumbnails
+
+        self._park(self._make_valid_image())
+
+        self.assertEqual(generate_missing_thumbnails()["total"], 0)
+
+
+class RetryFailedEndpointTests(ThumbnailFailureAPITestCase):
+    def test_endpoint_forwards_the_flag_to_the_task(self):
+        from unittest.mock import patch
+
+        from rest_framework import status
+
+        with patch("workspace.files.tasks.generate_thumbnails.delay") as delay:
+            delay.return_value.id = "task-1"
+            resp = self.client.post(
+                "/api/v1/thumbnails/generate",
+                {"retry_failed": True},
+                format="json",
+            )
+
+        self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
+        delay.assert_called_once_with(retry_failed=True)
+
+    def test_endpoint_reads_the_string_form_of_the_flag(self):
+        # Pins the is_truthy requirement: "false" is a non-empty string and
+        # would be truthy under plain Python truthiness, silently inverting
+        # the caller's intent.
+        from unittest.mock import patch
+
+        with patch("workspace.files.tasks.generate_thumbnails.delay") as delay:
+            delay.return_value.id = "task-1"
+            self.client.post(
+                "/api/v1/thumbnails/generate",
+                {"retry_failed": "false"},
+                format="json",
+            )
+
+        delay.assert_called_once_with(retry_failed=False)
+
+    def test_endpoint_defaults_the_flag_to_false(self):
+        from unittest.mock import patch
+
+        from rest_framework import status
+
+        with patch("workspace.files.tasks.generate_thumbnails.delay") as delay:
+            delay.return_value.id = "task-1"
+            resp = self.client.post("/api/v1/thumbnails/generate")
+
+        self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
+        delay.assert_called_once_with(retry_failed=False)

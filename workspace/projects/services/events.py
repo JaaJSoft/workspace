@@ -43,11 +43,16 @@ def serialize_task_event(ev):
         # Null actor means a system-driven write; never attribute it to
         # a real user (same convention as the files provider).
         actor = None
+    # Deep-link to the task panel while the task exists; a deleted task
+    # (SET_NULL on the event) falls back to the project page.
+    url = f"/projects/{ev.project_id}"
+    if ev.task_id is not None:
+        url = f"{url}?task={ev.task_id}"
     return {
         "icon": ev.icon,
         "label": ev.short_label,
         "description": ev.task_title,
         "timestamp": ev.created_at,
-        "url": f"/projects/{ev.project_id}",
+        "url": url,
         "actor": actor,
     }

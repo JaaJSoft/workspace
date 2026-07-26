@@ -45,12 +45,20 @@ class ProjectsActivityProvider(ActivityProvider):
             qs = qs.filter(actor_id=user_id)
         qs = (
             qs.filter(self._visibility_filter(user_id, viewer_id))
-            .select_related("actor")
+            .select_related("actor", "project")
             .order_by("-created_at")[offset : offset + limit]
         )
         from workspace.projects.services.events import serialize_task_event
 
-        return [serialize_task_event(ev) for ev in qs]
+        events = []
+        for ev in qs:
+            event = serialize_task_event(ev)
+            # Project name gives cross-project feeds (dashboard, profile)
+            # their context; the in-panel feed hides meta and doesn't need it.
+            event["meta_icon"] = "square-kanban"
+            event["meta_text"] = ev.project.name
+            events.append(event)
+        return events
 
     def get_stats(self, user_id, *, viewer_id=None):
         from workspace.projects.models import Task

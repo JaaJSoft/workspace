@@ -794,3 +794,29 @@ class FileLink(models.Model):
 
     def __str__(self):
         return f"{self.source_id} -> {self.target_id}"
+
+
+class ThumbnailFailure(models.Model):
+    """An image file whose thumbnail generation failed.
+
+    A row exists only while the file is failing: it is dropped as soon as
+    generation succeeds or the file's content is replaced, so ``attempts``
+    always counts attempts against the file's current bytes.
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
+    file = models.OneToOneField(
+        File,
+        on_delete=models.CASCADE,
+        related_name="thumbnail_failure",
+    )
+    attempts = models.PositiveSmallIntegerField(default=0)
+    # Set explicitly by the service: the counter is bumped through a queryset
+    # .update() for atomicity, and auto_now only fires inside Model.save().
+    last_attempt_at = models.DateTimeField()
+    last_error = models.CharField(max_length=200, blank=True)
+
+    def __str__(self):
+        return f"{self.file}: {self.attempts} failed thumbnail attempt(s)"

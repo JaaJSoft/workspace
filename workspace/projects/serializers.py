@@ -203,7 +203,10 @@ class TaskReorderSerializer(serializers.Serializer):
 
 class TaskMoveSerializer(serializers.Serializer):
     status = serializers.UUIDField()
-    tasks = serializers.ListField(allow_empty=False)
+    # max_length caps the IN clause of the bulk move: past a few thousand
+    # parameters SQLite (a production target) errors out with "too many
+    # SQL variables" and the request would 500 instead of 400.
+    tasks = serializers.ListField(allow_empty=False, max_length=1000)
 
     def validate_tasks(self, value):
         return _parse_uuid_list(value, "tasks")

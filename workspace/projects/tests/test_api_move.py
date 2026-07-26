@@ -75,6 +75,20 @@ class MoveApiTests(ProjectTestMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_oversized_task_list_is_400(self):
+        import uuid as uuid_module
+
+        self.client.force_authenticate(self.member)
+        response = self.client.post(
+            self.url,
+            {
+                "status": str(self.todo.uuid),
+                "tasks": [str(uuid_module.uuid4()) for _ in range(1001)],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_archived_project_is_403(self):
         self.project.archived_at = timezone.now()
         self.project.save(update_fields=["archived_at"])

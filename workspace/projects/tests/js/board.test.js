@@ -239,6 +239,30 @@ test('toggleSelectAll selects only the rows matching the filters', () => {
   assert.deepStrictEqual(Array.from(board.selected), []);
 });
 
+test('toggleSelectAll keeps selections outside the current filter', () => {
+  ctx.document = backlogDom([
+    ['u1', { priority: 'high' }],
+    ['u2', { priority: 'low' }],
+    ['u3', { priority: 'high' }],
+  ]);
+  const board = panelBoard();
+  board.filters.priority = 'high';
+  board.selected = ['u2'];
+  board.toggleSelectAll();
+  assert.deepStrictEqual(Array.from(board.selected), ['u2', 'u1', 'u3']);
+  board.toggleSelectAll();
+  assert.deepStrictEqual(Array.from(board.selected), ['u2']);
+});
+
+test('toggleSelectAll leaves the selection alone when nothing is visible', () => {
+  ctx.document = backlogDom([['u1', { priority: 'high' }]]);
+  const board = panelBoard();
+  board.filters.priority = 'low';
+  board.selected = ['u1'];
+  board.toggleSelectAll();
+  assert.deepStrictEqual(Array.from(board.selected), ['u1']);
+});
+
 test('columnCount returns the server total when no filter is active', () => {
   const board = panelBoard();
   assert.equal(board.columnCount('s1', 5), 5);

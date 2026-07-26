@@ -12,6 +12,20 @@ def next_position(project, status):
     return 0 if last is None else last + 1
 
 
+def _locked_tail_position(project, status):
+    """next_position with the *status* row locked for the transaction.
+
+    The tail is read with a plain aggregate, so two concurrent writers
+    appending to the same column would otherwise read the same
+    Max(position) and write duplicate positions. Locking the status row
+    first serializes every append path on the column. Must be called
+    inside a transaction, before any task-row locks (all writers take
+    the status lock first, keeping the lock order deadlock-free).
+    """
+    TaskStatus.objects.select_for_update().get(pk=status.pk)
+    return next_position(project, status)
+
+
 def create_task(
     project,
     user,
@@ -40,7 +54,7 @@ def create_task(
             priority=priority,
             due_date=due_date,
             created_by=user,
-            position=next_position(project, status),
+            position=_locked_tail_position(project, status),
         )
         if assignees:
             task.assignees.set(assignees)
@@ -93,13 +107,13 @@ def apply_status_change(task, *, actor=None, old_status=None):
     ``completed_at`` from the status category and records the move event.
     Saves the task.
     """
-    task.position = next_position(task.project, task.status)
-    if task.status.category == TaskStatus.Category.DONE:
-        if task.completed_at is None:
-            task.completed_at = timezone.now()
-    else:
-        task.completed_at = None
     with transaction.atomic():
+        task.position = _locked_tail_position(task.project, task.status)
+        if task.status.category == TaskStatus.Category.DONE:
+            if task.completed_at is None:
+                task.completed_at = timezone.now()
+        else:
+            task.completed_at = None
         task.save(update_fields=["status", "position", "completed_at", "updated_at"])
         record_task_event(
             task,
@@ -131,11 +145,11 @@ def move_tasks(project, status, task_uuids, *, actor=None):
     Returns the moved tasks.
     """
     with transaction.atomic():
+        position = _locked_tail_position(project, status)
         tasks = sorted(
             project.tasks.select_for_update().filter(uuid__in=task_uuids),
             key=lambda t: (t.position, t.created_at),
         )
-        position = next_position(project, status)
         now = timezone.now()
         moved = []
         for task in tasks:
@@ -179,6 +193,10 @@ def reorder_tasks(project, status, ordered_uuids, *, actor=None):
     skipped. Idempotent: replaying the same payload yields the same state.
     """
     with transaction.atomic():
+        # Status row first (same lock order as _locked_tail_position): the
+        # task-row locks below don't serialize writers when the column is
+        # empty, since there are then no rows to lock.
+        TaskStatus.objects.select_for_update().get(pk=status.pk)
         # One locking query for both the column and the listed tasks: two
         # separate SELECT FOR UPDATE passes would leave a window between
         # them where a concurrent reorder locks the other half first.

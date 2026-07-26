@@ -247,7 +247,17 @@ function projectBoard(config) {
     },
 
     toggleSelectAll() {
-      this.selected = this.allVisibleSelected() ? [] : this.visibleBacklogUuids();
+      // Only touch the rows matching the current filters: selections made
+      // under another filter must survive a select-all/deselect-all here.
+      const visible = this.visibleBacklogUuids();
+      if (!visible.length) return;
+      if (this.allVisibleSelected()) {
+        this.selected = this.selected.filter((u) => !visible.includes(u));
+      } else {
+        this.selected = this.selected.concat(
+          visible.filter((u) => !this.isSelected(u))
+        );
+      }
     },
 
     boardStatuses() {

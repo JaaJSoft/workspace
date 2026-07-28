@@ -30,8 +30,6 @@ function projectSettingsGeneral(config) {
   return {
     name: '',
     description: '',
-    group: null,
-    groups: [],
     saving: false,
     saved: false,
     error: '',
@@ -43,18 +41,6 @@ function projectSettingsGeneral(config) {
       );
       this.name = data.name;
       this.description = data.description;
-      this.group = data.group;
-      if (config.showGroup) this.loadGroups();
-    },
-
-    async loadGroups() {
-      try {
-        const resp = await fetch('/api/v1/users/groups');
-        if (resp.ok) this.groups = await resp.json();
-      } catch (e) {
-        // Selector simply stays empty; saving without touching the
-        // group keeps the current value.
-      }
     },
 
     async save() {
@@ -63,7 +49,6 @@ function projectSettingsGeneral(config) {
       this.saved = false;
       try {
         const body = { name: this.name, description: this.description };
-        if (config.showGroup) body.group = this.group || null;
         const resp = await fetch(config.apiBase, {
           method: 'PATCH',
           headers: settingsHeaders(),
@@ -82,6 +67,58 @@ function projectSettingsGeneral(config) {
         this.error = e.message;
       } finally {
         this.saving = false;
+      }
+    },
+  };
+}
+
+// Group attachment lives in the Access section and saves on change, no
+// explicit save button.
+function projectGroupAccess(config) {
+  return {
+    group: '',
+    groups: [],
+    busy: false,
+    saved: false,
+    error: '',
+
+    async init() {
+      const data = JSON.parse(
+        document.getElementById('project-settings-data').textContent
+      );
+      this.group = data.group === null ? '' : String(data.group);
+      try {
+        const resp = await fetch('/api/v1/users/groups');
+        if (resp.ok) this.groups = await resp.json();
+      } catch (e) {
+        // The selector stays limited to "No group"; the current value is
+        // kept until a change is actually made.
+      }
+    },
+
+    async save() {
+      this.busy = true;
+      this.error = '';
+      this.saved = false;
+      try {
+        const resp = await fetch(config.apiBase, {
+          method: 'PATCH',
+          headers: settingsHeaders(),
+          body: JSON.stringify({ group: this.group || null }),
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(function () {
+            return {};
+          });
+          throw new Error(
+            data.detail || (data.group && data.group[0]) || 'Could not save.'
+          );
+        }
+        this.saved = true;
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.busy = false;
       }
     },
   };
@@ -108,7 +145,9 @@ function projectSettingsDanger(config) {
       }
     },
 
-    async destroy() {
+    // Not named destroy(): Alpine auto-invokes a destroy() method as a
+    // teardown hook when the element leaves the DOM (view swaps).
+    async deleteProject() {
       const ok = await AppDialog.confirm({
         title: 'Delete project',
         message:
@@ -478,9 +517,6 @@ function projectLabels(config) {
 function projectMembers(config) {
   return {
     items: [],
-    search: '',
-    results: [],
-    searching: false,
     busy: false,
     error: '',
 
@@ -516,34 +552,12 @@ function projectMembers(config) {
       }
     },
 
-    async runSearch() {
-      const query = this.search.trim();
-      if (query.length < 2) {
-        this.results = [];
-        return;
-      }
-      this.searching = true;
-      try {
-        const resp = await fetch(
-          '/api/v1/users/search?q=' + encodeURIComponent(query)
-        );
-        if (resp.ok) {
-          const data = await resp.json();
-          const existing = new Set(
-            this.items.map(function (m) {
-              return m.user;
-            })
-          );
-          this.results = data.results.filter(function (u) {
-            return !existing.has(u.id);
-          });
-        }
-      } finally {
-        this.searching = false;
-      }
-    },
-
     async addMember(user) {
+      // The shared user selector does not know who is already a member.
+      const already = this.items.some(function (m) {
+        return String(m.user) === String(user.id);
+      });
+      if (already) return;
       try {
         const resp = await this.request(config.apiBase + '/members', {
           method: 'POST',
@@ -551,8 +565,6 @@ function projectMembers(config) {
           body: JSON.stringify({ user: user.id, role: 'member' }),
         });
         this.items.push(await resp.json());
-        this.search = '';
-        this.results = [];
         this.syncBoardMembers();
       } catch (e) {
         this.error = e.message;
@@ -606,6 +618,7 @@ function projectMembers(config) {
 }
 
 window.projectSettingsGeneral = projectSettingsGeneral;
+window.projectGroupAccess = projectGroupAccess;
 window.projectSettingsDanger = projectSettingsDanger;
 window.projectColumns = projectColumns;
 window.projectLabels = projectLabels;

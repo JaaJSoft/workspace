@@ -437,6 +437,7 @@ The bug is invisible: the second pass overwrites the first with the same data, n
 
 **Rules:**
 - Component objects with an `init()` method must rely on Alpine's auto-call. Do **not** also write `x-init="init()"`.
+- `destroy()` is the matching teardown hook: Alpine auto-invokes it when the element leaves the DOM (alpine-ajax view swaps included). Only define it for cleanup - never name an action `destroy()`. We shipped a settings page whose "delete the project" confirm dialog popped up on every navigation away because the delete action was named `destroy()`.
 - `x-init` is only for **inline expressions** on components that don't define an `init()` method (e.g., `<div x-data="{ open: false }" x-init="$watch('open', ...)">`).
 - When adding event listeners inside `init()`, remember they will be added once per mount - if you ever do see two listeners firing, suspect a duplicate `x-init` or a duplicate `x-data` instantiation of the same component (see `filePreferences()` in `files/ui/index.html`, instantiated twice intentionally - its `init()` should be guarded against re-fetching).
 

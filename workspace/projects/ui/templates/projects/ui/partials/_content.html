@@ -1,4 +1,14 @@
 <div id="project-content" class="flex-1 min-h-0 overflow-y-auto">
+  {% comment %}
+    The page header lives inside the scroller so it shares the same width,
+    centering and scrollbar as the active view - overview and settings render
+    a centered max-width column, board and backlog use the full width.
+  {% endcomment %}
+  <div class="flex items-center gap-3 min-w-0 mb-4{% if view == 'overview' or view == 'settings' %} max-w-6xl mx-auto{% endif %}">
+    {% include "ui/partials/drawer_toggle.html" with drawer_id="projects-drawer" class="lg:hidden" %}
+    <h1 class="text-xl font-semibold truncate">{{ project.name }}</h1>
+    {% if project.archived_at %}<span class="badge badge-ghost">Archived</span>{% endif %}
+  </div>
   {% if view == "backlog" %}
     {% include "projects/ui/partials/backlog.html" %}
   {% elif view == "overview" %}

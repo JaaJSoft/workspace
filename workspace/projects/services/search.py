@@ -1,8 +1,11 @@
+import re
+
 from workspace.common.search import apply_fulltext
 from workspace.common.search.schema import Col, FulltextIndex
 
 from ..models import Project, Task
 from ..queries import user_project_ids
+from .references import REFERENCE_RE
 
 PROJECT_FTS = FulltextIndex(
     table="projects_project",
@@ -47,3 +50,28 @@ def search_tasks_qs(user, query):
         project__archived_at__isnull=True,
     )
     return fts_tasks(qs, query).order_by("-search_rank", "-created_at")
+
+
+NUMBER_RE = re.compile(r"^#?([0-9]{1,9})$")
+
+
+def reference_tasks_qs(user, query):
+    """Exact task matches for a WR-42 reference or a bare number (42, #42).
+
+    Empty queryset when the query is not reference-shaped; access-filtered
+    and archived-excluded like the full-text search.
+    """
+    text = query.strip()
+    base = Task.objects.filter(
+        project_id__in=user_project_ids(user),
+        project__archived_at__isnull=True,
+    )
+    match = REFERENCE_RE.match(text)
+    if match:
+        return base.filter(
+            project__key=match.group(1).upper(), number=int(match.group(2))
+        )
+    match = NUMBER_RE.match(text)
+    if match:
+        return base.filter(number=int(match.group(1)))
+    return Task.objects.none()

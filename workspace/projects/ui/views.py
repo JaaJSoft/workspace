@@ -279,7 +279,10 @@ def settings_view(request, project_uuid):
     context["project_data"] = {
         "name": project.name,
         "description": project.description,
-        "group": project.group_id,
+        "groups": [
+            {"id": group.pk, "name": group.name}
+            for group in project.groups.order_by("name")
+        ],
         "type": project.type,
         "archived": project.is_archived,
     }

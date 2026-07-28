@@ -58,30 +58,38 @@
           {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="error"></span>' %}
         </template>
 
-        <div id="settings-group" class="flex flex-col"
-             x-data="projectGroupAccess({ apiBase: '/api/v1/projects/{{ project.uuid }}' })">
+        <div id="settings-group" class="flex flex-col gap-2"
+             x-data="projectGroupAccess({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
+             @project-group-selected.window="addGroup($event.detail.group)">
           <template x-if="error">
             {% include "ui/partials/inline_alert.html" with type="error" class="mb-2" slot='<span x-text="error"></span>' %}
           </template>
-          <label class="form-control w-full">
-            <div class="label py-1">
-              <span class="label-text">Group</span>
-              <span class="label-text-alt text-success flex items-center gap-1" x-show="saved" x-transition>
-                <i data-lucide="check" class="w-3 h-3"></i> Saved
+          <div class="flex items-center justify-between">
+            <h4 class="text-sm font-medium text-base-content/70">Groups</h4>
+            <span class="label-text-alt text-success flex items-center gap-1" x-show="saved" x-transition>
+              <i data-lucide="check" class="w-3 h-3"></i> Saved
+            </span>
+          </div>
+          {% if writable %}
+            {% include "ui/partials/group_selector.html" with on_select_event="project-group-selected" local_source="selectableGroups()" placeholder="Attach one of your groups" %}
+          {% endif %}
+          <div class="flex flex-wrap gap-2" x-show="items.length">
+            <template x-for="group in items" :key="group.id">
+              <span class="badge badge-outline badge-lg gap-1 bg-base-100">
+                <i data-lucide="users" class="w-3 h-3 opacity-60"></i>
+                <span x-text="group.name"></span>
+                {% if writable %}
+                  <button type="button" class="btn btn-ghost btn-xs btn-square text-error"
+                          aria-label="Detach group" :disabled="busy"
+                          @click="removeGroup(group)">
+                    <i data-lucide="x" class="w-3 h-3"></i>
+                  </button>
+                {% endif %}
               </span>
-            </div>
-            <select class="select select-bordered select-sm w-full" x-model="group"
-                    @change="save()" {% if not writable %}disabled{% endif %}>
-              <option value="">No group</option>
-              <template x-for="g in groups" :key="g.id">
-                <option :value="g.id" x-text="g.name"
-                        :selected="String(g.id) === String(group)"></option>
-              </template>
-            </select>
-            <div class="label py-1">
-              <span class="label-text-alt">Group members get member access implicitly; they are not listed below.</span>
-            </div>
-          </label>
+            </template>
+          </div>
+          <p class="text-sm text-base-content/60" x-show="!items.length">No groups attached.</p>
+          <p class="label-text-alt text-base-content/60">Members of attached groups get member access implicitly; they are not listed below.</p>
         </div>
 
         <h4 class="text-sm font-medium text-base-content/70">People</h4>

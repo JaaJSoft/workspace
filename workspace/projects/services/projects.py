@@ -11,17 +11,18 @@ DEFAULT_STATUSES = [
 
 
 def create_project(
-    user, *, name, description="", group=None, project_type=Project.Type.KANBAN
+    user, *, name, description="", groups=None, project_type=Project.Type.KANBAN
 ):
     """Create a project with its default statuses and the creator as admin."""
     with transaction.atomic():
         project = Project.objects.create(
             name=name,
             description=description,
-            group=group,
             type=project_type,
             created_by=user,
         )
+        if groups:
+            project.groups.set(groups)
         TaskStatus.objects.bulk_create(
             TaskStatus(project=project, name=n, category=c, position=i)
             for i, (n, c) in enumerate(DEFAULT_STATUSES)

@@ -43,9 +43,23 @@ class UserProjectIdsTests(TestCase):
     def test_group_member_sees_project(self):
         group = Group.objects.create(name="devs")
         self.outsider.groups.add(group)
-        self.project.group = group
-        self.project.save(update_fields=["group"])
+        self.project.groups.add(group)
         self.assertIn(self.project.uuid, list(user_project_ids(self.outsider)))
+
+    def test_any_attached_group_grants_access(self):
+        devs = Group.objects.create(name="devs")
+        design = Group.objects.create(name="design")
+        self.outsider.groups.add(design)
+        self.project.groups.add(devs, design)
+        self.assertIn(self.project.uuid, list(user_project_ids(self.outsider)))
+
+    def test_user_in_two_attached_groups_sees_project_once(self):
+        devs = Group.objects.create(name="devs")
+        design = Group.objects.create(name="design")
+        self.outsider.groups.add(devs, design)
+        self.project.groups.add(devs, design)
+        ids = list(user_project_ids(self.outsider))
+        self.assertEqual(ids.count(self.project.uuid), 1)
 
     def test_role_admin_filter(self):
         self.assertIn(
@@ -56,8 +70,7 @@ class UserProjectIdsTests(TestCase):
     def test_group_access_never_grants_admin(self):
         group = Group.objects.create(name="devs")
         self.outsider.groups.add(group)
-        self.project.group = group
-        self.project.save(update_fields=["group"])
+        self.project.groups.add(group)
         self.assertEqual(list(user_project_ids(self.outsider, role="admin")), [])
 
     def test_archived_project_still_visible(self):
@@ -68,8 +81,7 @@ class UserProjectIdsTests(TestCase):
     def test_departed_member_with_group_access_still_sees_project(self):
         group = Group.objects.create(name="devs")
         self.member.groups.add(group)
-        self.project.group = group
-        self.project.save(update_fields=["group"])
+        self.project.groups.add(group)
         ProjectMember.objects.filter(user=self.member).update(left_at=timezone.now())
         self.assertIn(self.project.uuid, list(user_project_ids(self.member)))
 
@@ -103,26 +115,30 @@ class GetProjectRoleTests(TestCase):
     def test_group_grants_member_role(self):
         group = Group.objects.create(name="devs")
         self.outsider.groups.add(group)
-        self.project.group = group
-        self.project.save(update_fields=["group"])
+        self.project.groups.add(group)
+        self.assertEqual(get_project_role(self.outsider, self.project), "member")
+
+    def test_any_attached_group_grants_member_role(self):
+        devs = Group.objects.create(name="devs")
+        design = Group.objects.create(name="design")
+        self.outsider.groups.add(design)
+        self.project.groups.add(devs, design)
         self.assertEqual(get_project_role(self.outsider, self.project), "member")
 
     def test_departed_member_with_group_access_keeps_member_role(self):
         # Group access is independent of membership rows: leaving a project
-        # does not revoke the access granted by the attached auth.Group
+        # does not revoke the access granted by an attached auth.Group
         # (files precedent).
         group = Group.objects.create(name="devs")
         self.member.groups.add(group)
-        self.project.group = group
-        self.project.save(update_fields=["group"])
+        self.project.groups.add(group)
         ProjectMember.objects.filter(user=self.member).update(left_at=timezone.now())
         self.assertEqual(get_project_role(self.member, self.project), "member")
 
     def test_membership_row_wins_over_group(self):
         group = Group.objects.create(name="devs")
         self.admin.groups.add(group)
-        self.project.group = group
-        self.project.save(update_fields=["group"])
+        self.project.groups.add(group)
         self.assertEqual(get_project_role(self.admin, self.project), "admin")
 
 
@@ -146,12 +162,11 @@ class ProjectUsersTests(TestCase):
         )
         ProjectMember.objects.create(project=self.project, user=self.member)
 
-    def _attach_group(self, *users):
-        group = Group.objects.create(name="devs")
+    def _attach_group(self, *users, name="devs"):
+        group = Group.objects.create(name=name)
         for user in users:
             user.groups.add(group)
-        self.project.group = group
-        self.project.save(update_fields=["group"])
+        self.project.groups.add(group)
         return group
 
     def test_individual_members_only(self):
@@ -174,6 +189,20 @@ class ProjectUsersTests(TestCase):
         self._attach_group(self.member)
         pks = [u.pk for u in project_users(self.project)]
         self.assertEqual(pks.count(self.member.pk), 1)
+
+    def test_user_in_two_attached_groups_included_once(self):
+        self._attach_group(self.grouper, name="devs")
+        self._attach_group(self.grouper, name="design")
+        pks = [u.pk for u in project_users(self.project)]
+        self.assertEqual(pks.count(self.grouper.pk), 1)
+
+    def test_users_from_all_attached_groups_included(self):
+        self._attach_group(self.grouper, name="devs")
+        other = self._attach_group(name="design")
+        self.outsider.groups.add(other)
+        pks = [u.pk for u in project_users(self.project)]
+        self.assertIn(self.grouper.pk, pks)
+        self.assertIn(self.outsider.pk, pks)
 
     def test_departed_member_with_group_access_included(self):
         self._attach_group(self.member)

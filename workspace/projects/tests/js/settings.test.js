@@ -61,50 +61,79 @@ test('projectSettingsDanger does not expose a destroy() lifecycle collision', ()
   assert.equal(typeof c.deleteProject, 'function');
 });
 
-test('projectGroupAccess.save sends null when no group is selected', async () => {
-  let captured = null;
-  const c = loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
+function groupAccess(fetchImpl) {
+  return loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
     getCSRFToken: () => 'test-token',
-    fetch: async (url, options) => {
-      captured = { url, options };
-      return { ok: true };
-    },
+    fetch: fetchImpl,
   }).projectGroupAccess({ apiBase: '/api/v1/projects/p1' });
-  c.group = '';
-  await c.save();
+}
+
+test('projectGroupAccess.addGroup PATCHes the extended id list and appends', async () => {
+  let captured = null;
+  const c = groupAccess(async (url, options) => {
+    captured = { url, options };
+    return { ok: true };
+  });
+  c.items = [{ id: 1, name: 'devs' }];
+  await c.addGroup({ id: 2, name: 'design' });
   assert.equal(captured.url, '/api/v1/projects/p1');
   assert.equal(captured.options.method, 'PATCH');
-  assert.equal(JSON.parse(captured.options.body).group, null);
+  assert.deepEqual(JSON.parse(captured.options.body).groups, [1, 2]);
+  assert.deepEqual(c.items.map((g) => g.name), ['devs', 'design']);
   assert.equal(c.saved, true);
 });
 
-test('projectGroupAccess.save sends the selected group id', async () => {
-  let captured = null;
-  const c = loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
-    getCSRFToken: () => 'test-token',
-    fetch: async (url, options) => {
-      captured = { url, options };
-      return { ok: true };
-    },
-  }).projectGroupAccess({ apiBase: '/api/v1/projects/p1' });
-  c.group = '42';
-  await c.save();
-  assert.equal(JSON.parse(captured.options.body).group, '42');
+test('projectGroupAccess.addGroup skips groups that are already attached', async () => {
+  let called = false;
+  const c = groupAccess(async () => {
+    called = true;
+    return { ok: true };
+  });
+  c.items = [{ id: 1, name: 'devs' }];
+  await c.addGroup({ id: '1', name: 'devs' });
+  assert.equal(called, false);
+  assert.equal(c.items.length, 1);
 });
 
-test('projectGroupAccess.save surfaces the server field error', async () => {
-  const c = loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
-    getCSRFToken: () => 'test-token',
-    fetch: async () => ({
-      ok: false,
-      json: async () => ({ group: ['Invalid group.'] }),
-    }),
-  }).projectGroupAccess({ apiBase: '/api/v1/projects/p1' });
-  c.group = '42';
-  await c.save();
-  assert.equal(c.error, 'Invalid group.');
+test('projectGroupAccess.removeGroup PATCHes the reduced id list', async () => {
+  let captured = null;
+  const c = groupAccess(async (url, options) => {
+    captured = { url, options };
+    return { ok: true };
+  });
+  c.items = [
+    { id: 1, name: 'devs' },
+    { id: 2, name: 'design' },
+  ];
+  await c.removeGroup({ id: 1, name: 'devs' });
+  assert.deepEqual(JSON.parse(captured.options.body).groups, [2]);
+  assert.deepEqual(c.items.map((g) => g.name), ['design']);
+});
+
+test('projectGroupAccess.save surfaces the server field error and keeps items', async () => {
+  const c = groupAccess(async () => ({
+    ok: false,
+    json: async () => ({ groups: ['You can only attach groups you belong to.'] }),
+  }));
+  c.items = [{ id: 1, name: 'devs' }];
+  await c.addGroup({ id: 2, name: 'design' });
+  assert.equal(c.error, 'You can only attach groups you belong to.');
   assert.equal(c.saved, false);
   assert.equal(c.busy, false);
+  assert.deepEqual(c.items.map((g) => g.name), ['devs']);
+});
+
+test('projectGroupAccess.selectableGroups excludes attached groups', () => {
+  const c = groupAccess(async () => ({ ok: true }));
+  c.items = [{ id: 1, name: 'devs' }];
+  c.available = [
+    { id: 1, name: 'devs' },
+    { id: 2, name: 'design' },
+  ];
+  assert.deepEqual(
+    Array.from(c.selectableGroups()).map((g) => g.name),
+    ['design']
+  );
 });
 
 test('projectMembers.addMember skips users that are already members', async () => {

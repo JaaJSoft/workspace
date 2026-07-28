@@ -4,11 +4,17 @@ from rest_framework import serializers
 
 from .models import Label, Project, ProjectMember, Task, TaskStatus
 from .queries import get_project_role
+from .services.references import KEY_RE
 
 User = get_user_model()
 
 
 class ProjectSerializer(serializers.ModelSerializer):
+    # Explicit (not required) because `create()` builds the project from
+    # curated kwargs and always auto-generates the key; the model field
+    # itself has no default, which would otherwise make DRF require it
+    # on every create request.
+    key = serializers.CharField(required=False)
     groups = serializers.PrimaryKeyRelatedField(
         queryset=Group.objects.all(), many=True, required=False
     )
@@ -19,6 +25,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         fields = [
             "uuid",
             "name",
+            "key",
             "description",
             "type",
             "groups",
@@ -33,6 +40,19 @@ class ProjectSerializer(serializers.ModelSerializer):
         # Set by the queryset annotation; group-only access has no
         # membership row and always means plain member.
         return getattr(obj, "_my_role", None) or ProjectMember.Role.MEMBER
+
+    def validate_key(self, value):
+        value = value.strip().upper()
+        if not KEY_RE.fullmatch(value):
+            raise serializers.ValidationError(
+                "Use 2-10 letters and digits, starting with a letter."
+            )
+        existing = Project.objects.filter(key=value)
+        if self.instance is not None:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise serializers.ValidationError("Another project already uses this key.")
+        return value
 
     def validate_groups(self, groups):
         # Only newly added groups require the requester's membership:
@@ -140,6 +160,7 @@ class TaskSerializer(serializers.ModelSerializer):
         queryset=Label.objects.none(), many=True, required=False
     )
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
+    reference = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -154,6 +175,8 @@ class TaskSerializer(serializers.ModelSerializer):
             "assignees",
             "labels",
             "position",
+            "number",
+            "reference",
             "completed_at",
             "created_by",
             "created_at",
@@ -161,10 +184,17 @@ class TaskSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "position",
+            "number",
             "completed_at",
             "created_at",
             "updated_at",
         ]
+
+    def get_reference(self, obj) -> str:
+        # The viewsets always put the project in context; the fallback keeps
+        # standalone serialization working at the cost of a query.
+        project = self.context.get("project") or obj.project
+        return f"{project.key}-{obj.number}"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

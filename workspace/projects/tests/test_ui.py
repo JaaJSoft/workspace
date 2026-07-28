@@ -5,7 +5,7 @@ from django.test import TestCase
 
 from workspace.projects.models import Project, TaskEvent
 from workspace.projects.services.projects import get_or_create_personal_project
-from workspace.projects.services.tasks import create_task
+from workspace.projects.services.tasks import create_task, delete_task
 from workspace.users.services.settings import get_setting, set_setting
 
 from .base import ProjectTestMixin
@@ -282,6 +282,14 @@ class OverviewActivityTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         resp = self.client.get(f"/projects/{self.project.uuid}")
         self.assertContains(resp, "Paint the shed")
         self.assertNotContains(resp, f"openTask('{task_uuid}')")
+
+    def test_overview_activity_deleted_task_still_shows_reference(self):
+        task = create_task(self.project, self.admin, title="Paint the shed")
+        task_number = task.number
+        delete_task(task, actor=self.admin)
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}")
+        self.assertContains(resp, f"{self.project.key}-{task_number}")
 
     def test_overview_activity_shows_status_transition(self):
         task = create_task(self.project, self.admin, title="Paint the shed")

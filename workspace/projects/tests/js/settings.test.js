@@ -31,6 +31,13 @@ test('defaultMoveTarget returns null when category has no sibling', () => {
   assert.equal(defaultMoveTarget(COLUMNS, 'unknown'), null);
 });
 
+test('normalizeProjectKey trims and uppercases', () => {
+  const { normalizeProjectKey } = ctx().projectSettingsHelpers;
+  assert.equal(normalizeProjectKey('  core7 '), 'CORE7');
+  assert.equal(normalizeProjectKey(null), '');
+  assert.equal(normalizeProjectKey(undefined), '');
+});
+
 test('saveEdit is a no-op when editing was cancelled', async () => {
   const c = ctx().projectColumns({ apiBase: '/x' });
   c.editing = null;

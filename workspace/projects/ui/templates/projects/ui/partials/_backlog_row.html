@@ -18,6 +18,7 @@
            @change="toggleSelect('{{ task.uuid }}')">
   {% endif %}
   <span class="flex-1 min-w-0 flex items-center gap-2">
+    <span class="text-xs font-mono text-base-content/50 shrink-0">{{ project.key }}-{{ task.number }}</span>
     <span class="text-sm font-medium truncate">{{ task.title }}</span>
     {% for label in task.labels.all %}
       <span class="badge badge-sm badge-outline shrink-0 hidden lg:inline-flex"

@@ -56,7 +56,7 @@
                 <span class="text-base-content/70">-</span>
                 {% if ev.task_id %}
                   <button type="button" class="link link-hover text-base-content/70"
-                          @click="openTask('{{ ev.task_id }}')">{{ ev.task_title }}</button>
+                          @click="openTask('{{ ev.task_id }}')">{% if ev.task_number %}<span class="font-mono text-base-content/50">{{ project.key }}-{{ ev.task_number }}</span> {% endif %}{{ ev.task_title }}</button>
                 {% else %}
                   <span class="text-base-content/70">{{ ev.task_title }}</span>
                 {% endif %}

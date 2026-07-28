@@ -26,10 +26,18 @@ function defaultMoveTarget(columns, uuid) {
   return null;
 }
 
+// Mirrors the backend normalization; the API re-validates the format.
+function normalizeProjectKey(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase();
+}
+
 function projectSettingsGeneral(config) {
   return {
     name: '',
     description: '',
+    key: '',
     saving: false,
     saved: false,
     error: '',
@@ -41,6 +49,7 @@ function projectSettingsGeneral(config) {
       );
       this.name = data.name;
       this.description = data.description;
+      this.key = data.key;
     },
 
     async save() {
@@ -48,7 +57,11 @@ function projectSettingsGeneral(config) {
       this.error = '';
       this.saved = false;
       try {
-        const body = { name: this.name, description: this.description };
+        const body = {
+          name: this.name,
+          description: this.description,
+          key: normalizeProjectKey(this.key),
+        };
         const resp = await fetch(config.apiBase, {
           method: 'PATCH',
           headers: settingsHeaders(),
@@ -59,7 +72,10 @@ function projectSettingsGeneral(config) {
             return {};
           });
           throw new Error(
-            data.detail || (data.name && data.name[0]) || 'Could not save.'
+            data.detail ||
+              (data.name && data.name[0]) ||
+              (data.key && data.key[0]) ||
+              'Could not save.'
           );
         }
         this.saved = true;
@@ -660,4 +676,7 @@ window.projectSettingsDanger = projectSettingsDanger;
 window.projectColumns = projectColumns;
 window.projectLabels = projectLabels;
 window.projectMembers = projectMembers;
-window.projectSettingsHelpers = { defaultMoveTarget: defaultMoveTarget };
+window.projectSettingsHelpers = {
+  defaultMoveTarget: defaultMoveTarget,
+  normalizeProjectKey: normalizeProjectKey,
+};

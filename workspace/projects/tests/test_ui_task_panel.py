@@ -115,6 +115,11 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(resp, 'id="task-panel-actions"')
         self.assertEqual(resp.context["panel_task_data"]["uuid"], str(self.task.uuid))
 
+    def test_panel_shows_the_task_reference(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(self.url)
+        self.assertContains(resp, f"{self.project.key}-{self.task.number}")
+
     def test_unknown_task_uuid_is_404(self):
         self.client.force_login(self.member)
         resp = self.client.get(

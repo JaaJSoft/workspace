@@ -150,7 +150,8 @@ def _render_project_view(request, context):
 
 def _task_panel_context(user, project, role, task):
     events = [
-        serialize_task_event(ev) for ev in task.events.select_related("actor")[:20]
+        serialize_task_event(ev)
+        for ev in task.events.select_related("actor", "project")[:20]
     ]
     for event in events:
         # Same color as the registered projects activity provider.
@@ -279,6 +280,7 @@ def settings_view(request, project_uuid):
     context["project_data"] = {
         "name": project.name,
         "description": project.description,
+        "key": project.key,
         "groups": [
             {"id": group.pk, "name": group.name}
             for group in project.groups.order_by("name")

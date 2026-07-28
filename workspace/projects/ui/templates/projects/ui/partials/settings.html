@@ -35,9 +35,17 @@
         <textarea class="textarea textarea-bordered w-full" rows="3"
                   x-model="description" {% if not writable %}disabled{% endif %}></textarea>
       </label>
+      <label class="form-control w-full">
+        <div class="label py-1"><span class="label-text">Key</span></div>
+        <input type="text" class="input input-bordered w-full font-mono uppercase" x-model="key"
+               maxlength="10" {% if not writable %}disabled{% endif %}>
+        <div class="label py-1">
+          <span class="label-text-alt">Used in task references ({{ project.key }}-42). Changing it changes every reference shown.</span>
+        </div>
+      </label>
       <div class="flex justify-end">
         <button type="button" class="btn btn-accent btn-sm" @click="save()"
-                :disabled="saving || !name.trim() || !writable">
+                :disabled="saving || !name.trim() || !key.trim() || !writable">
           Save
         </button>
       </div>

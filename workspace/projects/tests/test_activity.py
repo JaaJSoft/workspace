@@ -24,7 +24,10 @@ class ProjectsActivityProviderTests(ProjectTestMixin, TestCase):
         self.assertEqual(len(events), 1)
         event = events[0]
         self.assertEqual(event["label"], "Task created")
-        self.assertEqual(event["description"], "Visible work")
+        self.assertEqual(
+            event["description"],
+            f"{self.project.key}-{self.task.number} · Visible work",
+        )
         self.assertEqual(event["icon"], "plus")
         self.assertEqual(
             event["url"], f"/projects/{self.project.uuid}?task={self.task.uuid}"

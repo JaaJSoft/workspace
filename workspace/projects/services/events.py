@@ -25,7 +25,7 @@ def move_event_type(to_status):
 
 def events_for_project(project, limit=15):
     """Newest-first events for the project overview card."""
-    return project.task_events.select_related("actor")[:limit]
+    return project.task_events.select_related("actor", "project")[:limit]
 
 
 def serialize_task_event(ev):
@@ -49,10 +49,13 @@ def serialize_task_event(ev):
     url = f"/projects/{ev.project_id}"
     if ev.task_id is not None:
         url = f"{url}?task={ev.task_id}"
+    description = ev.task_title
+    if ev.task_number is not None:
+        description = f"{ev.project.key}-{ev.task_number} · {ev.task_title}"
     return {
         "icon": ev.icon,
         "label": ev.short_label,
-        "description": ev.task_title,
+        "description": description,
         "timestamp": ev.created_at,
         "url": url,
         "actor": actor,

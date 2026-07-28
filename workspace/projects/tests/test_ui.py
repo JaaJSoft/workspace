@@ -171,6 +171,17 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         response = self.client.get(f"/projects/{self.project.uuid}/board")
         self.assertEqual(response.status_code, 404)
 
+    def test_board_cards_show_the_task_reference(self):
+        task = create_task(
+            self.project,
+            self.admin,
+            title="Referenced",
+            status=self.project.statuses.get(name="To do"),
+        )
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertContains(resp, f"{self.project.key}-{task.number}")
+
 
 class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
     def test_renders_backlog(self):

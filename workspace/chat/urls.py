@@ -193,6 +193,12 @@ urlpatterns = [
         views_bots.BotCancelView.as_view(),
         name="chat-bot-cancel",
     ),
+    # Regenerate AI conversation title
+    path(
+        "api/v1/chat/conversations/<uuid:conversation_id>/regenerate-title",
+        views_bots.ConversationRegenerateTitleView.as_view(),
+        name="chat-conversation-regenerate-title",
+    ),
     # Attachments
     path(
         "api/v1/chat/attachments/<uuid:attachment_id>",

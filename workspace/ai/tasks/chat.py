@@ -166,12 +166,12 @@ def update_conversation_summary(self, conversation_id: str):
 
 
 @shared_task(name="ai.generate_conversation_title", bind=True, max_retries=0)
-def generate_conversation_title(self, conversation_id: str):
+def generate_conversation_title(self, conversation_id: str, force: bool = False):
     """Generate a short title for *conversation_id* based on its first messages.
 
-    No-op if the conversation already has a title or has no messages yet.
-    Uses the small model with a tight system prompt to get a single-line
-    title back.
+    No-op if the conversation already has a title (unless *force* is set,
+    for user-requested regeneration) or has no messages yet. Uses the small
+    model with a tight system prompt to get a single-line title back.
     """
     from workspace.chat.models import Conversation, Message
     from workspace.chat.services.notifications import notify_conversation_members
@@ -181,7 +181,7 @@ def generate_conversation_title(self, conversation_id: str):
     except Conversation.DoesNotExist:
         return {"status": "error", "error": "Conversation not found"}
 
-    if conversation.title:
+    if conversation.title and not force:
         return {"status": "skipped", "reason": "already has title"}
 
     messages = list(

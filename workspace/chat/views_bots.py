@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Message
-from .services.conversations import get_active_membership
+from .services.conversations import get_active_membership, is_bot_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -92,3 +92,35 @@ class BotCancelView(APIView):
             )
 
         return Response({"status": "cancelled"})
+
+
+@extend_schema(tags=["Chat"])
+class ConversationRegenerateTitleView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(summary="Regenerate the AI-generated title of a bot conversation")
+    def post(self, request, conversation_id):
+        from workspace.ai.tasks.chat import generate_conversation_title
+
+        membership = get_active_membership(request.user, conversation_id)
+        if not membership:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if not is_bot_conversation(conversation_id):
+            return Response(
+                {"detail": "Only AI conversations support title regeneration."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        has_messages = Message.objects.filter(
+            conversation_id=conversation_id,
+            deleted_at__isnull=True,
+        ).exists()
+        if not has_messages:
+            return Response(
+                {"detail": "The conversation has no messages yet."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        generate_conversation_title.delay(str(conversation_id), force=True)
+        return Response({"status": "ok"}, status=status.HTTP_202_ACCEPTED)

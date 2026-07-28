@@ -406,6 +406,23 @@ function projectBoard(config) {
       }
     },
 
+    formAssigneeName(id) {
+      const user = this.members.find((m) => m.id === id);
+      return user ? user.username : 'Unknown user';
+    },
+
+    formUnassignedUsers() {
+      return this.members.filter((m) => !this.form.assignees.includes(m.id));
+    },
+
+    addFormAssignee(user) {
+      if (!this.form.assignees.includes(user.id)) this.form.assignees.push(user.id);
+    },
+
+    removeFormAssignee(id) {
+      this.form.assignees = this.form.assignees.filter((v) => v !== id);
+    },
+
     async saveTask() {
       if (this.saving) return;
       this.saving = true;
@@ -453,6 +470,8 @@ function taskPanel() {
     editing: null,
     draft: '',
     actions: [],
+    users: [],
+    assigneeNames: {},
 
     init() {
       this.data = JSON.parse(
@@ -461,6 +480,34 @@ function taskPanel() {
       this.actions = JSON.parse(
         document.getElementById('task-panel-actions').textContent
       );
+      // members-data lives on the page shell, not in the swapped panel, so
+      // it survives alpine-ajax panel reloads.
+      const membersEl = document.getElementById('members-data');
+      this.users = membersEl ? JSON.parse(membersEl.textContent) : [];
+      // Departed users can still be assigned: seed names from the task's own
+      // assignee list first, then overlay the assignable users.
+      (this.data.assignee_users || []).forEach((u) => {
+        this.assigneeNames[u.id] = u.username;
+      });
+      this.users.forEach((u) => {
+        this.assigneeNames[u.id] = u.username;
+      });
+    },
+
+    assigneeName(id) {
+      return this.assigneeNames[id] || 'Unknown user';
+    },
+
+    unassignedUsers() {
+      return this.users.filter((u) => !this.data.assignees.includes(u.id));
+    },
+
+    addAssignee(user) {
+      this.toggleMulti('assignees', user.id, true);
+    },
+
+    removeAssignee(id) {
+      this.toggleMulti('assignees', id, false);
     },
 
     can(actionId) {

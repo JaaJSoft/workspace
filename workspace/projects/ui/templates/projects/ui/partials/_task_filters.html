@@ -13,8 +13,8 @@ card/row (see taskMatchesFilters in board.js).
   <select class="select select-bordered select-sm" x-model="filters.assignee" aria-label="Filter by assignee">
     <option value="">All assignees</option>
     <option value="none">Unassigned</option>
-    {% for m in members %}
-      <option value="{{ m.user_id }}">{{ m.user.username }}</option>
+    {% for m in members_data %}
+      <option value="{{ m.id }}">{{ m.username }}</option>
     {% endfor %}
   </select>
   {% if labels_data %}

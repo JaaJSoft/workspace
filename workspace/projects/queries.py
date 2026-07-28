@@ -27,6 +27,22 @@ def user_project_ids(user, *, role=None):
     return list(member_ids.union(group_ids))
 
 
+def project_users(project):
+    """Users who can access *project*: active individual members plus
+    members of the attached auth.Group, deduplicated, sorted by username.
+
+    The reverse direction of ``user_project_ids``; keep the two in sync.
+    """
+    memberships = ProjectMember.objects.filter(
+        project=project, left_at__isnull=True
+    ).select_related("user")
+    users = {m.user_id: m.user for m in memberships}
+    if project.group_id is not None:
+        for user in project.group.user_set.exclude(pk__in=users.keys()):
+            users[user.pk] = user
+    return sorted(users.values(), key=lambda u: u.username.lower())
+
+
 def get_project_role(user, project):
     """Return the user's role on *project*: 'admin', 'member', or None.
 

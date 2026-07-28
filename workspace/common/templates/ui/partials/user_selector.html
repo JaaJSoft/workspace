@@ -5,14 +5,19 @@
   Parameters:
     - placeholder: Placeholder text for the search input (default: "Search users...")
     - on_select_event: Custom event name dispatched when a user is selected (required)
+    - local_source: Optional Alpine expression (evaluated in the parent scope)
+      returning a list of {id, username, first_name, last_name}. When set, the
+      component filters that list client-side instead of querying the search
+      API, and the dropdown opens on focus with the full list.
 
   Usage:
     {% include "ui/partials/user_selector.html" with on_select_event="user-selected" placeholder="Add a user..." %}
+    {% include "ui/partials/user_selector.html" with on_select_event="assignee-selected" local_source="unassignedUsers()" %}
 
   The dispatched event contains { detail: { user: { id, username, first_name, last_name } } }
 {% endcomment %}
 
-<div x-data="userSelector('{{ on_select_event }}')" class="relative">
+<div x-data="userSelector('{{ on_select_event }}'{% if local_source %}, () => ({{ local_source }}){% endif %})" class="relative">
   <label class="input input-sm input-bordered flex items-center gap-2 w-full">
     <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
     <input
@@ -21,6 +26,7 @@
       placeholder="{{ placeholder|default:'Search users...' }}"
       x-model="query"
       @input.debounce.300ms="search()"
+      @focus="openLocal()"
       @keydown="handleKeydown($event)"
       @keydown.escape="showDropdown = false"
       @click.outside="showDropdown = false"
@@ -62,7 +68,7 @@
 
   <!-- No results -->
   <div
-    x-show="showDropdown && results.length === 0 && query.length >= 2 && !loading"
+    x-show="showDropdown && results.length === 0 && (localUsers ? query.length > 0 : query.length >= 2) && !loading"
     x-cloak
     class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg p-3 text-sm text-base-content/60 text-center"
   >

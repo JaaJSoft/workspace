@@ -93,23 +93,27 @@
       </template>
     </section>
 
-    {% if members %}
-    <section>
+    <section @panel-assignee-selected.window="addAssignee($event.detail.user)">
       <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Assignees</h3>
-      <div class="flex flex-wrap gap-3">
-        {% for m in members %}
-          <label class="label cursor-pointer gap-1.5 p-0">
-            <input type="checkbox" class="checkbox checkbox-accent checkbox-xs"
-                   value="{{ m.user_id }}"
-                   :checked="data.assignees.includes('{{ m.user_id }}')"
-                   @change="toggleMulti('assignees', '{{ m.user_id }}', $event.target.checked)"
-                   {% if "assign" not in panel_action_ids %}disabled{% endif %}>
-            <span class="label-text text-xs">{{ m.user.username }}</span>
-          </label>
-        {% endfor %}
+      <div class="flex flex-wrap gap-1.5 mb-2" x-show="data.assignees.length" x-cloak>
+        <template x-for="id in data.assignees" :key="id">
+          <span class="badge badge-sm gap-1 pl-0.5 pr-0.5 py-2.5">
+            <span class="flex-shrink-0" x-html="userAvatarHtml(id, assigneeName(id), 'w-4 h-4 text-[0.55rem]', {presence: false})"></span>
+            <span class="text-xs" x-text="assigneeName(id)"></span>
+            <button type="button" x-show="can('assign')" x-cloak
+                    class="btn btn-ghost btn-square p-0 w-4 h-4 min-h-0 hover:bg-base-300"
+                    :aria-label="'Remove ' + assigneeName(id)"
+                    @click="removeAssignee(id)">
+              <i data-lucide="x" class="w-2.5 h-2.5"></i>
+            </button>
+          </span>
+        </template>
+      </div>
+      <p class="text-sm text-base-content/50 italic mb-2" x-show="!data.assignees.length" x-cloak>No assignees.</p>
+      <div x-show="can('assign') && unassignedUsers().length" x-cloak>
+        {% include "ui/partials/user_selector.html" with on_select_event="panel-assignee-selected" placeholder="Add assignee..." local_source="unassignedUsers()" %}
       </div>
     </section>
-    {% endif %}
 
     {% if labels_data %}
     <section>

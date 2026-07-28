@@ -2,11 +2,14 @@ from django.db import migrations, models
 
 
 def copy_group_to_groups(apps, schema_editor):
+    db = schema_editor.connection.alias
     Project = apps.get_model("projects", "Project")
     through = Project.groups.through
-    through.objects.bulk_create(
+    through.objects.using(db).bulk_create(
         through(project_id=project.uuid, group_id=project.group_id)
-        for project in Project.objects.exclude(group=None).only("uuid", "group_id")
+        for project in Project.objects.using(db)
+        .exclude(group=None)
+        .only("uuid", "group_id")
     )
 
 
@@ -14,10 +17,11 @@ def copy_groups_to_group(apps, schema_editor):
     # Lossy by necessity: the old schema has a single FK slot, so only the
     # lowest-id group of each project survives a reverse migration; any
     # additional attached groups are dropped.
+    db = schema_editor.connection.alias
     Project = apps.get_model("projects", "Project")
     through = Project.groups.through
-    for row in through.objects.order_by("project_id", "group_id"):
-        Project.objects.filter(uuid=row.project_id, group=None).update(
+    for row in through.objects.using(db).order_by("project_id", "group_id"):
+        Project.objects.using(db).filter(uuid=row.project_id, group=None).update(
             group_id=row.group_id
         )
 

@@ -115,7 +115,7 @@
         {% include "ui/partials/user_selector.html" with on_select_event="calendar-member-selected" placeholder="Search users to invite..." %}
         <div class="flex flex-wrap gap-1 mt-2">
           <template x-for="member in selectedMembers" :key="member.id">
-            {% include "calendar/ui/partials/_guest_chip.html" with user_id_expr="member.id" username_expr="member.username" remove_expr="removeMember(member.id)" %}
+            {% include "ui/partials/user_chip.html" with user_id_expr="member.id" username_expr="member.username" remove_expr="removeMember(member.id)" %}
           </template>
         </div>
       </div>

@@ -97,16 +97,7 @@
       <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Assignees</h3>
       <div class="flex flex-wrap gap-1.5 mb-2" x-show="data.assignees.length" x-cloak>
         <template x-for="id in data.assignees" :key="id">
-          <span class="badge badge-sm gap-1 pl-0.5 pr-0.5 py-2.5">
-            <span class="flex-shrink-0" x-html="userAvatarHtml(id, assigneeName(id), 'w-4 h-4 text-[0.55rem]', {presence: false})"></span>
-            <span class="text-xs" x-text="assigneeName(id)"></span>
-            <button type="button" x-show="can('assign')" x-cloak
-                    class="btn btn-ghost btn-square p-0 w-4 h-4 min-h-0 hover:bg-base-300"
-                    :aria-label="'Remove ' + assigneeName(id)"
-                    @click="removeAssignee(id)">
-              <i data-lucide="x" class="w-2.5 h-2.5"></i>
-            </button>
-          </span>
+          {% include "ui/partials/user_chip.html" with user_id_expr="id" username_expr="assigneeName(id)" remove_expr="removeAssignee(id)" remove_show_expr="can('assign')" %}
         </template>
       </div>
       <p class="text-sm text-base-content/50 italic mb-2" x-show="!data.assignees.length" x-cloak>No assignees.</p>

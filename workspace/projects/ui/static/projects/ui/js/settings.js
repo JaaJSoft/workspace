@@ -107,7 +107,11 @@ function projectGroupAccess(config) {
       });
     },
 
+    // A change during an in-flight save would compute its list from items
+    // that the pending PATCH is about to supersede, silently dropping that
+    // change - hence the busy guard on both mutations.
     async addGroup(group) {
+      if (this.busy) return;
       const already = this.items.some(function (g) {
         return String(g.id) === String(group.id);
       });
@@ -116,6 +120,7 @@ function projectGroupAccess(config) {
     },
 
     async removeGroup(group) {
+      if (this.busy) return;
       await this.save(
         this.items.filter(function (g) {
           return String(g.id) !== String(group.id);

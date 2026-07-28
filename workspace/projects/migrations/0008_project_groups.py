@@ -11,6 +11,9 @@ def copy_group_to_groups(apps, schema_editor):
 
 
 def copy_groups_to_group(apps, schema_editor):
+    # Lossy by necessity: the old schema has a single FK slot, so only the
+    # lowest-id group of each project survives a reverse migration; any
+    # additional attached groups are dropped.
     Project = apps.get_model("projects", "Project")
     through = Project.groups.through
     for row in through.objects.order_by("project_id", "group_id"):

@@ -123,6 +123,32 @@ test('projectGroupAccess.save surfaces the server field error and keeps items', 
   assert.deepEqual(c.items.map((g) => g.name), ['devs']);
 });
 
+test('projectGroupAccess.addGroup is a no-op while a save is in flight', async () => {
+  let called = 0;
+  const c = groupAccess(async () => {
+    called++;
+    return { ok: true };
+  });
+  c.items = [{ id: 1, name: 'devs' }];
+  c.busy = true;
+  await c.addGroup({ id: 2, name: 'design' });
+  assert.equal(called, 0);
+  assert.deepEqual(c.items.map((g) => g.id), [1]);
+});
+
+test('projectGroupAccess.removeGroup is a no-op while a save is in flight', async () => {
+  let called = 0;
+  const c = groupAccess(async () => {
+    called++;
+    return { ok: true };
+  });
+  c.items = [{ id: 1, name: 'devs' }];
+  c.busy = true;
+  await c.removeGroup({ id: 1, name: 'devs' });
+  assert.equal(called, 0);
+  assert.deepEqual(c.items.map((g) => g.id), [1]);
+});
+
 test('projectGroupAccess.selectableGroups excludes attached groups', () => {
   const c = groupAccess(async () => ({ ok: true }));
   c.items = [{ id: 1, name: 'devs' }];

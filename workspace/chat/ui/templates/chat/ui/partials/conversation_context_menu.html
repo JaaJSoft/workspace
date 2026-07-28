@@ -46,6 +46,14 @@
       </button>
     </li>
 
+    <!-- Regenerate title (bot conversation only) -->
+    <li x-show="ctxMenu.isBot">
+      <button type="button" class="gap-3 rounded" @click="ctxMenuAction('regenerate_title')">
+        <i data-lucide="sparkles" class="w-4 h-4"></i>
+        <span>Regenerate title</span>
+      </button>
+    </li>
+
     <!-- Add members (group only) -->
     <li x-show="ctxMenu.kind === 'group'">
       <button type="button" class="gap-3 rounded" @click="ctxMenuAction('add_members')">

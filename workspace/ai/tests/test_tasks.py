@@ -1083,3 +1083,86 @@ class CleanLlmContentTests(TestCase):
 
     def test_only_timestamp_no_brackets(self):
         self.assertEqual(self.clean("2026-04-10 20:07"), "")
+
+
+@override_settings(
+    AI_API_KEY="test-key",
+    AI_MODEL="gpt-4o-mini",
+    AI_SMALL_MODEL="gpt-4o-mini",
+)
+class GenerateConversationTitleTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="user", password="pass123")
+        self.bot_user = User.objects.create_user(username="bot", password="pass123")
+        BotProfile.objects.create(user=self.bot_user, system_prompt="Test bot.")
+        self.conversation = Conversation.objects.create(
+            kind=Conversation.Kind.DM,
+            created_by=self.user,
+        )
+        ConversationMember.objects.create(
+            conversation=self.conversation, user=self.user
+        )
+        ConversationMember.objects.create(
+            conversation=self.conversation, user=self.bot_user
+        )
+        Message.objects.create(
+            conversation=self.conversation,
+            author=self.user,
+            body="How do I write Django tests?",
+        )
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    @patch("workspace.ai.tasks.chat.call_llm")
+    def test_generates_title_when_missing(self, mock_call_llm):
+        mock_call_llm.return_value = {"content": " Django testing help \n"}
+
+        from workspace.ai.tasks.chat import generate_conversation_title
+
+        result = generate_conversation_title(str(self.conversation.uuid))
+
+        self.assertEqual(result["status"], "ok")
+        self.conversation.refresh_from_db()
+        self.assertEqual(self.conversation.title, "Django testing help")
+
+    @patch("workspace.ai.tasks.chat.call_llm")
+    def test_skips_when_title_exists(self, mock_call_llm):
+        self.conversation.title = "Existing title"
+        self.conversation.save(update_fields=["title"])
+
+        from workspace.ai.tasks.chat import generate_conversation_title
+
+        result = generate_conversation_title(str(self.conversation.uuid))
+
+        self.assertEqual(result["status"], "skipped")
+        mock_call_llm.assert_not_called()
+        self.conversation.refresh_from_db()
+        self.assertEqual(self.conversation.title, "Existing title")
+
+    @patch("workspace.ai.tasks.chat.call_llm")
+    def test_force_overwrites_existing_title(self, mock_call_llm):
+        self.conversation.title = "Existing title"
+        self.conversation.save(update_fields=["title"])
+        mock_call_llm.return_value = {"content": "Fresh title"}
+
+        from workspace.ai.tasks.chat import generate_conversation_title
+
+        result = generate_conversation_title(str(self.conversation.uuid), force=True)
+
+        self.assertEqual(result["status"], "ok")
+        self.conversation.refresh_from_db()
+        self.assertEqual(self.conversation.title, "Fresh title")
+
+    @patch("workspace.ai.tasks.chat.call_llm")
+    def test_force_without_messages_skips(self, mock_call_llm):
+        Message.objects.filter(conversation=self.conversation).delete()
+
+        from workspace.ai.tasks.chat import generate_conversation_title
+
+        result = generate_conversation_title(str(self.conversation.uuid), force=True)
+
+        self.assertEqual(result["status"], "skipped")
+        mock_call_llm.assert_not_called()

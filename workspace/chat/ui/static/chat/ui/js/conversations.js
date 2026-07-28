@@ -559,12 +559,30 @@ window.chatConversationsMixin = function chatConversationsMixin() {
         case 'rename':
           this.renameConversation();
           break;
+        case 'regenerate_title':
+          this.regenerateConversationTitle(uuid);
+          break;
         case 'add_members':
           this.addMembersToConversation();
           break;
         case 'leave':
           this.leaveConversation();
           break;
+      }
+    },
+
+    // The regenerated title arrives asynchronously through the SSE refresh,
+    // so there is nothing to apply from the response here.
+    async regenerateConversationTitle(uuid) {
+      try {
+        const resp = await fetch(`/api/v1/chat/conversations/${uuid}/regenerate-title`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+          credentials: 'same-origin',
+        });
+        if (!resp.ok) throw new Error(`Regenerate title failed (${resp.status})`);
+      } catch (e) {
+        console.error('Failed to regenerate conversation title', e);
       }
     },
   };

@@ -15,9 +15,8 @@ class Project(models.Model):
     description = models.TextField(blank=True, default="")
     type = models.CharField(max_length=10, choices=Type.choices, default=Type.KANBAN)
     # Short reference prefix (WR in WR-42). Globally unique so a reference
-    # is unambiguous anywhere in the app. Nullable only until the backfill
-    # migration has keyed existing rows.
-    key = models.CharField(max_length=10, unique=True, null=True)
+    # is unambiguous anywhere in the app.
+    key = models.CharField(max_length=10, unique=True)
     # Monotone counter feeding Task.number. Never decremented and never
     # recomputed from existing rows: deleted tasks must not free their
     # number, or external references (commits, messages) would rebind.
@@ -162,9 +161,8 @@ class Task(models.Model):
         on_delete=models.CASCADE,
         related_name="tasks",
     )
-    # Per-project sequence assigned at creation, immutable. Nullable only
-    # until the backfill migration has numbered existing rows.
-    number = models.PositiveIntegerField(null=True, editable=False)
+    # Per-project sequence assigned at creation, immutable.
+    number = models.PositiveIntegerField(editable=False)
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
     status = models.ForeignKey(
@@ -203,6 +201,12 @@ class Task(models.Model):
             models.Index(
                 fields=["project", "status", "position"],
                 name="task_project_status_pos",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "number"],
+                name="unique_task_number_per_project",
             ),
         ]
 

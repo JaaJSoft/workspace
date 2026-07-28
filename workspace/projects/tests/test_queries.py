@@ -181,8 +181,13 @@ class ProjectUsersTests(TestCase):
         self.assertIn(self.member.pk, [u.pk for u in project_users(self.project)])
 
     def test_sorted_by_username_case_insensitive(self):
-        self._attach_group(self.grouper)
+        # Uppercase sorts before lowercase in a raw ASCII sort, so a
+        # case-sensitive implementation would put Bravo1 first.
+        bravo = User.objects.create_user(
+            username="Bravo1", email="bravo1@test.com", password="pass123"
+        )
+        self._attach_group(self.grouper, bravo)
         self.assertEqual(
             [u.username for u in project_users(self.project)],
-            ["admin1", "grouper1", "member1"],
+            ["admin1", "Bravo1", "grouper1", "member1"],
         )

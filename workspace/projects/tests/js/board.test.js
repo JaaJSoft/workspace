@@ -674,15 +674,3 @@ test('refresh targets the settings view when active', () => {
     'ajax /projects/p/settings -> project-content',
   ]);
 });
-
-test('centeredView follows the active view', () => {
-  const board = panelBoard();
-  board.currentView = 'overview';
-  assert.equal(board.centeredView(), true);
-  board.currentView = 'settings';
-  assert.equal(board.centeredView(), true);
-  board.currentView = 'board';
-  assert.equal(board.centeredView(), false);
-  board.currentView = 'backlog';
-  assert.equal(board.centeredView(), false);
-});

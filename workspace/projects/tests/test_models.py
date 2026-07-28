@@ -16,12 +16,15 @@ class ProjectModelTests(TestCase):
 
     def test_one_personal_project_per_user(self):
         Project.objects.create(
-            name="Personal", type=Project.Type.PERSONAL, created_by=self.user
+            name="Personal", key="P1", type=Project.Type.PERSONAL, created_by=self.user
         )
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 Project.objects.create(
-                    name="Personal 2", type=Project.Type.PERSONAL, created_by=self.user
+                    name="Personal 2",
+                    key="P2",
+                    type=Project.Type.PERSONAL,
+                    created_by=self.user,
                 )
 
     def test_multiple_kanban_projects_allowed(self):

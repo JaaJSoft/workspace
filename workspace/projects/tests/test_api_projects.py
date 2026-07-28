@@ -1,9 +1,12 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import Group
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.projects.models import Project
+from workspace.projects.serializers import ProjectSerializer
 from workspace.projects.services.projects import (
     create_project,
     get_or_create_personal_project,
@@ -234,3 +237,15 @@ class ProjectKeyApiTests(ProjectTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(resp.data["key"], "FB")
+
+    def test_concurrent_key_conflict_returns_400(self):
+        """Simulates two PATCHes racing past validate_key's exists() check:
+        the serializer says the key is free, but the database disagrees by
+        the time the row is written, so the unique constraint fires."""
+        other = create_project(self.admin, name="Other Board")
+        with patch.object(
+            ProjectSerializer, "validate_key", lambda self, value: value.strip().upper()
+        ):
+            resp = self._patch(self.admin, {"key": other.key})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data["key"], ["Another project already uses this key."])

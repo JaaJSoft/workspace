@@ -1,8 +1,9 @@
 from django.db import migrations
 from django.db.models import OuterRef, Subquery
 
-# Pure string/set helper: safe to import from a migration (no model access,
-# no behavior that can drift with schema history).
+# unique_project_key is a pure string/set helper: safe to import from a
+# migration. Note references.py itself imports models at module level,
+# which is safe here because nothing queries at import time.
 from workspace.projects.services.references import unique_project_key
 
 

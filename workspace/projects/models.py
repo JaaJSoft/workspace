@@ -14,10 +14,10 @@ class Project(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
     type = models.CharField(max_length=10, choices=Type.choices, default=Type.KANBAN)
-    group = models.ForeignKey(
+    # Every attached group grants its members plain member access; admin
+    # rights only ever come from a ProjectMember row.
+    groups = models.ManyToManyField(
         "auth.Group",
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name="projects",
     )

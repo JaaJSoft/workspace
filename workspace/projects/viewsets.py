@@ -78,7 +78,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             request.user,
             name=serializer.validated_data["name"],
             description=serializer.validated_data.get("description", ""),
-            group=serializer.validated_data.get("group"),
+            groups=serializer.validated_data.get("groups"),
         )
         project._my_role = ProjectMember.Role.ADMIN
         return Response(

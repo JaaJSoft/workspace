@@ -35,7 +35,7 @@ class ManageLabelsAction(BaseProjectAction):
 @ProjectActionRegistry.register
 class AttachGroupAction(NotOnPersonalProjectMixin, BaseProjectAction):
     id = "attach_group"
-    label = "Attach group"
+    label = "Manage groups"
     icon = "shield"
     category = ActionCategory.MEMBERS
     target_types = ("project",)

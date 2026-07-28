@@ -72,12 +72,13 @@ function projectSettingsGeneral(config) {
   };
 }
 
-// Group attachment lives in the Access section and saves on change, no
-// explicit save button.
+// Group attachment lives in the Access section: attached groups render as
+// removable chips, additions come from the shared group selector. Every
+// change PATCHes the full id list, no explicit save button.
 function projectGroupAccess(config) {
   return {
-    group: '',
-    groups: [],
+    items: [],
+    available: [],
     busy: false,
     saved: false,
     error: '',
@@ -86,17 +87,48 @@ function projectGroupAccess(config) {
       const data = JSON.parse(
         document.getElementById('project-settings-data').textContent
       );
-      this.group = data.group === null ? '' : String(data.group);
+      this.items = data.groups || [];
       try {
         const resp = await fetch('/api/v1/users/groups');
-        if (resp.ok) this.groups = await resp.json();
+        if (resp.ok) this.available = await resp.json();
       } catch (e) {
-        // The selector stays limited to "No group"; the current value is
-        // kept until a change is actually made.
+        // Additions stay unavailable; attached chips still render and can
+        // be removed.
       }
     },
 
-    async save() {
+    // Getter for the shared group selector: my groups not yet attached.
+    selectableGroups() {
+      const attached = this.items.map(function (g) {
+        return String(g.id);
+      });
+      return this.available.filter(function (g) {
+        return !attached.includes(String(g.id));
+      });
+    },
+
+    // A change during an in-flight save would compute its list from items
+    // that the pending PATCH is about to supersede, silently dropping that
+    // change - hence the busy guard on both mutations.
+    async addGroup(group) {
+      if (this.busy) return;
+      const already = this.items.some(function (g) {
+        return String(g.id) === String(group.id);
+      });
+      if (already) return;
+      await this.save(this.items.concat([{ id: group.id, name: group.name }]));
+    },
+
+    async removeGroup(group) {
+      if (this.busy) return;
+      await this.save(
+        this.items.filter(function (g) {
+          return String(g.id) !== String(group.id);
+        })
+      );
+    },
+
+    async save(next) {
       this.busy = true;
       this.error = '';
       this.saved = false;
@@ -104,16 +136,21 @@ function projectGroupAccess(config) {
         const resp = await fetch(config.apiBase, {
           method: 'PATCH',
           headers: settingsHeaders(),
-          body: JSON.stringify({ group: this.group || null }),
+          body: JSON.stringify({
+            groups: next.map(function (g) {
+              return g.id;
+            }),
+          }),
         });
         if (!resp.ok) {
           const data = await resp.json().catch(function () {
             return {};
           });
           throw new Error(
-            data.detail || (data.group && data.group[0]) || 'Could not save.'
+            data.detail || (data.groups && data.groups[0]) || 'Could not save.'
           );
         }
+        this.items = next;
         this.saved = true;
       } catch (e) {
         this.error = e.message;

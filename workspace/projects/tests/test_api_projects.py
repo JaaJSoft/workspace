@@ -39,16 +39,32 @@ class ProjectListCreateTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(self.outsider)
         response = self.client.post(
             "/api/v1/projects",
-            {"name": "New", "group": str(group.pk)},
+            {"name": "New", "groups": [group.pk]},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_create_with_groups_attaches_them(self):
+        devs = Group.objects.create(name="devs")
+        design = Group.objects.create(name="design")
+        self.outsider.groups.add(devs, design)
+        self.client.force_authenticate(self.outsider)
+        response = self.client.post(
+            "/api/v1/projects",
+            {"name": "New", "groups": [devs.pk, design.pk]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(set(response.data["groups"]), {devs.pk, design.pk})
+        project = Project.objects.get(uuid=response.data["uuid"])
+        self.assertEqual(
+            set(project.groups.values_list("pk", flat=True)), {devs.pk, design.pk}
+        )
+
     def test_group_only_access_lists_project_as_member(self):
         group = Group.objects.create(name="devs")
         self.outsider.groups.add(group)
-        self.project.group = group
-        self.project.save(update_fields=["group"])
+        self.project.groups.add(group)
         self.client.force_authenticate(self.outsider)
         response = self.client.get("/api/v1/projects")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -113,10 +129,51 @@ class ProjectDetailTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(self.admin)
         response = self.client.patch(
             f"/api/v1/projects/{personal.uuid}",
-            {"group": str(group.pk)},
+            {"groups": [group.pk]},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_rejects_added_group_user_is_not_in(self):
+        group = Group.objects.create(name="devs")
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(
+            f"/api/v1/projects/{self.project.uuid}",
+            {"groups": [group.pk]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_keeps_already_attached_foreign_group(self):
+        # Attached by another admin: keeping it in the list must not require
+        # the requesting admin to belong to it, only newly added groups do.
+        foreign = Group.objects.create(name="ops")
+        self.project.groups.add(foreign)
+        mine = Group.objects.create(name="devs")
+        self.admin.groups.add(mine)
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(
+            f"/api/v1/projects/{self.project.uuid}",
+            {"groups": [foreign.pk, mine.pk]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            set(self.project.groups.values_list("pk", flat=True)),
+            {foreign.pk, mine.pk},
+        )
+
+    def test_update_can_detach_foreign_group(self):
+        foreign = Group.objects.create(name="ops")
+        self.project.groups.add(foreign)
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(
+            f"/api/v1/projects/{self.project.uuid}",
+            {"groups": []},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.project.groups.count(), 0)
 
     def test_archive_and_unarchive(self):
         self.client.force_authenticate(self.admin)

@@ -160,8 +160,7 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
             username="grouper1", email="grouper1@test.com", password="pass123"
         )
         grouper.groups.add(group)
-        self.project.group = group
-        self.project.save(update_fields=["group"])
+        self.project.groups.add(group)
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}/board")
         ids = [m["id"] for m in response.context["members_data"]]
@@ -394,6 +393,20 @@ class SettingsViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.admin)
         response = self.client.get(f"/projects/{self.project.uuid}/settings")
         self.assertContains(response, "writable: false")
+
+    def test_settings_context_exposes_attached_groups(self):
+        devs = Group.objects.create(name="devs")
+        design = Group.objects.create(name="design")
+        self.project.groups.add(devs, design)
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertEqual(
+            response.context["project_data"]["groups"],
+            [
+                {"id": design.pk, "name": "design"},
+                {"id": devs.pk, "name": "devs"},
+            ],
+        )
 
     def test_settings_page_has_columns_section(self):
         self.client.force_login(self.admin)

@@ -109,8 +109,9 @@ class ProjectSearchServiceTests(TestCase):
         group = Group.objects.create(name="devs")
         self.alice.groups.add(group)
         grouped = Project.objects.create(
-            name="Grouped kumquat effort", created_by=self.bob, group=group
+            name="Grouped kumquat effort", created_by=self.bob
         )
+        grouped.groups.add(group)
         hits = [p.uuid for p in search_projects_qs(self.alice, "kumquat")]
         self.assertIn(grouped.uuid, hits)
 

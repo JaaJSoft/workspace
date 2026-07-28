@@ -9,8 +9,8 @@ User = get_user_model()
 
 
 class ProjectSerializer(serializers.ModelSerializer):
-    group = serializers.PrimaryKeyRelatedField(
-        queryset=Group.objects.all(), allow_null=True, required=False
+    groups = serializers.PrimaryKeyRelatedField(
+        queryset=Group.objects.all(), many=True, required=False
     )
     my_role = serializers.SerializerMethodField()
 
@@ -21,7 +21,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "type",
-            "group",
+            "groups",
             "archived_at",
             "my_role",
             "created_at",
@@ -34,24 +34,36 @@ class ProjectSerializer(serializers.ModelSerializer):
         # membership row and always means plain member.
         return getattr(obj, "_my_role", None) or ProjectMember.Role.MEMBER
 
-    def validate_group(self, group):
-        if group is None:
-            return group
-        user = self.context["request"].user
-        if not user.groups.filter(pk=group.pk).exists():
-            raise serializers.ValidationError(
-                "You can only attach a group you belong to."
+    def validate_groups(self, groups):
+        # Only newly added groups require the requester's membership:
+        # a group attached by another admin must survive a list update
+        # (and be removable) without locking the two admins out.
+        attached = (
+            set(self.instance.groups.values_list("pk", flat=True))
+            if self.instance is not None
+            else set()
+        )
+        added = {group.pk for group in groups} - attached
+        if added:
+            mine = set(
+                self.context["request"]
+                .user.groups.filter(pk__in=added)
+                .values_list("pk", flat=True)
             )
-        return group
+            if added - mine:
+                raise serializers.ValidationError(
+                    "You can only attach groups you belong to."
+                )
+        return groups
 
     def validate(self, attrs):
         if (
             self.instance is not None
             and self.instance.type == Project.Type.PERSONAL
-            and attrs.get("group") is not None
+            and attrs.get("groups")
         ):
             raise serializers.ValidationError(
-                {"group": "Personal projects cannot be attached to a group."}
+                {"groups": "Personal projects cannot be attached to groups."}
             )
         return attrs
 

@@ -51,6 +51,71 @@ test('projectMembers.changeRole refetches members when the server refuses', asyn
   assert.equal(c.error, 'Cannot demote the last admin of a project.');
 });
 
+// Alpine treats destroy() as a lifecycle hook and auto-invokes it when the
+// element leaves the DOM (e.g. an alpine-ajax view swap). An action named
+// destroy() therefore fires on navigation - the delete-project dialog used
+// to pop up when leaving the settings page.
+test('projectSettingsDanger does not expose a destroy() lifecycle collision', () => {
+  const c = ctx().projectSettingsDanger({ apiBase: '/x', projectName: 'P' });
+  assert.equal(typeof c.destroy, 'undefined');
+  assert.equal(typeof c.deleteProject, 'function');
+});
+
+test('projectGroupAccess.save sends null when no group is selected', async () => {
+  let captured = null;
+  const c = loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
+    getCSRFToken: () => 'test-token',
+    fetch: async (url, options) => {
+      captured = { url, options };
+      return { ok: true };
+    },
+  }).projectGroupAccess({ apiBase: '/api/v1/projects/p1' });
+  c.group = '';
+  await c.save();
+  assert.equal(captured.url, '/api/v1/projects/p1');
+  assert.equal(captured.options.method, 'PATCH');
+  assert.equal(JSON.parse(captured.options.body).group, null);
+  assert.equal(c.saved, true);
+});
+
+test('projectGroupAccess.save sends the selected group id', async () => {
+  let captured = null;
+  const c = loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
+    getCSRFToken: () => 'test-token',
+    fetch: async (url, options) => {
+      captured = { url, options };
+      return { ok: true };
+    },
+  }).projectGroupAccess({ apiBase: '/api/v1/projects/p1' });
+  c.group = '42';
+  await c.save();
+  assert.equal(JSON.parse(captured.options.body).group, '42');
+});
+
+test('projectGroupAccess.save surfaces the server field error', async () => {
+  const c = loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
+    getCSRFToken: () => 'test-token',
+    fetch: async () => ({
+      ok: false,
+      json: async () => ({ group: ['Invalid group.'] }),
+    }),
+  }).projectGroupAccess({ apiBase: '/api/v1/projects/p1' });
+  c.group = '42';
+  await c.save();
+  assert.equal(c.error, 'Invalid group.');
+  assert.equal(c.saved, false);
+  assert.equal(c.busy, false);
+});
+
+test('projectMembers.addMember skips users that are already members', async () => {
+  const c = ctx().projectMembers({ apiBase: '/x' });
+  c.items = [{ uuid: 'm1', user: 7, username: 'alice', role: 'member' }];
+  let called = false;
+  c.request = async () => { called = true; };
+  await c.addMember({ id: '7', username: 'alice' });
+  assert.equal(called, false);
+});
+
 test('projectLabels.saveEdit is a no-op when editing was cancelled', async () => {
   const c = ctx().projectLabels({ apiBase: '/x' });
   c.editing = null;

@@ -1,4 +1,9 @@
-<div id="project-content" class="flex-1 min-h-0 overflow-y-auto">
+{% comment %}
+  stable both-edges keeps the scroller's centered column aligned with the
+  fixed page header above it: without it the scrollbar shifts the content
+  half a gutter to the left of the header.
+{% endcomment %}
+<div id="project-content" class="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
   {% if view == "backlog" %}
     {% include "projects/ui/partials/backlog.html" %}
   {% elif view == "overview" %}

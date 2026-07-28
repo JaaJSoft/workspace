@@ -101,6 +101,12 @@ function projectBoard(config) {
       return window.matchMedia('(max-width: 1023px)').matches;
     },
 
+    // Overview and settings render in a centered max-width column; the page
+    // header (project title) follows the active view so both stay aligned.
+    centeredView() {
+      return this.currentView === 'overview' || this.currentView === 'settings';
+    },
+
     sidebarCollapsed() {
       return this.isMobile() ? false : this.collapsed;
     },

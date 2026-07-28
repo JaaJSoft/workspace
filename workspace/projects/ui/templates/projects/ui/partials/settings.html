@@ -1,16 +1,24 @@
 {{ project_data|json_script:"project-settings-data" }}
 {{ columns_data|json_script:"columns-settings-data" }}
-<div id="settings" class="max-w-3xl mx-auto w-full flex flex-col gap-6 pb-8">
-  <h2 class="text-lg font-semibold">Project settings</h2>
+<div id="settings" class="w-full max-w-6xl mx-auto flex flex-col gap-4 pb-8">
+  <div>
+    <h2 class="text-lg font-semibold flex items-center gap-2">
+      <i data-lucide="settings" class="w-5 h-5 text-accent"></i>
+      Settings
+    </h2>
+    <p class="text-sm text-base-content/60 mt-0.5">Project details, board setup and access.</p>
+  </div>
 
-  <section id="settings-general" class="card bg-base-100 border border-base-300"
-           x-data="projectSettingsGeneral({
-             apiBase: '/api/v1/projects/{{ project.uuid }}',
-             showGroup: {% if project.type != 'personal' %}true{% else %}false{% endif %},
-             writable: {% if writable %}true{% else %}false{% endif %},
-           })">
-    <div class="card-body gap-3">
-      <h3 class="card-title text-base">General</h3>
+  <div class="grid gap-4 items-start xl:grid-cols-2">
+    <section id="settings-general" class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
+             x-data="projectSettingsGeneral({
+               apiBase: '/api/v1/projects/{{ project.uuid }}',
+               writable: {% if writable %}true{% else %}false{% endif %},
+             })">
+      <h3 class="font-semibold flex items-center gap-2">
+        <i data-lucide="sliders-horizontal" class="w-4 h-4 text-accent"></i>
+        General
+      </h3>
       <template x-if="error">
         {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="error"></span>' %}
       </template>
@@ -18,43 +26,109 @@
         {% include "ui/partials/inline_alert.html" with type="success" message="Saved." %}
       </template>
       <label class="form-control w-full">
-        <div class="label"><span class="label-text">Name</span></div>
+        <div class="label py-1"><span class="label-text">Name</span></div>
         <input type="text" class="input input-bordered w-full" x-model="name"
                maxlength="255" {% if not writable %}disabled{% endif %}>
       </label>
       <label class="form-control w-full">
-        <div class="label"><span class="label-text">Description</span></div>
-        <textarea class="textarea textarea-bordered w-full" rows="2"
+        <div class="label py-1"><span class="label-text">Description</span></div>
+        <textarea class="textarea textarea-bordered w-full" rows="3"
                   x-model="description" {% if not writable %}disabled{% endif %}></textarea>
       </label>
-      {% if project.type != 'personal' %}
-        <label id="settings-group" class="form-control w-full">
-          <div class="label"><span class="label-text">Group</span></div>
-          <select class="select select-bordered w-full" x-model="group"
-                  {% if not writable %}disabled{% endif %}>
-            <option value="">No group</option>
-            <template x-for="g in groups" :key="g.id">
-              <option :value="g.id" x-text="g.name"
-                      :selected="String(g.id) === String(group)"></option>
-            </template>
-          </select>
-          <div class="label"><span class="label-text-alt">Group members get member access implicitly.</span></div>
-        </label>
-      {% endif %}
-      <div class="card-actions justify-end">
+      <div class="flex justify-end">
         <button type="button" class="btn btn-accent btn-sm" @click="save()"
                 :disabled="saving || !name.trim() || !writable">
           Save
         </button>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section id="settings-columns" class="card bg-base-100 border border-base-300"
-           x-data="projectColumns({ apiBase: '/api/v1/projects/{{ project.uuid }}' })">
-    <div class="card-body gap-3">
+    {% if project.type != 'personal' %}
+      <section id="settings-members" class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
+               x-data="projectMembers({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
+               @project-member-selected.window="addMember($event.detail.user)">
+        <div>
+          <h3 class="font-semibold flex items-center gap-2">
+            <i data-lucide="users" class="w-4 h-4 text-accent"></i>
+            Access
+          </h3>
+          <p class="text-sm text-base-content/60 mt-0.5">Share this project with a group or add people directly.</p>
+        </div>
+        <template x-if="error">
+          {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="error"></span>' %}
+        </template>
+
+        <div id="settings-group" class="flex flex-col"
+             x-data="projectGroupAccess({ apiBase: '/api/v1/projects/{{ project.uuid }}' })">
+          <template x-if="error">
+            {% include "ui/partials/inline_alert.html" with type="error" class="mb-2" slot='<span x-text="error"></span>' %}
+          </template>
+          <label class="form-control w-full">
+            <div class="label py-1">
+              <span class="label-text">Group</span>
+              <span class="label-text-alt text-success flex items-center gap-1" x-show="saved" x-transition>
+                <i data-lucide="check" class="w-3 h-3"></i> Saved
+              </span>
+            </div>
+            <select class="select select-bordered select-sm w-full" x-model="group"
+                    @change="save()" {% if not writable %}disabled{% endif %}>
+              <option value="">No group</option>
+              <template x-for="g in groups" :key="g.id">
+                <option :value="g.id" x-text="g.name"
+                        :selected="String(g.id) === String(group)"></option>
+              </template>
+            </select>
+            <div class="label py-1">
+              <span class="label-text-alt">Group members get member access implicitly; they are not listed below.</span>
+            </div>
+          </label>
+        </div>
+
+        <h4 class="text-sm font-medium text-base-content/70">People</h4>
+        {% if writable %}
+          {% include "ui/partials/user_selector.html" with on_select_event="project-member-selected" placeholder="Add a member by username or name" %}
+        {% endif %}
+        <ul class="flex flex-col gap-1.5">
+          <template x-for="member in items" :key="member.uuid">
+            <li class="flex items-center gap-3 p-2 rounded-box bg-base-100"
+                x-data="{ imgOk: true }">
+              <div class="avatar placeholder">
+                <div class="w-8 rounded-full text-white text-xs"
+                     :class="imgOk ? '' : userAvatarColorClass(member.user)">
+                  <img x-show="imgOk" :src="'/api/v1/users/' + member.user + '/avatar'"
+                       :alt="member.username" loading="lazy" @error="imgOk = false">
+                  <span x-show="!imgOk" x-text="member.username.charAt(0).toUpperCase()"></span>
+                </div>
+              </div>
+              <span class="font-medium flex-1 truncate" x-text="member.username"></span>
+              {% if writable %}
+                <select class="select select-bordered select-sm"
+                        :value="member.role" :disabled="busy"
+                        @change="changeRole(member, $event.target.value)">
+                  <option value="admin">Admin</option>
+                  <option value="member">Member</option>
+                </select>
+                <button type="button" class="btn btn-ghost btn-xs btn-square text-error"
+                        aria-label="Remove member" :disabled="busy"
+                        @click="removeMember(member)">
+                  <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+              {% else %}
+                <span class="badge badge-ghost capitalize" x-text="member.role"></span>
+              {% endif %}
+            </li>
+          </template>
+        </ul>
+      </section>
+    {% endif %}
+
+    <section id="settings-columns" class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
+             x-data="projectColumns({ apiBase: '/api/v1/projects/{{ project.uuid }}' })">
       <div class="flex items-center justify-between">
-        <h3 class="card-title text-base">Columns</h3>
+        <h3 class="font-semibold flex items-center gap-2">
+          <i data-lucide="columns-3" class="w-4 h-4 text-accent"></i>
+          Columns
+        </h3>
         {% if writable %}
           <button type="button" class="btn btn-ghost btn-sm" @click="adding = !adding">
             <i data-lucide="plus" class="w-4 h-4"></i> Add column
@@ -66,7 +140,7 @@
       </template>
 
       <template x-if="adding">
-        <form class="flex flex-wrap items-end gap-3 p-3 rounded-box bg-base-200"
+        <form class="flex flex-wrap items-end gap-3 p-3 rounded-box bg-base-100"
               @submit.prevent="addColumn()" @keydown.escape="adding = false">
           <label class="form-control">
             <div class="label py-0"><span class="label-text-alt">Name</span></div>
@@ -87,7 +161,7 @@
               <template x-for="c in colors" :key="c">
                 <button type="button"
                         class="w-6 h-6 rounded-full border border-base-300 shrink-0"
-                        :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-200' : ''"
+                        :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-100' : ''"
                         :style="c ? 'background:' + c : ''"
                         :aria-label="c ? 'Color ' + c : 'No color'"
                         :aria-pressed="addForm.color === c"
@@ -103,9 +177,9 @@
         </form>
       </template>
 
-      <ul class="flex flex-col gap-1">
+      <ul class="flex flex-col gap-1.5">
         <template x-for="column in columns" :key="column.uuid">
-          <li class="flex items-center gap-2 p-2 rounded-box border border-base-300"
+          <li class="flex items-center gap-2 p-2 rounded-box bg-base-100"
               :class="draggingColumn === column.uuid ? 'opacity-50' : ''"
               {% if writable %}draggable="true"
               @dragstart="onColumnDragStart($event, column.uuid)"
@@ -156,15 +230,15 @@
           </li>
         </template>
       </ul>
+    </section>
 
-    </div>
-  </section>
-
-  <section id="settings-labels" class="card bg-base-100 border border-base-300"
-           x-data="projectLabels({ apiBase: '/api/v1/projects/{{ project.uuid }}' })">
-    <div class="card-body gap-3">
+    <section id="settings-labels" class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
+             x-data="projectLabels({ apiBase: '/api/v1/projects/{{ project.uuid }}' })">
       <div class="flex items-center justify-between">
-        <h3 class="card-title text-base">Labels</h3>
+        <h3 class="font-semibold flex items-center gap-2">
+          <i data-lucide="tags" class="w-4 h-4 text-accent"></i>
+          Labels
+        </h3>
         {% if writable %}
           <button type="button" class="btn btn-ghost btn-sm" @click="adding = !adding">
             <i data-lucide="plus" class="w-4 h-4"></i> Add label
@@ -175,7 +249,7 @@
         {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="error"></span>' %}
       </template>
       <template x-if="adding">
-        <form class="flex flex-wrap items-end gap-3 p-3 rounded-box bg-base-200"
+        <form class="flex flex-wrap items-end gap-3 p-3 rounded-box bg-base-100"
               @submit.prevent="addLabel()" @keydown.escape="adding = false">
           <label class="form-control">
             <div class="label py-0"><span class="label-text-alt">Name</span></div>
@@ -188,7 +262,7 @@
               <template x-for="c in colors" :key="c">
                 <button type="button"
                         class="w-6 h-6 rounded-full border border-base-300 shrink-0"
-                        :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-200' : ''"
+                        :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-100' : ''"
                         :style="c ? 'background:' + c : ''"
                         :aria-label="c ? 'Color ' + c : 'No color'"
                         :aria-pressed="addForm.color === c"
@@ -205,7 +279,7 @@
       </template>
       <div class="flex flex-wrap gap-2">
         <template x-for="label in items" :key="label.uuid">
-          <span class="badge badge-outline badge-lg gap-1"
+          <span class="badge badge-outline badge-lg gap-1 bg-base-100"
                 :style="label.color ? 'border-color:' + label.color + '; color:' + label.color : ''">
             <template x-if="editing !== label.uuid">
               <button type="button" x-text="label.name"
@@ -243,103 +317,45 @@
           </span>
         </template>
       </div>
-      <p class="text-sm opacity-60" x-show="!items.length && !adding">No labels yet.</p>
-    </div>
-  </section>
+      <p class="text-sm text-base-content/60" x-show="!items.length && !adding">No labels yet.</p>
+    </section>
 
-  {% if project.type != 'personal' %}
-    <section id="settings-members" class="card bg-base-100 border border-base-300"
-             x-data="projectMembers({ apiBase: '/api/v1/projects/{{ project.uuid }}' })">
-      <div class="card-body gap-3">
-        <h3 class="card-title text-base">Members</h3>
+    {% if project.type != 'personal' %}
+      <section id="settings-danger" class="rounded-box border border-error/30 bg-error/5 p-4 flex flex-col gap-3 xl:col-span-2"
+               x-data="projectSettingsDanger({ apiBase: '/api/v1/projects/{{ project.uuid }}', projectName: '{{ project.name|escapejs }}' })">
+        <h3 class="font-semibold flex items-center gap-2 text-error">
+          <i data-lucide="triangle-alert" class="w-4 h-4"></i>
+          Danger zone
+        </h3>
         <template x-if="error">
           {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="error"></span>' %}
         </template>
-        {% if project.group %}
-          {% include "ui/partials/inline_alert.html" with type="info" message="Members of the attached group have implicit member access; they are not listed here." %}
-        {% endif %}
-        {% if writable %}
-          <div class="relative">
-            <input type="text" class="input input-bordered input-sm w-full"
-                   placeholder="Add a member by username or name"
-                   x-model="search" @input.debounce.300ms="runSearch()">
-            <ul class="menu bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 absolute z-50 w-full mt-1"
-                x-show="results.length" @click.outside="results = []">
-              <template x-for="user in results" :key="user.id">
-                <li>
-                  <button type="button" @click="addMember(user)" :disabled="busy">
-                    <span x-text="user.username"></span>
-                    <span class="opacity-60 text-sm"
-                          x-text="[user.first_name, user.last_name].filter(Boolean).join(' ')"></span>
-                  </button>
-                </li>
-              </template>
-            </ul>
+        <div class="grid gap-3 sm:grid-cols-2 items-stretch">
+          <div class="rounded-box bg-base-100 p-3 flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p class="font-medium">{% if project.archived_at %}Unarchive project{% else %}Archive project{% endif %}</p>
+              <p class="text-sm text-base-content/60">
+                {% if project.archived_at %}Make the project editable again.{% else %}Read-only for everyone until unarchived.{% endif %}
+              </p>
+            </div>
+            {% if project.archived_at %}
+              <button type="button" class="btn btn-outline btn-sm" :disabled="busy"
+                      @click="archive('unarchive')">Unarchive</button>
+            {% else %}
+              <button type="button" class="btn btn-outline btn-sm" :disabled="busy"
+                      @click="archive('archive')">Archive</button>
+            {% endif %}
           </div>
-        {% endif %}
-        <ul class="flex flex-col gap-1">
-          <template x-for="member in items" :key="member.uuid">
-            <li class="flex items-center gap-3 p-2 rounded-box border border-base-300">
-              <div class="avatar">
-                <div class="w-8 rounded-full">
-                  <img :src="'/api/v1/users/' + member.user + '/avatar'" :alt="member.username" loading="lazy">
-                </div>
-              </div>
-              <span class="font-medium flex-1 truncate" x-text="member.username"></span>
-              {% if writable %}
-                <select class="select select-bordered select-sm"
-                        :value="member.role" :disabled="busy"
-                        @change="changeRole(member, $event.target.value)">
-                  <option value="admin">Admin</option>
-                  <option value="member">Member</option>
-                </select>
-                <button type="button" class="btn btn-ghost btn-xs btn-square text-error"
-                        aria-label="Remove member" :disabled="busy"
-                        @click="removeMember(member)">
-                  <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
-              {% else %}
-                <span class="badge badge-ghost capitalize" x-text="member.role"></span>
-              {% endif %}
-            </li>
-          </template>
-        </ul>
-      </div>
-    </section>
-  {% endif %}
-
-  {% if project.type != 'personal' %}
-    <section id="settings-danger" class="card bg-base-100 border border-error/40"
-             x-data="projectSettingsDanger({ apiBase: '/api/v1/projects/{{ project.uuid }}', projectName: '{{ project.name|escapejs }}' })">
-      <div class="card-body gap-3">
-        <h3 class="card-title text-base text-error">Danger zone</h3>
-        <template x-if="error">
-          {% include "ui/partials/inline_alert.html" with type="error" slot='<span x-text="error"></span>' %}
-        </template>
-        <div class="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <p class="font-medium">{% if project.archived_at %}Unarchive project{% else %}Archive project{% endif %}</p>
-            <p class="text-sm opacity-70">
-              {% if project.archived_at %}Make the project editable again.{% else %}Read-only for everyone until unarchived.{% endif %}
-            </p>
+          <div class="rounded-box bg-base-100 p-3 flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p class="font-medium">Delete project</p>
+              <p class="text-sm text-base-content/60">Permanently deletes {{ project.name }} and all its tasks.</p>
+            </div>
+            <button type="button" class="btn btn-error btn-outline btn-sm" :disabled="busy"
+                    @click="deleteProject()">Delete</button>
           </div>
-          {% if project.archived_at %}
-            <button type="button" class="btn btn-outline btn-sm" :disabled="busy"
-                    @click="archive('unarchive')">Unarchive</button>
-          {% else %}
-            <button type="button" class="btn btn-outline btn-sm" :disabled="busy"
-                    @click="archive('archive')">Archive</button>
-          {% endif %}
         </div>
-        <div class="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <p class="font-medium">Delete project</p>
-            <p class="text-sm opacity-70">Permanently deletes {{ project.name }} and all its tasks.</p>
-          </div>
-          <button type="button" class="btn btn-error btn-outline btn-sm" :disabled="busy"
-                  @click="destroy()">Delete</button>
-        </div>
-      </div>
-    </section>
-  {% endif %}
+      </section>
+    {% endif %}
+  </div>
 </div>

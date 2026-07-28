@@ -405,6 +405,7 @@ class SettingsViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         response = self.client.get(f"/projects/{self.project.uuid}/settings")
         self.assertContains(response, 'id="settings-labels"')
         self.assertContains(response, 'id="settings-members"')
+        self.assertContains(response, 'id="settings-group"')
 
     def test_personal_project_hides_members_section(self):
         personal = get_or_create_personal_project(self.admin)

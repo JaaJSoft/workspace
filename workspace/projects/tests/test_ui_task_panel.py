@@ -81,10 +81,11 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertEqual(resp.context["panel_action_ids"], [])
         self.assertNotContains(resp, "Delete task")
         # No action is available on an archived project, so every gated
-        # control must be disabled: the status, priority and due-date fields,
-        # one checkbox per member (admin + member) and one per label.
-        active_members = self.project.members.filter(left_at__isnull=True).count()
-        expected_disabled = 3 + active_members + 1
+        # control must be disabled: the status, priority and due-date fields
+        # and one checkbox per label. Assignees are chips + selector, both
+        # hidden client-side via can('assign'), so they carry no disabled
+        # attribute.
+        expected_disabled = 3 + 1
         self.assertContains(resp, "disabled", count=expected_disabled)
 
     def test_activity_feed_uses_normalized_events(self):
@@ -97,6 +98,15 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertIn("time_ago", events[0])
         # Panel activity rows hide the redundant per-row View link.
         self.assertNotContains(resp, ">View</a>")
+
+    def test_panel_data_includes_assignee_users(self):
+        self.task.assignees.add(self.member)
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertEqual(
+            resp.context["panel_task_data"]["assignee_users"],
+            [{"id": str(self.member.pk), "username": "member1"}],
+        )
 
     def test_panel_task_data_embedded_as_json_script(self):
         self.client.force_login(self.member)

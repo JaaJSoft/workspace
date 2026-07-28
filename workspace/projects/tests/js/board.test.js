@@ -478,6 +478,30 @@ test('toggleMulti is gated on the matching action', () => {
   assert.equal(calls.length, 0);
 });
 
+test('taskPanel assignee helpers expose names and the unassigned list', () => {
+  const panel = panelWithActions(['assign'], []);
+  panel.users = [
+    { id: '7', username: 'alice' },
+    { id: '9', username: 'bob' },
+  ];
+  panel.assigneeNames = { 7: 'alice', 9: 'bob' };
+  assert.equal(panel.assigneeName('9'), 'bob');
+  assert.equal(panel.assigneeName('missing'), 'Unknown user');
+  assert.deepStrictEqual(
+    Array.from(panel.unassignedUsers()).map((u) => u.id),
+    ['9']
+  );
+});
+
+test('addAssignee and removeAssignee patch through toggleMulti', () => {
+  const calls = [];
+  const panel = panelWithActions(['assign'], calls);
+  panel.addAssignee({ id: '9', username: 'bob' });
+  assert.deepStrictEqual(Array.from(calls[0][1].assignees), ['7', '9']);
+  panel.removeAssignee('7');
+  assert.deepStrictEqual(Array.from(calls[1][1].assignees), []);
+});
+
 test('commitField is gated on the matching action', () => {
   const calls = [];
   const panel = panelWithActions(['edit'], calls);
@@ -495,6 +519,26 @@ test('removeTask is gated on the delete action', () => {
   const calls = [];
   panelWithActions(['delete'], calls).removeTask();
   assert.deepStrictEqual(Array.from(calls[0]), ['delete', 'u1', 'Task one']);
+});
+
+test('projectBoard form assignee helpers add, dedupe and remove', () => {
+  const board = panelBoard();
+  board.members = [
+    { id: '1', username: 'alice' },
+    { id: '2', username: 'bob' },
+  ];
+  board.form.assignees = ['1'];
+  assert.deepStrictEqual(
+    Array.from(board.formUnassignedUsers()).map((u) => u.id),
+    ['2']
+  );
+  board.addFormAssignee({ id: '2', username: 'bob' });
+  board.addFormAssignee({ id: '2', username: 'bob' });
+  assert.deepStrictEqual(Array.from(board.form.assignees), ['1', '2']);
+  board.removeFormAssignee('1');
+  assert.deepStrictEqual(Array.from(board.form.assignees), ['2']);
+  assert.equal(board.formAssigneeName('2'), 'bob');
+  assert.equal(board.formAssigneeName('missing'), 'Unknown user');
 });
 
 test('openTask pushes the task URL and swaps the panel', async () => {

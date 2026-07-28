@@ -40,16 +40,23 @@
           <input type="date" class="input input-bordered input-sm" x-model="form.due_date">
         </label>
       </div>
-      <div class="mt-2" x-show="members.length">
+      <div class="mt-2" x-show="members.length" @modal-assignee-selected.window="addFormAssignee($event.detail.user)">
         <div class="label"><span class="label-text">Assignees</span></div>
-        <div class="flex flex-wrap gap-3 mt-1">
-          <template x-for="m in members" :key="m.id">
-            <label class="label cursor-pointer gap-1 p-0">
-              <input type="checkbox" class="checkbox checkbox-accent checkbox-xs" :value="m.id"
-                     x-model="form.assignees">
-              <span class="label-text text-xs" x-text="m.username"></span>
-            </label>
+        <div class="flex flex-wrap gap-1.5 mb-1" x-show="form.assignees.length" x-cloak>
+          <template x-for="id in form.assignees" :key="id">
+            <span class="badge badge-sm gap-1 pl-0.5 pr-0.5 py-2.5">
+              <span class="flex-shrink-0" x-html="userAvatarHtml(id, formAssigneeName(id), 'w-4 h-4 text-[0.55rem]', {presence: false})"></span>
+              <span class="text-xs" x-text="formAssigneeName(id)"></span>
+              <button type="button" class="btn btn-ghost btn-square p-0 w-4 h-4 min-h-0 hover:bg-base-300"
+                      :aria-label="'Remove ' + formAssigneeName(id)"
+                      @click="removeFormAssignee(id)">
+                <i data-lucide="x" class="w-2.5 h-2.5"></i>
+              </button>
+            </span>
           </template>
+        </div>
+        <div x-show="formUnassignedUsers().length">
+          {% include "ui/partials/user_selector.html" with on_select_event="modal-assignee-selected" placeholder="Add assignee..." local_source="formUnassignedUsers()" %}
         </div>
       </div>
       <div class="mt-2" x-show="labels.length">

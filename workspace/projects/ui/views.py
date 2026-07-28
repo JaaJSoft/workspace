@@ -11,7 +11,11 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.services.activity import annotate_time_ago
 from workspace.projects.actions import ProjectActionRegistry
 from workspace.projects.models import Project, ProjectMember, TaskStatus
-from workspace.projects.queries import get_project_role, user_project_ids
+from workspace.projects.queries import (
+    get_project_role,
+    project_users,
+    user_project_ids,
+)
 from workspace.projects.services.events import events_for_project, serialize_task_event
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.rendering import render_task_description
@@ -119,7 +123,13 @@ def _base_context(request, project, role, view):
             for label in project.labels.all()
         ],
         "members_data": [
-            {"id": str(m.user_id), "username": m.user.username} for m in members
+            {
+                "id": str(u.pk),
+                "username": u.username,
+                "first_name": u.first_name,
+                "last_name": u.last_name,
+            }
+            for u in project_users(project)
         ],
     }
     if not request.headers.get("X-Alpine-Request"):
@@ -165,6 +175,9 @@ def _task_panel_context(user, project, role, task):
             "priority": task.priority,
             "due_date": task.due_date.isoformat() if task.due_date else "",
             "assignees": [str(u.pk) for u in task.assignees.all()],
+            "assignee_users": [
+                {"id": str(u.pk), "username": u.username} for u in task.assignees.all()
+            ],
             "labels": [str(label.uuid) for label in task.labels.all()],
         },
     }
@@ -184,7 +197,6 @@ def task_panel(request, project_uuid, task_uuid):
         "role": role,
         "writable": not project.is_archived,
         "statuses": list(project.statuses.order_by("position", "created_at")),
-        "members": project.members.filter(left_at__isnull=True).select_related("user"),
         "labels_data": [
             {"uuid": str(label.uuid), "name": label.name, "color": label.color}
             for label in project.labels.all()

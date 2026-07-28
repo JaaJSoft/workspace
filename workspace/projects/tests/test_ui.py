@@ -1,3 +1,5 @@
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
 
@@ -143,9 +145,27 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.member)
         response = self.client.get(f"/projects/{self.project.uuid}/board")
         self.assertIn(
-            {"id": str(self.member.pk), "username": "member1"},
+            {
+                "id": str(self.member.pk),
+                "username": "member1",
+                "first_name": "",
+                "last_name": "",
+            },
             response.context["members_data"],
         )
+
+    def test_members_data_includes_group_users(self):
+        group = Group.objects.create(name="devs")
+        grouper = get_user_model().objects.create_user(
+            username="grouper1", email="grouper1@test.com", password="pass123"
+        )
+        grouper.groups.add(group)
+        self.project.group = group
+        self.project.save(update_fields=["group"])
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/board")
+        ids = [m["id"] for m in response.context["members_data"]]
+        self.assertIn(str(grouper.pk), ids)
 
     def test_outsider_gets_404(self):
         self.client.force_login(self.outsider)

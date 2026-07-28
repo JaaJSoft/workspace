@@ -30,9 +30,12 @@ Usage:
     uv run python scripts/seed_demo.py --purge --yes        # wipe prior demo data
 
 All seeded users share the ``--email-domain`` (default ``demo.local``) and the
-``--password`` (default ``demo1234``). ``--purge`` deletes every user on that
-domain and cascades their files/conversations (including the on-disk blobs,
-via the File post_delete signal) before (re)seeding.
+``--password`` (default ``demo1234``). A deterministic login is always created
+on top of the faker users: username ``demo`` / the ``--password`` value, so
+tooling and UI agents can sign in without scraping the seeder output. Note the
+login form authenticates by USERNAME, not email. ``--purge`` deletes every
+user on that domain and cascades their files/conversations (including the
+on-disk blobs, via the File post_delete signal) before (re)seeding.
 """
 
 import argparse
@@ -75,6 +78,10 @@ from workspace.users.models import UserPresence  # noqa: E402
 from workspace.users.services import avatar as avatar_service  # noqa: E402
 
 User = get_user_model()
+
+# Fixed username of the deterministic login created by every run. The login
+# form authenticates by username (stock ModelBackend), not email.
+DEMO_USERNAME = "demo"
 
 # Multi-locale for an international-company feel (names span several scripts).
 # Seeded from --seed in main() for reproducible runs.
@@ -370,6 +377,35 @@ def create_users(count, domain, password, avatar_ratio):
     initials rendering.
     """
     users, n_avatars = [], 0
+
+    # Deterministic login (username `demo`) created on top of the faker users,
+    # so demos and UI agents always have known credentials. On re-runs the
+    # password is reset to --password to keep the documented login working.
+    demo = User.objects.filter(username=DEMO_USERNAME).first()
+    if demo is None:
+        demo = User.objects.create_user(
+            username=DEMO_USERNAME,
+            email=f"{DEMO_USERNAME}@{domain}",
+            first_name="Demo",
+            last_name="User",
+            password=password,
+            is_active=True,
+        )
+    else:
+        demo.set_password(password)
+        demo.save(update_fields=["password"])
+    UserPresence.objects.get_or_create(
+        user=demo, defaults={"last_seen": timezone.now()}
+    )
+    if avatar_ratio > 0 and not avatar_service.has_avatar(demo):
+        png = _avatar_png("DU", DEMO_USERNAME)
+        avatar_service.process_and_save_avatar(
+            demo, BytesIO(png), 0, 0, AVATAR_SIZE, AVATAR_SIZE
+        )
+        n_avatars += 1
+    users.append(demo)
+    print(f"  user demo: {DEMO_USERNAME} (deterministic login)", flush=True)
+
     for i in range(count):
         first = fake.first_name()
         last = fake.last_name()
@@ -781,7 +817,11 @@ def main():
     print(f"  direct convs:  {dms}")
     print(f"  messages:      {msgs}")
     print(f"\n  Activity spread over the last {args.history_days} days.")
-    print(f"  Login with any user's email and password '{args.password}'.")
+    print(
+        f"  Log in at /login with username '{DEMO_USERNAME}' and password "
+        f"'{args.password}' (any printed username works too - the form takes "
+        f"the USERNAME, not the email)."
+    )
 
 
 if __name__ == "__main__":

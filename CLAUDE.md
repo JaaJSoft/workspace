@@ -570,6 +570,8 @@ Use the `dialogs` partial for modal dialogs instead of inline modal HTML.
 - `navbar.html` - Navigation bar
 - `refresh_button.html` - Alpine-AJAX refresh button (spins while `loading` is truthy). Params: `url_expr`, `target`, optional `loading_expr` / `title` / `size`.
 - `user_avatar.html` - User avatar display
+- `user_chip.html` - removable avatar+name chip for "selected users" lists (guests, invitees, assignees, member pickers). Params are Alpine expression fragments: `user_id_expr`, `username_expr`, optional `remove_expr` (omit for read-only) and `remove_show_expr`. Never hand-roll this chip again - every hand-rolled copy has ended up with an off-center avatar.
+- `user_selector.html` / `group_selector.html` - search-as-you-type pickers dispatching a custom event on select (see the comment block at the top of each file for params)
 
 ### File Actions
 

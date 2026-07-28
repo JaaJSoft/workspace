@@ -367,7 +367,7 @@
           {% include "ui/partials/user_selector.html" with on_select_event="poll-invitee-selected" placeholder="Search users to invite..." %}
           <div class="flex flex-wrap gap-1 mt-2" x-show="(currentPoll?.invitees || []).length > 0">
             <template x-for="invitee in (currentPoll?.invitees || [])" :key="invitee.uuid">
-              {% include "calendar/ui/partials/_guest_chip.html" with user_id_expr="invitee.user.id" username_expr="invitee.user.username" remove_expr="removePollInvitee(invitee.user.id)" %}
+              {% include "ui/partials/user_chip.html" with user_id_expr="invitee.user.id" username_expr="invitee.user.username" remove_expr="removePollInvitee(invitee.user.id)" %}
             </template>
           </div>
         </div>
@@ -383,10 +383,7 @@
           </div>
           <div class="flex flex-wrap gap-1">
             <template x-for="invitee in (currentPoll?.invitees || [])" :key="invitee.uuid">
-              <span class="badge badge-outline gap-1">
-                <div class="w-4 h-4 flex-shrink-0" x-html="userAvatarHtml(invitee.user.id, invitee.user.username, 'w-4 h-4 text-[0.5rem]', {presence: false})"></div>
-                <span x-text="invitee.user.username"></span>
-              </span>
+              {% include "ui/partials/user_chip.html" with user_id_expr="invitee.user.id" username_expr="invitee.user.username" %}
             </template>
           </div>
         </div>

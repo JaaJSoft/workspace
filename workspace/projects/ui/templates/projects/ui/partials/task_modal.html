@@ -44,15 +44,7 @@
         <div class="label"><span class="label-text">Assignees</span></div>
         <div class="flex flex-wrap gap-1.5 mb-1" x-show="form.assignees.length" x-cloak>
           <template x-for="id in form.assignees" :key="id">
-            <span class="badge h-auto p-0.5 gap-1">
-              <span class="flex-shrink-0 flex items-center" x-html="userAvatarHtml(id, formAssigneeName(id), 'w-5 h-5 text-[0.65rem]', {presence: false})"></span>
-              <span class="text-xs" x-text="formAssigneeName(id)"></span>
-              <button type="button" class="btn btn-ghost btn-square p-0 w-4 h-4 min-h-0 hover:bg-base-300"
-                      :aria-label="'Remove ' + formAssigneeName(id)"
-                      @click="removeFormAssignee(id)">
-                <i data-lucide="x" class="w-2.5 h-2.5"></i>
-              </button>
-            </span>
+            {% include "ui/partials/user_chip.html" with user_id_expr="id" username_expr="formAssigneeName(id)" remove_expr="removeFormAssignee(id)" %}
           </template>
         </div>
         <div x-show="formUnassignedUsers().length">

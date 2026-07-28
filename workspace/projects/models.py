@@ -14,6 +14,14 @@ class Project(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
     type = models.CharField(max_length=10, choices=Type.choices, default=Type.KANBAN)
+    # Short reference prefix (WR in WR-42). Globally unique so a reference
+    # is unambiguous anywhere in the app. Nullable only until the backfill
+    # migration has keyed existing rows.
+    key = models.CharField(max_length=10, unique=True, null=True)
+    # Monotone counter feeding Task.number. Never decremented and never
+    # recomputed from existing rows: deleted tasks must not free their
+    # number, or external references (commits, messages) would rebind.
+    next_task_number = models.PositiveIntegerField(default=1)
     # Every attached group grants its members plain member access; admin
     # rights only ever come from a ProjectMember row.
     groups = models.ManyToManyField(
@@ -154,6 +162,9 @@ class Task(models.Model):
         on_delete=models.CASCADE,
         related_name="tasks",
     )
+    # Per-project sequence assigned at creation, immutable. Nullable only
+    # until the backfill migration has numbered existing rows.
+    number = models.PositiveIntegerField(null=True, editable=False)
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
     status = models.ForeignKey(
@@ -198,6 +209,13 @@ class Task(models.Model):
     def __str__(self):
         return self.title
 
+    @property
+    def reference(self):
+        """Human-readable id, e.g. WR-42. Loads self.project unless it is
+        already cached; templates that have the project in context should
+        render key and number directly instead."""
+        return f"{self.project.key}-{self.number}"
+
 
 class TaskEvent(models.Model):
     class Type(models.TextChoices):
@@ -238,6 +256,8 @@ class TaskEvent(models.Model):
         related_name="events",
     )
     task_title = models.CharField(max_length=255)
+    # Snapshotted like task_title: the reference must survive task deletion.
+    task_number = models.PositiveIntegerField(null=True, blank=True)
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

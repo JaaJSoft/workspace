@@ -7,6 +7,7 @@ def record_task_event(task, *, type, actor=None, from_status=None, to_status=Non
         project=task.project,
         task=task,
         task_title=task.title,
+        task_number=task.number,
         actor=actor,
         type=type,
         from_status=from_status.name if from_status is not None else "",

@@ -4,6 +4,7 @@ from django.utils import timezone
 
 from ..models import Task, TaskEvent, TaskStatus
 from .events import move_event_type, record_task_event
+from .references import allocate_task_number
 
 
 def next_position(project, status):
@@ -46,8 +47,10 @@ def create_task(
             .first()
         ) or project.statuses.order_by("position", "created_at").first()
     with transaction.atomic():
+        number = allocate_task_number(project)
         task = Task.objects.create(
             project=project,
+            number=number,
             title=title,
             description=description,
             status=status,

@@ -1,5 +1,7 @@
 import re
 
+from ..models import Project
+
 KEY_MAX_LENGTH = 10
 KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
 # WR-42 style; the key part is matched case-insensitively and normalized
@@ -45,3 +47,19 @@ def unique_project_key(name, *, taken):
         if candidate not in taken:
             return candidate
         suffix += 1
+
+
+def allocate_task_number(project):
+    """Reserve and return the next task number for *project*.
+
+    Locks the project row; must run inside a transaction and before any
+    status or task row locks (writers take locks project -> status, which
+    keeps the ordering deadlock-free). The counter is monotone: numbers
+    are never reused after a task is deleted.
+    """
+    locked = Project.objects.select_for_update().get(pk=project.pk)
+    number = locked.next_task_number
+    locked.next_task_number = number + 1
+    locked.save(update_fields=["next_task_number"])
+    project.next_task_number = locked.next_task_number
+    return number

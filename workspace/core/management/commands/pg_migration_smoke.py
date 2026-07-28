@@ -111,7 +111,9 @@ class Command(BaseCommand):
 
         from workspace.projects.models import Project, ProjectMember, Task, TaskStatus
 
-        project = Project.objects.create(name=SEED_PROJECT_NAME, created_by=alice)
+        project = Project.objects.create(
+            name=SEED_PROJECT_NAME, created_by=alice, key="SMOKE", next_task_number=2
+        )
         ProjectMember.objects.create(
             project=project, user=alice, role=ProjectMember.Role.ADMIN
         )
@@ -119,7 +121,11 @@ class Command(BaseCommand):
             project=project, name="Todo", category=TaskStatus.Category.BACKLOG
         )
         Task.objects.create(
-            project=project, title=SEED_TASK_TITLE, status=task_status, created_by=alice
+            project=project,
+            title=SEED_TASK_TITLE,
+            status=task_status,
+            created_by=alice,
+            number=1,
         )
 
         smoke_cal = Calendar.objects.create(name="Smoke", owner=alice)

@@ -506,8 +506,9 @@ def _seed_mail(alex, now):
 
 
 def _seed_projects(alex, sam, jordan, now):
-    from workspace.projects.models import Label, ProjectMember, Task
+    from workspace.projects.models import Label, ProjectMember
     from workspace.projects.services.projects import create_project
+    from workspace.projects.services.tasks import create_task
 
     project = create_project(
         alex,
@@ -538,25 +539,17 @@ def _seed_projects(alex, sam, jordan, now):
         ("Dark mode support", "Backlog", "low", None, [], ["Design"]),
         ("Customer testimonials section", "Backlog", "medium", None, [], ["Content"]),
     ]
-    for position, (
-        title,
-        status,
-        priority,
-        due_days,
-        assignees,
-        task_labels,
-    ) in enumerate(tasks):
-        task = Task.objects.create(
-            project=project,
+    for title, status, priority, due_days, assignees, task_labels in tasks:
+        create_task(
+            project,
+            alex,
             title=title,
             status=statuses[status],
             priority=priority,
-            position=position,
-            created_by=alex,
             due_date=(now + timedelta(days=due_days)).date() if due_days else None,
+            assignees=assignees,
+            labels=[labels[name] for name in task_labels],
         )
-        task.assignees.set(assignees)
-        task.labels.set([labels[name] for name in task_labels])
     return str(project.uuid)
 
 

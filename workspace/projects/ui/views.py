@@ -18,6 +18,7 @@ from workspace.projects.queries import (
 )
 from workspace.projects.services.events import events_for_project, serialize_task_event
 from workspace.projects.services.projects import get_or_create_personal_project
+from workspace.projects.services.references import REFERENCE_RE
 from workspace.projects.services.rendering import render_task_description
 from workspace.users.services.settings import get_setting, set_setting
 
@@ -88,19 +89,31 @@ def _sidebar_projects(user):
 
 
 def _deep_link_panel(request, project, role):
-    """Panel context for a valid ?task= deep link, else empty."""
-    task_uuid = parse_uuid_or_none(request.GET.get("task") or "")
-    if task_uuid is None:
+    """Panel context for a valid ?task= deep link (UUID or WR-42), else empty."""
+    raw = (request.GET.get("task") or "").strip()
+    if not raw:
         return {}
-    task = (
-        project.tasks.select_related("status", "created_by")
-        .prefetch_related("assignees", "labels")
-        .filter(uuid=task_uuid)
-        .first()
+    qs = project.tasks.select_related("status", "created_by").prefetch_related(
+        "assignees", "labels"
     )
+    task_uuid = parse_uuid_or_none(raw)
+    if task_uuid is not None:
+        task = qs.filter(uuid=task_uuid).first()
+    else:
+        task = _task_by_reference(qs, project, raw)
     if task is None:
         return {}
     return _task_panel_context(request.user, project, role, task)
+
+
+def _task_by_reference(qs, project, raw):
+    """Resolve WR-42 within *project*. A key mismatch or unknown number
+    resolves to nothing, mirroring the unknown-UUID behavior so existence
+    is never leaked."""
+    match = REFERENCE_RE.match(raw)
+    if match is None or match.group(1).upper() != project.key:
+        return None
+    return qs.filter(number=int(match.group(2))).first()
 
 
 def _base_context(request, project, role, view):

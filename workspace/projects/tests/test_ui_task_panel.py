@@ -174,3 +174,33 @@ class TaskDeepLinkTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.member)
         resp = self.client.get(f"/projects/{self.project.uuid}?task={self.task.uuid}")
         self.assertEqual(resp.context["panel_task"], self.task)
+
+    def test_reference_deep_link_opens_the_panel(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(
+            f"/projects/{self.project.uuid}?task={self.project.key}-{self.task.number}"
+        )
+        self.assertEqual(resp.context["panel_task"], self.task)
+        self.assertContains(resp, self.task.title)
+
+    def test_lowercase_reference_works(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(
+            f"/projects/{self.project.uuid}"
+            f"?task={self.project.key.lower()}-{self.task.number}"
+        )
+        self.assertEqual(resp.context["panel_task"], self.task)
+
+    def test_reference_key_must_match_the_project(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(
+            f"/projects/{self.project.uuid}?task=ZZZZ-{self.task.number}"
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn("panel_task", resp.context)
+
+    def test_garbage_task_param_is_ignored(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}?task=blah")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn("panel_task", resp.context)

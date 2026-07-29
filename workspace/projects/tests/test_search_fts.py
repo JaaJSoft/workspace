@@ -12,8 +12,8 @@ from workspace.projects.services.tasks import create_task
 User = get_user_model()
 
 
-def make_project(owner, *members, name="Board", description=""):
-    project = create_project(owner, name=name, description=description)
+def make_project(owner, *members, name="Board", description="", groups=None):
+    project = create_project(owner, name=name, description=description, groups=groups)
     for user in members:
         ProjectMember.objects.create(project=project, user=user)
     return project
@@ -99,10 +99,7 @@ class ProjectSearchServiceTests(TestCase):
 
         group = Group.objects.create(name="devs")
         self.alice.groups.add(group)
-        grouped = Project.objects.create(
-            name="Grouped kumquat effort", created_by=self.bob
-        )
-        grouped.groups.add(group)
+        grouped = make_project(self.bob, name="Grouped kumquat effort", groups=[group])
         hits = [p.uuid for p in search_projects_qs(self.alice, "kumquat")]
         self.assertIn(grouped.uuid, hits)
 

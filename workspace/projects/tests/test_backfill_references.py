@@ -4,7 +4,7 @@ from django.apps import apps
 from django.db.models import F
 from django.test import TestCase
 
-from workspace.projects.models import Project, Task
+from workspace.projects.models import Project, Task, TaskEvent
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.references import KEY_RE
 from workspace.projects.services.tasks import create_task, delete_task
@@ -45,12 +45,20 @@ class BackfillReferencesTests(ProjectTestMixin, TestCase):
     def test_event_snapshots_updated_for_live_tasks(self):
         task = create_task(self.project, self.admin, title="first")
         self._simulate_legacy_state()
+        # Corrupt the snapshot: creation already wrote 1, and the test must
+        # prove the backfill repairs it rather than inherit it.
+        TaskEvent.objects.update(task_number=None)
         backfill(apps, None)
         self.assertEqual(task.events.get().task_number, 1)
 
-    def test_keys_stay_unique_for_same_name_projects(self):
+    def test_keys_regenerate_deterministically_for_same_name_projects(self):
         create_project(self.admin, name="Website")
         self._simulate_legacy_state()
+        # Non-derived keys prove the backfill regenerates rather than keeps.
+        for i, pk in enumerate(
+            Project.objects.order_by("created_at").values_list("pk", flat=True)
+        ):
+            Project.objects.filter(pk=pk).update(key=f"ZZZ{i + 1}")
         backfill(apps, None)
-        keys = list(Project.objects.values_list("key", flat=True))
-        self.assertEqual(len(keys), len(set(keys)))
+        keys = [p.key for p in Project.objects.order_by("created_at").only("key")]
+        self.assertEqual(keys, ["WEBS", "WEBS2"])

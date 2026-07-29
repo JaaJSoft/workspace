@@ -14,9 +14,12 @@ Params:
 {% endcomment %}
 <span class="inline-flex items-center gap-1 rounded-full border border-base-300 bg-base-100 text-xs py-0.5 pl-2.5 {% if remove_expr %}pr-1{% else %}pr-2.5{% endif %}"
       :style="{{ style_expr }}">
-  {# -top offset: Segoe UI's baseline sits low in the text-xs line box, so the #}
-  {# flex-centered text box leaves the ink ~2px below the pill's optical center. #}
-  <span class="relative -top-[1.5px]" x-text="{{ name_expr }}"></span>
+  {# text-box trims the line box to the ink so flex centering is optically exact. #}
+  {# Browsers without it fall back to a whole-pixel nudge that compensates the #}
+  {# font's low baseline in the text-xs line box (fractional offsets shimmer #}
+  {# across browser zoom levels, so keep it integer). #}
+  <span class="relative -top-px [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0"
+        x-text="{{ name_expr }}"></span>
   {% if remove_expr %}
     {% comment %}Inline SVG on purpose: lucide.createIcons() does not process
     nodes that Alpine clones out of an x-for template, so a data-lucide icon

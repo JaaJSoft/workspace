@@ -16,7 +16,7 @@ On creation the component dispatches "project-label-created" with the new
 label (handled once on the board root), then the selection event.
 {% endcomment %}
 <div x-data="labelSelector('{{ on_select_event }}', () => {{ all_source }}, () => {{ selected_source }}, '{% if role == "admin" and writable %}/api/v1/projects/{{ project.uuid }}/labels{% endif %}')"
-     class="relative">
+     class="relative" @click.outside="showDropdown = false">
   <label class="input input-sm input-bordered flex items-center gap-2 w-full">
     <i data-lucide="tag" class="w-4 h-4 opacity-60"></i>
     <input type="text" class="grow" placeholder="{{ placeholder|default:'Add label...' }}"
@@ -24,8 +24,7 @@ label (handled once on the board root), then the selection event.
            @input="searchLocal()"
            @focus="searchLocal()"
            @keydown="handleKeydown($event)"
-           @keydown.escape="showDropdown = false"
-           @click.outside="showDropdown = false">
+           @keydown.escape="showDropdown = false">
     <span x-show="creating" x-cloak class="loading loading-spinner loading-xs"></span>
   </label>
   <div x-show="showDropdown && (results.length || showCreate() || createError || trimmedQuery())" x-cloak

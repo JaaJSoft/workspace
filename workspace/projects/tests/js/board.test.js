@@ -862,6 +862,56 @@ test('Enter without a query falls through to the surrounding form', () => {
   assert.equal(e.prevented, false);
 });
 
+test('Enter with a query is swallowed but selects nothing once the dropdown is closed', () => {
+  const events = [];
+  ctx.CustomEvent = function (name, opts) {
+    return { name: name, detail: opts && opts.detail };
+  };
+  ctx.dispatchEvent = (e) => events.push(e);
+  ctx.fetch = async () => {
+    throw new Error('createLabel must not run while the dropdown is closed');
+  };
+  const sel = labelPicker({ createUrl: '/api/labels' });
+  sel.query = 'bug';
+  sel.searchLocal();
+  sel.showDropdown = false;
+  const e = keyEvent('Enter');
+  sel.handleKeydown(e);
+  assert.equal(e.prevented, true);
+  assert.deepStrictEqual(Array.from(events), []);
+});
+
+test('Enter with no highlight and no exact match creates the label', async () => {
+  const calls = [];
+  const events = [];
+  ctx.getCSRFToken = () => 'token';
+  ctx.CustomEvent = function (name, opts) {
+    return { name: name, detail: opts && opts.detail };
+  };
+  ctx.dispatchEvent = (e) => events.push(e);
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url + ' ' + opts.body);
+    return {
+      ok: true,
+      json: async () => ({ uuid: 'l9', name: 'Urgent', color: '#f97316' }),
+    };
+  };
+  const sel = labelPicker({ createUrl: '/api/labels' });
+  sel.query = 'Urgent';
+  sel.searchLocal();
+  const e = keyEvent('Enter');
+  sel.handleKeydown(e);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(e.prevented, true);
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/labels {"name":"Urgent","color":"#f97316"}',
+  ]);
+  assert.deepStrictEqual(
+    Array.from(events).map((ev) => ev.name),
+    ['project-label-created', 'label-picked']
+  );
+});
+
 test('arrow keys wrap across the results plus the create row', () => {
   const sel = labelPicker({ createUrl: '/api/labels' });
   sel.query = 'b';

@@ -154,8 +154,10 @@ function labelSelector(eventName, allLabels, selectedUuids, createUrl) {
         this.highlight = this.highlight <= 0 ? count - 1 : this.highlight - 1;
       } else if (e.key === 'Enter' && this.trimmedQuery()) {
         // Always swallow Enter while a label is being typed: the input sits
-        // inside the task form and a fall-through would submit it.
+        // inside the task form and a fall-through would submit it. Selecting
+        // or creating only makes sense while the dropdown is actually open.
         e.preventDefault();
+        if (!this.showDropdown) return;
         if (this.highlight >= 0 && this.highlight < this.results.length) {
           this.select(this.results[this.highlight]);
         } else if (this.highlight === this.results.length && this.showCreate()) {

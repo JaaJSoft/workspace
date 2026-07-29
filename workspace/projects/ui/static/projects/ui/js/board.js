@@ -542,8 +542,15 @@ function taskPanel() {
 
     autoGrowTitle(el) {
       el.style.height = 'auto';
-      // scrollHeight excludes the borders, which border-box height includes.
-      el.style.height = el.scrollHeight + el.offsetHeight - el.clientHeight + 'px';
+      // The textarea is box-content sized, so height is the text block only.
+      // scrollHeight is integer-rounded while the line height is fractional
+      // (22.5px); snapping to whole lines keeps the box the exact height of
+      // the read-mode h2 and avoids a 1px reflow of everything below.
+      const style = getComputedStyle(el);
+      const lineHeight = parseFloat(style.lineHeight);
+      const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      const lines = Math.max(1, Math.round((el.scrollHeight - padding) / lineHeight));
+      el.style.height = lines * lineHeight + 'px';
     },
 
     commitField(field, value) {

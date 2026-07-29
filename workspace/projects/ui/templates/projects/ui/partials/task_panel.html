@@ -41,9 +41,12 @@
       {# Textarea (not input): it must wrap and keep the h2's typography so #}
       {# entering edit mode doesn't reflow the header. Height follows content #}
       {# via autoGrowTitle; commitDraft flattens any pasted newlines. #}
+      {# box-content + p-[3px]: padding (3px) + border (1px) = the -m-1 (4px), #}
+      {# so the box's footprint and text column match the h2 exactly - the #}
+      {# header keeps its height and the text wraps at the same point. #}
       <template x-if="editing === 'title'">
         <textarea rows="1" maxlength="255"
-                  class="textarea textarea-bordered block w-full resize-none overflow-hidden min-h-0 rounded p-1 -m-1 font-semibold text-lg leading-tight"
+                  class="textarea textarea-bordered box-content block w-full resize-none overflow-hidden min-h-0 rounded p-[3px] -m-1 font-semibold text-lg leading-tight"
                   {# $nextTick: x-init runs before x-model fills the value, #}
                   {# so sizing must wait for the draft to land in the field. #}
                   x-model="draft" x-init="$nextTick(() => { $el.focus(); autoGrowTitle($el) })"

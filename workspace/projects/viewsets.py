@@ -72,7 +72,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ).annotate(_my_role=Subquery(my_role))
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        # Keys are auto-generated at creation; a client-supplied value is
+        # dropped before validation so it cannot 400 a create.
+        data = request.data.copy()
+        data.pop("key", None)
+        serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         project = create_project(
             request.user,

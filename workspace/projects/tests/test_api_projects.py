@@ -238,6 +238,16 @@ class ProjectKeyApiTests(ProjectTestMixin, APITestCase):
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(resp.data["key"], "FB")
 
+    def test_invalid_key_on_create_is_ignored_too(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post(
+            "/api/v1/projects",
+            {"name": "Fresh Board", "key": "not-a-key"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["key"], "FB")
+
     def test_concurrent_key_conflict_returns_400(self):
         """Simulates two PATCHes racing past validate_key's exists() check:
         the serializer says the key is free, but the database disagrees by

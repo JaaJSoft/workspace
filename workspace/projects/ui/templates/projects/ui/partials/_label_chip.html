@@ -38,7 +38,8 @@ offsets shimmer across browser zoom levels, so keep it integer).
     {% endif %}
   </span>
 {% else %}
-  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-100 text-xs py-0.5 px-2.5 {{ class|default:'' }}"
+  {# min-h matches the removable variant, whose height is set by its h-5 buttons. #}
+  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-100 text-xs py-0.5 px-2.5 min-h-[26px] {{ class|default:'' }}"
         {% if label.color %}style="border-color: {{ label.color }}; color: {{ label.color }}"{% endif %}>
     <span class="relative -top-px [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0">{{ label.name }}</span>
   </span>

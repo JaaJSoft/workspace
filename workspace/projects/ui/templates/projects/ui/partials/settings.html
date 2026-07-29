@@ -293,12 +293,16 @@
           </div>
         </form>
       </template>
-      <div class="flex flex-wrap gap-2">
+      {# Same pill styling as _label_chip.html, kept separate because this chip #}
+      {# embeds the inline rename input and the color-picker dropdown. #}
+      <div class="flex flex-wrap gap-1.5">
         <template x-for="label in items" :key="label.uuid">
-          <span class="badge badge-outline badge-lg gap-1 bg-base-100"
+          <span class="inline-flex items-center gap-1 rounded-full border border-base-300 bg-base-100 text-xs py-0.5 pl-2.5 {% if writable %}pr-1{% else %}pr-2.5{% endif %}"
                 :style="label.color ? 'border-color:' + label.color + '; color:' + label.color : ''">
             <template x-if="editing !== label.uuid">
-              <button type="button" x-text="label.name"
+              <button type="button"
+                      class="relative -top-px [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0"
+                      x-text="label.name"
                       {% if writable %}@click="startEdit(label)"{% endif %}></button>
             </template>
             <template x-if="editing === label.uuid">
@@ -309,9 +313,11 @@
                      @blur="saveEdit(label)" x-init="$el.focus()">
             </template>
             {% if writable %}
+              {% comment %}Inline SVGs on purpose: lucide.createIcons() does not
+              process nodes that Alpine clones out of an x-for template.{% endcomment %}
               <div class="dropdown dropdown-end">
-                <button type="button" tabindex="0" class="btn btn-ghost btn-xs btn-square" aria-label="Label color">
-                  <i data-lucide="palette" class="w-3 h-3"></i>
+                <button type="button" tabindex="0" class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0" aria-label="Label color">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
                 </button>
                 <ul tabindex="0" class="dropdown-content z-50 mt-1 flex flex-row items-center gap-1.5 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2">
                   <template x-for="c in colors" :key="c">
@@ -325,9 +331,9 @@
                   </template>
                 </ul>
               </div>
-              <button type="button" class="btn btn-ghost btn-xs btn-square text-error"
+              <button type="button" class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0 text-error"
                       aria-label="Delete label" @click="removeLabel(label)">
-                <i data-lucide="x" class="w-3 h-3"></i>
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             {% endif %}
           </span>

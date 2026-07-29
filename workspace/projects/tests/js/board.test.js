@@ -674,3 +674,36 @@ test('refresh targets the settings view when active', () => {
     'ajax /projects/p/settings -> project-content',
   ]);
 });
+
+test('copyLink writes the task deep link and flashes feedback', async () => {
+  const written = [];
+  ctx.location = {
+    href: 'http://x.test/projects/p/board',
+    pathname: '/projects/p/board',
+    search: '',
+    origin: 'http://x.test',
+  };
+  ctx.navigator = { clipboard: { writeText: async (url) => written.push(url) } };
+  ctx.setTimeout = () => {};
+  const panel = panelWithActions([], []);
+  panel.copyLink('WR-3');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepStrictEqual(written, ['http://x.test/projects/p/board?task=WR-3']);
+  assert.equal(panel.linkCopied, true);
+});
+
+test('copyLink still copies when the URL already targets the task', async () => {
+  const written = [];
+  ctx.location = {
+    href: 'http://x.test/projects/p/board?task=WR-3',
+    pathname: '/projects/p/board',
+    search: '?task=WR-3',
+    origin: 'http://x.test',
+  };
+  ctx.navigator = { clipboard: { writeText: async (url) => written.push(url) } };
+  ctx.setTimeout = () => {};
+  const panel = panelWithActions([], []);
+  panel.copyLink('WR-3');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepStrictEqual(written, ['http://x.test/projects/p/board?task=WR-3']);
+});

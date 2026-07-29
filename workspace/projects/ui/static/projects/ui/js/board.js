@@ -472,6 +472,7 @@ function taskPanel() {
     actions: [],
     users: [],
     assigneeNames: {},
+    linkCopied: false,
 
     init() {
       this.data = JSON.parse(
@@ -559,6 +560,20 @@ function taskPanel() {
     removeTask() {
       if (!this.can('delete')) return;
       this.deletePanelTask(this.data.uuid, this.data.title);
+    },
+
+    copyLink(reference) {
+      // taskParamUrl returns null when the URL already points at this task.
+      const path =
+        taskParamUrl(window.location.href, reference) ||
+        window.location.pathname + window.location.search;
+      const url = window.location.origin + path;
+      navigator.clipboard.writeText(url).then(() => {
+        this.linkCopied = true;
+        setTimeout(() => {
+          this.linkCopied = false;
+        }, 1500);
+      });
     },
   };
 }

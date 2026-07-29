@@ -2,10 +2,11 @@
 """Seed a demo/stress environment for Workspace.
 
 Populates the database with a configurable number of fake users, each owning a
-random file tree, a set of calendars with events, plus fake chat conversations
-(department groups + direct messages). The goal is a believable "company demo"
-dataset that also stresses listings, tree queries, thumbnails, the activity
-feed and message rendering under volume.
+random file tree, a set of calendars with events, fake chat conversations
+(department groups + direct messages), plus kanban projects with tasks (shared
+team boards + one personal project per user). The goal is a believable
+"company demo" dataset that also stresses listings, tree queries, thumbnails,
+the activity feed and message rendering under volume.
 
 Human content (names, emails, sentences, paragraphs, addresses) is generated
 with `faker` across several locales for an international feel; the app-specific
@@ -34,8 +35,8 @@ All seeded users share the ``--email-domain`` (default ``demo.local``) and the
 on top of the faker users: username ``demo`` / the ``--password`` value, so
 tooling and UI agents can sign in without scraping the seeder output. Note the
 login form authenticates by USERNAME, not email. ``--purge`` deletes every
-user on that domain and cascades their files/conversations (including the
-on-disk blobs, via the File post_delete signal) before (re)seeding.
+user on that domain and cascades their files/conversations/projects (including
+the on-disk blobs, via the File post_delete signal) before (re)seeding.
 """
 
 import argparse
@@ -74,6 +75,22 @@ from workspace.chat.services.conversations import get_or_create_dm  # noqa: E402
 from workspace.chat.services.rendering import render_message_body  # noqa: E402
 from workspace.files.models import File, FileEvent  # noqa: E402
 from workspace.files.services import FileService  # noqa: E402
+from workspace.projects.models import (  # noqa: E402
+    Project,
+    ProjectMember,
+    Task,
+    TaskEvent,
+    TaskStatus,
+)
+from workspace.projects.services.members import add_member  # noqa: E402
+from workspace.projects.services.projects import (  # noqa: E402
+    create_project,
+    get_or_create_personal_project,
+)
+from workspace.projects.services.tasks import (  # noqa: E402
+    apply_status_change,
+    create_task,
+)
 from workspace.users.models import UserPresence  # noqa: E402
 from workspace.users.services import avatar as avatar_service  # noqa: E402
 
@@ -255,6 +272,79 @@ EVENT_LOCATIONS = [
     "Client office",
     "",
 ]
+
+PROJECT_NAMES = [
+    "Website Redesign",
+    "Mobile App",
+    "Customer Portal",
+    "Q3 Marketing Campaign",
+    "Internal Tools",
+    "Data Migration",
+    "Product Launch",
+    "Support Playbook",
+    "Brand Refresh",
+    "API v2",
+    "Onboarding Revamp",
+    "Office Move",
+]
+
+TASK_TITLES = [
+    "Fix login redirect loop",
+    "Update onboarding docs",
+    "Design new landing page",
+    "Refactor payment service",
+    "Write quarterly report",
+    "Review pull requests",
+    "Prepare demo environment",
+    "Migrate database to new host",
+    "Set up CI pipeline",
+    "Interview candidate",
+    "Draft press release",
+    "Audit access permissions",
+    "Polish mobile layout",
+    "Investigate slow queries",
+    "Update dependency versions",
+    "Plan sprint backlog",
+    "Ship dark mode",
+    "Add export to CSV",
+    "Localize French translations",
+    "Clean up error logs",
+    "Test backup restore",
+    "Renew SSL certificates",
+    "Benchmark search performance",
+    "Write user survey",
+    "Fix flaky tests",
+    "Archive stale branches",
+    "Improve empty states",
+    "Document API endpoints",
+]
+
+LABEL_NAMES = [
+    "bug",
+    "feature",
+    "design",
+    "backend",
+    "frontend",
+    "docs",
+    "research",
+    "urgent",
+    "blocked",
+    "customer",
+    "infra",
+    "qa",
+]
+
+# Hex palette of the project UI's column/label color picker (COLUMN_COLORS in
+# projects/ui/static/projects/ui/js/settings.js, minus the "no color" entry).
+LABEL_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7"]
+
+# Where seeded tasks land on the board, weighted per status category so boards
+# read mid-flight: heavier backlog/done, thinner active columns.
+STATUS_WEIGHTS = {
+    TaskStatus.Category.BACKLOG: 3,
+    TaskStatus.Category.ACTIVE: 2,
+    TaskStatus.Category.DONE: 3,
+}
 
 
 # --- Avatar generation ------------------------------------------------------
@@ -657,6 +747,171 @@ def _create_event(user, cal, others, history_days):
         )
 
 
+def _task_description():
+    """Markdown description (the panel renders it with task-list support)."""
+    if random.random() < 0.5:
+        return ""
+    parts = [fake.paragraph()]
+    if random.random() < 0.4:
+        parts.append(
+            "\n".join(
+                f"- [ ] {fake.sentence(nb_words=5)}"
+                for _ in range(random.randint(2, 5))
+            )
+        )
+    return "\n\n".join(parts)
+
+
+def _seed_task(project, statuses, members, labels, history_days, not_before):
+    """Create one task through the service layer, then backdate it.
+
+    The final column is drawn from STATUS_WEIGHTS; about half of the tasks
+    that end up off-backlog are first created in the backlog column and then
+    moved via apply_status_change, so the activity feed gets realistic
+    MOVED/COMPLETED events on top of the CREATED ones. Returns the task's
+    last-activity timestamp.
+    """
+    final = random.choices(
+        statuses, weights=[STATUS_WEIGHTS[s.category] for s in statuses]
+    )[0]
+    moved = final != statuses[0] and random.random() < 0.5
+
+    due_date = None
+    if random.random() < 0.35:
+        due_date = (
+            timezone.now() + timedelta(days=random.randint(-history_days // 3, 30))
+        ).date()
+    n_assignees = random.choices([0, 1, 2], weights=[35, 45, 20])[0]
+
+    task = create_task(
+        project,
+        random.choice(members),
+        title=(
+            random.choice(TASK_TITLES)
+            if random.random() < 0.7
+            else fake.sentence(nb_words=5).rstrip(".")
+        ),
+        description=_task_description(),
+        status=statuses[0] if moved else final,
+        priority=random.choices(list(Task.Priority), weights=[20, 45, 25, 10])[0],
+        due_date=due_date,
+        assignees=random.sample(members, k=min(n_assignees, len(members))),
+        labels=random.sample(labels, k=random.randint(0, 2)) if labels else (),
+    )
+
+    created_ts = max(_rand_past(history_days), not_before)
+    updated_ts = created_ts
+    if moved:
+        old_status = task.status
+        task.status = final
+        apply_status_change(task, actor=random.choice(members), old_status=old_status)
+        span = (timezone.now() - created_ts).total_seconds()
+        updated_ts = created_ts + timedelta(seconds=random.random() * span)
+
+    # created_at/updated_at/completed_at are stamped "now" by the service;
+    # rewrite them, and keep the TaskEvent rows in step (the activity feed
+    # orders on TaskEvent.created_at, same constraint as FileEvent).
+    Task.objects.filter(pk=task.pk).update(
+        created_at=created_ts,
+        updated_at=updated_ts,
+        completed_at=(
+            updated_ts if final.category == TaskStatus.Category.DONE else None
+        ),
+    )
+    TaskEvent.objects.filter(task=task, type=TaskEvent.Type.CREATED).update(
+        created_at=created_ts
+    )
+    TaskEvent.objects.filter(task=task).exclude(type=TaskEvent.Type.CREATED).update(
+        created_at=updated_ts
+    )
+    return updated_ts
+
+
+def create_shared_projects(users, min_tasks, max_tasks, history_days):
+    """Kanban projects shared by random member subsets, filled with tasks.
+
+    The demo user creates the first project (so the deterministic login owns
+    an admin board). Returns (n_projects, n_tasks).
+    """
+    n_projects_total, n_tasks_total = 0, 0
+    if len(users) < 2:
+        return n_projects_total, n_tasks_total
+
+    n_projects = max(2, min(len(PROJECT_NAMES), len(users) // 3))
+    for i, name in enumerate(random.sample(PROJECT_NAMES, k=n_projects)):
+        creator = users[0] if i == 0 else random.choice(users)
+        project_ts = _rand_past(history_days)
+        with transaction.atomic():
+            project = create_project(
+                creator,
+                name=name,
+                description=(
+                    fake.paragraph(nb_sentences=2) if random.random() < 0.8 else ""
+                ),
+            )
+            others = [u for u in users if u != creator]
+            members = [creator] + random.sample(
+                others, k=min(len(others), random.randint(2, 8))
+            )
+            for user in members[1:]:
+                add_member(
+                    project,
+                    user,
+                    role=(
+                        ProjectMember.Role.ADMIN
+                        if random.random() < 0.2
+                        else ProjectMember.Role.MEMBER
+                    ),
+                )
+            labels = [
+                project.labels.create(name=n, color=random.choice(LABEL_COLORS))
+                for n in random.sample(LABEL_NAMES, k=random.randint(3, 6))
+            ]
+
+            statuses = list(project.statuses.all())
+            n_tasks = random.randint(min_tasks, max_tasks)
+            last_activity = project_ts
+            for _ in range(n_tasks):
+                ts = _seed_task(
+                    project, statuses, members, labels, history_days, project_ts
+                )
+                last_activity = max(last_activity, ts)
+
+            Project.objects.filter(pk=project.pk).update(
+                created_at=project_ts, updated_at=last_activity
+            )
+            ProjectMember.objects.filter(project=project).update(joined_at=project_ts)
+        n_projects_total += 1
+        n_tasks_total += n_tasks
+        print(
+            f"  project '{name}' ({len(members)} members, {n_tasks} tasks)", flush=True
+        )
+    return n_projects_total, n_tasks_total
+
+
+def create_personal_projects(users, history_days):
+    """Give every user a personal project with a handful of tasks.
+
+    Uses the same lazy get-or-create the UI relies on, so re-runs never
+    duplicate the personal board. Returns the number of tasks created.
+    """
+    n_tasks_total = 0
+    for user in users:
+        project = get_or_create_personal_project(user)
+        project_ts = _rand_past(history_days)
+        statuses = list(project.statuses.all())
+        last_activity = project_ts
+        for _ in range(random.randint(2, 6)):
+            ts = _seed_task(project, statuses, [user], [], history_days, project_ts)
+            last_activity = max(last_activity, ts)
+            n_tasks_total += 1
+        Project.objects.filter(pk=project.pk).update(
+            created_at=project_ts, updated_at=last_activity
+        )
+        ProjectMember.objects.filter(project=project).update(joined_at=project_ts)
+    return n_tasks_total
+
+
 def purge(domain, assume_yes):
     """Delete all users on ``domain`` and cascade their data."""
     qs = User.objects.filter(email__endswith=f"@{domain}")
@@ -676,6 +931,9 @@ def purge(domain, assume_yes):
         avatar_service.delete_avatar(user)
     for conv in Conversation.objects.filter(created_by__in=qs, has_avatar=True):
         group_avatar_service.delete_group_avatar(conv)
+    # Project.created_by is SET_NULL (not CASCADE): deleting the users would
+    # orphan their projects with no remaining member, so drop them explicitly.
+    Project.objects.filter(created_by__in=qs).delete()
     deleted, _ = qs.delete()
     print(f"Purged {n} users on @{domain} ({deleted} rows total).")
 
@@ -712,6 +970,12 @@ def main():
         "--max-events", type=int, default=40, help="max calendar events per user"
     )
     parser.add_argument(
+        "--min-tasks", type=int, default=6, help="min tasks per shared project"
+    )
+    parser.add_argument(
+        "--max-tasks", type=int, default=30, help="max tasks per shared project"
+    )
+    parser.add_argument(
         "--history-days",
         type=int,
         default=180,
@@ -736,6 +1000,9 @@ def main():
         "--no-calendar", action="store_true", help="skip calendar/event generation"
     )
     parser.add_argument(
+        "--no-projects", action="store_true", help="skip project/task generation"
+    )
+    parser.add_argument(
         "--purge", action="store_true", help="delete existing demo users first"
     )
     parser.add_argument(
@@ -758,6 +1025,8 @@ def main():
         parser.error("--min-messages must be <= --max-messages")
     if args.min_events > args.max_events:
         parser.error("--min-events must be <= --max-events")
+    if args.min_tasks > args.max_tasks:
+        parser.error("--min-tasks must be <= --max-tasks")
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -795,6 +1064,16 @@ def main():
             events += e
             print(f"  {user.username}: {c} calendars, {e} events", flush=True)
 
+    shared_projects = personal_projects = tasks = 0
+    if not args.no_projects:
+        print("\nGenerating projects & tasks ...")
+        shared_projects, tasks = create_shared_projects(
+            users, args.min_tasks, args.max_tasks, args.history_days
+        )
+        tasks += create_personal_projects(users, args.history_days)
+        personal_projects = len(users)
+        print(f"  {personal_projects} personal projects", flush=True)
+
     groups = dms = msgs = group_avatars = 0
     if not args.no_chat:
         print("\nGenerating conversations ...")
@@ -813,6 +1092,8 @@ def main():
     print(f"  files:         {total_files}")
     print(f"  calendars:     {calendars}")
     print(f"  events:        {events}")
+    print(f"  projects:      {shared_projects} shared + {personal_projects} personal")
+    print(f"  tasks:         {tasks}")
     print(f"  group convs:   {groups}")
     print(f"  direct convs:  {dms}")
     print(f"  messages:      {msgs}")

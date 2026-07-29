@@ -17,8 +17,7 @@
     {% if task.labels.all %}
       <span class="flex flex-wrap gap-1">
         {% for label in task.labels.all %}
-          <span class="badge badge-sm badge-outline"
-                {% if label.color %}style="border-color: {{ label.color }}; color: {{ label.color }}"{% endif %}>{{ label.name }}</span>
+          {% include "projects/ui/partials/_label_chip.html" %}
         {% endfor %}
       </span>
     {% endif %}

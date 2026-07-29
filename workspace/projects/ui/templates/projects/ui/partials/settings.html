@@ -306,7 +306,8 @@
                       {% if writable %}@click="startEdit(label)"{% endif %}></button>
             </template>
             <template x-if="editing === label.uuid">
-              <input type="text" class="input input-ghost input-xs w-24"
+              {# h-5 keeps the pill at its 26px resting height while editing. #}
+              <input type="text" class="input input-ghost input-xs w-24 h-5 min-h-0 px-0 text-xs"
                      x-model="editName" maxlength="100"
                      @keydown.enter.prevent="saveEdit(label)"
                      @keydown.escape="editName = label.name; editing = null"

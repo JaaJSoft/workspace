@@ -6,13 +6,21 @@
   {{ panel_task_data|json_script:"task-panel-data" }}
   {{ panel_action_ids|json_script:"task-panel-actions" }}
 
-  <div class="flex items-start gap-2 p-4 pb-3 border-b border-base-300">
-    <button type="button" class="btn btn-sm btn-square btn-ghost lg:hidden -mt-1 -ml-1"
-            @click="closePanel()" aria-label="Back to board">
-      <i data-lucide="arrow-left" class="w-4 h-4"></i>
-    </button>
-    <div class="flex-1 min-w-0">
-      <p class="text-xs font-mono text-base-content/50">{{ project.key }}-{{ panel_task.number }}</p>
+  <div class="p-4 pb-3 border-b border-base-300">
+    {# Meta row: back / reference / close share one line so the small #}
+    {# controls align with the small text; the title gets the full width. #}
+    <div class="flex items-center gap-2 -mt-1">
+      <button type="button" class="btn btn-sm btn-square btn-ghost lg:hidden -ml-1"
+              @click="closePanel()" aria-label="Back to board">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+      </button>
+      <span class="font-mono text-xs tracking-wide text-base-content/50 select-all">{{ project.key }}-{{ panel_task.number }}</span>
+      <button type="button" class="btn btn-sm btn-square btn-ghost hidden lg:inline-flex ml-auto -mr-1"
+              @click="closePanel()" aria-label="Close panel">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div class="mt-1 min-w-0">
       <template x-if="editing !== 'title'">
         <h2 class="font-semibold text-lg leading-tight break-words"
             :class="can('edit') && 'cursor-text hover:bg-base-200 rounded px-1 -mx-1'"
@@ -32,10 +40,6 @@
                   @blur="commitDraft('title')"></textarea>
       </template>
     </div>
-    <button type="button" class="btn btn-sm btn-square btn-ghost hidden lg:inline-flex -mt-1 -mr-1"
-            @click="closePanel()" aria-label="Close panel">
-      <i data-lucide="x" class="w-4 h-4"></i>
-    </button>
   </div>
 
   <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">

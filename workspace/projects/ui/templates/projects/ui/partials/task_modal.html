@@ -54,7 +54,7 @@
       <div class="mt-2" {% if role != "admin" %}x-show="labels.length"{% endif %}
            @modal-label-selected.window="addFormLabel($event.detail.label)">
         <div class="label"><span class="label-text">Labels</span></div>
-        <div class="flex flex-wrap gap-1.5 mb-2" x-show="form.labels.length" x-cloak>
+        <div class="flex flex-wrap gap-1.5 mb-1.5" x-show="form.labels.length" x-cloak>
           <template x-for="id in form.labels" :key="id">
             {% include "projects/ui/partials/_label_chip.html" with name_expr="labelName(id)" style_expr="labelStyle(id)" remove_expr="removeFormLabel(id)" %}
           </template>

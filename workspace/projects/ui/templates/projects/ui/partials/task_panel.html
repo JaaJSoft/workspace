@@ -130,7 +130,7 @@
     <section @panel-label-selected.window="addLabel($event.detail.label)">
       <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Labels</h3>
       {{ labels_data|json_script:"panel-labels-data" }}
-      <div class="flex flex-wrap gap-1.5 mb-2" x-show="data.labels.length" x-cloak>
+      <div class="flex flex-wrap gap-1.5 mb-1.5" x-show="data.labels.length" x-cloak>
         <template x-for="id in data.labels" :key="id">
           {% if "set_labels" in panel_action_ids %}
             {% include "projects/ui/partials/_label_chip.html" with name_expr="labelName(id)" style_expr="labelStyle(id)" remove_expr="removeLabel(id)" %}

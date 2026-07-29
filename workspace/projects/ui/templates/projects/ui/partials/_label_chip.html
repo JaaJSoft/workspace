@@ -12,7 +12,7 @@ Params:
   - remove_expr: optional - expression run on remove (e.g. "removeLabel(id)").
                  Omit for a read-only chip without a cross.
 {% endcomment %}
-<span class="inline-flex items-center gap-1 rounded-full border border-base-300 bg-base-100 text-xs py-0.5 pl-2.5 {% if remove_expr %}pr-1{% else %}pr-2.5{% endif %}"
+<span class="inline-flex items-center gap-1 rounded-full border border-base-300 bg-base-100 text-xs py-0.5 pl-2.5 {% if remove_expr %}pr-1.5{% else %}pr-2.5{% endif %}"
       :style="{{ style_expr }}">
   <span x-text="{{ name_expr }}"></span>
   {% if remove_expr %}

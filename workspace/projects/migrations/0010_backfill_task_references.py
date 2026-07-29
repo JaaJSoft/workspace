@@ -39,7 +39,7 @@ def backfill(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("projects", "0008_project_key_task_number"),
+        ("projects", "0009_project_key_task_number"),
     ]
 
     operations = [

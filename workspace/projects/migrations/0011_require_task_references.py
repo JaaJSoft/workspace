@@ -6,7 +6,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("projects", "0009_backfill_task_references"),
+        ("projects", "0010_backfill_task_references"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

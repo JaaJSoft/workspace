@@ -11,7 +11,7 @@ from workspace.projects.services.tasks import create_task, delete_task
 from workspace.projects.tests.base import ProjectTestMixin
 
 backfill = import_module(
-    "workspace.projects.migrations.0009_backfill_task_references"
+    "workspace.projects.migrations.0010_backfill_task_references"
 ).backfill
 
 

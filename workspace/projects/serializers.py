@@ -10,10 +10,7 @@ User = get_user_model()
 
 
 class ProjectSerializer(serializers.ModelSerializer):
-    # Explicit (not required) because `create()` builds the project from
-    # curated kwargs and always auto-generates the key; the model field
-    # itself has no default, which would otherwise make DRF require it
-    # on every create request.
+    # Without this DRF would require key on create; create() auto-generates it.
     key = serializers.CharField(required=False)
     groups = serializers.PrimaryKeyRelatedField(
         queryset=Group.objects.all(), many=True, required=False
@@ -191,8 +188,7 @@ class TaskSerializer(serializers.ModelSerializer):
         ]
 
     def get_reference(self, obj) -> str:
-        # The viewsets always put the project in context; the fallback keeps
-        # standalone serialization working at the cost of a query.
+        # Context project avoids an N+1; the fallback costs a query per task.
         project = self.context.get("project") or obj.project
         return f"{project.key}-{obj.number}"
 

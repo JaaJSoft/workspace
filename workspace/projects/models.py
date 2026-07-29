@@ -14,12 +14,9 @@ class Project(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
     type = models.CharField(max_length=10, choices=Type.choices, default=Type.KANBAN)
-    # Short reference prefix (WR in WR-42). Globally unique so a reference
-    # is unambiguous anywhere in the app.
+    # Reference prefix (WR in WR-42); unique app-wide.
     key = models.CharField(max_length=10, unique=True)
-    # Monotone counter feeding Task.number. Never decremented and never
-    # recomputed from existing rows: deleted tasks must not free their
-    # number, or external references (commits, messages) would rebind.
+    # Monotone counter behind Task.number: never recomputed, numbers never reused.
     next_task_number = models.PositiveIntegerField(default=1)
     # Every attached group grants its members plain member access; admin
     # rights only ever come from a ProjectMember row.
@@ -215,9 +212,7 @@ class Task(models.Model):
 
     @property
     def reference(self):
-        """Human-readable id, e.g. WR-42. Loads self.project unless it is
-        already cached; templates that have the project in context should
-        render key and number directly instead."""
+        """Display id (WR-42); costs a project fetch unless project is cached."""
         return f"{self.project.key}-{self.number}"
 
 

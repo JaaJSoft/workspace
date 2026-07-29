@@ -1,0 +1,25 @@
+{% comment %}
+Removable label chip
+====================
+Colored outline badge for a selected label. Rendered inside an Alpine
+`<template x-for>`, so the parameters below are Alpine expression fragments
+evaluated in the caller's loop scope (not Django values).
+
+Params:
+  - name_expr:   expression for the label name         (e.g. "labelName(id)")
+  - style_expr:  expression for the inline color style (e.g. "labelStyle(id)")
+  - remove_expr: optional - expression run on remove (e.g. "removeLabel(id)").
+                 Omit for a read-only chip without a cross.
+{% endcomment %}
+<span class="badge badge-outline gap-1 bg-base-100" :style="{{ style_expr }}">
+  <span class="text-xs" x-text="{{ name_expr }}"></span>
+  {% if remove_expr %}
+    {% comment %}Inline SVG on purpose: lucide.createIcons() does not process
+    nodes that Alpine clones out of an x-for template, so a data-lucide icon
+    here would render blank.{% endcomment %}
+    <button type="button" class="btn btn-ghost btn-circle btn-xs min-h-0 h-4 w-4 p-0 -mr-1"
+            @click.stop="{{ remove_expr }}" :aria-label="'Remove ' + {{ name_expr }}">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  {% endif %}
+</span>

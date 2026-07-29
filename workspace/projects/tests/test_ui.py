@@ -445,3 +445,30 @@ class SettingsViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         response = self.client.get(f"/projects/{personal.uuid}/settings")
         self.assertContains(response, 'id="settings-labels"')
         self.assertNotContains(response, 'id="settings-members"')
+
+
+class BoardLabelSelectorTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    """Task modal label combobox: admins get inline create, members only pick."""
+
+    def board(self):
+        return self.client.get(f"/projects/{self.project.uuid}/board")
+
+    def test_admin_gets_the_create_endpoint(self):
+        self.client.force_login(self.admin)
+        resp = self.board()
+        self.assertContains(resp, "labelSelector(")
+        self.assertContains(resp, f"/api/v1/projects/{self.project.uuid}/labels")
+
+    def test_member_gets_the_selector_without_the_create_endpoint(self):
+        self.client.force_login(self.member)
+        resp = self.board()
+        self.assertContains(resp, "labelSelector(")
+        self.assertNotContains(resp, f"/api/v1/projects/{self.project.uuid}/labels")
+
+    def test_member_modal_section_collapses_without_labels(self):
+        # Members cannot create labels, so an empty project hides the section
+        # client-side; admins always see it (they can create the first label).
+        self.client.force_login(self.member)
+        self.assertContains(self.board(), 'x-show="labels.length"')
+        self.client.force_login(self.admin)
+        self.assertNotContains(self.board(), 'x-show="labels.length"')

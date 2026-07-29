@@ -51,17 +51,15 @@
           {% include "ui/partials/user_selector.html" with on_select_event="modal-assignee-selected" placeholder="Add assignee..." local_source="formUnassignedUsers()" %}
         </div>
       </div>
-      <div class="mt-2" x-show="labels.length">
+      <div class="mt-2" {% if role != "admin" %}x-show="labels.length"{% endif %}
+           @modal-label-selected.window="addFormLabel($event.detail.label)">
         <div class="label"><span class="label-text">Labels</span></div>
-        <div class="flex flex-wrap gap-3 mt-1">
-          <template x-for="l in labels" :key="l.uuid">
-            <label class="label cursor-pointer gap-1 p-0">
-              <input type="checkbox" class="checkbox checkbox-accent checkbox-xs" :value="l.uuid"
-                     x-model="form.labels">
-              <span class="label-text text-xs" x-text="l.name"></span>
-            </label>
+        <div class="flex flex-wrap gap-1.5 mb-1" x-show="form.labels.length" x-cloak>
+          <template x-for="id in form.labels" :key="id">
+            {% include "projects/ui/partials/_label_chip.html" with name_expr="labelName(id)" style_expr="labelStyle(id)" remove_expr="removeFormLabel(id)" %}
           </template>
         </div>
+        {% include "projects/ui/partials/_label_selector.html" with on_select_event="modal-label-selected" all_source="labels" selected_source="form.labels" %}
       </div>
       <div class="modal-action">
         <button type="button" class="btn btn-ghost btn-sm" @click="$refs.taskDialog.close()">Cancel</button>

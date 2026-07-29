@@ -1,0 +1,59 @@
+{% comment %}
+Label combobox: search-as-you-type over the project's labels, with an
+admin-only "Create ..." row when the query matches no existing label.
+
+Params:
+  - on_select_event: Django string - CustomEvent dispatched on window with
+                     { detail: { label } } when a label is picked (required)
+  - all_source:      Alpine expression returning every project label (required)
+  - selected_source: Alpine expression returning the selected uuid list (required)
+  - placeholder:     Django string (default "Add label...")
+
+Reads `role`, `writable` and `project` from the Django context: admins on a
+writable project get a create URL, everyone else gets a pure picker. The
+create URL is cosmetic gating only - the labels API enforces admin itself.
+On creation the component dispatches "project-label-created" with the new
+label (handled once on the board root), then the selection event.
+{% endcomment %}
+<div x-data="labelSelector('{{ on_select_event }}', () => {{ all_source }}, () => {{ selected_source }}, '{% if role == "admin" and writable %}/api/v1/projects/{{ project.uuid }}/labels{% endif %}')"
+     class="relative">
+  <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+    <i data-lucide="tag" class="w-4 h-4 opacity-60"></i>
+    <input type="text" class="grow" placeholder="{{ placeholder|default:'Add label...' }}"
+           x-model="query" maxlength="100" autocomplete="off"
+           @input="searchLocal()"
+           @focus="searchLocal()"
+           @keydown="handleKeydown($event)"
+           @keydown.escape="showDropdown = false"
+           @click.outside="showDropdown = false">
+    <span x-show="creating" x-cloak class="loading loading-spinner loading-xs"></span>
+  </label>
+  <div x-show="showDropdown && (results.length || showCreate() || createError || trimmedQuery())" x-cloak
+       class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+    <ul class="menu menu-sm p-1" x-show="results.length || showCreate()">
+      <template x-for="(label, idx) in results" :key="label.uuid">
+        <li>
+          <button type="button" class="flex items-center gap-2 rounded"
+                  :class="idx === highlight ? 'active' : ''"
+                  @click="select(label)" @mouseenter="highlight = idx">
+            <span class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"
+                  :style="label.color ? 'background:' + label.color : ''"></span>
+            <span class="text-sm" x-text="label.name"></span>
+          </button>
+        </li>
+      </template>
+      {# x-show (not x-if): the data-lucide icon must exist at createIcons time. #}
+      <li x-show="showCreate()" x-cloak>
+        <button type="button" class="flex items-center gap-2 rounded"
+                :class="highlight === results.length ? 'active' : ''"
+                @click="createLabel()" @mouseenter="highlight = results.length">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span class="text-sm">Create "<span x-text="trimmedQuery()"></span>"</span>
+        </button>
+      </li>
+    </ul>
+    <p x-show="!results.length && !showCreate() && trimmedQuery() && !createError" x-cloak
+       class="p-3 text-sm text-base-content/60 text-center">No matching labels</p>
+    <p x-show="createError" x-cloak class="px-3 py-2 text-xs text-error">Could not create the label.</p>
+  </div>
+</div>

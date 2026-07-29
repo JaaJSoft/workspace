@@ -568,6 +568,38 @@ function projectBoard(config) {
       this.form.assignees = this.form.assignees.filter((v) => v !== id);
     },
 
+    labelById(uuid) {
+      return this.labels.find((l) => l.uuid === uuid) || null;
+    },
+
+    labelName(uuid) {
+      const label = this.labelById(uuid);
+      return label ? label.name : 'Unknown label';
+    },
+
+    labelStyle(uuid) {
+      const label = this.labelById(uuid);
+      return label && label.color
+        ? 'border-color: ' + label.color + '; color: ' + label.color
+        : '';
+    },
+
+    onLabelCreated(label) {
+      if (!this.labels.some((l) => l.uuid === label.uuid)) {
+        this.labels.push(label);
+      }
+    },
+
+    addFormLabel(label) {
+      if (!this.form.labels.includes(label.uuid)) {
+        this.form.labels.push(label.uuid);
+      }
+    },
+
+    removeFormLabel(uuid) {
+      this.form.labels = this.form.labels.filter((v) => v !== uuid);
+    },
+
     async saveTask() {
       if (this.saving) return;
       this.saving = true;
@@ -638,6 +670,16 @@ function taskPanel() {
       this.users.forEach((u) => {
         this.assigneeNames[u.id] = u.username;
       });
+      // The shared project label list lives on the board shell and is loaded
+      // once; refresh it from the panel's server-rendered copy so labels
+      // created since page load resolve to names and colors. this.labels is
+      // the parent projectBoard's array via Alpine's scope chain; splice
+      // keeps the same reactive array.
+      const labelsEl = document.getElementById('panel-labels-data');
+      if (labelsEl && Array.isArray(this.labels)) {
+        const fresh = JSON.parse(labelsEl.textContent);
+        this.labels.splice(0, this.labels.length, ...fresh);
+      }
     },
 
     assigneeName(id) {
@@ -654,6 +696,14 @@ function taskPanel() {
 
     removeAssignee(id) {
       this.toggleMulti('assignees', id, false);
+    },
+
+    addLabel(label) {
+      this.toggleMulti('labels', label.uuid, true);
+    },
+
+    removeLabel(uuid) {
+      this.toggleMulti('labels', uuid, false);
     },
 
     can(actionId) {

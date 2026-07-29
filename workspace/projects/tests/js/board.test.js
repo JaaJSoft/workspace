@@ -878,3 +878,45 @@ test('arrow keys wrap across the results plus the create row', () => {
   sel.handleKeydown(keyEvent('ArrowUp'));
   assert.equal(sel.highlight, 2);
 });
+
+test('projectBoard label helpers resolve names, styles and creations', () => {
+  const board = panelBoard();
+  board.labels = [
+    { uuid: 'l1', name: 'Bug', color: '#ef4444' },
+    { uuid: 'l2', name: 'Chore', color: '' },
+  ];
+  assert.equal(board.labelName('l1'), 'Bug');
+  assert.equal(board.labelName('missing'), 'Unknown label');
+  assert.equal(board.labelStyle('l1'), 'border-color: #ef4444; color: #ef4444');
+  assert.equal(board.labelStyle('l2'), '');
+  assert.equal(board.labelStyle('missing'), '');
+  board.onLabelCreated({ uuid: 'l3', name: 'New', color: '' });
+  board.onLabelCreated({ uuid: 'l3', name: 'New', color: '' });
+  assert.equal(board.labels.length, 3);
+});
+
+test('projectBoard form label helpers add, dedupe and remove', () => {
+  const board = panelBoard();
+  board.form.labels = ['l1'];
+  board.addFormLabel({ uuid: 'l2', name: 'Chore', color: '' });
+  board.addFormLabel({ uuid: 'l2', name: 'Chore', color: '' });
+  assert.deepStrictEqual(Array.from(board.form.labels), ['l1', 'l2']);
+  board.removeFormLabel('l1');
+  assert.deepStrictEqual(Array.from(board.form.labels), ['l2']);
+});
+
+test('panel addLabel and removeLabel patch through toggleMulti', () => {
+  const calls = [];
+  const panel = panelWithActions(['set_labels'], calls);
+  panel.data.labels = ['l1'];
+  panel.addLabel({ uuid: 'l2', name: 'Chore', color: '' });
+  assert.deepStrictEqual(Array.from(calls[0][1].labels), ['l1', 'l2']);
+  panel.removeLabel('l1');
+  assert.deepStrictEqual(Array.from(calls[1][1].labels), []);
+});
+
+test('panel addLabel is gated on the set_labels action', () => {
+  const calls = [];
+  panelWithActions([], calls).addLabel({ uuid: 'l2', name: 'Chore', color: '' });
+  assert.equal(calls.length, 0);
+});

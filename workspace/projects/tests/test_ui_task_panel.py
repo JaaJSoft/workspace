@@ -81,12 +81,37 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertEqual(resp.context["panel_action_ids"], [])
         self.assertNotContains(resp, "Delete task")
         # No action is available on an archived project, so every gated
-        # control must be disabled: the status, priority and due-date fields
-        # and one checkbox per label. Assignees are chips + selector, both
-        # hidden client-side via can('assign'), so they carry no disabled
-        # attribute.
-        expected_disabled = 3 + 1
+        # control must be disabled: the status, priority and due-date fields.
+        # Assignees and labels render as chips whose remove controls and
+        # selectors are omitted entirely, so they carry no disabled attribute.
+        expected_disabled = 3
         self.assertContains(resp, "disabled", count=expected_disabled)
+
+    def test_admin_gets_the_label_selector_with_create_endpoint(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(self.url)
+        self.assertContains(resp, 'id="panel-labels-data"')
+        self.assertContains(resp, "labelSelector(")
+        self.assertContains(resp, f"/api/v1/projects/{self.project.uuid}/labels")
+
+    def test_member_gets_the_selector_without_the_create_endpoint(self):
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertContains(resp, "labelSelector(")
+        self.assertNotContains(resp, f"/api/v1/projects/{self.project.uuid}/labels")
+
+    def test_labels_section_hidden_for_member_when_project_has_none(self):
+        self.label.delete()
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertNotContains(resp, "labelSelector(")
+
+    def test_labels_section_rendered_for_admin_when_project_has_none(self):
+        # Admins can create the first label straight from the task panel.
+        self.label.delete()
+        self.client.force_login(self.admin)
+        resp = self.client.get(self.url)
+        self.assertContains(resp, "labelSelector(")
 
     def test_activity_feed_uses_normalized_events(self):
         self.client.force_login(self.member)

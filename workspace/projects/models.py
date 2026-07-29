@@ -14,6 +14,10 @@ class Project(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
     type = models.CharField(max_length=10, choices=Type.choices, default=Type.KANBAN)
+    # Reference prefix (WR in WR-42); unique app-wide.
+    key = models.CharField(max_length=10, unique=True)
+    # Monotone counter behind Task.number: never recomputed, numbers never reused.
+    next_task_number = models.PositiveIntegerField(default=1)
     # Every attached group grants its members plain member access; admin
     # rights only ever come from a ProjectMember row.
     groups = models.ManyToManyField(
@@ -154,6 +158,8 @@ class Task(models.Model):
         on_delete=models.CASCADE,
         related_name="tasks",
     )
+    # Per-project sequence assigned at creation, immutable.
+    number = models.PositiveIntegerField(editable=False)
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
     status = models.ForeignKey(
@@ -194,9 +200,20 @@ class Task(models.Model):
                 name="task_project_status_pos",
             ),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "number"],
+                name="unique_task_number_per_project",
+            ),
+        ]
 
     def __str__(self):
         return self.title
+
+    @property
+    def reference(self):
+        """Display id (WR-42); costs a project fetch unless project is cached."""
+        return f"{self.project.key}-{self.number}"
 
 
 class TaskEvent(models.Model):
@@ -238,6 +255,8 @@ class TaskEvent(models.Model):
         related_name="events",
     )
     task_title = models.CharField(max_length=255)
+    # Snapshotted like task_title: the reference must survive task deletion.
+    task_number = models.PositiveIntegerField(null=True, blank=True)
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

@@ -1,6 +1,6 @@
 from workspace.core.module_registry import SearchResult, SearchTag
 
-from .services.search import search_projects_qs, search_tasks_qs
+from .services.search import reference_tasks_qs, search_projects_qs, search_tasks_qs
 
 
 def search_projects(query, user, limit):
@@ -22,13 +22,25 @@ def search_projects(query, user, limit):
 
 
 def search_project_tasks(query, user, limit):
-    tasks = search_tasks_qs(user, query).select_related("project")[:limit]
+    reference_hits = list(
+        reference_tasks_qs(user, query).select_related("project")[:limit]
+    )
+    reference_uuids = {t.uuid for t in reference_hits}
+    tasks = list(reference_hits)
+    remaining = limit - len(tasks)
+    if remaining > 0:
+        for task in search_tasks_qs(user, query).select_related("project")[:limit]:
+            if task.uuid in reference_uuids:
+                continue
+            tasks.append(task)
+            if len(tasks) == limit:
+                break
     return [
         SearchResult(
             uuid=str(t.uuid),
             name=t.title,
-            url=f"/projects/{t.project_id}",
-            matched_value=t.title,
+            url=f"/projects/{t.project_id}?task={t.uuid}",
+            matched_value=t.reference if t.uuid in reference_uuids else t.title,
             match_type="task",
             type_icon="list-todo",
             module_slug="projects",

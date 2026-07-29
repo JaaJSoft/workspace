@@ -16,17 +16,20 @@ class ProjectModelTests(TestCase):
 
     def test_one_personal_project_per_user(self):
         Project.objects.create(
-            name="Personal", type=Project.Type.PERSONAL, created_by=self.user
+            name="Personal", key="P1", type=Project.Type.PERSONAL, created_by=self.user
         )
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 Project.objects.create(
-                    name="Personal 2", type=Project.Type.PERSONAL, created_by=self.user
+                    name="Personal 2",
+                    key="P2",
+                    type=Project.Type.PERSONAL,
+                    created_by=self.user,
                 )
 
     def test_multiple_kanban_projects_allowed(self):
-        Project.objects.create(name="A", created_by=self.user)
-        Project.objects.create(name="B", created_by=self.user)
+        Project.objects.create(name="A", key="A", created_by=self.user)
+        Project.objects.create(name="B", key="B", created_by=self.user)
         self.assertEqual(Project.objects.count(), 2)
 
     def test_is_archived_property(self):
@@ -49,7 +52,9 @@ class TaskStatusModelTests(TestCase):
         )
 
     def test_status_with_tasks_is_restricted(self):
-        Task.objects.create(project=self.project, title="t", status=self.status)
+        Task.objects.create(
+            project=self.project, number=1, title="t", status=self.status
+        )
         with self.assertRaises(RestrictedError):
             self.status.delete()
 
@@ -75,10 +80,18 @@ class TaskModelTests(TestCase):
 
     def test_ordering_by_position_then_created(self):
         t1 = Task.objects.create(
-            project=self.project, title="second", status=self.status, position=1
+            project=self.project,
+            number=1,
+            title="second",
+            status=self.status,
+            position=1,
         )
         t2 = Task.objects.create(
-            project=self.project, title="first", status=self.status, position=0
+            project=self.project,
+            number=2,
+            title="first",
+            status=self.status,
+            position=0,
         )
         self.assertEqual(list(Task.objects.all()), [t2, t1])
 

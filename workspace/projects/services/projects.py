@@ -1,6 +1,7 @@
 from django.db import IntegrityError, transaction
 
 from ..models import Project, ProjectMember, TaskStatus
+from .references import unique_project_key
 
 DEFAULT_STATUSES = [
     ("Backlog", TaskStatus.Category.BACKLOG),
@@ -13,13 +14,13 @@ DEFAULT_STATUSES = [
 def create_project(
     user, *, name, description="", groups=None, project_type=Project.Type.KANBAN
 ):
-    """Create a project with its default statuses and the creator as admin."""
+    """Create a project with its key, default statuses and creator as admin."""
     with transaction.atomic():
-        project = Project.objects.create(
+        project = _create_project_row(
+            user,
             name=name,
             description=description,
-            type=project_type,
-            created_by=user,
+            project_type=project_type,
         )
         if groups:
             project.groups.set(groups)
@@ -31,6 +32,38 @@ def create_project(
             project=project, user=user, role=ProjectMember.Role.ADMIN
         )
     return project
+
+
+def _create_project_row(user, *, name, description, project_type):
+    """Insert the project row with a free key, retrying on key collisions.
+
+    The unique constraint arbitrates concurrent creates: a loser regenerates
+    against an updated taken set behind a savepoint. The last attempt runs
+    without a net so a persistent IntegrityError (e.g. the personal-project
+    constraint) propagates to get_or_create_personal_project unchanged.
+    """
+    taken = set(Project.objects.values_list("key", flat=True))
+    taken.discard(None)
+    for _ in range(2):
+        key = unique_project_key(name, taken=taken)
+        try:
+            with transaction.atomic():
+                return Project.objects.create(
+                    name=name,
+                    description=description,
+                    type=project_type,
+                    created_by=user,
+                    key=key,
+                )
+        except IntegrityError:
+            taken.add(key)
+    return Project.objects.create(
+        name=name,
+        description=description,
+        type=project_type,
+        created_by=user,
+        key=unique_project_key(name, taken=taken),
+    )
 
 
 def get_or_create_personal_project(user):

@@ -142,6 +142,15 @@ class TaskDetailTests(TaskApiMixin, APITestCase):
         response = self.client.get(self.detail_url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_payload_includes_number_and_reference(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.get(self.detail_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["number"], self.task.number)
+        self.assertEqual(
+            resp.data["reference"], f"{self.project.key}-{self.task.number}"
+        )
+
 
 class TaskUpdateEventTests(TaskApiMixin, APITestCase):
     def setUp(self):

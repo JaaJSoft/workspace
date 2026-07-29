@@ -24,7 +24,10 @@ class ProjectsActivityProviderTests(ProjectTestMixin, TestCase):
         self.assertEqual(len(events), 1)
         event = events[0]
         self.assertEqual(event["label"], "Task created")
-        self.assertEqual(event["description"], "Visible work")
+        self.assertEqual(
+            event["description"],
+            f"{self.project.key}-{self.task.number} · Visible work",
+        )
         self.assertEqual(event["icon"], "plus")
         self.assertEqual(
             event["url"], f"/projects/{self.project.uuid}?task={self.task.uuid}"
@@ -35,11 +38,13 @@ class ProjectsActivityProviderTests(ProjectTestMixin, TestCase):
         self.assertIsNotNone(event["timestamp"])
 
     def test_deleted_task_event_falls_back_to_project_url(self):
+        expected = f"{self.project.key}-{self.task.number} · {self.task.title}"
         # Raw delete: SET_NULL keeps the created event but drops its task FK.
         self.task.delete()
         events = self.provider.get_recent_events(self.admin.pk, limit=5)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["url"], f"/projects/{self.project.uuid}")
+        self.assertEqual(events[0]["description"], expected)
 
     def test_member_viewer_sees_admins_events(self):
         events = self.provider.get_recent_events(

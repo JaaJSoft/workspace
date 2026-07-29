@@ -3,7 +3,7 @@
     :class="dragging === '{{ task.uuid }}' && 'opacity-50'"
     x-show="taskVisible($el.dataset)"
     data-task-uuid="{{ task.uuid }}"
-    data-search="{{ task.title|lower }} {% for label in task.labels.all %}{{ label.name|lower }} {% endfor %}"
+    data-search="{{ project.key|lower }}-{{ task.number }} {{ task.title|lower }} {% for label in task.labels.all %}{{ label.name|lower }} {% endfor %}"
     data-priority="{{ task.priority }}"
     data-assignees="{% for assignee in task.assignees.all %}{{ assignee.pk }} {% endfor %}"
     data-labels="{% for label in task.labels.all %}{{ label.uuid }} {% endfor %}"
@@ -18,6 +18,7 @@
            @change="toggleSelect('{{ task.uuid }}')">
   {% endif %}
   <span class="flex-1 min-w-0 flex items-center gap-2">
+    <span class="text-xs font-mono text-base-content/50 shrink-0">{{ project.key }}-{{ task.number }}</span>
     <span class="text-sm font-medium truncate">{{ task.title }}</span>
     {% for label in task.labels.all %}
       <span class="badge badge-sm badge-outline shrink-0 hidden lg:inline-flex"

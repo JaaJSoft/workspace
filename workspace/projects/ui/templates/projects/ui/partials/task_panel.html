@@ -6,12 +6,33 @@
   {{ panel_task_data|json_script:"task-panel-data" }}
   {{ panel_action_ids|json_script:"task-panel-actions" }}
 
-  <div class="flex items-start gap-2 p-4 pb-3 border-b border-base-300">
-    <button type="button" class="btn btn-sm btn-square btn-ghost lg:hidden -mt-1 -ml-1"
+  {# Meta strip: navigation, reference and task actions on a tinted band, #}
+  {# visually separated from the editable content below. #}
+  <div class="flex items-center gap-2 px-4 py-1.5 bg-base-200/60 border-b border-base-300">
+    <button type="button" class="btn btn-sm btn-square btn-ghost lg:hidden -ml-1"
             @click="closePanel()" aria-label="Back to board">
       <i data-lucide="arrow-left" class="w-4 h-4"></i>
     </button>
-    <div class="flex-1 min-w-0">
+    <span class="font-mono text-xs tracking-wide text-base-content/50 select-all">{{ project.key }}-{{ panel_task.number }}</span>
+    <button type="button" class="btn btn-sm btn-square btn-ghost ml-auto"
+            @click="copyLink('{{ project.key }}-{{ panel_task.number }}')"
+            aria-label="Copy link" :title="linkCopied ? 'Copied' : 'Copy link'">
+      <span x-show="!linkCopied" class="inline-flex"><i data-lucide="link" class="w-4 h-4"></i></span>
+      <span x-show="linkCopied" x-cloak class="inline-flex text-success"><i data-lucide="check" class="w-4 h-4"></i></span>
+    </button>
+    {% if "delete" in panel_action_ids %}
+      <button type="button" class="btn btn-sm btn-square btn-ghost text-error"
+              @click="removeTask()" aria-label="Delete task" title="Delete task">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+      </button>
+    {% endif %}
+    <button type="button" class="btn btn-sm btn-square btn-ghost hidden lg:inline-flex -mr-1"
+            @click="closePanel()" aria-label="Close panel">
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
+  </div>
+  <div class="px-4 pt-3 pb-3 border-b border-base-300">
+    <div class="min-w-0">
       <template x-if="editing !== 'title'">
         <h2 class="font-semibold text-lg leading-tight break-words"
             :class="can('edit') && 'cursor-text hover:bg-base-200 rounded px-1 -mx-1'"
@@ -31,10 +52,6 @@
                   @blur="commitDraft('title')"></textarea>
       </template>
     </div>
-    <button type="button" class="btn btn-sm btn-square btn-ghost hidden lg:inline-flex -mt-1 -mr-1"
-            @click="closePanel()" aria-label="Close panel">
-      <i data-lucide="x" class="w-4 h-4"></i>
-    </button>
   </div>
 
   <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
@@ -141,11 +158,5 @@
       {% if panel_task.completed_at %}<span>Completed {{ panel_task.completed_at|date:"DATE_FORMAT" }}</span>{% endif %}
     </section>
 
-    {% if "delete" in panel_action_ids %}
-      <button type="button" class="btn btn-error btn-outline btn-sm self-start"
-              @click="removeTask()">
-        <i data-lucide="trash-2" class="w-4 h-4"></i> Delete task
-      </button>
-    {% endif %}
   </div>
 </div>

@@ -1,10 +1,16 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import Group
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.projects.models import Project
-from workspace.projects.services.projects import get_or_create_personal_project
+from workspace.projects.serializers import ProjectSerializer
+from workspace.projects.services.projects import (
+    create_project,
+    get_or_create_personal_project,
+)
 
 from .base import ProjectTestMixin
 
@@ -194,3 +200,62 @@ class ProjectDetailTests(ProjectTestMixin, APITestCase):
             f"/api/v1/projects/{self.project.uuid}", {"name": "X"}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ProjectKeyApiTests(ProjectTestMixin, APITestCase):
+    def _patch(self, user, payload):
+        self.client.force_authenticate(user)
+        return self.client.patch(
+            f"/api/v1/projects/{self.project.uuid}", payload, format="json"
+        )
+
+    def test_admin_can_change_the_key(self):
+        resp = self._patch(self.admin, {"key": "core7"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["key"], "CORE7")
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.key, "CORE7")
+
+    def test_invalid_formats_are_rejected(self):
+        for bad in ("A", "1AB", "TOOLONGKEY1", "BAD-KEY", "É9", ""):
+            resp = self._patch(self.admin, {"key": bad})
+            self.assertEqual(resp.status_code, 400, bad)
+
+    def test_duplicate_key_is_rejected_case_insensitively(self):
+        other = create_project(self.admin, name="Other Board")
+        resp = self._patch(self.admin, {"key": other.key.lower()})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_member_cannot_change_the_key(self):
+        resp = self._patch(self.member, {"key": "NOPE"})
+        self.assertEqual(resp.status_code, 403)
+
+    def test_key_on_create_is_ignored(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post(
+            "/api/v1/projects", {"name": "Fresh Board", "key": "FORCED"}, format="json"
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["key"], "FB")
+
+    def test_invalid_key_on_create_is_ignored_too(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post(
+            "/api/v1/projects",
+            {"name": "Fresh Board", "key": "not-a-key"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["key"], "FB")
+
+    def test_concurrent_key_conflict_returns_400(self):
+        """Simulates two PATCHes racing past validate_key's exists() check:
+        the serializer says the key is free, but the database disagrees by
+        the time the row is written, so the unique constraint fires."""
+        other = create_project(self.admin, name="Other Board")
+        with patch.object(
+            ProjectSerializer, "validate_key", lambda self, value: value.strip().upper()
+        ):
+            resp = self._patch(self.admin, {"key": other.key})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data["key"], ["Another project already uses this key."])

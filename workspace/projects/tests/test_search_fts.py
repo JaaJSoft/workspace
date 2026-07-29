@@ -4,33 +4,24 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.common.search import fts5_available
-from workspace.projects.models import Project, ProjectMember, Task, TaskStatus
+from workspace.projects.models import Project, ProjectMember
+from workspace.projects.services.projects import create_project
 from workspace.projects.services.search import search_projects_qs, search_tasks_qs
+from workspace.projects.services.tasks import create_task
 
 User = get_user_model()
 
 
-def make_project(owner, *members, name="Board", description=""):
-    project = Project.objects.create(
-        name=name, description=description, created_by=owner
-    )
-    for user in (owner, *members):
+def make_project(owner, *members, name="Board", description="", groups=None):
+    project = create_project(owner, name=name, description=description, groups=groups)
+    for user in members:
         ProjectMember.objects.create(project=project, user=user)
     return project
 
 
 def make_task(project, title, description=""):
-    status = project.statuses.first()
-    if status is None:
-        status = TaskStatus.objects.create(
-            project=project, name="Todo", category=TaskStatus.Category.BACKLOG
-        )
-    return Task.objects.create(
-        project=project,
-        title=title,
-        description=description,
-        status=status,
-        created_by=project.created_by,
+    return create_task(
+        project, project.created_by, title=title, description=description
     )
 
 
@@ -108,10 +99,7 @@ class ProjectSearchServiceTests(TestCase):
 
         group = Group.objects.create(name="devs")
         self.alice.groups.add(group)
-        grouped = Project.objects.create(
-            name="Grouped kumquat effort", created_by=self.bob
-        )
-        grouped.groups.add(group)
+        grouped = make_project(self.bob, name="Grouped kumquat effort", groups=[group])
         hits = [p.uuid for p in search_projects_qs(self.alice, "kumquat")]
         self.assertIn(grouped.uuid, hits)
 
@@ -213,7 +201,7 @@ class GlobalSearchProviderTests(TestCase):
         r = results[0]
         self.assertEqual(r.uuid, str(self.task.uuid))
         self.assertEqual(r.name, "Pick the flamingo palette")
-        self.assertEqual(r.url, f"/projects/{self.project.uuid}")
+        self.assertEqual(r.url, f"/projects/{self.project.uuid}?task={self.task.uuid}")
         self.assertEqual(r.tags[0].label, "Flamingo redesign")
 
     def test_limit_respected(self):

@@ -72,7 +72,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ).annotate(_my_role=Subquery(my_role))
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        # Keys are auto-generated at creation; a client-supplied value is
+        # dropped before validation so it cannot 400 a create.
+        data = request.data.copy()
+        data.pop("key", None)
+        serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         project = create_project(
             request.user,
@@ -90,7 +94,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
         self._require_admin(project)
         if project.is_archived:
             raise PermissionDenied("Project is archived.")
-        return super().partial_update(request, *args, **kwargs)
+        try:
+            with transaction.atomic():
+                return super().partial_update(request, *args, **kwargs)
+        except IntegrityError:
+            return Response(
+                {"key": ["Another project already uses this key."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     def destroy(self, request, *args, **kwargs):
         project = self.get_object()

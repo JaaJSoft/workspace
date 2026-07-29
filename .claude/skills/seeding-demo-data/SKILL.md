@@ -60,7 +60,7 @@ Env vars do not persist across shell tool calls: chain migrate/seed/runserver in
 
 ## Gotchas
 
-- Re-running is additive: each run adds a new batch of faker users. Use `--purge --yes` to reset. The `demo` user is reused (its password is reset to `--password`), never duplicated.
+- Re-running is additive: each run adds a new batch of faker users, plus new shared projects and tasks. Personal projects are reused via get-or-create (never duplicated), though they gain a few tasks per run. Use `--purge --yes` to reset. The `demo` user is reused (its password is reset to `--password`), never duplicated.
 - The `demo` user gets files, calendars and conversations like everyone else, so its account looks lived-in. It is also the admin of the first shared kanban project and has its own personal board.
 - The seeder does not create a superuser. For `/admin`: `$env:DJANGO_SUPERUSER_PASSWORD='admin1234'; uv run python manage.py createsuperuser --noinput --username admin --email admin@demo.local`.
 - `scripts/_screenshot_seed.py` is NOT for this: it feeds `scripts/screenshots.py` into a temporary DB that is deleted after the run.

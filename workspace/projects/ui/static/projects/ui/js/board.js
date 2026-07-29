@@ -69,6 +69,151 @@ function emptyTaskForm() {
   };
 }
 
+// Keep in sync with COLUMN_COLORS in settings.js (minus its "no color" entry).
+var LABEL_COLORS = [
+  '#ef4444',
+  '#f97316',
+  '#eab308',
+  '#22c55e',
+  '#3b82f6',
+  '#a855f7',
+];
+
+function pickLabelColor(labels) {
+  const counts = new Map(LABEL_COLORS.map((color) => [color, 0]));
+  labels.forEach((label) => {
+    if (counts.has(label.color)) {
+      counts.set(label.color, counts.get(label.color) + 1);
+    }
+  });
+  let best = LABEL_COLORS[0];
+  counts.forEach((count, color) => {
+    if (count < counts.get(best)) best = color;
+  });
+  return best;
+}
+
+// Combobox over the project's labels. allLabels/selectedUuids are getters so
+// the parent's reactive state is read at call time. An empty createUrl hides
+// the create row (non-admins); the server enforces admin regardless.
+function labelSelector(eventName, allLabels, selectedUuids, createUrl) {
+  return {
+    query: '',
+    results: [],
+    showDropdown: false,
+    highlight: -1,
+    creating: false,
+    createError: false,
+    eventName: eventName,
+    allLabels: allLabels,
+    selectedUuids: selectedUuids,
+    createUrl: createUrl || '',
+
+    trimmedQuery() {
+      return (this.query || '').trim();
+    },
+
+    available() {
+      const selected = this.selectedUuids();
+      return this.allLabels().filter((l) => !selected.includes(l.uuid));
+    },
+
+    exactMatch() {
+      const needle = this.trimmedQuery().toLowerCase();
+      return (
+        this.allLabels().find((l) => l.name.toLowerCase() === needle) || null
+      );
+    },
+
+    showCreate() {
+      return (
+        Boolean(this.createUrl) &&
+        this.trimmedQuery() !== '' &&
+        !this.exactMatch()
+      );
+    },
+
+    searchLocal() {
+      const needle = this.trimmedQuery().toLowerCase();
+      this.results = this.available().filter((l) =>
+        l.name.toLowerCase().includes(needle)
+      );
+      this.highlight = -1;
+      this.createError = false;
+      this.showDropdown = true;
+    },
+
+    handleKeydown(e) {
+      const count = this.results.length + (this.showCreate() ? 1 : 0);
+      const open = this.showDropdown && count > 0;
+      if (e.key === 'ArrowDown' && open) {
+        e.preventDefault();
+        this.highlight = (this.highlight + 1) % count;
+      } else if (e.key === 'ArrowUp' && open) {
+        e.preventDefault();
+        this.highlight = this.highlight <= 0 ? count - 1 : this.highlight - 1;
+      } else if (e.key === 'Enter' && this.trimmedQuery()) {
+        // Always swallow Enter while a label is being typed: the input sits
+        // inside the task form and a fall-through would submit it.
+        e.preventDefault();
+        if (this.highlight >= 0 && this.highlight < this.results.length) {
+          this.select(this.results[this.highlight]);
+        } else if (this.highlight === this.results.length && this.showCreate()) {
+          this.createLabel();
+        } else {
+          const exact = this.exactMatch();
+          if (exact && this.available().some((l) => l.uuid === exact.uuid)) {
+            this.select(exact);
+          } else if (this.showCreate()) {
+            this.createLabel();
+          }
+        }
+      }
+    },
+
+    select(label) {
+      window.dispatchEvent(
+        new CustomEvent(this.eventName, { detail: { label: label } })
+      );
+      this.query = '';
+      this.results = [];
+      this.showDropdown = false;
+      this.highlight = -1;
+      this.createError = false;
+    },
+
+    async createLabel() {
+      const name = this.trimmedQuery();
+      if (!name || !this.createUrl || this.creating) return;
+      this.creating = true;
+      this.createError = false;
+      try {
+        const resp = await fetch(this.createUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(),
+          },
+          body: JSON.stringify({
+            name: name,
+            color: pickLabelColor(this.allLabels()),
+          }),
+        });
+        if (!resp.ok) throw new Error('Create failed');
+        const label = await resp.json();
+        window.dispatchEvent(
+          new CustomEvent('project-label-created', { detail: { label: label } })
+        );
+        this.select(label);
+      } catch (e) {
+        this.createError = true;
+      } finally {
+        this.creating = false;
+      }
+    },
+  };
+}
+
 function projectBoard(config) {
   return {
     currentView: config.view || 'board',
@@ -587,9 +732,11 @@ function taskPanel() {
 
 window.projectBoard = projectBoard;
 window.taskPanel = taskPanel;
+window.labelSelector = labelSelector;
 window.projectBoardHelpers = {
   listOrder: listOrder,
   taskParamUrl: taskParamUrl,
   fieldAction: fieldAction,
   taskMatchesFilters: taskMatchesFilters,
+  pickLabelColor: pickLabelColor,
 };

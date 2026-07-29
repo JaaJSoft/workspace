@@ -98,7 +98,7 @@
           </h2>
           <div class="flex flex-wrap gap-1.5">
             {% for label in labels_data %}
-              <span class="badge badge-outline">{{ label.name }}</span>
+              {% include "projects/ui/partials/_label_chip.html" %}
             {% endfor %}
           </div>
         </section>

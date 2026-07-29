@@ -22,6 +22,7 @@ x-data="projectBoard({
 })"
 @popstate.window="onPopState()"
 @ajax:after="ensureTaskParam()"
+@project-label-created.window="onLabelCreated($event.detail.label)"
 {% endblock %}
 
 {% block drawer_sidebar %}

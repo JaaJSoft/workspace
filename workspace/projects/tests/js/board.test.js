@@ -707,3 +707,266 @@ test('copyLink still copies when the URL already targets the task', async () => 
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepStrictEqual(written, ['http://x.test/projects/p/board?task=WR-3']);
 });
+
+function selectorLabels() {
+  return [
+    { uuid: 'l1', name: 'Bug', color: '#ef4444' },
+    { uuid: 'l2', name: 'Feature', color: '#3b82f6' },
+    { uuid: 'l3', name: 'Backend', color: '' },
+  ];
+}
+
+function labelPicker(overrides) {
+  const opts = {
+    all: selectorLabels,
+    selected: () => [],
+    createUrl: '',
+    ...overrides,
+  };
+  return ctx.labelSelector('label-picked', opts.all, opts.selected, opts.createUrl);
+}
+
+function keyEvent(key) {
+  return {
+    key: key,
+    prevented: false,
+    preventDefault() {
+      this.prevented = true;
+    },
+  };
+}
+
+test('labelSelector filters case-insensitively over unselected labels', () => {
+  const sel = labelPicker({ selected: () => ['l2'] });
+  sel.query = 'b';
+  sel.searchLocal();
+  assert.deepStrictEqual(
+    Array.from(sel.results).map((l) => l.uuid),
+    ['l1', 'l3']
+  );
+  sel.query = 'FEAT';
+  sel.searchLocal();
+  assert.deepStrictEqual(Array.from(sel.results), []);
+});
+
+test('showCreate needs a create URL, a query, and no exact match', () => {
+  const noUrl = labelPicker({});
+  noUrl.query = 'urgent';
+  assert.equal(noUrl.showCreate(), false);
+
+  const sel = labelPicker({ createUrl: '/api/labels' });
+  sel.query = '';
+  assert.equal(sel.showCreate(), false);
+  sel.query = '  urgent ';
+  assert.equal(sel.showCreate(), true);
+  sel.query = 'BUG';
+  assert.equal(sel.showCreate(), false);
+});
+
+test('showCreate stays hidden when the exact match is already selected', () => {
+  const sel = labelPicker({ createUrl: '/api/labels', selected: () => ['l1'] });
+  sel.query = 'bug';
+  assert.equal(sel.showCreate(), false);
+});
+
+test('pickLabelColor picks the least-used palette color', () => {
+  const pick = ctx.projectBoardHelpers.pickLabelColor;
+  assert.equal(pick([]), '#ef4444');
+  assert.equal(
+    pick([{ color: '#ef4444' }, { color: '' }, { color: 'not-in-palette' }]),
+    '#f97316'
+  );
+  assert.equal(
+    pick([
+      { color: '#ef4444' },
+      { color: '#f97316' },
+      { color: '#eab308' },
+      { color: '#22c55e' },
+      { color: '#3b82f6' },
+      { color: '#a855f7' },
+      { color: '#f97316' },
+    ]),
+    '#ef4444'
+  );
+});
+
+test('createLabel posts name and auto color then announces and selects', async () => {
+  const calls = [];
+  const events = [];
+  ctx.getCSRFToken = () => 'token';
+  ctx.CustomEvent = function (name, opts) {
+    return { name: name, detail: opts && opts.detail };
+  };
+  ctx.dispatchEvent = (e) => events.push(e);
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url + ' ' + opts.body);
+    return {
+      ok: true,
+      json: async () => ({ uuid: 'l9', name: 'Urgent', color: '#f97316' }),
+    };
+  };
+  const sel = labelPicker({ createUrl: '/api/labels' });
+  sel.query = ' Urgent ';
+  await sel.createLabel();
+  // Fixture colors: #ef4444 and #3b82f6 used once, so #f97316 is least used.
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/labels {"name":"Urgent","color":"#f97316"}',
+  ]);
+  assert.deepStrictEqual(
+    Array.from(events).map((e) => e.name),
+    ['project-label-created', 'label-picked']
+  );
+  assert.deepStrictEqual(
+    { ...events[0].detail.label },
+    { uuid: 'l9', name: 'Urgent', color: '#f97316' }
+  );
+  assert.equal(sel.query, '');
+  assert.equal(sel.creating, false);
+  assert.equal(sel.createError, false);
+});
+
+test('createLabel keeps the query and flags the error on failure', async () => {
+  ctx.getCSRFToken = () => 'token';
+  ctx.fetch = async () => ({ ok: false });
+  const sel = labelPicker({ createUrl: '/api/labels' });
+  sel.query = 'Urgent';
+  await sel.createLabel();
+  assert.equal(sel.createError, true);
+  assert.equal(sel.query, 'Urgent');
+  assert.equal(sel.creating, false);
+});
+
+test('Enter selects the exact match instead of creating', () => {
+  const events = [];
+  ctx.CustomEvent = function (name, opts) {
+    return { name: name, detail: opts && opts.detail };
+  };
+  ctx.dispatchEvent = (e) => events.push(e);
+  const sel = labelPicker({ createUrl: '/api/labels' });
+  sel.query = 'bug';
+  sel.searchLocal();
+  const e = keyEvent('Enter');
+  sel.handleKeydown(e);
+  assert.equal(e.prevented, true);
+  assert.deepStrictEqual(
+    Array.from(events).map((ev) => ev.name),
+    ['label-picked']
+  );
+  assert.equal(events[0].detail.label.uuid, 'l1');
+});
+
+test('Enter without a query falls through to the surrounding form', () => {
+  const sel = labelPicker({});
+  const e = keyEvent('Enter');
+  sel.handleKeydown(e);
+  assert.equal(e.prevented, false);
+});
+
+test('Enter with a query is swallowed but selects nothing once the dropdown is closed', () => {
+  const events = [];
+  ctx.CustomEvent = function (name, opts) {
+    return { name: name, detail: opts && opts.detail };
+  };
+  ctx.dispatchEvent = (e) => events.push(e);
+  ctx.fetch = async () => {
+    throw new Error('createLabel must not run while the dropdown is closed');
+  };
+  const sel = labelPicker({ createUrl: '/api/labels' });
+  sel.query = 'bug';
+  sel.searchLocal();
+  sel.showDropdown = false;
+  const e = keyEvent('Enter');
+  sel.handleKeydown(e);
+  assert.equal(e.prevented, true);
+  assert.deepStrictEqual(Array.from(events), []);
+});
+
+test('Enter with no highlight and no exact match creates the label', async () => {
+  const calls = [];
+  const events = [];
+  ctx.getCSRFToken = () => 'token';
+  ctx.CustomEvent = function (name, opts) {
+    return { name: name, detail: opts && opts.detail };
+  };
+  ctx.dispatchEvent = (e) => events.push(e);
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url + ' ' + opts.body);
+    return {
+      ok: true,
+      json: async () => ({ uuid: 'l9', name: 'Urgent', color: '#f97316' }),
+    };
+  };
+  const sel = labelPicker({ createUrl: '/api/labels' });
+  sel.query = 'Urgent';
+  sel.searchLocal();
+  const e = keyEvent('Enter');
+  sel.handleKeydown(e);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(e.prevented, true);
+  assert.deepStrictEqual(Array.from(calls), [
+    'POST /api/labels {"name":"Urgent","color":"#f97316"}',
+  ]);
+  assert.deepStrictEqual(
+    Array.from(events).map((ev) => ev.name),
+    ['project-label-created', 'label-picked']
+  );
+});
+
+test('arrow keys wrap across the results plus the create row', () => {
+  const sel = labelPicker({ createUrl: '/api/labels' });
+  sel.query = 'b';
+  sel.searchLocal();
+  // Results: l1 (Bug), l3 (Backend); "b" has no exact match so the create
+  // row is item index 2.
+  sel.handleKeydown(keyEvent('ArrowDown'));
+  assert.equal(sel.highlight, 0);
+  sel.handleKeydown(keyEvent('ArrowDown'));
+  sel.handleKeydown(keyEvent('ArrowDown'));
+  assert.equal(sel.highlight, 2);
+  sel.handleKeydown(keyEvent('ArrowDown'));
+  assert.equal(sel.highlight, 0);
+  sel.handleKeydown(keyEvent('ArrowUp'));
+  assert.equal(sel.highlight, 2);
+});
+
+test('projectBoard label helpers resolve names, styles and creations', () => {
+  const board = panelBoard();
+  board.labels = [
+    { uuid: 'l1', name: 'Bug', color: '#ef4444' },
+    { uuid: 'l2', name: 'Chore', color: '' },
+  ];
+  assert.equal(board.labelName('l1'), 'Bug');
+  assert.equal(board.labelName('missing'), 'Unknown label');
+  assert.equal(board.labelStyle('l1'), 'border-color: #ef4444; color: #ef4444');
+  assert.equal(board.labelStyle('l2'), '');
+  assert.equal(board.labelStyle('missing'), '');
+  board.onLabelCreated({ uuid: 'l3', name: 'New', color: '' });
+  board.onLabelCreated({ uuid: 'l3', name: 'New', color: '' });
+  assert.equal(board.labels.length, 3);
+});
+
+test('projectBoard form label helpers add, dedupe and remove', () => {
+  const board = panelBoard();
+  board.form.labels = ['l1'];
+  board.addFormLabel({ uuid: 'l2', name: 'Chore', color: '' });
+  board.addFormLabel({ uuid: 'l2', name: 'Chore', color: '' });
+  assert.deepStrictEqual(Array.from(board.form.labels), ['l1', 'l2']);
+  board.removeFormLabel('l1');
+  assert.deepStrictEqual(Array.from(board.form.labels), ['l2']);
+});
+
+test('panel addLabel and removeLabel patch through toggleMulti', () => {
+  const calls = [];
+  const panel = panelWithActions(['set_labels'], calls);
+  panel.data.labels = ['l1'];
+  panel.addLabel({ uuid: 'l2', name: 'Chore', color: '' });
+  assert.deepStrictEqual(Array.from(calls[0][1].labels), ['l1', 'l2']);
+  panel.removeLabel('l1');
+  assert.deepStrictEqual(Array.from(calls[1][1].labels), []);
+});
+
+test('panel addLabel is gated on the set_labels action', () => {
+  const calls = [];
+  panelWithActions([], calls).addLabel({ uuid: 'l2', name: 'Chore', color: '' });
+  assert.equal(calls.length, 0);
+});

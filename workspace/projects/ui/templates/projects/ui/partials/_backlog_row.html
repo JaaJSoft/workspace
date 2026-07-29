@@ -21,8 +21,7 @@
     <span class="text-xs font-mono text-base-content/50 shrink-0">{{ project.key }}-{{ task.number }}</span>
     <span class="text-sm font-medium truncate">{{ task.title }}</span>
     {% for label in task.labels.all %}
-      <span class="badge badge-sm badge-outline shrink-0 hidden lg:inline-flex"
-            {% if label.color %}style="border-color: {{ label.color }}; color: {{ label.color }}"{% endif %}>{{ label.name }}</span>
+      {% include "projects/ui/partials/_label_chip.html" with class="shrink-0 hidden lg:inline-flex" %}
     {% endfor %}
   </span>
   <span class="w-24 hidden sm:block shrink-0">

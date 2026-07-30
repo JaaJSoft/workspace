@@ -12,6 +12,7 @@ window.taskComments = function taskComments(projectUuid, taskUuid, currentUserId
     sending: false,
     editingId: null,
     editBody: '',
+    composerFocused: false,
 
     async init() {
       await this.loadComments();
@@ -45,10 +46,20 @@ window.taskComments = function taskComments(projectUuid, taskUuid, currentUserId
         });
         if (resp.ok) {
           this.newBody = '';
+          if (this.$refs.composer) {
+            this.$refs.composer.style.height = '';
+            this.$refs.composer.blur();
+          }
           await this.loadComments();
         }
       } catch (e) { /* ignore */ }
       this.sending = false;
+    },
+
+    autoGrow(el) {
+      el.style.height = 'auto';
+      // scrollHeight excludes borders (border-box), hence the offset delta.
+      el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
     },
 
     startEdit(comment) {

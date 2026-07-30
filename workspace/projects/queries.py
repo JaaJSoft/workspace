@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
-from .models import Project, ProjectMember
+from .models import Project, ProjectMember, Task, TaskStatus
 
 
 def user_project_ids(user, *, role=None):
@@ -28,6 +29,25 @@ def user_project_ids(user, *, role=None):
         .values_list("uuid", flat=True)
     )
     return list(member_ids.union(group_ids))
+
+
+def pending_task_count(user):
+    """Open tasks assigned to *user* that are overdue or due today.
+
+    Powers the dashboard pending-actions badge: only tasks the user can
+    still act on count, so archived projects and projects the user no
+    longer has access to are excluded.
+    """
+    return (
+        Task.objects.filter(
+            assignees=user,
+            project_id__in=user_project_ids(user),
+            project__archived_at__isnull=True,
+            due_date__lte=timezone.localdate(),
+        )
+        .exclude(status__category=TaskStatus.Category.DONE)
+        .count()
+    )
 
 
 def project_users(project):

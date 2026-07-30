@@ -45,6 +45,20 @@ class ProjectsConfig(AppConfig):
             )
         )
 
+        from workspace.core.module_registry import PendingActionProviderInfo
+
+        def _projects_pending_actions(user):
+            from workspace.projects.queries import pending_task_count
+
+            return pending_task_count(user)
+
+        registry.register_pending_action_provider(
+            PendingActionProviderInfo(
+                module_slug="projects",
+                pending_action_fn=_projects_pending_actions,
+            )
+        )
+
         from workspace.core.activity_registry import (
             ActivityProviderInfo,
             activity_registry,

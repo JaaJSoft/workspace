@@ -987,3 +987,11 @@ test('taskMatchesFilters ignores an empty status filter', () => {
   const dataset = { search: 'wr-1 fix login', status: 's1' };
   assert.equal(ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: '' }), true);
 });
+
+test('taskMatchesFilters skips rows without status metadata', () => {
+  const dataset = { search: 'wr-1 fix login' };
+  assert.equal(
+    ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: 's1' }),
+    true
+  );
+});

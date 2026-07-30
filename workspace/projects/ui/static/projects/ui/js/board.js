@@ -54,7 +54,13 @@ function taskMatchesFilters(dataset, filters) {
       return false;
     }
   }
-  if (filters.status && dataset.status !== filters.status) return false;
+  if (
+    filters.status &&
+    dataset.status !== undefined &&
+    dataset.status !== filters.status
+  ) {
+    return false;
+  }
   return true;
 }
 

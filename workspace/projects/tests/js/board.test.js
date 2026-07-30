@@ -995,3 +995,32 @@ test('taskMatchesFilters skips rows without status metadata', () => {
     true
   );
 });
+
+test('refresh targets the all-tasks partial when viewing tasks', () => {
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  const calls = [];
+  const board = ctx.projectBoard({
+    apiBase: '/api',
+    projectBase: '/projects/p',
+    writable: true,
+  });
+  board.currentView = 'tasks';
+  board.$ajax = (url) => calls.push(url);
+  board.refresh();
+  assert.deepStrictEqual(Array.from(calls), ['/projects/p/tasks']);
+});
+
+test('onPopState recognizes the tasks view', () => {
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.location = {
+    pathname: '/projects/p/tasks',
+    href: 'http://x.test/projects/p/tasks',
+  };
+  const board = ctx.projectBoard({
+    apiBase: '/api',
+    projectBase: '/projects/p',
+    writable: true,
+  });
+  board.onPopState();
+  assert.equal(board.currentView, 'tasks');
+});

@@ -505,6 +505,12 @@ class AllTasksViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         response = self.client.get(f"/projects/{self.project.uuid}/tasks")
         self.assertEqual(response.status_code, 404)
 
+    def test_sidebar_links_to_all_tasks(self):
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}")
+        self.assertContains(response, f"/projects/{self.project.uuid}/tasks")
+        self.assertContains(response, "All tasks")
+
     def test_backlog_rows_keep_bulk_controls(self):
         # Regression: the readonly flags must not leak into the backlog tab.
         backlog = self.project.statuses.get(name="Backlog")

@@ -335,6 +335,7 @@ function projectBoard(config) {
     refresh() {
       let url = config.projectBase;
       if (this.currentView === 'backlog') url += '/backlog';
+      else if (this.currentView === 'tasks') url += '/tasks';
       else if (this.currentView === 'settings') url += '/settings';
       else if (this.currentView !== 'overview') url += '/board';
       this.$ajax(url, { target: 'project-content' });
@@ -500,11 +501,13 @@ function projectBoard(config) {
       const path = window.location.pathname;
       this.currentView = path.endsWith('/backlog')
         ? 'backlog'
-        : path.endsWith('/board')
-          ? 'board'
-          : path.endsWith('/settings')
-            ? 'settings'
-            : 'overview';
+        : path.endsWith('/tasks')
+          ? 'tasks'
+          : path.endsWith('/board')
+            ? 'board'
+            : path.endsWith('/settings')
+              ? 'settings'
+              : 'overview';
       const task = new URL(window.location.href).searchParams.get('task');
       if (task && task !== this.panelTaskUuid) {
         this.panelTaskUuid = task;

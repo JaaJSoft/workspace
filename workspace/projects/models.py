@@ -216,6 +216,37 @@ class Task(models.Model):
         return f"{self.project.key}-{self.number}"
 
 
+class TaskComment(models.Model):
+    """User comment on a task."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="comments",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="task_comments",
+    )
+    body = models.TextField()
+    edited_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(
+                fields=["task", "created_at"], name="task_comment_task_created"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.author} on {self.task} ({self.created_at})"
+
+
 class TaskEvent(models.Model):
     class Type(models.TextChoices):
         CREATED = "created", "Created"

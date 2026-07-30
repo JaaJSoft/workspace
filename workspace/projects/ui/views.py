@@ -180,6 +180,7 @@ def _task_panel_context(user, project, role, task):
         "panel_task": task,
         "panel_events": events,
         "panel_action_ids": action_ids,
+        "panel_can_comment": "comment" in action_ids,
         "panel_description_html": render_task_description(task.description),
         "panel_task_data": {
             "uuid": str(task.uuid),

@@ -611,6 +611,7 @@ Use the `dialogs` partial for modal dialogs instead of inline modal HTML.
 
 - `app_logo.html` - Application logo
 - `breadcrumbs.html` - Breadcrumb navigation
+- `comments.html` - comment thread (list + collapsed-until-focused composer + inline edit) backed by `commentsComponent()` from `common/static/ui/js/comments.js`. Params: `list_url` (collection endpoint; item endpoints are `<list_url>/<uuid>`), `current_user_id`, `can_comment`. Used by the files properties panel and the task panel - reuse it for any new commentable entity instead of copying the markup.
 - `navbar.html` - Navigation bar
 - `refresh_button.html` - Alpine-AJAX refresh button (spins while `loading` is truthy). Params: `url_expr`, `target`, optional `loading_expr` / `title` / `size`.
 - `user_avatar.html` - User avatar display

@@ -1,8 +1,10 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import Label, Project, ProjectMember, Task, TaskStatus
+from .models import Label, Project, ProjectMember, Task, TaskComment, TaskStatus
 from .queries import get_project_role
 from .services.references import KEY_RE
 
@@ -255,3 +257,28 @@ class StatusReorderSerializer(serializers.Serializer):
 
     def validate_order(self, value):
         return _parse_uuid_list(value, "order")
+
+
+class TaskCommentAuthorSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="pk")
+    username = serializers.CharField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    avatar_url = serializers.SerializerMethodField()
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_avatar_url(self, obj):
+        return f"/api/v1/users/{obj.pk}/avatar"
+
+
+class TaskCommentSerializer(serializers.ModelSerializer):
+    author = TaskCommentAuthorSerializer(read_only=True)
+
+    class Meta:
+        model = TaskComment
+        fields = ["uuid", "task", "author", "body", "edited_at", "created_at"]
+        read_only_fields = fields
+
+
+class TaskCommentBodySerializer(serializers.Serializer):
+    body = serializers.CharField()

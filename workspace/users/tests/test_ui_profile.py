@@ -1,9 +1,12 @@
+from dataclasses import replace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
+
+from workspace.core.module_registry import registry
 
 User = get_user_model()
 
@@ -34,10 +37,17 @@ class ProfileAsyncFeedTests(TestCase):
 
 class ProfileActivityVisibilityTests(TestCase):
     """The profile activity tabs must follow the *viewer*'s module visibility:
-    a preview module (projects, staff-only by default) must not appear for a
-    non-staff viewer, on any profile. Uses the real registries."""
+    a staff-restricted preview module must not appear for a non-staff viewer,
+    on any profile. Uses the real registries, with the projects module forced
+    into preview for the duration (no real module ships as preview right now)."""
 
     def setUp(self):
+        mods = dict(registry._modules)
+        mods["projects"] = replace(mods["projects"], preview=True)
+        patcher = patch.object(registry, "_modules", mods)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         self.normal = User.objects.create_user(username="visnorm", password="pass123")
         self.staff = User.objects.create_user(
             username="visstaff", password="pass123", is_staff=True

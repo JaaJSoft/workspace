@@ -8,17 +8,20 @@ Meet Projects: a full task management app with kanban boards, a backlog, task re
 
 ### Projects
 
-- The new Projects app is out of preview and open to all. Organize work into projects, each with a kanban board and a hand-ordered backlog: drag tasks between columns, reorder them freely, and give each task a priority, a due date, labels, and assignees. Every user gets a personal project, and shared projects can be opened to individual members or to whole groups at once.
-- Every task carries a short reference like PRJ-42, shown on cards, in the backlog, and in activity history. Type it (or just the number) into search to jump straight to the task, or share its link with anyone on the project.
-- Click a task to open a detail panel alongside the board: edit the title, description (with Markdown), status, priority, due date, assignees, and labels in place, and follow the task's full activity history. The panel has its own link, so a task can be shared and opens right where you left it, back button included.
-- Discuss work where it happens: tasks now have comments. The task's creator, assignees, and previous commenters are notified of new replies and taken straight to the conversation.
-- The backlog is a dense, filterable list: search by text, filter by assignee, label, or priority (the same filters work on the board), select several tasks at once, and send them to the board in one move.
-- Each project has an overview page with task counts, members, labels, and a recent activity feed where each entry links to its task. Project activity also shows up in your dashboard and profile feeds.
-- Project admins get a full settings page: add, rename, recolor, and reorder board columns, manage labels, members and roles, attach or detach groups, and archive or delete the project.
-- You can now choose how long finished tasks stay visible in Done columns, from one day to forever, per project. Hidden tasks are never deleted and stay reachable through search and direct links.
-- Picking assignees and labels is a search-as-you-type affair with removable chips, and admins can create a new label on the fly right from the picker.
-- Projects and tasks appear in the global search, matching words from descriptions as well as titles.
-- The Projects tile on your home page shows a badge with your assigned tasks that are due today or overdue.
+The Projects app is out of preview and available to everyone. Here is what it brings:
+
+- **Board and backlog.** Each project has a kanban board and a hand-ordered backlog. Drag tasks between columns, reorder them freely, and give each task a priority, a due date, labels, and assignees.
+- **Personal and shared projects.** Every user gets a personal project for their own tasks; shared projects are opened to individual members or to whole groups at once, with admin and member roles.
+- **Task references.** Every task carries a short reference like PRJ-42, shown on cards, in the backlog, and in activity history. Typing it (or just the number) into search jumps straight to the task, and its link can be shared with anyone on the project.
+- **Task detail panel.** Clicking a task opens a panel alongside the board: title, description (with Markdown), status, priority, due date, assignees, and labels are all edited in place, with the task's full activity history below. The panel has its own URL and plays nice with the back button.
+- **Comments.** Each task has a comment thread; the task's creator, assignees, and previous commenters are notified of new replies and taken straight to the conversation.
+- **Filters and bulk actions.** Search by text or filter by assignee, label, or priority, on the board and in the backlog alike. In the backlog, several tasks can be selected and sent to the board in one move.
+- **Project overview.** A per-project home with task counts, members, labels, and a recent activity feed where each entry links to its task. Project activity also feeds into the dashboard and profile activity streams.
+- **Project settings.** Admins manage everything from a dedicated page: add, rename, recolor, and reorder board columns, curate labels, handle members and roles, attach or detach groups, and archive or delete the project.
+- **Tidy Done columns.** Each project decides how long completed tasks remain visible on the board, from one day to forever. Older ones leave the board but are not deleted: they still count in the overview and remain reachable through search and direct links.
+- **Quick pickers.** Assignees and labels are picked through search-as-you-type fields with removable chips, and admins can create a new label on the fly right from the picker.
+- **Search.** Projects and tasks appear in the global search, matching words from descriptions as well as titles.
+- **At a glance.** The Projects tile on the home page shows a badge with your assigned tasks that are due today or overdue.
 
 ### Dashboard
 

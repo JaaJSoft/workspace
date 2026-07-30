@@ -202,6 +202,40 @@ class ProjectDetailTests(ProjectTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class ProjectDoneRetentionApiTests(ProjectTestMixin, APITestCase):
+    def _patch(self, payload):
+        self.client.force_authenticate(self.admin)
+        return self.client.patch(
+            f"/api/v1/projects/{self.project.uuid}", payload, format="json"
+        )
+
+    def test_defaults_to_always_visible(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.get(f"/api/v1/projects/{self.project.uuid}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIsNone(resp.data["done_retention_days"])
+
+    def test_admin_sets_retention(self):
+        resp = self._patch({"done_retention_days": 30})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["done_retention_days"], 30)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.done_retention_days, 30)
+
+    def test_null_resets_to_always_visible(self):
+        self.project.done_retention_days = 14
+        self.project.save(update_fields=["done_retention_days"])
+        resp = self._patch({"done_retention_days": None})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.project.refresh_from_db()
+        self.assertIsNone(self.project.done_retention_days)
+
+    def test_out_of_range_values_are_rejected(self):
+        for bad in (0, -1, 366, "abc"):
+            resp = self._patch({"done_retention_days": bad})
+            self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST, bad)
+
+
 class ProjectKeyApiTests(ProjectTestMixin, APITestCase):
     def _patch(self, user, payload):
         self.client.force_authenticate(user)

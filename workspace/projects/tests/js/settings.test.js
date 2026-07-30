@@ -58,6 +58,110 @@ test('projectMembers.changeRole refetches members when the server refuses', asyn
   assert.equal(c.error, 'Cannot demote the last admin of a project.');
 });
 
+function generalWithFetch(fetchImpl) {
+  return loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
+    getCSRFToken: () => 'test-token',
+    fetch: fetchImpl,
+  }).projectSettingsGeneral({ apiBase: '/api/v1/projects/p1' });
+}
+
+function generalWithData(data) {
+  return loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
+    getCSRFToken: () => 'test-token',
+    document: {
+      getElementById: () => ({ textContent: JSON.stringify(data) }),
+    },
+  }).projectSettingsGeneral({ apiBase: '/api/v1/projects/p1' });
+}
+
+test('projectSettingsGeneral.init maps a null retention to the empty preset', () => {
+  const c = generalWithData({
+    name: 'P', description: '', key: 'P1', done_retention_days: null,
+  });
+  c.init();
+  assert.equal(c.doneRetentionDays, '');
+});
+
+test('projectSettingsGeneral.init reads the stored retention as a string', () => {
+  const c = generalWithData({
+    name: 'P', description: '', key: 'P1', done_retention_days: 14,
+  });
+  c.init();
+  assert.equal(c.doneRetentionDays, '14');
+});
+
+test('retentionSliderIndex maps always-visible to the last stop', () => {
+  const { retentionSliderIndex } = ctx().projectSettingsHelpers;
+  assert.equal(retentionSliderIndex(''), 5);
+  assert.equal(retentionSliderIndex(null), 5);
+});
+
+test('retentionSliderIndex maps a preset to its stop', () => {
+  const { retentionSliderIndex } = ctx().projectSettingsHelpers;
+  assert.equal(retentionSliderIndex('1'), 0);
+  assert.equal(retentionSliderIndex('7'), 1);
+  assert.equal(retentionSliderIndex('90'), 4);
+});
+
+test('retentionSliderIndex snaps an API-set value to the nearest stop', () => {
+  const { retentionSliderIndex } = ctx().projectSettingsHelpers;
+  assert.equal(retentionSliderIndex('21'), 2);
+  assert.equal(retentionSliderIndex('365'), 4);
+});
+
+test('retentionDaysFromIndex maps stops back to day strings', () => {
+  const { retentionDaysFromIndex } = ctx().projectSettingsHelpers;
+  assert.equal(retentionDaysFromIndex('0'), '1');
+  assert.equal(retentionDaysFromIndex(3), '30');
+  assert.equal(retentionDaysFromIndex(5), '');
+});
+
+test('projectSettingsGeneral.setRetentionIndex drives the canonical value', () => {
+  const c = generalWithFetch(async () => ({ ok: true }));
+  c.setRetentionIndex(1);
+  assert.equal(c.doneRetentionDays, '7');
+  c.setRetentionIndex('5');
+  assert.equal(c.doneRetentionDays, '');
+});
+
+test('projectSettingsGeneral.retentionSliderLabel describes the current stop', () => {
+  const c = generalWithFetch(async () => ({ ok: true }));
+  c.doneRetentionDays = '1';
+  assert.equal(c.retentionSliderLabel(), '1 day');
+  c.doneRetentionDays = '30';
+  assert.equal(c.retentionSliderLabel(), '30 days');
+  c.doneRetentionDays = '';
+  assert.equal(c.retentionSliderLabel(), 'Always');
+});
+
+test('projectSettingsGeneral.save sends the retention as a number', async () => {
+  let captured = null;
+  const c = generalWithFetch(async (url, options) => {
+    captured = { url, options };
+    return { ok: true };
+  });
+  c.name = 'P';
+  c.key = 'P1';
+  c.doneRetentionDays = '30';
+  await c.save();
+  assert.equal(JSON.parse(captured.options.body).done_retention_days, 30);
+});
+
+test('projectSettingsGeneral.save sends null for the always-visible preset', async () => {
+  let captured = null;
+  const c = generalWithFetch(async (url, options) => {
+    captured = { url, options };
+    return { ok: true };
+  });
+  c.name = 'P';
+  c.key = 'P1';
+  c.doneRetentionDays = '';
+  await c.save();
+  const body = JSON.parse(captured.options.body);
+  assert.ok('done_retention_days' in body);
+  assert.strictEqual(body.done_retention_days, null);
+});
+
 // Alpine treats destroy() as a lifecycle hook and auto-invokes it when the
 // element leaves the DOM (e.g. an alpine-ajax view swap). An action named
 // destroy() therefore fires on navigation - the delete-project dialog used

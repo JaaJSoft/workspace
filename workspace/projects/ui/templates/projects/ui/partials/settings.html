@@ -43,6 +43,30 @@
           <span class="label-text-alt">Used in task references ({{ project.key }}-42). Changing it changes every reference shown.</span>
         </div>
       </label>
+      <div class="form-control w-full">
+        <div class="label py-1">
+          <span class="label-text">Completed tasks visibility</span>
+          <span class="label-text-alt font-medium text-accent" x-text="retentionSliderLabel()"></span>
+        </div>
+        <input type="range" min="0" max="5" step="1"
+               class="range range-sm range-accent"
+               aria-label="Completed tasks visibility"
+               :aria-valuetext="retentionSliderLabel()"
+               :value="retentionIndex()"
+               @input="setRetentionIndex($event.target.value)"
+               {% if not writable %}disabled{% endif %}>
+        <div class="flex justify-between px-1.5 mt-1 text-xs text-base-content/50">
+          <span>1d</span>
+          <span>7d</span>
+          <span>14d</span>
+          <span>30d</span>
+          <span>90d</span>
+          <span>&infin;</span>
+        </div>
+        <div class="label py-1">
+          <span class="label-text-alt">Tasks completed longer ago than this are hidden from the board's Done columns. They are not deleted and still count everywhere else.</span>
+        </div>
+      </div>
       <div class="flex justify-end">
         <button type="button" class="btn btn-accent btn-sm" @click="save()"
                 :disabled="saving || !name.trim() || !key.trim() || !writable">

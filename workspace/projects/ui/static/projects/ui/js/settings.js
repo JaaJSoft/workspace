@@ -33,11 +33,39 @@ function normalizeProjectKey(value) {
     .toUpperCase();
 }
 
+// Stops of the done-retention slider; the stop after the last preset means
+// "always visible" ('' / null).
+var RETENTION_PRESETS = [1, 7, 14, 30, 90];
+
+// Snaps to the nearest preset so an API-set value (e.g. 21) still lands on
+// a valid stop instead of leaving the slider out of range.
+function retentionSliderIndex(days) {
+  if (days === '' || days == null) return RETENTION_PRESETS.length;
+  const value = Number(days);
+  let best = 0;
+  for (let i = 1; i < RETENTION_PRESETS.length; i++) {
+    if (
+      Math.abs(RETENTION_PRESETS[i] - value) <
+      Math.abs(RETENTION_PRESETS[best] - value)
+    ) {
+      best = i;
+    }
+  }
+  return best;
+}
+
+function retentionDaysFromIndex(index) {
+  const i = Number(index);
+  return i >= RETENTION_PRESETS.length ? '' : String(RETENTION_PRESETS[i]);
+}
+
 function projectSettingsGeneral(config) {
   return {
     name: '',
     description: '',
     key: '',
+    // Select model: preset day count as a string, '' = always visible.
+    doneRetentionDays: '',
     saving: false,
     saved: false,
     error: '',
@@ -50,6 +78,25 @@ function projectSettingsGeneral(config) {
       this.name = data.name;
       this.description = data.description;
       this.key = data.key;
+      this.doneRetentionDays =
+        data.done_retention_days == null ? '' : String(data.done_retention_days);
+    },
+
+    retentionIndex() {
+      return retentionSliderIndex(this.doneRetentionDays);
+    },
+
+    setRetentionIndex(index) {
+      this.doneRetentionDays = retentionDaysFromIndex(index);
+    },
+
+    retentionSliderLabel() {
+      if (this.doneRetentionDays === '') return 'Always';
+      return (
+        this.doneRetentionDays +
+        ' day' +
+        (this.doneRetentionDays === '1' ? '' : 's')
+      );
     },
 
     async save() {
@@ -61,6 +108,8 @@ function projectSettingsGeneral(config) {
           name: this.name,
           description: this.description,
           key: normalizeProjectKey(this.key),
+          done_retention_days:
+            this.doneRetentionDays === '' ? null : Number(this.doneRetentionDays),
         };
         const resp = await fetch(config.apiBase, {
           method: 'PATCH',
@@ -679,4 +728,6 @@ window.projectMembers = projectMembers;
 window.projectSettingsHelpers = {
   defaultMoveTarget: defaultMoveTarget,
   normalizeProjectKey: normalizeProjectKey,
+  retentionSliderIndex: retentionSliderIndex,
+  retentionDaysFromIndex: retentionDaysFromIndex,
 };

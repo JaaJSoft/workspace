@@ -6,7 +6,7 @@
 # Setup
 uv sync                                        # install dependencies
 uv run python manage.py migrate                # apply migrations
-uv run python manage.py runserver              # dev server on :8000
+uv run python manage.py runserver 127.0.0.1:$port --noreload   # NEVER :8000 in agent sessions - pick a free port, see .claude/skills/running-the-app
 
 # Tests (per module - matches CI matrix)
 uv run python manage.py test workspace.<module>           # e.g. workspace.files

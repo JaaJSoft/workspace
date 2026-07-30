@@ -541,11 +541,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
 
       switch (action) {
         case 'info':
-          this.showInfoPanel = true;
-          if (this.activeConversation) {
-            this.loadConversationStats(this.activeConversation.uuid);
-            this.loadConversationMedia(this.activeConversation.uuid);
-          }
+          this.openInfoPanel();
           break;
         case 'copy_link':
           this.copyConversationLink(uuid);

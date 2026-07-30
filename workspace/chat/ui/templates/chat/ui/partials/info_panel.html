@@ -411,14 +411,14 @@
       </template>
 
       <!-- No search results -->
-      <div x-show="!loadingBotMemories && botMemories.length > 0 && filteredBotMemories.length === 0" class="text-xs text-base-content/40 text-center py-2">
+      <div x-show="!loadingBotMemories && botMemories.length > 0 && filteredBotMemories().length === 0" class="text-xs text-base-content/40 text-center py-2">
         No matches
       </div>
 
       <!-- Memory list -->
       <template x-if="!loadingBotMemories && botMemories.length > 0">
         <ul class="space-y-1">
-          <template x-for="mem in filteredBotMemories" :key="mem.id">
+          <template x-for="mem in filteredBotMemories()" :key="mem.id">
             <li class="group flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors">
               <i data-lucide="brain" class="w-3.5 h-3.5 text-secondary flex-shrink-0 mt-0.5"></i>
               <div class="flex-1 min-w-0">

@@ -27,20 +27,34 @@ window.chatPanelsMixin = function chatPanelsMixin() {
     searchFiltersExpanded: false,
 
     // ── Info panel ───────────────────────────────────────────
-    toggleInfoPanel() {
-      this.showInfoPanel = !this.showInfoPanel;
-      if (this.showInfoPanel) {
-        this.closeSearchPanel();
-        if (this.activeConversation) {
-          this.loadConversationStats(this.activeConversation.uuid);
-          this.loadPinnedMessages(this.activeConversation.uuid);
-          this.loadConversationMedia(this.activeConversation.uuid);
-          if (this.isBotConversation(this.activeConversation)) {
-            this.loadBotMemories();
-            this.loadScheduledMessages(this.activeConversation.uuid);
-          }
+    // Single entry point for showing the panel: every section it renders is
+    // populated here, so a new caller can never open a half-empty panel.
+    openInfoPanel({ scrollTo = null } = {}) {
+      this.showInfoPanel = true;
+      this.closeSearchPanel();
+      if (this.activeConversation) {
+        const conversationId = this.activeConversation.uuid;
+        this.loadConversationStats(conversationId);
+        this.loadPinnedMessages(conversationId);
+        this.loadConversationMedia(conversationId);
+        if (this.isBotConversation(this.activeConversation)) {
+          this.loadBotMemories();
+          this.loadScheduledMessages(conversationId);
         }
       }
+      if (scrollTo) {
+        this.$nextTick(() => {
+          document.getElementById(scrollTo)?.scrollIntoView({ behavior: 'smooth' });
+        });
+      }
+    },
+
+    toggleInfoPanel() {
+      if (this.showInfoPanel) {
+        this.showInfoPanel = false;
+        return;
+      }
+      this.openInfoPanel();
     },
 
     async loadConversationStats(conversationId) {

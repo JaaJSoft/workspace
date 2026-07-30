@@ -441,6 +441,50 @@ The bug is invisible: the second pass overwrites the first with the same data, n
 - `x-init` is only for **inline expressions** on components that don't define an `init()` method (e.g., `<div x-data="{ open: false }" x-init="$watch('open', ...)">`).
 - When adding event listeners inside `init()`, remember they will be added once per mount - if you ever do see two listeners firing, suspect a duplicate `x-init` or a duplicate `x-data` instantiation of the same component (see `filePreferences()` in `files/ui/index.html`, instantiated twice intentionally - its `init()` should be guarded against re-fetching).
 
+### Never put a `get` accessor in a spread mixin - use a method
+
+Components composed from mixins (`chatApp()`, `mailApp()`, `fileBrowser()`…) build themselves with object spread:
+
+```js
+return {
+  ...chatBotMixin(),
+  ...chatPanelsMixin(),
+  ...
+};
+```
+
+Object spread copies **values**, not property descriptors. A `get foo()` inside a mixin is therefore *called once* at spread time and the result is baked in as a plain data property. It never recomputes, Alpine has nothing to track, and the UI renders whatever the state happened to be before any fetch resolved - usually an empty array.
+
+```js
+// ❌ WRONG - inside a mixin that gets spread. Frozen to [] forever.
+window.chatBotMixin = function chatBotMixin() {
+  return {
+    botMemories: [],
+    get filteredBotMemories() { return this.botMemories.filter(...); },
+  };
+};
+
+// ✅ Correct - a method is copied as a function and re-evaluated on every read.
+window.chatBotMixin = function chatBotMixin() {
+  return {
+    botMemories: [],
+    filteredBotMemories() { return this.botMemories.filter(...); },
+  };
+};
+```
+
+```html
+<template x-for="mem in filteredBotMemories()" :key="mem.id">
+```
+
+The failure mode is silent and easy to misread: no console error, and sibling bindings that read the raw state (`x-text="botMemories.length"`) keep working, so the badge shows "3" next to an empty list. We shipped this twice - the AI Memory panel in chat, and the hidden-folders picker in mail.
+
+**Rules:**
+- A mixin (any function whose result is spread into a component) must never expose a `get` accessor. Write a method and call it with `()` from the template.
+- A getter is fine **only** on the component's own root object literal - the one that isn't spread into anything. `filteredHiddenFolders` in `mail/ui/static/mail/ui/js/mail.js` is declared there for exactly this reason; keep the comment that says why.
+- Reviewing a mixin: `grep -n "get [a-zA-Z_]*()" workspace/*/ui/static/*/ui/js/*.js` and check each hit is on a root literal.
+- Getters on Alpine **stores** (`Alpine.store(...)`) are safe - stores are registered as objects, not spread.
+
 ### Embedding view data into JS - use `|json_script`, never `orjson.dumps + |safe`
 
 When a Django view needs to hand off data to client-side JS (initial state, server-rendered preferences, serialized querysets that would otherwise force a redundant API call), **pass the raw Python object in context** and render it with Django's built-in `|json_script` filter:

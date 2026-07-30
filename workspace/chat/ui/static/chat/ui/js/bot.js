@@ -118,7 +118,12 @@ window.chatBotMixin = function chatBotMixin() {
     },
 
     // ── Bot memories ──────────────────────────────────────────
-    get filteredBotMemories() {
+    // A method, not a getter: chatApp() composes its mixins with object
+    // spread, and `{...mixin()}` copies a getter as the value it returned at
+    // spread time — freezing the list to the empty array it held before the
+    // fetch. A method keeps being re-evaluated, so Alpine tracks
+    // botMemories / memorySearch and re-renders when they change.
+    filteredBotMemories() {
       if (!this.memorySearch) return this.botMemories;
       const q = this.memorySearch.toLowerCase();
       return this.botMemories.filter(m =>

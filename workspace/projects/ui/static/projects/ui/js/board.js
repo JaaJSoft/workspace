@@ -33,7 +33,7 @@ function fieldAction(field) {
 }
 
 function emptyTaskFilters() {
-  return { q: '', assignee: '', label: '', priority: '' };
+  return { q: '', assignee: '', label: '', priority: '', status: '' };
 }
 
 function taskMatchesFilters(dataset, filters) {
@@ -54,6 +54,7 @@ function taskMatchesFilters(dataset, filters) {
       return false;
     }
   }
+  if (filters.status && dataset.status !== filters.status) return false;
   return true;
 }
 
@@ -346,7 +347,8 @@ function projectBoard(config) {
         this.filters.q.trim() ||
           this.filters.assignee ||
           this.filters.label ||
-          this.filters.priority
+          this.filters.priority ||
+          this.filters.status
       );
     },
 
@@ -368,6 +370,10 @@ function projectBoard(config) {
 
     backlogVisibleCount() {
       return this._visibleTaskEls('#backlog').length;
+    },
+
+    allTasksVisibleCount() {
+      return this._visibleTaskEls('#all-tasks').length;
     },
 
     visibleBacklogUuids() {

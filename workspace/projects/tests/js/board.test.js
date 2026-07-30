@@ -970,3 +970,20 @@ test('panel addLabel is gated on the set_labels action', () => {
   panelWithActions([], calls).addLabel({ uuid: 'l2', name: 'Chore', color: '' });
   assert.equal(calls.length, 0);
 });
+
+test('taskMatchesFilters filters by status', () => {
+  const dataset = { search: 'wr-1 fix login', priority: 'high', status: 's1' };
+  assert.equal(
+    ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: 's1' }),
+    true
+  );
+  assert.equal(
+    ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: 's2' }),
+    false
+  );
+});
+
+test('taskMatchesFilters ignores an empty status filter', () => {
+  const dataset = { search: 'wr-1 fix login', status: 's1' };
+  assert.equal(ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: '' }), true);
+});

@@ -514,6 +514,18 @@ class AllTasksViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(response, "Select task")
         self.assertContains(response, 'draggable="true"')
 
+    def test_status_filter_renders_only_on_all_tasks_view(self):
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/tasks")
+        self.assertContains(response, 'aria-label="Filter by status"')
+        self.assertContains(response, "All statuses")
+        for status in self.project.statuses.all():
+            self.assertContains(response, f'<option value="{status.uuid}">')
+        response = self.client.get(f"/projects/{self.project.uuid}/backlog")
+        self.assertNotContains(response, 'aria-label="Filter by status"')
+        response = self.client.get(f"/projects/{self.project.uuid}/board")
+        self.assertNotContains(response, 'aria-label="Filter by status"')
+
 
 class BoardLabelSelectorTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
     """Task modal label combobox: admins get inline create, members only pick."""

@@ -7,6 +7,7 @@ from .viewsets import (
     MemberViewSet,
     ProjectViewSet,
     StatusViewSet,
+    TaskCommentViewSet,
     TaskViewSet,
 )
 
@@ -25,6 +26,10 @@ task_reorder = TaskViewSet.as_view({"post": "reorder"})
 task_move = TaskViewSet.as_view({"post": "move"})
 task_detail = TaskViewSet.as_view(
     {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
+)
+task_comments = TaskCommentViewSet.as_view({"get": "list", "post": "create"})
+task_comment_detail = TaskCommentViewSet.as_view(
+    {"patch": "partial_update", "delete": "destroy"}
 )
 
 urlpatterns = [
@@ -87,6 +92,16 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>",
         task_detail,
         name="project-task-detail",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/comments",
+        task_comments,
+        name="project-task-comments",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/comments/<uuid:uuid>",
+        task_comment_detail,
+        name="project-task-comment-detail",
     ),
     path("api/v1/", include(router.urls)),
 ]

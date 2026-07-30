@@ -48,6 +48,15 @@ class SetLabelsAction(BaseProjectAction):
 
 
 @ProjectActionRegistry.register
+class CommentTaskAction(BaseProjectAction):
+    id = "comment"
+    label = "Comment"
+    icon = "message-square"
+    category = ActionCategory.EDIT
+    target_types = ("task",)
+
+
+@ProjectActionRegistry.register
 class DeleteTaskAction(BaseProjectAction):
     id = "delete"
     label = "Delete"

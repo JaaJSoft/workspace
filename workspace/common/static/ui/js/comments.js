@@ -1,9 +1,11 @@
-// ── Task Comments ──────────────────────────────────────────
+// ── Shared comments component ──────────────────────────────
+// Backs the comment thread UI (files properties panel, task panel).
+// listUrl is the collection endpoint; item endpoints are `${listUrl}/<uuid>`.
+// Pair with the "ui/partials/comments.html" template partial.
 
-window.taskComments = function taskComments(projectUuid, taskUuid, currentUserId, canComment) {
+window.commentsComponent = function commentsComponent(listUrl, currentUserId, canComment) {
   return {
-    projectUuid,
-    taskUuid,
+    listUrl,
     currentUserId,
     canComment,
     comments: [],
@@ -19,8 +21,7 @@ window.taskComments = function taskComments(projectUuid, taskUuid, currentUserId
     },
 
     _url(commentUuid) {
-      const base = `/api/v1/projects/${this.projectUuid}/tasks/${this.taskUuid}/comments`;
-      return commentUuid ? `${base}/${commentUuid}` : base;
+      return commentUuid ? `${this.listUrl}/${commentUuid}` : this.listUrl;
     },
 
     async loadComments() {

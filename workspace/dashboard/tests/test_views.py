@@ -1,3 +1,4 @@
+from dataclasses import replace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -6,7 +7,7 @@ from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
-from workspace.core.module_registry import ModuleInfo
+from workspace.core.module_registry import ModuleInfo, registry
 from workspace.dashboard.views import (
     ACTIVITY_LIMIT,
     _build_dashboard_context,
@@ -448,10 +449,17 @@ class GetActivityContextTests(TestCase):
 
 class ActivityPreviewVisibilityTests(TestCase):
     """The activity source tabs must not expose modules the user cannot see
-    (preview modules restricted to staff/admin). Uses the real registries:
-    the projects module is registered with preview=True."""
+    (preview modules restricted to staff/admin). Uses the real registries,
+    with the projects module forced into preview for the duration (no real
+    module ships as preview right now)."""
 
     def setUp(self):
+        mods = dict(registry._modules)
+        mods["projects"] = replace(mods["projects"], preview=True)
+        patcher = patch.object(registry, "_modules", mods)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         self.normal = User.objects.create_user(
             username="actnormal",
             password="pass123",

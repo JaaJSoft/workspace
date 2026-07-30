@@ -143,7 +143,21 @@ x-data="projectBoard({
 <dialog id="new-project-dialog" class="modal">
   <div class="modal-box max-w-sm"
        x-data="{ creating: false, name: '', description: '', error: '' }">
-    <h2 class="font-semibold mb-3">New project</h2>
+    <div class="flex items-start justify-between gap-3 mb-4">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="bg-accent/10 text-accent rounded-lg p-2 shrink-0">
+          <i data-lucide="square-kanban" class="w-5 h-5"></i>
+        </div>
+        <div class="min-w-0">
+          <h3 class="font-bold text-lg">New project</h3>
+          <p class="text-sm text-base-content/60">Board and backlog for your tasks</p>
+        </div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm btn-square" aria-label="Close"
+              @click="document.getElementById('new-project-dialog').close()">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
     <template x-if="error">
       {% include "ui/partials/inline_alert.html" with type="error" class="mb-2" slot='<span x-text="error"></span>' %}
     </template>

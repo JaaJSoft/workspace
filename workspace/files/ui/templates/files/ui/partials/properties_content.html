@@ -268,7 +268,7 @@ Context:
             <template x-if="editingId === comment.uuid">
               <div class="mt-1 space-y-2">
                 <textarea
-                  class="textarea textarea-bordered textarea-sm w-full"
+                  class="textarea textarea-bordered textarea-sm w-full leading-snug"
                   rows="2"
                   x-model="editBody"
                   @keydown.ctrl.enter="saveEdit(comment.uuid)"
@@ -289,7 +289,7 @@ Context:
     <!-- Add comment form -->
     <div class="pt-2 border-t border-base-300 space-y-2">
       <textarea
-        class="textarea textarea-bordered textarea-sm w-full"
+        class="textarea textarea-bordered textarea-sm w-full leading-snug"
         rows="2"
         placeholder="Add a comment..."
         x-model="newBody"

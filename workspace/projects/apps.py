@@ -17,7 +17,6 @@ class ProjectsConfig(AppConfig):
                 color="accent",
                 url="/projects",
                 order=35,
-                preview=True,
             )
         )
 

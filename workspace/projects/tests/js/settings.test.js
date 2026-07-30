@@ -90,6 +90,50 @@ test('projectSettingsGeneral.init reads the stored retention as a string', () =>
   assert.equal(c.doneRetentionDays, '14');
 });
 
+test('retentionSliderIndex maps always-visible to the last stop', () => {
+  const { retentionSliderIndex } = ctx().projectSettingsHelpers;
+  assert.equal(retentionSliderIndex(''), 5);
+  assert.equal(retentionSliderIndex(null), 5);
+});
+
+test('retentionSliderIndex maps a preset to its stop', () => {
+  const { retentionSliderIndex } = ctx().projectSettingsHelpers;
+  assert.equal(retentionSliderIndex('1'), 0);
+  assert.equal(retentionSliderIndex('7'), 1);
+  assert.equal(retentionSliderIndex('90'), 4);
+});
+
+test('retentionSliderIndex snaps an API-set value to the nearest stop', () => {
+  const { retentionSliderIndex } = ctx().projectSettingsHelpers;
+  assert.equal(retentionSliderIndex('21'), 2);
+  assert.equal(retentionSliderIndex('365'), 4);
+});
+
+test('retentionDaysFromIndex maps stops back to day strings', () => {
+  const { retentionDaysFromIndex } = ctx().projectSettingsHelpers;
+  assert.equal(retentionDaysFromIndex('0'), '1');
+  assert.equal(retentionDaysFromIndex(3), '30');
+  assert.equal(retentionDaysFromIndex(5), '');
+});
+
+test('projectSettingsGeneral.setRetentionIndex drives the canonical value', () => {
+  const c = generalWithFetch(async () => ({ ok: true }));
+  c.setRetentionIndex(1);
+  assert.equal(c.doneRetentionDays, '7');
+  c.setRetentionIndex('5');
+  assert.equal(c.doneRetentionDays, '');
+});
+
+test('projectSettingsGeneral.retentionSliderLabel describes the current stop', () => {
+  const c = generalWithFetch(async () => ({ ok: true }));
+  c.doneRetentionDays = '1';
+  assert.equal(c.retentionSliderLabel(), '1 day');
+  c.doneRetentionDays = '30';
+  assert.equal(c.retentionSliderLabel(), '30 days');
+  c.doneRetentionDays = '';
+  assert.equal(c.retentionSliderLabel(), 'Always');
+});
+
 test('projectSettingsGeneral.save sends the retention as a number', async () => {
   let captured = null;
   const c = generalWithFetch(async (url, options) => {

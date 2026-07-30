@@ -38,6 +38,8 @@ function projectSettingsGeneral(config) {
     name: '',
     description: '',
     key: '',
+    // Select model: preset day count as a string, '' = always visible.
+    doneRetentionDays: '',
     saving: false,
     saved: false,
     error: '',
@@ -50,6 +52,8 @@ function projectSettingsGeneral(config) {
       this.name = data.name;
       this.description = data.description;
       this.key = data.key;
+      this.doneRetentionDays =
+        data.done_retention_days == null ? '' : String(data.done_retention_days);
     },
 
     async save() {
@@ -61,6 +65,8 @@ function projectSettingsGeneral(config) {
           name: this.name,
           description: this.description,
           key: normalizeProjectKey(this.key),
+          done_retention_days:
+            this.doneRetentionDays === '' ? null : Number(this.doneRetentionDays),
         };
         const resp = await fetch(config.apiBase, {
           method: 'PATCH',

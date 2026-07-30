@@ -17,6 +17,9 @@ class ProjectSerializer(serializers.ModelSerializer):
     groups = serializers.PrimaryKeyRelatedField(
         queryset=Group.objects.all(), many=True, required=False
     )
+    done_retention_days = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1, max_value=365
+    )
     my_role = serializers.SerializerMethodField()
 
     class Meta:
@@ -28,6 +31,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "description",
             "type",
             "groups",
+            "done_retention_days",
             "archived_at",
             "my_role",
             "created_at",

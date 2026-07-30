@@ -18,6 +18,9 @@ class Project(models.Model):
     key = models.CharField(max_length=10, unique=True)
     # Monotone counter behind Task.number: never recomputed, numbers never reused.
     next_task_number = models.PositiveIntegerField(default=1)
+    # Days a completed task stays on the board's done columns; null = forever.
+    # Board-only display filter: hidden tasks stay in counts, search and links.
+    done_retention_days = models.PositiveIntegerField(null=True, blank=True)
     # Every attached group grants its members plain member access; admin
     # rights only ever come from a ProjectMember row.
     groups = models.ManyToManyField(

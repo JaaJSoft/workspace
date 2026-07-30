@@ -58,6 +58,66 @@ test('projectMembers.changeRole refetches members when the server refuses', asyn
   assert.equal(c.error, 'Cannot demote the last admin of a project.');
 });
 
+function generalWithFetch(fetchImpl) {
+  return loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
+    getCSRFToken: () => 'test-token',
+    fetch: fetchImpl,
+  }).projectSettingsGeneral({ apiBase: '/api/v1/projects/p1' });
+}
+
+function generalWithData(data) {
+  return loadScript('workspace/projects/ui/static/projects/ui/js/settings.js', {
+    getCSRFToken: () => 'test-token',
+    document: {
+      getElementById: () => ({ textContent: JSON.stringify(data) }),
+    },
+  }).projectSettingsGeneral({ apiBase: '/api/v1/projects/p1' });
+}
+
+test('projectSettingsGeneral.init maps a null retention to the empty preset', () => {
+  const c = generalWithData({
+    name: 'P', description: '', key: 'P1', done_retention_days: null,
+  });
+  c.init();
+  assert.equal(c.doneRetentionDays, '');
+});
+
+test('projectSettingsGeneral.init reads the stored retention as a string', () => {
+  const c = generalWithData({
+    name: 'P', description: '', key: 'P1', done_retention_days: 14,
+  });
+  c.init();
+  assert.equal(c.doneRetentionDays, '14');
+});
+
+test('projectSettingsGeneral.save sends the retention as a number', async () => {
+  let captured = null;
+  const c = generalWithFetch(async (url, options) => {
+    captured = { url, options };
+    return { ok: true };
+  });
+  c.name = 'P';
+  c.key = 'P1';
+  c.doneRetentionDays = '30';
+  await c.save();
+  assert.equal(JSON.parse(captured.options.body).done_retention_days, 30);
+});
+
+test('projectSettingsGeneral.save sends null for the always-visible preset', async () => {
+  let captured = null;
+  const c = generalWithFetch(async (url, options) => {
+    captured = { url, options };
+    return { ok: true };
+  });
+  c.name = 'P';
+  c.key = 'P1';
+  c.doneRetentionDays = '';
+  await c.save();
+  const body = JSON.parse(captured.options.body);
+  assert.ok('done_retention_days' in body);
+  assert.strictEqual(body.done_retention_days, null);
+});
+
 // Alpine treats destroy() as a lifecycle hook and auto-invokes it when the
 // element leaves the DOM (e.g. an alpine-ajax view swap). An action named
 // destroy() therefore fires on navigation - the delete-project dialog used

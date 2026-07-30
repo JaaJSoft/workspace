@@ -113,12 +113,20 @@
     </section>
   {% endif %}
 
-  {% if show_my_tasks %}
-    {# ── My tasks (loaded async via alpine-ajax) ── #}
-    <section class="max-w-4xl mx-auto w-full">
+  {# ── My tasks: async load; empty hidden slot kept so the prefs toggle can swap it live ── #}
+  <section
+    id="dashboard-tasks"
+    class="max-w-4xl mx-auto w-full{% if not show_my_tasks %} hidden{% endif %}"
+    {% if show_my_tasks %}
+    x-data="{}"
+    x-init="$ajax('{% url 'dashboard:tasks_fragment' %}')"
+    @ajax:error="$el.replaceChildren()"
+    {% endif %}
+  >
+    {% if show_my_tasks %}
       {% include 'dashboard/partials/my_tasks_skeleton.html' %}
-    </section>
-  {% endif %}
+    {% endif %}
+  </section>
 
   {# ── Activity feed ── #}
   <section class="max-w-4xl mx-auto w-full">
@@ -323,6 +331,13 @@ function dashboardPrefsForm() {
     hidden: apps.filter(a => a.hidden).map(a => a.slug),
     isVisible(slug) {
       return !this.hidden.includes(slug);
+    },
+    toggleMyTasks() {
+      // Persist first, then re-fetch the section: the server decides whether
+      // the widget or the empty hidden slot comes back.
+      this.save('show_my_tasks', this.showMyTasks).then(() => {
+        this.$ajax('{% url 'dashboard:tasks_fragment' %}', { target: 'dashboard-tasks' });
+      });
     },
     toggleApp(slug, visible) {
       if (visible) {

@@ -29,6 +29,7 @@
     >
   </label>
 
+  {% if my_tasks_available %}
   <label class="flex items-center justify-between gap-4">
     <div>
       <div class="font-medium text-sm">Show my tasks</div>
@@ -38,9 +39,10 @@
       type="checkbox"
       class="toggle toggle-sm toggle-primary"
       x-model="showMyTasks"
-      @change="save('show_my_tasks', showMyTasks)"
+      @change="toggleMyTasks()"
     >
   </label>
+  {% endif %}
 
   <div
     class="pt-3 border-t border-base-300"

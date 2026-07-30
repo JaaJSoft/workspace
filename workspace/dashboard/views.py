@@ -15,12 +15,15 @@ from workspace.core.services.activity import (
     get_sources,
     get_usage_stats,
 )
-from workspace.core.services.module_visibility import visible_modules
+from workspace.core.services.module_visibility import (
+    is_module_slug_visible,
+    visible_modules,
+)
 from workspace.projects.queries import assigned_open_tasks
 from workspace.users.services.settings import get_module_settings, get_setting
 
 ACTIVITY_LIMIT = 10
-MY_TASKS_LIMIT = 10
+MY_TASKS_LIMIT = 5
 
 
 def _get_upcoming_events(user):
@@ -114,12 +117,16 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
     dashboard_settings = get_module_settings(user, "dashboard")
     modules, dashboard_apps = _dashboard_modules(user)
 
+    my_tasks_available = is_module_slug_visible(user, "projects")
+
     context = {
         "modules": modules,
         "dashboard_apps": dashboard_apps,
         "show_upcoming_events": dashboard_settings.get("show_upcoming_events", True),
         "show_upcoming_empty": dashboard_settings.get("show_upcoming_empty", True),
-        "show_my_tasks": dashboard_settings.get("show_my_tasks", True),
+        "my_tasks_available": my_tasks_available,
+        "show_my_tasks": my_tasks_available
+        and dashboard_settings.get("show_my_tasks", True),
         "usage_stats": get_usage_stats(user.id),
         "storage_quota": django_settings.STORAGE_QUOTA_BYTES,
     }
@@ -173,15 +180,20 @@ def upcoming_fragment(request):
 
 @login_required
 def tasks_fragment(request):
-    """Dashboard my-tasks widget, loaded async via alpine-ajax."""
-    return render(
-        request,
-        "dashboard/partials/my_tasks.html",
-        {
-            "tasks": assigned_open_tasks(request.user)[:MY_TASKS_LIMIT],
-            "today": timezone.localdate(),
-        },
+    """Dashboard my-tasks widget, loaded async via alpine-ajax.
+
+    When the widget is disabled or the projects module is not visible to the
+    user, the response is the empty (hidden) slot: the prefs toggle swaps the
+    section live in both directions, so the target id must always render.
+    """
+    show = is_module_slug_visible(request.user, "projects") and get_setting(
+        request.user, "dashboard", "show_my_tasks", default=True
     )
+    context = {"show_my_tasks": show}
+    if show:
+        context["tasks"] = assigned_open_tasks(request.user)[:MY_TASKS_LIMIT]
+        context["today"] = timezone.localdate()
+    return render(request, "dashboard/partials/my_tasks.html", context)
 
 
 @login_required

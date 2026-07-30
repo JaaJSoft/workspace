@@ -18,8 +18,12 @@ The login form authenticates by USERNAME, never by email (stock Django `ModelBac
 ```powershell
 uv run python manage.py migrate
 uv run python scripts/seed_demo.py --users 10 --seed 42
-uv run python manage.py runserver   # http://localhost:8000/login -> demo / demo1234
+$port = uv run python -c "import socket; s=socket.socket(); s.bind(('127.0.0.1', 0)); print(s.getsockname()[1])"
+"PORT=$port"
+uv run python manage.py runserver 127.0.0.1:$port --noreload   # http://127.0.0.1:<port>/login -> demo / demo1234
 ```
+
+Never use the default port 8000: parallel agent tasks share localhost and their servers collide (see the running-the-app skill - including the rule to never kill whatever holds a busy port).
 
 No Redis or Celery worker is needed: without `REDIS_URL` the app falls back to LocMem cache + DB sessions, and `DEBUG` (default `True`) makes Celery tasks run eagerly in-process.
 
@@ -40,7 +44,9 @@ $env:DATABASE_URL = "sqlite:///$($tmp -replace '\\','/')/db.sqlite3"
 $env:MEDIA_ROOT = $tmp
 uv run python manage.py migrate
 uv run python scripts/seed_demo.py --users 3 --seed 42
-uv run python manage.py runserver
+$port = uv run python -c "import socket; s=socket.socket(); s.bind(('127.0.0.1', 0)); print(s.getsockname()[1])"
+"PORT=$port"
+uv run python manage.py runserver 127.0.0.1:$port --noreload
 ```
 
 Env vars do not persist across shell tool calls: chain migrate/seed/runserver in the same call, or re-set the vars in each call.

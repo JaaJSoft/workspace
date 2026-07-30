@@ -20,11 +20,16 @@
   <span class="flex-1 min-w-0 flex items-center gap-2">
     <span class="text-xs font-mono text-base-content/50 shrink-0">{{ project.key }}-{{ task.number }}</span>
     <span class="text-sm font-medium truncate">{{ task.title }}</span>
-    {% for label in task.labels.all %}
-      {% include "projects/ui/partials/_label_chip.html" with class="shrink-0 hidden lg:inline-flex" %}
-    {% endfor %}
+    {% if task.labels.all %}
+      {# ml-auto packs the chips against the priority column so they line up across rows. #}
+      <span class="ml-auto hidden lg:flex items-center gap-1 shrink-0">
+        {% for label in task.labels.all %}
+          {% include "projects/ui/partials/_label_chip.html" with size="sm" class="shrink-0" %}
+        {% endfor %}
+      </span>
+    {% endif %}
   </span>
-  <span class="w-24 hidden sm:block shrink-0">
+  <span class="w-24 hidden sm:flex items-center shrink-0">
     {% include "projects/ui/partials/_priority_badge.html" %}
   </span>
   <span class="w-24 hidden md:flex items-center gap-1 shrink-0 text-xs {% if task.due_date and task.due_date < today %}text-error font-medium{% else %}text-base-content/60{% endif %}">

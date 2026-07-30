@@ -17,7 +17,7 @@
     {% if task.labels.all %}
       <span class="flex flex-wrap gap-1">
         {% for label in task.labels.all %}
-          {% include "projects/ui/partials/_label_chip.html" %}
+          {% include "projects/ui/partials/_label_chip.html" with size="sm" %}
         {% endfor %}
       </span>
     {% endif %}

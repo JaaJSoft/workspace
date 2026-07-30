@@ -16,9 +16,11 @@ from workspace.core.services.activity import (
     get_usage_stats,
 )
 from workspace.core.services.module_visibility import visible_modules
+from workspace.projects.queries import assigned_open_tasks
 from workspace.users.services.settings import get_module_settings, get_setting
 
 ACTIVITY_LIMIT = 10
+MY_TASKS_LIMIT = 10
 
 
 def _get_upcoming_events(user):
@@ -117,6 +119,7 @@ def _build_dashboard_context(user, include_activity=True, activity_source=None):
         "dashboard_apps": dashboard_apps,
         "show_upcoming_events": dashboard_settings.get("show_upcoming_events", True),
         "show_upcoming_empty": dashboard_settings.get("show_upcoming_empty", True),
+        "show_my_tasks": dashboard_settings.get("show_my_tasks", True),
         "usage_stats": get_usage_stats(user.id),
         "storage_quota": django_settings.STORAGE_QUOTA_BYTES,
     }
@@ -164,6 +167,19 @@ def upcoming_fragment(request):
                 "show_upcoming_empty",
                 default=True,
             ),
+        },
+    )
+
+
+@login_required
+def tasks_fragment(request):
+    """Dashboard my-tasks widget, loaded async via alpine-ajax."""
+    return render(
+        request,
+        "dashboard/partials/my_tasks.html",
+        {
+            "tasks": assigned_open_tasks(request.user)[:MY_TASKS_LIMIT],
+            "today": timezone.localdate(),
         },
     )
 

@@ -247,6 +247,31 @@ class BuildDashboardContextTests(TestCase):
         self.assertTrue(context["show_upcoming_events"])  # default
         self.assertTrue(context["show_upcoming_empty"])  # default
 
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_context_includes_show_my_tasks_default_true(
+        self, mock_visible, mock_registry
+    ):
+        mock_visible.return_value = []
+        mock_registry.get_pending_action_counts.return_value = {}
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertTrue(context["show_my_tasks"])
+
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_context_show_my_tasks_false_when_disabled(
+        self, mock_visible, mock_registry
+    ):
+        mock_visible.return_value = []
+        mock_registry.get_pending_action_counts.return_value = {}
+        set_setting(self.user, "dashboard", "show_my_tasks", False)
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertFalse(context["show_my_tasks"])
+
 
 # ── _get_activity_context ───────────────────────────────────────
 
@@ -546,6 +571,29 @@ class IndexViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "$ajax(feedUrl, { target: 'dashboard-activity' })")
 
+    def test_show_my_tasks_defaults_to_true(self):
+        self.client.login(username="viewuser", password="pass123")
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="dashboard-tasks"')
+
+    def test_show_my_tasks_false_hides_section(self):
+        set_setting(self.user, "dashboard", "show_my_tasks", False)
+        self.client.login(username="viewuser", password="pass123")
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'id="dashboard-tasks"')
+        self.assertNotContains(resp, "/dashboard/tasks")
+
+    @patch("workspace.dashboard.views.assigned_open_tasks")
+    def test_does_not_query_tasks_on_initial_render(self, mock_tasks):
+        """The tasks widget loads async, so the initial dashboard render must
+        not run the assigned-tasks query."""
+        self.client.login(username="viewuser", password="pass123")
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        mock_tasks.assert_not_called()
+
 
 # ── modules_fragment view ───────────────────────────────────────
 
@@ -807,6 +855,69 @@ class UpcomingFragmentViewTests(TestCase):
 
         self.assertContains(resp, "Fake event")
         self.assertNotContains(resp, "No upcoming events today.")
+
+
+# ── tasks_fragment view ─────────────────────────────────────────
+
+
+class TasksFragmentViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="taskuser",
+            password="pass123",
+        )
+        self.client.login(username="taskuser", password="pass123")
+
+    def tearDown(self):
+        cache.clear()
+
+    def _make_task(self, title, **kwargs):
+        from workspace.projects.services.projects import create_project
+        from workspace.projects.services.tasks import create_task
+
+        if not hasattr(self, "project"):
+            self.project = create_project(self.user, name="Website")
+        return create_task(
+            self.project,
+            self.user,
+            title=title,
+            assignees=[self.user],
+            **kwargs,
+        )
+
+    def test_requires_login(self):
+        self.client.logout()
+        resp = self.client.get("/dashboard/tasks")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("login", resp.url)
+
+    def test_returns_partial_template(self):
+        resp = self.client.get("/dashboard/tasks")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "dashboard/partials/my_tasks.html")
+
+    def test_response_contains_swap_target_id(self):
+        resp = self.client.get("/dashboard/tasks")
+        self.assertContains(resp, 'id="dashboard-tasks"')
+
+    def test_renders_assigned_task(self):
+        task = self._make_task("Ship the widget")
+        resp = self.client.get("/dashboard/tasks")
+        self.assertContains(resp, "Ship the widget")
+        self.assertContains(resp, task.reference)
+        self.assertContains(resp, f"/projects/{self.project.uuid}?task={task.uuid}")
+
+    def test_empty_state_rendered(self):
+        resp = self.client.get("/dashboard/tasks")
+        self.assertContains(resp, "No open tasks assigned to you.")
+
+    def test_list_is_capped(self):
+        from workspace.dashboard.views import MY_TASKS_LIMIT
+
+        for i in range(MY_TASKS_LIMIT + 2):
+            self._make_task(f"Task {i}")
+        resp = self.client.get("/dashboard/tasks")
+        self.assertEqual(len(resp.context["tasks"]), MY_TASKS_LIMIT)
 
 
 # ── query budget guard ──────────────────────────────────────────

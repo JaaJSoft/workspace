@@ -1,14 +1,19 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.projects.models import Project, ProjectMember
+from workspace.projects.models import Project, ProjectMember, Task, TaskStatus
 from workspace.projects.queries import (
+    assigned_open_tasks,
     get_project_role,
     project_users,
     user_project_ids,
 )
+from workspace.projects.services.projects import create_project
+from workspace.projects.services.tasks import create_task
 
 User = get_user_model()
 
@@ -220,3 +225,95 @@ class ProjectUsersTests(TestCase):
             [u.username for u in project_users(self.project)],
             ["admin1", "Bravo1", "grouper1", "member1"],
         )
+
+
+class AssignedOpenTasksTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="admin1", email="admin1@test.com", password="pass123"
+        )
+        self.member = User.objects.create_user(
+            username="member1", email="member1@test.com", password="pass123"
+        )
+        self.project = create_project(self.admin, name="Website")
+        ProjectMember.objects.create(project=self.project, user=self.member)
+        self.today = timezone.localdate()
+
+    def _task(self, title, *, project=None, due=None, priority=Task.Priority.MEDIUM):
+        return create_task(
+            project or self.project,
+            self.admin,
+            title=title,
+            priority=priority,
+            due_date=due,
+            assignees=[self.member],
+        )
+
+    def test_returns_only_tasks_assigned_to_user(self):
+        assigned = self._task("Assigned")
+        create_task(self.project, self.admin, title="Unassigned")
+        self.assertEqual(list(assigned_open_tasks(self.member)), [assigned])
+        self.assertEqual(assigned.uuid, assigned_open_tasks(self.member)[0].uuid)
+
+    def test_excludes_done_tasks(self):
+        done_status = self.project.statuses.get(category=TaskStatus.Category.DONE)
+        task = self._task("Finished")
+        task.status = done_status
+        task.save(update_fields=["status"])
+        self.assertEqual(list(assigned_open_tasks(self.member)), [])
+
+    def test_excludes_archived_projects(self):
+        self._task("Old work")
+        self.project.archived_at = timezone.now()
+        self.project.save(update_fields=["archived_at"])
+        self.assertEqual(list(assigned_open_tasks(self.member)), [])
+
+    def test_excludes_projects_without_access(self):
+        other = create_project(self.admin, name="Private")
+        task = create_task(other, self.admin, title="Hidden")
+        # Assignment can outlive membership; access is what gates visibility.
+        task.assignees.add(self.member)
+        self.assertEqual(list(assigned_open_tasks(self.member)), [])
+
+    def test_ordered_by_due_date_then_priority(self):
+        low_today = self._task("Low today", due=self.today, priority=Task.Priority.LOW)
+        urgent_tomorrow = self._task(
+            "Urgent tomorrow",
+            due=self.today + timedelta(days=1),
+            priority=Task.Priority.URGENT,
+        )
+        overdue = self._task(
+            "Overdue", due=self.today - timedelta(days=2), priority=Task.Priority.MEDIUM
+        )
+        urgent_today = self._task(
+            "Urgent today", due=self.today, priority=Task.Priority.URGENT
+        )
+        high_today = self._task(
+            "High today", due=self.today, priority=Task.Priority.HIGH
+        )
+        self.assertEqual(
+            list(assigned_open_tasks(self.member)),
+            [overdue, urgent_today, high_today, low_today, urgent_tomorrow],
+        )
+
+    def test_null_due_dates_sort_last_by_priority(self):
+        no_due_low = self._task("No due low", priority=Task.Priority.LOW)
+        no_due_urgent = self._task("No due urgent", priority=Task.Priority.URGENT)
+        dated = self._task(
+            "Dated", due=self.today + timedelta(days=30), priority=Task.Priority.LOW
+        )
+        self.assertEqual(
+            list(assigned_open_tasks(self.member)),
+            [dated, no_due_urgent, no_due_low],
+        )
+
+    def test_no_extra_queries_for_reference_and_status(self):
+        for i in range(3):
+            self._task(f"Task {i}", due=self.today)
+        # 1 for the accessible-project ids union + 1 for the task list;
+        # reference (project.key) and status must come from the joined row.
+        with self.assertNumQueries(2):
+            tasks = list(assigned_open_tasks(self.member))
+            for task in tasks:
+                _ = task.reference
+                _ = task.status.name

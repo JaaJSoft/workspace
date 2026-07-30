@@ -16,6 +16,8 @@ backlog rows, overview). Used when name_expr is NOT passed:
   - label: Label instance or {name, color} dict (an enclosing "for label in"
            loop variable is picked up automatically via context inheritance)
   - class: optional extra classes on the pill (e.g. "shrink-0 hidden lg:inline-flex")
+  - size:  "sm" for a compact pill (dense lists: board cards, backlog rows);
+           omit for the default size matching the removable variant
 
 The inner span's text-box trims the line box to the ink so flex centering is
 optically exact. Browsers without it fall back to a whole-pixel nudge that
@@ -38,8 +40,8 @@ offsets shimmer across browser zoom levels, so keep it integer).
     {% endif %}
   </span>
 {% else %}
-  {# min-h matches the removable variant, whose height is set by its h-5 buttons. #}
-  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-100 text-xs py-0.5 px-2.5 min-h-[26px] {{ class|default:'' }}"
+  {# Default min-h matches the removable variant, whose height is set by its h-5 buttons. #}
+  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-100 {% if size == 'sm' %}text-[11px] px-2 py-px{% else %}text-xs py-0.5 px-2.5 min-h-[26px]{% endif %} {{ class|default:'' }}"
         {% if label.color %}style="border-color: {{ label.color }}; color: {{ label.color }}"{% endif %}>
     <span class="relative -top-px [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0">{{ label.name }}</span>
   </span>

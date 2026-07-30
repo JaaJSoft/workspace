@@ -447,6 +447,74 @@ class SettingsViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertNotContains(response, 'id="settings-members"')
 
 
+class AllTasksViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    def _seed_one_task_per_category(self):
+        backlog = self.project.statuses.get(name="Backlog")
+        todo = self.project.statuses.get(name="To do")
+        done = self.project.statuses.get(name="Done")
+        create_task(self.project, self.admin, title="Queued work", status=backlog)
+        create_task(self.project, self.admin, title="Active work", status=todo)
+        create_task(self.project, self.admin, title="Shipped work", status=done)
+
+    def test_renders_tasks_from_all_categories(self):
+        self._seed_one_task_per_category()
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/tasks")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "projects/ui/project.html")
+        self.assertEqual(response.context["view"], "tasks")
+        self.assertEqual(len(response.context["all_tasks"]), 3)
+        self.assertContains(response, "Queued work")
+        self.assertContains(response, "Active work")
+        self.assertContains(response, "Shipped work")
+
+    def test_tasks_follow_status_position_order(self):
+        self._seed_one_task_per_category()
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/tasks")
+        html = response.content.decode()
+        self.assertLess(html.index("Queued work"), html.index("Active work"))
+        self.assertLess(html.index("Active work"), html.index("Shipped work"))
+
+    def test_rows_are_readonly_with_status_metadata(self):
+        self._seed_one_task_per_category()
+        todo = self.project.statuses.get(name="To do")
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/tasks")
+        self.assertNotContains(response, "Select task")
+        self.assertNotContains(response, "Send to board")
+        self.assertNotContains(response, 'draggable="true"')
+        self.assertContains(response, f'data-status="{todo.uuid}"')
+
+    def test_partial_returns_content_wrapper(self):
+        self.client.force_login(self.member)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/tasks", HTTP_X_ALPINE_REQUEST="1"
+        )
+        self.assertTemplateUsed(response, "projects/ui/partials/_content.html")
+        self.assertTemplateNotUsed(response, "projects/ui/project.html")
+        self.assertContains(response, 'id="all-tasks"')
+
+    def test_empty_project_shows_empty_state(self):
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/tasks")
+        self.assertContains(response, "This project has no tasks yet.")
+
+    def test_outsider_gets_404(self):
+        self.client.force_login(self.outsider)
+        response = self.client.get(f"/projects/{self.project.uuid}/tasks")
+        self.assertEqual(response.status_code, 404)
+
+    def test_backlog_rows_keep_bulk_controls(self):
+        # Regression: the readonly flags must not leak into the backlog tab.
+        backlog = self.project.statuses.get(name="Backlog")
+        create_task(self.project, self.admin, title="Queued work", status=backlog)
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/backlog")
+        self.assertContains(response, "Select task")
+        self.assertContains(response, 'draggable="true"')
+
+
 class BoardLabelSelectorTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
     """Task modal label combobox: admins get inline create, members only pick."""
 

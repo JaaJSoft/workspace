@@ -1,5 +1,5 @@
-{# Column widths must stay in sync with the header row in backlog.html. #}
-<li class="flex items-center gap-3 px-3 py-2 hover:bg-base-200/60 select-none {% if writable %}cursor-grab{% endif %}"
+{# Column widths must stay in sync with the header rows in backlog.html and all_tasks.html. #}
+<li class="flex items-center gap-3 px-3 py-2 hover:bg-base-200/60 select-none {% if writable and not row_readonly %}cursor-grab{% endif %}"
     :class="dragging === '{{ task.uuid }}' && 'opacity-50'"
     x-show="taskVisible($el.dataset)"
     data-task-uuid="{{ task.uuid }}"
@@ -7,11 +7,12 @@
     data-priority="{{ task.priority }}"
     data-assignees="{% for assignee in task.assignees.all %}{{ assignee.pk }} {% endfor %}"
     data-labels="{% for label in task.labels.all %}{{ label.uuid }} {% endfor %}"
-    {% if writable %}draggable="true"{% endif %}
+    {% if show_status %}data-status="{{ task.status_id }}"{% endif %}
+    {% if writable and not row_readonly %}draggable="true"{% endif %}
     @dragstart="onDragStart($event, '{{ task.uuid }}')"
     @dragend="onDragEnd()"
     @click="openTask('{{ task.uuid }}')">
-  {% if writable %}
+  {% if writable and not row_readonly %}
     <input type="checkbox" class="checkbox checkbox-sm shrink-0" @click.stop
            aria-label="Select task"
            :checked="isSelected('{{ task.uuid }}')"
@@ -24,6 +25,14 @@
       {% include "projects/ui/partials/_label_chip.html" with class="shrink-0 hidden lg:inline-flex" %}
     {% endfor %}
   </span>
+  {% if show_status %}
+    <span class="w-28 hidden sm:flex items-center gap-1.5 shrink-0 text-xs text-base-content/70">
+      {% if task.status.color %}
+        <span class="w-2 h-2 rounded-full shrink-0" style="background-color: {{ task.status.color }}"></span>
+      {% endif %}
+      <span class="truncate">{{ task.status.name }}</span>
+    </span>
+  {% endif %}
   <span class="w-24 hidden sm:block shrink-0">
     {% include "projects/ui/partials/_priority_badge.html" %}
   </span>
@@ -37,7 +46,7 @@
       {% include "ui/partials/user_avatar.html" with user=assignee size="2xs" show_presence=False show_card=True %}
     {% endfor %}
   </span>
-  {% if writable %}
+  {% if writable and not row_readonly %}
     <button class="btn btn-ghost btn-sm btn-square shrink-0" title="Send to board"
             @click.stop="sendToBoard('{{ task.uuid }}')">
       <i data-lucide="arrow-right-circle" class="w-5 h-5"></i>

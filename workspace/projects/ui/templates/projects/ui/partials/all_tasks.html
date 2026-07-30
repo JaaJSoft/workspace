@@ -1,0 +1,25 @@
+<div id="all-tasks" class="w-full flex flex-col gap-3">
+  <div class="flex flex-wrap items-center gap-2">
+    {% include "projects/ui/partials/_task_filters.html" %}
+  </div>
+
+  {% if all_tasks %}
+    <div class="rounded-box border border-base-300 bg-base-100 overflow-hidden">
+      {# Column widths must stay in sync with _backlog_row.html. #}
+      <div class="flex items-center gap-3 px-3 py-2 border-b border-base-300 bg-base-200/60 text-xs font-medium uppercase tracking-wide text-base-content/60">
+        <span class="flex-1">Task</span>
+        <span class="w-28 hidden sm:block shrink-0">Status</span>
+        <span class="w-24 hidden sm:block shrink-0">Priority</span>
+        <span class="w-24 hidden md:block shrink-0">Due</span>
+        <span class="w-24 hidden md:block shrink-0 text-right">Assignees</span>
+      </div>
+      <ul class="divide-y divide-base-200 min-h-8">
+        {% for task in all_tasks %}
+          {% include "projects/ui/partials/_backlog_row.html" with row_readonly=True show_status=True %}
+        {% endfor %}
+      </ul>
+    </div>
+  {% else %}
+    {% include "ui/partials/inline_alert.html" with type="info" message="This project has no tasks yet." %}
+  {% endif %}
+</div>

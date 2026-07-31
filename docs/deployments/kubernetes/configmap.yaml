@@ -14,6 +14,7 @@ data:
   DJANGO_LOG_LEVEL: "INFO"
   TRASH_RETENTION_DAYS: "30"
   MEDIA_ROOT: "/app/data"
+  METRICS_USER: "prometheus"  # HTTP Basic user for /metrics; password lives in workspace-secrets
   WEBPUSH_VAPID_PUBLIC_KEY: ""
   WEBPUSH_VAPID_MAILTO: ""
   AI_MODEL: "gpt-5"

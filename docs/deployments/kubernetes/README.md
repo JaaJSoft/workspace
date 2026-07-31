@@ -32,7 +32,7 @@ An **initContainer** (`migrate`) runs database migrations before the pod starts.
 | File             | Description                                                    |
 |------------------|----------------------------------------------------------------|
 | `namespace.yaml` | Namespace `workspace`                                          |
-| `secrets.yaml`   | Sensitive config: `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `WEBPUSH_VAPID_PRIVATE_KEY`, `AI_API_KEY` |
+| `secrets.yaml`   | Sensitive config: `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `WEBPUSH_VAPID_PRIVATE_KEY`, `METRICS_PASSWORD`, `AI_API_KEY` |
 | `configmap.yaml` | Non-sensitive config: debug, allowed hosts, workers, log level |
 | `app.yaml`       | Deployment (all containers) + PVC + Service                    |
 | `ingress.yaml`   | Ingress (nginx) with TLS                                       |
@@ -77,6 +77,7 @@ kubectl apply -f ingress.yaml
 | `DATABASE_URL`            | Database connection string. Default: `sqlite:////app/data/db.sqlite3` |
 | `REDIS_URL`               | Redis connection. Default: `redis://localhost:6379/0` (sidecar)       |
 | `WEBPUSH_VAPID_PRIVATE_KEY` | VAPID private key (PEM). Generate with `manage.py generate_vapid_keys` |
+| `METRICS_PASSWORD`        | HTTP Basic password for `/metrics`, plain text (`stringData` needs no base64). Endpoint returns 401 to everyone until set |
 | `OAUTH_GOOGLE_CLIENT_ID` | Google OAuth2 client ID (enables Gmail login) |
 | `OAUTH_GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret |
 | `OAUTH_MICROSOFT_CLIENT_ID` | Microsoft OAuth2 client ID (enables Outlook login) |
@@ -107,6 +108,7 @@ kubectl apply -f ingress.yaml
 | `DJANGO_LOG_LEVEL`     | `INFO`                          | Django log level                          |
 | `TRASH_RETENTION_DAYS` | `30`                            | Days before trashed files are purged      |
 | `MEDIA_ROOT`           | `/app/data`                     | Root directory for user files and uploads |
+| `METRICS_USER`         | `prometheus`                    | HTTP Basic user for `/metrics` (password in `secrets.yaml`) |
 | `WEBPUSH_VAPID_PUBLIC_KEY` | *(empty)*                  | VAPID public key (base64url)              |
 | `WEBPUSH_VAPID_MAILTO` | *(empty)*                       | Contact email for VAPID claims (`mailto:…`) |
 | `AI_MODEL`             | `gpt-5`                        | Default LLM model for chat and tasks |
@@ -130,6 +132,14 @@ The web container exposes `/health/` with three probes:
 - **startupProbe**: polls every 2s, up to 30 failures (allows slow boot)
 - **livenessProbe**: every 15s
 - **readinessProbe**: every 5s
+
+## Metrics
+
+Prometheus metrics are served at `/metrics` behind HTTP Basic auth. Set `METRICS_USER` (configmap) and `METRICS_PASSWORD` (secret), then restart the pod — until both are set the endpoint answers 401 to everyone.
+
+`ingress.yaml` also drops `/metrics` at the edge with a `deny all` snippet. That is defence in depth: scraping through the ClusterIP Service bypasses the ingress and keeps working. Remove the snippet if Prometheus lives outside the cluster.
+
+See [Monitoring with Prometheus](../../guides/monitoring.md) for the scrape config and the list of exposed series.
 
 ## Web Search (optional)
 

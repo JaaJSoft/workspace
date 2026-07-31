@@ -101,27 +101,11 @@ RECENT_FILES_LIMIT = int(os.getenv("RECENT_FILES_LIMIT", "25"))
 RECENT_FILES_MAX_LIMIT = int(os.getenv("RECENT_FILES_MAX_LIMIT", "200"))
 TRASH_RETENTION_DAYS = int(os.getenv("TRASH_RETENTION_DAYS", "30"))
 
-# Prometheus /metrics access control (workspace.core.views_metrics). A request
-# is served when it carries "Authorization: Bearer <METRICS_TOKEN>", when its
-# REMOTE_ADDR falls inside METRICS_ALLOWED_IPS, or when it comes from a
-# superuser session. Defaults to the private ranges so cluster-internal
-# scraping works out of the box; behind a reverse proxy REMOTE_ADDR is the
-# proxy itself, so set METRICS_ALLOWED_IPS= (empty) and scrape with a token.
-METRICS_TOKEN = os.getenv("METRICS_TOKEN", "").strip()
-_METRICS_ALLOWED_IPS = os.getenv("METRICS_ALLOWED_IPS")
-METRICS_ALLOWED_IPS = (
-    [entry.strip() for entry in _METRICS_ALLOWED_IPS.split(",") if entry.strip()]
-    if _METRICS_ALLOWED_IPS is not None
-    else [
-        "127.0.0.0/8",
-        "::1/128",
-        "10.0.0.0/8",
-        "172.16.0.0/12",
-        "192.168.0.0/16",
-        "100.64.0.0/10",
-        "fc00::/7",
-    ]
-)
+# HTTP Basic credentials for /metrics. Leaving either empty closes the
+# endpoint rather than opening it. Whitespace is trimmed so a stray newline in
+# a secret file doesn't turn into an unexplainable 401.
+METRICS_USER = os.getenv("METRICS_USER", "").strip()
+METRICS_PASSWORD = os.getenv("METRICS_PASSWORD", "").strip()
 
 # Application definition
 

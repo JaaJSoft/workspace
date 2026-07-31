@@ -14,11 +14,7 @@ data:
   DJANGO_LOG_LEVEL: "INFO"
   TRASH_RETENTION_DAYS: "30"
   MEDIA_ROOT: "/app/data"
-  # /metrics callers allowed by address. Defaults to the private ranges when unset,
-  # which covers in-cluster scraping. Set to "" to require METRICS_TOKEN instead —
-  # only REMOTE_ADDR is checked, so a proxy in front of the pod would otherwise
-  # make every request look private.
-  METRICS_ALLOWED_IPS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+  METRICS_USER: "prometheus"  # HTTP Basic user for /metrics; password lives in workspace-secrets
   WEBPUSH_VAPID_PUBLIC_KEY: ""
   WEBPUSH_VAPID_MAILTO: ""
   AI_MODEL: "gpt-5"

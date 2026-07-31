@@ -136,6 +136,8 @@ The most common variables are listed below. For the full, annotated list - inclu
 | `REDIS_URL`            | Redis URL for cache and sessions                  | *(none, in-memory fallback)* |
 | `GUNICORN_WORKERS`     | Gunicorn worker count (Docker)                    | `3`                          |
 | `TRASH_RETENTION_DAYS` | Days before trashed items are permanently deleted | `30`                         |
+| `METRICS_USER`         | HTTP Basic user for `/metrics`                    | *(none, endpoint closed)*    |
+| `METRICS_PASSWORD`     | HTTP Basic password for `/metrics`                | *(none, endpoint closed)*    |
 | `AI_API_KEY`           | OpenAI API key (or compatible provider)           | *(none, AI disabled)*        |
 | `AI_BASE_URL`          | Custom LLM API base URL (Ollama, LM Studio, etc.) | *(OpenAI default)*           |
 | `AI_MODEL`             | Default LLM model                                 | `gpt-5`                      |
@@ -160,6 +162,10 @@ All endpoints are prefixed with `/api/` with no trailing slashes. Interactive do
 - `/health/live` - Liveness probe
 - `/health/ready` - Readiness probe (checks database)
 - `/health/startup` - Startup probe
+
+### Metrics
+
+- `/metrics` - Prometheus exposition, behind HTTP Basic auth (`METRICS_USER` / `METRICS_PASSWORD`). Returns `401` until both are set. See [Monitoring with Prometheus](docs/guides/monitoring.md).
 
 ## Extending Workspace
 

@@ -35,6 +35,7 @@ kubectl apply -f ingress.yaml
 - **SQLite**: Both setups default to SQLite. Set `DATABASE_URL` to a PostgreSQL connection string to switch.
 - **SECRET_KEY**: Always change the default secret key before deploying.
 - **Static files**: Collected at image build time via `collectstatic` and served by WhiteNoise.
+- **Metrics**: `/metrics` requires HTTP Basic credentials and answers `401` until `METRICS_USER` and `METRICS_PASSWORD` are both set. See [Monitoring with Prometheus](../guides/monitoring.md).
 
 ## Reverse Proxy
 

@@ -46,6 +46,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # Changes daily so the Dockerfile's apt layer re-runs and picks up freshly
+      # published Debian security patches instead of replaying a stale GHA cache.
+      - name: Compute apt cache-bust value
+        id: apt_refresh
+        run: echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v6
@@ -65,6 +71,8 @@ jobs:
           load: true
           tags: workspace:ci
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APT_REFRESH=${{ steps.apt_refresh.outputs.date }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -168,4 +176,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APT_REFRESH=${{ steps.apt_refresh.outputs.date }}
           cache-from: type=gha

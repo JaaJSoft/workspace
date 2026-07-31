@@ -18,6 +18,9 @@ class Project(models.Model):
     key = models.CharField(max_length=10, unique=True)
     # Monotone counter behind Task.number: never recomputed, numbers never reused.
     next_task_number = models.PositiveIntegerField(default=1)
+    # Days a completed task stays on the board's done columns; null = forever.
+    # Board-only display filter: hidden tasks stay in counts, search and links.
+    done_retention_days = models.PositiveIntegerField(null=True, blank=True)
     # Every attached group grants its members plain member access; admin
     # rights only ever come from a ProjectMember row.
     groups = models.ManyToManyField(
@@ -214,6 +217,37 @@ class Task(models.Model):
     def reference(self):
         """Display id (WR-42); costs a project fetch unless project is cached."""
         return f"{self.project.key}-{self.number}"
+
+
+class TaskComment(models.Model):
+    """User comment on a task."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="comments",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="task_comments",
+    )
+    body = models.TextField()
+    edited_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(
+                fields=["task", "created_at"], name="task_comment_task_created"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.author} on {self.task} ({self.created_at})"
 
 
 class TaskEvent(models.Model):

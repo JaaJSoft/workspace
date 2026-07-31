@@ -53,8 +53,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # System deps required at runtime (cairosvg needs libcairo, video frames need ffmpeg).
 # `apt-get upgrade` pulls pending Debian security patches without waiting for the
-# python:3.14-slim base image to be rebuilt with them.
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+# python:3.14-slim base image to be rebuilt with them. APT_REFRESH busts the layer
+# cache (CI passes the current date): without it a cached layer replays forever and
+# the upgrade never sees newly published patches.
+ARG APT_REFRESH=0
+RUN echo "apt refresh: ${APT_REFRESH}" \
+    && apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*

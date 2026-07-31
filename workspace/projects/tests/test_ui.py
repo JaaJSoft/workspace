@@ -1,9 +1,12 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
+from django.utils import timezone
 
-from workspace.projects.models import Project, TaskEvent
+from workspace.projects.models import Project, Task, TaskEvent
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.tasks import create_task, delete_task
 from workspace.users.services.settings import get_setting, set_setting
@@ -183,6 +186,77 @@ class BoardViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(resp, f"{self.project.key}-{task.number}")
 
 
+class BoardDoneRetentionTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.done = self.project.statuses.get(name="Done")
+
+    def _set_retention(self, days):
+        self.project.done_retention_days = days
+        self.project.save(update_fields=["done_retention_days"])
+
+    def _make_done_task(self, title, completed_days_ago):
+        task = create_task(self.project, self.admin, title=title, status=self.done)
+        Task.objects.filter(pk=task.pk).update(
+            completed_at=timezone.now() - timedelta(days=completed_days_ago)
+        )
+        return task
+
+    def _board(self):
+        self.client.force_login(self.member)
+        return self.client.get(f"/projects/{self.project.uuid}/board")
+
+    def test_all_done_tasks_visible_without_retention(self):
+        self._make_done_task("Ancient win", 400)
+        self.assertContains(self._board(), "Ancient win")
+
+    def test_done_task_older_than_retention_is_hidden(self):
+        self._set_retention(7)
+        self._make_done_task("Old news", 8)
+        self.assertNotContains(self._board(), "Old news")
+
+    def test_recent_done_task_stays_visible(self):
+        self._set_retention(7)
+        self._make_done_task("Fresh win", 2)
+        self.assertContains(self._board(), "Fresh win")
+
+    def test_done_task_without_completed_at_stays_visible(self):
+        self._set_retention(7)
+        task = create_task(
+            self.project, self.admin, title="No timestamp", status=self.done
+        )
+        Task.objects.filter(pk=task.pk).update(completed_at=None)
+        self.assertContains(self._board(), "No timestamp")
+
+    def test_active_tasks_unaffected_by_retention(self):
+        self._set_retention(1)
+        todo = self.project.statuses.get(name="To do")
+        create_task(self.project, self.admin, title="Still doing", status=todo)
+        self.assertContains(self._board(), "Still doing")
+
+    def test_hidden_count_shown_in_done_column(self):
+        self._set_retention(7)
+        self._make_done_task("Old one", 10)
+        self._make_done_task("Old two", 20)
+        self._make_done_task("Recent", 1)
+        response = self._board()
+        done_column = next(
+            c for c in response.context["columns"] if c["status"].pk == self.done.pk
+        )
+        self.assertEqual(done_column["hidden_count"], 2)
+        self.assertContains(response, "2 hidden")
+
+    def test_no_hidden_counter_when_nothing_is_hidden(self):
+        self._set_retention(7)
+        self._make_done_task("Recent", 1)
+        response = self._board()
+        done_column = next(
+            c for c in response.context["columns"] if c["status"].pk == self.done.pk
+        )
+        self.assertEqual(done_column["hidden_count"], 0)
+        self.assertNotContains(response, 'data-lucide="eye-off"')
+
+
 class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
     def test_renders_backlog(self):
         self.client.force_login(self.member)
@@ -344,6 +418,13 @@ class SettingsViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "projects/ui/project.html")
         self.assertEqual(response.context["view"], "settings")
+
+    def test_project_data_embeds_done_retention(self):
+        self.project.done_retention_days = 14
+        self.project.save(update_fields=["done_retention_days"])
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertEqual(response.context["project_data"]["done_retention_days"], 14)
 
     def test_member_gets_404(self):
         self.client.force_login(self.member)

@@ -16,6 +16,9 @@ services:
       - WEBPUSH_VAPID_PRIVATE_KEY=${WEBPUSH_VAPID_PRIVATE_KEY:-}
       - WEBPUSH_VAPID_PUBLIC_KEY=${WEBPUSH_VAPID_PUBLIC_KEY:-}
       - WEBPUSH_VAPID_MAILTO=${WEBPUSH_VAPID_MAILTO:-}
+      # Prometheus /metrics — endpoint stays closed until both are set
+      - METRICS_USER=${METRICS_USER:-}
+      - METRICS_PASSWORD=${METRICS_PASSWORD:-}
       # OAuth2 Mail Providers (optional)
       - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
       - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET:-}

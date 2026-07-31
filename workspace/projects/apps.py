@@ -17,7 +17,6 @@ class ProjectsConfig(AppConfig):
                 color="accent",
                 url="/projects",
                 order=35,
-                preview=True,
             )
         )
 
@@ -42,6 +41,20 @@ class ProjectsConfig(AppConfig):
                 slug="project-tasks",
                 module_slug="projects",
                 search_fn=search_project_tasks,
+            )
+        )
+
+        from workspace.core.module_registry import PendingActionProviderInfo
+
+        def _projects_pending_actions(user):
+            from workspace.projects.queries import pending_task_count
+
+            return pending_task_count(user)
+
+        registry.register_pending_action_provider(
+            PendingActionProviderInfo(
+                module_slug="projects",
+                pending_action_fn=_projects_pending_actions,
             )
         )
 

@@ -6,7 +6,7 @@
 # Setup
 uv sync                                        # install dependencies
 uv run python manage.py migrate                # apply migrations
-uv run python manage.py runserver              # dev server on :8000
+uv run python manage.py runserver 127.0.0.1:$port --noreload   # NEVER :8000 in agent sessions - pick a free port, see .claude/skills/running-the-app
 
 # Tests (per module - matches CI matrix)
 uv run python manage.py test workspace.<module>           # e.g. workspace.files
@@ -56,6 +56,18 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 - Git worktrees are allowed - use one when isolating work from the current workspace is useful. Otherwise work directly on the current branch (creating a feature branch when the current branch is `master`/`main`, per the rule above).
 - Never mention "Claude", "Claude Code", "CLAUDE.md", or any AI/assistant attribution in commit messages, commit titles, PR titles, or PR descriptions. The user wants commits and PRs to read as if a human wrote them. This includes the trailing "🤖 Generated with [Claude Code]" footer and the "Co-Authored-By: Claude" trailer - omit both. References to project rules should cite the rule itself ("per the no-logic-change refactor contract"), not the file ("per CLAUDE.md").
 - All commit messages **and** PR titles must follow the Conventional Commits format `type(scope): subject` (e.g. `feat(theme): split theme picker into light and dark slots`, `fix(chat): prevent duplicate retry`). Allowed types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `style`, `build`, `ci`, `revert`. Subject is lowercase, imperative mood, no trailing period. This applies to PR titles too - don't pass a free-form title to `gh pr create`, prefix it.
+
+### Backward Compatibility
+
+By default, do not preserve backward compatibility. In doubt, ask the user.
+
+Rationale: APIs, data formats, query parameters, and behavior are not semver'd internally - no callers outside this project depend on stable contracts. Shipping a breaking change (renamed field, removed endpoint, modified response shape, stricter validation) is the right call if it simplifies the code or model: update all call sites and remove the old path - no legacy aliases, shims, deprecated parameters, or dual code paths kept around "just in case". Only preserve compatibility when:
+
+- The change would require a migration strategy (data export/re-import, user-facing schema changes).
+- A production system or external integration actively depends on the old interface.
+- You're explicitly unsure whether a caller exists - ask the user before breaking it.
+
+When in doubt between "the old way is dead code" and "someone might use this," ask rather than guessing.
 
 ### Refactoring & Optimization
 
@@ -611,6 +623,7 @@ Use the `dialogs` partial for modal dialogs instead of inline modal HTML.
 
 - `app_logo.html` - Application logo
 - `breadcrumbs.html` - Breadcrumb navigation
+- `comments.html` - comment thread (list + collapsed-until-focused composer + inline edit) backed by `commentsComponent()` from `common/static/ui/js/comments.js`. Params: `list_url` (collection endpoint; item endpoints are `<list_url>/<uuid>`), `current_user_id`, `can_comment`. Used by the files properties panel and the task panel - reuse it for any new commentable entity instead of copying the markup.
 - `navbar.html` - Navigation bar
 - `refresh_button.html` - Alpine-AJAX refresh button (spins while `loading` is truthy). Params: `url_expr`, `target`, optional `loading_expr` / `title` / `size`.
 - `user_avatar.html` - User avatar display

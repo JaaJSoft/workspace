@@ -1,3 +1,4 @@
+from dataclasses import replace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -6,7 +7,7 @@ from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
-from workspace.core.module_registry import ModuleInfo
+from workspace.core.module_registry import ModuleInfo, registry
 from workspace.dashboard.views import (
     ACTIVITY_LIMIT,
     _build_dashboard_context,
@@ -247,6 +248,51 @@ class BuildDashboardContextTests(TestCase):
         self.assertTrue(context["show_upcoming_events"])  # default
         self.assertTrue(context["show_upcoming_empty"])  # default
 
+    @patch("workspace.dashboard.views.is_module_slug_visible", return_value=True)
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_context_includes_show_my_tasks_default_true(
+        self, mock_visible, mock_registry, mock_module_visible
+    ):
+        mock_visible.return_value = []
+        mock_registry.get_pending_action_counts.return_value = {}
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertTrue(context["show_my_tasks"])
+        self.assertTrue(context["my_tasks_available"])
+
+    @patch("workspace.dashboard.views.is_module_slug_visible", return_value=True)
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_context_show_my_tasks_false_when_disabled(
+        self, mock_visible, mock_registry, mock_module_visible
+    ):
+        mock_visible.return_value = []
+        mock_registry.get_pending_action_counts.return_value = {}
+        set_setting(self.user, "dashboard", "show_my_tasks", False)
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertFalse(context["show_my_tasks"])
+
+    @patch("workspace.dashboard.views.is_module_slug_visible", return_value=False)
+    @patch("workspace.dashboard.views.registry")
+    @patch("workspace.dashboard.views.visible_modules")
+    def test_context_show_my_tasks_false_when_projects_module_hidden(
+        self, mock_visible, mock_registry, mock_module_visible
+    ):
+        """Setting on, but the projects module is not visible to the user:
+        the widget must not show and the prefs toggle must not be offered."""
+        mock_visible.return_value = []
+        mock_registry.get_pending_action_counts.return_value = {}
+
+        context = _build_dashboard_context(self.user)
+
+        self.assertFalse(context["show_my_tasks"])
+        self.assertFalse(context["my_tasks_available"])
+        mock_module_visible.assert_called_once_with(self.user, "projects")
+
 
 # ── _get_activity_context ───────────────────────────────────────
 
@@ -403,10 +449,17 @@ class GetActivityContextTests(TestCase):
 
 class ActivityPreviewVisibilityTests(TestCase):
     """The activity source tabs must not expose modules the user cannot see
-    (preview modules restricted to staff/admin). Uses the real registries:
-    the projects module is registered with preview=True."""
+    (preview modules restricted to staff/admin). Uses the real registries,
+    with the projects module forced into preview for the duration (no real
+    module ships as preview right now)."""
 
     def setUp(self):
+        mods = dict(registry._modules)
+        mods["projects"] = replace(mods["projects"], preview=True)
+        patcher = patch.object(registry, "_modules", mods)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         self.normal = User.objects.create_user(
             username="actnormal",
             password="pass123",
@@ -545,6 +598,45 @@ class IndexViewTests(TestCase):
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "$ajax(feedUrl, { target: 'dashboard-activity' })")
+
+    @override_settings(PREVIEW_VISIBILITY="all")
+    def test_show_my_tasks_defaults_to_true(self):
+        self.client.login(username="viewuser", password="pass123")
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="dashboard-tasks"')
+        self.assertContains(resp, "$ajax('/dashboard/tasks')")
+
+    @override_settings(PREVIEW_VISIBILITY="all")
+    def test_show_my_tasks_false_keeps_slot_without_loading(self):
+        """Disabled: the section stays in the page as an empty swap slot (so
+        the prefs toggle can re-enable it live) but must not auto-load."""
+        set_setting(self.user, "dashboard", "show_my_tasks", False)
+        self.client.login(username="viewuser", password="pass123")
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="dashboard-tasks"')
+        self.assertNotContains(resp, "$ajax('/dashboard/tasks')")
+
+    @patch("workspace.dashboard.views.is_module_slug_visible", return_value=False)
+    def test_my_tasks_hidden_when_projects_module_not_visible(
+        self, mock_module_visible
+    ):
+        """No projects access: no widget auto-load and no prefs toggle."""
+        self.client.login(username="viewuser", password="pass123")
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "$ajax('/dashboard/tasks')")
+        self.assertNotContains(resp, "Show my tasks")
+
+    @patch("workspace.dashboard.views.assigned_open_tasks")
+    def test_does_not_query_tasks_on_initial_render(self, mock_tasks):
+        """The tasks widget loads async, so the initial dashboard render must
+        not run the assigned-tasks query."""
+        self.client.login(username="viewuser", password="pass123")
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        mock_tasks.assert_not_called()
 
 
 # ── modules_fragment view ───────────────────────────────────────
@@ -807,6 +899,87 @@ class UpcomingFragmentViewTests(TestCase):
 
         self.assertContains(resp, "Fake event")
         self.assertNotContains(resp, "No upcoming events today.")
+
+
+# ── tasks_fragment view ─────────────────────────────────────────
+
+
+@override_settings(PREVIEW_VISIBILITY="all")
+class TasksFragmentViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="taskuser",
+            password="pass123",
+        )
+        self.client.login(username="taskuser", password="pass123")
+
+    def tearDown(self):
+        cache.clear()
+
+    def _make_task(self, title, **kwargs):
+        from workspace.projects.services.projects import create_project
+        from workspace.projects.services.tasks import create_task
+
+        if not hasattr(self, "project"):
+            self.project = create_project(self.user, name="Website")
+        return create_task(
+            self.project,
+            self.user,
+            title=title,
+            assignees=[self.user],
+            **kwargs,
+        )
+
+    def test_requires_login(self):
+        self.client.logout()
+        resp = self.client.get("/dashboard/tasks")
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("login", resp.url)
+
+    def test_returns_partial_template(self):
+        resp = self.client.get("/dashboard/tasks")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "dashboard/partials/my_tasks.html")
+
+    def test_response_contains_swap_target_id(self):
+        resp = self.client.get("/dashboard/tasks")
+        self.assertContains(resp, 'id="dashboard-tasks"')
+
+    def test_renders_assigned_task(self):
+        task = self._make_task("Ship the widget")
+        resp = self.client.get("/dashboard/tasks")
+        self.assertContains(resp, "Ship the widget")
+        self.assertContains(resp, task.reference)
+        self.assertContains(resp, f"/projects/{self.project.uuid}?task={task.uuid}")
+
+    def test_empty_state_rendered(self):
+        resp = self.client.get("/dashboard/tasks")
+        self.assertContains(resp, "No open tasks assigned to you.")
+
+    def test_list_is_capped(self):
+        from workspace.dashboard.views import MY_TASKS_LIMIT
+
+        for i in range(MY_TASKS_LIMIT + 2):
+            self._make_task(f"Task {i}")
+        resp = self.client.get("/dashboard/tasks")
+        self.assertEqual(len(resp.context["tasks"]), MY_TASKS_LIMIT)
+
+    def test_empty_slot_when_setting_off(self):
+        """Toggling the pref off must swap the widget out: the fragment keeps
+        the swap-target id but renders no content."""
+        self._make_task("Should not appear")
+        set_setting(self.user, "dashboard", "show_my_tasks", False)
+        resp = self.client.get("/dashboard/tasks")
+        self.assertContains(resp, 'id="dashboard-tasks"')
+        self.assertNotContains(resp, "My Tasks")
+        self.assertNotContains(resp, "Should not appear")
+
+    @patch("workspace.dashboard.views.is_module_slug_visible", return_value=False)
+    def test_empty_slot_when_projects_module_not_visible(self, mock_module_visible):
+        self._make_task("Hidden module task")
+        resp = self.client.get("/dashboard/tasks")
+        self.assertContains(resp, 'id="dashboard-tasks"')
+        self.assertNotContains(resp, "Hidden module task")
 
 
 # ── query budget guard ──────────────────────────────────────────

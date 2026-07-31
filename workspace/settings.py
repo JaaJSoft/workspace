@@ -100,6 +100,13 @@ PREVIEW_VISIBILITY = os.getenv("PREVIEW_VISIBILITY", "staff")
 RECENT_FILES_LIMIT = int(os.getenv("RECENT_FILES_LIMIT", "25"))
 RECENT_FILES_MAX_LIMIT = int(os.getenv("RECENT_FILES_MAX_LIMIT", "200"))
 TRASH_RETENTION_DAYS = int(os.getenv("TRASH_RETENTION_DAYS", "30"))
+
+# HTTP Basic credentials for /metrics. Leaving either empty closes the
+# endpoint rather than opening it. Whitespace is trimmed so a stray newline in
+# a secret file doesn't turn into an unexplainable 401.
+METRICS_USER = os.getenv("METRICS_USER", "").strip()
+METRICS_PASSWORD = os.getenv("METRICS_PASSWORD", "").strip()
+
 # Application definition
 
 INSTALLED_APPS = [

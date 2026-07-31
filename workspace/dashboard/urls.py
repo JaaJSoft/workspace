@@ -8,5 +8,6 @@ urlpatterns = [
     path("", views.index, name="index"),
     path("dashboard/activity", views.activity_feed, name="activity_feed"),
     path("dashboard/upcoming", views.upcoming_fragment, name="upcoming_fragment"),
+    path("dashboard/tasks", views.tasks_fragment, name="tasks_fragment"),
     path("dashboard/modules", views.modules_fragment, name="modules_fragment"),
 ]

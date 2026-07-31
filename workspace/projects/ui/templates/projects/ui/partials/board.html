@@ -29,6 +29,12 @@
             {% include "projects/ui/partials/task_card.html" %}
           {% endfor %}
         </ul>
+        {% if column.hidden_count %}
+          <p class="text-xs text-base-content/50 mt-2 flex items-center gap-1.5">
+            <i data-lucide="eye-off" class="w-3 h-3"></i>
+            {{ column.hidden_count }} hidden
+          </p>
+        {% endif %}
       </section>
     {% endfor %}
   </div>

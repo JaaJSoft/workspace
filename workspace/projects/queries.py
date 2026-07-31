@@ -1,6 +1,18 @@
 from django.contrib.auth import get_user_model
+from django.db.models import Case, F, IntegerField, Value, When
+from django.utils import timezone
 
-from .models import Project, ProjectMember
+from .models import Project, ProjectMember, Task, TaskStatus
+
+# CharField priorities don't sort by urgency ('high' < 'urgent' alphabetically),
+# so ordering needs an explicit rank. Lower rank = more urgent.
+_PRIORITY_RANK = Case(
+    When(priority=Task.Priority.URGENT, then=Value(0)),
+    When(priority=Task.Priority.HIGH, then=Value(1)),
+    When(priority=Task.Priority.MEDIUM, then=Value(2)),
+    default=Value(3),
+    output_field=IntegerField(),
+)
 
 
 def user_project_ids(user, *, role=None):
@@ -28,6 +40,47 @@ def user_project_ids(user, *, role=None):
         .values_list("uuid", flat=True)
     )
     return list(member_ids.union(group_ids))
+
+
+def pending_task_count(user):
+    """Open tasks assigned to *user* that are overdue or due today.
+
+    Powers the dashboard pending-actions badge: only tasks the user can
+    still act on count, so archived projects and projects the user no
+    longer has access to are excluded.
+    """
+    return (
+        Task.objects.filter(
+            assignees=user,
+            project_id__in=user_project_ids(user),
+            project__archived_at__isnull=True,
+            due_date__lte=timezone.localdate(),
+        )
+        .exclude(status__category=TaskStatus.Category.DONE)
+        .count()
+    )
+
+
+def assigned_open_tasks(user):
+    """Open tasks assigned to *user*, most urgent first.
+
+    Same access scope as ``pending_task_count`` (accessible, non-archived
+    projects), but without the due-date cutoff: this feeds the dashboard
+    task list, which also shows upcoming and undated work. Ordered by due
+    date (overdue first, undated last), then priority, then age. Project
+    and status are joined for ``task.reference`` and status display.
+    """
+    return (
+        Task.objects.filter(
+            assignees=user,
+            project_id__in=user_project_ids(user),
+            project__archived_at__isnull=True,
+        )
+        .exclude(status__category=TaskStatus.Category.DONE)
+        .select_related("project", "status")
+        .annotate(priority_rank=_PRIORITY_RANK)
+        .order_by(F("due_date").asc(nulls_last=True), "priority_rank", "created_at")
+    )
 
 
 def project_users(project):

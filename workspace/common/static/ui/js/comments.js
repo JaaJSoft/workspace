@@ -1,27 +1,33 @@
-// ── File Comments ──────────────────────────────────────────
+// ── Shared comments component ──────────────────────────────
+// Backs the comment thread UI (files properties panel, task panel).
+// listUrl is the collection endpoint; item endpoints are `${listUrl}/<uuid>`.
+// Pair with the "ui/partials/comments.html" template partial.
 
-window.fileComments = function fileComments(fileUuid, currentUserId) {
+window.commentsComponent = function commentsComponent(listUrl, currentUserId, canComment) {
   return {
-    fileUuid,
+    listUrl,
     currentUserId,
+    canComment,
     comments: [],
     loading: true,
     newBody: '',
     sending: false,
     editingId: null,
     editBody: '',
-
+    composerFocused: false,
 
     async init() {
       await this.loadComments();
     },
 
+    _url(commentUuid) {
+      return commentUuid ? `${this.listUrl}/${commentUuid}` : this.listUrl;
+    },
+
     async loadComments() {
       this.loading = true;
       try {
-        const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments`, {
-          credentials: 'same-origin',
-        });
+        const resp = await fetch(this._url(), { credentials: 'same-origin' });
         if (resp.ok) {
           this.comments = await resp.json();
         }
@@ -30,10 +36,10 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
     },
 
     async addComment() {
-      if (!this.newBody.trim() || this.sending) return;
+      if (!this.canComment || !this.newBody.trim() || this.sending) return;
       this.sending = true;
       try {
-        const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments`, {
+        const resp = await fetch(this._url(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
@@ -41,31 +47,36 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
         });
         if (resp.ok) {
           this.newBody = '';
+          if (this.$refs.composer) {
+            this.$refs.composer.style.height = '';
+            this.$refs.composer.blur();
+          }
           await this.loadComments();
         }
       } catch (e) { /* ignore */ }
       this.sending = false;
     },
 
-    _refreshIcons() {
+    autoGrow(el) {
+      el.style.height = 'auto';
+      // scrollHeight excludes borders (border-box), hence the offset delta.
+      el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
     },
 
     startEdit(comment) {
       this.editingId = comment.uuid;
       this.editBody = comment.body;
-      this._refreshIcons();
     },
 
     cancelEdit() {
       this.editingId = null;
       this.editBody = '';
-      this._refreshIcons();
     },
 
     async saveEdit(commentUuid) {
-      if (!this.editBody.trim()) return;
+      if (!this.canComment || !this.editBody.trim()) return;
       try {
-        const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments/${commentUuid}`, {
+        const resp = await fetch(this._url(commentUuid), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
@@ -80,8 +91,9 @@ window.fileComments = function fileComments(fileUuid, currentUserId) {
     },
 
     async deleteComment(commentUuid) {
+      if (!this.canComment) return;
       try {
-        const resp = await fetch(`/api/v1/files/${this.fileUuid}/comments/${commentUuid}`, {
+        const resp = await fetch(this._url(commentUuid), {
           method: 'DELETE',
           headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',

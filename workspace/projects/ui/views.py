@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Case, Count, IntegerField, Q, Value, When
@@ -181,6 +182,7 @@ def _task_panel_context(user, project, role, task):
         "panel_task": task,
         "panel_events": events,
         "panel_action_ids": action_ids,
+        "panel_can_comment": "comment" in action_ids,
         "panel_description_html": render_task_description(task.description),
         "panel_task_data": {
             "uuid": str(task.uuid),
@@ -230,17 +232,34 @@ def board(request, project_uuid):
     context["backlog_count"] = project.tasks.filter(
         status__category=TaskStatus.Category.BACKLOG
     ).count()
-    tasks = list(
+    tasks_qs = (
         project.tasks.exclude(status__category=TaskStatus.Category.BACKLOG)
         .select_related("status")
         .prefetch_related("assignees", "labels")
         .order_by("position", "created_at")
     )
+    hidden_counts = {}
+    if project.done_retention_days is not None:
+        cutoff = timezone.now() - timedelta(days=project.done_retention_days)
+        # completed_at__lt is null-safe: a done task missing its timestamp
+        # never matches and stays visible.
+        expired = Q(status__category=TaskStatus.Category.DONE, completed_at__lt=cutoff)
+        hidden_counts = dict(
+            project.tasks.filter(expired)
+            .values_list("status_id")
+            .annotate(n=Count("uuid"))
+            .values_list("status_id", "n")
+        )
+        tasks_qs = tasks_qs.exclude(expired)
     tasks_by_status = defaultdict(list)
-    for task in tasks:
+    for task in tasks_qs:
         tasks_by_status[task.status_id].append(task)
     context["columns"] = [
-        {"status": s, "tasks": tasks_by_status[s.pk]}
+        {
+            "status": s,
+            "tasks": tasks_by_status[s.pk],
+            "hidden_count": hidden_counts.get(s.pk, 0),
+        }
         for s in context["statuses"]
         if s.category != TaskStatus.Category.BACKLOG
     ]
@@ -312,6 +331,7 @@ def settings_view(request, project_uuid):
         "name": project.name,
         "description": project.description,
         "key": project.key,
+        "done_retention_days": project.done_retention_days,
         "groups": [
             {"id": group.pk, "name": group.name}
             for group in project.groups.order_by("name")

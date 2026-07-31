@@ -147,6 +147,12 @@
     {% endif %}
 
     <section>
+      <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Comments</h3>
+      {% url 'project-task-comments' project_uuid=project.uuid task_uuid=panel_task.uuid as comments_url %}
+      {% include "ui/partials/comments.html" with list_url=comments_url current_user_id=request.user.id can_comment=panel_can_comment %}
+    </section>
+
+    <section>
       <h3 class="text-xs font-semibold uppercase text-base-content/50 mb-1">Activity</h3>
       <ul class="divide-y divide-base-200">
         {% for event in panel_events %}

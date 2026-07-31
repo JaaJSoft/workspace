@@ -59,6 +59,8 @@ All settings are configurable via environment variables or a `.env` file next to
 | `WEBPUSH_VAPID_PRIVATE_KEY` | *(empty)*                   | VAPID private key (PEM). Generate with `manage.py generate_vapid_keys` |
 | `WEBPUSH_VAPID_PUBLIC_KEY`  | *(empty)*                   | VAPID public key (base64url)              |
 | `WEBPUSH_VAPID_MAILTO`      | *(empty)*                   | Contact email for VAPID claims (`mailto:…`) |
+| `METRICS_USER`         | *(empty)*                        | HTTP Basic user for `/metrics`. Endpoint returns 401 to everyone until set |
+| `METRICS_PASSWORD`     | *(empty)*                        | Matching password, in plain text. See [Monitoring](../../guides/monitoring.md) |
 | `OAUTH_GOOGLE_CLIENT_ID` | *(empty)* | Google OAuth2 client ID (enables Gmail login) |
 | `OAUTH_GOOGLE_CLIENT_SECRET` | *(empty)* | Google OAuth2 client secret |
 | `OAUTH_MICROSOFT_CLIENT_ID` | *(empty)* | Microsoft OAuth2 client ID (enables Outlook login) |
@@ -93,6 +95,10 @@ WEBPUSH_VAPID_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 -----END PRIVATE KEY-----"
 WEBPUSH_VAPID_PUBLIC_KEY=BHh5Vu...base64url...
 WEBPUSH_VAPID_MAILTO=mailto:admin@example.com
+
+# Prometheus (optional) - /metrics stays closed until both are set
+METRICS_USER=prometheus
+METRICS_PASSWORD=a-long-random-password
 
 # AI (optional)
 AI_API_KEY=sk-your-openai-key

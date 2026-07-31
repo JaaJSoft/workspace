@@ -11,7 +11,15 @@ from rest_framework.response import Response
 
 from workspace.common.uuids import parse_uuid_or_none
 
-from .models import Label, Project, ProjectMember, Task, TaskEvent, TaskStatus
+from .models import (
+    Label,
+    Project,
+    ProjectMember,
+    Task,
+    TaskComment,
+    TaskEvent,
+    TaskStatus,
+)
 from .queries import get_project_role, user_project_ids
 from .serializers import (
     LabelSerializer,
@@ -20,11 +28,14 @@ from .serializers import (
     MemberWriteSerializer,
     ProjectSerializer,
     StatusReorderSerializer,
+    TaskCommentBodySerializer,
+    TaskCommentSerializer,
     TaskMoveSerializer,
     TaskReorderSerializer,
     TaskSerializer,
     TaskStatusSerializer,
 )
+from .services.comments import notify_comment_added
 from .services.events import record_task_event
 from .services.members import (
     ProjectRuleError,
@@ -475,3 +486,69 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
 
     def _resolve_status(self, status_uuid):
         return self.project.statuses.filter(uuid=status_uuid).first()
+
+
+@extend_schema(tags=["Projects"])
+class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
+    serializer_class = TaskCommentSerializer
+    lookup_field = "uuid"
+    pagination_class = None
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        try:
+            self.task = self.project.tasks.get(uuid=kwargs["task_uuid"])
+        except Task.DoesNotExist:
+            raise Http404 from None
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return TaskComment.objects.none()
+        return (
+            self.task.comments.filter(deleted_at__isnull=True)
+            .select_related("author")
+            .order_by("created_at")
+        )
+
+    def list(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_queryset(), many=True)
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        self._require_writable()
+        body_ser = TaskCommentBodySerializer(data=request.data)
+        body_ser.is_valid(raise_exception=True)
+        comment = TaskComment.objects.create(
+            task=self.task,
+            author=request.user,
+            body=body_ser.validated_data["body"],
+        )
+        notify_comment_added(self.task, request.user)
+        return Response(
+            self.get_serializer(comment).data, status=status.HTTP_201_CREATED
+        )
+
+    def partial_update(self, request, *args, **kwargs):
+        self._require_writable()
+        comment = self._get_own_comment(request)
+        body_ser = TaskCommentBodySerializer(data=request.data)
+        body_ser.is_valid(raise_exception=True)
+        comment.body = body_ser.validated_data["body"]
+        comment.edited_at = timezone.now()
+        comment.save(update_fields=["body", "edited_at"])
+        return Response(self.get_serializer(comment).data)
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_writable()
+        comment = self._get_own_comment(request)
+        comment.deleted_at = timezone.now()
+        comment.save(update_fields=["deleted_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _get_own_comment(self, request):
+        comment = self.get_queryset().filter(uuid=self.kwargs["uuid"]).first()
+        if comment is None:
+            raise Http404
+        if comment.author_id != request.user.pk:
+            raise PermissionDenied("You can only modify your own comments.")
+        return comment

@@ -72,7 +72,8 @@ class TaskActionTests(ProjectTestMixin, TestCase):
     def test_member_gets_all_task_actions(self):
         ids = action_ids(self.member, self.task, role="member")
         self.assertEqual(
-            set(ids), {"edit", "move", "assign", "set_due", "set_labels", "delete"}
+            set(ids),
+            {"edit", "move", "assign", "set_due", "set_labels", "comment", "delete"},
         )
 
     def test_archived_project_freezes_tasks(self):

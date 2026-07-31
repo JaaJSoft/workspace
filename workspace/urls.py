@@ -30,6 +30,7 @@ from drf_spectacular.views import (
 )
 
 from workspace.core.views_health import LiveView, ReadyView, StartupView
+from workspace.core.views_metrics import metrics_view
 
 api_urlpatterns = [
     # OpenAPI schema and documentation
@@ -105,8 +106,8 @@ urlpatterns = [
     path("health/startup", StartupView.as_view(), name="health-startup"),
     path("health/live", LiveView.as_view(), name="health-live"),
     path("health/ready", ReadyView.as_view(), name="health-ready"),
-    # Prometheus metrics
-    path("", include("django_prometheus.urls")),
+    # Prometheus metrics (access-controlled, see workspace.core.views_metrics)
+    path("metrics", metrics_view, name="prometheus-django-metrics"),
 ]
 
 urlpatterns += api_urlpatterns

@@ -8,7 +8,9 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
     nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-    # Block /metrics from public access (Prometheus scrapes via ClusterIP)
+    # Defence in depth on top of the app-level check in workspace.core.views_metrics:
+    # drop /metrics at the edge so it is never reachable from outside the cluster
+    # (Prometheus scrapes via ClusterIP, which bypasses the ingress).
     nginx.ingress.kubernetes.io/server-snippet: |
       location /metrics {
         deny all;

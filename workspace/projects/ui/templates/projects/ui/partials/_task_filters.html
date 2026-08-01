@@ -11,10 +11,13 @@ card/row (see taskMatchesFilters in board.js).
     <input type="search" class="grow min-w-0" placeholder="Search tasks" x-model="filters.q">
   </label>
   {% comment %}
-    Mobile: the dropdowns share one full-width row that scrolls sideways, so the bar
-    stays two lines however many filters the project has, and no label gets clipped.
+    The dropdowns share a row that scrolls sideways rather than shrinking, so no label
+    gets clipped whatever a project's member/label/status names are. It stays a scroll
+    container at every width: the selects are sized by their widest option, so a long
+    name would otherwise spill out of the bar and scroll the whole page.
+    On mobile the row spans the full width, keeping the bar at two lines.
   {% endcomment %}
-  <div class="w-full sm:w-auto flex items-center gap-2 overflow-x-auto sm:overflow-x-visible py-1 -my-1">
+  <div class="w-full sm:w-auto flex items-center gap-2 overflow-x-auto py-1 -my-1">
     <select class="select select-bordered select-sm shrink-0" x-model="filters.assignee" aria-label="Filter by assignee">
       <option value="">All assignees</option>
       <option value="none">Unassigned</option>

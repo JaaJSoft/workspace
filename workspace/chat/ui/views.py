@@ -48,6 +48,7 @@ def _build_conversation_context(user, conversation_uuids=None):
                 left_at__isnull=True,
             ).select_related("user", "user__bot_profile"),
         ),
+        "groups",
     ).order_by("-updated_at")
 
     last_msg_subquery = (

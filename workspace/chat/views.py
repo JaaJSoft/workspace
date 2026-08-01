@@ -78,6 +78,7 @@ class ConversationListView(CacheControlMixin, APIView):
                         left_at__isnull=True,
                     ).select_related("user", "user__bot_profile"),
                 ),
+                "groups",
             )
             .order_by("-updated_at")
         )
@@ -200,7 +201,10 @@ class ConversationListView(CacheControlMixin, APIView):
             ConversationMember.objects.bulk_create(created_members)
 
         if created_members is not None:
-            conversation._prefetched_objects_cache = {"members": created_members}
+            conversation._prefetched_objects_cache = {
+                "members": created_members,
+                "groups": [],
+            }
         else:
             conversation = (
                 Conversation.objects.filter(pk=conversation.pk)
@@ -211,6 +215,7 @@ class ConversationListView(CacheControlMixin, APIView):
                             left_at__isnull=True,
                         ).select_related("user", "user__bot_profile"),
                     ),
+                    "groups",
                 )
                 .first()
             )
@@ -242,6 +247,7 @@ class ConversationDetailView(APIView):
                         left_at__isnull=True,
                     ).select_related("user", "user__bot_profile"),
                 ),
+                "groups",
             )
             .first()
         )
@@ -401,6 +407,7 @@ class ConversationMembersView(APIView):
                         left_at__isnull=True,
                     ).select_related("user", "user__bot_profile"),
                 ),
+                "groups",
             )
             .first()
         )

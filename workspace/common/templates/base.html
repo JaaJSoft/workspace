@@ -173,26 +173,29 @@
       document.addEventListener('DOMContentLoaded', function () {
         const banner = document.getElementById('tz-suggest-banner');
         if (!banner) return;
-        document.getElementById('tz-suggest-zone').textContent = detected;
+        const zone = document.createElement('strong');
+        zone.textContent = detected;
+        const text = document.createElement('span');
+        text.append('Your browser looks like it is in ', zone, '. Update your timezone?');
+        banner.appendChild(InlineAlert.create({
+          type: 'info',
+          iconName: 'globe',
+          slot: text,
+          actions: [
+            { label: 'Update', style: 'primary', onClick: function () {
+              putTimezone(detected).then(function () { window.location.reload(); });
+            } },
+            { label: 'Ignore', onClick: function () {
+              localStorage.setItem('tz-suggest-dismissed', detected);
+              banner.classList.add('hidden');
+            } },
+          ],
+        }));
         banner.classList.remove('hidden');
-        document.getElementById('tz-suggest-update').addEventListener('click', function () {
-          putTimezone(detected).then(function () { window.location.reload(); });
-        });
-        document.getElementById('tz-suggest-dismiss').addEventListener('click', function () {
-          localStorage.setItem('tz-suggest-dismissed', detected);
-          banner.classList.add('hidden');
-        });
       });
     })();
   </script>
-  <div id="tz-suggest-banner" class="hidden fixed bottom-4 right-4 z-50 max-w-md alert shadow-lg">
-    <i data-lucide="globe" class="w-5 h-5"></i>
-    <span>Your browser looks like it is in <strong id="tz-suggest-zone"></strong>. Update your timezone?</span>
-    <div class="flex gap-2">
-      <button id="tz-suggest-update" type="button" class="btn btn-primary btn-xs">Update</button>
-      <button id="tz-suggest-dismiss" type="button" class="btn btn-ghost btn-xs">Ignore</button>
-    </div>
-  </div>
+  <div id="tz-suggest-banner" class="hidden fixed bottom-4 right-4 z-50 max-w-md bg-base-100 rounded-lg shadow-lg"></div>
   {% endif %}
 
   <!-- Shared components -->

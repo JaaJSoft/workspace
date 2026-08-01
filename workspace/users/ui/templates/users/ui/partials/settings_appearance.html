@@ -73,9 +73,65 @@
       </div>
     </div>
   </div>
+
+  <div class="card bg-base-100 border border-base-300 shadow-sm mt-6" x-data="timezonePickerForm()">
+    <div class="card-body">
+      <h2 class="card-title text-lg gap-2">
+        <i data-lucide="globe" class="w-5 h-5"></i>
+        Timezone
+      </h2>
+      <p class="text-sm text-base-content/60 mt-1">
+        Dates and times across the app are shown in this timezone.
+      </p>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <select class="select select-bordered w-full max-w-xs" x-model="tz" @change="save()">
+          <template x-for="z in zones" :key="z">
+            <option :value="z" x-text="z"></option>
+          </template>
+        </select>
+        <button type="button" class="btn btn-ghost btn-sm gap-2" @click="detect()">
+          <i data-lucide="locate-fixed" class="w-4 h-4"></i>
+          Detect automatically
+        </button>
+        <span class="text-xs text-base-content/50" x-show="detected && detected !== tz">
+          Browser: <span x-text="detected"></span>
+        </span>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
+  function timezonePickerForm() {
+    const html = document.documentElement;
+    return {
+      tz: html.getAttribute('data-timezone') || '',
+      detected: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+      zones: (typeof Intl.supportedValuesOf === 'function') ? Intl.supportedValuesOf('timeZone') : [],
+      init() {
+        // The stored/detected zone must be selectable even when the browser list lacks it.
+        for (const z of [this.detected, this.tz]) {
+          if (z && !this.zones.includes(z)) this.zones = [z].concat(this.zones);
+        }
+      },
+      detect() {
+        if (!this.detected || this.detected === this.tz) return;
+        this.tz = this.detected;
+        this.save();
+      },
+      save() {
+        if (!this.tz) return;
+        html.setAttribute('data-timezone', this.tz);
+        if (window.convertLocaltimes) window.convertLocaltimes(document);
+        fetch('/api/v1/settings/core/timezone', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ value: this.tz }),
+        });
+      },
+    };
+  }
+
   function themePickerForm() {
     const html = document.documentElement;
     return {

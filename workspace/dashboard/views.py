@@ -30,7 +30,7 @@ def _get_upcoming_events(user):
     """Return today's upcoming events for the user, including recurring."""
     now = timezone.now()
     end_of_today = timezone.make_aware(
-        datetime.combine(now.date(), time.max),
+        datetime.combine(timezone.localdate(), time.max),
         timezone.get_current_timezone(),
     )
     return get_upcoming_for_user(user, now, end_of_today)

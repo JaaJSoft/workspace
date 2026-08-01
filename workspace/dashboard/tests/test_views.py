@@ -528,6 +528,27 @@ class GetUpcomingEventsTests(TestCase):
         # Same date
         self.assertEqual(now_arg.date(), end_arg.date())
 
+    @patch("workspace.dashboard.views.get_upcoming_for_user")
+    def test_window_ends_at_user_local_end_of_day(self, mock_upcoming):
+        from datetime import datetime, timezone as dt_timezone
+        from zoneinfo import ZoneInfo
+
+        from django.utils import timezone as dj_timezone
+
+        mock_upcoming.return_value = []
+        # 23:30 UTC on Jan 31 is already Feb 1 in Paris: the window must
+        # cover the user's Feb 1, not stop at UTC Jan 31 23:59.
+        fixed_now = datetime(2026, 1, 31, 23, 30, tzinfo=dt_timezone.utc)
+        dj_timezone.activate("Europe/Paris")
+        self.addCleanup(dj_timezone.deactivate)
+        with patch("django.utils.timezone.now", return_value=fixed_now):
+            _get_upcoming_events(self.user)
+
+        end_arg = mock_upcoming.call_args[0][2]
+        local_end = end_arg.astimezone(ZoneInfo("Europe/Paris"))
+        self.assertEqual(local_end.date().isoformat(), "2026-02-01")
+        self.assertGreaterEqual(end_arg, fixed_now)
+
 
 # ── index view ──────────────────────────────────────────────────
 

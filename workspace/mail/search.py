@@ -66,15 +66,16 @@ def _format_date(dt):
         return None
     from django.utils import timezone
 
-    now = timezone.now()
-    diff = now - dt
-    if diff.days == 0 and dt.date() == now.date():
-        return dt.strftime("%H:%M")
+    local = timezone.localtime(dt)
+    now = timezone.localtime(timezone.now())
+    diff = now - local
+    if diff.days == 0 and local.date() == now.date():
+        return local.strftime("%H:%M")
     if diff.days < 7:
-        return dt.strftime("%a")
-    if dt.year == now.year:
-        return dt.strftime("%d %b")
-    return dt.strftime("%d %b %Y")
+        return local.strftime("%a")
+    if local.year == now.year:
+        return local.strftime("%d %b")
+    return local.strftime("%d %b %Y")
 
 
 def search_contacts(query, user, limit):

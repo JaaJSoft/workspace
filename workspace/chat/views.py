@@ -1,6 +1,7 @@
 import logging
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.db import transaction
 from django.db.models import OuterRef, Prefetch, Subquery
 from django.utils import timezone
@@ -25,6 +26,7 @@ from .services.conversations import (
     get_unread_counts,
     user_conversation_ids,
 )
+from .services.group_sync import create_group_conversation, is_group_linked
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -78,6 +80,7 @@ class ConversationListView(CacheControlMixin, APIView):
                         left_at__isnull=True,
                     ).select_related("user", "user__bot_profile"),
                 ),
+                "groups",
             )
             .order_by("-updated_at")
         )
@@ -134,8 +137,39 @@ class ConversationListView(CacheControlMixin, APIView):
         serializer = ConversationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        member_ids = serializer.validated_data["member_ids"]
         title = serializer.validated_data.get("title", "")
+
+        group_ids = serializer.validated_data.get("group_ids")
+        if group_ids:
+            groups_by_pk = {g.pk: g for g in Group.objects.filter(pk__in=group_ids)}
+            if len(groups_by_pk) != len(set(group_ids)):
+                return Response(
+                    {"detail": "One or more group IDs are invalid."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Preserve request order so the blank-title fallback (first group's
+            # name) matches the user's first-selected group, not DB pk order.
+            groups = [groups_by_pk[pk] for pk in dict.fromkeys(group_ids)]
+            conversation = create_group_conversation(request.user, groups, title)
+            conversation = (
+                Conversation.objects.filter(pk=conversation.pk)
+                .prefetch_related(
+                    "groups",
+                    Prefetch(
+                        "members",
+                        queryset=ConversationMember.objects.filter(
+                            left_at__isnull=True,
+                        ).select_related("user", "user__bot_profile"),
+                    ),
+                )
+                .first()
+            )
+            return Response(
+                ConversationDetailSerializer(conversation).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        member_ids = serializer.validated_data.get("member_ids")
 
         # Validate that all member_ids exist and are active
         users = User.objects.filter(id__in=member_ids, is_active=True).select_related(
@@ -200,7 +234,10 @@ class ConversationListView(CacheControlMixin, APIView):
             ConversationMember.objects.bulk_create(created_members)
 
         if created_members is not None:
-            conversation._prefetched_objects_cache = {"members": created_members}
+            conversation._prefetched_objects_cache = {
+                "members": created_members,
+                "groups": [],
+            }
         else:
             conversation = (
                 Conversation.objects.filter(pk=conversation.pk)
@@ -211,6 +248,7 @@ class ConversationListView(CacheControlMixin, APIView):
                             left_at__isnull=True,
                         ).select_related("user", "user__bot_profile"),
                     ),
+                    "groups",
                 )
                 .first()
             )
@@ -242,6 +280,7 @@ class ConversationDetailView(APIView):
                         left_at__isnull=True,
                     ).select_related("user", "user__bot_profile"),
                 ),
+                "groups",
             )
             .first()
         )
@@ -317,6 +356,14 @@ class ConversationDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        if is_group_linked(conversation_id):
+            return Response(
+                {
+                    "detail": "Membership of a group-linked conversation follows its groups."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         membership.left_at = timezone.now()
         membership.save(update_fields=["left_at"])
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -351,6 +398,14 @@ class ConversationMembersView(APIView):
             return Response(
                 {"detail": "Can only add members to group conversations."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if is_group_linked(conversation.pk):
+            return Response(
+                {
+                    "detail": "Members of a group-linked conversation are managed through its groups."
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         ser = MemberAddSerializer(data=request.data)
@@ -401,6 +456,7 @@ class ConversationMembersView(APIView):
                         left_at__isnull=True,
                     ).select_related("user", "user__bot_profile"),
                 ),
+                "groups",
             )
             .first()
         )
@@ -428,6 +484,14 @@ class ConversationMemberRemoveView(APIView):
             return Response(
                 {"detail": "Can only remove members from group conversations."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if is_group_linked(conversation.pk):
+            return Response(
+                {
+                    "detail": "Members of a group-linked conversation are managed through its groups."
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         if conversation.created_by_id != request.user.id:

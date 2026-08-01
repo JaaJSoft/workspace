@@ -1,7 +1,7 @@
 <!-- Chat Attachment Viewer Modal -->
 <div x-data="chatAttachmentViewer()">
   <dialog x-ref="dialog" class="modal" @close="open = false">
-    <div class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col max-w-5xl">
+    <div class="modal-box max-h-[90vh] w-full h-full p-0 flex flex-col max-w-5xl relative">
       <!-- Actions (Top Right) -->
       <div class="absolute top-4 right-4 z-10 flex items-center gap-1">
         <!-- Download -->
@@ -25,7 +25,14 @@
       <div class="flex items-center gap-2 p-4 pr-24 border-b border-base-300 bg-base-100">
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
-          <p class="text-sm text-base-content/60" x-text="mimeType"></p>
+          <div class="flex items-center gap-2">
+            <p class="text-sm text-base-content/60" x-text="mimeType"></p>
+            <span
+              class="text-xs text-base-content/40"
+              x-show="_totalViewable() > 1"
+              x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"
+            ></span>
+          </div>
         </div>
       </div>
 
@@ -46,6 +53,28 @@
           <p class="text-sm text-base-content/60" x-text="error"></p>
         </div>
       </div>
+
+      <!-- Prev / Next overlay arrows -->
+      <button
+        type="button"
+        class="btn btn-circle absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow"
+        title="Previous attachment"
+        x-show="_totalViewable() > 1 && _currentIndex() > 0"
+        x-cloak
+        @click="navigatePrev()"
+      >
+        <i data-lucide="chevron-left" class="w-5 h-5"></i>
+      </button>
+      <button
+        type="button"
+        class="btn btn-circle absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow"
+        title="Next attachment"
+        x-show="_totalViewable() > 1 && _currentIndex() >= 0 && _currentIndex() < _totalViewable() - 1"
+        x-cloak
+        @click="navigateNext()"
+      >
+        <i data-lucide="chevron-right" class="w-5 h-5"></i>
+      </button>
     </div>
 
     <!-- Backdrop -->
@@ -126,6 +155,68 @@
           }
         },
 
+        _getViewableAttachments() {
+          const els = document.querySelectorAll('#message-list [data-attachment-uuid]');
+          return Array.from(els)
+            .filter(function(el) { return el.offsetParent !== null; })
+            .map(function(el) {
+              return {
+                uuid: el.dataset.attachmentUuid,
+                name: el.dataset.attachmentName,
+                type: el.dataset.attachmentType,
+              };
+            });
+        },
+
+        _currentIndex() {
+          // Read the reactive uuid before querying the DOM: the message list
+          // loads after Alpine init, so without a reactive dependency these
+          // bindings would be evaluated once against an empty list and stick.
+          const current = this.attachmentUuid;
+          const atts = this._getViewableAttachments();
+          return atts.findIndex(function(a) { return a.uuid === current; });
+        },
+
+        _totalViewable() {
+          void this.attachmentUuid;
+          return this._getViewableAttachments().length;
+        },
+
+        navigateNext() {
+          const atts = this._getViewableAttachments();
+          const idx = this._currentIndex();
+          if (idx >= 0 && idx < atts.length - 1) {
+            const next = atts[idx + 1];
+            this.openAttachment(next.uuid, next.name, next.type);
+          }
+        },
+
+        navigatePrev() {
+          const atts = this._getViewableAttachments();
+          const idx = this._currentIndex();
+          if (idx > 0) {
+            const prev = atts[idx - 1];
+            this.openAttachment(prev.uuid, prev.name, prev.type);
+          }
+        },
+
+        handleKeydown(event) {
+          if (!this.open) return;
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+
+          const active = document.activeElement;
+          const tag = active && active.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+          if (active && active.isContentEditable) return;
+
+          event.preventDefault();
+          if (event.key === 'ArrowLeft') {
+            this.navigatePrev();
+          } else {
+            this.navigateNext();
+          }
+        },
+
         saveToFiles() {
           const uuid = this.attachmentUuid;
           this.close();
@@ -154,7 +245,13 @@
             const d = e.detail;
             self.openAttachment(d.uuid, d.name, d.type);
           };
+          this._keydownHandler = function(e) { self.handleKeydown(e); };
           window.addEventListener('open-chat-attachment-viewer', this._openHandler);
+          window.addEventListener('keydown', this._keydownHandler);
+          this._detachSwipe = window.attachSwipeNavigation(this.$refs.dialog, {
+            onPrev: function() { self.navigatePrev(); },
+            onNext: function() { self.navigateNext(); },
+          });
         },
       };
     }

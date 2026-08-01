@@ -28,6 +28,11 @@ from workspace.files.ui.viewers import ViewerRegistry
 from workspace.users.services.settings import get_setting
 
 
+def _user_chat_groups(user):
+    """Groups the user can attach conversations to, shaped for json_script."""
+    return [{"id": g.pk, "name": g.name} for g in user.groups.order_by("name")]
+
+
 def _build_conversation_context(user, conversation_uuids=None):
     """Build conversation list with display data for templates.
 
@@ -48,6 +53,7 @@ def _build_conversation_context(user, conversation_uuids=None):
                 left_at__isnull=True,
             ).select_related("user", "user__bot_profile"),
         ),
+        "groups",
     ).order_by("-updated_at")
 
     last_msg_subquery = (
@@ -177,6 +183,7 @@ def chat_view(request, conversation_uuid=None):
             "call_sounds_enabled": get_setting(
                 request.user, "chat", "call_sounds", default=True
             ),
+            "chat_groups": _user_chat_groups(request.user),
         },
     )
 
@@ -205,6 +212,7 @@ def chat_room_view(request, conversation_uuid):
                 left_at__isnull=True,
             ).select_related("user", "user__bot_profile"),
         ),
+        "groups",
     )
 
     conversation_data = ConversationListSerializer(conversation).data
@@ -235,6 +243,7 @@ def chat_room_view(request, conversation_uuid):
                 request.user, "chat", "call_sounds", default=True
             ),
             "current_user_id": request.user.id,
+            "chat_groups": _user_chat_groups(request.user),
         },
     )
 

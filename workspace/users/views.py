@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings as django_settings
 from django.contrib.auth import password_validation, update_session_auth_hash
@@ -477,6 +478,16 @@ _setting_fields = {
 }
 
 
+def _validate_setting_value(module, key, value):
+    """Return an error message when the value is rejected, else None."""
+    if module == "core" and key == "timezone" and value is not None:
+        try:
+            ZoneInfo(str(value))
+        except ZoneInfoNotFoundError, ValueError:
+            return "Invalid timezone."
+    return None
+
+
 @extend_schema(tags=["Settings"])
 class SettingsListView(APIView):
     """List all settings for the authenticated user, optionally filtered by module."""
@@ -545,10 +556,14 @@ class SettingDetailView(APIView):
         ),
         responses={
             200: inline_serializer(name="SettingWriteResponse", fields=_setting_fields),
+            400: OpenApiResponse(description="Invalid value for this setting."),
         },
     )
     def put(self, request, module, key):
         value = request.data.get("value")
+        error = _validate_setting_value(module, key, value)
+        if error:
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
         obj = set_setting(request.user, module, key, value)
         return Response({"module": obj.module, "key": obj.key, "value": obj.value})
 
@@ -620,6 +635,13 @@ class SettingsModuleView(APIView):
                 {"detail": "Body must be a JSON object of {key: value} pairs."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        for key, value in data.items():
+            error = _validate_setting_value(module, key, value)
+            if error:
+                return Response(
+                    {"detail": f"{key}: {error}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         with transaction.atomic():
             for key, value in data.items():
                 set_setting(request.user, module, key, value)

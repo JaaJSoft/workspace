@@ -397,3 +397,47 @@ class SettingCacheTests(TestCase):
         delete_setting(self.user, "profile", "bio")
         # Deleted key must disappear from the module dict
         self.assertEqual(get_module_settings(self.user, "profile"), {})
+
+
+class TimezoneSettingValidationTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="tzval", password="pass")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_put_rejects_invalid_timezone(self):
+        resp = self.client.put(
+            "/api/v1/settings/core/timezone",
+            data={"value": "Mars/Olympus"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertNotIn("timezone", get_module_settings(self.user, "core"))
+
+    def test_put_accepts_valid_timezone(self):
+        resp = self.client.put(
+            "/api/v1/settings/core/timezone",
+            data={"value": "Europe/Paris"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(get_setting(self.user, "core", "timezone"), "Europe/Paris")
+
+    def test_put_accepts_null_to_clear(self):
+        resp = self.client.put(
+            "/api/v1/settings/core/timezone",
+            data={"value": None},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    def test_bulk_patch_rejects_invalid_timezone(self):
+        resp = self.client.patch(
+            "/api/v1/settings/core",
+            data={"timezone": "Not/AZone", "theme": "dark"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertNotIn("timezone", get_module_settings(self.user, "core"))

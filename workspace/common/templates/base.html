@@ -148,19 +148,50 @@
   <script src="{% static 'ui/js/dialogs.js' %}"></script>
   <script src="{% static 'ui/js/inline_alert.js' %}"></script>
 
-  {% if user.is_authenticated and not user_timezone %}
+  {% if user.is_authenticated %}
   <script>
-    // Auto-detect + persist the browser timezone the first time the user signs in.
+    // Timezone bookkeeping: first sign-in auto-detects; afterwards the stored
+    // setting wins and a divergent browser zone only surfaces a suggestion.
     (function () {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (!tz) return;
-      fetch('/api/v1/settings/core/timezone', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ value: tz }),
-      }).catch(function () {});
+      const putTimezone = function (value) {
+        return fetch('/api/v1/settings/core/timezone', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ value: value }),
+        });
+      };
+      const stored = document.documentElement.getAttribute('data-timezone') || '';
+      const detected = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      if (!detected) return;
+      if (!stored) {
+        putTimezone(detected).catch(function () {});
+        return;
+      }
+      if (stored === detected) return;
+      if (localStorage.getItem('tz-suggest-dismissed') === detected) return;
+      document.addEventListener('DOMContentLoaded', function () {
+        const banner = document.getElementById('tz-suggest-banner');
+        if (!banner) return;
+        document.getElementById('tz-suggest-zone').textContent = detected;
+        banner.classList.remove('hidden');
+        document.getElementById('tz-suggest-update').addEventListener('click', function () {
+          putTimezone(detected).then(function () { window.location.reload(); });
+        });
+        document.getElementById('tz-suggest-dismiss').addEventListener('click', function () {
+          localStorage.setItem('tz-suggest-dismissed', detected);
+          banner.classList.add('hidden');
+        });
+      });
     })();
   </script>
+  <div id="tz-suggest-banner" class="hidden fixed bottom-4 right-4 z-50 max-w-md alert shadow-lg">
+    <i data-lucide="globe" class="w-5 h-5"></i>
+    <span>Your browser looks like it is in <strong id="tz-suggest-zone"></strong>. Update your timezone?</span>
+    <div class="flex gap-2">
+      <button id="tz-suggest-update" type="button" class="btn btn-primary btn-xs">Update</button>
+      <button id="tz-suggest-dismiss" type="button" class="btn btn-ghost btn-xs">Ignore</button>
+    </div>
+  </div>
   {% endif %}
 
   <!-- Shared components -->

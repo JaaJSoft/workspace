@@ -134,8 +134,11 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       // ?action=new-event or ?action=new-poll - open create modal from command palette
       const action = params.get('action');
       if (action === 'new-event') {
-        const start = this._nowWallClock();
-        this.$nextTick(() => this.openCreateModal(start, this._addHour(new Date().toISOString()), false));
+        // Pass real instants: openCreateModal converts them to the user
+        // zone itself (a preformatted wall-clock string would be shifted
+        // a second time).
+        const now = new Date().toISOString();
+        this.$nextTick(() => this.openCreateModal(now, this._addHour(now), false));
       } else if (action === 'new-poll') {
         this.$nextTick(() => { this.showPollListModal = true; this.openPollCreate(); });
       }
@@ -414,7 +417,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
     // --- Create modal ---
     createEventNow() {
-      this.openCreateModal(this._nowWallClock(), this._addHour(new Date().toISOString()), false);
+      // Real instants only: openCreateModal owns the wall-clock conversion.
+      const now = new Date().toISOString();
+      this.openCreateModal(now, this._addHour(now), false);
     },
 
     openCreateModal(start, end, allDay) {
@@ -426,16 +431,20 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       // Preference controls all-day default, ignore FullCalendar's allDay flag
       const useAllDay = this.prefs.defaultAllDay;
 
-      // If month view gives date-only string but we need datetime, default to 09:00
-      let startStr = start;
-      let endStr = end;
-      if (!useAllDay && startStr.length === 10) {
-        startStr = startStr + 'T09:00:00';
-        endStr = endStr || (startStr.split('T')[0] + 'T10:00:00');
+      let startVal, endVal;
+      if (useAllDay) {
+        startVal = this.toLocalDate(start);
+        endVal = end ? this.toLocalDate(end) : '';
+      } else if (start.length === 10) {
+        // A date-only grid click already names the intended day in the
+        // display zone: attach the default times verbatim - converting the
+        // naive string would shift it by the browser/user zone delta.
+        startVal = start + 'T09:00';
+        endVal = end && end.length !== 10 ? this.toLocalDatetime(end) : start + 'T10:00';
+      } else {
+        startVal = this.toLocalDatetime(start);
+        endVal = end ? this.toLocalDatetime(end) : '';
       }
-
-      const startVal = useAllDay ? this.toLocalDate(startStr) : this.toLocalDatetime(startStr);
-      const endVal = endStr ? (useAllDay ? this.toLocalDate(endStr) : this.toLocalDatetime(endStr)) : '';
 
       this.form = {
         uuid: null,

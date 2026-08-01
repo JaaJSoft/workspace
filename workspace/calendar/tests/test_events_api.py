@@ -586,3 +586,53 @@ class RangeEndpointTimezoneTests(CalendarTestMixin, APITestCase):
             if e["title"] in ("Day label", "Morning meeting")
         ]
         self.assertEqual(titles, ["Day label", "Morning meeting"])
+
+
+class TimezoneStampingScopeTests(CalendarTestMixin, APITestCase):
+    """Only a series GAINING recurrence adopts the editor's zone; legacy
+    recurring series keep UTC expansion whatever else is edited."""
+
+    url = "/api/v1/calendar/events"
+
+    def tearDown(self):
+        dj_timezone.deactivate()
+        cache.clear()
+
+    def _login_paris(self):
+        set_setting(self.owner, "core", "timezone", "Europe/Paris")
+        self.client.force_login(self.owner)
+
+    def test_editing_legacy_recurring_series_keeps_utc_expansion(self):
+        event = Event.objects.create(
+            calendar=self.calendar,
+            title="Legacy daily",
+            start=datetime(2026, 8, 5, 9, 0, tzinfo=UTC),
+            owner=self.owner,
+            recurrence_frequency="daily",
+        )
+        self._login_paris()
+        resp = self.client.put(
+            f"{self.url}/{event.uuid}",
+            {"title": "Legacy daily renamed"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        event.refresh_from_db()
+        self.assertEqual(event.timezone, "")
+
+    def test_gaining_recurrence_stamps_active_timezone(self):
+        event = Event.objects.create(
+            calendar=self.calendar,
+            title="One-off",
+            start=datetime(2026, 8, 5, 9, 0, tzinfo=UTC),
+            owner=self.owner,
+        )
+        self._login_paris()
+        resp = self.client.put(
+            f"{self.url}/{event.uuid}",
+            {"recurrence_frequency": "daily"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        event.refresh_from_db()
+        self.assertEqual(event.timezone, "Europe/Paris")

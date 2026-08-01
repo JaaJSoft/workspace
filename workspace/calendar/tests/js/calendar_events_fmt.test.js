@@ -25,6 +25,16 @@ function makeCalendarApp(userTz) {
     calendarPollsMixin: mixinStub,
   });
   ctx.getUserTimeZone = () => userTz;
+  // In the browser localtime.js shares the window; mirror its helper here.
+  ctx.isoToWallClock = (iso, tz) => {
+    const p = {};
+    const dtf = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    });
+    for (const part of dtf.formatToParts(new Date(iso))) p[part.type] = part.value;
+    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+  };
   return ctx.calendarApp();
 }
 
@@ -90,4 +100,38 @@ test('panel labels read raw instants, not the wall-clock form values', () => {
   // Same-day events keep the times on the clock line only.
   assert.doesNotMatch(merged.panelDateDisplay(), /21:42|05:42/);
   assert.match(merged.panelDateDisplay(), /August 13|13 ao\xc3\xbbt|13 ao\u00fbt/);
+});
+
+test('openCreateModal keeps date-only clicks on their day with verbatim default times', () => {
+  const { mixin } = makeEventsMixin('Asia/Vladivostok');
+  const app = makeCalendarApp('Asia/Vladivostok');
+  const merged = Object.assign({}, app, mixin, {
+    showModal: false,
+    showPanel: false,
+    modalMode: '',
+    ownedCalendars: [],
+    selectedMembers: [],
+    prefs: { defaultAllDay: false, timeFormat: '24h' },
+  });
+  // A month-view click hands over a date-only string: the prefill must be
+  // that day at 09:00 verbatim, not a converted (shifted) wall clock.
+  merged.openCreateModal('2026-08-05', '', false);
+  assert.equal(merged.form.start, '2026-08-05T09:00');
+  assert.equal(merged.form.end, '2026-08-05T10:00');
+});
+
+test('openCreateModal converts real instants to the configured wall clock', () => {
+  const { mixin, ctx } = makeEventsMixin('Asia/Vladivostok');
+  const app = makeCalendarApp('Asia/Vladivostok');
+  const merged = Object.assign({}, app, mixin, {
+    showModal: false,
+    showPanel: false,
+    modalMode: '',
+    ownedCalendars: [],
+    selectedMembers: [],
+    prefs: { defaultAllDay: false, timeFormat: '24h' },
+  });
+  // 11:42Z is 21:42 in Vladivostok (+10).
+  merged.openCreateModal('2026-08-05T11:42:00Z', '', false);
+  assert.equal(merged.form.start, '2026-08-05T21:42');
 });

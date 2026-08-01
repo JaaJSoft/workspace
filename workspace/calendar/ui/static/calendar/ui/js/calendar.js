@@ -372,10 +372,6 @@ window.calendarApp = function calendarApp() {
       return window.isoToWallClock(isoStr, this._tz()).slice(0, 10);
     },
 
-    _nowWallClock() {
-      return window.isoToWallClock(new Date().toISOString(), this._tz());
-    },
-
     _addHour(isoStr) {
       const d = new Date(isoStr);
       d.setHours(d.getHours() + 1);

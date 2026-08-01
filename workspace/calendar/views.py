@@ -95,6 +95,7 @@ def _update_event_fields(event, data, user):
         except Calendar.DoesNotExist:
             return {"detail": "Calendar not found."}
 
+    had_recurrence = event.recurrence_frequency is not None
     for field in [
         "title",
         "description",
@@ -114,9 +115,11 @@ def _update_event_fields(event, data, user):
         event.start = normalize_all_day(event.start)
         event.end = normalize_all_day(event.end)
         event.timezone = ""
-    elif event.recurrence_frequency and not event.timezone:
-        # A series gaining recurrence anchors its wall clock in the zone
-        # it is being edited from.
+    elif event.recurrence_frequency and not had_recurrence and not event.timezone:
+        # Only a series GAINING recurrence anchors its wall clock in the
+        # editing zone. Legacy recurring series (blank timezone) must keep
+        # UTC expansion: stamping them on an unrelated edit would shift
+        # future occurrences and orphan their exceptions.
         event.timezone = current_timezone_name()
     event.save()
     return None

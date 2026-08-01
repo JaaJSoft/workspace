@@ -227,6 +227,8 @@ def _count_to_end(start, frequency, interval, count, tzid=""):
         try:
             dtstart = start.astimezone(ZoneInfo(tzid))
         except ZoneInfoNotFoundError, KeyError, ValueError:
+            # Unknown TZID in the feed: count in UTC, matching how the
+            # expansion engine treats an unresolvable event timezone.
             pass
     rule = du_rrule(freq, interval=interval, dtstart=dtstart, count=count)
     return rule[count - 1].astimezone(UTC)

@@ -23,9 +23,38 @@
 
       <!-- Header -->
       <div class="flex items-center gap-2 p-4 pr-24 border-b border-base-300 bg-base-100">
+        <!-- Prev / Next buttons -->
+        <div class="flex items-center gap-0.5 shrink-0" x-show="_totalViewable() > 1">
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square"
+            title="Previous attachment"
+            :disabled="_currentIndex() <= 0"
+            @click="navigatePrev()"
+          >
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square"
+            title="Next attachment"
+            :disabled="_currentIndex() < 0 || _currentIndex() >= _totalViewable() - 1"
+            @click="navigateNext()"
+          >
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-lg truncate" x-text="fileName"></h3>
-          <p class="text-sm text-base-content/60" x-text="mimeType"></p>
+          <div class="flex items-center gap-2">
+            <p class="text-sm text-base-content/60" x-text="mimeType"></p>
+            <span
+              class="text-xs text-base-content/40"
+              x-show="_totalViewable() > 1"
+              x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"
+            ></span>
+          </div>
         </div>
       </div>
 
@@ -126,6 +155,68 @@
           }
         },
 
+        _getViewableAttachments() {
+          const els = document.querySelectorAll('#message-list [data-attachment-uuid]');
+          return Array.from(els)
+            .filter(function(el) { return el.offsetParent !== null; })
+            .map(function(el) {
+              return {
+                uuid: el.dataset.attachmentUuid,
+                name: el.dataset.attachmentName,
+                type: el.dataset.attachmentType,
+              };
+            });
+        },
+
+        _currentIndex() {
+          // Read the reactive uuid before querying the DOM: the message list
+          // loads after Alpine init, so without a reactive dependency these
+          // bindings would be evaluated once against an empty list and stick.
+          const current = this.attachmentUuid;
+          const atts = this._getViewableAttachments();
+          return atts.findIndex(function(a) { return a.uuid === current; });
+        },
+
+        _totalViewable() {
+          void this.attachmentUuid;
+          return this._getViewableAttachments().length;
+        },
+
+        navigateNext() {
+          const atts = this._getViewableAttachments();
+          const idx = this._currentIndex();
+          if (idx >= 0 && idx < atts.length - 1) {
+            const next = atts[idx + 1];
+            this.openAttachment(next.uuid, next.name, next.type);
+          }
+        },
+
+        navigatePrev() {
+          const atts = this._getViewableAttachments();
+          const idx = this._currentIndex();
+          if (idx > 0) {
+            const prev = atts[idx - 1];
+            this.openAttachment(prev.uuid, prev.name, prev.type);
+          }
+        },
+
+        handleKeydown(event) {
+          if (!this.open) return;
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+
+          const active = document.activeElement;
+          const tag = active && active.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+          if (active && active.isContentEditable) return;
+
+          event.preventDefault();
+          if (event.key === 'ArrowLeft') {
+            this.navigatePrev();
+          } else {
+            this.navigateNext();
+          }
+        },
+
         saveToFiles() {
           const uuid = this.attachmentUuid;
           this.close();
@@ -154,7 +245,9 @@
             const d = e.detail;
             self.openAttachment(d.uuid, d.name, d.type);
           };
+          this._keydownHandler = function(e) { self.handleKeydown(e); };
           window.addEventListener('open-chat-attachment-viewer', this._openHandler);
+          window.addEventListener('keydown', this._keydownHandler);
         },
       };
     }

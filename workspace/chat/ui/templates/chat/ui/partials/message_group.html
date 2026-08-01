@@ -116,7 +116,10 @@
                   {% with media_count=media|length %}
                     {% if media_count == 1 %}
                       {% with att=media.0 %}
-                        <div class="relative group/att inline-block">
+                        <div class="relative group/att inline-block"
+                             data-attachment-uuid="{{ att.uuid }}"
+                             data-attachment-name="{{ att.original_name }}"
+                             data-attachment-type="{{ att.type }}">
                           <div class="block cursor-pointer"
                                @click="window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {detail: {uuid: '{{ att.uuid }}', name: '{{ att.original_name|escapejs }}', type: '{{ att.type|escapejs }}'}}))">
                             {% if att.is_image %}
@@ -157,6 +160,9 @@
                         {% for att in media %}
                           <div class="relative group/att cursor-pointer overflow-hidden
                                       {% if media_count == 3 and forloop.first %}col-span-2 aspect-[2/1]{% else %}aspect-square{% endif %}"
+                               data-attachment-uuid="{{ att.uuid }}"
+                               data-attachment-name="{{ att.original_name }}"
+                               data-attachment-type="{{ att.type }}"
                                @click="window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {detail: {uuid: '{{ att.uuid }}', name: '{{ att.original_name|escapejs }}', type: '{{ att.type|escapejs }}'}}))">
                             {% if att.is_image %}
                               <img
@@ -191,7 +197,10 @@
                     {% endif %}
                   {% endwith %}
                   {% for att in files %}
-                    <div class="flex items-center gap-0.5 group/att min-w-0">
+                    <div class="flex items-center gap-0.5 group/att min-w-0"
+                         data-attachment-uuid="{{ att.uuid }}"
+                         data-attachment-name="{{ att.original_name }}"
+                         data-attachment-type="{{ att.type }}">
                       <div class="flex items-center gap-2 p-2 rounded-lg {% if is_own %}bg-info/15 hover:bg-info/25{% else %}bg-base-300/50 hover:bg-base-300{% endif %} transition-colors min-w-0 flex-1 cursor-pointer"
                            @click="window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {detail: {uuid: '{{ att.uuid }}', name: '{{ att.original_name|escapejs }}', type: '{{ att.type|escapejs }}'}}))">
                         <i data-lucide="file" class="w-4 h-4 flex-shrink-0"></i>

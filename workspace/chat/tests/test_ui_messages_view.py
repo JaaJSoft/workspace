@@ -57,6 +57,9 @@ class ConversationMessagesViewAttachmentTests(TestCase):
         # assert on the uuid to cover both shapes.
         for att in attachments:
             self.assertIn(str(att.uuid), html)
+        # The viewer's prev/next navigation walks these data attributes.
+        for att in attachments:
+            self.assertIn(f'data-attachment-uuid="{att.uuid}"', html)
 
     def test_single_image_renders(self):
         att = self._attach("solo.png", "image/png", "image")

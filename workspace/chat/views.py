@@ -1,6 +1,7 @@
 import logging
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.db import transaction
 from django.db.models import OuterRef, Prefetch, Subquery
 from django.utils import timezone
@@ -25,6 +26,7 @@ from .services.conversations import (
     get_unread_counts,
     user_conversation_ids,
 )
+from .services.group_sync import create_group_conversation
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -135,8 +137,36 @@ class ConversationListView(CacheControlMixin, APIView):
         serializer = ConversationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        member_ids = serializer.validated_data["member_ids"]
         title = serializer.validated_data.get("title", "")
+
+        group_ids = serializer.validated_data.get("group_ids")
+        if group_ids:
+            groups = list(Group.objects.filter(pk__in=group_ids))
+            if len(groups) != len(set(group_ids)):
+                return Response(
+                    {"detail": "One or more group IDs are invalid."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            conversation = create_group_conversation(request.user, groups, title)
+            conversation = (
+                Conversation.objects.filter(pk=conversation.pk)
+                .prefetch_related(
+                    "groups",
+                    Prefetch(
+                        "members",
+                        queryset=ConversationMember.objects.filter(
+                            left_at__isnull=True,
+                        ).select_related("user", "user__bot_profile"),
+                    ),
+                )
+                .first()
+            )
+            return Response(
+                ConversationDetailSerializer(conversation).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        member_ids = serializer.validated_data.get("member_ids")
 
         # Validate that all member_ids exist and are active
         users = User.objects.filter(id__in=member_ids, is_active=True).select_related(

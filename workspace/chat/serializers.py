@@ -266,9 +266,22 @@ class ConversationCreateSerializer(serializers.Serializer):
     member_ids = serializers.ListField(
         child=serializers.IntegerField(),
         min_length=1,
+        required=False,
+    )
+    group_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1,
+        required=False,
     )
     title = serializers.CharField(max_length=255, required=False, default="")
     description = serializers.CharField(required=False, default="", allow_blank=True)
+
+    def validate(self, attrs):
+        if bool(attrs.get("member_ids")) == bool(attrs.get("group_ids")):
+            raise serializers.ValidationError(
+                "Provide exactly one of member_ids or group_ids."
+            )
+        return attrs
 
 
 class MessageCreateSerializer(serializers.Serializer):

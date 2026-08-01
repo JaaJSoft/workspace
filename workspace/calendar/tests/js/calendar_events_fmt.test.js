@@ -6,11 +6,45 @@ const { loadScript } = require('../../../common/tests/js/loader');
 
 const mixinStub = () => ({});
 
+// In the browser localtime.js shares the window with every calendar
+// script; mirror its wall-clock helpers into a vm realm.
+function injectTzHelpers(ctx) {
+  const parts = (d, tz) => {
+    const out = {};
+    const dtf = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    });
+    for (const part of dtf.formatToParts(d)) out[part.type] = part.value;
+    return out;
+  };
+  const offsetMs = (tz, date) => {
+    const p = parts(date, tz);
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - date.getTime();
+  };
+  ctx.wallClockToIso = (naive, tz) => {
+    if (!naive) return null;
+    if (!tz) return new Date(naive.length === 10 ? naive + 'T00:00' : naive).toISOString();
+    const [datePart, timePart] = naive.split('T');
+    const [y, mo, d] = datePart.split('-').map(Number);
+    const [h = 0, mi = 0, sec = 0] = (timePart || '00:00').split(':').map(Number);
+    const guess = Date.UTC(y, mo - 1, d, h, mi, sec);
+    let ts = guess - offsetMs(tz, new Date(guess));
+    ts = guess - offsetMs(tz, new Date(ts));
+    return new Date(ts).toISOString();
+  };
+  ctx.isoToWallClock = (iso, tz) => {
+    const p = parts(new Date(iso), tz);
+    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+  };
+}
+
 function makeEventsMixin(userTz) {
   const ctx = loadScript('workspace/calendar/ui/static/calendar/ui/js/calendar_events.js', {
     document: { getElementById: () => null },
   });
   ctx.getUserTimeZone = () => userTz;
+  injectTzHelpers(ctx);
   return { ctx, mixin: ctx.calendarEventsMixin() };
 }
 
@@ -25,16 +59,7 @@ function makeCalendarApp(userTz) {
     calendarPollsMixin: mixinStub,
   });
   ctx.getUserTimeZone = () => userTz;
-  // In the browser localtime.js shares the window; mirror its helper here.
-  ctx.isoToWallClock = (iso, tz) => {
-    const p = {};
-    const dtf = new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-    });
-    for (const part of dtf.formatToParts(new Date(iso))) p[part.type] = part.value;
-    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
-  };
+  injectTzHelpers(ctx);
   return ctx.calendarApp();
 }
 
@@ -134,4 +159,26 @@ test('openCreateModal converts real instants to the configured wall clock', () =
   // 11:42Z is 21:42 in Vladivostok (+10).
   merged.openCreateModal('2026-08-05T11:42:00Z', '', false);
   assert.equal(merged.form.start, '2026-08-05T21:42');
+});
+
+test('applyDuration adds to the user-zone wall clock, not the browser parse', () => {
+  const { mixin } = makeEventsMixin('Asia/Vladivostok');
+  const app = makeCalendarApp('Asia/Vladivostok');
+  const merged = Object.assign({}, app, mixin, {
+    form: { start: '2026-08-05T09:00', end: '', all_day: false },
+    prefs: { timeFormat: '24h' },
+  });
+  merged.applyDuration(60);
+  assert.equal(merged.form.end, '2026-08-05T10:00');
+});
+
+test('applyDuration on all-day events does pure day-label arithmetic', () => {
+  const { mixin } = makeEventsMixin('America/Los_Angeles');
+  const app = makeCalendarApp('America/Los_Angeles');
+  const merged = Object.assign({}, app, mixin, {
+    form: { start: '2026-08-05', end: '', all_day: true },
+    prefs: { timeFormat: '24h' },
+  });
+  merged.applyDuration(1440);
+  assert.equal(merged.form.end, '2026-08-06');
 });

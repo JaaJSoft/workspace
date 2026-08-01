@@ -231,7 +231,11 @@ window.shareModal = function shareModal() {
       this.creatingLink = true;
       const csrfToken = getCSRFToken();
       const body = {};
-      if (this.newLinkExpiry) body.expires_at = new Date(this.newLinkExpiry).toISOString();
+      // The picked day means "valid through that day" in the user's zone.
+      if (this.newLinkExpiry) {
+        const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+        body.expires_at = window.wallClockToIso(this.newLinkExpiry + 'T23:59:59', tz);
+      }
       if (this.newLinkPassword) body.password = this.newLinkPassword;
       try {
         const resp = await fetch(`/api/v1/files/${this.fileUuid}/share-links`, {
@@ -270,9 +274,10 @@ window.shareModal = function shareModal() {
 
     formatLinkExpiry(expiresAt) {
       if (!expiresAt) return 'Permanent';
-      // The expiry is a date-only choice stored as UTC midnight: format it
-      // in UTC so the chosen day never shifts with the user timezone.
-      return new Date(expiresAt).toLocaleDateString(undefined, { timeZone: 'UTC' });
+      // Expiry is stored as end-of-day in the user's zone: formatting in
+      // that zone shows the day the user picked.
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+      return new Date(expiresAt).toLocaleDateString(undefined, { timeZone: tz });
     },
   };
 };

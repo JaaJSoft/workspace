@@ -748,9 +748,19 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
     applyDuration(minutes) {
       if (!this.form.start) return;
-      const d = new Date(this.form.start);
-      d.setMinutes(d.getMinutes() + minutes);
-      this.form.end = this.form.all_day ? this.toLocalDate(d.toISOString()) : this.toLocalDatetime(d.toISOString());
+      if (this.form.all_day) {
+        // Pure day-label arithmetic: routing the date through Date/instant
+        // conversions would shift it by the browser/user zone delta.
+        const [y, m, d] = this.form.start.split('-').map(Number);
+        this.form.end = new Date(Date.UTC(y, m - 1, d + minutes / 1440)).toISOString().slice(0, 10);
+        return;
+      }
+      // form.start is a user-zone wall clock: resolve it to an instant in
+      // that zone, add the duration, and render back in the same zone.
+      const tz = this._tz();
+      const d = new Date(window.wallClockToIso(this.form.start, tz));
+      d.setTime(d.getTime() + minutes * 60000);
+      this.form.end = window.isoToWallClock(d.toISOString(), tz);
     },
 
     // --- Keyboard shortcuts ---

@@ -1,5 +1,4 @@
 import logging
-from datetime import UTC, datetime
 
 import icalendar
 from django.db import transaction
@@ -7,9 +6,29 @@ from django.utils import timezone as django_tz
 
 from workspace.calendar.models import Event, EventMember
 from workspace.calendar.services.event_creation import create_event_from_payload
+from workspace.calendar.services.ics_common import (
+    extract_email,
+    is_all_day,
+    parse_dt_prop,
+)
+from workspace.calendar.services.timezones import normalize_all_day
 from workspace.notifications.services.notifications import notify
+from workspace.users.services.settings import get_user_timezone
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_event_times(vevent, user):
+    """Return (start, end, all_day, tzid) for a VEVENT, invariant-normalized."""
+    owner_tz = get_user_timezone(user)
+    start, tzid = parse_dt_prop(vevent.get("DTSTART"), owner_tz)
+    end, _ = parse_dt_prop(vevent.get("DTEND"), owner_tz)
+    all_day = is_all_day(vevent.get("DTSTART"))
+    if all_day:
+        start = normalize_all_day(start)
+        end = normalize_all_day(end)
+        tzid = ""
+    return start, end, all_day, tzid
 
 
 def process_calendar_email(mail_message):
@@ -85,9 +104,8 @@ def _handle_cancel(vevent, uid, mail_message):
 def _create_event(vevent, uid, sequence, mail_message):
     """Create a new Event from a VEVENT component."""
     user = mail_message.account.owner
-    external_organizer = _extract_email(vevent.get("ORGANIZER"))
-    dtstart = _to_datetime(vevent.get("DTSTART"))
-    dtend = _to_datetime(vevent.get("DTEND"))
+    external_organizer = extract_email(vevent.get("ORGANIZER"))
+    dtstart, dtend, all_day, tzid = _parse_event_times(vevent, user)
 
     event = create_event_from_payload(
         user=user,
@@ -96,7 +114,8 @@ def _create_event(vevent, uid, sequence, mail_message):
             "description": str(vevent.get("DESCRIPTION", "")),
             "start": dtstart,
             "end": dtend,
-            "all_day": _is_all_day(vevent.get("DTSTART")),
+            "all_day": all_day,
+            "timezone": tzid,
             "location": str(vevent.get("LOCATION", "")),
         },
         source_message=mail_message,
@@ -126,11 +145,13 @@ def _create_event(vevent, uid, sequence, mail_message):
 
 def _update_event(event, vevent, sequence, mail_message):
     """Update an existing Event from a newer VEVENT component."""
+    start, end, all_day, tzid = _parse_event_times(vevent, event.owner)
     event.title = str(vevent.get("SUMMARY", ""))
     event.description = str(vevent.get("DESCRIPTION", ""))
-    event.start = _to_datetime(vevent.get("DTSTART"))
-    event.end = _to_datetime(vevent.get("DTEND"))
-    event.all_day = _is_all_day(vevent.get("DTSTART"))
+    event.start = start
+    event.end = end
+    event.all_day = all_day
+    event.timezone = tzid
     event.location = str(vevent.get("LOCATION", ""))
     event.ical_sequence = sequence
     event.source_message = mail_message
@@ -142,6 +163,7 @@ def _update_event(event, vevent, sequence, mail_message):
             "start",
             "end",
             "all_day",
+            "timezone",
             "location",
             "ical_sequence",
             "source_message",
@@ -164,35 +186,3 @@ def _is_future_event(event):
     if ref is None:
         return True
     return ref > django_tz.now()
-
-
-def _extract_email(organizer_prop):
-    """Extract email address from an ORGANIZER or ATTENDEE property."""
-    if not organizer_prop:
-        return ""
-    value = str(organizer_prop)
-    if value.lower().startswith("mailto:"):
-        return value[7:]
-    return value
-
-
-def _to_datetime(dt_prop):
-    """Convert an icalendar date/datetime property to a timezone-aware datetime."""
-    if dt_prop is None:
-        return None
-    dt = dt_prop.dt
-    if hasattr(dt, "hour"):
-        # It's a datetime
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        return dt
-    else:
-        # It's a date (all-day event) - convert to datetime at midnight UTC
-        return datetime(dt.year, dt.month, dt.day, tzinfo=UTC)
-
-
-def _is_all_day(dt_prop):
-    """Return True if the DTSTART property represents an all-day event (date, not datetime)."""
-    if dt_prop is None:
-        return False
-    return not hasattr(dt_prop.dt, "hour")

@@ -60,6 +60,7 @@ def create_event_from_payload(
         start=payload["start"],
         end=payload.get("end"),
         all_day=payload.get("all_day", False),
+        timezone=payload.get("timezone", ""),
         location=payload.get("location", ""),
         owner=user,
         ical_uid=ical_uid or None,

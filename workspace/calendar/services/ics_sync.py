@@ -1,7 +1,7 @@
 """Fetch and sync external ICS calendar feeds."""
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import httpx
 import icalendar
@@ -9,6 +9,13 @@ from django.db import transaction
 from django.utils import timezone
 
 from workspace.calendar.models import Event
+from workspace.calendar.services.ics_common import (
+    extract_email,
+    is_all_day,
+    parse_dt_prop,
+)
+from workspace.calendar.services.timezones import normalize_all_day
+from workspace.users.services.settings import get_user_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +47,9 @@ def sync_external_calendar(external_calendar):
     cal = icalendar.Calendar.from_ical(ics_text)
     calendar = external_calendar.calendar
     owner = calendar.owner
+    # Floating (naive) feed times mean "local time of the observer": the
+    # closest observer we have is the calendar owner.
+    owner_tz = get_user_timezone(owner)
 
     # Pre-load existing rows keyed by ical_uid so we can short-circuit
     # no-op syncs: feeds that don't support ETag/If-None-Match return
@@ -65,7 +75,7 @@ def sync_external_calendar(external_calendar):
             continue
         seen_uids.add(uid)
 
-        defaults = _vevent_to_defaults(component, owner)
+        defaults = _vevent_to_defaults(component, owner, owner_tz)
         existing = existing_by_uid.get(uid)
         if existing is not None and _matches_defaults(existing, defaults):
             continue
@@ -127,26 +137,35 @@ def _matches_defaults(existing, defaults):
     return True
 
 
-def _vevent_to_defaults(vevent, owner):
+def _vevent_to_defaults(vevent, owner, owner_tz=None):
     """Convert a VEVENT component to a dict of Event field defaults."""
     dtstart_prop = vevent.get("DTSTART")
     dtend_prop = vevent.get("DTEND")
+
+    start, tzid = parse_dt_prop(dtstart_prop, owner_tz)
+    end, _end_tzid = parse_dt_prop(dtend_prop, owner_tz)
+    all_day = is_all_day(dtstart_prop)
+    if all_day:
+        start = normalize_all_day(start)
+        end = normalize_all_day(end)
+        tzid = ""
 
     return {
         "title": str(vevent.get("SUMMARY", "")),
         "description": str(vevent.get("DESCRIPTION", "")),
         "location": str(vevent.get("LOCATION", "")),
-        "start": _to_datetime(dtstart_prop),
-        "end": _to_datetime(dtend_prop),
-        "all_day": _is_all_day(dtstart_prop),
+        "start": start,
+        "end": end,
+        "all_day": all_day,
+        "timezone": tzid,
         "ical_sequence": int(vevent.get("SEQUENCE", 0)),
         "owner": owner,
-        "external_organizer": _extract_email(vevent.get("ORGANIZER")),
-        **_parse_rrule(vevent),
+        "external_organizer": extract_email(vevent.get("ORGANIZER")),
+        **_parse_rrule(vevent, start, tzid),
     }
 
 
-def _parse_rrule(vevent):
+def _parse_rrule(vevent, start, tzid):
     """Extract recurrence fields from a VEVENT's RRULE property."""
     rrule = vevent.get("RRULE")
     if not rrule:
@@ -174,10 +193,7 @@ def _parse_rrule(vevent):
             recurrence_end = datetime(until.year, until.month, until.day, tzinfo=UTC)
     elif rrule.get("COUNT") and frequency:
         recurrence_end = _count_to_end(
-            vevent.get("DTSTART"),
-            frequency,
-            interval,
-            int(rrule["COUNT"][0]),
+            start, frequency, interval, int(rrule["COUNT"][0]), tzid
         )
 
     return {
@@ -187,62 +203,30 @@ def _parse_rrule(vevent):
     }
 
 
-def _count_to_end(dtstart_prop, frequency, interval, count):
-    """Convert a COUNT-based RRULE to a concrete end datetime."""
-    if not dtstart_prop or count <= 0:
-        return None
-    start = _to_datetime(dtstart_prop)
-    if not start:
-        return None
+def _count_to_end(start, frequency, interval, count, tzid=""):
+    """Convert a COUNT-based RRULE to the exact last-occurrence instant.
 
-    delta_map = {
-        "daily": timedelta(days=interval),
-        "weekly": timedelta(weeks=interval),
-        "monthly": None,
-        "yearly": None,
-    }
-    delta = delta_map.get(frequency)
-    if delta:
-        return start + delta * (count - 1)
-
-    # For monthly/yearly, approximate with dateutil
-    from dateutil.relativedelta import relativedelta
-
-    if frequency == "monthly":
-        return start + relativedelta(months=interval * (count - 1))
-    if frequency == "yearly":
-        return start + relativedelta(years=interval * (count - 1))
-    return None
-
-
-def _to_datetime(dt_prop):
-    """Convert an icalendar date/datetime property to a timezone-aware datetime."""
-    if dt_prop is None:
-        return None
-    dt = dt_prop.dt
-    if hasattr(dt, "hour"):
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        return dt
-    return datetime(dt.year, dt.month, dt.day, tzinfo=UTC)
-
-
-def _is_all_day(dt_prop):
-    """Return True if the DTSTART property represents an all-day event."""
-    if dt_prop is None:
-        return False
-    return not hasattr(dt_prop.dt, "hour")
-
-
-def _extract_email(organizer_prop):
-    """Extract the email address from an ICS ORGANIZER property.
-
-    Duplicated from ics_processor._extract_email — each sync path owns
-    its own parsing, and the RFC 5545 form is stable.
+    Computed with the same dateutil rrule the expansion engine uses (in
+    the event's zone when it has one), so the final occurrence survives
+    DST transitions and calendar-dependent monthly/yearly stepping.
     """
-    if not organizer_prop:
-        return ""
-    value = str(organizer_prop)
-    if value.lower().startswith("mailto:"):
-        return value[7:]
-    return value
+    if not start or count <= 0:
+        return None
+
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from dateutil.rrule import rrule as du_rrule
+
+    from workspace.calendar.recurrence import FREQ_MAP as _ENGINE_FREQ_MAP
+
+    freq = _ENGINE_FREQ_MAP.get(frequency)
+    if freq is None:
+        return None
+    dtstart = start
+    if tzid:
+        try:
+            dtstart = start.astimezone(ZoneInfo(tzid))
+        except ZoneInfoNotFoundError, KeyError, ValueError:
+            pass
+    rule = du_rrule(freq, interval=interval, dtstart=dtstart, count=count)
+    return rule[count - 1].astimezone(UTC)

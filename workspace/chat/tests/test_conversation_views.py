@@ -6,6 +6,7 @@ GET/POST /api/v1/chat/conversations before any optimization is attempted.
 """
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -500,3 +501,133 @@ class ConversationCreateViewTests(ChatTestMixin, APITestCase):
                 f"with 10 members={len(ctx_large)}"
             ),
         )
+
+
+class GroupConversationCreateTests(ChatTestMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.team = Group.objects.create(name="Team A")
+        self.other_team = Group.objects.create(name="Team B")
+        self.creator.groups.add(self.team)
+        self.member.groups.add(self.team)
+        self.outsider.groups.add(self.other_team)
+        self.client.force_authenticate(user=self.creator)
+
+    def test_create_from_group(self):
+        resp = self.client.post(
+            "/api/v1/chat/conversations",
+            {"group_ids": [self.team.pk], "title": "Chan"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["groups"], [{"id": self.team.pk, "name": "Team A"}])
+        member_ids = {m["user"]["id"] for m in resp.data["members"]}
+        self.assertEqual(member_ids, {self.creator.id, self.member.id})
+
+    def test_create_from_multiple_groups_unions_members(self):
+        resp = self.client.post(
+            "/api/v1/chat/conversations",
+            {"group_ids": [self.team.pk, self.other_team.pk], "title": "Chan"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        member_ids = {m["user"]["id"] for m in resp.data["members"]}
+        self.assertEqual(
+            member_ids, {self.creator.id, self.member.id, self.outsider.id}
+        )
+
+    def test_creator_in_no_group_gets_403(self):
+        self.client.force_authenticate(user=self.extra_user)
+        resp = self.client.post(
+            "/api/v1/chat/conversations",
+            {"group_ids": [self.team.pk]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_both_member_ids_and_group_ids_is_400(self):
+        resp = self.client.post(
+            "/api/v1/chat/conversations",
+            {"group_ids": [self.team.pk], "member_ids": [self.member.id]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_neither_member_ids_nor_group_ids_is_400(self):
+        resp = self.client.post("/api/v1/chat/conversations", {}, format="json")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_unknown_group_id_is_400(self):
+        resp = self.client.post(
+            "/api/v1/chat/conversations",
+            {"group_ids": [999999]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_empty_group_ids_is_400(self):
+        resp = self.client.post(
+            "/api/v1/chat/conversations",
+            {"group_ids": []},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_blank_title_falls_back_to_first_requested_group_name(self):
+        """The fallback must follow request order, not DB pk order: team_a
+        was created first (lower pk) but the request lists team_b first."""
+        self.client.force_authenticate(user=self.outsider)
+        resp = self.client.post(
+            "/api/v1/chat/conversations",
+            {"group_ids": [self.other_team.pk, self.team.pk]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["title"], self.other_team.name)
+
+    def test_classic_member_ids_creation_still_works(self):
+        resp = self.client.post(
+            "/api/v1/chat/conversations",
+            {"member_ids": [self.member.id, self.extra_user.id], "title": "Classic"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["groups"], [])
+
+
+class GroupConversationGuardTests(ChatTestMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.team = Group.objects.create(name="Team A")
+        self.creator.groups.add(self.team)
+        self.member.groups.add(self.team)
+        from workspace.chat.services.group_sync import create_group_conversation
+
+        self.group_conv = create_group_conversation(
+            self.creator, [self.team], title="Chan"
+        )
+        self.client.force_authenticate(user=self.member)
+
+    def test_leave_is_403(self):
+        resp = self.client.delete(f"/api/v1/chat/conversations/{self.group_conv.uuid}")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_add_member_is_403(self):
+        self.client.force_authenticate(user=self.creator)
+        resp = self.client.post(
+            f"/api/v1/chat/conversations/{self.group_conv.uuid}/members",
+            {"user_ids": [self.extra_user.id]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_remove_member_is_403(self):
+        self.client.force_authenticate(user=self.creator)
+        resp = self.client.delete(
+            f"/api/v1/chat/conversations/{self.group_conv.uuid}/members/{self.member.id}"
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_leave_still_works_on_classic_conversation(self):
+        resp = self.client.delete(f"/api/v1/chat/conversations/{self.group.uuid}")
+        self.assertEqual(resp.status_code, 204)

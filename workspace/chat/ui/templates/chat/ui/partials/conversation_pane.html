@@ -656,4 +656,5 @@
 {{ conversations|json_script:"conversations-data" }}
 {{ ice_servers|json_script:"call-ice-servers-data" }}
 {{ call_sounds_enabled|json_script:"call-sounds-enabled-data" }}
+{{ chat_groups|json_script:"chat-groups-data" }}
 {% if initial_conversation_uuid %}{{ initial_conversation_uuid|json_script:"initial-conversation" }}{% endif %}

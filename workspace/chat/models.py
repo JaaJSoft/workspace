@@ -19,6 +19,12 @@ class Conversation(models.Model):
         related_name="created_conversations",
     )
     has_avatar = models.BooleanField(default=False)
+    # Attached auth.Groups: membership follows their union (see services/group_sync).
+    groups = models.ManyToManyField(
+        "auth.Group",
+        blank=True,
+        related_name="conversations",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -106,6 +112,15 @@ class Message(models.Model):
 
     def __str__(self):
         return f"Message by {self.author} at {self.created_at}"
+
+    @property
+    def media_attachments(self):
+        # Iterates attachments.all() so a prefetch cache is reused as-is.
+        return [a for a in self.attachments.all() if a.is_image or a.is_video]
+
+    @property
+    def file_attachments(self):
+        return [a for a in self.attachments.all() if not (a.is_image or a.is_video)]
 
 
 class Reaction(models.Model):

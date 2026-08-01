@@ -86,7 +86,7 @@
       <div class="mt-4 flex flex-wrap items-center gap-3">
         <select class="select select-bordered w-full max-w-xs" x-model="tz" @change="save()">
           <template x-for="z in zones" :key="z">
-            <option :value="z" x-text="z"></option>
+            <option :value="z" x-text="z" :selected="z === tz"></option>
           </template>
         </select>
         <button type="button" class="btn btn-ghost btn-sm gap-2" @click="detect()">

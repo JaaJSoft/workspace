@@ -378,20 +378,34 @@ window.calendarApp = function calendarApp() {
       return window.getUserTimeZone ? window.getUserTimeZone() : undefined;
     },
 
-    _dayKey(d) {
-      return window.userTzDayKey ? window.userTzDayKey(d) : d.toDateString();
+    _dayKeyIn(d, tz) {
+      // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
+      return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
     },
 
-    _fmtDate(isoStr) {
-      if (!isoStr) return '';
-      const tz = this._tz();
-      const d = new Date(isoStr);
+    _dayKey(d) {
+      return this._dayKeyIn(d, this._tz());
+    },
+
+    // Date-only values ('YYYY-MM-DD', all-day events) parse as UTC midnight:
+    // format them in UTC so the calendar day never shifts with the user zone.
+    _isDateOnly(value) {
+      return typeof value === 'string' && value.length === 10;
+    },
+
+    _valueDayKey(value) {
+      return this._dayKeyIn(new Date(value), this._isDateOnly(value) ? 'UTC' : this._tz());
+    },
+
+    _fmtDate(value) {
+      if (!value) return '';
+      const tz = this._isDateOnly(value) ? 'UTC' : this._tz();
+      const d = new Date(value);
       const today = new Date();
-      const tomorrow = new Date(today.getTime() + 86400000);
-      const isToday = this._dayKey(d) === this._dayKey(today);
-      const isTomorrow = this._dayKey(d) === this._dayKey(tomorrow);
+      const isToday = this._dayKeyIn(d, tz) === this._dayKey(today);
+      const isTomorrow = this._dayKeyIn(d, tz) === this._dayKey(new Date(today.getTime() + 86400000));
       const opts = { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long' };
-      if (d.getFullYear() !== today.getFullYear()) opts.year = 'numeric';
+      if (this._dayKeyIn(d, tz).slice(0, 4) !== this._dayKey(today).slice(0, 4)) opts.year = 'numeric';
       const datePart = d.toLocaleDateString('en-US', opts);
       if (isToday) return `Today — ${datePart}`;
       if (isTomorrow) return `Tomorrow — ${datePart}`;
@@ -409,7 +423,7 @@ window.calendarApp = function calendarApp() {
 
     _sameDay(a, b) {
       if (!a || !b) return false;
-      return this._dayKey(new Date(a)) === this._dayKey(new Date(b));
+      return this._valueDayKey(a) === this._valueDayKey(b);
     },
   };
 };

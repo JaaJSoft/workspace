@@ -459,7 +459,10 @@ function mailApp() {
         return d.toLocaleDateString([], { timeZone: tz, weekday: 'short' });
       }
       const opts = { timeZone: tz, month: 'short', day: 'numeric' };
-      if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
+      const yearKey = (x) => window.userTzDayKey
+        ? window.userTzDayKey(x).slice(0, 4)
+        : String(x.getFullYear());
+      if (yearKey(d) !== yearKey(now)) opts.year = 'numeric';
       return d.toLocaleDateString([], opts);
     },
 

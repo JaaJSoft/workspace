@@ -12,7 +12,8 @@
 
   {# ── Hero ── #}
   <section class="text-center space-y-1 relative">
-    <h1 class="text-3xl font-semibold text-base-content" x-data x-text="(() => { const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined; const h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date()), 10) % 24; const g = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; return g + ', {{ user.first_name|default:user.username }}.'; })()">Welcome back, {{ user.first_name|default:user.username }}.</h1>
+    {# The name stays in HTML (Django autoescape); only the greeting word goes through JS. #}
+    <h1 class="text-3xl font-semibold text-base-content"><span x-data x-text="(() => { const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined; const h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date()), 10) % 24; return h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; })()">Welcome back</span>, {{ user.first_name|default:user.username }}.</h1>
     <p class="text-base-content/60" x-data="weatherWidget()" x-cloak>
       <span x-text="label"></span>
     </p>

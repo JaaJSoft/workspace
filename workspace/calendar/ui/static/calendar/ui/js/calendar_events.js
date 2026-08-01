@@ -319,21 +319,22 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       let currentGroup = null;
 
       const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
-      const dayKey = (d) => window.userTzDayKey
-        ? window.userTzDayKey(d)
-        : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const keyIn = (d, zone) => new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(d);
 
       const todayDate = new Date();
-      const todayKey = dayKey(todayDate);
-      const tomorrowKey = dayKey(new Date(todayDate.getTime() + 86400000));
+      const todayKey = keyIn(todayDate, tz);
+      const tomorrowKey = keyIn(new Date(todayDate.getTime() + 86400000), tz);
 
       for (const event of this.agenda.events) {
+        // All-day values are UTC-midnight anchored: group and label them in
+        // UTC so the covered day never shifts with the user zone.
+        const evTz = event.all_day ? 'UTC' : tz;
         const d = new Date(event.start);
-        const key = dayKey(d);
+        const key = keyIn(d, evTz);
         if (key !== currentKey) {
           currentKey = key;
           // `undefined` locale uses the browser's default (OS/language settings)
-          const dateLabel = d.toLocaleDateString(undefined, { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long' });
+          const dateLabel = d.toLocaleDateString(undefined, { timeZone: evTz, weekday: 'long', day: 'numeric', month: 'long' });
           let label;
           if (key === todayKey) {
             label = `Today · ${dateLabel}`;
@@ -888,7 +889,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         // FullCalendar stores `end` as the day AFTER the last covered day for
         // all-day events. Render the inclusive last day so a Mon-Tue event
         // doesn't show as Mon -> Wed.
-        const inclusiveEnd = end ? new Date(new Date(end).getTime() - 86400000) : null;
+        const inclusiveEnd = end ? new Date(new Date(end).getTime() - 86400000).toISOString().slice(0, 10) : null;
         if (!end || this._sameDay(start, end) || this._sameDay(start, inclusiveEnd)) {
           return dateStr;
         }

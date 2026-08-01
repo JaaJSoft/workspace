@@ -123,10 +123,16 @@
         if (!this.tz) return;
         html.setAttribute('data-timezone', this.tz);
         if (window.convertLocaltimes) window.convertLocaltimes(document);
+        // The browser tz list can be newer than the server tzdata: surface a
+        // rejected save instead of leaving the UI silently out of sync.
         fetch('/api/v1/settings/core/timezone', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ value: this.tz }),
+        }).then((resp) => {
+          if (!resp.ok && window.AppAlert) window.AppAlert.error('Failed to save timezone');
+        }).catch(() => {
+          if (window.AppAlert) window.AppAlert.error('Failed to save timezone');
         });
       },
     };

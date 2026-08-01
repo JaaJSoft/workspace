@@ -426,18 +426,25 @@ class TimezoneSettingValidationTests(TestCase):
         self.assertEqual(get_setting(self.user, "core", "timezone"), "Europe/Paris")
 
     def test_put_accepts_null_to_clear(self):
+        set_setting(self.user, "core", "timezone", "Europe/Paris")
         resp = self.client.put(
             "/api/v1/settings/core/timezone",
             data={"value": None},
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 200)
+        # The stored value must actually be overwritten with null.
+        self.assertIsNone(get_setting(self.user, "core", "timezone", default="unset"))
 
     def test_bulk_patch_rejects_invalid_timezone(self):
+        # A valid key listed before the invalid one must not be persisted:
+        # validation runs on the whole payload before any write.
         resp = self.client.patch(
             "/api/v1/settings/core",
-            data={"timezone": "Not/AZone", "theme": "dark"},
+            data={"theme": "dark", "timezone": "Not/AZone"},
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 400)
-        self.assertNotIn("timezone", get_module_settings(self.user, "core"))
+        core = get_module_settings(self.user, "core")
+        self.assertNotIn("timezone", core)
+        self.assertNotIn("theme", core)

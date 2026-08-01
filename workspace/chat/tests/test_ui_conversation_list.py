@@ -5,6 +5,7 @@ including the `?q=` search filter.
 """
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -166,6 +167,10 @@ class ConversationListViewPartialTests(ChatTestMixin, TestCase):
         )
         timezone.activate("Europe/Paris")
         self.addCleanup(timezone.deactivate)
-        convs = _build_conversation_context(self.creator)
+        # Freeze "now" so the message stays in the month-label branch
+        # (< 1 year old) regardless of when the test runs.
+        fixed_now = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
+        with patch("django.utils.timezone.now", return_value=fixed_now):
+            convs = _build_conversation_context(self.creator)
         group = next(c for c in convs if c.pk == self.group.pk)
         self.assertEqual(group.time_ago, "Feb 01")

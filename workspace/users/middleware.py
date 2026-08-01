@@ -1,7 +1,9 @@
 from django.conf import settings
 from django.http import HttpResponse
+from django.utils import timezone
 
 from workspace.users.services import presence as presence_service
+from workspace.users.services.settings import get_user_timezone
 
 
 class AjaxLoginRedirectMiddleware:
@@ -35,6 +37,30 @@ class AjaxLoginRedirectMiddleware:
             request.headers.get("X-Alpine-Request")
             or request.headers.get("X-Requested-With") == "XMLHttpRequest"
         )
+
+
+class TimezoneMiddleware:
+    """Activate the user's configured timezone for the duration of the request.
+
+    Everything downstream (|date / |timesince filters, localtime(),
+    localdate(), __date ORM lookups) then resolves in that zone. The
+    finally-deactivate keeps the zone from leaking to the next request
+    served by the same worker thread. Streaming/SSE generators run after
+    the deactivate and therefore stay in UTC - they only emit ISO strings.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if hasattr(request, "user") and request.user.is_authenticated:
+            timezone.activate(get_user_timezone(request.user))
+        else:
+            timezone.deactivate()
+        try:
+            return self.get_response(request)
+        finally:
+            timezone.deactivate()
 
 
 class PresenceMiddleware:

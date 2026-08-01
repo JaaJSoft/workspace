@@ -1,5 +1,5 @@
 import logging
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from dateutil.parser import parse as dateutil_parse
 from django.contrib.auth import get_user_model
@@ -27,6 +27,7 @@ from .serializers import (
     EventSerializer,
     EventUpdateSerializer,
 )
+from .services.timezones import current_timezone_name, normalize_all_day
 from .upcoming import get_upcoming_page
 
 
@@ -43,6 +44,19 @@ def _parse_dt(value):
         return dt
     except ValueError, TypeError:
         return None
+
+
+def _sort_instant(value):
+    """Comparable UTC instant for a serialized start value.
+
+    Date-only all-day labels parse as midnight in the active (user)
+    timezone, so an all-day event sorts at the top of that user-local day,
+    ahead of its timed events, regardless of the offsets in the strings.
+    """
+    dt = _parse_dt(value)
+    if dt is None:
+        return datetime.min.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def _is_external_calendar(calendar_id):
@@ -81,6 +95,7 @@ def _update_event_fields(event, data, user):
         except Calendar.DoesNotExist:
             return {"detail": "Calendar not found."}
 
+    had_recurrence = event.recurrence_frequency is not None
     for field in [
         "title",
         "description",
@@ -94,6 +109,18 @@ def _update_event_fields(event, data, user):
     ]:
         if field in data:
             setattr(event, field, data[field])
+    if event.all_day:
+        # Enforce the storage invariant even when all_day was already set
+        # and only start/end changed.
+        event.start = normalize_all_day(event.start)
+        event.end = normalize_all_day(event.end)
+        event.timezone = ""
+    elif event.recurrence_frequency and not had_recurrence and not event.timezone:
+        # Only a series GAINING recurrence anchors its wall clock in the
+        # editing zone. Legacy recurring series (blank timezone) must keep
+        # UTC expansion: stamping them on an unrelated edit would shift
+        # future occurrences and orphan their exceptions.
+        event.timezone = current_timezone_name()
     event.save()
     return None
 
@@ -301,6 +328,11 @@ class EventListView(CacheControlMixin, APIView):
 
         range_start = _parse_dt(start)
         range_end = _parse_dt(end)
+        if range_start is None or range_end is None:
+            return Response(
+                {"detail": "Invalid start or end datetime."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         user = request.user
 
@@ -322,9 +354,9 @@ class EventListView(CacheControlMixin, APIView):
             recurrence_frequency__isnull=True,
             recurrence_parent__isnull=True,
             is_cancelled=False,
-            start__lt=end,
+            start__lt=range_end,
         ).filter(
-            Q(end__gt=start) | Q(end__isnull=True, start__gte=start),
+            Q(end__gt=range_start) | Q(end__isnull=True, start__gte=range_start),
         )
         non_recurring = _prefetch_event(non_recurring).order_by("start")
 
@@ -335,19 +367,19 @@ class EventListView(CacheControlMixin, APIView):
             cal_or_member,
             recurrence_frequency__isnull=False,
             recurrence_parent__isnull=True,
-            start__lt=end,
+            start__lt=range_end,
         ).filter(
-            Q(recurrence_end__isnull=True) | Q(recurrence_end__gt=start),
+            Q(recurrence_end__isnull=True) | Q(recurrence_end__gt=range_start),
         )
         masters = _prefetch_event(masters)
 
-        recurring_data = []
-        if range_start and range_end:
-            recurring_data = expand_recurring_events(masters, range_start, range_end)
+        recurring_data = expand_recurring_events(masters, range_start, range_end)
 
-        # Merge and sort
+        # Merge and sort as instants: values mix date-only all-day labels
+        # with ISO datetimes whose offsets can differ, so a plain string
+        # sort would misorder them.
         all_events = non_recurring_data + recurring_data
-        all_events.sort(key=lambda e: e.get("start", ""))
+        all_events.sort(key=lambda e: _sort_instant(e.get("start")))
         return Response(all_events)
 
     @extend_schema(summary="Create an event", request=EventCreateSerializer)
@@ -378,6 +410,9 @@ class EventListView(CacheControlMixin, APIView):
             start=data["start"],
             end=data["end"],
             all_day=data["all_day"],
+            # All-day events are zone-less day labels; timed events anchor
+            # their wall clock in the creator's active timezone.
+            timezone="" if data["all_day"] else current_timezone_name(),
             location=data["location"],
             owner=request.user,
             recurrence_frequency=data.get("recurrence_frequency"),

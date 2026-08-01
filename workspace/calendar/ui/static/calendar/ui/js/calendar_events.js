@@ -30,6 +30,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this.calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: fcInitialView,
         ...(urlDate ? { initialDate: urlDate } : {}),
+        // Render the grid in the user's configured zone (luxon3 plugin);
+        // date strings emitted by FullCalendar then carry that offset.
+        timeZone: (window.getUserTimeZone && window.getUserTimeZone()) || 'local',
         headerToolbar: false,
         // Follow the browser's language (e.g. en-US, fr-FR) so FullCalendar
         // formats weekdays, months, and the toolbar title consistently with
@@ -131,12 +134,11 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       // ?action=new-event or ?action=new-poll - open create modal from command palette
       const action = params.get('action');
       if (action === 'new-event') {
-        const now = new Date();
-        const pad = n => String(n).padStart(2, '0');
-        const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-        const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-        const start = `${dateStr}T${timeStr}`;
-        this.$nextTick(() => this.openCreateModal(start, this._addHour(now.toISOString()), false));
+        // Pass real instants: openCreateModal converts them to the user
+        // zone itself (a preformatted wall-clock string would be shifted
+        // a second time).
+        const now = new Date().toISOString();
+        this.$nextTick(() => this.openCreateModal(now, this._addHour(now), false));
       } else if (action === 'new-poll') {
         this.$nextTick(() => { this.showPollListModal = true; this.openPollCreate(); });
       }
@@ -415,12 +417,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
     // --- Create modal ---
     createEventNow() {
-      const now = new Date();
-      const pad = n => String(n).padStart(2, '0');
-      const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-      const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-      const start = `${dateStr}T${timeStr}`;
-      this.openCreateModal(start, this._addHour(now.toISOString()), false);
+      // Real instants only: openCreateModal owns the wall-clock conversion.
+      const now = new Date().toISOString();
+      this.openCreateModal(now, this._addHour(now), false);
     },
 
     openCreateModal(start, end, allDay) {
@@ -432,16 +431,27 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       // Preference controls all-day default, ignore FullCalendar's allDay flag
       const useAllDay = this.prefs.defaultAllDay;
 
-      // If month view gives date-only string but we need datetime, default to 09:00
-      let startStr = start;
-      let endStr = end;
-      if (!useAllDay && startStr.length === 10) {
-        startStr = startStr + 'T09:00:00';
-        endStr = endStr || (startStr.split('T')[0] + 'T10:00:00');
+      let startVal, endVal;
+      if (useAllDay) {
+        startVal = this.toLocalDate(start);
+        endVal = end ? this.toLocalDate(end) : '';
+      } else if (start.length === 10) {
+        // A date-only grid click already names the intended day in the
+        // display zone: attach the default times verbatim - converting the
+        // naive string would shift it by the browser/user zone delta.
+        startVal = start + 'T09:00';
+        if (end && end.length === 10) {
+          // Multi-day drag: the date-only end is exclusive; keep the last
+          // covered day with the default end time.
+          const [y, m, d] = end.split('-').map(Number);
+          endVal = new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10) + 'T10:00';
+        } else {
+          endVal = end ? this.toLocalDatetime(end) : start + 'T10:00';
+        }
+      } else {
+        startVal = this.toLocalDatetime(start);
+        endVal = end ? this.toLocalDatetime(end) : '';
       }
-
-      const startVal = useAllDay ? this.toLocalDate(startStr) : this.toLocalDatetime(startStr);
-      const endVal = endStr ? (useAllDay ? this.toLocalDate(endStr) : this.toLocalDatetime(endStr)) : '';
 
       this.form = {
         uuid: null,
@@ -561,18 +571,26 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       }
       this.saving = true;
 
+      // Timed inputs are wall-clock values in the user's configured zone;
+      // all-day inputs are date-only day labels sent verbatim. The
+      // recurrence end (a date input) covers its whole final day.
+      const tz = this._tz();
       const payload = {
         calendar_id: this.form.calendar_id,
         title: this.form.title.trim(),
         description: this.form.description,
-        start: new Date(this.form.start).toISOString(),
-        end: this.form.end ? new Date(this.form.end).toISOString() : null,
+        start: this.form.all_day ? this.form.start : window.wallClockToIso(this.form.start, tz),
+        end: this.form.end
+          ? (this.form.all_day ? this.form.end : window.wallClockToIso(this.form.end, tz))
+          : null,
         all_day: this.form.all_day,
         location: this.form.location,
         member_ids: this.selectedMembers.map(u => u.id),
         recurrence_frequency: this.form.recurrence_frequency || null,
         recurrence_interval: this.form.recurrence_interval || 1,
-        recurrence_end: this.form.recurrence_end ? new Date(this.form.recurrence_end).toISOString() : null,
+        recurrence_end: this.form.recurrence_end
+          ? window.wallClockToIso(this.form.recurrence_end + 'T23:59:59', tz)
+          : null,
       };
 
       try {
@@ -737,9 +755,19 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
     applyDuration(minutes) {
       if (!this.form.start) return;
-      const d = new Date(this.form.start);
-      d.setMinutes(d.getMinutes() + minutes);
-      this.form.end = this.form.all_day ? this.toLocalDate(d.toISOString()) : this.toLocalDatetime(d.toISOString());
+      if (this.form.all_day) {
+        // Pure day-label arithmetic: routing the date through Date/instant
+        // conversions would shift it by the browser/user zone delta.
+        const [y, m, d] = this.form.start.split('-').map(Number);
+        this.form.end = new Date(Date.UTC(y, m - 1, d + minutes / 1440)).toISOString().slice(0, 10);
+        return;
+      }
+      // form.start is a user-zone wall clock: resolve it to an instant in
+      // that zone, add the duration, and render back in the same zone.
+      const tz = this._tz();
+      const d = new Date(window.wallClockToIso(this.form.start, tz));
+      d.setTime(d.getTime() + minutes * 60000);
+      this.form.end = window.isoToWallClock(d.toISOString(), tz);
     },
 
     // --- Keyboard shortcuts ---
@@ -881,9 +909,13 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     },
 
     // --- Panel display helpers ---
+    // Read the raw occurrence instants (_panelRaw), never this.form: the
+    // form holds user-zone wall-clock strings for the inputs, and running
+    // those through the instant formatters would convert them twice.
     panelDateDisplay() {
-      const { start, end, all_day } = this.form;
-      if (!start) return '';
+      const raw = this._panelRaw;
+      if (!raw || !raw.start) return '';
+      const { start, end, all_day } = raw;
       const dateStr = this._fmtDate(start);
       if (all_day) {
         // FullCalendar stores `end` as the day AFTER the last covered day for
@@ -895,17 +927,15 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         }
         return `${dateStr} → ${this._fmtDate(inclusiveEnd)}`;
       }
-      const startTime = this._fmtTime(start);
-      if (!end) return `${dateStr}, ${startTime}`;
-      const endTime = this._fmtTime(end);
-      if (this._sameDay(start, end)) {
-        return `${dateStr}, ${startTime} – ${endTime}`;
-      }
-      return `${dateStr}, ${startTime} → ${this._fmtDate(end)}, ${endTime}`;
+      // Same-day times live on the clock line below (panelTimeLabel).
+      if (!end || this._sameDay(start, end)) return dateStr;
+      return `${dateStr}, ${this._fmtTime(start)} → ${this._fmtDate(end)}, ${this._fmtTime(end)}`;
     },
 
     panelTimeLabel() {
-      const { start, end, all_day } = this.form;
+      const raw = this._panelRaw;
+      if (!raw) return '';
+      const { start, end, all_day } = raw;
       if (all_day) return 'All day';
       if (!start) return '';
       const startTime = this._fmtTime(start);

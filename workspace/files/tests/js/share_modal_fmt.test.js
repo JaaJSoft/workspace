@@ -10,13 +10,13 @@ function makeModal(userTz) {
   return ctx.shareModal();
 }
 
-test('formatLinkExpiry keeps the chosen day for behind-UTC zones', () => {
+test('formatLinkExpiry shows the picked day for end-of-day expiries', () => {
   const modal = makeModal('America/Los_Angeles');
-  // The expiry is stored as UTC midnight of the picked day; a naive
-  // user-zone conversion would show July 31.
-  const label = modal.formatLinkExpiry('2026-08-01T00:00:00Z');
-  assert.match(label, /8\/1\/2026|2026-08-01|0?1\/0?8\/2026/);
-  assert.doesNotMatch(label, /7\/31|31\/0?7|2026-07-31/);
+  // Stored as 23:59:59 on Aug 5 in Los Angeles (= 06:59:59Z on Aug 6):
+  // the label must be the picked day, whatever the offsets involved.
+  const label = modal.formatLinkExpiry('2026-08-06T06:59:59Z');
+  assert.match(label, /8\/5\/2026|2026-08-05|0?5\/0?8\/2026/);
+  assert.doesNotMatch(label, /8\/6|0?6\/0?8|2026-08-06/);
 });
 
 test('formatLinkExpiry falls back to Permanent', () => {

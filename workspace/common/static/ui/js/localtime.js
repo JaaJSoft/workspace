@@ -64,8 +64,55 @@
     }
   }
 
+  function _tzParts(d, tz) {
+    const dtf = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    });
+    const parts = {};
+    for (const p of dtf.formatToParts(d)) parts[p.type] = p.value;
+    return parts;
+  }
+
+  function _tzOffsetMs(tz, date) {
+    const p = _tzParts(date, tz);
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - date.getTime();
+  }
+
+  // 'YYYY-MM-DD[THH:MM[:SS]]' wall-clock in tz -> ISO instant. Without tz,
+  // falls back to the browser zone (matching new Date(naive) semantics).
+  function wallClockToIso(naive, tz) {
+    if (!naive) return null;
+    if (!tz) return new Date(naive.length === 10 ? naive + 'T00:00' : naive).toISOString();
+    const [datePart, timePart] = naive.split('T');
+    const [y, mo, d] = datePart.split('-').map(Number);
+    const [h = 0, mi = 0, s = 0] = (timePart || '00:00').split(':').map(Number);
+    const guess = Date.UTC(y, mo - 1, d, h, mi, s);
+    let ts = guess - _tzOffsetMs(tz, new Date(guess));
+    // Second pass fixes instants near DST transitions where the first
+    // offset was read on the wrong side of the switch; nonexistent times
+    // resolve forward, ambiguous ones to the later (post-switch) instant.
+    ts = guess - _tzOffsetMs(tz, new Date(ts));
+    return new Date(ts).toISOString();
+  }
+
+  // ISO instant -> 'YYYY-MM-DDTHH:MM' wall-clock in tz (datetime-local value).
+  function isoToWallClock(iso, tz) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    if (!tz) {
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    const p = _tzParts(d, tz);
+    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+  }
+
   window.getUserTimeZone = getUserTimeZone;
   window.userTzDayKey = userTzDayKey;
+  window.wallClockToIso = wallClockToIso;
+  window.isoToWallClock = isoToWallClock;
 
   window.convertLocaltimes = function (root) {
     (root || document).querySelectorAll('time[data-localtime]').forEach(_formatLocaltime);

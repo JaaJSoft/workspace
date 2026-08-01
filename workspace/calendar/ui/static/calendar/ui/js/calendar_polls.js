@@ -90,8 +90,8 @@ window.calendarPollsMixin = function calendarPollsMixin() {
             title: this.pollForm.title.trim(),
             description: this.pollForm.description,
             slots: validSlots.map(s => ({
-              start: new Date(s.start).toISOString(),
-              end: s.end ? new Date(s.end).toISOString() : null,
+              start: window.wallClockToIso(s.start, window.getUserTimeZone ? window.getUserTimeZone() : undefined),
+              end: s.end ? window.wallClockToIso(s.end, window.getUserTimeZone ? window.getUserTimeZone() : undefined) : null,
             })),
           }),
         });
@@ -373,8 +373,8 @@ window.calendarPollsMixin = function calendarPollsMixin() {
             description: this.pollForm.description,
             slots: validSlots.map(s => ({
               ...(s.uuid ? { uuid: s.uuid } : {}),
-              start: new Date(s.start).toISOString(),
-              end: s.end ? new Date(s.end).toISOString() : null,
+              start: window.wallClockToIso(s.start, window.getUserTimeZone ? window.getUserTimeZone() : undefined),
+              end: s.end ? window.wallClockToIso(s.end, window.getUserTimeZone ? window.getUserTimeZone() : undefined) : null,
             })),
           }),
         });

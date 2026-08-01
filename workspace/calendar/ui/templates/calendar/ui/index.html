@@ -177,6 +177,10 @@
 
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<!-- Named-timezone support for the grid: luxon + the FullCalendar bridge
+     (without it, a named timeZone degrades to UTC coercion). -->
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js" integrity="sha384-CU0J6nu6GO5gWB5IqOOhPQsG0LKyjpotF5Gw502R+0zbkzKHjDWc6FKSZsNTJfLX" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/luxon3@6.1.15/index.global.min.js" integrity="sha384-IrJ8IFDRrT4FxNjjLp1sNpEM3tgtoeL2SGxzHZkXXyH5r6i3h72IQ/JXTC/xbOek" crossorigin="anonymous"></script>
 <script src="{% static 'calendar/ui/js/polls.js' %}"></script>
 <script src="{% static 'calendar/ui/js/calendar_calendars.js' %}"></script>
 <script src="{% static 'calendar/ui/js/calendar_events.js' %}"></script>

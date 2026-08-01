@@ -330,11 +330,13 @@ window.calendarApp = function calendarApp() {
       params.set('view', this._viewToUrl(viewType));
       // Store the current date as YYYY-MM-DD (skipped for agenda since it's always "from now")
       if (viewType !== 'agenda' && this.calendar) {
-        // FullCalendar returns browser-local dates; key them in the browser
-        // zone too (toISOString would shift the day for any UTC+ browser).
-        const d = this.calendar.getDate();
-        const dateStr = this._dayKeyIn(d);
-        const today = this._dayKeyIn(new Date());
+        // getDate() is the real instant of the current date's start in the
+        // grid zone (luxon plugin) or browser-local midnight without one:
+        // formatting that instant in the display zone yields the right day
+        // key in both cases (toISOString would shift it).
+        const tz = this._tz();
+        const dateStr = this._dayKeyIn(this.calendar.getDate(), tz);
+        const today = this._dayKeyIn(new Date(), tz);
         if (dateStr !== today) params.set('date', dateStr);
       }
       if (this.showPanel && this.form.uuid) params.set('event', this.form.uuid);
@@ -356,17 +358,18 @@ window.calendarApp = function calendarApp() {
     },
 
     // ── Date/time helpers ───────────────────────────────────
+    // Form inputs are wall-clock values in the user's configured timezone,
+    // whatever the browser zone is (see wallClockToIso in localtime.js).
     toLocalDatetime(isoStr) {
       if (!isoStr) return '';
-      const d = new Date(isoStr);
       if (isoStr.length === 10) return isoStr;
-      const pad = n => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      return window.isoToWallClock(isoStr, this._tz());
     },
 
     toLocalDate(isoStr) {
       if (!isoStr) return '';
-      return isoStr.split('T')[0];
+      if (isoStr.length === 10) return isoStr;
+      return window.isoToWallClock(isoStr, this._tz()).slice(0, 10);
     },
 
     _addHour(isoStr) {

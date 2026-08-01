@@ -84,3 +84,31 @@ test('full mode renders date and time in the user timezone', () => {
   assert.match(label, /Feb 1, 2026|1 févr\. 2026/);
   assert.match(label, /05:00/);
 });
+
+test('wallClockToIso resolves wall-clock times in the given zone', () => {
+  const ctx = load('Europe/Paris');
+  assert.equal(ctx.wallClockToIso('2026-08-05T10:00', 'Europe/Paris'), '2026-08-05T08:00:00.000Z');
+  assert.equal(ctx.wallClockToIso('2026-01-05T10:00', 'Europe/Paris'), '2026-01-05T09:00:00.000Z');
+});
+
+test('wallClockToIso resolves the DST spring-forward gap forward', () => {
+  const ctx = load('Europe/Paris');
+  // 02:30 local does not exist on 2026-03-29; it resolves to summer time.
+  assert.equal(ctx.wallClockToIso('2026-03-29T02:30', 'Europe/Paris'), '2026-03-29T01:30:00.000Z');
+});
+
+test('wallClockToIso date-only means midnight in the zone', () => {
+  const ctx = load('Europe/Paris');
+  assert.equal(ctx.wallClockToIso('2026-08-05', 'Europe/Paris'), '2026-08-04T22:00:00.000Z');
+});
+
+test('isoToWallClock renders the wall clock of the given zone', () => {
+  const ctx = load('Asia/Tokyo');
+  assert.equal(ctx.isoToWallClock('2026-08-05T08:00:00Z', 'Europe/Paris'), '2026-08-05T10:00');
+});
+
+test('wall-clock round-trip is stable across the fall-back day', () => {
+  const ctx = load('Europe/Paris');
+  const iso = ctx.wallClockToIso('2026-10-25T05:30', 'Europe/Paris');
+  assert.equal(ctx.isoToWallClock(iso, 'Europe/Paris'), '2026-10-25T05:30');
+});

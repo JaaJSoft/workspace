@@ -1,6 +1,8 @@
-from datetime import UTC, timedelta
+from datetime import UTC, datetime, timedelta
 
 from dateutil.rrule import DAILY, MONTHLY, WEEKLY, YEARLY, rrule
+
+from .services.timezones import event_timezone
 
 FREQ_MAP = {
     "daily": DAILY,
@@ -15,33 +17,66 @@ _FIXED_STEP = {
     "weekly": timedelta(weeks=1),
 }
 
+_FIXED_STEP_DAYS = {
+    "daily": 1,
+    "weekly": 7,
+}
 
-def _anchored_dtstart(master, floor):
-    """Return ``master.start`` advanced to the last in-phase occurrence at
-    or before *floor*.
+
+def _anchored_dtstart(master, floor, tz=None):
+    """Return the series dtstart advanced to the last in-phase occurrence
+    at or before *floor*.
 
     Iterating an rrule walks the series occurrence by occurrence from
     dtstart, so a years-old daily master costs hundreds of discarded
-    iterations per expansion. For fixed-step frequencies the phase is plain
-    timedelta arithmetic (datetimes are stored in UTC, so there is no DST
-    wall-clock adjustment to preserve): re-anchoring dtstart keeps the
-    exact same occurrence stream while skipping the pre-window walk.
+    iterations per expansion. Re-anchoring dtstart keeps the exact same
+    occurrence stream while skipping the pre-window walk.
+
+    Without *tz* (legacy UTC series) the phase is plain timedelta
+    arithmetic. With *tz* the series is anchored to a local wall clock, so
+    the anchor steps whole local calendar days and reattaches the original
+    local time - a fixed timedelta would drift across DST transitions.
     Monthly/yearly steps are calendar-dependent (day-31 or Feb-29 masters
     skip periods), so those keep the true start - they are bounded to at
     most 12 iterations per year of series age.
     """
-    dtstart = master.start
-    fixed_step = _FIXED_STEP.get(master.recurrence_frequency)
-    if fixed_step and dtstart < floor:
-        step = fixed_step * master.recurrence_interval
-        dtstart += ((floor - dtstart) // step) * step
+    if tz is None:
+        dtstart = master.start
+        fixed_step = _FIXED_STEP.get(master.recurrence_frequency)
+        if fixed_step and dtstart < floor:
+            step = fixed_step * master.recurrence_interval
+            dtstart += ((floor - dtstart) // step) * step
+        return dtstart
+
+    dtstart = master.start.astimezone(tz)
+    step_days = _FIXED_STEP_DAYS.get(master.recurrence_frequency)
+    if step_days and dtstart < floor:
+        step = step_days * master.recurrence_interval
+        days = (floor.astimezone(tz).date() - dtstart.date()).days
+        if days > 0:
+            anchored_date = dtstart.date() + timedelta(days=(days // step) * step)
+            dtstart = datetime.combine(anchored_date, dtstart.time(), tzinfo=tz)
     return dtstart
 
 
+def _series_rrule(master, dtstart, until):
+    return rrule(
+        FREQ_MAP[master.recurrence_frequency],
+        interval=master.recurrence_interval,
+        dtstart=dtstart,
+        until=until,
+    )
+
+
 def _build_rrule(master, range_start, range_end):
-    """Yield occurrence start datetimes for a recurring master event."""
-    freq = FREQ_MAP.get(master.recurrence_frequency)
-    if freq is None:
+    """Yield occurrence start datetimes (aware UTC) for a recurring master.
+
+    Series with an ``Event.timezone`` iterate in that zone, preserving the
+    local wall clock across DST transitions; legacy series iterate in UTC
+    with fixed steps. Either way the yielded instants are UTC, so exception
+    keys and serialized values stay zone-independent.
+    """
+    if FREQ_MAP.get(master.recurrence_frequency) is None:
         return
 
     until = range_end
@@ -55,29 +90,26 @@ def _build_rrule(master, range_start, range_end):
     # the window, so back the threshold up by the duration.
     window_floor = (range_start - duration) if duration else range_start
 
-    rule = rrule(
-        freq,
-        interval=master.recurrence_interval,
-        dtstart=_anchored_dtstart(master, window_floor),
-        until=until,
-    )
+    tz = event_timezone(master)
+    rule = _series_rrule(master, _anchored_dtstart(master, window_floor, tz), until)
 
     for dt in rule:
         if dt >= range_end:
             break
+        occ = dt.astimezone(UTC) if tz else dt
         # Only yield if the occurrence overlaps the query range (strict:
         # an occurrence ending exactly at range_start does not overlap).
         if duration:
-            if dt + duration > range_start:
-                yield dt
+            if occ + duration > range_start:
+                yield occ
         else:
-            if dt >= range_start:
-                yield dt
+            if occ >= range_start:
+                yield occ
 
 
 def next_occurrences_after(master, after, limit=None):
-    """Yield occurrence start datetimes for a recurring master, all with
-    start >= after.
+    """Yield occurrence start datetimes (aware UTC) for a recurring master,
+    all with start >= after.
 
     Unlike `_build_rrule`, this is count-bounded (not range-bounded). A master
     whose own `start` is in the past is still iterated — only the occurrences
@@ -88,19 +120,19 @@ def next_occurrences_after(master, after, limit=None):
     stream (e.g. skipping exceptions) to take as many occurrences as they
     need rather than being capped.
     """
-    freq = FREQ_MAP.get(master.recurrence_frequency)
-    if freq is None:
+    if FREQ_MAP.get(master.recurrence_frequency) is None:
         return
 
-    rule = rrule(
-        freq,
-        interval=master.recurrence_interval,
+    tz = event_timezone(master)
+    rule = _series_rrule(
+        master,
         # xafter still walks the series from dtstart before yielding, so
         # jump the anchor to just before `after` (see _anchored_dtstart).
-        dtstart=_anchored_dtstart(master, after),
-        until=master.recurrence_end,  # None → unbounded
+        _anchored_dtstart(master, after, tz),
+        master.recurrence_end,  # None → unbounded
     )
-    yield from rule.xafter(after, count=limit, inc=True)
+    for dt in rule.xafter(after, count=limit, inc=True):
+        yield dt.astimezone(UTC) if tz else dt
 
 
 def _user_dict(user):

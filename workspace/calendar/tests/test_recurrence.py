@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -663,3 +663,132 @@ class RecurrenceServiceTests(CalendarTestMixin, TestCase):
         result = expand_recurring_events(masters, range_start, range_end)
         titles = [r["title"] for r in result]
         self.assertIn("Modified Meeting", titles)
+
+
+class WallClockExpansionTests(TestCase):
+    """Series with Event.timezone keep their local wall clock across DST.
+
+    Europe/Paris switches to summer time on Sunday 2026-03-29 02:00:
+    09:00 local is 08:00Z before the change and 07:00Z after it.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="wc", password="p")
+        self.cal = Calendar.objects.create(name="W", owner=self.user)
+
+    def _master(self, tz="Europe/Paris", freq="daily", start=None, **kwargs):
+        return Event.objects.create(
+            calendar=self.cal,
+            owner=self.user,
+            title="Standup",
+            start=start or datetime(2026, 3, 27, 8, 0, tzinfo=UTC),  # 09:00 Paris
+            end=(start or datetime(2026, 3, 27, 8, 0, tzinfo=UTC)) + timedelta(hours=1),
+            recurrence_frequency=freq,
+            timezone=tz,
+            **kwargs,
+        )
+
+    def _expand(self, master, start, end):
+        return list(_build_rrule(master, start, end))
+
+    def test_daily_series_keeps_wall_clock_across_dst(self):
+        master = self._master()
+        occs = self._expand(
+            master,
+            datetime(2026, 3, 27, 0, 0, tzinfo=UTC),
+            datetime(2026, 3, 31, 0, 0, tzinfo=UTC),
+        )
+        self.assertEqual(
+            [o.astimezone(UTC).isoformat() for o in occs],
+            [
+                "2026-03-27T08:00:00+00:00",
+                "2026-03-28T08:00:00+00:00",
+                "2026-03-29T07:00:00+00:00",
+                "2026-03-30T07:00:00+00:00",
+            ],
+        )
+
+    def test_occurrences_are_utc_instants(self):
+        master = self._master()
+        occs = self._expand(
+            master,
+            datetime(2026, 3, 29, 0, 0, tzinfo=UTC),
+            datetime(2026, 3, 30, 0, 0, tzinfo=UTC),
+        )
+        self.assertEqual(len(occs), 1)
+        self.assertEqual(occs[0].utcoffset(), timedelta(0))
+
+    def test_empty_timezone_keeps_legacy_fixed_step(self):
+        master = self._master(tz="")
+        occs = self._expand(
+            master,
+            datetime(2026, 3, 27, 0, 0, tzinfo=UTC),
+            datetime(2026, 3, 31, 0, 0, tzinfo=UTC),
+        )
+        self.assertEqual(
+            [o.isoformat() for o in occs],
+            [
+                "2026-03-27T08:00:00+00:00",
+                "2026-03-28T08:00:00+00:00",
+                "2026-03-29T08:00:00+00:00",
+                "2026-03-30T08:00:00+00:00",
+            ],
+        )
+
+    def test_old_master_anchor_keeps_wall_clock(self):
+        # Master a year before the window: exercises the fast-forward anchor.
+        master = self._master(start=datetime(2025, 3, 27, 8, 0, tzinfo=UTC))
+        occs = self._expand(
+            master,
+            datetime(2026, 3, 29, 0, 0, tzinfo=UTC),
+            datetime(2026, 3, 31, 0, 0, tzinfo=UTC),
+        )
+        self.assertEqual(
+            [o.astimezone(UTC).isoformat() for o in occs],
+            ["2026-03-29T07:00:00+00:00", "2026-03-30T07:00:00+00:00"],
+        )
+
+    def test_weekly_series_keeps_wall_clock_across_dst(self):
+        master = self._master(freq="weekly")
+        occs = self._expand(
+            master,
+            datetime(2026, 3, 27, 0, 0, tzinfo=UTC),
+            datetime(2026, 4, 11, 0, 0, tzinfo=UTC),
+        )
+        self.assertEqual(
+            [o.astimezone(UTC).isoformat() for o in occs],
+            [
+                "2026-03-27T08:00:00+00:00",
+                "2026-04-03T07:00:00+00:00",
+                "2026-04-10T07:00:00+00:00",
+            ],
+        )
+
+    def test_next_occurrences_after_crosses_dst(self):
+        master = self._master()
+        occs = list(
+            next_occurrences_after(master, datetime(2026, 3, 28, 12, 0, tzinfo=UTC), 2)
+        )
+        self.assertEqual(
+            [o.astimezone(UTC).isoformat() for o in occs],
+            ["2026-03-29T07:00:00+00:00", "2026-03-30T07:00:00+00:00"],
+        )
+
+    def test_exception_matches_post_dst_occurrence(self):
+        master = self._master()
+        Event.objects.create(
+            calendar=self.cal,
+            owner=self.user,
+            title="Standup (moved)",
+            start=datetime(2026, 3, 29, 9, 0, tzinfo=UTC),
+            recurrence_parent=master,
+            original_start=datetime(2026, 3, 29, 7, 0, tzinfo=UTC),
+        )
+        occs = expand_recurring_events(
+            Event.objects.filter(pk=master.pk).select_related("owner"),
+            datetime(2026, 3, 29, 0, 0, tzinfo=UTC),
+            datetime(2026, 3, 30, 0, 0, tzinfo=UTC),
+        )
+        self.assertEqual(len(occs), 1)
+        self.assertTrue(occs[0]["is_exception"])
+        self.assertEqual(occs[0]["title"], "Standup (moved)")

@@ -202,6 +202,7 @@ def chat_room_view(request, conversation_uuid):
                 left_at__isnull=True,
             ).select_related("user", "user__bot_profile"),
         ),
+        "groups",
     )
 
     conversation_data = ConversationListSerializer(conversation).data

@@ -26,7 +26,13 @@ def resync_conversation_members(conversation):
         .values_list("id", flat=True)
         .distinct()
     )
-    existing = {m.user_id: m for m in conversation.members.all()}
+    # Query directly instead of conversation.members.all(): a caller holding a
+    # filtered members prefetch (active-only) would otherwise hide left rows
+    # and bulk_create would hit the unique constraint on reactivation.
+    existing = {
+        m.user_id: m
+        for m in ConversationMember.objects.filter(conversation=conversation)
+    }
 
     to_create = [
         ConversationMember(conversation=conversation, user_id=uid)
@@ -54,6 +60,15 @@ def resync_conversation_members(conversation):
         m.left_at = now
     if to_deactivate:
         ConversationMember.objects.bulk_update(to_deactivate, ["left_at"])
+
+
+def is_group_linked(conversation_id):
+    """Whether the conversation has attached auth groups (membership is synced)."""
+    from ..models import Conversation
+
+    return Conversation.objects.filter(
+        pk=conversation_id, groups__isnull=False
+    ).exists()
 
 
 @transaction.atomic

@@ -111,9 +111,15 @@ window.chatMembersMixin = function chatMembersMixin() {
       }
     },
 
+    // Membership of a group-linked conversation follows its auth groups; the
+    // backend rejects manual mutations, these guards just hide the affordances.
+    isGroupLinkedConversation() {
+      return Boolean(this.activeConversation?.groups?.length);
+    },
+
     async leaveConversation() {
       if (!this.activeConversation) return;
-      if (this.activeConversation?.groups?.length) return;
+      if (this.isGroupLinkedConversation()) return;
       const ok = await AppDialog.confirm({
         title: 'Leave conversation',
         message: 'Are you sure you want to leave this conversation?',
@@ -143,7 +149,7 @@ window.chatMembersMixin = function chatMembersMixin() {
     // ── Member management (group only) ────────────────────────
     async addMembersToConversation() {
       if (!this.activeConversation || this.activeConversation.kind !== 'group') return;
-      if (this.activeConversation.groups?.length) return;
+      if (this.isGroupLinkedConversation()) return;
       this.addMemberSelected = [];
       this.addMemberSearchQuery = '';
       this.addMemberResults = [];
@@ -244,7 +250,7 @@ window.chatMembersMixin = function chatMembersMixin() {
 
     async removeMember(userId) {
       if (!this.activeConversation) return;
-      if (this.activeConversation.groups?.length) return;
+      if (this.isGroupLinkedConversation()) return;
       const member = this.activeConversation.members?.find(m => m.user.id === userId);
       const name = member ? this.memberDisplayName(member) : 'this member';
       const ok = await AppDialog.confirm({

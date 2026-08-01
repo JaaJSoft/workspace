@@ -26,7 +26,7 @@ from .services.conversations import (
     get_unread_counts,
     user_conversation_ids,
 )
-from .services.group_sync import create_group_conversation
+from .services.group_sync import create_group_conversation, is_group_linked
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -356,9 +356,7 @@ class ConversationDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if Conversation.objects.filter(
-            pk=conversation_id, groups__isnull=False
-        ).exists():
+        if is_group_linked(conversation_id):
             return Response(
                 {
                     "detail": "Membership of a group-linked conversation follows its groups."
@@ -402,7 +400,7 @@ class ConversationMembersView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if conversation.groups.exists():
+        if is_group_linked(conversation.pk):
             return Response(
                 {
                     "detail": "Members of a group-linked conversation are managed through its groups."
@@ -488,7 +486,7 @@ class ConversationMemberRemoveView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if conversation.groups.exists():
+        if is_group_linked(conversation.pk):
             return Response(
                 {
                     "detail": "Members of a group-linked conversation are managed through its groups."

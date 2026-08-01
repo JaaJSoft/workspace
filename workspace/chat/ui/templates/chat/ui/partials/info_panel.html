@@ -112,7 +112,7 @@
       Clear
     </button>
     <button
-      x-show="!activeConversation.groups?.length"
+      x-show="!isGroupLinkedConversation()"
       class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
       @click="leaveConversation()"
     >
@@ -131,7 +131,7 @@
   <ul class="space-y-1">
     <!-- Add members row -->
     <li
-      x-show="activeConversation.kind === 'group' && !activeConversation.groups?.length"
+      x-show="activeConversation.kind === 'group' && !isGroupLinkedConversation()"
       class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
       @click="addMembersToConversation()"
     >
@@ -168,7 +168,7 @@
         </div>
         <!-- Remove button (visible to creator, not on self) -->
         <button
-          x-show="activeConversation.kind === 'group' && !activeConversation.groups?.length && activeConversation.created_by_id === currentUserId && member.user.id !== currentUserId"
+          x-show="activeConversation.kind === 'group' && !isGroupLinkedConversation() && activeConversation.created_by_id === currentUserId && member.user.id !== currentUserId"
           class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 text-error transition-opacity"
           @click="removeMember(member.user.id)"
           title="Remove from group"

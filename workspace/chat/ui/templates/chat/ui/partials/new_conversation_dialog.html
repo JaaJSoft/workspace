@@ -13,8 +13,8 @@
     <div class="px-5 pb-5 flex flex-col gap-3">
       <!-- People/Groups mode toggle -->
       <div class="join">
-        <button type="button" class="btn btn-xs join-item" :class="newConvMode === 'people' ? 'btn-active' : ''" @click="newConvMode = 'people'">People</button>
-        <button type="button" class="btn btn-xs join-item" :class="newConvMode === 'groups' ? 'btn-active' : ''" @click="newConvMode = 'groups'">Groups</button>
+        <button type="button" class="btn btn-xs join-item" :class="newConvMode === 'people' ? 'btn-active' : ''" :aria-pressed="(newConvMode === 'people').toString()" @click="newConvMode = 'people'">People</button>
+        <button type="button" class="btn btn-xs join-item" :class="newConvMode === 'groups' ? 'btn-active' : ''" :aria-pressed="(newConvMode === 'groups').toString()" @click="newConvMode = 'groups'">Groups</button>
       </div>
 
       <!-- To: tag-input -->

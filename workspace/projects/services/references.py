@@ -8,6 +8,21 @@ KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
 # to uppercase by callers.
 REFERENCE_RE = re.compile(r"^([A-Za-z][A-Za-z0-9]{1,9})-([0-9]{1,9})$")
 FALLBACK_KEY = "PROJ"
+PERSONAL_KEY_PREFIX = "PERS"
+
+
+def _word_signature(text):
+    """Uppercase initials of the first 5 words, or a 4-letter prefix.
+
+    Empty when *text* holds no ASCII alphanumerics (accented-only names
+    included - callers decide what to fall back to).
+    """
+    words = re.findall(r"[A-Za-z0-9]+", text)
+    if len(words) >= 2:
+        return "".join(word[0] for word in words[:5]).upper()
+    if words:
+        return words[0][:4].upper()
+    return ""
 
 
 def generate_base_key(name):
@@ -17,27 +32,34 @@ def generate_base_key(name):
     prefix. Names yielding fewer than 2 usable characters fall back to
     FALLBACK_KEY. The result always matches KEY_RE.
     """
-    words = re.findall(r"[A-Za-z0-9]+", name)
-    if len(words) >= 2:
-        base = "".join(word[0] for word in words[:5])
-    elif words:
-        base = words[0][:4]
-    else:
-        base = ""
     # Keys must start with a letter, so leading digits are dropped.
-    base = base.upper().lstrip("0123456789")
+    base = _word_signature(name).lstrip("0123456789")
     if len(base) < 2:
         return FALLBACK_KEY
     return base[:KEY_MAX_LENGTH]
 
 
-def unique_project_key(name, *, taken):
-    """First key derived from *name* absent from *taken* (uppercase keys).
+def personal_key_base(username):
+    """Derive a personal project's key from its owner's username (PERSPC).
+
+    The constant prefix supplies the leading letter KEY_RE demands, so a
+    digit-only username stays valid and one with no ASCII alphanumerics
+    degrades to the prefix alone instead of failing validation. It also
+    bounds the result: _word_signature caps at 5 characters, so the key
+    always fits KEY_MAX_LENGTH.
+
+    Distinct users can still collide (pierre.chopinet and paul.charpentier
+    both yield PERSPC); unique_project_key arbitrates.
+    """
+    return PERSONAL_KEY_PREFIX + _word_signature(username)
+
+
+def unique_project_key(base, *, taken):
+    """First key from *base* absent from *taken* (uppercase keys).
 
     Collisions get a numeric suffix (WR, WR2, WR3, ...), truncating the
     base so the result stays within KEY_MAX_LENGTH.
     """
-    base = generate_base_key(name)
     if base not in taken:
         return base
     suffix = 2

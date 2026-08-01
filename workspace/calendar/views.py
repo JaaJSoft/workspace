@@ -19,7 +19,6 @@ from .models import Calendar, Event, EventMember
 from .models_external import ExternalCalendar
 from .queries import member_event_ids, visible_calendar_ids, visible_calendars
 from .recurrence import expand_recurring_events, make_virtual_occurrence
-from .services.timezones import current_timezone_name, normalize_all_day
 from .serializers import (
     CalendarCreateSerializer,
     CalendarSerializer,
@@ -28,6 +27,7 @@ from .serializers import (
     EventSerializer,
     EventUpdateSerializer,
 )
+from .services.timezones import current_timezone_name, normalize_all_day
 from .upcoming import get_upcoming_page
 
 

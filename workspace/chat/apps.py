@@ -114,3 +114,19 @@ class ChatConfig(AppConfig):
         from workspace.chat.ai_tools import ChatToolProvider
 
         tool_registry.register_provider(ChatToolProvider())
+
+        from django.contrib.auth.models import Group, User
+        from django.db.models.signals import m2m_changed, pre_delete
+
+        from workspace.chat import signals as chat_signals
+
+        m2m_changed.connect(
+            chat_signals.sync_on_user_groups_changed,
+            sender=User.groups.through,
+            dispatch_uid="chat_sync_user_groups",
+        )
+        pre_delete.connect(
+            chat_signals.handle_group_pre_delete,
+            sender=Group,
+            dispatch_uid="chat_group_pre_delete",
+        )

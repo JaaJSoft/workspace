@@ -134,3 +134,96 @@ class ResyncConversationMembersTests(TestCase):
         self.assertEqual(
             ConversationMember.objects.filter(conversation=self.conv).count(), 2
         )
+
+
+class GroupChangeSignalTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user(
+            username="alice", email="alice@test.com", password="pass123"
+        )
+        self.bob = User.objects.create_user(
+            username="bob", email="bob@test.com", password="pass123"
+        )
+        self.team_a = Group.objects.create(name="Team A")
+        self.alice.groups.add(self.team_a)
+        self.conv = create_group_conversation(self.alice, [self.team_a], title="Chan")
+
+    def _active_ids(self):
+        return set(
+            ConversationMember.objects.filter(
+                conversation=self.conv, left_at__isnull=True
+            ).values_list("user_id", flat=True)
+        )
+
+    def test_user_added_to_group_gains_membership(self):
+        self.bob.groups.add(self.team_a)
+        self.assertIn(self.bob.id, self._active_ids())
+
+    def test_reverse_direction_add(self):
+        self.team_a.user_set.add(self.bob)
+        self.assertIn(self.bob.id, self._active_ids())
+
+    def test_user_removed_from_group_loses_membership(self):
+        self.bob.groups.add(self.team_a)
+        self.bob.groups.remove(self.team_a)
+        self.assertNotIn(self.bob.id, self._active_ids())
+
+    def test_user_groups_clear_loses_membership(self):
+        self.bob.groups.add(self.team_a)
+        self.bob.groups.clear()
+        self.assertNotIn(self.bob.id, self._active_ids())
+
+    def test_reverse_direction_remove(self):
+        self.team_a.user_set.add(self.bob)
+        self.team_a.user_set.remove(self.bob)
+        self.assertNotIn(self.bob.id, self._active_ids())
+
+    def test_uncovered_user_cannot_read_conversation(self):
+        from workspace.chat.services.conversations import get_active_membership
+
+        self.bob.groups.add(self.team_a)
+        self.bob.groups.remove(self.team_a)
+        self.assertIsNone(get_active_membership(self.bob, self.conv.uuid))
+
+    def test_classic_conversation_unaffected_by_group_changes(self):
+        classic = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, title="Classic", created_by=self.alice
+        )
+        ConversationMember.objects.create(conversation=classic, user=self.bob)
+        self.bob.groups.add(self.team_a)
+        self.bob.groups.clear()
+        row = ConversationMember.objects.get(conversation=classic, user=self.bob)
+        self.assertIsNone(row.left_at)
+
+
+class GroupDeletionTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user(
+            username="alice", email="alice@test.com", password="pass123"
+        )
+        self.bob = User.objects.create_user(
+            username="bob", email="bob@test.com", password="pass123"
+        )
+        self.team_a = Group.objects.create(name="Team A")
+        self.team_b = Group.objects.create(name="Team B")
+        self.alice.groups.add(self.team_a)
+        self.bob.groups.add(self.team_b)
+
+    def test_deleting_only_group_deletes_conversation(self):
+        conv = create_group_conversation(self.alice, [self.team_a], title="Chan")
+        self.team_a.delete()
+        self.assertFalse(Conversation.objects.filter(pk=conv.pk).exists())
+
+    def test_deleting_one_of_two_groups_detaches_and_resyncs(self):
+        conv = create_group_conversation(
+            self.alice, [self.team_a, self.team_b], title="Chan"
+        )
+        self.team_b.delete()
+        conv.refresh_from_db()
+        self.assertEqual(list(conv.groups.all()), [self.team_a])
+        active = set(
+            ConversationMember.objects.filter(
+                conversation=conv, left_at__isnull=True
+            ).values_list("user_id", flat=True)
+        )
+        self.assertEqual(active, {self.alice.id})

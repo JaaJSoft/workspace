@@ -440,7 +440,14 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         // display zone: attach the default times verbatim - converting the
         // naive string would shift it by the browser/user zone delta.
         startVal = start + 'T09:00';
-        endVal = end && end.length !== 10 ? this.toLocalDatetime(end) : start + 'T10:00';
+        if (end && end.length === 10) {
+          // Multi-day drag: the date-only end is exclusive; keep the last
+          // covered day with the default end time.
+          const [y, m, d] = end.split('-').map(Number);
+          endVal = new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10) + 'T10:00';
+        } else {
+          endVal = end ? this.toLocalDatetime(end) : start + 'T10:00';
+        }
       } else {
         startVal = this.toLocalDatetime(start);
         endVal = end ? this.toLocalDatetime(end) : '';

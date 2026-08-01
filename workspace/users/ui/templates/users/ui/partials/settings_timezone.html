@@ -47,19 +47,25 @@
       },
       save() {
         if (!this.tz) return;
+        const previous = html.getAttribute('data-timezone') || '';
         html.setAttribute('data-timezone', this.tz);
         if (window.convertLocaltimes) window.convertLocaltimes(document);
-        // The browser tz list can be newer than the server tzdata: surface a
-        // rejected save instead of leaving the UI silently out of sync.
+        // The browser tz list can be newer than the server tzdata: on a
+        // rejected save, roll the optimistic change back and say so.
+        const revert = () => {
+          this.tz = previous;
+          if (previous) html.setAttribute('data-timezone', previous);
+          else html.removeAttribute('data-timezone');
+          if (window.convertLocaltimes) window.convertLocaltimes(document);
+          if (window.AppAlert) window.AppAlert.error('Failed to save timezone');
+        };
         fetch('/api/v1/settings/core/timezone', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
           body: JSON.stringify({ value: this.tz }),
         }).then((resp) => {
-          if (!resp.ok && window.AppAlert) window.AppAlert.error('Failed to save timezone');
-        }).catch(() => {
-          if (window.AppAlert) window.AppAlert.error('Failed to save timezone');
-        });
+          if (!resp.ok) revert();
+        }).catch(revert);
       },
     };
   }

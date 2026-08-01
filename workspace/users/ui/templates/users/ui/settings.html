@@ -104,7 +104,7 @@
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
 <script>
   function settingsPage() {
-    const validTabs = ['profile', 'appearance', 'security', 'tokens', 'usage'];
+    const validTabs = ['profile', 'appearance', 'timezone', 'security', 'tokens', 'usage'];
     return {
       tab: validTabs.includes(location.hash.replace('#', '')) ? location.hash.replace('#', '') : 'profile',
       async init() {

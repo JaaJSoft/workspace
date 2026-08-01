@@ -7,36 +7,20 @@ const { loadScript } = require('../../../common/tests/js/loader');
 const mixinStub = () => ({});
 
 // In the browser localtime.js shares the window with every calendar
-// script; mirror its wall-clock helpers into a vm realm.
+// script; load the real production helpers once and mirror them into
+// each vm realm so the tests exercise the shared implementation.
+const localtimeCtx = loadScript('workspace/common/static/ui/js/localtime.js', {
+  document: {
+    documentElement: { getAttribute: () => null },
+    body: {},
+    querySelectorAll: () => [],
+  },
+  MutationObserver: class { observe() {} },
+});
+
 function injectTzHelpers(ctx) {
-  const parts = (d, tz) => {
-    const out = {};
-    const dtf = new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
-    });
-    for (const part of dtf.formatToParts(d)) out[part.type] = part.value;
-    return out;
-  };
-  const offsetMs = (tz, date) => {
-    const p = parts(date, tz);
-    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - date.getTime();
-  };
-  ctx.wallClockToIso = (naive, tz) => {
-    if (!naive) return null;
-    if (!tz) return new Date(naive.length === 10 ? naive + 'T00:00' : naive).toISOString();
-    const [datePart, timePart] = naive.split('T');
-    const [y, mo, d] = datePart.split('-').map(Number);
-    const [h = 0, mi = 0, sec = 0] = (timePart || '00:00').split(':').map(Number);
-    const guess = Date.UTC(y, mo - 1, d, h, mi, sec);
-    let ts = guess - offsetMs(tz, new Date(guess));
-    ts = guess - offsetMs(tz, new Date(ts));
-    return new Date(ts).toISOString();
-  };
-  ctx.isoToWallClock = (iso, tz) => {
-    const p = parts(new Date(iso), tz);
-    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
-  };
+  ctx.wallClockToIso = localtimeCtx.wallClockToIso;
+  ctx.isoToWallClock = localtimeCtx.isoToWallClock;
 }
 
 function makeEventsMixin(userTz) {
@@ -181,4 +165,21 @@ test('applyDuration on all-day events does pure day-label arithmetic', () => {
   });
   merged.applyDuration(1440);
   assert.equal(merged.form.end, '2026-08-06');
+});
+
+test('openCreateModal keeps the last covered day of a multi-day date-only drag', () => {
+  const { mixin } = makeEventsMixin('Asia/Vladivostok');
+  const app = makeCalendarApp('Asia/Vladivostok');
+  const merged = Object.assign({}, app, mixin, {
+    showModal: false,
+    showPanel: false,
+    modalMode: '',
+    ownedCalendars: [],
+    selectedMembers: [],
+    prefs: { defaultAllDay: false, timeFormat: '24h' },
+  });
+  // FullCalendar select() hands over an exclusive date-only end.
+  merged.openCreateModal('2026-08-05', '2026-08-08', false);
+  assert.equal(merged.form.start, '2026-08-05T09:00');
+  assert.equal(merged.form.end, '2026-08-07T10:00');
 });

@@ -635,4 +635,5 @@ class TimezoneStampingScopeTests(CalendarTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         event.refresh_from_db()
+        self.assertEqual(event.recurrence_frequency, "daily")
         self.assertEqual(event.timezone, "Europe/Paris")

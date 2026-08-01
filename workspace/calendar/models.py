@@ -87,6 +87,9 @@ class Event(models.Model):
     start = models.DateTimeField()
     end = models.DateTimeField(null=True, blank=True)
     all_day = models.BooleanField(default=False)
+    # IANA zone the series wall-clock is anchored in; blank = legacy UTC
+    # expansion (see workspace/calendar/services/timezones.py).
+    timezone = models.CharField(max_length=64, blank=True, default="")
     location = models.CharField(max_length=255, blank=True, default="")
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,

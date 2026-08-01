@@ -26,6 +26,7 @@ from workspace.users.services.settings import get_setting, set_setting
 VIEW_OVERVIEW = "overview"
 VIEW_BOARD = "board"
 VIEW_BACKLOG = "backlog"
+VIEW_TASKS = "tasks"
 VIEW_SETTINGS = "settings"
 
 
@@ -282,6 +283,23 @@ def backlog(request, project_uuid):
         .order_by("position", "created_at")
     )
     context["backlog_count"] = len(context["backlog_tasks"])
+    return _render_project_view(request, context)
+
+
+@login_required
+@ensure_csrf_cookie
+def all_tasks(request, project_uuid):
+    project, role = _get_project_or_404(request.user, project_uuid)
+    _record_visit(request.user, project_uuid)
+    context = _base_context(request, project, role, VIEW_TASKS)
+    context["backlog_count"] = project.tasks.filter(
+        status__category=TaskStatus.Category.BACKLOG
+    ).count()
+    context["all_tasks"] = list(
+        project.tasks.select_related("status")
+        .prefetch_related("assignees", "labels")
+        .order_by("status__position", "status__created_at", "position", "created_at")
+    )
     return _render_project_view(request, context)
 
 

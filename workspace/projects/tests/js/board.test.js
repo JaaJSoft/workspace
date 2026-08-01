@@ -970,3 +970,57 @@ test('panel addLabel is gated on the set_labels action', () => {
   panelWithActions([], calls).addLabel({ uuid: 'l2', name: 'Chore', color: '' });
   assert.equal(calls.length, 0);
 });
+
+test('taskMatchesFilters filters by status', () => {
+  const dataset = { search: 'wr-1 fix login', priority: 'high', status: 's1' };
+  assert.equal(
+    ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: 's1' }),
+    true
+  );
+  assert.equal(
+    ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: 's2' }),
+    false
+  );
+});
+
+test('taskMatchesFilters ignores an empty status filter', () => {
+  const dataset = { search: 'wr-1 fix login', status: 's1' };
+  assert.equal(ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: '' }), true);
+});
+
+test('taskMatchesFilters skips rows without status metadata', () => {
+  const dataset = { search: 'wr-1 fix login' };
+  assert.equal(
+    ctx.projectBoardHelpers.taskMatchesFilters(dataset, { status: 's1' }),
+    true
+  );
+});
+
+test('refresh targets the all-tasks partial when viewing tasks', () => {
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  const calls = [];
+  const board = ctx.projectBoard({
+    apiBase: '/api',
+    projectBase: '/projects/p',
+    writable: true,
+  });
+  board.currentView = 'tasks';
+  board.$ajax = (url) => calls.push(url);
+  board.refresh();
+  assert.deepStrictEqual(Array.from(calls), ['/projects/p/tasks']);
+});
+
+test('onPopState recognizes the tasks view', () => {
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  ctx.location = {
+    pathname: '/projects/p/tasks',
+    href: 'http://x.test/projects/p/tasks',
+  };
+  const board = ctx.projectBoard({
+    apiBase: '/api',
+    projectBase: '/projects/p',
+    writable: true,
+  });
+  board.onPopState();
+  assert.equal(board.currentView, 'tasks');
+});

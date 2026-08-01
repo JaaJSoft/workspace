@@ -33,7 +33,7 @@ function fieldAction(field) {
 }
 
 function emptyTaskFilters() {
-  return { q: '', assignee: '', label: '', priority: '' };
+  return { q: '', assignee: '', label: '', priority: '', status: '' };
 }
 
 function taskMatchesFilters(dataset, filters) {
@@ -53,6 +53,13 @@ function taskMatchesFilters(dataset, filters) {
     } else if (!ids.includes(filters.assignee)) {
       return false;
     }
+  }
+  if (
+    filters.status &&
+    dataset.status !== undefined &&
+    dataset.status !== filters.status
+  ) {
+    return false;
   }
   return true;
 }
@@ -328,6 +335,7 @@ function projectBoard(config) {
     refresh() {
       let url = config.projectBase;
       if (this.currentView === 'backlog') url += '/backlog';
+      else if (this.currentView === 'tasks') url += '/tasks';
       else if (this.currentView === 'settings') url += '/settings';
       else if (this.currentView !== 'overview') url += '/board';
       this.$ajax(url, { target: 'project-content' });
@@ -346,7 +354,8 @@ function projectBoard(config) {
         this.filters.q.trim() ||
           this.filters.assignee ||
           this.filters.label ||
-          this.filters.priority
+          this.filters.priority ||
+          this.filters.status
       );
     },
 
@@ -368,6 +377,10 @@ function projectBoard(config) {
 
     backlogVisibleCount() {
       return this._visibleTaskEls('#backlog').length;
+    },
+
+    allTasksVisibleCount() {
+      return this._visibleTaskEls('#all-tasks').length;
     },
 
     visibleBacklogUuids() {
@@ -488,11 +501,13 @@ function projectBoard(config) {
       const path = window.location.pathname;
       this.currentView = path.endsWith('/backlog')
         ? 'backlog'
-        : path.endsWith('/board')
-          ? 'board'
-          : path.endsWith('/settings')
-            ? 'settings'
-            : 'overview';
+        : path.endsWith('/tasks')
+          ? 'tasks'
+          : path.endsWith('/board')
+            ? 'board'
+            : path.endsWith('/settings')
+              ? 'settings'
+              : 'overview';
       const task = new URL(window.location.href).searchParams.get('task');
       if (task && task !== this.panelTaskUuid) {
         this.panelTaskUuid = task;

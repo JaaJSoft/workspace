@@ -37,6 +37,14 @@ card/row (see taskMatchesFilters in board.js).
       <option value="medium">Medium</option>
       <option value="low">Low</option>
     </select>
+    {% if show_status_filter %}
+      <select class="select select-bordered select-sm shrink-0" x-model="filters.status" aria-label="Filter by status">
+        <option value="">All statuses</option>
+        {% for s in statuses_data %}
+          <option value="{{ s.uuid }}">{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    {% endif %}
     <button type="button" class="btn btn-ghost btn-sm shrink-0 px-2 sm:px-3" x-show="filtersActive()" x-cloak
             title="Clear filters" aria-label="Clear filters" @click="clearFilters()">
       <i data-lucide="x" class="w-4 h-4"></i>

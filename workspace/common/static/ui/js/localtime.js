@@ -1,15 +1,29 @@
 // Local timezone formatting for <time data-localtime> elements.
-// Registers window.convertLocaltimes(root) and a MutationObserver that
-// formats any <time data-localtime> nodes added to the DOM later.
+// The zone comes from <html data-timezone> (the user's stored setting);
+// without it, formatting falls back to the browser timezone.
+// Registers window.convertLocaltimes(root), window.getUserTimeZone(),
+// window.userTzDayKey(date) and a MutationObserver that formats any
+// <time data-localtime> nodes added to the DOM later.
 (function () {
-  function _dateLabelLocal(d) {
+  function getUserTimeZone() {
+    return document.documentElement.getAttribute('data-timezone') || undefined;
+  }
+
+  // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
+  function _dayKey(d, tz) {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
+  }
+
+  function userTzDayKey(d) {
+    return _dayKey(d, getUserTimeZone());
+  }
+
+  function _dateLabelLocal(d, tz) {
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const diff = (today - target) / 86400000;
-    if (diff === 0) return 'Today';
-    if (diff === 1) return 'Yesterday';
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const target = _dayKey(d, tz);
+    if (target === _dayKey(now, tz)) return 'Today';
+    if (target === _dayKey(new Date(now.getTime() - 86400000), tz)) return 'Yesterday';
+    return d.toLocaleDateString(undefined, { timeZone: tz, month: 'short', day: 'numeric' });
   }
 
   function _formatLocaltime(el) {
@@ -17,16 +31,17 @@
     if (!iso) return;
     const d = new Date(iso);
     if (isNaN(d)) return;
+    const tz = getUserTimeZone();
     const fmt = el.dataset.localtime || 'time';
     switch (fmt) {
       case 'time':
-        el.textContent = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        el.textContent = d.toLocaleTimeString(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit' });
         break;
       case 'date':
-        el.textContent = _dateLabelLocal(d);
+        el.textContent = _dateLabelLocal(d, tz);
         break;
       case 'datetime':
-        el.textContent = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        el.textContent = d.toLocaleDateString(undefined, { timeZone: tz, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         break;
       case 'relative': {
         const sec = Math.floor((Date.now() - d.getTime()) / 1000);
@@ -37,18 +52,20 @@
         break;
       }
       case 'smart': {
-        const now = new Date();
-        const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+        const isToday = _dayKey(d, tz) === _dayKey(new Date(), tz);
         el.textContent = isToday
-          ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-          : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          ? d.toLocaleTimeString(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit' })
+          : d.toLocaleDateString(undefined, { timeZone: tz, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         break;
       }
       case 'full':
-        el.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        el.textContent = d.toLocaleDateString(undefined, { timeZone: tz, year: 'numeric', month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit' });
         break;
     }
   }
+
+  window.getUserTimeZone = getUserTimeZone;
+  window.userTzDayKey = userTzDayKey;
 
   window.convertLocaltimes = function (root) {
     (root || document).querySelectorAll('time[data-localtime]').forEach(_formatLocaltime);

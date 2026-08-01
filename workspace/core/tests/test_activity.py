@@ -1,13 +1,15 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from django.utils import timezone as dj_timezone
 
 from workspace.core.activity_registry import (
     ActivityProvider,
     ActivityProviderInfo,
     ActivityRegistry,
 )
+from workspace.core.services.activity import annotate_time_ago
 
 User = get_user_model()
 
@@ -767,3 +769,15 @@ class UsageStatsCacheTests(TestCase):
             activity_service.get_usage_stats(1, viewer_id=9)
 
         self.assertEqual(mock_stats.call_count, 3)
+
+
+class AnnotateTimeAgoTimezoneTests(TestCase):
+    def tearDown(self):
+        dj_timezone.deactivate()
+
+    def test_month_label_uses_active_timezone(self):
+        # 23:30 UTC on Jan 31 is already Feb 1 in Paris.
+        ts = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
+        dj_timezone.activate("Europe/Paris")
+        events = annotate_time_ago([{"timestamp": ts}])
+        self.assertEqual(events[0]["time_ago"], "Feb 01")

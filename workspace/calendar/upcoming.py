@@ -3,7 +3,10 @@
 Used by the dashboard (event list + pending action count).
 """
 
+from datetime import UTC, datetime, time, timedelta
+
 from django.db.models import Q
+from django.utils import timezone
 
 from workspace.calendar.models import Event, EventMember
 from workspace.calendar.queries import visible_events_q
@@ -38,16 +41,25 @@ def get_upcoming_for_user(user, now, end_of_today):
     # Exclude events the user explicitly declined
     declined_q = Q(members__user=user, members__status=EventMember.Status.DECLINED)
 
-    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # All-day events are UTC-midnight anchored to a calendar-day label:
+    # match the label against the user's current day (active timezone),
+    # not UTC's, or the widget shows yesterday's all-day events past
+    # midnight for positive-offset users.
+    all_day_today = datetime.combine(timezone.localdate(now), time.min, tzinfo=UTC)
 
     # One-off events + materialized exceptions still relevant today:
     # - timed: not yet finished (end >= now, or no end and start >= now)
     # - all-day: stored as start at 00:00 with end=None — always visible the
-    #   whole day, so include any all-day event whose start falls today.
+    #   whole day, so include any all-day event whose day label is today.
     relevance_q = (
         Q(end__gte=now)
         | Q(all_day=False, end__isnull=True, start__gte=now)
-        | Q(all_day=True, end__isnull=True, start__gte=start_of_today)
+        | Q(
+            all_day=True,
+            end__isnull=True,
+            start__gte=all_day_today,
+            start__lt=all_day_today + timedelta(days=1),
+        )
     )
     one_off = list(
         Event.objects.filter(

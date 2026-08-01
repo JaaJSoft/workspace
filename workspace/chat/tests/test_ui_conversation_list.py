@@ -4,12 +4,19 @@ Covers the HTML partial returned for the chat sidebar (Alpine AJAX refresh),
 including the `?q=` search filter.
 """
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.chat.models import Conversation, ConversationMember, PinnedConversation
+from workspace.chat.models import (
+    Conversation,
+    ConversationMember,
+    Message,
+    PinnedConversation,
+)
+from workspace.chat.ui.views import _build_conversation_context
 
 from .test_chat import ChatTestMixin
 
@@ -149,3 +156,21 @@ class ConversationListViewPartialTests(ChatTestMixin, TestCase):
             dm_pos,
             "Pinned group must come before the more recent unpinned DM",
         )
+
+    def test_time_ago_month_label_uses_active_timezone(self):
+        msg = Message.objects.create(
+            conversation=self.group, author=self.member, body="hello"
+        )
+        # 23:30 UTC on Jan 31 is already Feb 1 in Paris.
+        Message.objects.filter(pk=msg.pk).update(
+            created_at=datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
+        )
+        timezone.activate("Europe/Paris")
+        self.addCleanup(timezone.deactivate)
+        # Freeze "now" so the message stays in the month-label branch
+        # (< 1 year old) regardless of when the test runs.
+        fixed_now = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
+        with patch("django.utils.timezone.now", return_value=fixed_now):
+            convs = _build_conversation_context(self.creator)
+        group = next(c for c in convs if c.pk == self.group.pk)
+        self.assertEqual(group.time_ago, "Feb 01")

@@ -165,7 +165,7 @@ def annotate_time_ago(events):
         elif diff < 604800:
             event["time_ago"] = f"{int(diff // 86400)}d"
         else:
-            event["time_ago"] = ts.strftime("%b %d")
+            event["time_ago"] = timezone.localtime(ts).strftime("%b %d")
     return events
 
 

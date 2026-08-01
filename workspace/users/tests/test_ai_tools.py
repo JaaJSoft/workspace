@@ -257,3 +257,40 @@ class ListOnlineUsersTests(TestCase):
             result = self._call(limit=9999)
 
         self.assertIn("@alice", result)
+
+
+class CheckUserStatusTimezoneTests(TestCase):
+    def setUp(self):
+        self.viewer = User.objects.create_user(username="tzviewer", password="pw")
+        self.target = User.objects.create_user(username="tztarget", password="pw")
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def test_last_seen_rendered_in_user_timezone(self):
+        from workspace.users.services.settings import set_setting
+
+        set_setting(self.viewer, "core", "timezone", "Europe/Paris")
+        # 23:30 UTC on Jan 31 is already Feb 1 in Paris.
+        last_seen = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
+        with (
+            mock.patch(
+                "workspace.users.services.presence.get_status",
+                return_value="offline",
+            ),
+            mock.patch(
+                "workspace.users.services.presence.get_last_seen",
+                return_value=last_seen,
+            ),
+        ):
+            result = UsersToolProvider().check_user_status(
+                CheckUserStatusParams(username="tztarget"),
+                user=self.viewer,
+                bot=None,
+                conversation_id=None,
+                context={},
+            )
+        payload = json.loads(result)
+        self.assertEqual(payload["last_seen"], "2026-02-01 00:30")

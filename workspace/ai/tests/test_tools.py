@@ -1,7 +1,9 @@
 import json
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db import connection
 from django.test import TestCase
 
@@ -218,3 +220,24 @@ class ExecuteToolCallTests(TestCase):
         self.assertEqual(data["first_name"], "Pierre")
         self.assertEqual(data["last_name"], "Dupont")
         self.assertEqual(data["email"], "pierre@example.com")
+
+
+class CurrentUserInfoTimezoneTests(TestCase):
+    def tearDown(self):
+        cache.clear()
+
+    def test_date_joined_in_user_timezone(self):
+        from workspace.ai.tools import CoreToolProvider
+        from workspace.users.services.settings import set_setting
+
+        user = User.objects.create_user(username="tzju", password="pw")
+        # 23:30 UTC on Jan 31 is already Feb 1 in Paris.
+        User.objects.filter(pk=user.pk).update(
+            date_joined=datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
+        )
+        user.refresh_from_db()
+        set_setting(user, "core", "timezone", "Europe/Paris")
+        result = CoreToolProvider().get_current_user_info(
+            None, user=user, bot=None, conversation_id=None, context={}
+        )
+        self.assertIn("2026-02-01", result)

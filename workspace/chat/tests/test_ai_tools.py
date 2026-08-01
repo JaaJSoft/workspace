@@ -1,11 +1,18 @@
+from datetime import UTC, datetime
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from pydantic import ValidationError
 
 from workspace.chat.ai_tools import (
     AskUserQuestionParams,
     ChatToolProvider,
+    SearchMessagesParams,
 )
+from workspace.chat.models import Conversation, ConversationMember, Message
+from workspace.users.services.settings import set_setting
 
 User = get_user_model()
 
@@ -101,3 +108,49 @@ class AskUserQuestionToolTests(TestCase):
         self.assertIn("Error", result)
         self.assertNotIn("question", ctx)
         self.assertNotIn("stop_after_round", ctx)
+
+
+class SearchMessagesTimezoneTests(TestCase):
+    """Tools run in Celery with no active timezone: they must resolve the
+    user's stored zone explicitly instead of relying on the middleware."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="tzsm", password="pw")
+        self.bot = User.objects.create_user(username="tzbot", password="pw")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, title="G", created_by=self.user
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.user)
+        self.provider = ChatToolProvider()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _search(self, **kwargs):
+        args = SearchMessagesParams(query="boundary", **kwargs)
+        return self.provider.search_messages(
+            args, user=self.user, bot=self.bot, conversation_id=None, context={}
+        )
+
+    def _make_message(self, created_at):
+        msg = Message.objects.create(
+            conversation=self.conv, author=self.user, body="boundary msg"
+        )
+        Message.objects.filter(pk=msg.pk).update(created_at=created_at)
+        return msg
+
+    def test_today_range_uses_stored_user_timezone(self):
+        # 22:30 UTC Jan 31 = 23:30 Jan 31 in Paris; at 23:45 UTC the user's
+        # day is already Feb 1, so "today" must exclude this message.
+        self._make_message(datetime(2026, 1, 31, 22, 30, tzinfo=UTC))
+        set_setting(self.user, "core", "timezone", "Europe/Paris")
+        fixed_now = datetime(2026, 1, 31, 23, 45, tzinfo=UTC)
+        with patch("django.utils.timezone.now", return_value=fixed_now):
+            result = self._search(date_range="today")
+        self.assertIn("No messages found", result)
+
+    def test_timestamps_rendered_in_user_timezone(self):
+        self._make_message(datetime(2026, 1, 31, 23, 30, tzinfo=UTC))
+        set_setting(self.user, "core", "timezone", "Europe/Paris")
+        result = self._search()
+        self.assertIn("2026-02-01 00:30", result)

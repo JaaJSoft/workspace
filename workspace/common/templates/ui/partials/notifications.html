@@ -49,7 +49,8 @@
     if (hours < 24) return hours + 'h ago';
     const days = Math.floor(hours / 24);
     if (days < 7) return days + 'd ago';
-    return new Date(dateStr).toLocaleDateString();
+    const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+    return new Date(dateStr).toLocaleDateString(undefined, { timeZone: tz });
   },
 
   async clickItem(item) {

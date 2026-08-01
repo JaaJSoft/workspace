@@ -270,8 +270,9 @@ window.shareModal = function shareModal() {
 
     formatLinkExpiry(expiresAt) {
       if (!expiresAt) return 'Permanent';
-      const d = new Date(expiresAt);
-      return d.toLocaleDateString();
+      // The expiry is a date-only choice stored as UTC midnight: format it
+      // in UTC so the chosen day never shifts with the user timezone.
+      return new Date(expiresAt).toLocaleDateString(undefined, { timeZone: 'UTC' });
     },
   };
 };

@@ -63,6 +63,11 @@ or references a past discussion."""
         from django.utils import timezone
 
         from workspace.chat.services.message_search import search_messages_qs
+        from workspace.users.services.settings import get_user_timezone
+
+        # Tools run in Celery with no request middleware, so the active
+        # timezone is UTC: resolve the user's stored zone explicitly.
+        user_tz = get_user_timezone(user)
 
         conv_only = args.conversation_only
         if conv_only and conversation_id:
@@ -79,7 +84,13 @@ or references a past discussion."""
         if date_range:
             now = timezone.now()
             if date_range == "today":
-                qs = qs.filter(created_at__date=now.date())
+                day_start = now.astimezone(user_tz).replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                qs = qs.filter(
+                    created_at__gte=day_start,
+                    created_at__lt=day_start + timedelta(days=1),
+                )
             elif date_range == "7d":
                 qs = qs.filter(created_at__gte=now - timedelta(days=7))
             elif date_range == "30d":
@@ -99,7 +110,7 @@ or references a past discussion."""
             author_name = msg.author.get_full_name() or msg.author.username
             conv_name = msg.conversation.title or "DM"
             snippet = msg.body[:200]
-            ts = msg.created_at.strftime("%Y-%m-%d %H:%M")
+            ts = msg.created_at.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
             results.append(
                 {
                     "timestamp": ts,

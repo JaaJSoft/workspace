@@ -94,12 +94,15 @@ class CoreToolProvider(ToolProvider):
 Call this when you need to address the user by name, check their email, or answer questions about their account."""
         if not user:
             return "Error: no user context"
+        from workspace.users.services.settings import get_user_timezone
+
+        joined = user.date_joined.astimezone(get_user_timezone(user))
         info = {
             "username": user.username,
             "first_name": user.first_name,
             "last_name": user.last_name,
             "email": user.email,
-            "date_joined": user.date_joined.strftime("%Y-%m-%d"),
+            "date_joined": joined.strftime("%Y-%m-%d"),
         }
         return json.dumps(info)
 

@@ -134,16 +134,17 @@ window._eventCardCancelHide = function(wrapper) {
  * Reuses the same logic as the global localtime formatter in base.html.
  */
 function _formatEventCardTimes(container) {
+  const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
   container.querySelectorAll('time[data-localtime]').forEach(function(el) {
     const d = new Date(el.getAttribute('datetime'));
     if (isNaN(d)) return;
     const mode = el.dataset.localtime;
     if (mode === 'time') {
-      el.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      el.textContent = d.toLocaleTimeString([], { timeZone: tz, hour: '2-digit', minute: '2-digit' });
     } else if (mode === 'date') {
-      el.textContent = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+      el.textContent = d.toLocaleDateString([], { timeZone: tz, month: 'short', day: 'numeric', year: 'numeric' });
     } else {
-      el.textContent = d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      el.textContent = d.toLocaleDateString([], { timeZone: tz, month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { timeZone: tz, hour: '2-digit', minute: '2-digit' });
     }
   });
 }

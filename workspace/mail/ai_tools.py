@@ -71,7 +71,10 @@ or when the user asks to read, open, or see the details of a specific email."""
         if msg.cc_addresses:
             parts.append(f"Cc: {', '.join(_fmt_addr(a) for a in msg.cc_addresses)}")
         if msg.date:
-            parts.append(f"Date: {msg.date.strftime('%Y-%m-%d %H:%M')}")
+            from workspace.users.services.settings import get_user_timezone
+
+            local_date = msg.date.astimezone(get_user_timezone(user))
+            parts.append(f"Date: {local_date.strftime('%Y-%m-%d %H:%M')}")
         parts.append(f"Folder: {msg.folder.display_name}")
         if msg.has_attachments:
             parts.append("Attachments: yes")
@@ -118,6 +121,9 @@ Use read_email with the returned UUID to get the full content."""
         if not matches:
             return f'No emails found matching "{query}".'
 
+        from workspace.users.services.settings import get_user_timezone
+
+        user_tz = get_user_timezone(user)
         results = []
         for msg in matches:
             results.append(
@@ -125,7 +131,9 @@ Use read_email with the returned UUID to get the full content."""
                     "uuid": str(msg.uuid),
                     "subject": msg.subject or "(no subject)",
                     "from": msg.from_name or msg.from_email,
-                    "date": msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else "",
+                    "date": msg.date.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
+                    if msg.date
+                    else "",
                     "folder": msg.folder.display_name if msg.folder else "",
                     "is_read": msg.is_read,
                     "has_attachments": msg.has_attachments,

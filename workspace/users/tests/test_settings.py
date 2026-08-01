@@ -397,3 +397,66 @@ class SettingCacheTests(TestCase):
         delete_setting(self.user, "profile", "bio")
         # Deleted key must disappear from the module dict
         self.assertEqual(get_module_settings(self.user, "profile"), {})
+
+
+class TimezoneSettingValidationTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="tzval", password="pass")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_put_rejects_invalid_timezone(self):
+        resp = self.client.put(
+            "/api/v1/settings/core/timezone",
+            data={"value": "Mars/Olympus"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertNotIn("timezone", get_module_settings(self.user, "core"))
+
+    def test_put_accepts_valid_timezone(self):
+        resp = self.client.put(
+            "/api/v1/settings/core/timezone",
+            data={"value": "Europe/Paris"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(get_setting(self.user, "core", "timezone"), "Europe/Paris")
+
+    def test_put_accepts_null_to_clear(self):
+        set_setting(self.user, "core", "timezone", "Europe/Paris")
+        resp = self.client.put(
+            "/api/v1/settings/core/timezone",
+            data={"value": None},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        # The stored value must actually be overwritten with null.
+        self.assertIsNone(get_setting(self.user, "core", "timezone", default="unset"))
+
+    def test_bulk_patch_rejects_invalid_timezone(self):
+        # A valid key listed before the invalid one must not be persisted:
+        # validation runs on the whole payload before any write.
+        resp = self.client.patch(
+            "/api/v1/settings/core",
+            data={"theme": "dark", "timezone": "Not/AZone"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        core = get_module_settings(self.user, "core")
+        self.assertNotIn("timezone", core)
+        self.assertNotIn("theme", core)
+
+
+class GetUserTimezonePathValueTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="tzpath", password="pass")
+
+    def test_returns_utc_for_path_like_value(self):
+        # ZoneInfo raises ValueError (not ZoneInfoNotFoundError) for path-like
+        # keys; a value planted via shell/fixture must not 500 every request.
+        set_setting(self.user, "core", "timezone", "../etc")
+        self.assertEqual(str(get_user_timezone(self.user)), "UTC")

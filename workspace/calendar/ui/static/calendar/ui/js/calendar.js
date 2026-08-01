@@ -330,9 +330,11 @@ window.calendarApp = function calendarApp() {
       params.set('view', this._viewToUrl(viewType));
       // Store the current date as YYYY-MM-DD (skipped for agenda since it's always "from now")
       if (viewType !== 'agenda' && this.calendar) {
+        // FullCalendar returns browser-local dates; key them in the browser
+        // zone too (toISOString would shift the day for any UTC+ browser).
         const d = this.calendar.getDate();
-        const dateStr = d.toISOString().split('T')[0];
-        const today = new Date().toISOString().split('T')[0];
+        const dateStr = this._dayKeyIn(d);
+        const today = this._dayKeyIn(new Date());
         if (dateStr !== today) params.set('date', dateStr);
       }
       if (this.showPanel && this.form.uuid) params.set('event', this.form.uuid);
@@ -374,16 +376,38 @@ window.calendarApp = function calendarApp() {
     },
 
     // ── Display helpers (panel / agenda formatting) ─────────
-    _fmtDate(isoStr) {
-      if (!isoStr) return '';
-      const d = new Date(isoStr);
+    _tz() {
+      return window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+    },
+
+    _dayKeyIn(d, tz) {
+      // 'en-CA' formats as YYYY-MM-DD, giving a comparable day key in the zone.
+      return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
+    },
+
+    _dayKey(d) {
+      return this._dayKeyIn(d, this._tz());
+    },
+
+    // Date-only values ('YYYY-MM-DD', all-day events) parse as UTC midnight:
+    // format them in UTC so the calendar day never shifts with the user zone.
+    _isDateOnly(value) {
+      return typeof value === 'string' && value.length === 10;
+    },
+
+    _valueDayKey(value) {
+      return this._dayKeyIn(new Date(value), this._isDateOnly(value) ? 'UTC' : this._tz());
+    },
+
+    _fmtDate(value) {
+      if (!value) return '';
+      const tz = this._isDateOnly(value) ? 'UTC' : this._tz();
+      const d = new Date(value);
       const today = new Date();
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const isToday = d.toDateString() === today.toDateString();
-      const isTomorrow = d.toDateString() === tomorrow.toDateString();
-      const opts = { weekday: 'long', day: 'numeric', month: 'long' };
-      if (d.getFullYear() !== today.getFullYear()) opts.year = 'numeric';
+      const isToday = this._dayKeyIn(d, tz) === this._dayKey(today);
+      const isTomorrow = this._dayKeyIn(d, tz) === this._dayKey(new Date(today.getTime() + 86400000));
+      const opts = { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long' };
+      if (this._dayKeyIn(d, tz).slice(0, 4) !== this._dayKey(today).slice(0, 4)) opts.year = 'numeric';
       const datePart = d.toLocaleDateString('en-US', opts);
       if (isToday) return `Today — ${datePart}`;
       if (isTomorrow) return `Tomorrow — ${datePart}`;
@@ -392,15 +416,16 @@ window.calendarApp = function calendarApp() {
 
     _fmtTime(isoStr) {
       if (!isoStr) return '';
+      const tz = this._tz();
       const d = new Date(isoStr);
       return this.prefs.timeFormat === '12h'
-        ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-        : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        ? d.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' })
+        : d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
     },
 
     _sameDay(a, b) {
       if (!a || !b) return false;
-      return new Date(a).toDateString() === new Date(b).toDateString();
+      return this._valueDayKey(a) === this._valueDayKey(b);
     },
   };
 };

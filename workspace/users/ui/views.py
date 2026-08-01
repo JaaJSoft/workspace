@@ -25,7 +25,7 @@ ACTIVITY_LIMIT = 10
 
 def _build_heatmap_data(user_id, viewer_id=None):
     """Build contribution heatmap grid data for the last 12 months."""
-    today = timezone.now().date()
+    today = timezone.localdate()
     # Go back ~12 months (52 weeks)
     # Start from the Monday of the week 51 weeks ago
     start = today - timedelta(days=today.weekday()) - timedelta(weeks=51)

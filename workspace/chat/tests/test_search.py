@@ -1,5 +1,7 @@
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.utils import timezone
@@ -8,6 +10,7 @@ from rest_framework.test import APITestCase
 
 from workspace.chat.models import Message, MessageAttachment
 from workspace.common.search import fts5_available
+from workspace.users.services.settings import set_setting
 
 from .test_chat import ChatTestMixin
 
@@ -477,3 +480,29 @@ class ConversationMessageSearchTests(ChatTestMixin, APITestCase):
         resp = self.client.get(self.url(self.group.uuid), {"author": self.creator.id})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["count"], 1)
+
+
+class SearchTodayTimezoneTests(ChatTestMixin, APITestCase):
+    def url(self, conv_id):
+        return f"/api/v1/chat/conversations/{conv_id}/messages/search"
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_today_filter_uses_user_timezone(self):
+        # 22:30 UTC on Jan 31 is still Jan 31 in Paris. At 23:45 UTC
+        # (00:45 Feb 1 in Paris) that message belongs to the user's
+        # *yesterday* and must not match date_range=today.
+        msg = Message.objects.create(
+            conversation=self.group, author=self.member, body="boundary hello"
+        )
+        Message.objects.filter(pk=msg.pk).update(
+            created_at=datetime(2026, 1, 31, 22, 30, tzinfo=UTC)
+        )
+        set_setting(self.member, "core", "timezone", "Europe/Paris")
+        self.client.force_login(self.member)
+        fixed_now = datetime(2026, 1, 31, 23, 45, tzinfo=UTC)
+        with patch("django.utils.timezone.now", return_value=fixed_now):
+            resp = self.client.get(self.url(self.group.uuid), {"date_range": "today"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["count"], 0)

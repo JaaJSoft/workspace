@@ -67,6 +67,11 @@
       <i data-lucide="tag" class="w-3.5 h-3.5 flex-shrink-0"></i>
       <span x-text="activeConversation.title" class="truncate"></span>
     </div>
+    <!-- Attached groups (membership follows these groups; read-only) -->
+    <div class="flex items-center gap-2 text-base-content/60" x-show="activeConversation.groups?.length">
+      <i data-lucide="users" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span x-text="'Linked to ' + (activeConversation.groups || []).map(g => g.name).join(', ')" class="truncate"></span>
+    </div>
     <!-- Description -->
     <div x-show="activeConversation.description" class="flex items-start gap-2 text-base-content/60">
       <i data-lucide="align-left" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
@@ -107,6 +112,7 @@
       Clear
     </button>
     <button
+      x-show="!isGroupLinkedConversation()"
       class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
       @click="leaveConversation()"
     >
@@ -125,7 +131,7 @@
   <ul class="space-y-1">
     <!-- Add members row -->
     <li
-      x-show="activeConversation.kind === 'group'"
+      x-show="activeConversation.kind === 'group' && !isGroupLinkedConversation()"
       class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
       @click="addMembersToConversation()"
     >
@@ -162,7 +168,7 @@
         </div>
         <!-- Remove button (visible to creator, not on self) -->
         <button
-          x-show="activeConversation.kind === 'group' && activeConversation.created_by_id === currentUserId && member.user.id !== currentUserId"
+          x-show="activeConversation.kind === 'group' && !isGroupLinkedConversation() && activeConversation.created_by_id === currentUserId && member.user.id !== currentUserId"
           class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 text-error transition-opacity"
           @click="removeMember(member.user.id)"
           title="Remove from group"

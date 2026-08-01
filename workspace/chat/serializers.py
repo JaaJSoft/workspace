@@ -169,8 +169,14 @@ class LastMessageSerializer(serializers.ModelSerializer):
         return obj.attachments.exists()
 
 
+class GroupBriefSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+
+
 class ConversationListSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
+    groups = GroupBriefSerializer(many=True, read_only=True)
     member_count = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.IntegerField(read_only=True, default=0)
@@ -190,6 +196,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
             "updated_at",
             "has_avatar",
             "members",
+            "groups",
             "member_count",
             "last_message",
             "unread_count",
@@ -237,6 +244,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
 
 class ConversationDetailSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
+    groups = GroupBriefSerializer(many=True, read_only=True)
 
     class Meta:
         model = Conversation
@@ -250,6 +258,7 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
             "updated_at",
             "has_avatar",
             "members",
+            "groups",
         ]
 
 
@@ -257,9 +266,22 @@ class ConversationCreateSerializer(serializers.Serializer):
     member_ids = serializers.ListField(
         child=serializers.IntegerField(),
         min_length=1,
+        required=False,
+    )
+    group_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1,
+        required=False,
     )
     title = serializers.CharField(max_length=255, required=False, default="")
     description = serializers.CharField(required=False, default="", allow_blank=True)
+
+    def validate(self, attrs):
+        if bool(attrs.get("member_ids")) == bool(attrs.get("group_ids")):
+            raise serializers.ValidationError(
+                "Provide exactly one of member_ids or group_ids."
+            )
+        return attrs
 
 
 class MessageCreateSerializer(serializers.Serializer):

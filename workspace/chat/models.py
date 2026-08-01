@@ -19,6 +19,12 @@ class Conversation(models.Model):
         related_name="created_conversations",
     )
     has_avatar = models.BooleanField(default=False)
+    # Attached auth.Groups: membership follows their union (see services/group_sync).
+    groups = models.ManyToManyField(
+        "auth.Group",
+        blank=True,
+        related_name="conversations",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

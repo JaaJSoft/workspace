@@ -2,6 +2,7 @@ from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from rest_framework.exceptions import PermissionDenied
 
+from workspace.ai.models import BotProfile
 from workspace.chat.models import Conversation, ConversationMember
 from workspace.chat.serializers import ConversationDetailSerializer
 from workspace.chat.services.group_sync import (
@@ -133,6 +134,16 @@ class ResyncConversationMembersTests(TestCase):
         resync_conversation_members(self.conv)
         self.assertEqual(
             ConversationMember.objects.filter(conversation=self.conv).count(), 2
+        )
+
+    def test_bot_in_group_is_not_auto_joined(self):
+        bot = User.objects.create_user(username="group-bot", password="pass123")
+        BotProfile.objects.create(user=bot, is_public=True)
+        bot.groups.add(self.team_a)
+        resync_conversation_members(self.conv)
+        self.assertNotIn(bot.id, self._active_ids())
+        self.assertFalse(
+            ConversationMember.objects.filter(conversation=self.conv, user=bot).exists()
         )
 
 

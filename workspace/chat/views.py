@@ -141,12 +141,15 @@ class ConversationListView(CacheControlMixin, APIView):
 
         group_ids = serializer.validated_data.get("group_ids")
         if group_ids:
-            groups = list(Group.objects.filter(pk__in=group_ids))
-            if len(groups) != len(set(group_ids)):
+            groups_by_pk = {g.pk: g for g in Group.objects.filter(pk__in=group_ids)}
+            if len(groups_by_pk) != len(set(group_ids)):
                 return Response(
                     {"detail": "One or more group IDs are invalid."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            # Preserve request order so the blank-title fallback (first group's
+            # name) matches the user's first-selected group, not DB pk order.
+            groups = [groups_by_pk[pk] for pk in dict.fromkeys(group_ids)]
             conversation = create_group_conversation(request.user, groups, title)
             conversation = (
                 Conversation.objects.filter(pk=conversation.pk)

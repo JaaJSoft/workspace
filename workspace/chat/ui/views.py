@@ -237,6 +237,10 @@ def chat_room_view(request, conversation_uuid):
                 request.user, "chat", "call_sounds", default=True
             ),
             "current_user_id": request.user.id,
+            "chat_groups": [
+                {"id": g.pk, "name": g.name}
+                for g in request.user.groups.order_by("name")
+            ],
         },
     )
 

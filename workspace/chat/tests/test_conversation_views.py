@@ -565,6 +565,26 @@ class GroupConversationCreateTests(ChatTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, 400)
 
+    def test_empty_group_ids_is_400(self):
+        resp = self.client.post(
+            "/api/v1/chat/conversations",
+            {"group_ids": []},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_blank_title_falls_back_to_first_requested_group_name(self):
+        """The fallback must follow request order, not DB pk order: team_a
+        was created first (lower pk) but the request lists team_b first."""
+        self.client.force_authenticate(user=self.outsider)
+        resp = self.client.post(
+            "/api/v1/chat/conversations",
+            {"group_ids": [self.other_team.pk, self.team.pk]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["title"], self.other_team.name)
+
     def test_classic_member_ids_creation_still_works(self):
         resp = self.client.post(
             "/api/v1/chat/conversations",

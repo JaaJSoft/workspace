@@ -4,17 +4,27 @@
      @dragover.prevent="onDragOver($event)"
      @drop.prevent="onDrop($event, '{{ backlog_status.uuid }}')"
      {% endif %}>
-  <div class="flex flex-wrap items-center gap-2">
-    {% include "projects/ui/partials/_task_filters.html" %}
+  {# items-start keeps the actions aligned with the first filter row once it wraps on mobile. #}
+  <div class="flex items-start gap-2">
+    <div class="flex-1 min-w-0">
+      {% include "projects/ui/partials/_task_filters.html" %}
+    </div>
     {% if writable and backlog_status %}
-      <div class="ms-auto flex items-center gap-2">
+      <div class="shrink-0 flex items-center gap-2">
         <div class="flex items-center gap-2" x-show="selected.length" x-cloak>
-          <span class="text-sm text-base-content/70" x-text="selected.length + ' selected'"></span>
-          <button type="button" class="btn btn-ghost btn-sm" @click="clearSelection()">Clear</button>
+          <span class="text-sm text-base-content/70 shrink-0">
+            <span x-text="selected.length"></span><span class="hidden sm:inline"> selected</span>
+          </span>
+          <button type="button" class="btn btn-ghost btn-sm px-2 sm:px-3"
+                  title="Clear selection" aria-label="Clear selection" @click="clearSelection()">
+            <i data-lucide="x" class="w-4 h-4 sm:hidden"></i>
+            <span class="hidden sm:inline">Clear</span>
+          </button>
           <div class="join">
             <button type="button" class="btn btn-accent btn-sm join-item" @click="sendSelected()">
               <i data-lucide="arrow-right-circle" class="w-4 h-4"></i>
-              Send to board
+              <span class="hidden sm:inline">Send to board</span>
+              <span class="sm:hidden">Send</span>
             </button>
             <div class="dropdown dropdown-end">
               <button type="button" tabindex="0" class="btn btn-accent btn-sm join-item px-1.5"

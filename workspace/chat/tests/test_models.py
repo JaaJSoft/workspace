@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
@@ -8,6 +9,7 @@ from workspace.chat.models import (
     Conversation,
     ConversationMember,
     Message,
+    MessageAttachment,
     MessageInteraction,
 )
 
@@ -100,6 +102,49 @@ class MessageInteractionModelTests(TestCase):
         outsider.delete()
         interaction.refresh_from_db()
         self.assertIsNone(interaction.interacted_by)
+
+
+class MessageAttachmentSplitTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        self.message = Message.objects.create(
+            conversation=self.conv, author=self.user, body="media"
+        )
+
+    def _attach(self, name, mime, category="unknown"):
+        return MessageAttachment.objects.create(
+            message=self.message,
+            file=SimpleUploadedFile(name, b"x", content_type=mime),
+            original_name=name,
+            mime_type=mime,
+            category=category,
+            size=1,
+        )
+
+    def test_media_and_file_attachments_split(self):
+        image = self._attach("photo.png", "image/png", category="image")
+        video = self._attach("clip.mp4", "video/mp4", category="video")
+        doc = self._attach("doc.pdf", "application/pdf", category="document")
+        self.assertEqual(self.message.media_attachments, [image, video])
+        self.assertEqual(self.message.file_attachments, [doc])
+
+    def test_split_falls_back_to_mime_type_for_unknown_category(self):
+        image = self._attach("photo.jpg", "image/jpeg")
+        doc = self._attach("doc.pdf", "application/pdf")
+        self.assertEqual(self.message.media_attachments, [image])
+        self.assertEqual(self.message.file_attachments, [doc])
+
+    def test_split_reuses_prefetched_attachments(self):
+        self._attach("photo.png", "image/png", category="image")
+        msg = Message.objects.prefetch_related("attachments").get(
+            uuid=self.message.uuid
+        )
+        with self.assertNumQueries(0):
+            self.assertEqual(len(msg.media_attachments), 1)
+            self.assertEqual(msg.file_attachments, [])
 
 
 class CallModelTests(TestCase):

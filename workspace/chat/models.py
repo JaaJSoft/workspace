@@ -113,6 +113,15 @@ class Message(models.Model):
     def __str__(self):
         return f"Message by {self.author} at {self.created_at}"
 
+    @property
+    def media_attachments(self):
+        # Iterates attachments.all() so a prefetch cache is reused as-is.
+        return [a for a in self.attachments.all() if a.is_image or a.is_video]
+
+    @property
+    def file_attachments(self):
+        return [a for a in self.attachments.all() if not (a.is_image or a.is_video)]
+
 
 class Reaction(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)

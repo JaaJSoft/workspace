@@ -174,6 +174,10 @@ def chat_view(request, conversation_uuid=None):
             "call_sounds_enabled": get_setting(
                 request.user, "chat", "call_sounds", default=True
             ),
+            "chat_groups": [
+                {"id": g.pk, "name": g.name}
+                for g in request.user.groups.order_by("name")
+            ],
         },
     )
 

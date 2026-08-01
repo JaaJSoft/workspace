@@ -1,4 +1,5 @@
-<dialog x-ref="newConvDialog" class="modal" @keydown.escape="$refs.newConvDialog.close()">
+<dialog x-ref="newConvDialog" class="modal" @keydown.escape="$refs.newConvDialog.close()"
+        @chat-new-conv-group-selected.window="addSelectedGroup($event.detail.group)">
   <div class="modal-box max-w-md p-0 flex flex-col overflow-visible">
     <!-- Header -->
     <div class="flex items-center justify-between px-5 pt-5 pb-2">
@@ -10,8 +11,14 @@
 
     <!-- Body -->
     <div class="px-5 pb-5 flex flex-col gap-3">
+      <!-- People/Groups mode toggle -->
+      <div class="join">
+        <button type="button" class="btn btn-xs join-item" :class="newConvMode === 'people' ? 'btn-active' : ''" @click="newConvMode = 'people'">People</button>
+        <button type="button" class="btn btn-xs join-item" :class="newConvMode === 'groups' ? 'btn-active' : ''" @click="newConvMode = 'groups'">Groups</button>
+      </div>
+
       <!-- To: tag-input -->
-      <div class="form-control">
+      <div class="form-control" x-show="newConvMode === 'people'" x-cloak>
         <label class="label pb-1">
           <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50">To</span>
         </label>
@@ -86,8 +93,27 @@
         </div>
       </div>
 
-      <!-- Group name (shown when 2+ users) -->
-      <div class="form-control" x-show="selectedUsers.length >= 2" x-cloak x-transition>
+      <!-- Groups: select one or more of the user's groups -->
+      <div class="form-control" x-show="newConvMode === 'groups'" x-cloak>
+        <label class="label pb-1">
+          <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50">Groups</span>
+        </label>
+        <div class="flex flex-wrap gap-1.5 mb-1.5" x-show="selectedGroups.length > 0">
+          <template x-for="g in selectedGroups" :key="g.id">
+            <span class="badge badge-outline gap-1">
+              <i data-lucide="users" class="w-3 h-3"></i>
+              <span x-text="g.name"></span>
+              <button type="button" @click="removeSelectedGroup(g.id)">
+                <i data-lucide="x" class="w-3 h-3"></i>
+              </button>
+            </span>
+          </template>
+        </div>
+        {% include "ui/partials/group_selector.html" with on_select_event="chat-new-conv-group-selected" local_source="selectableGroups()" %}
+      </div>
+
+      <!-- Group name (shown when 2+ users, or always in Groups mode) -->
+      <div class="form-control" x-show="selectedUsers.length >= 2 || newConvMode === 'groups'" x-cloak x-transition>
         <label class="label pb-1">
           <span class="label-text text-xs font-medium uppercase tracking-wide text-base-content/50">Group name</span>
           <span class="label-text-alt text-xs text-base-content/40">Optional</span>
@@ -106,7 +132,7 @@
         <button
           class="btn btn-info btn-sm gap-1.5"
           @click="createConversation()"
-          :disabled="selectedUsers.length === 0 || creatingConversation"
+          :disabled="(newConvMode === 'groups' ? selectedGroups.length === 0 : selectedUsers.length === 0) || creatingConversation"
         >
           <template x-if="!creatingConversation">
             <span class="flex items-center gap-1.5">

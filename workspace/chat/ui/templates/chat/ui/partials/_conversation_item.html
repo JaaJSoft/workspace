@@ -71,6 +71,11 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
           <span x-show="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.is_bot_conversation" x-cloak class="text-secondary flex-shrink-0" title="AI Bot">
             <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
           </span>
+          {% if conv.groups.all %}
+          <span class="text-base-content/40 flex-shrink-0" title="Group-linked conversation">
+            <i data-lucide="users" class="w-3.5 h-3.5"></i>
+          </span>
+          {% endif %}
           {% if pinned %}
           <i data-lucide="pin" class="w-3 h-3 text-base-content/30 flex-shrink-0"></i>
           {% endif %}

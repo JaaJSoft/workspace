@@ -33,6 +33,9 @@ window.chatConversationsMixin = function chatConversationsMixin() {
     userSearchLoading: false,
     userSearchShowDropdown: false,
     userSearchHighlight: -1,
+    myGroups: [],
+    selectedGroups: [],
+    newConvMode: 'people',
 
     // Pinned drag & drop
     draggingPinned: null,
@@ -219,6 +222,8 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       this.userSearchQuery = '';
       this.userSearchResults = [];
       this.userSearchShowDropdown = false;
+      this.selectedGroups = [];
+      this.newConvMode = 'people';
       this.$refs.newConvDialog.showModal();
       this.$nextTick(() => {
         this.$refs.userSearchInput?.focus();
@@ -302,14 +307,34 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       this.selectedUsers = this.selectedUsers.filter(u => u.id !== userId);
     },
 
+    selectableGroups() {
+      const selected = new Set(this.selectedGroups.map(g => g.id));
+      return this.myGroups.filter(g => !selected.has(g.id));
+    },
+
+    addSelectedGroup(group) {
+      if (this.selectedGroups.find(g => g.id === group.id)) return;
+      this.selectedGroups.push(group);
+    },
+
+    removeSelectedGroup(groupId) {
+      this.selectedGroups = this.selectedGroups.filter(g => g.id !== groupId);
+    },
+
     async createConversation() {
-      if (this.selectedUsers.length === 0) return;
+      const fromGroups = this.newConvMode === 'groups';
+      if (fromGroups ? this.selectedGroups.length === 0 : this.selectedUsers.length === 0) return;
       this.creatingConversation = true;
 
-      const memberIds = this.selectedUsers.map(u => u.id);
-      const payload = { member_ids: memberIds };
-      if (this.selectedUsers.length >= 2 && this.newConvTitle.trim()) {
-        payload.title = this.newConvTitle.trim();
+      let payload;
+      if (fromGroups) {
+        payload = { group_ids: this.selectedGroups.map(g => g.id) };
+        if (this.newConvTitle.trim()) payload.title = this.newConvTitle.trim();
+      } else {
+        payload = { member_ids: this.selectedUsers.map(u => u.id) };
+        if (this.selectedUsers.length >= 2 && this.newConvTitle.trim()) {
+          payload.title = this.newConvTitle.trim();
+        }
       }
 
       try {

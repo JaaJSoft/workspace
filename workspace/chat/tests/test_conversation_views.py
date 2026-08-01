@@ -573,3 +573,41 @@ class GroupConversationCreateTests(ChatTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(resp.data["groups"], [])
+
+
+class GroupConversationGuardTests(ChatTestMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.team = Group.objects.create(name="Team A")
+        self.creator.groups.add(self.team)
+        self.member.groups.add(self.team)
+        from workspace.chat.services.group_sync import create_group_conversation
+
+        self.group_conv = create_group_conversation(
+            self.creator, [self.team], title="Chan"
+        )
+        self.client.force_authenticate(user=self.member)
+
+    def test_leave_is_403(self):
+        resp = self.client.delete(f"/api/v1/chat/conversations/{self.group_conv.uuid}")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_add_member_is_403(self):
+        self.client.force_authenticate(user=self.creator)
+        resp = self.client.post(
+            f"/api/v1/chat/conversations/{self.group_conv.uuid}/members",
+            {"user_ids": [self.extra_user.id]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_remove_member_is_403(self):
+        self.client.force_authenticate(user=self.creator)
+        resp = self.client.delete(
+            f"/api/v1/chat/conversations/{self.group_conv.uuid}/members/{self.member.id}"
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_leave_still_works_on_classic_conversation(self):
+        resp = self.client.delete(f"/api/v1/chat/conversations/{self.group.uuid}")
+        self.assertEqual(resp.status_code, 204)

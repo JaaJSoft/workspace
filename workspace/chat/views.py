@@ -353,6 +353,16 @@ class ConversationDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        if Conversation.objects.filter(
+            pk=conversation_id, groups__isnull=False
+        ).exists():
+            return Response(
+                {
+                    "detail": "Membership of a group-linked conversation follows its groups."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         membership.left_at = timezone.now()
         membership.save(update_fields=["left_at"])
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -387,6 +397,14 @@ class ConversationMembersView(APIView):
             return Response(
                 {"detail": "Can only add members to group conversations."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if conversation.groups.exists():
+            return Response(
+                {
+                    "detail": "Members of a group-linked conversation are managed through its groups."
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         ser = MemberAddSerializer(data=request.data)
@@ -465,6 +483,14 @@ class ConversationMemberRemoveView(APIView):
             return Response(
                 {"detail": "Can only remove members from group conversations."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if conversation.groups.exists():
+            return Response(
+                {
+                    "detail": "Members of a group-linked conversation are managed through its groups."
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         if conversation.created_by_id != request.user.id:

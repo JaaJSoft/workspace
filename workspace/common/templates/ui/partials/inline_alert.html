@@ -14,12 +14,13 @@
     - icon_name: Nom de l'icône lucide personnalisée (optionnel)
     - class: Classes CSS additionnelles
     - slot: Contenu HTML personnalisé (prioritaire sur message)
+    - actions: Liste de dicts { label, href?, click?, style?, dismiss? }. href rend un lien, click est une expression Alpine (string), style par défaut 'ghost', dismiss ajoute 'show = false' au handler. Les valeurs href/click/dismiss passent depuis le contexte de vue Django. Voir le jumeau JS qui accepte des callbacks au lieu d'expressions. Cette synchronisation exige que les deux restent alignés lors des modifications.
 {% endcomment %}
 
 {% if message or slot %}
   <div class="flex items-start gap-3 rounded-lg border bg-base-200/50 px-4 py-3 {{ class|default:'' }} {% if type == 'success' %}border-success/30{% elif type == 'error' %}border-error/30{% elif type == 'warning' %}border-warning/30{% else %}border-info/30{% endif %}"
        role="alert"
-       {% if dismissible %}x-data="{ show: true }" x-show="show" x-transition{% endif %}>
+       {% if dismissible or actions %}x-data="{ show: true }" x-show="show" x-transition{% endif %}>
 
     {% if icon|default:True %}
       {% if icon_name %}
@@ -44,6 +45,22 @@
       </div>
     {% else %}
       <span class="flex-1 text-sm text-base-content/80">{{ message }}</span>
+    {% endif %}
+
+    {% if actions %}
+      <div class="flex gap-2 shrink-0">
+        {% for action in actions %}
+          {% if action.href %}
+            <a href="{{ action.href }}" class="btn btn-xs btn-{{ action.style|default:'ghost' }}">{{ action.label }}</a>
+          {% elif action.click and action.dismiss %}
+            <button type="button" class="btn btn-xs btn-{{ action.style|default:'ghost' }}" @click="{{ action.click }}; show = false">{{ action.label }}</button>
+          {% elif action.dismiss %}
+            <button type="button" class="btn btn-xs btn-{{ action.style|default:'ghost' }}" @click="show = false">{{ action.label }}</button>
+          {% else %}
+            <button type="button" class="btn btn-xs btn-{{ action.style|default:'ghost' }}" @click="{{ action.click }}">{{ action.label }}</button>
+          {% endif %}
+        {% endfor %}
+      </div>
     {% endif %}
 
     {% if dismissible %}

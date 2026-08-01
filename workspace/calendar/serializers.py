@@ -1,6 +1,37 @@
+from datetime import UTC, datetime
+
 from rest_framework import serializers
 
 from .models import Calendar, Event, EventMember
+from .services.timezones import normalize_all_day
+
+
+class FlexibleDateTimeField(serializers.DateTimeField):
+    """DateTimeField that also accepts date-only strings as UTC midnight.
+
+    All-day values travel as 'YYYY-MM-DD' day labels; anchoring them at UTC
+    midnight here keeps the storage invariant without a separate field type.
+    """
+
+    def to_internal_value(self, value):
+        if isinstance(value, str) and len(value) == 10:
+            try:
+                return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC)
+            except ValueError:
+                pass
+        return super().to_internal_value(value)
+
+
+class AllDayNormalizingMixin:
+    """Truncates all-day start/end to UTC midnight during validation."""
+
+    def validate(self, attrs):
+        if attrs.get("all_day"):
+            if attrs.get("start"):
+                attrs["start"] = normalize_all_day(attrs["start"])
+            if attrs.get("end"):
+                attrs["end"] = normalize_all_day(attrs["end"])
+        return attrs
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -67,6 +98,7 @@ class EventSerializer(serializers.ModelSerializer):
             "start",
             "end",
             "all_day",
+            "timezone",
             "location",
             "owner",
             "members",
@@ -86,13 +118,24 @@ class EventSerializer(serializers.ModelSerializer):
         poll_id = getattr(obj, "_poll_id", None)
         return str(poll_id) if poll_id else None
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if data.get("all_day"):
+            # All-day values are UTC-midnight day labels: expose them
+            # date-only so no client can shift them across zones.
+            if data.get("start"):
+                data["start"] = data["start"][:10]
+            if data.get("end"):
+                data["end"] = data["end"][:10]
+        return data
 
-class EventCreateSerializer(serializers.Serializer):
+
+class EventCreateSerializer(AllDayNormalizingMixin, serializers.Serializer):
     calendar_id = serializers.UUIDField()
     title = serializers.CharField(max_length=255)
     description = serializers.CharField(required=False, default="", allow_blank=True)
-    start = serializers.DateTimeField()
-    end = serializers.DateTimeField(required=False, allow_null=True, default=None)
+    start = FlexibleDateTimeField()
+    end = FlexibleDateTimeField(required=False, allow_null=True, default=None)
     all_day = serializers.BooleanField(required=False, default=False)
     location = serializers.CharField(
         max_length=255, required=False, default="", allow_blank=True
@@ -120,12 +163,12 @@ class EventCreateSerializer(serializers.Serializer):
     )
 
 
-class EventUpdateSerializer(serializers.Serializer):
+class EventUpdateSerializer(AllDayNormalizingMixin, serializers.Serializer):
     calendar_id = serializers.UUIDField(required=False)
     title = serializers.CharField(max_length=255, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
-    start = serializers.DateTimeField(required=False)
-    end = serializers.DateTimeField(required=False, allow_null=True)
+    start = FlexibleDateTimeField(required=False)
+    end = FlexibleDateTimeField(required=False, allow_null=True)
     all_day = serializers.BooleanField(required=False)
     location = serializers.CharField(max_length=255, required=False, allow_blank=True)
     member_ids = serializers.ListField(

@@ -19,6 +19,7 @@ from .models import Calendar, Event, EventMember
 from .models_external import ExternalCalendar
 from .queries import member_event_ids, visible_calendar_ids, visible_calendars
 from .recurrence import expand_recurring_events, make_virtual_occurrence
+from .services.timezones import current_timezone_name, normalize_all_day
 from .serializers import (
     CalendarCreateSerializer,
     CalendarSerializer,
@@ -94,6 +95,16 @@ def _update_event_fields(event, data, user):
     ]:
         if field in data:
             setattr(event, field, data[field])
+    if event.all_day:
+        # Enforce the storage invariant even when all_day was already set
+        # and only start/end changed.
+        event.start = normalize_all_day(event.start)
+        event.end = normalize_all_day(event.end)
+        event.timezone = ""
+    elif event.recurrence_frequency and not event.timezone:
+        # A series gaining recurrence anchors its wall clock in the zone
+        # it is being edited from.
+        event.timezone = current_timezone_name()
     event.save()
     return None
 
@@ -378,6 +389,9 @@ class EventListView(CacheControlMixin, APIView):
             start=data["start"],
             end=data["end"],
             all_day=data["all_day"],
+            # All-day events are zone-less day labels; timed events anchor
+            # their wall clock in the creator's active timezone.
+            timezone="" if data["all_day"] else current_timezone_name(),
             location=data["location"],
             owner=request.user,
             recurrence_frequency=data.get("recurrence_frequency"),

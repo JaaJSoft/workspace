@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import UTC, timedelta
 
 from dateutil.rrule import DAILY, MONTHLY, WEEKLY, YEARLY, rrule
 
@@ -121,6 +121,15 @@ def _member_dict(member):
     }
 
 
+def _event_dt_str(dt, all_day):
+    """ISO instant for timed values, date-only day label for all-day ones."""
+    if dt is None:
+        return None
+    if all_day:
+        return dt.astimezone(UTC).date().isoformat()
+    return dt.isoformat()
+
+
 def make_virtual_occurrence(master, occ_start):
     """Build a dict for a virtual (non-materialized) occurrence."""
     duration = (master.end - master.start) if master.end else None
@@ -131,8 +140,8 @@ def make_virtual_occurrence(master, occ_start):
         "calendar_id": str(master.calendar_id),
         "title": master.title,
         "description": master.description,
-        "start": occ_start.isoformat(),
-        "end": occ_end.isoformat() if occ_end else None,
+        "start": _event_dt_str(occ_start, master.all_day),
+        "end": _event_dt_str(occ_end, master.all_day),
         "all_day": master.all_day,
         "location": master.location,
         "owner": _user_dict(master.owner),
@@ -159,8 +168,8 @@ def make_exception_dict(exc):
         "calendar_id": str(exc.calendar_id),
         "title": exc.title,
         "description": exc.description,
-        "start": exc.start.isoformat(),
-        "end": exc.end.isoformat() if exc.end else None,
+        "start": _event_dt_str(exc.start, exc.all_day),
+        "end": _event_dt_str(exc.end, exc.all_day),
         "all_day": exc.all_day,
         "location": exc.location,
         "owner": _user_dict(exc.owner),

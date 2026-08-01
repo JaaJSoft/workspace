@@ -1,12 +1,15 @@
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
+from django.core.cache import cache
 from django.utils import timezone
+from django.utils import timezone as dj_timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.calendar.models import Calendar, CalendarSubscription, Event, EventMember
 from workspace.calendar.search import search_events
+from workspace.users.services.settings import set_setting
 
 from .test_calendar import CalendarTestMixin
 
@@ -398,3 +401,105 @@ class SearchTests(CalendarTestMixin, APITestCase):
             )
         results = search_events("Event", self.owner, limit=3)
         self.assertEqual(len(results), 3)
+
+
+class AllDayApiContractTests(CalendarTestMixin, APITestCase):
+    """All-day events: normalized UTC-midnight storage, date-only API shape,
+    and timezone stamping for timed events."""
+
+    url = "/api/v1/calendar/events"
+
+    def tearDown(self):
+        dj_timezone.deactivate()
+        cache.clear()
+
+    def test_all_day_create_normalizes_and_serializes_date_only(self):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            self.url,
+            {
+                "calendar_id": str(self.calendar.uuid),
+                "title": "Summit",
+                "start": "2026-08-05T14:30:00Z",
+                "all_day": True,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        event = Event.objects.get(title="Summit")
+        self.assertEqual(event.start, datetime(2026, 8, 5, tzinfo=UTC))
+        self.assertEqual(event.timezone, "")
+        self.assertEqual(resp.data["start"], "2026-08-05")
+
+    def test_all_day_create_accepts_date_only_strings(self):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            self.url,
+            {
+                "calendar_id": str(self.calendar.uuid),
+                "title": "Trip",
+                "start": "2026-08-05",
+                "end": "2026-08-07",
+                "all_day": True,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        event = Event.objects.get(title="Trip")
+        self.assertEqual(event.start, datetime(2026, 8, 5, tzinfo=UTC))
+        self.assertEqual(event.end, datetime(2026, 8, 7, tzinfo=UTC))
+        self.assertEqual(resp.data["start"], "2026-08-05")
+        self.assertEqual(resp.data["end"], "2026-08-07")
+
+    def test_timed_create_stamps_active_timezone(self):
+        set_setting(self.owner, "core", "timezone", "Europe/Paris")
+        self.client.force_login(self.owner)
+        resp = self.client.post(
+            self.url,
+            {
+                "calendar_id": str(self.calendar.uuid),
+                "title": "Standup",
+                "start": "2026-08-05T09:00:00+02:00",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        event = Event.objects.get(title="Standup")
+        self.assertEqual(event.timezone, "Europe/Paris")
+        self.assertEqual(event.start, datetime(2026, 8, 5, 7, 0, tzinfo=UTC))
+
+    def test_all_day_update_keeps_invariant(self):
+        event = Event.objects.create(
+            calendar=self.calendar,
+            title="Trip",
+            start=datetime(2026, 8, 5, tzinfo=UTC),
+            all_day=True,
+            owner=self.owner,
+        )
+        self.client.force_authenticate(self.owner)
+        resp = self.client.put(
+            f"{self.url}/{event.uuid}",
+            {"start": "2026-08-06T10:15:00Z"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        event.refresh_from_db()
+        self.assertEqual(event.start, datetime(2026, 8, 6, tzinfo=UTC))
+
+    def test_recurring_all_day_occurrences_are_date_only(self):
+        Event.objects.create(
+            calendar=self.calendar,
+            title="Daily standdown",
+            start=datetime(2026, 8, 3, tzinfo=UTC),
+            all_day=True,
+            owner=self.owner,
+            recurrence_frequency="daily",
+        )
+        self.client.force_authenticate(self.owner)
+        resp = self.client.get(
+            self.url,
+            {"start": "2026-08-03T00:00:00Z", "end": "2026-08-06T00:00:00Z"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        starts = [e["start"] for e in resp.data if e["title"] == "Daily standdown"]
+        self.assertEqual(starts, ["2026-08-03", "2026-08-04", "2026-08-05"])

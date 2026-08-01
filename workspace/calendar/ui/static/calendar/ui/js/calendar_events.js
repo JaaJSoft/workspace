@@ -131,12 +131,8 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       // ?action=new-event or ?action=new-poll - open create modal from command palette
       const action = params.get('action');
       if (action === 'new-event') {
-        const now = new Date();
-        const pad = n => String(n).padStart(2, '0');
-        const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-        const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-        const start = `${dateStr}T${timeStr}`;
-        this.$nextTick(() => this.openCreateModal(start, this._addHour(now.toISOString()), false));
+        const start = this._nowWallClock();
+        this.$nextTick(() => this.openCreateModal(start, this._addHour(new Date().toISOString()), false));
       } else if (action === 'new-poll') {
         this.$nextTick(() => { this.showPollListModal = true; this.openPollCreate(); });
       }
@@ -415,12 +411,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
     // --- Create modal ---
     createEventNow() {
-      const now = new Date();
-      const pad = n => String(n).padStart(2, '0');
-      const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-      const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-      const start = `${dateStr}T${timeStr}`;
-      this.openCreateModal(start, this._addHour(now.toISOString()), false);
+      this.openCreateModal(this._nowWallClock(), this._addHour(new Date().toISOString()), false);
     },
 
     openCreateModal(start, end, allDay) {
@@ -561,18 +552,26 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       }
       this.saving = true;
 
+      // Timed inputs are wall-clock values in the user's configured zone;
+      // all-day inputs are date-only day labels sent verbatim. The
+      // recurrence end (a date input) covers its whole final day.
+      const tz = this._tz();
       const payload = {
         calendar_id: this.form.calendar_id,
         title: this.form.title.trim(),
         description: this.form.description,
-        start: new Date(this.form.start).toISOString(),
-        end: this.form.end ? new Date(this.form.end).toISOString() : null,
+        start: this.form.all_day ? this.form.start : window.wallClockToIso(this.form.start, tz),
+        end: this.form.end
+          ? (this.form.all_day ? this.form.end : window.wallClockToIso(this.form.end, tz))
+          : null,
         all_day: this.form.all_day,
         location: this.form.location,
         member_ids: this.selectedMembers.map(u => u.id),
         recurrence_frequency: this.form.recurrence_frequency || null,
         recurrence_interval: this.form.recurrence_interval || 1,
-        recurrence_end: this.form.recurrence_end ? new Date(this.form.recurrence_end).toISOString() : null,
+        recurrence_end: this.form.recurrence_end
+          ? window.wallClockToIso(this.form.recurrence_end + 'T23:59:59', tz)
+          : null,
       };
 
       try {

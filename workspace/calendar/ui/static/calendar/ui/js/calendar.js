@@ -356,17 +356,22 @@ window.calendarApp = function calendarApp() {
     },
 
     // ── Date/time helpers ───────────────────────────────────
+    // Form inputs are wall-clock values in the user's configured timezone,
+    // whatever the browser zone is (see wallClockToIso in localtime.js).
     toLocalDatetime(isoStr) {
       if (!isoStr) return '';
-      const d = new Date(isoStr);
       if (isoStr.length === 10) return isoStr;
-      const pad = n => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      return window.isoToWallClock(isoStr, this._tz());
     },
 
     toLocalDate(isoStr) {
       if (!isoStr) return '';
-      return isoStr.split('T')[0];
+      if (isoStr.length === 10) return isoStr;
+      return window.isoToWallClock(isoStr, this._tz()).slice(0, 10);
+    },
+
+    _nowWallClock() {
+      return window.isoToWallClock(new Date().toISOString(), this._tz());
     },
 
     _addHour(isoStr) {

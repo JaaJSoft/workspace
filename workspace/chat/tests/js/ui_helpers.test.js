@@ -78,3 +78,20 @@ test('isSmallScreen reads matchMedia at (max-width: 639px)', () => {
   const result = h.isSmallScreen();
   assert.equal(result, false);
 });
+
+// ── Timezone-aware formatting ─────────────────────────────────
+
+const tzCtx = loadScript('workspace/chat/ui/static/chat/ui/js/ui_helpers.js', {
+  matchMedia: matchMediaStub,
+});
+tzCtx.getUserTimeZone = () => 'Asia/Tokyo';
+const tzMixin = tzCtx.chatUiHelpersMixin();
+
+test('formatDate crosses the day boundary in the configured timezone', () => {
+  // 20:00 UTC on Jan 31 is already Feb 1 in Tokyo.
+  assert.match(tzMixin.formatDate('2026-01-31T20:00:00Z'), /February 1|1 février/);
+});
+
+test('formatDateTime crosses the day boundary in the configured timezone', () => {
+  assert.match(tzMixin.formatDateTime('2026-01-31T20:00:00Z'), /Feb 1|1 févr/);
+});

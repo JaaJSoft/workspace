@@ -49,7 +49,10 @@ Call this when the user asks if someone is available, reachable, or what their s
             "status": status,
         }
         if status == "offline" and last_seen:
-            info["last_seen"] = last_seen.strftime("%Y-%m-%d %H:%M")
+            from workspace.users.services.settings import get_user_timezone
+
+            local_seen = last_seen.astimezone(get_user_timezone(user))
+            info["last_seen"] = local_seen.strftime("%Y-%m-%d %H:%M")
         return json.dumps(info)
 
     @tool(

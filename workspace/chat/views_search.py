@@ -99,7 +99,7 @@ class ConversationMessageSearchView(APIView):
 
         now = timezone.now()
         if date_range == "today":
-            qs = qs.filter(created_at__date=now.date())
+            qs = qs.filter(created_at__date=timezone.localdate())
         elif date_range == "7d":
             qs = qs.filter(created_at__gte=now - timedelta(days=7))
         elif date_range == "30d":

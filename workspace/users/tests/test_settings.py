@@ -448,3 +448,15 @@ class TimezoneSettingValidationTests(TestCase):
         core = get_module_settings(self.user, "core")
         self.assertNotIn("timezone", core)
         self.assertNotIn("theme", core)
+
+
+class GetUserTimezonePathValueTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username="tzpath", password="pass")
+
+    def test_returns_utc_for_path_like_value(self):
+        # ZoneInfo raises ValueError (not ZoneInfoNotFoundError) for path-like
+        # keys; a value planted via shell/fixture must not 500 every request.
+        set_setting(self.user, "core", "timezone", "../etc")
+        self.assertEqual(str(get_user_timezone(self.user)), "UTC")

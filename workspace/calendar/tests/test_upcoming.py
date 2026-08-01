@@ -8,7 +8,7 @@ finished. That covers three buckets:
 * recurring occurrences matching either of the above
 """
 
-from datetime import time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -149,3 +149,38 @@ class GetUpcomingForUserTests(TestCase):
         result = get_upcoming_for_user(self.user, self.now, self.end_of_today)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].title, "Daily standup")
+
+
+class AllDayTimezoneWindowTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="tzu", password="pass123")
+        self.calendar = Calendar.objects.create(name="Work", owner=self.user)
+
+    def tearDown(self):
+        timezone.deactivate()
+
+    def test_all_day_window_follows_user_local_day(self):
+        timezone.activate("Europe/Paris")
+        # 23:30 UTC on Jan 31 is 00:30 Feb 1 in Paris: the user's day is Feb 1.
+        now = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
+        end_of_today = timezone.make_aware(
+            datetime.combine(date(2026, 2, 1), time.max),
+            timezone.get_current_timezone(),
+        )
+        Event.objects.create(
+            calendar=self.calendar,
+            owner=self.user,
+            title="yesterday all-day",
+            start=datetime(2026, 1, 31, 0, 0, tzinfo=UTC),
+            all_day=True,
+        )
+        Event.objects.create(
+            calendar=self.calendar,
+            owner=self.user,
+            title="today all-day",
+            start=datetime(2026, 2, 1, 0, 0, tzinfo=UTC),
+            all_day=True,
+        )
+        titles = [e.title for e in get_upcoming_for_user(self.user, now, end_of_today)]
+        self.assertIn("today all-day", titles)
+        self.assertNotIn("yesterday all-day", titles)

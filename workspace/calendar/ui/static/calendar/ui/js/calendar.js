@@ -330,9 +330,11 @@ window.calendarApp = function calendarApp() {
       params.set('view', this._viewToUrl(viewType));
       // Store the current date as YYYY-MM-DD (skipped for agenda since it's always "from now")
       if (viewType !== 'agenda' && this.calendar) {
+        // FullCalendar returns browser-local dates; key them in the browser
+        // zone too (toISOString would shift the day for any UTC+ browser).
         const d = this.calendar.getDate();
-        const dateStr = d.toISOString().split('T')[0];
-        const today = new Date().toISOString().split('T')[0];
+        const dateStr = this._dayKeyIn(d);
+        const today = this._dayKeyIn(new Date());
         if (dateStr !== today) params.set('date', dateStr);
       }
       if (this.showPanel && this.form.uuid) params.set('event', this.form.uuid);

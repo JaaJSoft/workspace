@@ -97,6 +97,9 @@ Use read_file with the returned UUID to get the content."""
         if not matches:
             return f'No files found matching "{query}".'
 
+        from workspace.users.services.settings import get_user_timezone
+
+        user_tz = get_user_timezone(user)
         results = []
         for f in matches:
             results.append(
@@ -106,7 +109,9 @@ Use read_file with the returned UUID to get the content."""
                     "node_type": f.node_type,
                     "type": f.type or "",
                     "parent_folder": f.parent.name if f.parent else "",
-                    "updated_at": f.updated_at.strftime("%Y-%m-%d %H:%M"),
+                    "updated_at": f.updated_at.astimezone(user_tz).strftime(
+                        "%Y-%m-%d %H:%M"
+                    ),
                 }
             )
         return json.dumps(results, ensure_ascii=False)

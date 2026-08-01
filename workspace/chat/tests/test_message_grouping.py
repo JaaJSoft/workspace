@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone as dt_timezone
+from datetime import UTC, date, datetime
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -21,13 +21,13 @@ class GroupMessagesTimezoneTests(TestCase):
             author=user,
             kind=Message.Kind.USER,
             body="a",
-            created_at=datetime(2026, 1, 31, 22, 0, tzinfo=dt_timezone.utc),
+            created_at=datetime(2026, 1, 31, 22, 0, tzinfo=UTC),
         )
         m2 = Message(
             author=user,
             kind=Message.Kind.USER,
             body="b",
-            created_at=datetime(2026, 1, 31, 23, 30, tzinfo=dt_timezone.utc),
+            created_at=datetime(2026, 1, 31, 23, 30, tzinfo=UTC),
         )
         dj_timezone.activate("Europe/Paris")
         groups = group_messages([m1, m2], user)

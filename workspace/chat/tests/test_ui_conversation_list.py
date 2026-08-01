@@ -4,7 +4,7 @@ Covers the HTML partial returned for the chat sidebar (Alpine AJAX refresh),
 including the `?q=` search filter.
 """
 
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import UTC, datetime, timedelta
 
 from django.test import TestCase
 from django.utils import timezone
@@ -162,7 +162,7 @@ class ConversationListViewPartialTests(ChatTestMixin, TestCase):
         )
         # 23:30 UTC on Jan 31 is already Feb 1 in Paris.
         Message.objects.filter(pk=msg.pk).update(
-            created_at=datetime(2026, 1, 31, 23, 30, tzinfo=dt_timezone.utc)
+            created_at=datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
         )
         timezone.activate("Europe/Paris")
         self.addCleanup(timezone.deactivate)

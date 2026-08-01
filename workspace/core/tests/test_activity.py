@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone as dt_timezone
+from datetime import UTC, date, datetime
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -777,7 +777,7 @@ class AnnotateTimeAgoTimezoneTests(TestCase):
 
     def test_month_label_uses_active_timezone(self):
         # 23:30 UTC on Jan 31 is already Feb 1 in Paris.
-        ts = datetime(2026, 1, 31, 23, 30, tzinfo=dt_timezone.utc)
+        ts = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
         dj_timezone.activate("Europe/Paris")
         events = annotate_time_ago([{"timestamp": ts}])
         self.assertEqual(events[0]["time_ago"], "Feb 01")

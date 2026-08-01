@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import UTC
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -530,7 +531,7 @@ class GetUpcomingEventsTests(TestCase):
 
     @patch("workspace.dashboard.views.get_upcoming_for_user")
     def test_window_ends_at_user_local_end_of_day(self, mock_upcoming):
-        from datetime import datetime, timezone as dt_timezone
+        from datetime import datetime
         from zoneinfo import ZoneInfo
 
         from django.utils import timezone as dj_timezone
@@ -538,7 +539,7 @@ class GetUpcomingEventsTests(TestCase):
         mock_upcoming.return_value = []
         # 23:30 UTC on Jan 31 is already Feb 1 in Paris: the window must
         # cover the user's Feb 1, not stop at UTC Jan 31 23:59.
-        fixed_now = datetime(2026, 1, 31, 23, 30, tzinfo=dt_timezone.utc)
+        fixed_now = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
         dj_timezone.activate("Europe/Paris")
         self.addCleanup(dj_timezone.deactivate)
         with patch("django.utils.timezone.now", return_value=fixed_now):

@@ -270,8 +270,9 @@ window.shareModal = function shareModal() {
 
     formatLinkExpiry(expiresAt) {
       if (!expiresAt) return 'Permanent';
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
       const d = new Date(expiresAt);
-      return d.toLocaleDateString();
+      return d.toLocaleDateString(undefined, { timeZone: tz });
     },
   };
 };

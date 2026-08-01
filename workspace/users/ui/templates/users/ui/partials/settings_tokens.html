@@ -62,12 +62,12 @@
                 <div class="flex items-center gap-2 text-xs text-base-content/50 mt-0.5">
                   <code class="bg-base-200 px-1 py-0.5 rounded" x-text="token.token_key + '...'"></code>
                   <span>&middot;</span>
-                  <span x-text="'Created ' + new Date(token.created).toLocaleDateString()"></span>
+                  <span x-text="'Created ' + new Date(token.created).toLocaleDateString(undefined, { timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined })"></span>
                   <template x-if="token.expiry">
                     <span>
                       <span>&middot;</span>
                       <span :class="new Date(token.expiry) < new Date() ? 'text-error' : ''"
-                            x-text="'Expires ' + new Date(token.expiry).toLocaleDateString()"></span>
+                            x-text="'Expires ' + new Date(token.expiry).toLocaleDateString(undefined, { timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined })"></span>
                     </span>
                   </template>
                   <template x-if="!token.expiry">

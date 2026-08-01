@@ -20,14 +20,16 @@ window.chatUiHelpersMixin = function chatUiHelpersMixin() {
     // ── Generic helpers (shared across mixins) ──────────────
     formatDate(iso) {
       if (!iso) return '';
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
       const d = new Date(iso);
-      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+      return d.toLocaleDateString(undefined, { timeZone: tz, year: 'numeric', month: 'long', day: 'numeric' });
     },
 
     formatDateTime(iso) {
       if (!iso) return '';
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
       const d = new Date(iso);
-      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleDateString(undefined, { timeZone: tz, year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     },
 
     memberDisplayName(member) {

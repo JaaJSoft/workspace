@@ -634,8 +634,10 @@ window.notesApp = function notesApp(config) {
             this.activeId = journalUuid;
             await this.loadNotes('/api/v1/files?type=markdown&parent=' + journalUuid + '&ordering=-name');
 
-            // Create today's note if needed
-            const today = new Date().toISOString().split('T')[0];
+            // Create today's note if needed ("today" in the user's timezone)
+            const today = window.userTzDayKey
+                ? window.userTzDayKey(new Date())
+                : new Date().toISOString().split('T')[0];
             const todayName = today + '.md';
             let todayNote = this.notes.find(function(n) { return n.name === todayName; });
 
@@ -1476,8 +1478,9 @@ window.notesApp = function notesApp(config) {
 
         formatDate(dateStr) {
             if (!dateStr) return '';
+            const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
             const d = new Date(dateStr);
-            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            return d.toLocaleDateString(undefined, { timeZone: tz, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         },
 
         toggleCollapse() {

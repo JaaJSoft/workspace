@@ -25,17 +25,19 @@ window.pollUtils = {
 
   formatSlotDate(slot) {
     if (!slot?.start) return '';
+    const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
     const d = new Date(slot.start);
-    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    return d.toLocaleDateString(undefined, { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' });
   },
 
   formatSlotTime(slot) {
     if (!slot?.start) return '';
+    const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
     const start = new Date(slot.start);
-    const parts = [start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })];
+    const parts = [start.toLocaleTimeString(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit' })];
     if (slot.end) {
       const end = new Date(slot.end);
-      parts.push(end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }));
+      parts.push(end.toLocaleTimeString(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit' }));
     }
     return parts.join(' - ');
   },

@@ -12,7 +12,7 @@
 
   {# ── Hero ── #}
   <section class="text-center space-y-1 relative">
-    <h1 class="text-3xl font-semibold text-base-content" x-data x-text="(() => { const h = new Date().getHours(); const g = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; return g + ', {{ user.first_name|default:user.username }}.'; })()">Welcome back, {{ user.first_name|default:user.username }}.</h1>
+    <h1 class="text-3xl font-semibold text-base-content" x-data x-text="(() => { const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined; const h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date()), 10) % 24; const g = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; return g + ', {{ user.first_name|default:user.username }}.'; })()">Welcome back, {{ user.first_name|default:user.username }}.</h1>
     <p class="text-base-content/60" x-data="weatherWidget()" x-cloak>
       <span x-text="label"></span>
     </p>
@@ -268,8 +268,9 @@ function weatherWidget() {
   return {
     label: '',
     init() {
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
       const now = new Date();
-      this.label = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+      this.label = now.toLocaleDateString(undefined, { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' });
       this._loadWeather();
     },
     _loadWeather() {
@@ -305,7 +306,7 @@ function weatherWidget() {
       const h = new Date().getHours();
       if ((condition === 'clear-day') && (h < 6 || h >= 20)) condition = 'clear-night';
       const icon = _weatherIcons[condition] || 'cloud';
-      const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+      const dateStr = new Date().toLocaleDateString(undefined, { timeZone: window.getUserTimeZone ? window.getUserTimeZone() : undefined, weekday: 'long', month: 'long', day: 'numeric' });
       this.label = dateStr + '  ·  ' + temp + '°C';
       // Inject lucide icon next to temperature
       this.$nextTick(() => {

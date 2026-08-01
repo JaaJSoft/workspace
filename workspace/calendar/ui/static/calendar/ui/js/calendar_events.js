@@ -318,19 +318,22 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       let currentKey = null;
       let currentGroup = null;
 
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+      const dayKey = (d) => window.userTzDayKey
+        ? window.userTzDayKey(d)
+        : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
       const todayDate = new Date();
-      const todayKey = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
-      const tomorrowDate = new Date(todayDate);
-      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-      const tomorrowKey = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`;
+      const todayKey = dayKey(todayDate);
+      const tomorrowKey = dayKey(new Date(todayDate.getTime() + 86400000));
 
       for (const event of this.agenda.events) {
         const d = new Date(event.start);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const key = dayKey(d);
         if (key !== currentKey) {
           currentKey = key;
           // `undefined` locale uses the browser's default (OS/language settings)
-          const dateLabel = d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+          const dateLabel = d.toLocaleDateString(undefined, { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long' });
           let label;
           if (key === todayKey) {
             label = `Today · ${dateLabel}`;
@@ -354,10 +357,11 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
     formatAgendaEventTime(event) {
       if (event.all_day) return 'All day';
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
       const d = new Date(event.start);
       const opts = this.prefs.timeFormat === '12h'
-        ? { hour: 'numeric', minute: '2-digit', hour12: true }
-        : { hour: '2-digit', minute: '2-digit', hour12: false };
+        ? { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }
+        : { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false };
       // `undefined` locale uses browser default
       return d.toLocaleTimeString(undefined, opts);
     },

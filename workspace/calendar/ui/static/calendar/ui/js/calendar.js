@@ -374,15 +374,23 @@ window.calendarApp = function calendarApp() {
     },
 
     // ── Display helpers (panel / agenda formatting) ─────────
+    _tz() {
+      return window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+    },
+
+    _dayKey(d) {
+      return window.userTzDayKey ? window.userTzDayKey(d) : d.toDateString();
+    },
+
     _fmtDate(isoStr) {
       if (!isoStr) return '';
+      const tz = this._tz();
       const d = new Date(isoStr);
       const today = new Date();
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const isToday = d.toDateString() === today.toDateString();
-      const isTomorrow = d.toDateString() === tomorrow.toDateString();
-      const opts = { weekday: 'long', day: 'numeric', month: 'long' };
+      const tomorrow = new Date(today.getTime() + 86400000);
+      const isToday = this._dayKey(d) === this._dayKey(today);
+      const isTomorrow = this._dayKey(d) === this._dayKey(tomorrow);
+      const opts = { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long' };
       if (d.getFullYear() !== today.getFullYear()) opts.year = 'numeric';
       const datePart = d.toLocaleDateString('en-US', opts);
       if (isToday) return `Today — ${datePart}`;
@@ -392,15 +400,16 @@ window.calendarApp = function calendarApp() {
 
     _fmtTime(isoStr) {
       if (!isoStr) return '';
+      const tz = this._tz();
       const d = new Date(isoStr);
       return this.prefs.timeFormat === '12h'
-        ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-        : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        ? d.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' })
+        : d.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
     },
 
     _sameDay(a, b) {
       if (!a || !b) return false;
-      return new Date(a).toDateString() === new Date(b).toDateString();
+      return this._dayKey(new Date(a)) === this._dayKey(new Date(b));
     },
   };
 };

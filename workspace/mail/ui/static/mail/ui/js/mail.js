@@ -445,23 +445,29 @@ function mailApp() {
 
     formatDate(dateStr) {
       if (!dateStr) return '';
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
       const d = new Date(dateStr);
       const now = new Date();
       const diff = now - d;
-      if (diff < 86400000 && d.getDate() === now.getDate()) {
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const sameDay = window.userTzDayKey
+        ? window.userTzDayKey(d) === window.userTzDayKey(now)
+        : d.getDate() === now.getDate();
+      if (diff < 86400000 && sameDay) {
+        return d.toLocaleTimeString([], { timeZone: tz, hour: '2-digit', minute: '2-digit' });
       }
       if (diff < 604800000) {
-        return d.toLocaleDateString([], { weekday: 'short' });
+        return d.toLocaleDateString([], { timeZone: tz, weekday: 'short' });
       }
-      const opts = { month: 'short', day: 'numeric' };
+      const opts = { timeZone: tz, month: 'short', day: 'numeric' };
       if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
       return d.toLocaleDateString([], opts);
     },
 
     formatFullDate(dateStr) {
       if (!dateStr) return '';
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
       return new Date(dateStr).toLocaleString([], {
+        timeZone: tz,
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
         hour: '2-digit', minute: '2-digit',
       });

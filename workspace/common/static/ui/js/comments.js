@@ -112,7 +112,8 @@ window.commentsComponent = function commentsComponent(listUrl, currentUserId, ca
       if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
       if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
       if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
-      return d.toLocaleDateString();
+      const tz = window.getUserTimeZone ? window.getUserTimeZone() : undefined;
+      return d.toLocaleDateString(undefined, { timeZone: tz });
     },
   };
 };

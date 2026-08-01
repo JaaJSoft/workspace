@@ -883,9 +883,13 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     },
 
     // --- Panel display helpers ---
+    // Read the raw occurrence instants (_panelRaw), never this.form: the
+    // form holds user-zone wall-clock strings for the inputs, and running
+    // those through the instant formatters would convert them twice.
     panelDateDisplay() {
-      const { start, end, all_day } = this.form;
-      if (!start) return '';
+      const raw = this._panelRaw;
+      if (!raw || !raw.start) return '';
+      const { start, end, all_day } = raw;
       const dateStr = this._fmtDate(start);
       if (all_day) {
         // FullCalendar stores `end` as the day AFTER the last covered day for
@@ -897,17 +901,15 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         }
         return `${dateStr} → ${this._fmtDate(inclusiveEnd)}`;
       }
-      const startTime = this._fmtTime(start);
-      if (!end) return `${dateStr}, ${startTime}`;
-      const endTime = this._fmtTime(end);
-      if (this._sameDay(start, end)) {
-        return `${dateStr}, ${startTime} – ${endTime}`;
-      }
-      return `${dateStr}, ${startTime} → ${this._fmtDate(end)}, ${endTime}`;
+      // Same-day times live on the clock line below (panelTimeLabel).
+      if (!end || this._sameDay(start, end)) return dateStr;
+      return `${dateStr}, ${this._fmtTime(start)} → ${this._fmtDate(end)}, ${this._fmtTime(end)}`;
     },
 
     panelTimeLabel() {
-      const { start, end, all_day } = this.form;
+      const raw = this._panelRaw;
+      if (!raw) return '';
+      const { start, end, all_day } = raw;
       if (all_day) return 'All day';
       if (!start) return '';
       const startTime = this._fmtTime(start);

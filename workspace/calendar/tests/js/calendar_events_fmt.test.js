@@ -61,10 +61,33 @@ test('panelDateDisplay keeps a single-day all-day event on its day', () => {
   // panelDateDisplay lives in the events mixin but formats through the
   // root app helpers, exactly like the spread composition at runtime.
   const merged = Object.assign({}, app, mixin, {
-    form: { start: '2026-08-01', end: '2026-08-02', all_day: true },
+    _panelRaw: { start: '2026-08-01', end: '2026-08-02', all_day: true },
     prefs: { timeFormat: '24h' },
   });
   const label = merged.panelDateDisplay();
   assert.match(label, /August 1|1 août/);
   assert.doesNotMatch(label, /July 31|31 juillet|August 2|2 août/);
+});
+
+test('panel labels read raw instants, not the wall-clock form values', () => {
+  const { mixin } = makeEventsMixin('Asia/Vladivostok');
+  const app = makeCalendarApp('Asia/Vladivostok');
+  const merged = Object.assign({}, app, mixin, {
+    // Raw occurrence: 11:42Z = 21:42 in Vladivostok (+10).
+    _panelRaw: {
+      start: '2026-08-13T11:42:59+00:00',
+      end: '2026-08-13T13:12:59+00:00',
+      all_day: false,
+    },
+    // The form holds user-zone wall-clock strings for the inputs; feeding
+    // them back through the instant formatters double-converts (the
+    // regression showed 05:42 for a 21:42 event).
+    form: { start: '2026-08-13T21:42', end: '2026-08-13T23:12', all_day: false },
+    prefs: { timeFormat: '24h' },
+  });
+  assert.match(merged.panelTimeLabel(), /21:42/);
+  assert.doesNotMatch(merged.panelTimeLabel(), /05:42|07:42/);
+  // Same-day events keep the times on the clock line only.
+  assert.doesNotMatch(merged.panelDateDisplay(), /21:42|05:42/);
+  assert.match(merged.panelDateDisplay(), /August 13|13 ao\xc3\xbbt|13 ao\u00fbt/);
 });

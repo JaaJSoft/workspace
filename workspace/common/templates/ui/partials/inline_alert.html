@@ -1,20 +1,20 @@
 {% comment %}
-  Composant d'alerte inline réutilisable
+  Reusable inline alert component
 
   Usage Django template:
     {% include "ui/partials/inline_alert.html" with type="info" message="Your message here" %}
     {% include "ui/partials/inline_alert.html" with type="error" title="Error" message="Something went wrong" dismissible=True %}
 
-  Paramètres:
-    - type: 'info', 'success', 'warning', 'error' (défaut: 'info')
-    - message: Le message à afficher (requis si pas de slot)
-    - title: Titre optionnel
-    - dismissible: Afficher un bouton de fermeture (défaut: False)
-    - icon: Afficher l'icône (défaut: True)
-    - icon_name: Nom de l'icône lucide personnalisée (optionnel)
-    - class: Classes CSS additionnelles
-    - slot: Contenu HTML personnalisé (prioritaire sur message)
-    - actions: Liste de dicts { label, href?, click?, style?, dismiss? }. href rend un lien, click est une expression Alpine (string), style par défaut 'ghost', dismiss ajoute 'show = false' au handler. Les valeurs href/click/dismiss passent depuis le contexte de vue Django. Voir le jumeau JS qui accepte des callbacks au lieu d'expressions. Cette synchronisation exige que les deux restent alignés lors des modifications. Trust model: click expressions and href values must be view-authored literals, never user-supplied data (Alpine executes click; a javascript: href would be live too).
+  Parameters:
+    - type: 'info', 'success', 'warning', 'error' (default: 'info')
+    - message: The message to display (required unless slot is set)
+    - title: Optional title
+    - dismissible: Show a close button (default: False)
+    - icon: Show the icon (default: True)
+    - icon_name: Custom lucide icon name (optional)
+    - class: Additional CSS classes
+    - slot: Custom HTML content (takes priority over message)
+    - actions: List of dicts { label, href?, click?, style?, dismiss? }. href renders a link, click is an Alpine expression (string), style defaults to 'ghost', dismiss appends 'show = false' to the handler. Pass the list from the Django view context. The JS twin (InlineAlert.create in ui/js/inline_alert.js) accepts callbacks instead of expressions; keep both in sync when changing either. Trust model: click expressions and href values must be view-authored literals, never user-supplied data (Alpine executes click; a javascript: href would be live too).
 {% endcomment %}
 
 {% if message or slot %}

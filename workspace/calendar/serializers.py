@@ -122,11 +122,13 @@ class EventSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         if data.get("all_day"):
             # All-day values are UTC-midnight day labels: expose them
-            # date-only so no client can shift them across zones.
-            if data.get("start"):
-                data["start"] = data["start"][:10]
-            if data.get("end"):
-                data["end"] = data["end"][:10]
+            # date-only so no client can shift them across zones. Read the
+            # instance datetimes - the rendered strings carry the active
+            # timezone's offset, so slicing them would shift the label.
+            if instance.start:
+                data["start"] = instance.start.astimezone(UTC).date().isoformat()
+            if instance.end:
+                data["end"] = instance.end.astimezone(UTC).date().isoformat()
         return data
 
 

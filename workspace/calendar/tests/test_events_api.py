@@ -503,3 +503,86 @@ class AllDayApiContractTests(CalendarTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         starts = [e["start"] for e in resp.data if e["title"] == "Daily standdown"]
         self.assertEqual(starts, ["2026-08-03", "2026-08-04", "2026-08-05"])
+
+
+class RangeEndpointTimezoneTests(CalendarTestMixin, APITestCase):
+    url = "/api/v1/calendar/events"
+
+    def tearDown(self):
+        dj_timezone.deactivate()
+        cache.clear()
+
+    def test_all_day_stays_date_only_for_negative_offset_user(self):
+        # Rendering must not shift the day label when the active timezone
+        # has a negative offset (the rendered ISO string carries -07:00).
+        Event.objects.create(
+            calendar=self.calendar,
+            title="Label day",
+            start=datetime(2026, 8, 5, tzinfo=UTC),
+            all_day=True,
+            owner=self.owner,
+        )
+        set_setting(self.owner, "core", "timezone", "America/Los_Angeles")
+        self.client.force_login(self.owner)
+        resp = self.client.get(
+            self.url,
+            {"start": "2026-08-01T00:00:00Z", "end": "2026-08-10T00:00:00Z"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        event = next(e for e in resp.data if e["title"] == "Label day")
+        self.assertEqual(event["start"], "2026-08-05")
+
+    def test_invalid_range_returns_400(self):
+        self.client.force_authenticate(self.owner)
+        resp = self.client.get(self.url, {"start": "garbage", "end": "2026-08-10"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_naive_range_is_interpreted_in_active_timezone(self):
+        # 2026-08-05T23:30 Paris is 21:30Z; a naive end of 2026-08-05T23:00
+        # (Paris) must exclude it, while the same naive end in UTC would not.
+        Event.objects.create(
+            calendar=self.calendar,
+            title="Late event",
+            start=datetime(2026, 8, 5, 21, 30, tzinfo=UTC),
+            end=datetime(2026, 8, 5, 22, 0, tzinfo=UTC),
+            owner=self.owner,
+        )
+        set_setting(self.owner, "core", "timezone", "Europe/Paris")
+        self.client.force_login(self.owner)
+        resp = self.client.get(
+            self.url, {"start": "2026-08-05T00:00", "end": "2026-08-05T23:00"}
+        )
+        titles = [e["title"] for e in resp.data]
+        self.assertNotIn("Late event", titles)
+        resp = self.client.get(
+            self.url, {"start": "2026-08-05T00:00", "end": "2026-08-06T00:00"}
+        )
+        titles = [e["title"] for e in resp.data]
+        self.assertIn("Late event", titles)
+
+    def test_mixed_all_day_and_timed_sorting(self):
+        Event.objects.create(
+            calendar=self.calendar,
+            title="Day label",
+            start=datetime(2026, 8, 5, tzinfo=UTC),
+            all_day=True,
+            owner=self.owner,
+        )
+        Event.objects.create(
+            calendar=self.calendar,
+            title="Morning meeting",
+            start=datetime(2026, 8, 5, 7, 0, tzinfo=UTC),
+            end=datetime(2026, 8, 5, 8, 0, tzinfo=UTC),
+            owner=self.owner,
+        )
+        self.client.force_authenticate(self.owner)
+        resp = self.client.get(
+            self.url,
+            {"start": "2026-08-04T00:00:00Z", "end": "2026-08-07T00:00:00Z"},
+        )
+        titles = [
+            e["title"]
+            for e in resp.data
+            if e["title"] in ("Day label", "Morning meeting")
+        ]
+        self.assertEqual(titles, ["Day label", "Morning meeting"])

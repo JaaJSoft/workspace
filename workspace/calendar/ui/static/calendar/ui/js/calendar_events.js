@@ -30,6 +30,9 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this.calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: fcInitialView,
         ...(urlDate ? { initialDate: urlDate } : {}),
+        // Render the grid in the user's configured zone (luxon3 plugin);
+        // date strings emitted by FullCalendar then carry that offset.
+        timeZone: (window.getUserTimeZone && window.getUserTimeZone()) || 'local',
         headerToolbar: false,
         // Follow the browser's language (e.g. en-US, fr-FR) so FullCalendar
         // formats weekdays, months, and the toolbar title consistently with

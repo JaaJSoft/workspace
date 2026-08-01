@@ -330,11 +330,15 @@ window.calendarApp = function calendarApp() {
       params.set('view', this._viewToUrl(viewType));
       // Store the current date as YYYY-MM-DD (skipped for agenda since it's always "from now")
       if (viewType !== 'agenda' && this.calendar) {
-        // FullCalendar returns browser-local dates; key them in the browser
-        // zone too (toISOString would shift the day for any UTC+ browser).
+        // With a named timeZone, FullCalendar returns "coerced" dates whose
+        // UTC components hold the zone-local wall clock, so toISOString IS
+        // the zone-local key. Without one it returns browser-local dates,
+        // which must be keyed in the browser zone (toISOString would shift
+        // the day for any UTC+ browser).
+        const named = this._tz();
         const d = this.calendar.getDate();
-        const dateStr = this._dayKeyIn(d);
-        const today = this._dayKeyIn(new Date());
+        const dateStr = named ? d.toISOString().slice(0, 10) : this._dayKeyIn(d);
+        const today = named ? this._dayKeyIn(new Date(), named) : this._dayKeyIn(new Date());
         if (dateStr !== today) params.set('date', dateStr);
       }
       if (this.showPanel && this.form.uuid) params.set('event', this.form.uuid);

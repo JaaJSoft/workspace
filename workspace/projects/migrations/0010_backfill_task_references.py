@@ -1,10 +1,13 @@
 from django.db import migrations
 from django.db.models import OuterRef, Subquery
 
-# unique_project_key is a pure string/set helper: safe to import from a
+# Both helpers are pure string/set functions: safe to import from a
 # migration. Note references.py itself imports models at module level,
 # which is safe here because nothing queries at import time.
-from workspace.projects.services.references import unique_project_key
+from workspace.projects.services.references import (
+    generate_base_key,
+    unique_project_key,
+)
 
 
 def backfill(apps, schema_editor):
@@ -20,7 +23,7 @@ def backfill(apps, schema_editor):
 
     taken = set()
     for project in Project.objects.order_by("created_at", "uuid").iterator():
-        key = unique_project_key(project.name, taken=taken)
+        key = unique_project_key(generate_base_key(project.name), taken=taken)
         taken.add(key)
         tasks = list(project.tasks.order_by("created_at", "uuid").only("uuid"))
         for i, task in enumerate(tasks, start=1):

@@ -63,6 +63,26 @@ class ProjectKeyTests(TestCase):
         second = create_project(self.user, name="Web Ring")
         self.assertEqual(second.key, "WR2")
 
-    def test_personal_project_gets_a_key(self):
+    def test_personal_project_key_derives_from_the_username(self):
         project = get_or_create_personal_project(self.user)
-        self.assertEqual(project.key, "PERS")
+        self.assertEqual(project.key, "PERSKEYU")
+
+    def test_personal_projects_of_different_users_get_distinct_keys(self):
+        other = User.objects.create_user(
+            username="pierre.chopinet", email="pc@test.com", password="pass123"
+        )
+        mine = get_or_create_personal_project(self.user)
+        theirs = get_or_create_personal_project(other)
+        self.assertEqual((mine.key, theirs.key), ("PERSKEYU", "PERSPC"))
+
+    def test_personal_key_collision_falls_back_to_a_suffix(self):
+        # Different users, same initials: the unique constraint still wins.
+        pierre = User.objects.create_user(
+            username="pierre.chopinet", email="p@test.com", password="pass123"
+        )
+        paul = User.objects.create_user(
+            username="paul.charpentier", email="pa@test.com", password="pass123"
+        )
+        first = get_or_create_personal_project(pierre)
+        second = get_or_create_personal_project(paul)
+        self.assertEqual((first.key, second.key), ("PERSPC", "PERSPC2"))

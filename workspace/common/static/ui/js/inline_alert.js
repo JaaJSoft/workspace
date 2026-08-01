@@ -55,7 +55,7 @@ const InlineAlert = {
       alertDiv.appendChild(span);
     }
 
-    if (actions.length) {
+    if (actions && actions.length) {
       const row = document.createElement('div');
       row.className = 'flex gap-2 shrink-0';
       for (const action of actions) {

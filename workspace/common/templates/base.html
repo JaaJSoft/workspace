@@ -187,6 +187,7 @@
             } },
             { label: 'Ignore', onClick: function () {
               localStorage.setItem('tz-suggest-dismissed', detected);
+              // Hide the wrapper instead of dismissing the inner alert, because removing only the alert would leave the opaque wrapper as an empty floating box.
               banner.classList.add('hidden');
             } },
           ],

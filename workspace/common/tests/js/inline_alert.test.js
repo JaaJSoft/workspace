@@ -90,6 +90,11 @@ test('renders no actions row when the option is absent', () => {
   assert.equal(collect(alert, isButton).length, 0);
 });
 
+test('renders no actions row when actions is null', () => {
+  const alert = make().create({ message: 'm', actions: null });
+  assert.equal(collect(alert, isButton).length, 0);
+});
+
 test('slot node replaces the message content', () => {
   const InlineAlert = make();
   const slot = fakeElement('span');

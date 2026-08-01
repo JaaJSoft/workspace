@@ -14,7 +14,7 @@
     - icon_name: Nom de l'icône lucide personnalisée (optionnel)
     - class: Classes CSS additionnelles
     - slot: Contenu HTML personnalisé (prioritaire sur message)
-    - actions: Liste de dicts { label, href?, click?, style?, dismiss? }. href rend un lien, click est une expression Alpine (string), style par défaut 'ghost', dismiss ajoute 'show = false' au handler. Les valeurs href/click/dismiss passent depuis le contexte de vue Django. Voir le jumeau JS qui accepte des callbacks au lieu d'expressions. Cette synchronisation exige que les deux restent alignés lors des modifications.
+    - actions: Liste de dicts { label, href?, click?, style?, dismiss? }. href rend un lien, click est une expression Alpine (string), style par défaut 'ghost', dismiss ajoute 'show = false' au handler. Les valeurs href/click/dismiss passent depuis le contexte de vue Django. Voir le jumeau JS qui accepte des callbacks au lieu d'expressions. Cette synchronisation exige que les deux restent alignés lors des modifications. Trust model: click expressions and href values must be view-authored literals, never user-supplied data (Alpine executes click; a javascript: href would be live too).
 {% endcomment %}
 
 {% if message or slot %}

@@ -90,6 +90,7 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
 
         td_round = {
             "assistant_content": msg.content or "",
+            "thinking": result.get("thinking", ""),
             "tool_calls": tc_list,
             "results": [],
         }

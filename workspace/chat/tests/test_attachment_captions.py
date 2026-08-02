@@ -6,6 +6,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from rest_framework.test import APITestCase
 
+from workspace.ai.models import BotProfile
 from workspace.chat.models import Conversation, ConversationMember
 
 User = get_user_model()
@@ -25,8 +26,16 @@ class UploadCaptionEnqueueTests(APITestCase):
         self.client.force_authenticate(self.user)
         self.url = f"/api/v1/chat/conversations/{self.conv.pk}/messages"
 
+    def _add_bot_member(self):
+        bot_user = User.objects.create_user(
+            username="captionbot", email="cb@test.com", password="pw"
+        )
+        BotProfile.objects.create(user=bot_user)
+        ConversationMember.objects.create(conversation=self.conv, user=bot_user)
+
     @override_settings(AI_API_KEY="k")
     def test_image_upload_enqueues_caption(self):
+        self._add_bot_member()
         upload = SimpleUploadedFile("photo.png", b"fakepng", content_type="image/png")
         with (
             patch(
@@ -44,7 +53,26 @@ class UploadCaptionEnqueueTests(APITestCase):
         mock_delay.assert_called_once()
 
     @override_settings(AI_API_KEY="k")
+    def test_image_upload_without_bot_member_enqueues_nothing(self):
+        upload = SimpleUploadedFile("photo.png", b"fakepng", content_type="image/png")
+        with (
+            patch(
+                "workspace.files.services.detection.detect_from_stream",
+                return_value=PNG_DETECTION,
+            ),
+            patch(
+                "workspace.ai.tasks.captions.generate_attachment_caption.delay"
+            ) as mock_delay,
+        ):
+            resp = self.client.post(
+                self.url, {"body": "here", "files": [upload]}, format="multipart"
+            )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        mock_delay.assert_not_called()
+
+    @override_settings(AI_API_KEY="k")
     def test_text_only_message_enqueues_nothing(self):
+        self._add_bot_member()
         with patch(
             "workspace.ai.tasks.captions.generate_attachment_caption.delay"
         ) as mock_delay:

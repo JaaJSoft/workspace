@@ -290,10 +290,17 @@ class MessageListView(CacheControlMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        from workspace.ai.tasks.captions import enqueue_caption_if_image
+        if created_attachments and any(a.is_image for a in created_attachments):
+            has_bot_member = ConversationMember.objects.filter(
+                conversation_id=conversation_id,
+                left_at__isnull=True,
+                user__bot_profile__isnull=False,
+            ).exists()
+            if has_bot_member:
+                from workspace.ai.tasks.captions import enqueue_caption_if_image
 
-        for att in created_attachments:
-            enqueue_caption_if_image(att)
+                for att in created_attachments:
+                    enqueue_caption_if_image(att)
 
         # Notify other members via SSE + push notifications
         conversation = Conversation.objects.get(pk=conversation_id)

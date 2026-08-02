@@ -6,9 +6,11 @@ from django.test import SimpleTestCase, TestCase
 
 from workspace.ai.services.llm import (
     _extract_thinking,
+    build_tool_content,
     call_llm,
     extract_text_tool_calls,
     serialize_response,
+    truncate_tool_result,
 )
 
 
@@ -205,3 +207,37 @@ class SerializeResponseThinkingTests(SimpleTestCase):
 
     def test_missing_thinking_defaults_empty(self):
         self.assertEqual(serialize_response({"content": "hi"})["thinking"], "")
+
+
+class ImagePayloadTextTests(TestCase):
+    def test_build_tool_content_uses_payload_text(self):
+        payload = json.dumps(
+            {
+                "type": "image",
+                "mime_type": "image/png",
+                "data": "QUJD",
+                "text": "Image generated successfully for: a cat",
+            }
+        )
+        content = build_tool_content(payload)
+        self.assertEqual(
+            content[0],
+            {"type": "text", "text": "Image generated successfully for: a cat"},
+        )
+        self.assertEqual(content[1]["image_url"]["url"], "data:image/png;base64,QUJD")
+
+    def test_build_tool_content_falls_back_without_text(self):
+        payload = json.dumps(
+            {"type": "image", "mime_type": "image/webp", "data": "QUJD"}
+        )
+        content = build_tool_content(payload)
+        self.assertEqual(content[0], {"type": "text", "text": "Here is the image:"})
+
+    def test_truncate_tool_result_keeps_text(self):
+        payload = json.dumps(
+            {"type": "image", "data": "QUJD", "text": "Image edited: darker"}
+        )
+        self.assertEqual(
+            json.loads(truncate_tool_result(payload)),
+            {"type": "image", "data": "[stripped]", "text": "Image edited: darker"},
+        )

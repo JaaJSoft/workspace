@@ -1,14 +1,16 @@
 import json
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from workspace.ai.models import BotProfile, UserMemory
 from workspace.ai.tool_registry import tool_registry
+from workspace.ai.tools import GenerateImageParams, ImageToolProvider
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.common.search import fts5_available
 
@@ -276,3 +278,61 @@ class EditImageSameTurnTests(TestCase):
         self.assertEqual(mock_edit.call_args[0][0], b"TURN_IMAGE")
         self.assertIn("Image edited successfully", result)
         self.assertEqual(context["images"][-1]["data"], b"EDITED")
+
+
+def _fake_image_client(b64):
+    response = SimpleNamespace(data=[SimpleNamespace(b64_json=b64)])
+    images = SimpleNamespace(
+        generate=lambda **kwargs: response, edit=lambda **kwargs: response
+    )
+    return SimpleNamespace(images=images)
+
+
+@override_settings(AI_IMAGE_MODEL="img-model")
+class GenerateImageVisionTests(TestCase):
+    PNG_B64 = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAA"
+        "BQABh6FO1AAAAABJRU5ErkJggg=="
+    )
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="genu", email="genu@test.com", password="pw"
+        )
+        self.bot_user = User.objects.create_user(
+            username="genbot", email="genbot@test.com", password="pw"
+        )
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+
+    def _generate(self, context):
+        provider = ImageToolProvider()
+        args = GenerateImageParams(prompt="a cat")
+        with patch(
+            "workspace.ai.tools.get_image_client",
+            return_value=_fake_image_client(self.PNG_B64),
+        ):
+            return provider.generate_image(
+                args, self.user, self.bot_user, str(self.conv.pk), context
+            )
+
+    def test_vision_bot_gets_image_payload(self):
+        BotProfile.objects.create(user=self.bot_user, supports_vision=True)
+        context = {}
+        result = self._generate(context)
+        parsed = json.loads(result)
+        self.assertEqual(parsed["type"], "image")
+        self.assertEqual(parsed["text"], "Image generated successfully for: a cat")
+        self.assertTrue(parsed["data"])
+        self.assertTrue(parsed["mime_type"].startswith("image/"))
+        self.assertEqual(len(context["images"]), 1)
+
+    def test_non_vision_bot_gets_plain_text(self):
+        BotProfile.objects.create(user=self.bot_user, supports_vision=False)
+        result = self._generate({})
+        self.assertEqual(result, "Image generated successfully for: a cat")
+
+    def test_bot_without_profile_gets_plain_text(self):
+        result = self._generate({})
+        self.assertEqual(result, "Image generated successfully for: a cat")

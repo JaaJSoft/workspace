@@ -180,6 +180,16 @@ class CallLlmThinkingTests(SimpleTestCase):
         result = self._call(msg)
         self.assertEqual(result["thinking"], "")
 
+    def test_blank_reasoning_content_falls_back_to_reasoning(self):
+        msg = SimpleNamespace(
+            content="Hello",
+            tool_calls=None,
+            reasoning_content="   ",
+            reasoning="or reasoning",
+        )
+        result = self._call(msg)
+        self.assertEqual(result["thinking"], "or reasoning")
+
     def test_non_string_native_reasoning_is_ignored(self):
         msg = SimpleNamespace(
             content="Hello", tool_calls=None, reasoning_content={"odd": True}

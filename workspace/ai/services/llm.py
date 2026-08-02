@@ -202,12 +202,22 @@ def call_llm(
     choice = response.choices[0]
     thinking, content = _extract_thinking(choice.message.content or "")
     # Some backends (vLLM/DeepSeek: reasoning_content, OpenRouter: reasoning)
-    # return reasoning as a separate field instead of <think> tags.
-    native = getattr(choice.message, "reasoning_content", None) or getattr(
-        choice.message, "reasoning", None
+    # return reasoning as a separate field instead of <think> tags. First
+    # non-blank field wins, so a whitespace-only reasoning_content still
+    # falls back to reasoning.
+    native = next(
+        (
+            v.strip()
+            for v in (
+                getattr(choice.message, "reasoning_content", None),
+                getattr(choice.message, "reasoning", None),
+            )
+            if isinstance(v, str) and v.strip()
+        ),
+        "",
     )
-    if isinstance(native, str) and native.strip():
-        thinking = native.strip()
+    if native:
+        thinking = native
     # Apply both strip and clean here so downstream consumers (summaries, mail
     # composer, titles, ...) see normalized text regardless of which path they
     # took.

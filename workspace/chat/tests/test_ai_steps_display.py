@@ -1,6 +1,5 @@
 import json
 from importlib import import_module
-from unittest import skip
 from unittest.mock import patch
 
 from django.apps import apps as django_apps
@@ -201,7 +200,6 @@ def render_partial(tool_data):
     )
 
 
-@skip("partial created in the next commit")
 class AiStepsPartialTests(SimpleTestCase):
     def test_empty_steps_render_nothing(self):
         self.assertEqual(render_partial(None).strip(), "")

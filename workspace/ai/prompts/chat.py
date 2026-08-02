@@ -176,6 +176,15 @@ def build_chat_messages(
         "avatar before generating an image of yourself."
     )
 
+    past_images_instructions = (
+        "\n\n## Past images\n"
+        "History markers like [image: filename - description] or "
+        '"[Images sent by the assistant in the message above]" are system '
+        "annotations standing in for images that are no longer shown to you. "
+        "Never write these markers yourself: to share an image, call the image "
+        "tools; otherwise reply in plain text."
+    )
+
     web_instructions = (
         "\n\n## Web search\n"
         "You can search the web and read webpages when you have these tools available. "
@@ -219,6 +228,7 @@ def build_chat_messages(
         f"{memory_instructions}"
         f"{scheduling_instructions}"
         f"{image_instructions}"
+        f"{past_images_instructions}"
         f"{web_instructions}"
         f"{safety_instructions}"
         f"{tools_block}"

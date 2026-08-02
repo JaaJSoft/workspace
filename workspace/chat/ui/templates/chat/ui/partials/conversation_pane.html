@@ -21,7 +21,12 @@
         <div x-html="conversationAvatar(activeConversation)"></div>
 
         <div class="flex-1 min-w-0">
-          <h3 class="font-semibold text-sm truncate" x-text="conversationName(activeConversation)"></h3>
+          <div class="flex items-center gap-1.5 min-w-0">
+            <h3 class="font-semibold text-sm truncate" x-text="conversationName(activeConversation)"></h3>
+            <span x-show="titleRegeneratingUuid === activeConversation.uuid" x-cloak
+                  class="loading loading-spinner loading-xs text-secondary flex-shrink-0"
+                  title="Regenerating title..."></span>
+          </div>
           <p class="text-xs text-base-content/60 truncate">
             <span x-text="membersList(activeConversation)"></span>
             <template x-if="activeConversation.description">

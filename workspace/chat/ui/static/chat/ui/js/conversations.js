@@ -44,6 +44,9 @@ window.chatConversationsMixin = function chatConversationsMixin() {
     // Context menu
     ctxMenu: { open: false, x: 0, y: 0, uuid: null, kind: null, isPinned: false, isBot: false },
 
+    // AI title regeneration in flight (drives the header/sidebar spinners)
+    titleRegeneratingUuid: null,
+
     // ── List loading ─────────────────────────────────────────
     async loadConversations() {
       try {
@@ -74,8 +77,9 @@ window.chatConversationsMixin = function chatConversationsMixin() {
     // conversation. Swaps only the affected `#conv-item-<uuid>` rows via a
     // dedicated partial endpoint, and falls back to the full-list refresh
     // when a row isn't in the DOM (brand-new conversation, or filtered out
-    // by the sidebar search).
-    async refreshConversationItems(uuids) {
+    // by the sidebar search). Pass `bump: false` for updates that don't
+    // change the conversation's recency (e.g. a title change).
+    async refreshConversationItems(uuids, { bump = true } = {}) {
       const ids = [...new Set(uuids)].filter(Boolean);
       if (ids.length === 0) return;
       if (ids.some(u => !document.getElementById(`conv-item-${u}`))) {
@@ -94,7 +98,9 @@ window.chatConversationsMixin = function chatConversationsMixin() {
         this.refreshConversationList();
         return;
       }
-      for (const u of ids) this._moveConversationItemToTop(u);
+      if (bump) {
+        for (const u of ids) this._moveConversationItemToTop(u);
+      }
     },
 
     // The full list is server-ordered by -updated_at, but a targeted swap
@@ -592,9 +598,14 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       }
     },
 
-    // The regenerated title arrives asynchronously through the SSE refresh,
-    // so there is nothing to apply from the response here.
+    // The endpoint only enqueues the generation task (202); the new title
+    // arrives through the conversation_updated SSE event, which also clears
+    // the spinner. The timeout is a safety net for a task that fails
+    // server-side (no SSE event is emitted in that case).
     async regenerateConversationTitle(uuid) {
+      this.titleRegeneratingUuid = uuid;
+      clearTimeout(this._titleRegenTimer);
+      this._titleRegenTimer = setTimeout(() => { this.titleRegeneratingUuid = null; }, 30000);
       try {
         const resp = await fetch(`/api/v1/chat/conversations/${uuid}/regenerate-title`, {
           method: 'POST',
@@ -604,6 +615,8 @@ window.chatConversationsMixin = function chatConversationsMixin() {
         if (!resp.ok) throw new Error(`Regenerate title failed (${resp.status})`);
       } catch (e) {
         console.error('Failed to regenerate conversation title', e);
+        clearTimeout(this._titleRegenTimer);
+        this.titleRegeneratingUuid = null;
       }
     },
   };

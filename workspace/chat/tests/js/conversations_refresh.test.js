@@ -123,6 +123,17 @@ test('falls back to the full-list refresh when the targeted swap fails', async (
   assert.notEqual(ul.rows[0], rowA, 'the row should not be reordered after a failed swap');
 });
 
+test('bump: false refreshes the row without moving it to the top', async () => {
+  const rowA = fakeRow();
+  const ul = fakeList([fakeRow(), rowA]); // rowA starts second
+  const { app, calls } = buildApp({ 'conv-item-a': rowA });
+
+  await app.refreshConversationItems(['a'], { bump: false });
+
+  assert.equal(calls.ajax.length, 1, 'the targeted swap still runs');
+  assert.equal(ul.rows[1], rowA, 'the row keeps its position');
+});
+
 test('pinned rows are refreshed in place without reordering', async () => {
   const pinnedRow = fakeRow({ pinned: true });
   const ul = fakeList([fakeRow({ pinned: true }), pinnedRow]);

@@ -75,7 +75,12 @@ class _StreamingWriteBuffer:
     def _flush(self):
         if not self._membuf:
             return
-        os.write(self._fd, self._membuf)
+        # os.write may write fewer bytes than requested (POSIX); loop or
+        # the unwritten tail is silently dropped.
+        view = memoryview(self._membuf)
+        while view:
+            written = os.write(self._fd, view)
+            view = view[written:]
         self._membuf = bytearray()
 
     @property
@@ -295,15 +300,7 @@ class FolderResource(DAVCollection):
 
     @transaction.atomic
     def move_recursive(self, dest_path):
-        dest_parts = _dest_parts(dest_path)
-        new_name = dest_parts[-1]
-        dest_parent = _resolve_parent(self._user, dest_parts[:-1])
-
-        if new_name != self._file.name:
-            FileService.rename(self._file, new_name, acting_user=self._user)
-
-        if dest_parent != self._file.parent:
-            FileService.move(self._file, dest_parent, acting_user=self._user)
+        _move_to(self._file, self._user, dest_path)
 
     def support_recursive_delete(self):
         return True
@@ -450,17 +447,14 @@ class FileResource(DAVNonCollection):
         FileService.soft_delete(self._file, acting_user=self._user)
 
     def copy_move_single(self, dest_path, *, is_move):
-        dest_parts = _dest_parts(dest_path)
-        new_name = dest_parts[-1]
-        dest_parent = _resolve_parent(self._user, dest_parts[:-1])
-
         if is_move:
-            if new_name != self._file.name:
-                FileService.rename(self._file, new_name, acting_user=self._user)
-            if dest_parent != self._file.parent:
-                FileService.move(self._file, dest_parent, acting_user=self._user)
+            with transaction.atomic():
+                _move_to(self._file, self._user, dest_path)
             self._moved = True
         else:
+            dest_parts = _dest_parts(dest_path)
+            new_name = dest_parts[-1]
+            dest_parent = _resolve_parent(self._user, dest_parts[:-1])
             _copy_as(self._file, dest_parent, self._user, new_name)
 
     def support_content_length(self):
@@ -490,6 +484,47 @@ def _dest_parts(dest_path):
     exist and silently re-root the copy.
     """
     return [part for part in dest_path.split("/") if part]
+
+
+def _move_to(file_obj, user, dest_path):
+    """Move and/or rename *file_obj* to *dest_path* (MOVE handlers).
+
+    When both a rename and a re-parent are needed, the order matters:
+    renaming first collides with an old-parent sibling already named
+    ``new_name`` (folder directories cannot be merged on storage, and the
+    descendants' content paths would be rewritten to a directory that was
+    never created), while moving first collides with a destination child
+    carrying the current name.  Pick whichever order is collision-free;
+    renaming first is the default.
+    """
+    dest_parts = _dest_parts(dest_path)
+    new_name = dest_parts[-1]
+    dest_parent = _resolve_parent(user, dest_parts[:-1])
+
+    needs_rename = new_name != file_obj.name
+    needs_move = dest_parent != file_obj.parent
+
+    rename_first = not (
+        needs_rename
+        and needs_move
+        and _live_child_exists(user, file_obj.parent, new_name)
+    )
+
+    if needs_rename and rename_first:
+        FileService.rename(file_obj, new_name, acting_user=user)
+    if needs_move:
+        FileService.move(file_obj, dest_parent, acting_user=user)
+    if needs_rename and not rename_first:
+        FileService.rename(file_obj, new_name, acting_user=user)
+
+
+def _live_child_exists(user, parent, name):
+    return File.objects.filter(
+        FileService.accessible_files_q(user),
+        parent=parent,
+        name=name,
+        deleted_at__isnull=True,
+    ).exists()
 
 
 def _copy_as(file_obj, dest_parent, owner, new_name):

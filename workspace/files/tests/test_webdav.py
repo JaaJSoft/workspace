@@ -11,6 +11,7 @@ from django.test import TestCase, override_settings
 
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.webdav import dc as dc_module
 from workspace.files.webdav.dc import DjangoBasicDomainController
 from workspace.files.webdav.provider import WorkspaceDAVProvider
 from workspace.files.webdav.resources import (
@@ -50,11 +51,17 @@ class DomainControllerTests(TestCase):
     """Tests for DjangoBasicDomainController."""
 
     def setUp(self):
+        # The auth cache is module-global and keyed on credentials only:
+        # without a reset, a user cached by one test leaks into the next.
+        dc_module._auth_cache.clear()
         self.user = User.objects.create_user(
             username="davdc", email="dc@test.com", password="secret123"
         )
         # DC requires a wsgidav_app + config; we pass minimal stubs.
         self.dc = DjangoBasicDomainController(None, {})
+
+    def tearDown(self):
+        dc_module._auth_cache.clear()
 
     def test_get_domain_realm(self):
         self.assertEqual(self.dc.get_domain_realm("/", {}), "Workspace")
@@ -88,6 +95,32 @@ class DomainControllerTests(TestCase):
         environ = {}
         result = self.dc.basic_auth_user("Workspace", "davdc", "secret123", environ)
         self.assertFalse(result)
+
+    def test_basic_auth_result_is_cached(self):
+        """A second request with the same credentials must not re-run the
+        (expensive) authentication backend within the cache TTL."""
+        from unittest import mock
+
+        first = {}
+        self.assertTrue(
+            self.dc.basic_auth_user("Workspace", "davdc", "secret123", first)
+        )
+        with mock.patch("workspace.files.webdav.dc.authenticate") as auth:
+            second = {}
+            result = self.dc.basic_auth_user("Workspace", "davdc", "secret123", second)
+        self.assertTrue(result)
+        auth.assert_not_called()
+        self.assertEqual(second["workspace.user"], self.user)
+
+    def test_basic_auth_wrong_password_not_served_from_cache(self):
+        """Caching a success must not let a wrong password through."""
+        environ = {}
+        self.assertTrue(
+            self.dc.basic_auth_user("Workspace", "davdc", "secret123", environ)
+        )
+        self.assertFalse(
+            self.dc.basic_auth_user("Workspace", "davdc", "wrong", environ)
+        )
 
 
 # ── Provider ──────────────────────────────────────────────────────────
@@ -493,6 +526,70 @@ class FolderResourceMoveStorageTests(TestCase):
         self.assertTrue(os.path.isfile(new_full_path))
         self.assertFalse(os.path.isfile(old_full_path))
 
+    def test_move_recursive_rename_collision_with_old_sibling(self):
+        """MOVE /A/Sub -> /B/Target while /A/Target exists: renaming before
+        moving collides with the sibling's directory on storage (os.rename
+        refuses) while descendant content paths get rewritten anyway,
+        leaving every child pointing at a path that was never created."""
+        a = FileService.create_folder(self.user, "A")
+        b = FileService.create_folder(self.user, "B")
+        sub = FileService.create_folder(self.user, "Sub", parent=a)
+        FileService.create_folder(self.user, "Target", parent=a)
+        note = FileService.create_file(
+            self.user,
+            "note.txt",
+            parent=sub,
+            content=ContentFile(b"payload", name="note.txt"),
+        )
+
+        res = FolderResource("/A/Sub", self.environ, sub)
+        res.move_recursive("/B/Target")
+
+        sub.refresh_from_db()
+        self.assertEqual(sub.name, "Target")
+        self.assertEqual(sub.parent, b)
+        note.refresh_from_db()
+        blob = os.path.join(self._tmpdir, note.content.name)
+        self.assertTrue(os.path.isfile(blob), f"missing blob at {note.content.name}")
+        with open(blob, "rb") as f:
+            self.assertEqual(f.read(), b"payload")
+        # The colliding sibling's directory must be left alone.
+        self.assertTrue(
+            os.path.isdir(
+                os.path.join(self._tmpdir, "files", "users", "davmove", "A", "Target")
+            )
+        )
+
+    def test_move_file_with_rename_keeps_colliding_sibling(self):
+        """MOVE /A/x.txt -> /B/y.txt while /A/y.txt exists must leave the
+        sibling untouched and carry x's content to the destination."""
+        a = FileService.create_folder(self.user, "A")
+        FileService.create_folder(self.user, "B")
+        x = FileService.create_file(
+            self.user,
+            "x.txt",
+            parent=a,
+            content=ContentFile(b"xdata", name="x.txt"),
+        )
+        sibling = FileService.create_file(
+            self.user,
+            "y.txt",
+            parent=a,
+            content=ContentFile(b"ydata", name="y.txt"),
+        )
+
+        res = FileResource("/A/x.txt", self.environ, x)
+        res.copy_move_single("/B/y.txt", is_move=True)
+
+        x.refresh_from_db()
+        self.assertEqual(x.name, "y.txt")
+        self.assertEqual(x.path, "B/y.txt")
+        with open(os.path.join(self._tmpdir, x.content.name), "rb") as f:
+            self.assertEqual(f.read(), b"xdata")
+        sibling.refresh_from_db()
+        with open(os.path.join(self._tmpdir, sibling.content.name), "rb") as f:
+            self.assertEqual(f.read(), b"ydata")
+
 
 # ── FileResource ──────────────────────────────────────────────────────
 
@@ -889,6 +986,28 @@ class StreamingWriteBufferTests(TestCase):
         self.assertEqual(buf.size, 12)
         with open(path, "rb") as f:
             self.assertEqual(f.read(), b"12345678ABCD")
+
+    def test_flush_survives_partial_os_write(self):
+        """POSIX allows os.write to write fewer bytes than requested; the
+        flush must loop until the whole buffer is on disk or bytes are
+        silently dropped."""
+        from unittest import mock
+
+        buf, path = self._make_buf(flush_size=8)
+        real_write = os.write
+
+        def short_write(fd, data):
+            return real_write(fd, bytes(data)[:5])
+
+        with mock.patch(
+            "workspace.files.webdav.resources.os.write", side_effect=short_write
+        ):
+            buf.write(b"0123456789ABCDEF")  # crosses the flush threshold
+            buf.finalize()
+
+        self.assertEqual(buf.size, 16)
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), b"0123456789ABCDEF")
 
     def test_abort_deletes_file(self):
         buf, path = self._make_buf()

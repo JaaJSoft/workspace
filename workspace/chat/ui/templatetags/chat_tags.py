@@ -132,23 +132,36 @@ def _pretty_result(content):
     return content
 
 
-@register.inclusion_tag("chat/ui/partials/_tool_calls.html")
-def render_tool_calls(message):
-    """Flatten Message.tool_data rounds into displayable tool call rows.
+@register.inclusion_tag("chat/ui/partials/_ai_steps.html")
+def render_ai_steps(message):
+    """Flatten Message.tool_data rounds into a chronological step timeline.
 
     tool_data is overloaded: AI messages store a list of rounds, call system
-    messages store a dict - only the list shape is rendered here.
+    messages store a dict - only the list shape is rendered here. Step types:
+    'thinking' (model reasoning), 'text' (intermediate assistant text emitted
+    between tool rounds), 'tool' (one executed call).
     """
     from workspace.ai.tool_registry import tool_registry
 
     tool_data = getattr(message, "tool_data", None)
     if not isinstance(tool_data, list):
-        return {"calls": []}
+        return {
+            "steps": [],
+            "tool_count": 0,
+            "has_reasoning": False,
+            "collapsed": False,
+        }
 
-    calls = []
+    steps = []
     for td_round in tool_data:
         if not isinstance(td_round, dict):
             continue
+        thinking = td_round.get("thinking")
+        if isinstance(thinking, str) and thinking.strip():
+            steps.append({"type": "thinking", "text": thinking.strip()})
+        assistant_content = td_round.get("assistant_content")
+        if isinstance(assistant_content, str) and assistant_content.strip():
+            steps.append({"type": "text", "text": assistant_content.strip()})
         results = td_round.get("results")
         if not isinstance(results, list):
             results = []
@@ -179,8 +192,9 @@ def render_tool_calls(message):
                 else ""
             )
             result = results_by_id.get(tc.get("id"), "")
-            calls.append(
+            steps.append(
                 {
+                    "type": "tool",
                     "icon": badge["icon"],
                     "label": badge["label"],
                     "detail": detail,
@@ -190,4 +204,12 @@ def render_tool_calls(message):
                     "is_error": result.startswith(("Error:", "Unknown tool:")),
                 }
             )
-    return {"calls": calls}
+
+    tool_count = sum(1 for s in steps if s["type"] == "tool")
+    has_reasoning = any(s["type"] in ("thinking", "text") for s in steps)
+    return {
+        "steps": steps,
+        "tool_count": tool_count,
+        "has_reasoning": has_reasoning,
+        "collapsed": has_reasoning or len(steps) > 3,
+    }

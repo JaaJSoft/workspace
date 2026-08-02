@@ -61,7 +61,7 @@
               <div class="msg-body prose prose-sm max-w-none break-words">{{ msg.body_html|safe }}</div>
             {% endif %}
             {% if msg.tool_data %}
-              {% render_tool_calls msg %}
+              {% render_ai_steps msg %}
             {% endif %}
             {% if msg.interaction %}
               {% include "chat/ui/partials/_message_interaction.html" with msg=msg %}

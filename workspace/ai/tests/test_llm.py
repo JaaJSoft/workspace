@@ -1,8 +1,15 @@
 import json
+from types import SimpleNamespace
+from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
-from workspace.ai.services.llm import extract_text_tool_calls
+from workspace.ai.services.llm import (
+    _extract_thinking,
+    call_llm,
+    extract_text_tool_calls,
+    serialize_response,
+)
 
 
 class ExtractTextToolCallsTests(TestCase):
@@ -93,3 +100,108 @@ class ExtractTextToolCallsTests(TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], "ping")
         self.assertEqual(json.loads(calls[0][1]), {})
+
+
+class ExtractThinkingTests(SimpleTestCase):
+    def test_no_think_block_returns_empty_thinking(self):
+        thinking, cleaned = _extract_thinking("just a reply")
+        self.assertEqual(thinking, "")
+        self.assertEqual(cleaned, "just a reply")
+
+    def test_think_block_is_captured_and_stripped(self):
+        thinking, cleaned = _extract_thinking(
+            "<think>plan the answer</think>Hello there"
+        )
+        self.assertEqual(thinking, "plan the answer")
+        self.assertEqual(cleaned, "Hello there")
+
+    def test_multiple_blocks_join_with_blank_line(self):
+        thinking, cleaned = _extract_thinking(
+            "<think>first</think>mid<think>second</think>end"
+        )
+        self.assertEqual(thinking, "first\n\nsecond")
+        self.assertEqual(cleaned, "midend")
+
+    def test_unclosed_tag_captures_nothing_and_keeps_content(self):
+        content = "<think>never closed... Hello"
+        thinking, cleaned = _extract_thinking(content)
+        self.assertEqual(thinking, "")
+        self.assertEqual(cleaned, content)
+
+    def test_case_insensitive(self):
+        thinking, cleaned = _extract_thinking("<THINK>loud</THINK>hi")
+        self.assertEqual(thinking, "loud")
+        self.assertEqual(cleaned, "hi")
+
+
+def _fake_client(message):
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=message)],
+        model="test-model",
+        usage=SimpleNamespace(prompt_tokens=1, completion_tokens=2),
+    )
+    completions = SimpleNamespace(create=lambda **kwargs: response)
+    return SimpleNamespace(chat=SimpleNamespace(completions=completions))
+
+
+class CallLlmThinkingTests(SimpleTestCase):
+    def _call(self, message):
+        with patch(
+            "workspace.ai.client.get_ai_client",
+            return_value=_fake_client(message),
+        ):
+            return call_llm([{"role": "user", "content": "hi"}], model="m")
+
+    def test_think_tags_populate_thinking(self):
+        msg = SimpleNamespace(content="<think>let me see</think>Hello", tool_calls=None)
+        result = self._call(msg)
+        self.assertEqual(result["thinking"], "let me see")
+        self.assertEqual(result["content"], "Hello")
+
+    def test_native_reasoning_content_wins_over_tags(self):
+        msg = SimpleNamespace(
+            content="<think>tag</think>Hello",
+            tool_calls=None,
+            reasoning_content="native reasoning",
+        )
+        result = self._call(msg)
+        self.assertEqual(result["thinking"], "native reasoning")
+        self.assertEqual(result["content"], "Hello")
+
+    def test_openrouter_reasoning_field_is_read(self):
+        msg = SimpleNamespace(
+            content="Hello", tool_calls=None, reasoning="or reasoning"
+        )
+        result = self._call(msg)
+        self.assertEqual(result["thinking"], "or reasoning")
+
+    def test_no_thinking_yields_empty_string(self):
+        msg = SimpleNamespace(content="Hello", tool_calls=None)
+        result = self._call(msg)
+        self.assertEqual(result["thinking"], "")
+
+    def test_blank_reasoning_content_falls_back_to_reasoning(self):
+        msg = SimpleNamespace(
+            content="Hello",
+            tool_calls=None,
+            reasoning_content="   ",
+            reasoning="or reasoning",
+        )
+        result = self._call(msg)
+        self.assertEqual(result["thinking"], "or reasoning")
+
+    def test_non_string_native_reasoning_is_ignored(self):
+        msg = SimpleNamespace(
+            content="Hello", tool_calls=None, reasoning_content={"odd": True}
+        )
+        result = self._call(msg)
+        self.assertEqual(result["thinking"], "")
+
+
+class SerializeResponseThinkingTests(SimpleTestCase):
+    def test_thinking_included(self):
+        result = {"content": "hi", "thinking": "why not", "model": "m"}
+        self.assertEqual(serialize_response(result)["thinking"], "why not")
+
+    def test_missing_thinking_defaults_empty(self):
+        self.assertEqual(serialize_response({"content": "hi"})["thinking"], "")

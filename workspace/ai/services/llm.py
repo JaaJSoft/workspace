@@ -7,7 +7,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-_THINK_RE = re.compile(r"<think>[\s\S]*?</think>\s*", re.IGNORECASE)
+_THINK_RE = re.compile(r"<think>([\s\S]*?)</think>\s*", re.IGNORECASE)
 _RAW_TOOL_CALL_RE = re.compile(r"</?tool_call>", re.IGNORECASE)
 # Matches timestamp prefixes leaked by the LLM, with or without brackets:
 # "[2026-04-10 20:07] ..." or "2026-04-10 20:07 ..."
@@ -26,6 +26,7 @@ def serialize_response(result):
     tc = result.get("tool_calls")
     return {
         "content": result.get("content", ""),
+        "thinking": result.get("thinking", ""),
         "tool_calls": [
             {"id": c.id, "name": c.function.name, "arguments": c.function.arguments}
             for c in tc
@@ -97,9 +98,17 @@ def build_tool_content(tool_result: str):
     return tool_result
 
 
-def _strip_thinking(content: str) -> str:
-    """Remove <think>...</think> blocks from model output."""
-    return _THINK_RE.sub("", content).strip()
+def _extract_thinking(content: str) -> tuple[str, str]:
+    """Split <think>...</think> blocks out of model output.
+
+    Returns (thinking, cleaned). Multiple blocks join with a blank line.
+    An unclosed <think> tag matches nothing: it stays in the content and
+    captures no thinking.
+    """
+    blocks = [m.group(1).strip() for m in _THINK_RE.finditer(content)]
+    thinking = "\n\n".join(b for b in blocks if b)
+    cleaned = _THINK_RE.sub("", content).strip()
+    return thinking, cleaned
 
 
 def extract_text_tool_calls(content: str):
@@ -191,12 +200,31 @@ def call_llm(
             ).inc(response.usage.completion_tokens)
 
     choice = response.choices[0]
+    thinking, content = _extract_thinking(choice.message.content or "")
+    # Some backends (vLLM/DeepSeek: reasoning_content, OpenRouter: reasoning)
+    # return reasoning as a separate field instead of <think> tags. First
+    # non-blank field wins, so a whitespace-only reasoning_content still
+    # falls back to reasoning.
+    native = next(
+        (
+            v.strip()
+            for v in (
+                getattr(choice.message, "reasoning_content", None),
+                getattr(choice.message, "reasoning", None),
+            )
+            if isinstance(v, str) and v.strip()
+        ),
+        "",
+    )
+    if native:
+        thinking = native
     # Apply both strip and clean here so downstream consumers (summaries, mail
     # composer, titles, ...) see normalized text regardless of which path they
     # took.
-    content = clean_llm_content(_strip_thinking(choice.message.content or ""))
+    content = clean_llm_content(content)
     return {
         "content": content,
+        "thinking": thinking,
         "tool_calls": choice.message.tool_calls,
         "message": choice.message,
         "model": response.model,

@@ -76,10 +76,15 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
         # Reconstruct tool call history for bot messages
         if is_bot and msg.tool_data:
             for td_round in msg.tool_data:
+                tool_calls = td_round.get("tool_calls")
+                if not tool_calls:
+                    # Tool-less rounds only carry thinking for the UI
+                    # timeline; reasoning is never replayed to the LLM.
+                    continue
                 assistant_msg = {
                     "role": "assistant",
                     "content": td_round.get("assistant_content", ""),
-                    "tool_calls": td_round["tool_calls"],
+                    "tool_calls": tool_calls,
                 }
                 history.append(assistant_msg)
                 for tr in td_round.get("results", []):

@@ -120,6 +120,23 @@ window.chatSseMixin = function chatSseMixin() {
       }
     },
 
+    // A conversation's title changed server-side (AI regeneration, rename by
+    // another member): sync the reactive state, stop the regenerate loader,
+    // and re-render the sidebar row in place (no bump to the top - the
+    // conversation didn't receive a new message).
+    handleSSEConversationUpdated(detail) {
+      const conv = this.conversations.find(c => c.uuid === detail.conversation_id);
+      if (conv) conv.title = detail.title;
+      if (this.activeConversation && this.activeConversation.uuid === detail.conversation_id) {
+        this.activeConversation.title = detail.title;
+      }
+      if (this.titleRegeneratingUuid === detail.conversation_id) {
+        clearTimeout(this._titleRegenTimer);
+        this.titleRegeneratingUuid = null;
+      }
+      this.refreshConversationItems([detail.conversation_id], { bump: false });
+    },
+
     handleSSETyping(detail) {
       this.typingUsers = detail;
       clearTimeout(this._typingHideTimer);

@@ -68,6 +68,8 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
       <div class="flex items-center justify-between gap-1">
         <span class="font-medium text-sm truncate flex items-center gap-1">
           {{ conv.display_name }}
+          <span x-show="titleRegeneratingUuid === '{{ conv.uuid }}'" x-cloak
+                class="loading loading-spinner loading-xs text-secondary flex-shrink-0"></span>
           <span x-show="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.is_bot_conversation" x-cloak class="text-secondary flex-shrink-0" title="AI Bot">
             <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
           </span>

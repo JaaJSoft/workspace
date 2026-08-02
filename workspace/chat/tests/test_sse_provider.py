@@ -65,6 +65,25 @@ class InteractionSSETests(TestCase):
             [e[0] for e in events2],
         )
 
+    def test_emits_conversation_updated_on_title_change(self):
+        provider = ChatSSEProvider(self.user, last_event_id=None)
+        self.conv.title = "Fresh AI title"
+        self.conv.save(update_fields=["title"])
+
+        events = provider.poll(cache_value="dirty")
+        updated = [e for e in events if e[0] == "conversation_updated"]
+        self.assertEqual(len(updated), 1)
+        self.assertEqual(updated[0][1]["conversation_id"], str(self.conv.uuid))
+        self.assertEqual(updated[0][1]["title"], "Fresh AI title")
+        # Idempotence: a second poll should not re-emit
+        events2 = provider.poll(cache_value="dirty")
+        self.assertNotIn("conversation_updated", [e[0] for e in events2])
+
+    def test_no_conversation_updated_when_title_unchanged(self):
+        provider = ChatSSEProvider(self.user, last_event_id=None)
+        events = provider.poll(cache_value="dirty")
+        self.assertNotIn("conversation_updated", [e[0] for e in events])
+
     def test_does_not_emit_when_self_answered(self):
         interaction = MessageInteraction.objects.create(
             message=self.msg,

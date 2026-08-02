@@ -9,6 +9,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.sse_registry import SSEProvider
 
 from .models import (
+    Conversation,
     ConversationMember,
     Message,
     MessageInteraction,
@@ -49,6 +50,7 @@ class ChatSSEProvider(SSEProvider):
         else:
             self._since = timezone.now()
 
+        self._conv_titles = self._current_titles()
         self._seen_message_ids = set()
         self._seen_edit_keys = set()
         self._seen_delete_keys = set()
@@ -59,6 +61,13 @@ class ChatSSEProvider(SSEProvider):
         self._last_unread_push = 0
         self._last_read_check = timezone.now()
         self._last_typing_state = {}
+
+    def _current_titles(self):
+        return dict(
+            Conversation.objects.filter(uuid__in=self._member_conv_ids).values_list(
+                "uuid", "title"
+            )
+        )
 
     def get_initial_events(self):
         events = []
@@ -111,6 +120,20 @@ class ChatSSEProvider(SSEProvider):
 
         # Refresh member conversation IDs
         self._member_conv_ids = set(user_conversation_ids(self.user))
+
+        # Conversation title changes (AI regeneration, renames by other
+        # members). Conversations entering the snapshot (new membership) don't
+        # emit - the first message event already triggers a sidebar refresh.
+        current_titles = self._current_titles()
+        for conv_id, title in current_titles.items():
+            if conv_id in self._conv_titles and self._conv_titles[conv_id] != title:
+                data = {
+                    "type": "conversation_updated",
+                    "conversation_id": str(conv_id),
+                    "title": title,
+                }
+                events.append(("conversation_updated", data, None))
+        self._conv_titles = current_titles
 
         # New messages
         new_messages = list(

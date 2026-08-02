@@ -241,3 +241,38 @@ class CurrentUserInfoTimezoneTests(TestCase):
             None, user=user, bot=None, conversation_id=None, context={}
         )
         self.assertIn("2026-02-01", result)
+
+
+class EditImageSameTurnTests(TestCase):
+    """Regression: edit_image must edit the image generated earlier in the
+    same tool-loop turn (context['images']), not the last DB attachment."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="editu", email="editu@test.com", password="pw"
+        )
+        self.bot_user = User.objects.create_user(
+            username="editbot", email="editbot@test.com", password="pw"
+        )
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+
+    def test_edit_uses_current_turn_image_over_db(self):
+        from workspace.ai.tools import EditImageParams, ImageToolProvider
+
+        provider = ImageToolProvider()
+        args = EditImageParams(prompt="make it darker")
+        context = {
+            "images": [{"data": b"TURN_IMAGE", "prompt": "cat", "size": "1024x1024"}]
+        }
+        with patch(
+            "workspace.ai.services.image.ai_edit_image", return_value=b"EDITED"
+        ) as mock_edit:
+            result = provider.edit_image(
+                args, self.user, self.bot_user, str(self.conv.pk), context
+            )
+        mock_edit.assert_called_once()
+        self.assertEqual(mock_edit.call_args[0][0], b"TURN_IMAGE")
+        self.assertIn("Image edited successfully", result)
+        self.assertEqual(context["images"][-1]["data"], b"EDITED")

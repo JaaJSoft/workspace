@@ -375,25 +375,33 @@ Do NOT use this to create an image from scratch — use generate_image instead."
         if not conversation_id:
             return "Error: no conversation context"
 
-        # Find the most recent image attachment in the conversation
-        from workspace.chat.models import MessageAttachment
+        # Prefer the image produced earlier in this same turn: it is not an
+        # attachment yet (attachments are created after the loop completes),
+        # so the DB lookup below would silently pick an older image.
+        turn_images = context.get("images") or []
+        if turn_images:
+            source_data = turn_images[-1]["data"]
+        else:
+            from workspace.chat.models import MessageAttachment
 
-        attachment = (
-            MessageAttachment.objects.filter(
-                message__conversation_id=conversation_id,
-                mime_type__startswith="image/",
+            attachment = (
+                MessageAttachment.objects.filter(
+                    message__conversation_id=conversation_id,
+                    mime_type__startswith="image/",
+                )
+                .order_by("-message__created_at", "-created_at")
+                .first()
             )
-            .order_by("-message__created_at", "-created_at")
-            .first()
-        )
-        if not attachment:
-            return "Error: no image found in the conversation to edit"
+            if not attachment:
+                return "Error: no image found in the conversation to edit"
 
-        try:
-            source_data = attachment.file.read()
-        except Exception:
-            logger.warning("Could not read attachment %s for editing", attachment.uuid)
-            return "Error: could not read the source image"
+            try:
+                source_data = attachment.file.read()
+            except Exception:
+                logger.warning(
+                    "Could not read attachment %s for editing", attachment.uuid
+                )
+                return "Error: could not read the source image"
 
         size = args.size
 

@@ -11,7 +11,7 @@ Several agent tasks often run in parallel on this machine (one git worktree each
 
 ## Start the server
 
-Chain port-pick + runserver in ONE shell call (shell state does not persist across tool calls) and run that call in the background:
+Chain port-pick + runserver in ONE shell call (shell state does not persist across tool calls) and run that call in the background. Pick the block matching the shell you are in - Windows sessions get PowerShell, Linux/macOS sessions (including cloud containers) get bash.
 
 ```powershell
 $port = uv run python -c "import socket; s=socket.socket(); s.bind(('127.0.0.1', 0)); print(s.getsockname()[1])"
@@ -19,15 +19,21 @@ $port = uv run python -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',
 uv run python manage.py runserver 127.0.0.1:$port --noreload
 ```
 
+```bash
+port=$(uv run python -c "import socket; s=socket.socket(); s.bind(('127.0.0.1', 0)); print(s.getsockname()[1])")
+echo "PORT=$port"
+uv run python manage.py runserver "127.0.0.1:$port" --noreload
+```
+
 - `bind(('127.0.0.1', 0))` asks the OS for an unused port, so it never collides. Same idiom as `free_port()` in `scripts/screenshots.py`.
-- `--noreload` keeps runserver single-process, so stopping the background task actually stops the server (the autoreloader child can outlive its parent on Windows).
+- `--noreload` keeps runserver single-process, so stopping the background task actually stops the server (the autoreloader child can outlive its parent on Windows, and survives as an orphan under a killed shell on Linux).
 - Read the `PORT=` line from the background task output; every later URL is `http://127.0.0.1:<port>/...`.
-- Readiness check from a later call: `Invoke-WebRequest http://127.0.0.1:<port>/health/live -UseBasicParsing`.
+- Readiness check from a later call: `Invoke-WebRequest http://127.0.0.1:<port>/health/live -UseBasicParsing` (PowerShell) or `curl -sf http://127.0.0.1:<port>/health/live` (bash).
 - Need data and login credentials first? Use the seeding-demo-data skill and chain its migrate/seed commands before the lines above, in the same call.
 
 ## When a port is busy - THE RULE
 
-**A busy port belongs to another live task's server. Never free a port by killing whatever holds it.** No `Stop-Process`, no `taskkill`, no `netstat`/`Get-NetTCPConnection` PID hunting. Pick another free port with the recipe above.
+**A busy port belongs to another live task's server. Never free a port by killing whatever holds it.** No `Stop-Process`, no `taskkill`, no `netstat`/`Get-NetTCPConnection` PID hunting on Windows; no `kill`/`pkill`, no `fuser -k`, no `lsof -ti:<port> | xargs kill`, no `ss`/`netstat`/`/proc` PID hunting on Linux/macOS. Pick another free port with the recipe above.
 
 Only exception: stopping a server YOU started in THIS session, via the background task id or the PID you recorded at launch - never via a port lookup.
 

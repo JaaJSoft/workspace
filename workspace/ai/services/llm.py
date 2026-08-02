@@ -68,7 +68,10 @@ def truncate_tool_result(text, max_len=2000):
     try:
         parsed = json.loads(text)
         if isinstance(parsed, dict) and parsed.get("type") == "image":
-            return json.dumps({"type": "image", "data": "[stripped]"})
+            stripped = {"type": "image", "data": "[stripped]"}
+            if parsed.get("text"):
+                stripped["text"] = parsed["text"]
+            return json.dumps(stripped)
     except json.JSONDecodeError, TypeError:
         # Not an image payload (most tool results are plain text JSON or raw
         # strings) - fall through to plain length-based truncation.
@@ -86,7 +89,7 @@ def build_tool_content(tool_result: str):
             mime = parsed.get("mime_type", "image/webp")
             data = parsed["data"]
             return [
-                {"type": "text", "text": "Here is the image:"},
+                {"type": "text", "text": parsed.get("text") or "Here is the image:"},
                 {
                     "type": "image_url",
                     "image_url": {"url": f"data:{mime};base64,{data}"},

@@ -228,6 +228,7 @@ class MessageListView(CacheControlMixin, APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        created_attachments = []
         try:
             with transaction.atomic():
                 message = Message.objects.create(
@@ -242,14 +243,16 @@ class MessageListView(CacheControlMixin, APIView):
                     from workspace.files.services.detection import detect_from_stream
 
                     detection = detect_from_stream(f)
-                    MessageAttachment.objects.create(
-                        message=message,
-                        file=f,
-                        original_name=f.name,
-                        mime_type=detection.mime_type,
-                        type=detection.label,
-                        category=detection.group or "unknown",
-                        size=f.size,
+                    created_attachments.append(
+                        MessageAttachment.objects.create(
+                            message=message,
+                            file=f,
+                            original_name=f.name,
+                            mime_type=detection.mime_type,
+                            type=detection.label,
+                            category=detection.group or "unknown",
+                            size=f.size,
+                        )
                     )
 
                 from django.core.files.base import File as DjangoFile
@@ -266,6 +269,7 @@ class MessageListView(CacheControlMixin, APIView):
                     with ws_file.content.open("rb") as f:
                         attachment.file = DjangoFile(f, name=ws_file.name)
                         attachment.save()
+                    created_attachments.append(attachment)
 
                 # Increment unread_count for other active members
                 ConversationMember.objects.filter(
@@ -285,6 +289,18 @@ class MessageListView(CacheControlMixin, APIView):
                 {"detail": "One or more workspace file contents are unavailable."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        if created_attachments and any(a.is_image for a in created_attachments):
+            has_bot_member = ConversationMember.objects.filter(
+                conversation_id=conversation_id,
+                left_at__isnull=True,
+                user__bot_profile__isnull=False,
+            ).exists()
+            if has_bot_member:
+                from workspace.ai.tasks.captions import enqueue_caption_if_image
+
+                for att in created_attachments:
+                    enqueue_caption_if_image(att)
 
         # Notify other members via SSE + push notifications
         conversation = Conversation.objects.get(pk=conversation_id)

@@ -87,6 +87,27 @@ class CancelScheduleParams(BaseModel):
     schedule_id: str = Field(description="UUID of the schedule to cancel.")
 
 
+def _bot_supports_vision(bot):
+    profile = getattr(bot, "bot_profile", None)
+    return bool(profile and profile.supports_vision)
+
+
+def _image_tool_payload(image_data, text):
+    """Tool result that lets a vision bot see the image it just produced."""
+    from workspace.files.services.detection import detect_from_bytes
+
+    detection = detect_from_bytes(image_data)
+    mime = detection.mime_type if detection.group == "image" else "image/png"
+    return json.dumps(
+        {
+            "type": "image",
+            "mime_type": mime,
+            "data": base64.b64encode(image_data).decode(),
+            "text": text,
+        }
+    )
+
+
 class CoreToolProvider(ToolProvider):
     @tool(badge_icon="👤", badge_label="Looked up profile")
     def get_current_user_info(self, args, user, bot, conversation_id, context):
@@ -353,7 +374,10 @@ Do NOT use this to modify an existing image — use edit_image instead."""
             }
         )
 
-        return f"Image generated successfully for: {prompt}"
+        confirmation = f"Image generated successfully for: {prompt}"
+        if _bot_supports_vision(bot):
+            return _image_tool_payload(image_data, confirmation)
+        return confirmation
 
     @tool(
         badge_icon="✏️",
@@ -375,25 +399,34 @@ Do NOT use this to create an image from scratch — use generate_image instead."
         if not conversation_id:
             return "Error: no conversation context"
 
-        # Find the most recent image attachment in the conversation
-        from workspace.chat.models import MessageAttachment
+        # Prefer the image produced earlier in this same turn: it is not an
+        # attachment yet (attachments are created after the loop completes),
+        # so the DB lookup below would silently pick an older image.
+        turn_images = context.get("images") or []
+        if turn_images:
+            source_data = turn_images[-1]["data"]
+        else:
+            from workspace.chat.models import MessageAttachment
 
-        attachment = (
-            MessageAttachment.objects.filter(
-                message__conversation_id=conversation_id,
-                mime_type__startswith="image/",
+            attachment = (
+                MessageAttachment.objects.filter(
+                    message__conversation_id=conversation_id,
+                    mime_type__startswith="image/",
+                )
+                .order_by("-message__created_at", "-created_at")
+                .first()
             )
-            .order_by("-message__created_at", "-created_at")
-            .first()
-        )
-        if not attachment:
-            return "Error: no image found in the conversation to edit"
+            if not attachment:
+                return "Error: no image found in the conversation to edit"
 
-        try:
-            source_data = attachment.file.read()
-        except Exception:
-            logger.warning("Could not read attachment %s for editing", attachment.uuid)
-            return "Error: could not read the source image"
+            try:
+                source_data = attachment.file.read()
+            except Exception:
+                logger.warning(
+                    "Could not read attachment %s for editing",
+                    scrub(str(attachment.uuid)),
+                )
+                return "Error: could not read the source image"
 
         size = args.size
 
@@ -410,7 +443,10 @@ Do NOT use this to create an image from scratch — use generate_image instead."
             }
         )
 
-        return f"Image edited successfully: {prompt}"
+        confirmation = f"Image edited successfully: {prompt}"
+        if _bot_supports_vision(bot):
+            return _image_tool_payload(image_data, confirmation)
+        return confirmation
 
 
 class ScheduleToolProvider(ToolProvider):

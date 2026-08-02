@@ -1,5 +1,7 @@
 import logging
 
+from django.conf import settings
+
 from workspace.ai.services.llm import (
     build_tool_content,
     call_llm,
@@ -15,7 +17,8 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
     """Run the tool call loop and return (result, tool_context, rounds, tool_data).
 
     Calls the AI model, executes any tool calls it returns, and re-calls
-    until we get a plain text response (max 5 rounds).  *rounds* is a list
+    until we get a plain text response (capped at settings.AI_MAX_TOOL_ROUNDS
+    rounds).  *rounds* is a list
     of dicts capturing each LLM response and the tool executions that
     followed it, suitable for storage in ``AITask.raw_messages``.
 
@@ -31,7 +34,7 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
     tool_context = {}
     rounds = []
     tool_data = []  # compact history for Message.tool_data
-    max_tool_rounds = 5
+    max_tool_rounds = settings.AI_MAX_TOOL_ROUNDS
     for _ in range(max_tool_rounds):
         # Fallback: parse tool calls from text if model didn't use native function calling
         if not result.get("tool_calls") and result.get("content"):

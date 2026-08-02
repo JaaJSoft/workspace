@@ -2,11 +2,59 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from workspace.ai.services.tool_loop import run_tool_loop
 
 User = get_user_model()
+
+
+class RoundCapTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="dave", email="d@test.com", password="pw"
+        )
+        self.bot = User.objects.create_user(
+            username="bot3", email="b3@test.com", password="pw"
+        )
+
+    @override_settings(AI_MAX_TOOL_ROUNDS=2)
+    @patch("workspace.ai.services.tool_loop.call_llm")
+    @patch("workspace.ai.services.tool_loop.build_tool_content", return_value="ok")
+    def test_loop_stops_at_configured_round_cap(self, mock_build, mock_call_llm):
+        tool_call = SimpleNamespace(
+            id="call_1",
+            type="function",
+            function=SimpleNamespace(name="search", arguments="{}"),
+        )
+        msg = SimpleNamespace(role="assistant", content="", tool_calls=[tool_call])
+        looping_result = {
+            "tool_calls": [tool_call],
+            "content": "",
+            "message": msg,
+            "model": "x",
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+        }
+        mock_call_llm.return_value = looping_result
+
+        with patch("workspace.ai.tool_registry.tool_registry") as reg:
+            reg.get_definitions.return_value = []
+            reg.execute.return_value = "ok"
+            result, ctx, rounds, td = run_tool_loop(
+                messages=[{"role": "user", "content": "go"}],
+                model="x",
+                human_user=self.user,
+                bot_user=self.bot,
+                conversation_id=None,
+            )
+
+        # 1 initial call + one re-call per allowed round
+        self.assertEqual(mock_call_llm.call_count, 3)
+        self.assertEqual(reg.execute.call_count, 2)
+        # The final entry is the captured last response, not a tool round
+        self.assertEqual(len(rounds), 3)
+        self.assertNotIn("tool_executions", rounds[-1])
 
 
 class StopAfterRoundTests(TestCase):

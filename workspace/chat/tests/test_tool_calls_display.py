@@ -1,11 +1,19 @@
 import json
+from importlib import import_module
 from unittest.mock import patch
 
+from django.apps import apps as django_apps
+from django.contrib.auth import get_user_model
 from django.template.loader import render_to_string
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
 from workspace.ai.tool_registry import tool_registry
+from workspace.chat.models import Conversation, Message
 from workspace.chat.ui.templatetags.chat_tags import render_tool_calls
+
+migration = import_module(
+    "workspace.chat.migrations.0023_strip_tool_badges_from_body_html"
+)
 
 
 class FakeMessage:
@@ -171,3 +179,66 @@ class ToolCallsPartialTests(SimpleTestCase):
         self.assertIn("query", html)
         self.assertIn("hello", html)
         self.assertIn("ok", html)
+
+
+BADGE_BLOCK = (
+    '\n<div class="mt-2 text-xs text-base-content/40 flex items-center gap-1 flex-wrap">'
+    "<span>🔍</span> Searched the web: hello</div>"
+)
+
+
+class StripToolBadgesMigrationTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="alice", email="a@test.com", password="pw"
+        )
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+
+    def _message(self, body_html, tool_data):
+        return Message.objects.create(
+            conversation=self.conv,
+            author=self.user,
+            body="hi",
+            body_html=body_html,
+            tool_data=tool_data,
+        )
+
+    def test_badge_block_stripped_when_tool_data_is_list(self):
+        msg = self._message("<p>hi</p>" + BADGE_BLOCK, [make_round()])
+        migration.strip_tool_badges(django_apps, None)
+        msg.refresh_from_db()
+        self.assertEqual(msg.body_html, "<p>hi</p>")
+
+    def test_multiline_badge_variant_stripped(self):
+        block = (
+            '\n<div class="mt-2 text-xs text-base-content/40 flex flex-col gap-0.5">'
+            '<div class="flex items-center gap-1"><span>🎨</span> Generated image: x</div>'
+            "</div>"
+        )
+        msg = self._message("<p>hi</p>" + block, [make_round()])
+        migration.strip_tool_badges(django_apps, None)
+        msg.refresh_from_db()
+        self.assertEqual(msg.body_html, "<p>hi</p>")
+
+    def test_dict_tool_data_untouched(self):
+        html = "<p>call</p>" + BADGE_BLOCK
+        msg = self._message(html, {"type": "call", "state": "ended"})
+        migration.strip_tool_badges(django_apps, None)
+        msg.refresh_from_db()
+        self.assertEqual(msg.body_html, html)
+
+    def test_null_tool_data_untouched(self):
+        html = "<p>old</p>" + BADGE_BLOCK
+        msg = self._message(html, None)
+        migration.strip_tool_badges(django_apps, None)
+        msg.refresh_from_db()
+        self.assertEqual(msg.body_html, html)
+
+    def test_no_marker_untouched(self):
+        msg = self._message("<p>plain</p>", [make_round()])
+        migration.strip_tool_badges(django_apps, None)
+        msg.refresh_from_db()
+        self.assertEqual(msg.body_html, "<p>plain</p>")

@@ -48,8 +48,9 @@ uv run python scripts/seed_demo.py --users 3 --min-files 2 --max-files 5 --min-m
 File blobs land in `MEDIA_ROOT`, which defaults to the repo root, so redirect BOTH the DB and the media directory:
 
 ```powershell
-$tmp = "$env:TEMP\workspace-demo"
+$tmp = Join-Path $env:TEMP "workspace-demo-$((New-Guid).Guid.Substring(0,8))"
 New-Item -ItemType Directory -Force $tmp | Out-Null
+"TMP=$tmp"
 $env:DATABASE_URL = "sqlite:///$($tmp -replace '\\','/')/db.sqlite3"
 $env:MEDIA_ROOT = $tmp
 uv run python manage.py migrate
@@ -60,8 +61,8 @@ uv run python manage.py runserver 127.0.0.1:$port --noreload
 ```
 
 ```bash
-tmp="${TMPDIR:-/tmp}/workspace-demo"
-mkdir -p "$tmp"
+tmp=$(mktemp -d -t workspace-demo-XXXXXX)
+echo "TMP=$tmp"
 export DATABASE_URL="sqlite:///$tmp/db.sqlite3"
 export MEDIA_ROOT="$tmp"
 uv run python manage.py migrate
@@ -71,9 +72,11 @@ echo "PORT=$port"
 uv run python manage.py runserver "127.0.0.1:$port" --noreload
 ```
 
-`$tmp` is absolute on Linux/macOS, so the URL ends up with four slashes (`sqlite:////tmp/workspace-demo/db.sqlite3`) - that is the correct form for an absolute SQLite path, not a typo. The Windows form has three because the drive letter follows.
+The directory carries a random suffix so that parallel agent tasks each get their own DB and media root - a fixed name would have them seeding and serving the same SQLite file. Delete it when done; nothing else cleans it up.
 
-Env vars do not persist across shell tool calls: chain migrate/seed/runserver in the same call, or re-set the vars in each call.
+`$tmp` is absolute on Linux/macOS, so the URL ends up with four slashes (`sqlite:////tmp/workspace-demo-a1b2c3/db.sqlite3`) - that is the correct form for an absolute SQLite path, not a typo. The Windows form has three because the drive letter follows.
+
+Env vars do not persist across shell tool calls: chain migrate/seed/runserver in the same call, or re-set the vars in each call - read the `TMP=` line from the first call's output and re-export from it, since the suffix is new on every run.
 
 ## Flag reference
 

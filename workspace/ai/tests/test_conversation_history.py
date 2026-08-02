@@ -184,6 +184,16 @@ class VisualWindowTests(TestCase):
         self.assertEqual(len([e for e in history if image_parts(e)]), 1)
         self.assertIn("[image: first.png]", str(history))
 
+    def test_unreadable_in_window_image_degrades_to_caption(self):
+        m = Message.objects.create(
+            conversation=self.conv, author=self.user, body="look"
+        )
+        att = attach_image(m, "pic.png", ai_description="A red square.")
+        with patch.object(type(att.file), "read", side_effect=OSError("gone")):
+            history = self._history()
+        self.assertEqual([e for e in history if image_parts(e)], [])
+        self.assertIn("[image: pic.png - A red square.]", str(history))
+
     def test_non_vision_bot_unchanged(self):
         self.bot_profile.supports_vision = False
         self.bot_profile.save()

@@ -153,7 +153,9 @@ def render_tool_calls(message):
         if not isinstance(results, list):
             results = []
         results_by_id = {
-            r.get("tool_call_id"): r.get("content") or ""
+            r.get("tool_call_id"): r.get("content")
+            if isinstance(r.get("content"), str)
+            else ""
             for r in results
             if isinstance(r, dict)
         }
@@ -185,7 +187,7 @@ def render_tool_calls(message):
                     "args": _display_args(parsed),
                     "args_raw": raw_args if parsed is None else "",
                     "result": _pretty_result(result),
-                    "is_error": result.startswith(("Error", "Unknown tool")),
+                    "is_error": result.startswith(("Error:", "Unknown tool:")),
                 }
             )
     return {"calls": calls}

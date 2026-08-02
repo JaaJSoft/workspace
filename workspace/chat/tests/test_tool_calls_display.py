@@ -115,6 +115,22 @@ class RenderToolCallsTagTests(SimpleTestCase):
             call = ctx["calls"][0]
             self.assertTrue(call["is_error"], content)
             self.assertEqual(call["result"], content)
+        # Legitimate result starting with "Error" without colon should not be flagged
+        ctx = render_tool_calls(
+            FakeMessage([make_round(result_content="Error handling guide")])
+        )
+        call = ctx["calls"][0]
+        self.assertFalse(call["is_error"])
+        self.assertEqual(call["result"], "Error handling guide")
+
+    def test_non_string_result_content_is_treated_as_empty(self):
+        # Non-string result content (dict) should not crash and should render as empty
+        rnd = make_round()
+        rnd["results"] = [{"tool_call_id": "call_1", "content": {"nested": True}}]
+        ctx = render_tool_calls(FakeMessage([rnd]))
+        call = ctx["calls"][0]
+        self.assertEqual(call["result"], "")
+        self.assertFalse(call["is_error"])
 
     def test_multiple_rounds_flatten_in_order(self):
         rounds = [

@@ -83,16 +83,21 @@ def _collect_media(msg, is_bot, in_window, allowed_att_uuids, att_cache):
     return media_parts, video_descriptions, caption_notes
 
 
-def _assistant_images_message(media_parts):
+def _assistant_images_message(media_parts, caption_notes=()):
     # image_url parts are not universally accepted in assistant-role messages,
     # so the assistant's own images ride in a follow-up user message (same
-    # role rationale as the video descriptions below).
+    # role rationale as the video descriptions below). Caption notes ride here
+    # too: an "[image: ...]" marker in an assistant turn reads as the bot's own
+    # writing style and gets imitated in later replies.
     return {
         "role": "user",
         "content": [
             {
                 "type": "text",
-                "text": "[Images sent by the assistant in the message above]",
+                "text": "\n".join(
+                    ["[Images sent by the assistant in the message above]"]
+                    + list(caption_notes)
+                ),
             },
             *media_parts,
         ],
@@ -165,7 +170,7 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
                 msg, is_bot, in_window, allowed_att_uuids, _att_cache
             )
         body_text = body
-        if caption_notes:
+        if caption_notes and not is_bot:
             body_text = (body + "\n" if body else "") + "\n".join(caption_notes)
 
         # Reconstruct tool call history for bot messages
@@ -191,8 +196,8 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
                         }
                     )
             history.append({"role": "assistant", "content": body_text})
-            if media_parts:
-                history.append(_assistant_images_message(media_parts))
+            if media_parts or caption_notes:
+                history.append(_assistant_images_message(media_parts, caption_notes))
             continue
 
         if video_descriptions:
@@ -203,8 +208,8 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
 
         if is_bot:
             history.append({"role": "assistant", "content": body_text})
-            if media_parts:
-                history.append(_assistant_images_message(media_parts))
+            if media_parts or caption_notes:
+                history.append(_assistant_images_message(media_parts, caption_notes))
         elif media_parts:
             content = []
             if body_text:

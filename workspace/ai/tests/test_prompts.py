@@ -72,6 +72,14 @@ class BuildChatMessagesMemoryTests(TestCase):
         self.assertEqual(msgs[-1]["role"], "system")
         self.assertIn("<context>", msgs[-1]["content"])
 
+    def test_image_placeholder_guardrail_present(self):
+        # Without this framing the model imitates the "[image: ...]"
+        # markers it sees in past turns and emits them in its replies.
+        msgs = build_chat_messages("System prompt", [])
+        system = msgs[0]["content"]
+        self.assertIn("[image:", system)
+        self.assertIn("Never write these markers yourself", system)
+
     def test_identity_fields_are_sanitized_against_injection(self):
         # `first_name` has no Django-level anti-newline validator, so a
         # crafted name with embedded newlines or control characters

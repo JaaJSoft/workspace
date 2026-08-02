@@ -423,7 +423,8 @@ Do NOT use this to create an image from scratch — use generate_image instead."
                 source_data = attachment.file.read()
             except Exception:
                 logger.warning(
-                    "Could not read attachment %s for editing", attachment.uuid
+                    "Could not read attachment %s for editing",
+                    scrub(str(attachment.uuid)),
                 )
                 return "Error: could not read the source image"
 

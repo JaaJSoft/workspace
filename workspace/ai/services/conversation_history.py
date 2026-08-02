@@ -140,9 +140,8 @@ def build_conversation_history(conversation_id, bot_profile, human_user):
     if vision:
         for msg in msgs_to_use:
             _att_cache[msg.uuid] = list(msg.attachments.all())
+        # Only defined (and only read) when vision is on.
         pixel_msg_uuids, allowed_att_uuids = _visual_window(msgs_to_use, _att_cache)
-    else:
-        pixel_msg_uuids, allowed_att_uuids = [], set()
 
     _user_tz = get_user_timezone(human_user) if human_user else None
 

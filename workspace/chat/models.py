@@ -232,6 +232,7 @@ class MessageAttachment(models.Model):
     type = models.CharField(max_length=50, default="unknown", db_index=True)
     category = models.CharField(max_length=20, default="unknown", db_index=True)
     size = models.PositiveBigIntegerField()
+    ai_description = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

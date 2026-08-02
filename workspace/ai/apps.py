@@ -45,6 +45,7 @@ class AIConfig(AppConfig):
         # via the @shared_task decorators evaluated at import time.
         from workspace.ai.tasks import (  # noqa: F401
             calendar,
+            captions,
             chat,
             editor,
             housekeeping,

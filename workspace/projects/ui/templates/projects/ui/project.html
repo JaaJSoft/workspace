@@ -21,6 +21,7 @@ x-data="projectBoard({
   initialTask: '{{ panel_task.uuid }}',
 })"
 @popstate.window="onPopState()"
+@keydown.window="handleKeydown($event)"
 @ajax:after="ensureTaskParam()"
 @project-label-created.window="onLabelCreated($event.detail.label)"
 {% endblock %}
@@ -109,6 +110,13 @@ x-data="projectBoard({
       </ul>
     </div>
 
+    <!-- Help button -->
+    <div class="px-3 pb-2">
+      <ul class="menu p-0">
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="accent" onclick="document.getElementById('projects-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" %}
+      </ul>
+    </div>
+
     <!-- Collapse toggle (desktop only) -->
     <div class="border-t border-base-300 py-4 px-3">
       <ul class="menu p-0 hidden lg:block">
@@ -141,6 +149,7 @@ x-data="projectBoard({
 </div>
 
 {% include "projects/ui/partials/task_modal.html" %}
+{% include "projects/ui/partials/help_dialog.html" %}
 
 <dialog id="new-project-dialog" class="modal">
   <div class="modal-box max-w-sm"

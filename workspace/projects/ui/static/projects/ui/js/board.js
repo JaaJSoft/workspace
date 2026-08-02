@@ -272,6 +272,18 @@ function projectBoard(config) {
       }
     },
 
+    handleKeydown(e) {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+      if (e.target.isContentEditable) return;
+      if (document.querySelector('dialog[open]')) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === '?') {
+        e.preventDefault();
+        const dlg = document.getElementById('projects-help-dialog');
+        if (dlg) dlg.showModal();
+      }
+    },
+
     headers() {
       return {
         'Content-Type': 'application/json',

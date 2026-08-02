@@ -1024,3 +1024,44 @@ test('onPopState recognizes the tasks view', () => {
   board.onPopState();
   assert.equal(board.currentView, 'tasks');
 });
+
+function keydownBoard() {
+  ctx.localStorage = { getItem: () => null, setItem: () => {} };
+  return ctx.projectBoard({
+    apiBase: '/api',
+    projectBase: '/projects/p',
+    writable: true,
+  });
+}
+
+function helpKeyEvent(overrides) {
+  return Object.assign(
+    { key: '?', target: { tagName: 'DIV' }, preventDefault: () => {} },
+    overrides
+  );
+}
+
+test('handleKeydown opens the help dialog on "?"', () => {
+  const shown = [];
+  ctx.document = {
+    querySelector: () => null,
+    getElementById: (id) => ({ showModal: () => shown.push(id) }),
+  };
+  keydownBoard().handleKeydown(helpKeyEvent({}));
+  assert.deepStrictEqual(shown, ['projects-help-dialog']);
+});
+
+test('handleKeydown ignores "?" while typing or with a dialog open', () => {
+  const shown = [];
+  ctx.document = {
+    querySelector: () => null,
+    getElementById: (id) => ({ showModal: () => shown.push(id) }),
+  };
+  const board = keydownBoard();
+  board.handleKeydown(helpKeyEvent({ target: { tagName: 'INPUT' } }));
+  board.handleKeydown(helpKeyEvent({ target: { tagName: 'DIV', isContentEditable: true } }));
+  board.handleKeydown(helpKeyEvent({ ctrlKey: true }));
+  ctx.document.querySelector = () => ({ open: true });
+  board.handleKeydown(helpKeyEvent({}));
+  assert.deepStrictEqual(shown, []);
+});

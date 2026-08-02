@@ -261,7 +261,7 @@ class EditImageSameTurnTests(TestCase):
         )
 
     def test_edit_uses_current_turn_image_over_db(self):
-        from workspace.ai.tools import EditImageParams, ImageToolProvider
+        from workspace.ai.tools import EditImageParams
 
         provider = ImageToolProvider()
         args = EditImageParams(prompt="make it darker")

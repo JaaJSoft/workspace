@@ -30,9 +30,9 @@ def _image_note(att):
     next turn has it (the task is idempotent and exits early once filled).
     """
     if not att.ai_description:
-        from workspace.ai.tasks.captions import generate_attachment_caption
+        from workspace.ai.tasks.captions import enqueue_caption_retry
 
-        generate_attachment_caption.delay(str(att.uuid))
+        enqueue_caption_retry(att)
         return f"[image: {att.original_name}]"
     return f"[image: {att.original_name} - {att.ai_description}]"
 

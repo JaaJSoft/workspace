@@ -2,6 +2,7 @@ import base64
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
@@ -113,6 +114,9 @@ class VisualWindowTests(TestCase):
             kind=Conversation.Kind.DM, created_by=self.user
         )
 
+    def tearDown(self):
+        cache.clear()
+
     def _history(self):
         history, _ = build_conversation_history(
             self.conv.pk, self.bot_profile, self.user
@@ -150,6 +154,7 @@ class VisualWindowTests(TestCase):
         self.assertIn("[image: old.png - A sunset over the sea.]", flat)
         self.assertEqual(len([e for e in history if image_parts(e)]), 2)
 
+    @override_settings(AI_API_KEY="k")
     def test_missing_caption_falls_back_and_reenqueues(self):
         old = Message.objects.create(
             conversation=self.conv, author=self.user, body="old"
@@ -167,7 +172,7 @@ class VisualWindowTests(TestCase):
         self.assertIn("[image: old.png]", str(history))
         mock_delay.assert_called_once_with(str(att.uuid))
 
-    @override_settings(AI_VISION_MAX_IMAGES=1)
+    @override_settings(AI_VISION_MAX_IMAGES=1, AI_API_KEY="k")
     def test_image_cap_prefers_newest(self):
         m1 = Message.objects.create(
             conversation=self.conv, author=self.user, body="first"

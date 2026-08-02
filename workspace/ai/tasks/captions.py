@@ -10,6 +10,7 @@ import logging
 
 from celery import shared_task
 from django.conf import settings
+from django.core.cache import cache
 
 from workspace.common.logging import scrub
 
@@ -69,5 +70,14 @@ def enqueue_caption_if_image(attachment):
     if not settings.AI_API_KEY:
         return
     if not attachment.is_image:
+        return
+    generate_attachment_caption.delay(str(attachment.uuid))
+
+
+def enqueue_caption_retry(attachment):
+    """History-build re-enqueue, throttled to one attempt per attachment per hour."""
+    if not settings.AI_API_KEY or not attachment.is_image:
+        return
+    if not cache.add(f"ai:caption-enqueued:{attachment.uuid}", 1, timeout=3600):
         return
     generate_attachment_caption.delay(str(attachment.uuid))

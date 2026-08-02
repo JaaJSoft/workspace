@@ -2,11 +2,13 @@ import base64
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
 from workspace.ai.tasks.captions import (
     enqueue_caption_if_image,
+    enqueue_caption_retry,
     generate_attachment_caption,
 )
 from workspace.chat.models import Conversation, Message, MessageAttachment
@@ -120,4 +122,57 @@ class EnqueueHelperTests(TestCase):
             "workspace.ai.tasks.captions.generate_attachment_caption.delay"
         ) as mock_delay:
             enqueue_caption_if_image(att)
+        mock_delay.assert_not_called()
+
+
+class EnqueueRetryHelperTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="retryuser", email="retry@test.com", password="pw"
+        )
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        self.msg = Message.objects.create(
+            conversation=self.conv, author=self.user, body="x"
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    @override_settings(AI_API_KEY="k")
+    def test_enqueues_once(self):
+        att = make_attachment(self.msg)
+        with patch(
+            "workspace.ai.tasks.captions.generate_attachment_caption.delay"
+        ) as mock_delay:
+            enqueue_caption_retry(att)
+        mock_delay.assert_called_once_with(str(att.uuid))
+
+    @override_settings(AI_API_KEY="k")
+    def test_second_call_within_ttl_does_not_enqueue(self):
+        att = make_attachment(self.msg)
+        with patch(
+            "workspace.ai.tasks.captions.generate_attachment_caption.delay"
+        ) as mock_delay:
+            enqueue_caption_retry(att)
+            enqueue_caption_retry(att)
+        mock_delay.assert_called_once_with(str(att.uuid))
+
+    @override_settings(AI_API_KEY="")
+    def test_skips_when_ai_not_configured(self):
+        att = make_attachment(self.msg)
+        with patch(
+            "workspace.ai.tasks.captions.generate_attachment_caption.delay"
+        ) as mock_delay:
+            enqueue_caption_retry(att)
+        mock_delay.assert_not_called()
+
+    @override_settings(AI_API_KEY="k")
+    def test_skips_non_image(self):
+        att = make_attachment(self.msg, name="doc.pdf", category="document")
+        with patch(
+            "workspace.ai.tasks.captions.generate_attachment_caption.delay"
+        ) as mock_delay:
+            enqueue_caption_retry(att)
         mock_delay.assert_not_called()

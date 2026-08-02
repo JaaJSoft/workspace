@@ -56,6 +56,18 @@ def post_bot_message(
     body = clean_llm_content(result["content"])
     body_html = render_message_body(body)
 
+    # Reasoning of the final completion is not captured by run_tool_loop,
+    # which only records rounds that executed tools. Append it as a tool-less
+    # round so the UI timeline can show it. Skip when it duplicates the last
+    # round's thinking: on the stop_after_round path the posted result IS the
+    # last tool round.
+    thinking = (result.get("thinking") or "").strip()
+    if thinking and not (tool_data and tool_data[-1].get("thinking") == thinking):
+        tool_data = [
+            *(tool_data or []),
+            {"thinking": thinking, "tool_calls": [], "results": []},
+        ]
+
     bot_message = Message.objects.create(
         conversation_id=conversation.pk,
         author=bot_user,

@@ -147,3 +147,84 @@ class PostBotMessageImageTypingTests(TestCase):
         self.assertEqual(att.category, "unknown")
         self.assertEqual(att.mime_type, "image/png")
         self.assertTrue(att.is_image)
+
+
+class PostBotMessageThinkingTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="dave", email="d@test.com", password="pw"
+        )
+        self.bot = User.objects.create_user(
+            username="bot3", email="b3@test.com", password="pw"
+        )
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.user)
+        ConversationMember.objects.create(conversation=self.conv, user=self.bot)
+        self.ai_task = AITask.objects.create(
+            owner=self.user, task_type=AITask.TaskType.CHAT
+        )
+
+    def _result(self, thinking=""):
+        return {
+            "content": "Hello",
+            "thinking": thinking,
+            "model": "test",
+            "prompt_tokens": 1,
+            "completion_tokens": 1,
+        }
+
+    def _post(self, result, tool_data=None):
+        _, msg = post_bot_message(
+            conversation=self.conv,
+            bot_user=self.bot,
+            result=result,
+            tool_context={},
+            ai_task=self.ai_task,
+            tool_data=tool_data,
+        )
+        return msg
+
+    def _round(self, thinking):
+        return {
+            "assistant_content": "",
+            "thinking": thinking,
+            "tool_calls": [
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "t", "arguments": "{}"},
+                }
+            ],
+            "results": [{"tool_call_id": "c1", "content": "ok"}],
+        }
+
+    def test_final_thinking_creates_tool_data_when_none(self):
+        msg = self._post(self._result(thinking="final reasoning"))
+        self.assertEqual(
+            msg.tool_data,
+            [{"thinking": "final reasoning", "tool_calls": [], "results": []}],
+        )
+
+    def test_final_thinking_appends_to_existing_rounds(self):
+        msg = self._post(
+            self._result(thinking="final reasoning"),
+            tool_data=[self._round("round thinking")],
+        )
+        self.assertEqual(len(msg.tool_data), 2)
+        self.assertEqual(msg.tool_data[-1]["thinking"], "final reasoning")
+        self.assertEqual(msg.tool_data[-1]["tool_calls"], [])
+
+    def test_no_thinking_leaves_tool_data_untouched(self):
+        msg = self._post(self._result(thinking=""))
+        self.assertIsNone(msg.tool_data)
+
+    def test_duplicate_of_last_round_thinking_is_not_appended(self):
+        # stop_after_round case: the posted result IS the last tool round,
+        # whose thinking is already persisted in tool_data.
+        msg = self._post(
+            self._result(thinking="same thought"),
+            tool_data=[self._round("same thought")],
+        )
+        self.assertEqual(len(msg.tool_data), 1)

@@ -420,6 +420,24 @@ class FolderResourceTests(TestCase):
         self.folder.refresh_from_db()
         self.assertIsNone(self.folder.deleted_at)
 
+    def test_copy_move_single_creates_empty_collection(self):
+        """WsgiDAV's copy loop visits every descendant itself, so the
+        collection hook must create the destination folder WITHOUT members
+        (recursing here duplicates every child)."""
+        FileService.create_file(
+            self.user, "child.txt", parent=self.folder, mime_type="text/plain"
+        )
+        target = FileService.create_folder(self.user, "Dest")
+        self.res.copy_move_single("/Dest/DocsCopy", is_move=False)
+        copy = File.objects.get(
+            owner=self.user,
+            name="DocsCopy",
+            parent=target,
+            node_type=File.NodeType.FOLDER,
+            deleted_at__isnull=True,
+        )
+        self.assertFalse(File.objects.filter(parent=copy).exists())
+
 
 class FolderResourceMoveStorageTests(TestCase):
     """Tests for FolderResource.move_recursive against real FileSystemStorage.
@@ -603,6 +621,65 @@ class FileResourceTests(TestCase):
         # New file (size=None) should be hard-deleted
         self.assertFalse(File.objects.filter(pk=new.pk).exists())
 
+    def test_copy_move_single_resolves_parent_despite_double_slash(self):
+        """WsgiDAV normalizes collection destinations with a trailing slash,
+        so child destinations arrive as '/Dest//name' during folder copies.
+        The empty segment must not break parent resolution (the copy would
+        silently land at the root)."""
+        target = FileService.create_folder(self.user, "Dest")
+        self.res.copy_move_single("/Dest//copy.txt", is_move=False)
+        copy = File.objects.get(
+            owner=self.user, name="copy.txt", deleted_at__isnull=True
+        )
+        self.assertEqual(copy.parent, target)
+
+    def test_begin_write_preserves_current_blob(self):
+        """An in-progress overwrite must not touch the current blob: a
+        concurrent GET (or a failed upload) would otherwise see truncated
+        content."""
+        buf = self.res.begin_write()
+        buf.write(b"incoming data")
+        with self.file.content.storage.open(self.file.content.name, "rb") as f:
+            self.assertEqual(f.read(), b"hello world")
+        buf.abort()
+
+    def test_end_write_with_errors_preserves_existing_content(self):
+        """A failed overwrite PUT must leave the previous content intact."""
+        buf = self.res.begin_write()
+        buf.write(b"partial upload")
+        buf.close()
+        self.res.end_write(with_errors=True)
+        self.file.refresh_from_db()
+        with self.file.content.storage.open(self.file.content.name, "rb") as f:
+            self.assertEqual(f.read(), b"hello world")
+
+    def test_rejected_partial_overwrite_preserves_existing_content(self):
+        """An overwrite rejected as incomplete (Content-Length mismatch)
+        must leave the previous content intact."""
+        from wsgidav.dav_error import DAVError
+
+        env = _make_environ(user=self.user, CONTENT_LENGTH="100")
+        res = FileResource("/test.txt", env, self.file)
+        buf = res.begin_write()
+        buf.write(b"x" * 10)
+        buf.close()
+        with self.assertRaises(DAVError):
+            res.end_write(with_errors=False)
+        self.file.refresh_from_db()
+        with self.file.content.storage.open(self.file.content.name, "rb") as f:
+            self.assertEqual(f.read(), b"hello world")
+
+    def test_successful_overwrite_leaves_single_file_on_disk(self):
+        """After a completed overwrite no temp/partial files may remain."""
+        buf = self.res.begin_write()
+        buf.write(b"new content")
+        buf.close()
+        self.res.end_write(with_errors=False)
+        on_disk = []
+        for _root, _dirs, names in os.walk(self._tmpdir):
+            on_disk.extend(names)
+        self.assertEqual(on_disk, ["test.txt"])
+
     def test_end_write_accepts_complete_upload(self):
         """Complete transfer (size == Content-Length) must save."""
         env = _make_environ(user=self.user, CONTENT_LENGTH="5")
@@ -756,34 +833,6 @@ class CopyAsTests(TestCase):
         copy = _copy_as(orig, None, self.user, "empty_copy.txt")
         self.assertEqual(copy.name, "empty_copy.txt")
 
-    def test_copy_folder_recursive(self):
-        folder = FileService.create_folder(self.user, "Src")
-        content = ContentFile(b"child", name="c.txt")
-        FileService.create_file(
-            self.user, "c.txt", parent=folder, content=content, mime_type="text/plain"
-        )
-        sub = FileService.create_folder(self.user, "Sub", parent=folder)
-        FileService.create_file(
-            self.user,
-            "deep.txt",
-            parent=sub,
-            content=ContentFile(b"deep", name="deep.txt"),
-            mime_type="text/plain",
-        )
-
-        copy = _copy_as(folder, None, self.user, "Dst")
-        self.assertEqual(copy.name, "Dst")
-        children = File.objects.filter(parent=copy, deleted_at__isnull=True)
-        self.assertEqual(children.count(), 2)
-        child_names = set(children.values_list("name", flat=True))
-        self.assertIn("c.txt", child_names)
-        self.assertIn("Sub", child_names)
-        # Check grandchild
-        sub_copy = children.get(node_type=File.NodeType.FOLDER)
-        grandchildren = File.objects.filter(parent=sub_copy, deleted_at__isnull=True)
-        self.assertEqual(grandchildren.count(), 1)
-        self.assertEqual(grandchildren.first().name, "deep.txt")
-
     def test_copy_into_folder(self):
         target = FileService.create_folder(self.user, "Target")
         content = ContentFile(b"x", name="x.txt")
@@ -846,10 +895,13 @@ class StreamingWriteBufferTests(TestCase):
         buf.write(b"partial data")
         buf.abort()
         self.assertFalse(os.path.exists(path))
+        self.assertEqual(os.listdir(self._tmpdir), [])  # no temp leftovers
 
     def test_abort_then_missing_file_is_safe(self):
         buf, path = self._make_buf()
-        os.unlink(path)  # already gone
+        os.close(buf._fd)
+        buf._fd = None
+        os.unlink(buf._temp_path)  # in-progress file already gone
         buf.abort()  # should not raise
 
 
@@ -932,9 +984,12 @@ def _basic_auth_header(username, password):
     return f"Basic {cred}"
 
 
-@override_settings(DEFAULT_FILE_STORAGE="django.core.files.storage.InMemoryStorage")
 class WebDAVIntegrationTests(TestCase):
-    """End-to-end tests hitting the WsgiDAV app through the WSGI dispatch."""
+    """End-to-end tests hitting the WsgiDAV app through the WSGI dispatch.
+
+    Uses a real temporary FileSystemStorage (via MEDIA_ROOT override)
+    because ``_StreamingWriteBuffer`` needs ``storage.path()``.
+    """
 
     @classmethod
     def setUpClass(cls):
@@ -944,15 +999,31 @@ class WebDAVIntegrationTests(TestCase):
         cls._app = create_webdav_app()
 
     def setUp(self):
+        import tempfile
+
+        self._tmpdir = tempfile.mkdtemp()
+        self._media_override = override_settings(MEDIA_ROOT=self._tmpdir)
+        self._media_override.enable()
+
         self.user = User.objects.create_user(
             username="davint", email="int@test.com", password="pass123"
         )
         self.auth = _basic_auth_header("davint", "pass123")
 
+    def tearDown(self):
+        import shutil
+
+        self._media_override.disable()
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
+
     # ── helpers ──
 
-    def _request(self, method, path, body=b"", headers=None):
-        """Send a raw WSGI request to the WebDAV app and return (status, headers, body)."""
+    def _request(self, method, path, body=b"", headers=None, content_length=None):
+        """Send a raw WSGI request to the WebDAV app and return (status, headers, body).
+
+        ``content_length`` overrides the announced Content-Length to
+        simulate interrupted transfers (body shorter than announced).
+        """
         env = {
             "REQUEST_METHOD": method,
             "SCRIPT_NAME": "/dav",
@@ -964,7 +1035,9 @@ class WebDAVIntegrationTests(TestCase):
             "wsgi.input": io.BytesIO(body),
             "wsgi.errors": io.BytesIO(),
             "wsgi.url_scheme": "http",
-            "CONTENT_LENGTH": str(len(body)),
+            "CONTENT_LENGTH": (
+                str(len(body)) if content_length is None else content_length
+            ),
         }
         if headers:
             for key, value in headers.items():
@@ -1514,6 +1587,53 @@ class WebDAVIntegrationTests(TestCase):
         dup.content.open("rb")
         self.assertEqual(dup.content.read(), b"copy me")
         dup.content.close()
+
+    def test_copy_folder_does_not_duplicate_children_at_root(self):
+        """COPY of a folder must reproduce the tree at the destination and
+        nowhere else. WsgiDAV calls copy_move_single on the collection AND
+        on each descendant (with a '/dst//child' destination), which used
+        to leave stray copies of every child at the root."""
+        self._request("MKCOL", "/src")
+        self._request("PUT", "/src/a.txt", body=b"alpha")
+        self._request("PUT", "/src/b.txt", body=b"beta")
+
+        code, _, _ = self._request(
+            "COPY",
+            "/src",
+            headers={
+                "Destination": "http://testserver/dav/dst",
+                "Depth": "infinity",
+            },
+        )
+        self.assertIn(code, (201, 204))
+
+        paths = sorted(
+            File.objects.filter(owner=self.user, deleted_at__isnull=True).values_list(
+                "path", flat=True
+            )
+        )
+        self.assertEqual(
+            paths,
+            ["dst", "dst/a.txt", "dst/b.txt", "src", "src/a.txt", "src/b.txt"],
+        )
+        code, _, body = self._request("GET", "/dst/a.txt")
+        self.assertEqual(code, 200)
+        self.assertEqual(body, b"alpha")
+
+    def test_interrupted_overwrite_put_preserves_content(self):
+        """A PUT that dies mid-transfer (fewer bytes than Content-Length)
+        must be rejected AND leave the previous content readable."""
+        code, _, _ = self._request("PUT", "/doc.txt", body=b"original payload")
+        self.assertIn(code, (201, 204))
+
+        code, _, _ = self._request(
+            "PUT", "/doc.txt", body=b"x" * 10, content_length="100"
+        )
+        self.assertEqual(code, 400)
+
+        code, _, body = self._request("GET", "/doc.txt")
+        self.assertEqual(code, 200)
+        self.assertEqual(body, b"original payload")
 
     # ── GET nonexistent ──
 

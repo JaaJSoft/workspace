@@ -4,6 +4,7 @@ import io
 import logging
 import os
 import time
+import uuid
 
 from django.conf import settings as django_settings
 from django.core.files.base import File as DjangoFile
@@ -31,10 +32,18 @@ class _StreamingWriteBuffer:
     naturally: slow storage → slow ``write()`` → slow ``wsgi.input.read()``
     → TCP window shrinks → client slows down.  The result is a smooth
     progress bar on the client instead of "fast upload then stuck".
+
+    Bytes land in a unique sibling temp file that ``finalize()`` atomically
+    renames over ``full_path``.  Writing to the final path directly would
+    truncate the current blob at the first byte of an overwrite PUT: an
+    interrupted upload (or its ``abort()``) would then destroy the previous
+    content, a concurrent GET would read a half-written file, and two
+    concurrent PUTs (Windows retries a slow upload) would interleave writes.
     """
 
     def __init__(self, full_path, flush_size):
         self._full_path = full_path
+        self._temp_path = f"{full_path}.{uuid.uuid4().hex}.part"
         self._flush_size = flush_size
         self._membuf = bytearray()
         self._total_size = 0
@@ -44,8 +53,8 @@ class _StreamingWriteBuffer:
     def _open(self):
         os.makedirs(os.path.dirname(self._full_path), exist_ok=True)
         self._fd = os.open(
-            self._full_path,
-            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+            self._temp_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
             0o600,
         )
 
@@ -74,21 +83,26 @@ class _StreamingWriteBuffer:
         return self._total_size
 
     def finalize(self):
-        """Flush remaining data and close the file descriptor."""
+        """Flush remaining data, close, and move into place atomically."""
         self._flush()
         if self._fd is not None:
             os.close(self._fd)
             self._fd = None
+        os.replace(self._temp_path, self._full_path)
 
     def abort(self):
-        """Close and delete the partially-written file."""
+        """Close and delete the partially-written temp file.
+
+        The final path is never touched, so the previous content (if any)
+        survives an aborted overwrite.
+        """
         if self._fd is not None:
             os.close(self._fd)
             self._fd = None
         try:
-            os.unlink(self._full_path)
+            os.unlink(self._temp_path)
         except OSError:
-            logger.debug("Could not remove partial upload %s", scrub(self._full_path))
+            logger.debug("Could not remove partial upload %s", scrub(self._temp_path))
 
 
 class RootCollection(DAVCollection):
@@ -263,17 +277,25 @@ class FolderResource(DAVCollection):
         FileService.soft_delete(self._file, acting_user=self._user)
 
     def copy_move_single(self, dest_path, *, is_move):
-        dest_parts = dest_path.strip("/").split("/")
+        # WsgiDAV's copy/move loop visits every descendant itself, so this
+        # hook must only create the destination collection, without members
+        # (recursing here would duplicate every child).
+        dest_parts = _dest_parts(dest_path)
         new_name = dest_parts[-1]
         dest_parent = _resolve_parent(self._user, dest_parts[:-1])
-        _copy_as(self._file, dest_parent, self._user, new_name)
+        FileService.create_folder(
+            self._user,
+            new_name,
+            parent=dest_parent,
+            acting_user=self._user,
+        )
 
     def support_recursive_move(self, dest_path):
         return True
 
     @transaction.atomic
     def move_recursive(self, dest_path):
-        dest_parts = dest_path.strip("/").split("/")
+        dest_parts = _dest_parts(dest_path)
         new_name = dest_parts[-1]
         dest_parent = _resolve_parent(self._user, dest_parts[:-1])
 
@@ -428,7 +450,7 @@ class FileResource(DAVNonCollection):
         FileService.soft_delete(self._file, acting_user=self._user)
 
     def copy_move_single(self, dest_path, *, is_move):
-        dest_parts = dest_path.strip("/").split("/")
+        dest_parts = _dest_parts(dest_path)
         new_name = dest_parts[-1]
         dest_parent = _resolve_parent(self._user, dest_parts[:-1])
 
@@ -458,28 +480,26 @@ class FileResource(DAVNonCollection):
         return f"{self._file.uuid}-{self._file.updated_at.timestamp()}"
 
 
+def _dest_parts(dest_path):
+    """Split a WsgiDAV destination path into non-empty segments.
+
+    WsgiDAV normalizes collection destinations with a trailing slash and
+    builds descendant destinations by concatenation, so paths like
+    ``/dst//child`` reach the resource hooks during folder copies.  Without
+    filtering, parent resolution would chase a ``dst/`` path that doesn't
+    exist and silently re-root the copy.
+    """
+    return [part for part in dest_path.split("/") if part]
+
+
 def _copy_as(file_obj, dest_parent, owner, new_name):
-    """Copy a File to *dest_parent* with a specific *new_name*.
+    """Copy a (non-folder) File to *dest_parent* with a specific *new_name*.
 
     Unlike ``FileService.copy`` this does not auto-generate "(Copy)" suffixes.
-    For folders, children are copied recursively with their original names.
+    Folders are never copied here: WsgiDAV's copy loop creates each
+    collection via ``FolderResource.copy_move_single`` and visits the
+    descendants one by one.
     """
-    if file_obj.is_folder():
-        folder = FileService.create_folder(
-            owner,
-            new_name,
-            parent=dest_parent,
-            acting_user=owner,
-        )
-        children = File.objects.filter(
-            FileService.accessible_files_q(owner),
-            parent=file_obj,
-            deleted_at__isnull=True,
-        )
-        for child in children:
-            _copy_as(child, folder, owner, child.name)
-        return folder
-
     content = None
     if file_obj.content:
         file_obj.content.open("rb")

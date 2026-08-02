@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.34.0 - Time Zones & AI Transparency
+
+### Highlights
+
+The whole app now runs on your time zone: pick it once in your settings and every date follows, from mail timestamps to recurring meetings that survive daylight saving changes. Meanwhile the assistant stops being a black box: each reply can show how it reasoned and which tools it used, and it finally sees the images it creates.
+
+### Time Zones
+
+- Choose your time zone in Settings > Appearance and every date and time in the app follows it: mail, chat, calendar, notes, dashboard, activity feeds. It is detected automatically on your first sign-in, and if your browser later reports a different zone (say, while traveling), a banner offers to update it instead of changing it behind your back.
+- Day boundaries are now yours too: "today" sections, date separators, and the daily journal note follow your zone instead of the server's clock, so a note written at 11 pm no longer lands on tomorrow's page.
+- Calendar events remember the time zone they were created in. A weekly 10:00 meeting stays at 10:00 through daylight saving changes, all-day events stay on their labeled day for every participant, and calendar import and export carry the zone information correctly.
+
+### Chat & Assistant
+
+- See how the assistant thinks: bot replies now carry a collapsible timeline showing the reasoning steps and each tool used along the way, with the full details one click away. Failed tool calls are shown too, so you can tell why the AI missed instead of guessing.
+- Assistants that support vision now actually see the images they generate or edit: they can look at the result, refine it over several steps, and remember earlier images from the conversation.
+- Conversations can now be linked to user groups. Everyone in the group joins the conversation automatically, and membership follows as people join or leave the group.
+- Messages with several photos or videos display as a compact mosaic instead of a tall stack, and the attachment viewer browses all the conversation's media in order with previous/next controls.
+- Regenerating a conversation title now shows a spinner and updates the title everywhere as soon as it is ready. Renames made by another member appear live as well.
+
+### Photos & Media
+
+- The image and video viewer, in files and in chat alike, gets a proper lightbox feel: navigation arrows overlaid on the edges of the picture, arrow-key support, and swipe gestures on touch screens.
+
+### Projects
+
+- A new All tasks view lists every task of a project in one flat list, whatever its status, with a status filter, complementing the board and the backlog.
+- Personal project task references are now based on your username (for example PERSPC-42) instead of an arbitrary number, so a reference tells you at a glance whose project it belongs to. Existing personal projects were renumbered accordingly.
+
+### Fixes
+
+- An upload over WebDAV that fails midway no longer damages the file it was replacing: the previous content stays intact until the new version has fully arrived.
+- Copying a folder over WebDAV no longer leaves stray duplicates of its contents at the top of your tree, and moving a folder onto a name that already exists no longer breaks the files inside it.
+- The backlog toolbar no longer overflows the screen on phones and small tablets.
+
+### Self-hosting
+
+- The metrics endpoint used by monitoring tools now requires credentials (set METRICS_USER and METRICS_PASSWORD). Instances that do not configure them keep the endpoint closed instead of exposed.
+
 ## 0.33.0 - Projects & Tasks
 
 ### Highlights

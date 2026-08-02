@@ -1,3 +1,5 @@
+import json
+
 from django import template
 from django.utils import timezone
 
@@ -102,3 +104,88 @@ def render_reactions(message, current_user):
         "groups": list(emoji_map.values()),
         "message_uuid": message.uuid,
     }
+
+
+def _display_args(parsed):
+    """Stringify parsed tool arguments as (key, value) pairs for display."""
+    if not isinstance(parsed, dict):
+        return []
+    pairs = []
+    for key, value in parsed.items():
+        if isinstance(value, str):
+            pairs.append((key, value))
+        else:
+            pairs.append((key, json.dumps(value, ensure_ascii=False)))
+    return pairs
+
+
+def _pretty_result(content):
+    """Pretty-print JSON tool results; leave plain text (incl. truncated JSON) as-is."""
+    if not content:
+        return ""
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError, TypeError:
+        return content
+    if isinstance(parsed, dict | list):
+        return json.dumps(parsed, indent=2, ensure_ascii=False)
+    return content
+
+
+@register.inclusion_tag("chat/ui/partials/_tool_calls.html")
+def render_tool_calls(message):
+    """Flatten Message.tool_data rounds into displayable tool call rows.
+
+    tool_data is overloaded: AI messages store a list of rounds, call system
+    messages store a dict - only the list shape is rendered here.
+    """
+    from workspace.ai.tool_registry import tool_registry
+
+    tool_data = getattr(message, "tool_data", None)
+    if not isinstance(tool_data, list):
+        return {"calls": []}
+
+    calls = []
+    for td_round in tool_data:
+        if not isinstance(td_round, dict):
+            continue
+        results = td_round.get("results")
+        if not isinstance(results, list):
+            results = []
+        results_by_id = {
+            r.get("tool_call_id"): r.get("content") or ""
+            for r in results
+            if isinstance(r, dict)
+        }
+        tool_calls = td_round.get("tool_calls")
+        if not isinstance(tool_calls, list):
+            continue
+        for tc in tool_calls:
+            if not isinstance(tc, dict):
+                continue
+            function = tc.get("function") or {}
+            name = function.get("name") or ""
+            raw_args = function.get("arguments") or ""
+            try:
+                parsed = json.loads(raw_args) if raw_args else {}
+            except json.JSONDecodeError, TypeError:
+                parsed = None
+            badge = tool_registry.get_badge(name)
+            detail = (
+                tool_registry.get_detail(name, parsed)
+                if isinstance(parsed, dict)
+                else ""
+            )
+            result = results_by_id.get(tc.get("id"), "")
+            calls.append(
+                {
+                    "icon": badge["icon"],
+                    "label": badge["label"],
+                    "detail": detail,
+                    "args": _display_args(parsed),
+                    "args_raw": raw_args if parsed is None else "",
+                    "result": _pretty_result(result),
+                    "is_error": result.startswith(("Error", "Unknown tool")),
+                }
+            )
+    return {"calls": calls}

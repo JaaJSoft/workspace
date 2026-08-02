@@ -854,6 +854,9 @@ AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "2048"))
 AI_CHAT_CONTEXT_SIZE = int(
     os.getenv("AI_CHAT_CONTEXT_SIZE", "30")
 )  # recent messages kept in full; older ones are summarized
+AI_VISION_MAX_IMAGES = int(
+    os.getenv("AI_VISION_MAX_IMAGES", "8")
+)  # max images injected as pixels into a vision bot's history
 AI_TIMEOUT = int(os.getenv("AI_TIMEOUT", "300"))  # seconds per request
 AI_MAX_RETRIES = int(
     os.getenv("AI_MAX_RETRIES", "2")

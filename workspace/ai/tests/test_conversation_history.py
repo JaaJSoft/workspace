@@ -210,6 +210,44 @@ class VisualWindowTests(TestCase):
         self.assertIn("[image: generated.png - A blue circle.]", user_flat)
         self.assertIn("[Images sent by the assistant in the message above]", user_flat)
 
+    def test_tool_round_bot_caption_note_never_rides_in_assistant_turn(self):
+        # Same guarantee through the tool-call reconstruction branch, which
+        # appends its assistant turns separately from the regular bot path.
+        old = Message.objects.create(
+            conversation=self.conv,
+            author=self.bot_user,
+            body="here you go",
+            tool_data=[
+                {
+                    "assistant_content": "",
+                    "tool_calls": [
+                        {
+                            "id": "c1",
+                            "type": "function",
+                            "function": {
+                                "name": "generate_image",
+                                "arguments": "{}",
+                            },
+                        }
+                    ],
+                    "results": [{"tool_call_id": "c1", "content": "ok"}],
+                }
+            ],
+        )
+        attach_image(old, "generated.png", ai_description="A blue circle.")
+        for i in range(2):
+            m = Message.objects.create(
+                conversation=self.conv, author=self.user, body=f"new {i}"
+            )
+            attach_image(m, f"new{i}.png")
+        history = self._history()
+        for entry in history:
+            if entry["role"] == "assistant":
+                self.assertNotIn("[image:", str(entry.get("content", "")))
+        user_flat = str([e for e in history if e["role"] == "user"])
+        self.assertIn("[image: generated.png - A blue circle.]", user_flat)
+        self.assertIn("[Images sent by the assistant in the message above]", user_flat)
+
     def test_unreadable_in_window_image_degrades_to_caption(self):
         m = Message.objects.create(
             conversation=self.conv, author=self.user, body="look"

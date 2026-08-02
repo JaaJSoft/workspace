@@ -1,7 +1,8 @@
 import io
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from PIL import Image
 
 from workspace.ai.models import AITask
@@ -228,3 +229,39 @@ class PostBotMessageThinkingTests(TestCase):
             tool_data=[self._round("same thought")],
         )
         self.assertEqual(len(msg.tool_data), 1)
+
+
+class PostBotMessageCaptionEnqueueTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="erin", email="e@test.com", password="pw"
+        )
+        self.bot_user = User.objects.create_user(
+            username="bot4", email="b4@test.com", password="pw"
+        )
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.user)
+        ConversationMember.objects.create(conversation=self.conv, user=self.bot_user)
+        self.ai_task = AITask.objects.create(
+            owner=self.user, task_type=AITask.TaskType.CHAT
+        )
+
+    @override_settings(AI_API_KEY="k")
+    def test_generated_images_enqueue_captions(self):
+        result = {
+            "content": "here is your image",
+            "model": "m",
+            "prompt_tokens": 1,
+            "completion_tokens": 1,
+        }
+        tool_context = {"images": [{"data": b"\x89PNGfake", "prompt": "a cat"}]}
+        with patch(
+            "workspace.ai.tasks.captions.generate_attachment_caption.delay"
+        ) as mock_delay:
+            with self.captureOnCommitCallbacks(execute=True):
+                post_bot_message(
+                    self.conv, self.bot_user, result, tool_context, self.ai_task
+                )
+        mock_delay.assert_called_once()

@@ -3,6 +3,8 @@
 // builds the SAME markup at runtime (e.g. after a fetch error), so a JS-driven
 // alert is visually identical to a server-rendered one. Keep the two in sync:
 // any class/icon change here must mirror the partial and vice-versa.
+// Note: actions array and slot node are supported on both twins (callbacks here,
+// href/Alpine expression in the partial); slot takes a DOM Node.
 const InlineAlert = {
   // Per-type styling, mirrored from inline_alert.html.
   _styles: {
@@ -12,7 +14,7 @@ const InlineAlert = {
     info: { border: 'border-info/30', icon: 'info', iconColor: 'text-info' },
   },
 
-  create({ type = 'info', message, title, dismissible = false, icon = true, iconName, className = '' } = {}) {
+  create({ type = 'info', message, title, dismissible = false, icon = true, iconName, className = '', actions = [], slot = null } = {}) {
     const style = this._styles[type] || this._styles.info;
 
     const alertDiv = document.createElement('div');
@@ -29,7 +31,12 @@ const InlineAlert = {
       alertDiv.appendChild(iconEl);
     }
 
-    if (title) {
+    if (slot) {
+      const wrap = document.createElement('div');
+      wrap.className = 'flex-1 text-sm text-base-content/80';
+      wrap.appendChild(slot);
+      alertDiv.appendChild(wrap);
+    } else if (title) {
       const wrap = document.createElement('div');
       wrap.className = 'flex-1';
       const titleEl = document.createElement('p');
@@ -46,6 +53,23 @@ const InlineAlert = {
       span.className = 'flex-1 text-sm text-base-content/80';
       span.textContent = message;
       alertDiv.appendChild(span);
+    }
+
+    if (actions && actions.length) {
+      const row = document.createElement('div');
+      row.className = 'flex gap-2 shrink-0';
+      for (const action of actions) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `btn btn-xs btn-${action.style || 'ghost'}`;
+        btn.textContent = action.label;
+        btn.addEventListener('click', () => {
+          if (action.onClick) action.onClick();
+          if (action.dismiss) alertDiv.remove();
+        });
+        row.appendChild(btn);
+      }
+      alertDiv.appendChild(row);
     }
 
     if (dismissible) {
@@ -73,3 +97,5 @@ const InlineAlert = {
     return alert;
   },
 };
+
+window.InlineAlert = InlineAlert;

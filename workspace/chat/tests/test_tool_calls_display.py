@@ -1,6 +1,7 @@
 import json
 from unittest.mock import patch
 
+from django.template.loader import render_to_string
 from django.test import SimpleTestCase
 
 from workspace.ai.tool_registry import tool_registry
@@ -119,3 +120,54 @@ class RenderToolCallsTagTests(SimpleTestCase):
         rounds = ["junk", {"tool_calls": ["junk"], "results": "junk"}, make_round()]
         ctx = render_tool_calls(FakeMessage(rounds))
         self.assertEqual(len(ctx["calls"]), 1)
+
+
+def render_partial(tool_data):
+    return render_to_string(
+        "chat/ui/partials/_tool_calls.html",
+        render_tool_calls(FakeMessage(tool_data)),
+    )
+
+
+class ToolCallsPartialTests(SimpleTestCase):
+    def test_empty_calls_render_nothing(self):
+        self.assertEqual(render_partial(None).strip(), "")
+
+    def test_three_or_fewer_rows_are_directly_visible(self):
+        rounds = [make_round(name=f"tool_{i}", call_id=f"call_{i}") for i in range(3)]
+        html = render_to_string(
+            "chat/ui/partials/_tool_calls.html",
+            render_tool_calls(FakeMessage(rounds)),
+        )
+        self.assertNotIn("Used 3 tools", html)
+        self.assertEqual(html.count("<details"), 3)
+
+    def test_more_than_three_rows_collapse_behind_summary(self):
+        rounds = [make_round(name=f"tool_{i}", call_id=f"call_{i}") for i in range(4)]
+        html = render_partial(rounds)
+        self.assertIn("Used 4 tools", html)
+        # 1 outer wrapper + 4 per-call rows
+        self.assertEqual(html.count("<details"), 5)
+
+    def test_detail_and_result_are_escaped(self):
+        rnd = make_round(
+            arguments=json.dumps({"query": "<script>alert(1)</script>"}),
+            result_content="<img src=x onerror=alert(1)>",
+        )
+        with patch.object(
+            tool_registry, "get_detail", return_value="<script>alert(1)</script>"
+        ):
+            html = render_partial([rnd])
+        self.assertNotIn("<script>alert(1)</script>", html)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", html)
+        self.assertNotIn("<img src=x", html)
+
+    def test_error_result_gets_error_styling(self):
+        html = render_partial([make_round(result_content="Error: boom")])
+        self.assertIn("text-error", html)
+
+    def test_args_and_result_shown_in_expanded_content(self):
+        html = render_partial([make_round()])
+        self.assertIn("query", html)
+        self.assertIn("hello", html)
+        self.assertIn("ok", html)

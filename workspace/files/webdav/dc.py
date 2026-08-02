@@ -1,6 +1,7 @@
 """Domain controller for WsgiDAV using Django's auth backend."""
 
 import hashlib
+import hmac
 import os
 import threading
 import time
@@ -56,10 +57,11 @@ class DjangoBasicDomainController(BaseDomainController):
 def _cache_key(user_name, password):
     """Return a deterministic, non-reversible cache key for the given credentials.
 
-    Uses PBKDF2-HMAC with a process-local salt.  The iteration count is kept
-    modest (100 000 ≈ 30-50 ms) because this is only an in-memory cache key —
-    the real password verification is handled by Django's auth backend.
+    HMAC-SHA256 keyed with a process-local random secret: the digest cannot
+    be brute-forced without the in-memory key, and unlike a KDF it costs
+    microseconds.  This runs on EVERY WebDAV request, before the cache
+    lookup can short-circuit anything - a KDF here would cost more than the
+    bcrypt verification the cache exists to avoid.
     """
     message = f"{user_name}:{password}".encode()
-    dk = hashlib.pbkdf2_hmac("sha256", message, _CACHE_KEY_SECRET, 100_000)
-    return dk.hex()
+    return hmac.new(_CACHE_KEY_SECRET, message, hashlib.sha256).hexdigest()

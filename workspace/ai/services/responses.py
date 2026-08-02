@@ -4,7 +4,6 @@ from django.db import transaction
 from django.utils import timezone
 
 from workspace.ai.services.llm import clean_llm_content
-from workspace.ai.services.tool_loop import render_tool_badges
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +32,6 @@ def post_bot_message(
     conversation,
     bot_user,
     result,
-    used_tools,
     tool_context,
     ai_task,
     raw_messages=None,
@@ -57,9 +55,6 @@ def post_bot_message(
 
     body = clean_llm_content(result["content"])
     body_html = render_message_body(body)
-
-    if used_tools:
-        body_html += render_tool_badges(used_tools)
 
     bot_message = Message.objects.create(
         conversation_id=conversation.pk,

@@ -56,7 +56,6 @@ class PostBotMessageInteractionTests(TestCase):
             conversation=self.conv,
             bot_user=self.bot,
             result=self.result,
-            used_tools=[],
             tool_context=tool_context,
             ai_task=self.ai_task,
         )
@@ -71,7 +70,6 @@ class PostBotMessageInteractionTests(TestCase):
             conversation=self.conv,
             bot_user=self.bot,
             result=self.result,
-            used_tools=[],
             tool_context={},
             ai_task=self.ai_task,
         )
@@ -118,7 +116,6 @@ class PostBotMessageImageTypingTests(TestCase):
             conversation=self.conv,
             bot_user=self.bot,
             result=self.result,
-            used_tools=[],
             tool_context={"images": images},
             ai_task=self.ai_task,
         )

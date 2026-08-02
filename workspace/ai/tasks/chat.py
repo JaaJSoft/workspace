@@ -87,7 +87,7 @@ def generate_chat_response(
     try:
         initial_messages = sanitize_messages_for_storage(list(messages))
 
-        result, used_tools, tool_context, rounds, tool_data = run_tool_loop(
+        result, tool_context, rounds, tool_data = run_tool_loop(
             messages,
             bot_profile.get_model(),
             human_user,
@@ -98,7 +98,7 @@ def generate_chat_response(
         # Auto-retry once if the model returned an empty response.
         # Only the final completion is retried (no tools): rerunning
         # the whole loop would re-execute side-effectful tools and
-        # discard the first pass's tool_context / used_tools.
+        # discard the first pass's tool_context / tool_data.
         body_preview = clean_llm_content(result.get("content") or "")
         if not body_preview and not tool_context.get("images"):
             logger.warning(
@@ -126,7 +126,6 @@ def generate_chat_response(
             conversation,
             bot_user,
             result,
-            used_tools,
             tool_context,
             ai_task,
             raw_messages,

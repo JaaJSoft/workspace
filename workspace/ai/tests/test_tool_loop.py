@@ -52,9 +52,8 @@ class StopAfterRoundTests(TestCase):
         with patch("workspace.ai.tool_registry.tool_registry") as reg:
             reg.get_definitions.return_value = []
             reg.execute.side_effect = fake_execute
-            reg.get_detail.return_value = None
 
-            result, used_tools, ctx, rounds, td = run_tool_loop(
+            result, ctx, rounds, td = run_tool_loop(
                 messages=[{"role": "user", "content": "go"}],
                 model="x",
                 human_user=self.user,

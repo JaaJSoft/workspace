@@ -274,9 +274,15 @@ class GenerateChatResponseWithToolsTests(TestCase):
         bot_msg = Message.objects.filter(author=self.bot_user).first()
         self.assertEqual(bot_msg.body, "Got it, Pierre!")
 
-        # Retention badge appears in body_html
-        self.assertIn("Retained:", bot_msg.body_html)
-        self.assertIn("name", bot_msg.body_html)
+        # Tool usage is persisted on tool_data, not baked into body_html
+        self.assertNotIn("Retained:", bot_msg.body_html)
+        self.assertIsInstance(bot_msg.tool_data, list)
+        tool_names = [
+            tc["function"]["name"]
+            for td_round in bot_msg.tool_data
+            for tc in td_round["tool_calls"]
+        ]
+        self.assertIn("save_memory", tool_names)
 
         # Two API calls were made
         self.assertEqual(mock_client.chat.completions.create.call_count, 2)

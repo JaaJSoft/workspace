@@ -1,5 +1,3 @@
-import html
-import json
 import logging
 
 from workspace.ai.services.llm import (
@@ -13,62 +11,8 @@ from workspace.ai.services.llm import (
 logger = logging.getLogger(__name__)
 
 
-def _track_tool_usage(tool_call, tool_result, used_tools):
-    """Extract a human-readable detail from a successful tool call."""
-    from workspace.ai.tool_registry import tool_registry
-
-    name = tool_call.function.name
-    try:
-        args = json.loads(tool_call.function.arguments)
-    except json.JSONDecodeError, AttributeError:
-        args = {}
-    used_tools.append((name, tool_registry.get_detail(name, args)))
-
-
-def render_tool_badges(used_tools):
-    """Render HTML badges for tools used during response generation."""
-    from workspace.ai.tool_registry import tool_registry
-
-    grouped = {}
-    for name, detail in used_tools:
-        grouped.setdefault(name, [])
-        if detail:
-            grouped[name].append(detail)
-
-    parts = []
-    for name, details in grouped.items():
-        cfg = tool_registry.get_badge(name)
-        icon = cfg["icon"]
-        label = cfg["label"]
-        # `label`/`details` come from the registry/get_detail() with model- or
-        # user-driven values. Escape before interpolating into body_html.
-        if details:
-            details_display = " &bull; ".join(html.escape(d) for d in details)
-            parts.append(f"<span>{icon}</span> {html.escape(label)}: {details_display}")
-        else:
-            parts.append(f"<span>{icon}</span> {html.escape(label)}")
-
-    # Single tool or short badges: inline. Multiple tools: one per line.
-    if len(parts) <= 2:
-        badges_html = ' <span class="opacity-30">|</span> '.join(parts)
-        return (
-            f'\n<div class="mt-2 text-xs text-base-content/40 flex items-center gap-1 flex-wrap">'
-            f"{badges_html}"
-            f"</div>"
-        )
-
-    badges_html = "".join(
-        f'<div class="flex items-center gap-1">{p}</div>' for p in parts
-    )
-    return (
-        f'\n<div class="mt-2 text-xs text-base-content/40 flex flex-col gap-0.5">'
-        f"{badges_html}"
-        f"</div>"
-    )
-
-
 def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
-    """Run the tool call loop and return (result, used_tools, tool_context, rounds, tool_data).
+    """Run the tool call loop and return (result, tool_context, rounds, tool_data).
 
     Calls the AI model, executes any tool calls it returns, and re-calls
     until we get a plain text response (max 5 rounds).  *rounds* is a list
@@ -84,7 +28,6 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
     tools = tool_registry.get_definitions()
     result = call_llm(messages, model=model, tools=tools)
 
-    used_tools = []
     tool_context = {}
     rounds = []
     tool_data = []  # compact history for Message.tool_data
@@ -167,8 +110,6 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
                     "content": tool_content,
                 }
             )
-            if "Error" not in tool_result and "Unknown tool" not in tool_result:
-                _track_tool_usage(tc, tool_result, used_tools)
             round_data["tool_executions"].append(
                 {
                     "tool_call_id": tc.id,
@@ -209,7 +150,7 @@ def run_tool_loop(messages, model, human_user, bot_user, conversation_id):
         # Max rounds reached - capture the final response
         rounds.append({"response": serialize_response(result)})
 
-    return result, used_tools, tool_context, rounds, tool_data or None
+    return result, tool_context, rounds, tool_data or None
 
 
 def retry_final_completion(messages, model):
@@ -225,7 +166,7 @@ def retry_final_completion(messages, model):
     tool calls and their results - keeps the conversation context.
 
     Returns ``(result, retry_rounds)`` so the caller can extend its
-    ``rounds`` log; ``tool_context``, ``used_tools`` and ``tool_data``
+    ``rounds`` log; ``tool_context`` and ``tool_data``
     accumulated by the first pass are preserved on the caller side.
     """
     result = call_llm(messages, model=model)

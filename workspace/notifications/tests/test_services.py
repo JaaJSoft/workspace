@@ -155,3 +155,41 @@ class GetUnreadCountTests(TestCase):
             title="New",
         )
         self.assertEqual(get_unread_count(self.alice), 0)  # cached
+
+
+class NotifySourceTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.alice = User.objects.create_user(username="alice", password="pass")
+
+    def tearDown(self):
+        cache.clear()
+
+    @patch("workspace.notifications.services.notifications.send_push_notification")
+    @patch("workspace.notifications.services.notifications.notify_sse")
+    def test_notify_sets_source_fk(self, mock_sse, mock_push):
+        from workspace.chat.models import Conversation
+
+        conv = Conversation.objects.create(created_by=self.alice)
+        notif = notify(recipient=self.alice, origin="chat", title="Hi", source=conv)
+        self.assertEqual(notif.conversation_id, conv.pk)
+
+    @patch("workspace.notifications.services.notifications.send_push_notification")
+    @patch("workspace.notifications.services.notifications.notify_sse")
+    def test_notify_many_sets_source_fk(self, mock_sse, mock_push):
+        from workspace.files.models import File
+
+        file_obj = File.objects.create(owner=self.alice, name="a.txt", node_type="file")
+        notifs = notify_many(
+            recipients=[self.alice], origin="files", title="Hi", source=file_obj
+        )
+        self.assertEqual(notifs[0].file_id, file_obj.pk)
+
+    def test_unmapped_source_raises(self):
+        with self.assertRaises(ValueError):
+            notify(
+                recipient=self.alice,
+                origin="core",
+                title="Hi",
+                source=self.alice,  # User is not a notification source
+            )

@@ -212,6 +212,25 @@ def notify_stream(
     return to_update + to_create
 
 
+def mark_source_read(user, source):
+    """Mark the user's unread notifications for *source* as read.
+
+    Called from the endpoints where the user demonstrably views the source
+    (conversation mark-read, file comments, task comments, event and poll
+    detail). Returns the number of rows marked.
+    """
+    field = source_field(source)
+    marked = Notification.objects.filter(
+        recipient=user,
+        read_at__isnull=True,
+        **{field: source},
+    ).update(read_at=timezone.now())
+    if marked:
+        invalidate_tags(_user_tag(user.pk))
+        notify_sse("notifications", user.pk)
+    return marked
+
+
 @cached(
     key=lambda user: f"notif:unread:{user.pk}",
     ttl=_UNREAD_TTL,

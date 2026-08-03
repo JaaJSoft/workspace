@@ -6,6 +6,8 @@ from pygments.formatters import HtmlFormatter
 from pygments.lexers import TextLexer, get_lexer_by_name, guess_lexer
 from pygments.util import ClassNotFound
 
+from workspace.common.services.mentions import mention_badge
+
 
 class _ChatRenderer(mistune.HTMLRenderer):
     """Markdown renderer with Pygments syntax highlighting for code blocks."""
@@ -63,7 +65,7 @@ def render_message_body(body, mention_map=None):
             if username in mention_map or username == "everyone":
                 key = f"{_MENTION_PREFIX}{username}{_MENTION_SUFFIX}"
                 user_id = mention_map.get(username)
-                placeholders[key] = _mention_badge(username, user_id)
+                placeholders[key] = mention_badge(username, user_id)
                 return key
             return match.group(0)
 
@@ -76,27 +78,3 @@ def render_message_body(body, mention_map=None):
         return html
 
     return _markdown(body)
-
-
-def _mention_badge(username, user_id=None):
-    if username == "everyone":
-        return '<span class="mention-badge mention-everyone">@everyone</span>'
-    if user_id:
-        return (
-            f'<span class="mention-badge" data-username="{username}" data-user-id="{user_id}"'
-            f' onmouseenter="window._userCardShow(this,{user_id})"'
-            f' onmouseleave="window._userCardScheduleHide(this)"'
-            f">@{username}</span>"
-        )
-    return f'<span class="mention-badge" data-username="{username}">@{username}</span>'
-
-
-def extract_mentions(body):
-    """Extract @username tokens from message body text.
-
-    Returns a set of usernames (excluding 'everyone') and whether @everyone was used.
-    """
-    tokens = set(re.findall(r"@(\w+)", body))
-    has_everyone = "everyone" in tokens
-    tokens.discard("everyone")
-    return tokens, has_everyone

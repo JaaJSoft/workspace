@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 
 from workspace.chat.services.reactions import invalidate_quick_reactions
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.services.mentions import extract_mentions
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..common.logging import scrub
@@ -33,7 +34,7 @@ from .serializers import (
 )
 from .services.conversations import get_active_membership
 from .services.notifications import notify_conversation_members, notify_new_message
-from .services.rendering import extract_mentions, render_message_body
+from .services.rendering import render_message_body
 
 User = get_user_model()
 logger = logging.getLogger(__name__)

@@ -15,6 +15,7 @@ from workspace.calendar.models import (
     PollSlot,
     PollVote,
 )
+from workspace.notifications.models import Notification
 
 User = get_user_model()
 
@@ -184,6 +185,21 @@ class PollCRUDTests(PollTestMixin, APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["title"], "Test poll")
         self.assertEqual(len(resp.data["slots"]), 2)
+
+    def test_get_poll_detail_marks_notification_read(self):
+        poll, _, _ = self._make_poll_with_slots()
+        notif = Notification.objects.create(
+            recipient=self.owner,
+            origin="calendar",
+            icon="",
+            title="t",
+            poll=poll,
+        )
+        self.client.force_authenticate(user=self.owner)
+        resp = self.client.get(f"/api/v1/calendar/polls/{poll.uuid}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        notif.refresh_from_db()
+        self.assertIsNotNone(notif.read_at)
 
     def test_update_poll(self):
         self.client.force_authenticate(user=self.owner)
@@ -361,6 +377,26 @@ class PollVoteTests(PollTestMixin, APITestCase):
         self.assertIn(
             resp.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]
         )
+
+    def test_voting_marks_poll_notification_read(self):
+        notif = Notification.objects.create(
+            recipient=self.voter,
+            origin="calendar",
+            icon="",
+            title="t",
+            poll=self.poll,
+        )
+        self.client.force_authenticate(user=self.voter)
+        resp = self.client.post(
+            f"/api/v1/calendar/polls/{self.poll.uuid}/vote",
+            {
+                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        notif.refresh_from_db()
+        self.assertIsNotNone(notif.read_at)
 
     def test_vote_response_includes_counts(self):
         self.client.force_authenticate(user=self.voter)
@@ -550,6 +586,7 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
         PollVote.objects.create(slot=self.slot, user=self.voter, choice="yes")
 
     def test_finalize_creates_event(self):
+        PollInvitee.objects.create(poll=self.poll, user=self.voter)
         self.client.force_authenticate(user=self.owner)
         resp = self.client.post(
             f"/api/v1/calendar/polls/{self.poll.uuid}/finalize",
@@ -567,6 +604,10 @@ class PollFinalizeTests(PollTestMixin, APITestCase):
         self.assertTrue(
             EventMember.objects.filter(event=event, user=self.voter).exists()
         )
+        # Poll finalized notifies via the event, not the poll: opening the
+        # event (not the poll) is what should clear it.
+        notif = Notification.objects.get(recipient=self.voter)
+        self.assertEqual(notif.event_id, event.pk)
 
     def test_finalize_sets_chosen_slot(self):
         self.client.force_authenticate(user=self.owner)
@@ -648,6 +689,8 @@ class PollInviteTests(PollTestMixin, APITestCase):
             PollInvitee.objects.filter(poll=self.poll, user=self.voter).exists()
         )
         self.assertEqual(len(resp.data["invitees"]), 1)
+        notif = Notification.objects.get(recipient=self.voter)
+        self.assertEqual(notif.poll_id, self.poll.pk)
 
     def test_invite_excludes_creator(self):
         self.client.force_authenticate(user=self.owner)

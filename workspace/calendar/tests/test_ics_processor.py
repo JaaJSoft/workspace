@@ -184,6 +184,7 @@ class ProcessRequestTest(ICSProcessorMixin, TestCase):
             title="Invitation: Sprint Review",
             body="From alice@example.com",
             url=f"/calendar?event={event.pk}",
+            source=event,
         )
 
     def test_duplicate_ics_ignored(self, mock_notify, _mock_now):
@@ -230,6 +231,7 @@ class ProcessUpdateTest(ICSProcessorMixin, TestCase):
             title="Updated: Sprint Review (Updated)",
             body="The event has been updated",
             url=f"/calendar?event={event.pk}",
+            source=event,
         )
 
     def test_ignores_lower_sequence(self, mock_notify, _mock_now):
@@ -282,6 +284,7 @@ class ProcessCancelTest(ICSProcessorMixin, TestCase):
             origin="calendar",
             title="Cancelled: Sprint Review",
             url=f"/calendar?event={event.pk}",
+            source=event,
         )
 
 

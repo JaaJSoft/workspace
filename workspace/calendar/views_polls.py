@@ -12,7 +12,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from workspace.notifications.services.notifications import notify_many
+from workspace.notifications.services.notifications import (
+    mark_source_read,
+    notify_many,
+)
 from workspace.users.services.settings import get_setting
 
 from .models import Calendar, Event, EventMember, Poll, PollInvitee, PollSlot, PollVote
@@ -151,6 +154,9 @@ class PollDetailView(APIView):
     @extend_schema(summary="Get poll detail", responses=PollSerializer)
     def get(self, request, poll_id):
         poll = get_object_or_404(_poll_detail_queryset(), uuid=poll_id)
+
+        mark_source_read(request.user, poll)
+
         _prefetch_poll_votes(poll)
         return Response(PollSerializer(poll, context={"request": request}).data)
 
@@ -215,6 +221,7 @@ class PollDetailView(APIView):
                         body="Time slots have been updated. Please review your votes.",
                         url=f"/calendar?poll={poll.pk}",
                         actor=request.user,
+                        source=poll,
                     )
 
         poll = _poll_detail_queryset().get(uuid=poll.uuid)
@@ -267,7 +274,10 @@ class PollVoteView(APIView):
                     body=f"{request.user.username} voted on your poll.",
                     url=f"/calendar?poll={poll.pk}",
                     actor=request.user,
+                    source=poll,
                 )
+
+        mark_source_read(request.user, poll)
 
         poll = _poll_detail_queryset().get(uuid=poll.uuid)
         _prefetch_poll_votes(poll)
@@ -353,6 +363,7 @@ class PollFinalizeView(APIView):
                 body="A date has been chosen.",
                 url=f"/calendar?event={event.pk}",
                 actor=request.user,
+                source=event,
             )
 
         poll = _poll_detail_queryset().get(uuid=poll.uuid)
@@ -395,6 +406,7 @@ class PollInviteView(APIView):
                 body=f"{request.user.username} invited you to vote on a poll.",
                 url=f"/calendar?poll={poll.pk}",
                 actor=request.user,
+                source=poll,
             )
 
         poll = _poll_detail_queryset().get(uuid=poll.uuid)
@@ -530,6 +542,7 @@ class SharedPollVoteView(APIView):
                 title=f'New vote on "{poll.title}"',
                 body=f"{guest_label} voted on your poll.",
                 url=f"/calendar?poll={poll.pk}",
+                source=poll,
             )
 
         poll = _poll_detail_queryset().get(uuid=poll.uuid)

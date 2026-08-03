@@ -40,8 +40,11 @@ class EventCreateNotificationTests(CalendarNotificationTestBase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         notifs = self._notifs_for(self.member)
         self.assertEqual(notifs.count(), 1)
-        self.assertIn("Invited", notifs.first().title)
-        self.assertEqual(notifs.first().actor, self.owner)
+        notif = notifs.first()
+        self.assertIn("Invited", notif.title)
+        self.assertEqual(notif.actor, self.owner)
+        event = Event.objects.get(title="Planning")
+        self.assertEqual(notif.event_id, event.pk)
 
     def test_create_event_without_members_no_notification(self):
         self.client.force_authenticate(self.owner)
@@ -144,6 +147,16 @@ class EventDeleteNotificationTests(CalendarNotificationTestBase):
         self.assertIn("Team Meeting", n.title)
         self.assertEqual(n.actor, self.owner)
 
+    def test_delete_event_notification_survives_event_deletion(self):
+        """The cancel path notifies without a source: CASCADE must not erase
+        the "cancelled" notification when the event row is deleted."""
+        self.client.force_authenticate(self.owner)
+        resp = self.client.delete(self.url(self.event.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(Notification.objects.filter(recipient=self.member).count(), 1)
+        notif = Notification.objects.get(recipient=self.member)
+        self.assertIsNone(notif.event_id)
+
     def test_delete_event_does_not_notify_owner(self):
         self.client.force_authenticate(self.owner)
         resp = self.client.delete(self.url(self.event.uuid))
@@ -191,6 +204,7 @@ class EventRespondNotificationTests(CalendarNotificationTestBase):
         self.assertIn("accepted", n.title)
         self.assertIn("Team Meeting", n.title)
         self.assertEqual(n.actor, self.member)
+        self.assertEqual(n.event_id, self.event.pk)
 
     def test_decline_notifies_owner(self):
         self.client.force_authenticate(self.member)
@@ -215,3 +229,21 @@ class EventRespondNotificationTests(CalendarNotificationTestBase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(self._notifs_for(self.owner).count(), 0)
+
+
+class EventDetailAutoReadTests(CalendarNotificationTestBase):
+    """Opening an event's detail clears its unread notifications."""
+
+    def test_event_detail_marks_notification_read(self):
+        notif = Notification.objects.create(
+            recipient=self.member,
+            origin="calendar",
+            icon="",
+            title="t",
+            event=self.event,
+        )
+        self.client.force_authenticate(self.member)
+        resp = self.client.get(f"/api/v1/calendar/events/{self.event.uuid}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        notif.refresh_from_db()
+        self.assertIsNotNone(notif.read_at)

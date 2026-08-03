@@ -13,7 +13,11 @@ from rest_framework.views import APIView
 
 from workspace.common.cache import cached_response, invalidate
 from workspace.common.mixins import CacheControlMixin
-from workspace.notifications.services.notifications import notify, notify_many
+from workspace.notifications.services.notifications import (
+    mark_source_read,
+    notify,
+    notify_many,
+)
 
 from .models import Calendar, Event, EventMember
 from .models_external import ExternalCalendar
@@ -144,6 +148,7 @@ def _sync_members(event, member_ids, owner_id):
                 body=f"{event.owner.username} removed you from an event.",
                 url=f"/calendar?event={event.pk}",
                 actor=event.owner,
+                source=event,
             )
     to_add = new_ids - current
     if to_add:
@@ -158,6 +163,7 @@ def _sync_members(event, member_ids, owner_id):
             body=f"{event.owner.username} invited you to an event.",
             url=f"/calendar?event={event.pk}",
             actor=event.owner,
+            source=event,
         )
     return to_add | to_remove
 
@@ -435,6 +441,7 @@ class EventListView(CacheControlMixin, APIView):
                 body=f"{request.user.username} invited you to an event.",
                 url=f"/calendar?event={event.pk}",
                 actor=request.user,
+                source=event,
             )
 
         event = _prefetch_event(Event.objects.filter(pk=event.pk)).first()
@@ -466,6 +473,8 @@ class EventDetailView(APIView):
         event, err = self._get_event(event_id, request.user)
         if err:
             return err
+
+        mark_source_read(request.user, event)
 
         # If original_start is provided, return the specific occurrence
         original_start_str = request.query_params.get("original_start")
@@ -536,6 +545,7 @@ class EventDetailView(APIView):
                     body=f"{request.user.username} updated an event you are part of.",
                     url=f"/calendar?event={event.pk}",
                     actor=request.user,
+                    source=event,
                 )
 
             event = _prefetch_event(Event.objects.filter(pk=event.pk)).first()
@@ -612,6 +622,7 @@ class EventDetailView(APIView):
                         body=f"{user.username} invited you to an event.",
                         url=f"/calendar?event={exc.pk}",
                         actor=user,
+                        source=exc,
                     )
             else:
                 # Copy from master
@@ -692,6 +703,7 @@ class EventDetailView(APIView):
                     body=f"{user.username} invited you to an event.",
                     url=f"/calendar?event={new_master.pk}",
                     actor=user,
+                    source=new_master,
                 )
         else:
             EventMember.objects.bulk_create(
@@ -826,5 +838,6 @@ class EventRespondView(APIView):
                 title=f'{request.user.username} {status_label} "{event.title}"',
                 url=f"/calendar?event={event.pk}",
                 actor=request.user,
+                source=event,
             )
         return Response({"status": membership.status})

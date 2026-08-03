@@ -523,6 +523,10 @@ class TaskCommentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
         return self._audience_cache
 
     def list(self, request, *args, **kwargs):
+        from workspace.notifications.services.notifications import mark_source_read
+
+        mark_source_read(request.user, self.task)
+
         serializer = self.get_serializer(self.get_queryset(), many=True)
         return Response(
             {

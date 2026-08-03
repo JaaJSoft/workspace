@@ -3,7 +3,7 @@
 from django.contrib.auth import get_user_model
 
 from workspace.common.services.mentions import mentioned_users, newly_mentioned_users
-from workspace.notifications.services.notifications import notify_many
+from workspace.notifications.services.notifications import notify_stream
 
 from ..queries import project_users
 
@@ -15,13 +15,14 @@ def _task_url(task):
 
 
 def _notify_mentioned(task, actor, mentioned):
-    notify_many(
-        recipients=mentioned,
+    notify_stream(
+        recipient_ids=[u.pk for u in mentioned],
+        source=task,
         origin="projects",
         title=f'{actor.username} mentioned you in a comment on "{task.title}"',
         url=_task_url(task),
         actor=actor,
-        priority="high",
+        default_priority="high",
     )
 
 
@@ -50,8 +51,9 @@ def notify_comment_added(task, actor, body):
     recipients.discard(actor)
     recipients = [u for u in recipients if u.pk not in mentioned_ids]
     if recipients:
-        notify_many(
-            recipients=recipients,
+        notify_stream(
+            recipient_ids=[u.pk for u in recipients],
+            source=task,
             origin="projects",
             title=f'{actor.username} commented on "{task.title}"',
             url=_task_url(task),

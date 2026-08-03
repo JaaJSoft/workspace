@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import status
@@ -5,6 +7,7 @@ from rest_framework.test import APITestCase
 
 from workspace.notifications.models import Notification
 from workspace.projects.models import TaskEvent
+from workspace.projects.services.comments import notify_comment_added
 from workspace.projects.services.members import add_member
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.tasks import create_task
@@ -157,6 +160,34 @@ class TaskCommentApiTests(ProjectTestMixin, APITestCase):
         self.client.force_authenticate(self.admin)
         response = self.client.delete(f"{self.base_url}/{comment.uuid}")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    # ── Notification merge / auto-read ─────────────────────
+
+    @patch("workspace.notifications.services.notifications.send_push_notification")
+    @patch("workspace.notifications.services.notifications.notify_sse")
+    def test_repeated_comments_merge_into_one_notification(self, mock_sse, mock_push):
+        notify_comment_added(self.task, self.member, "first")
+        notify_comment_added(self.task, self.member, "second")
+        notifs = Notification.objects.filter(
+            recipient=self.task.created_by,
+            task=self.task,
+            read_at__isnull=True,
+        )
+        self.assertEqual(notifs.count(), 1)
+
+    def test_listing_comments_marks_notifications_read(self):
+        notif = Notification.objects.create(
+            recipient=self.member,
+            origin="projects",
+            icon="",
+            title="t",
+            task=self.task,
+        )
+        self.client.force_authenticate(self.member)
+        response = self.client.get(self.base_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        notif.refresh_from_db()
+        self.assertIsNotNone(notif.read_at)
 
 
 class TaskCommentMentionTests(ProjectTestMixin, APITestCase):

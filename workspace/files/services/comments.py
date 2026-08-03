@@ -3,7 +3,7 @@
 from django.contrib.auth import get_user_model
 
 from workspace.common.services.mentions import mentioned_users, newly_mentioned_users
-from workspace.notifications.services.notifications import notify_many
+from workspace.notifications.services.notifications import notify_stream
 
 from ..models import FileComment
 
@@ -34,13 +34,14 @@ def _file_url(file_obj):
 
 
 def _notify_mentioned(file_obj, actor, mentioned):
-    notify_many(
-        recipients=mentioned,
+    notify_stream(
+        recipient_ids=[u.pk for u in mentioned],
+        source=file_obj,
         origin="files",
         title=f'{actor.username} mentioned you in a comment on "{file_obj.name}"',
         url=_file_url(file_obj),
         actor=actor,
-        priority="high",
+        default_priority="high",
     )
 
 
@@ -69,8 +70,9 @@ def notify_comment_added(file_obj, actor, body, *, audience=None):
     recipients.update(User.objects.filter(pk__in=commenter_ids))
     recipients = [u for u in recipients if u.pk not in mentioned_ids]
     if recipients:
-        notify_many(
-            recipients=recipients,
+        notify_stream(
+            recipient_ids=[u.pk for u in recipients],
+            source=file_obj,
             origin="files",
             title=f'{actor.username} commented on "{file_obj.name}"',
             url=_file_url(file_obj),

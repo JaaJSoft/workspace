@@ -123,6 +123,7 @@ class ShareMixin:
                     if file_obj.parent_id
                     else "/files",
                     actor=request.user,
+                    source=file_obj,
                 )
             if permission_changed:
                 perm_label = (

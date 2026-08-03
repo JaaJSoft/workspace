@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -5,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileComment, FileShare
+from workspace.files.services.comments import notify_comment_added
 from workspace.notifications.models import Notification
 
 User = get_user_model()
@@ -56,6 +59,7 @@ class ShareNotificationTests(FileNotificationTestBase):
         self.assertIn("doc.txt", n.title)
         self.assertEqual(n.url, "/files")
         self.assertEqual(n.actor, self.owner)
+        self.assertEqual(n.file_id, self.file.pk)
 
     def test_share_duplicate_no_extra_notification(self):
         """Re-sharing with the same permission should not create a new notification."""
@@ -223,6 +227,31 @@ class CommentNotificationTests(FileNotificationTestBase):
         # recipient should NOT be notified (their comment was deleted)
         self.assertEqual(self._notifs_for(self.recipient).count(), 0)
 
+    @patch("workspace.notifications.services.notifications.send_push_notification")
+    @patch("workspace.notifications.services.notifications.notify_sse")
+    def test_repeated_comments_merge_into_one_notification(self, mock_sse, mock_push):
+        """Two comments from the same actor merge into one unread notification."""
+        notify_comment_added(self.file, self.recipient, "first")
+        notify_comment_added(self.file, self.recipient, "second")
+        notifs = Notification.objects.filter(
+            recipient=self.owner, file=self.file, read_at__isnull=True
+        )
+        self.assertEqual(notifs.count(), 1)
+        self.assertIn("commented on", notifs.get().title)
+
+    def test_opening_comment_thread_marks_notifications_read(self):
+        notif = Notification.objects.create(
+            recipient=self.owner,
+            origin="files",
+            icon="",
+            title="t",
+            file=self.file,
+        )
+        resp = self.client.get(f"/api/v1/files/{self.file.uuid}/comments")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        notif.refresh_from_db()
+        self.assertIsNotNone(notif.read_at)
+
 
 class SharedEditNotificationTests(FileNotificationTestBase):
     """Tests for notifications when a shared user edits file content."""
@@ -250,6 +279,7 @@ class SharedEditNotificationTests(FileNotificationTestBase):
         self.assertIn("edited", n.title)
         self.assertIn("doc.txt", n.title)
         self.assertEqual(n.actor, self.recipient)
+        self.assertEqual(n.file_id, self.file.pk)
 
     def test_owner_edit_no_notification(self):
         """Owner editing their own file should not create a notification."""

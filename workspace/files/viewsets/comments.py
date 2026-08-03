@@ -57,6 +57,12 @@ class CommentsMixin:
         audience = mentionable_users(file_obj)
 
         if request.method == "GET":
+            from workspace.notifications.services.notifications import (
+                mark_source_read,
+            )
+
+            mark_source_read(request.user, file_obj)
+
             qs = (
                 FileComment.objects.filter(
                     file=file_obj,

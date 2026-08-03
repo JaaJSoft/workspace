@@ -3,6 +3,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from workspace.common.services.mentions import render_comment_body
 from workspace.files.services import FileService
 
 from .models import File, FileComment
@@ -332,6 +333,7 @@ class FileCommentAuthorSerializer(serializers.Serializer):
 
 class FileCommentSerializer(serializers.ModelSerializer):
     author = FileCommentAuthorSerializer(read_only=True)
+    body_html = serializers.SerializerMethodField()
 
     class Meta:
         model = FileComment
@@ -340,6 +342,7 @@ class FileCommentSerializer(serializers.ModelSerializer):
             "file",
             "author",
             "body",
+            "body_html",
             "edited_at",
             "created_at",
             "deleted_at",
@@ -348,10 +351,15 @@ class FileCommentSerializer(serializers.ModelSerializer):
             "uuid",
             "file",
             "author",
+            "body_html",
             "edited_at",
             "created_at",
             "deleted_at",
         ]
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_body_html(self, obj):
+        return render_comment_body(obj.body, self.context.get("mention_map") or {})
 
 
 class FileCommentCreateSerializer(serializers.Serializer):

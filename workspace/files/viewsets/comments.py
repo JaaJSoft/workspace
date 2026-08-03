@@ -1,6 +1,5 @@
 """Comment-related actions for FileViewSet."""
 
-from django.contrib.auth import get_user_model
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -13,9 +12,27 @@ from workspace.files.serializers import (
     FileCommentEditSerializer,
     FileCommentSerializer,
 )
-from workspace.notifications.services.notifications import notify_many
+from workspace.files.services.comments import (
+    mentionable_users,
+    notify_comment_added,
+    notify_comment_edited,
+)
 
-User = get_user_model()
+
+def _mention_context(audience):
+    return {"mention_map": {u.username: u.pk for u in audience}}
+
+
+def _mention_users_payload(audience):
+    return [
+        {
+            "id": u.pk,
+            "username": u.username,
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+        }
+        for u in audience
+    ]
 
 
 class CommentsMixin:
@@ -23,10 +40,13 @@ class CommentsMixin:
 
     @extend_schema(
         summary="List or create comments on a file",
-        description="GET to list comments, POST to add a new comment.",
+        description=(
+            "GET returns {comments, mention_users}, POST adds a new comment. "
+            "mention_users lists the file's audience for @mention autocomplete."
+        ),
         request=FileCommentCreateSerializer,
         responses={
-            200: OpenApiResponse(response=FileCommentSerializer(many=True)),
+            200: OpenApiResponse(description="Comments and mentionable users."),
             201: OpenApiResponse(response=FileCommentSerializer),
         },
     )
@@ -34,6 +54,7 @@ class CommentsMixin:
     def comments(self, request, uuid=None):
         """List or create comments on a file/folder."""
         file_obj, perm = self._resolve_file_with_access(uuid)
+        audience = mentionable_users(file_obj)
 
         if request.method == "GET":
             qs = (
@@ -44,8 +65,15 @@ class CommentsMixin:
                 .select_related("author")
                 .order_by("created_at")
             )
-            serializer = FileCommentSerializer(qs, many=True)
-            return Response(serializer.data)
+            serializer = FileCommentSerializer(
+                qs, many=True, context=_mention_context(audience)
+            )
+            return Response(
+                {
+                    "comments": serializer.data,
+                    "mention_users": _mention_users_payload(audience),
+                }
+            )
 
         # POST
         create_ser = FileCommentCreateSerializer(data=request.data)
@@ -55,28 +83,8 @@ class CommentsMixin:
             author=request.user,
             body=create_ser.validated_data["body"],
         )
-        recipients = set()
-        if file_obj.owner != request.user:
-            recipients.add(file_obj.owner)
-        commenter_ids = (
-            FileComment.objects.filter(
-                file=file_obj,
-                deleted_at__isnull=True,
-            )
-            .exclude(author=request.user)
-            .values_list("author", flat=True)
-            .distinct()
-        )
-        recipients.update(User.objects.filter(pk__in=commenter_ids))
-        if recipients:
-            notify_many(
-                recipients=list(recipients),
-                origin="files",
-                title=f'{request.user.username} commented on "{file_obj.name}"',
-                url=f"/files/{file_obj.parent_id}" if file_obj.parent_id else "/files",
-                actor=request.user,
-            )
-        serializer = FileCommentSerializer(comment)
+        notify_comment_added(file_obj, request.user, comment.body, audience=audience)
+        serializer = FileCommentSerializer(comment, context=_mention_context(audience))
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
@@ -97,7 +105,7 @@ class CommentsMixin:
     )
     def comment_detail(self, request, uuid=None, comment_uuid=None):
         """Edit or soft-delete a comment."""
-        self._resolve_file_with_access(uuid)
+        file_obj, perm = self._resolve_file_with_access(uuid)
 
         comment = (
             FileComment.objects.filter(
@@ -127,8 +135,13 @@ class CommentsMixin:
         # PATCH
         edit_ser = FileCommentEditSerializer(data=request.data)
         edit_ser.is_valid(raise_exception=True)
+        old_body = comment.body
         comment.body = edit_ser.validated_data["body"]
         comment.edited_at = timezone.now()
         comment.save(update_fields=["body", "edited_at"])
-        serializer = FileCommentSerializer(comment)
+        audience = mentionable_users(file_obj)
+        notify_comment_edited(
+            file_obj, request.user, old_body, comment.body, audience=audience
+        )
+        serializer = FileCommentSerializer(comment, context=_mention_context(audience))
         return Response(serializer.data)
